@@ -188,17 +188,22 @@ Ideal for containerized environments or testing.
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
+For a new container, choose a [protected setup connection](#open-a-protected-setup-connection),
+then continue with [bootstrap-token setup](#step-1-get-the-token)
 in your browser; do not add an example password to the command.
 
 ### Docker Compose
+Like the `docker run` example, this publishes only on the Docker host's IPv4
+loopback. Use a [protected setup connection](#open-a-protected-setup-connection)
+before entering credentials; remote agents need a reachable HTTPS origin.
+
 Create a `docker-compose.yml` file:
 
 ```yaml
@@ -208,7 +213,7 @@ services:
     container_name: pulse
     restart: unless-stopped
     ports:
-      - "7655:7655"
+      - "127.0.0.1:7655:7655"
     volumes:
       - pulse_data:/data
     environment:
@@ -342,7 +347,53 @@ shortcut.
 
 ## 🔐 First-Time Setup
 
-Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Token** to create your admin account.
+On first launch, retrieve a **Bootstrap Token** to create your admin account.
+The token controls setup access; it does not encrypt the connection carrying
+that token, your new password or the generated API token.
+
+### Open a protected setup connection
+
+Before entering credentials, choose one of these paths:
+
+- **Remote browser:** use your Pulse HTTPS origin with a certificate trusted by
+  the browser. Follow the [reverse-proxy guide](REVERSE_PROXY.md#before-configuring-the-proxy)
+  and keep the plain-HTTP backend private. Do not bypass a certificate warning.
+- **Browser on the Pulse host:** `http://127.0.0.1:7655` is a local-only example.
+  In a browser on another machine, that address refers to the other machine,
+  not Pulse.
+- **Existing SSH access:** run the following on your trusted workstation,
+  replacing `admin@pulse-host` with your existing SSH account and host. The SSH
+  destination must be the machine where Pulse is reachable on loopback: the
+  Docker host for these examples, or the Pulse LXC itself, not its Proxmox
+  host. Use an independently verified SSH host key already in your known-hosts
+  file; an unknown or changed key must stop the connection, not be bypassed.
+
+```bash
+ssh -N -T -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes \
+  -L 127.0.0.1:17655:127.0.0.1:7655 admin@pulse-host
+```
+
+Keep that terminal open and open `http://127.0.0.1:17655` in the workstation's
+browser. SSH encrypts the remote hop; the HTTP endpoints are local to each
+machine. Stop on a tunnel error; a running SSH command alone does not prove
+Pulse is listening at the destination. If local port 17655 is already in use,
+choose another unused local port in both the command and browser address,
+never a wildcard bind. Close the tunnel with **Ctrl+C** when finished; this
+does not stop Pulse. If suitable SSH access is unavailable, use the HTTPS
+path rather than enabling remote plain HTTP or weakening authentication.
+
+**New Docker examples bind the host port to IPv4 loopback.** This is not HTTPS
+configuration and does not change the container's own listener. An existing
+deployment must keep its saved data, image edition and network configuration;
+do not recreate it just to match these examples. A reverse proxy in a separate
+container uses a shared private network and service name, not its own loopback.
+Remote agents and SSO callbacks need a routable verified HTTPS origin, not the
+workstation's setup-tunnel address.
+
+Do not enter bootstrap tokens, passwords or API tokens into a remote
+`http://<your-ip>:7655` page. A private LAN or VPN address alone does not encrypt
+HTTP; protect that browser connection first. Keep the token, setup output and
+screenshots containing credentials out of reports.
 
 ### Step 1: Get the Token
 
@@ -359,7 +410,7 @@ The Proxmox path must be absolute. `pct exec` runs with `PATH=/sbin:/bin:/usr/sb
 > **Important**: Paste the token string printed by the command above. Do not paste the raw `.bootstrap_token` file contents directly. In v6 that file may contain an encrypted JSON snapshot rather than the usable setup token.
 
 ### Step 2: Create Admin Account
-1. Open `http://<your-ip>:7655`
+1. Open the [protected setup connection](#open-a-protected-setup-connection) chosen above.
 2. Paste the **Bootstrap Token**.
 3. Complete the **Quick Security Setup** wizard.
    - Set your **Admin Username** and **Password** (or let Pulse generate one).

@@ -89,13 +89,18 @@ Für Container-Umgebungen oder Tests kannst du Pulse direkt mit Docker starten:
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-Öffne danach Pulse unter `http://<your-ip>:7655`.
+Dieses Beispiel für Neuinstallationen bindet den Host-Port nur an IPv4-Loopback.
+Nutze vor der Eingabe von Token oder Passwort eine
+[geschützte Setup-Verbindung](../../INSTALL.md#open-a-protected-setup-connection):
+HTTPS mit vertrauenswürdigem Zertifikat, einen Browser auf dem Docker-Host oder
+einen SSH-Tunnel von deinem Arbeitsplatz. Sende keine Zugangsdaten über
+unverschlüsseltes HTTP an einen entfernten Host.
 
 Für Docker Compose kann dieselbe Compose-Datei Community- und private Pro-Images
 verwenden, wenn sie die `PULSE_IMAGE`-Variable nutzt:
@@ -107,13 +112,20 @@ services:
     container_name: pulse
     restart: unless-stopped
     ports:
-      - "7655:7655"
+      - "127.0.0.1:7655:7655"
     volumes:
       - pulse_data:/data
 
 volumes:
   pulse_data:
 ```
+
+Auch Compose veröffentlicht hier nur auf Host-Loopback. Ersetze damit keine
+bestehende Installation; behalte Daten-Volume, Image-Edition und Netzkonfiguration.
+Ein Proxy in einem anderen Container benötigt ein gemeinsames privates Netzwerk
+und den Pulse-Servicenamen, nicht sein eigenes Loopback. Entfernte Agenten und
+SSO-Callbacks benötigen eine erreichbare HTTPS-Adresse mit geprüftem Zertifikat,
+nicht die lokale Adresse des Setup-Tunnels.
 
 Lass `PULSE_AUTH_USER` und `PULSE_AUTH_PASS` bei einer neuen Installation
 ungesetzt und richte den Zugang beim ersten Anmelden mit dem Bootstrap-Token
@@ -139,7 +151,7 @@ Füge den Token-String ein, den der Befehl ausgibt. Füge nicht direkt den Inhal
 der Datei `.bootstrap_token` ein. In v6 kann diese Datei einen verschlüsselten
 JSON-Snapshot enthalten, nicht den verwendbaren Setup-Token.
 
-1. Öffne `http://<your-ip>:7655`.
+1. Öffne die [geschützte Setup-Verbindung](../../INSTALL.md#open-a-protected-setup-connection).
 2. Füge das **Bootstrap Token** ein.
 3. Schließe den **Quick Security Setup**-Assistenten ab.
 4. Öffne **Settings → Infrastructure → Install on a host**, wenn du den

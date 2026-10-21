@@ -69,14 +69,18 @@ and keep that version pinned during installation.
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-Open `http://<your-ip>:7655` and follow the bootstrap-token setup. Docker host
+This new-install example binds the published port to the Docker host's IPv4
+loopback, not every host interface. Before entering any bootstrap token or
+password, use [protected first-time setup](docs/INSTALL.md#open-a-protected-setup-connection):
+verified HTTPS, a browser on that host, or an SSH tunnel from your workstation.
+Do not send setup credentials to a remote plain-HTTP address. Docker host
 monitoring is provided by the unified agent; the Pulse server container does
 not need the Docker socket.
 
