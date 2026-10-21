@@ -21,22 +21,34 @@ Guest filesystem rows which resolve to the same existing alert key are evaluated
 once, using the highest observed usage, not the first row in response order.
 Selection preserves one whole row's mount/device, percentage and byte metadata;
 when percentages tie, deterministic row fields break the tie. Display inventory,
-capacity aggregation, alert IDs, per-filesystem override keys, migration and
+capacity aggregation, alert ID formats, per-filesystem override keys and
 request/guest-command policy do not change. This is conservative evaluation of
 an existing shared identity, not proof that colliding labels are one filesystem
 or a new independent identity for each colliding row.
 
-An otherwise eligible row with a non-finite or above-100 percentage keeps that
-identity's observation unavailable instead of allowing a healthy duplicate to
-establish recovery. Existing nonpositive-capacity/negative-sentinel filtering,
-retained/unavailable inventory handling and explicit disablement remain intact.
+Filesystem presence is independent of measurement validity. A supplied row with
+nonpositive capacity, negative/sentinel usage, non-finite usage or usage above
+100 keeps that identity's observation unavailable. It cannot become filesystem
+removal or let a healthy duplicate establish recovery. It cannot open an
+incident or complete an activation run across the gap either. Existing incident
+values, occurrence, acknowledgement and measurement metadata remain unchanged; independent
+current siblings and other guests continue to evaluate. An actually omitted
+identity in a current inventory and explicit per-filesystem disablement still
+clear the relevant incident. On a node move, current inventory presence re-homes
+the existing occurrence and its guest link before removal cleanup; the last
+valid reading and acknowledgement survive until usable recovery evidence.
+The independently usable guest aggregate fallback for inventories containing only previously skipped rows is unchanged.
 An ordinary usable inventory where every alias is below the clear threshold
 can recover the existing occurrence. Separate guest/device identities, their
 thresholds, acknowledgements, grace periods and notification lifecycle remain
 independent. Selection does not mutate caller-owned rows.
 
-`TestGuestFilesystemDuplicateIdentityOrder` in `guest_snapshot_test.go` covers
-VM/LXC, identical and sanitized-key aliases in both response orders.
+`guest_snapshot_test.go` covers node moves with invalid readings and the
+VM/LXC identical and sanitized-key alias matrix in both response orders.
+`guest_filesystem_invalid_row_test.go` covers VM/LXC value and pointer paths,
+invalid-row lifecycle/events, alias order, legacy/explicit activation gaps,
+sibling recovery, authoritative removal, disablement, aggregate fallback and
+exact public Alert consumer projections.
 `guest_duplicate_identity_test.go` covers activation grace, reordering,
 acknowledgement, retained readings, invalid duplicates, overrides, peer isolation,
 one firing/recovery event and exact public Alert consumer projections. Offline

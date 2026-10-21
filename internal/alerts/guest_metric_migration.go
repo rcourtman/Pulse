@@ -185,6 +185,14 @@ func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, 
 	matchedAlert.ResourceName = resourceName
 	matchedAlert.Node = normalizedNode
 	matchedAlert.Instance = normalizedInstance
+	// Filesystem cards link through this explicit parent, rather than parsing
+	// their sub-resource ID. The current inventory establishes the new parent
+	// identity even when the filesystem measurement itself is unavailable.
+	if matchedAlert.Metadata != nil {
+		if _, exists := matchedAlert.Metadata["guestResourceId"]; exists {
+			matchedAlert.Metadata["guestResourceId"] = strings.TrimSuffix(resourceID, currentIdentity.resourceSuffix)
+		}
+	}
 	if dn := m.resolveNodeDisplayName(normalizedInstance, normalizedNode); dn != "" {
 		matchedAlert.NodeDisplayName = dn
 	} else {
