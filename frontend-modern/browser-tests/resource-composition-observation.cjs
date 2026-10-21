@@ -219,6 +219,7 @@ module.exports = (async () => {
             id: 'vm-resource-101',
             name: 'qualified-memory',
             type: 'vm',
+            metricsTarget: { resourceType: 'vm', resourceId: 'vm-resource-101' },
             status: mode === 'offline' ? 'offline' : 'online',
             lastSeen: now,
             platformType: 'proxmox-pve',
@@ -394,6 +395,10 @@ module.exports = (async () => {
       await page.goto(origin + '/browser-tests/resource-agent-observation.html?kind=composition', {
         waitUntil: 'domcontentloaded',
       });
+      record.hoverPointer = await page.evaluate(
+        () => matchMedia('(hover: hover) and (pointer: fine)').matches,
+      );
+      assert.equal(record.hoverPointer, width >= 500, 'actual pointer posture matches profile');
       await expect(page.locator('[data-seed-count]')).toHaveText('2 websocket-only resources');
       assert.equal(record.requests.filter((row) => row.path === '/api/resources').length, 0);
       await click(page.getByRole('button', { name: 'Open REST-backed resources' }));
@@ -454,6 +459,16 @@ module.exports = (async () => {
       // The Updates column's sort button is not a container update action.
       assert(record.updateNamedButtons.every((button) => button.header));
       await expect(table.locator('tbody').getByRole('button', { name: /update/i })).toHaveCount(0);
+      await click(
+        table.locator('[tabindex="0"][aria-label^="Update available. Pulse cannot apply it:"]'),
+      );
+      await page.clock.runFor(32);
+      await expect(
+        page.getByText(/Apply this update using your container manager on the host\./),
+      ).toBeVisible();
+      await capture('rest-table-refusal', page.locator('body'));
+      await page.keyboard.press('Escape');
+      await expect(page.locator('[data-tooltip="true"]')).toHaveCount(0);
       record.checks.push(
         'REST refusal is a focusable/tappable explanation, not an Update action, in both the real Docker table and full Infrastructure drawer; no POST occurs.',
       );
@@ -592,6 +607,8 @@ module.exports = (async () => {
     report.result = 'passed';
   } catch (error) {
     report.error = String(error.stack || error);
+    const failedPage = context?.pages()[0];
+    if (failedPage) report.failure_text = await failedPage.locator('body').innerText();
     process.exitCode = 1;
   } finally {
     if (context) {
