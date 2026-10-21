@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCustomSensorRows,
+  getResourceAgentReadingsLastKnownReason,
   buildTemperatureRows,
   HOST_AGENT_STOPPED_REPORTING_REASON,
   formatInteger,
@@ -575,5 +576,38 @@ describe('resourceDetailMappers', () => {
 
       expect(agent?.displayName).toBe('Tower');
     });
+  });
+});
+
+describe('native guest sensor provenance', () => {
+  it('keeps physical-host collection independent but qualifies the same report inside a stopped VM', () => {
+    const sensors = {
+      smart: [
+        {
+          device: '/dev/sda',
+          temperature: 36,
+          collection: { temperature: { state: 'available' as const } },
+        },
+      ],
+    };
+    const host = createHybridHostResource();
+    host.agent = { stale: true };
+    const reason = getResourceAgentReadingsLastKnownReason(host);
+    expect(buildTemperatureRows(sensors, { lastKnownReason: reason })[0].value).toBe('36°C');
+    const guest = {
+      ...host,
+      type: 'vm' as const,
+      proxmox: { runtimeStatus: 'stopped' },
+      agent: { stale: false },
+    };
+    const powerReason = getResourceAgentReadingsLastKnownReason(guest);
+    expect(powerReason).toBe('Proxmox reports this VM stopped');
+    const rows = buildTemperatureRows(sensors, {
+      lastKnownReason: powerReason,
+      inGuestLastKnownReason: powerReason,
+    });
+    expect(rows[0].value).toBe('36°C (last known)');
+    expect(rows[0].valueTitle).toContain(powerReason);
+    expect(sensors.smart[0].collection.temperature.state).toBe('available');
   });
 });

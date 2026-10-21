@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Native guest power qualifies only its own agent cards
+
+Canonical power-only Proxmox deltas qualify the detail drawer's retained in-guest
+filesystem, RAID, thermal/SMART, custom and interface evidence, even while the
+resource is online and its agent lease unexpired. The drawer shares Workloads'
+VM/LXC power rules but reads only the native runtime field, not row health.
+Other scopes, host/API inventory and independent physical disk collection remain
+separate. Source values, failures, identities and timestamps are not rewritten.
+Mapper, primitive and full-drawer tests plus the source-bound
+`resource-agent-observation.cjs` fixture cover recovery and scope boundaries at
+desktop and 320px touch widths; this is not native recovery or guest liveness.
+
+
 ### Guest physical-disk inventory distinguishes pending and empty reads
 
 The existing guest drawer names the pending scoped inventory read. A successful

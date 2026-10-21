@@ -21,6 +21,31 @@
 
 ## Purpose
 
+### Infrastructure agent cards honour native guest power
+
+The existing canonical detail drawer qualifies its selected in-guest agent report
+when Proxmox reports a VM paused, suspended or stopped, or an LXC stopped. A
+healthy carrier, recent Last seen or unexpired agent lease cannot make retained
+filesystem usage, RAID/rebuild, network, thermals, custom values or in-guest SMART
+current. Wrapping visible explanations reach touch and keyboard users; values,
+reported failures and identities remain intact without live health colour or
+rebuild speed. The shared filesystem and interface cards accept a first report
+and removal without requiring the drawer to reopen.
+
+Only positively identified Proxmox guests and the native runtime field confer
+this power qualification. Unknown power, other platforms, host configuration,
+independent physical disk collection and API readings keep their own evidence.
+Normal running reports and expired-host-agent qualification remain separate.
+No collector, alert policy, resource status, observation timestamp, stored History,
+guest operation, thaw or liveness verdict changes.
+
+`resourceAgentObservation.test.ts`, `ResourceDetailDrawer.agent-observation.test.tsx`,
+shared-card tests and `browser-tests/resource-agent-observation.cjs` cover native
+power-only canonical deltas, still-leased/online carriers, VM/LXC, provenance
+controls, recovery and open-drawer lifecycle at desktop and 320px touch widths.
+These are synthetic presentation proofs, not installed guest recovery.
+
+
 ### Unraid assessment alerts keep their exact producer identity
 
 The storage adapter carries a separate `refs.alertResourceId` for an agent-backed

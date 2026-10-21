@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Retained agent cards stay off the collection hot path
+
+Native-power qualification in the existing resource drawer reuses the small
+Workloads power classifier, with no new polling, timers, requests or observation
+rewrites. It changes only rendered agent-card evidence and leaves independently
+sourced disk collection, inventory and stored History intact. Mapper provenance
+and shared-card lifecycle tests accompany the drawer/browser consumer tests;
+production build and the unchanged bundle budgets remain the size checks.
+
+
 ### Missing LXC disk measurements remain explainable without hover
 
 The existing workload Disk cell labels an unavailable Proxmox LXC aggregate

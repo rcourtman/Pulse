@@ -14,6 +14,7 @@ import type {
   PBSVerifyJob,
 } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceVMwareMeta } from '@/types/resource';
+import { getGuestHardwareLastKnownReason } from '@/utils/guestHardwareObservation';
 import { formatTemperature } from '@/utils/temperature';
 import { getPhysicalDiskTemperaturePresentation } from '@/features/storageBackups/diskTemperaturePresentation';
 import { formatBytes } from '@/utils/format';
@@ -406,6 +407,27 @@ const buildTypedGPUTemperatureKeys = (gpus?: HostSensorSummary['gpu']) => {
 // lease no longer collects (models.HostAgentStoppedReportingReason).
 export const HOST_AGENT_STOPPED_REPORTING_REASON = 'host agent stopped reporting';
 
+// Canonical availability and a still-valid agent lease cannot renew an
+// in-guest report after a native power change. Reuse Workloads' power rules,
+// but only the native Proxmox field may make that claim, never row health.
+// Host/API cards and physical disks keep their own independent evidence.
+export const getResourceGuestPowerLastKnownReason = (resource: Resource): string | undefined => {
+  const status = resource.proxmox?.runtimeStatus;
+  if (!status) return undefined;
+  const powerReason = getGuestHardwareLastKnownReason({
+    type: resource.type,
+    platformType: resource.platformType,
+    platformScopes: resource.platformScopes,
+    status,
+  });
+  // Card explanations add their own punctuation.
+  return powerReason?.replace(/\.$/, '');
+};
+
+export const getResourceAgentReadingsLastKnownReason = (resource: Resource): string | undefined =>
+  getResourceGuestPowerLastKnownReason(resource) ??
+  (resource.agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined);
+
 export type TemperatureRowsOptions = {
   /**
    * Why the machine's own sensor readings are retained rather than current,
@@ -413,6 +435,8 @@ export type TemperatureRowsOptions = {
    * collection state instead.
    */
   lastKnownReason?: string;
+  /** Native guest power also contradicts that guest's retained SMART report. */
+  inGuestLastKnownReason?: string;
 };
 
 export const buildTemperatureRows = (
@@ -535,7 +559,11 @@ export const buildTemperatureRows = (
       .filter((disk) => !disk.standby)
       .sort((a, b) => a.device.localeCompare(b.device))
       .forEach((disk) => {
-        const temperature = getPhysicalDiskTemperaturePresentation(disk);
+        const temperature = getPhysicalDiskTemperaturePresentation(
+          options.inGuestLastKnownReason
+            ? { ...disk, lastKnown: true, lastKnownReason: options.inGuestLastKnownReason }
+            : disk,
+        );
         if (!temperature) return;
         // A retained reading, such as a silent agent's, says so in the value
         // because this card has no other cue that it is not current.

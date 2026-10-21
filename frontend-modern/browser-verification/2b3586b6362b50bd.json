@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "d9efe3f52ad79d0f974777bfad6fa62e2e4fffd3",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx",
+    "frontend-modern/src/components/shared/cards/NetworkInterfacesCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "63e749a3db56c31987e6692fde3129b63dec0f872760cb1d483310c55a17af9f",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "9a6638708fc41d00ffa159e3b91f62e298b5fd13c9e279cca03ac55b8cfa818d",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "aed7061e4cc92b376d9786725afb9f022e91e5a45d29e5ae073238f013fced2a",
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "17c055f5fbd3065404a5e04783488e5fd60a5f55557a3453ff3a091d4ac60cff",
+    "frontend-modern/src/components/shared/cards/NetworkInterfacesCard.tsx": "8fbdee9f38187c2e590519457548f390c418dcff2172fd0a08c86d51569d4ef3"
+  },
+  "routes": [
+    "/browser-tests/resource-agent-observation.html (isolated fixture consuming the production canonical merger, Infrastructure drawer, agent cards and CSS; not an added product route)"
+  ],
+  "states": [
+    "First agent report appears in the already-open drawer; current disks, rebuild, thermals, SMART, custom zero and network are intact.",
+    "paused: native power-only delta qualifies every in-guest card without changing the selected agent report, resource status or time.",
+    "suspended: native power-only delta qualifies every in-guest card without changing the selected agent report, resource status or time.",
+    "stopped: native power-only delta qualifies every in-guest card without changing the selected agent report, resource status or time.",
+    "offline: native power-only delta qualifies every in-guest card without changing the selected agent report, resource status or time.",
+    "An online carrier and later Last seen do not renew in-guest evidence.",
+    "A confirmed running update restores these reports; independent failed custom sensors remain stale.",
+    "Stopped/offline LXC reports are qualified with their own native state, not VM semantics.",
+    "Removing a physical host's agent list exposes its independently sourced Proxmox configuration without downgrading it.",
+    "A physical host is not made into a stopped guest by a provider facet.",
+    "Expired-host reports retain their existing qualification; independent disk collection stays authoritative.",
+    "An explicit vSphere scope cannot borrow Proxmox power semantics.",
+    "Unknown native power does not invent a stopped state or invalidate an independently reporting agent.",
+    "Trusted keyboard/touch disclosure closes normally, same mounted details, no horizontal overflow."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard Enter and 320px WebKit touch open and close the production Details disclosure.",
+    "Power-only canonical deltas update the same open drawer; original selected agent bytes, native scope and independent host/API configuration are checked.",
+    "Eight complete desktop/narrow current, paused, stopped-LXC and recovered captures were opened with native view_image."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "verified_at": "2026-10-21T12:05:37Z",
+  "evidence": {
+    "source": "d9efe3f52ad79d0f974777bfad6fa62e2e4fffd3",
+    "compiled_binding_sha256": "f5f009f681c0943b794e86bc2c6e5a8f31ac9cefb59f2c529a5574413d6b7985",
+    "browser_groups": 28,
+    "captures": [
+      {
+        "file": "desktop-current-vm.png",
+        "sha256": "cf7b62d90ed65b03ae4939e02a7bb6efa8acfa1dd3ed38c6df29394c429173ab",
+        "name": "desktop",
+        "label": "current-vm"
+      },
+      {
+        "file": "desktop-paused-vm.png",
+        "sha256": "6aa4641559b8f0f340917ec21bf9ab8d3e110105b7fd213a6269e5287f69a3de",
+        "name": "desktop",
+        "label": "paused-vm"
+      },
+      {
+        "file": "desktop-stopped-lxc.png",
+        "sha256": "bc7ed09b83c71dbce868836e744864d1cea021b592fc26f7b7ecb0efaf6ed105",
+        "name": "desktop",
+        "label": "stopped-lxc"
+      },
+      {
+        "file": "desktop-recovered-vm.png",
+        "sha256": "6c09a9a59488de8c21f04cb634da372139e1913313e0c6b5f6e50aa6dbc91c7a",
+        "name": "desktop",
+        "label": "recovered-vm"
+      },
+      {
+        "file": "narrow-current-vm.png",
+        "sha256": "b8e6e41ab2ab9375f0a2374cc658d91b9c7f4186677d98b74235d718ce6fca8c",
+        "name": "narrow",
+        "label": "current-vm"
+      },
+      {
+        "file": "narrow-paused-vm.png",
+        "sha256": "0874ff001aa8bc452807d96bd18f802d2c594ad47ee6faa6c750c50b6de10871",
+        "name": "narrow",
+        "label": "paused-vm"
+      },
+      {
+        "file": "narrow-stopped-lxc.png",
+        "sha256": "b4111828ef4653959465529a7ce0e80bdf9c4a75a02365359190122992636f94",
+        "name": "narrow",
+        "label": "stopped-lxc"
+      },
+      {
+        "file": "narrow-recovered-vm.png",
+        "sha256": "456ce1bc5751de1ebca29294987a89498e333df442c479eb7165ce5c3aa4944a",
+        "name": "narrow",
+        "label": "recovered-vm"
+      }
+    ],
+    "source_proof_receipt": "source-mibtl6vj",
+    "final_source_checks": "190 focused tests, types, lint, formatting, production build and unchanged bundle budgets pass on this source.",
+    "full_suite_lineage": "25526 passes / seven skips on containing ancestor 2af5d4fd; that aggregate retained type errors (exit1). Later 638e4b72 type check exited2 for a fixture field. Both failures were repaired and remain retained separately, not relabelled as full final-source suite passes."
+  },
+  "limits": [
+    "Synthetic consumer proof only; no guest operation, native thaw/filesystem liveness, installed recovery, protected landing or release availability.",
+    "Unknown native state, other scopes and independent host/API/physical-disk evidence remain separate. Existing static system/root-capacity placeholders were not part of this repair or proof of health."
+  ]
+}
