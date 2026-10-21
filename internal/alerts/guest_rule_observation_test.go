@@ -9,13 +9,24 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+// Immediate lifecycle controls opt in to zero delay; the timed control below
+// separately proves the unchanged configured activation and recovery windows.
+func guestRuleObservationManager(t *testing.T) *Manager {
+	t.Helper()
+	m := guestObservationManager(t)
+	cfg := m.GetConfig()
+	cfg.MetricTimeThresholds = map[string]map[string]int{"all": {"cpu": 0, "memory": 0, "disk": 0, "diskRead": 0, "diskWrite": 0, "networkIn": 0, "networkOut": 0}}
+	m.UpdateConfig(cfg)
+	return m
+}
+
 // The missing observation is a rule input, not the metric being alerted on.
 // Falling through to the default policy would invent a recovery even though
 // the current memory observation and original occurrence have not changed.
 func TestGuestRuleUnknownFilterPreservesOtherMetricIncident(t *testing.T) {
 	for _, kind := range []string{"vm", "lxc"} {
 		t.Run(kind, func(t *testing.T) {
-			m := guestObservationManager(t)
+			m := guestRuleObservationManager(t)
 			cfg := m.GetConfig()
 			cfg.GuestDefaults = ThresholdConfig{Memory: &HysteresisThreshold{Trigger: -1}}
 			cfg.CustomRules = []CustomAlertRule{{
@@ -58,7 +69,7 @@ func TestGuestRuleUnknownFilterPreservesOtherMetricIncident(t *testing.T) {
 }
 
 func TestGuestRuleFilterThreeValuedLogic(t *testing.T) {
-	m := guestObservationManager(t)
+	m := guestRuleObservationManager(t)
 	vm := guestObservationVM()
 	vm.CPU = -1
 	vm.Memory.Observation.State = "last-known"
@@ -126,7 +137,7 @@ func TestGuestRulePolicyPriorityAndFinalOverrides(t *testing.T) {
 		{name: "relaxed floor eliminates difference", unknownPriority: 11, relaxed: true, wantKnown: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			m := guestObservationManager(t)
+			m := guestRuleObservationManager(t)
 			cfg := m.GetConfig()
 			known := CustomAlertRule{Enabled: true, Priority: 10, FilterConditions: FilterStack{Filters: []FilterCondition{{Type: "text", Field: "name", Value: "database"}}}, Thresholds: ThresholdConfig{Memory: &HysteresisThreshold{Trigger: 85, Clear: 80}}}
 			unknown := CustomAlertRule{Enabled: !test.disabledRule, Priority: test.unknownPriority, FilterConditions: FilterStack{Filters: []FilterCondition{{Type: "metric", Field: "cpu", Operator: ">", Value: 80.0}}}, Thresholds: ThresholdConfig{Memory: &HysteresisThreshold{Trigger: 60, Clear: 55}}}
@@ -163,7 +174,7 @@ func TestGuestRulePolicyPriorityAndFinalOverrides(t *testing.T) {
 func TestGuestRuleUnknownCannotFireAndKeepsIndependentMetrics(t *testing.T) {
 	for _, disabled := range []bool{false, true} {
 		t.Run(fmt.Sprint("possible-disabled-", disabled), func(t *testing.T) {
-			m := guestObservationManager(t)
+			m := guestRuleObservationManager(t)
 			cfg := m.GetConfig()
 			cfg.GuestDefaults = ThresholdConfig{Memory: &HysteresisThreshold{Trigger: 85, Clear: 80}, DiskWrite: &HysteresisThreshold{Trigger: 5, Clear: 4}}
 			cfg.CustomRules = []CustomAlertRule{{Enabled: true, Priority: 10,
@@ -249,7 +260,7 @@ func TestGuestRuleUnknownInterruptsPendingAndRecovery(t *testing.T) {
 }
 
 func TestGuestRuleConfigSaveAndFilesystemOverride(t *testing.T) {
-	m := guestObservationManager(t)
+	m := guestRuleObservationManager(t)
 	cfg := m.GetConfig()
 	cfg.GuestDefaults = ThresholdConfig{Memory: &HysteresisThreshold{Trigger: -1}, Disk: &HysteresisThreshold{Trigger: -1}}
 	cfg.CustomRules = []CustomAlertRule{{Enabled: true, Priority: 10,
@@ -297,7 +308,7 @@ func TestGuestRuleEveryUnavailableInputPreservesCrossMetricAlert(t *testing.T) {
 	for _, field := range []string{"cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut"} {
 		for _, kind := range []string{"vm", "lxc"} {
 			t.Run(kind+"/"+field, func(t *testing.T) {
-				m := guestObservationManager(t)
+				m := guestRuleObservationManager(t)
 				cfg := m.GetConfig()
 				cfg.GuestDefaults = ThresholdConfig{}
 				threshold := &HysteresisThreshold{Trigger: 85, Clear: 80}
