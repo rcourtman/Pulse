@@ -9381,3 +9381,24 @@ same-VMID connections, snapshots and completed/empty recovery. The source-bound
 production Backups views at desktop and 320px, including job and running-evidence
 controls. These are synthetic read-only proofs, not guest/QGA operations, durable
 store acceptance, incident cause, installed recovery or release availability.
+
+
+### LXC disk counters distinguish unknown usage from measured zero
+
+Both cluster/resources and node LXC collectors preserve whether `disk` and
+`maxdisk` were actually present and non-null in the complete decoded response.
+Missing usage/capacity or zero capacity yields the existing -1 unknown-usage
+sentinel, not a measured 0%. Root filesystem seeding and config-only enrichment
+preserve that sentinel: capacity alone cannot establish used/free space, enter
+History, or recover an existing disk incident. Explicit zero with positive
+capacity remains current and can recover normally. Legacy in-process producers,
+existing LXC overcommit clamping, independent current agent filesystem readings,
+identity, configuration, CPU, memory and access policy remain unchanged.
+
+`TestLXCDiskPresenceDistinguishesZeroNullAndMissing` covers the API boundary.
+`TestLXCDiskUsagePresenceLifecycle` joins direct/cluster HTTP clients to both
+collectors, root enrichment, acknowledged alert continuity, canonical public
+resources, History and ordinary measured-zero recovery. The root-seeding and
+independent-agent controls in `monitor_pve_guest_lxc_test.go` protect the shared
+sentinel and independent observations. These synthetic GET-only checks do not
+establish guest liveness, backup restore, incident cause or installed recovery.

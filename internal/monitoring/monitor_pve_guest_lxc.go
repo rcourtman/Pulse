@@ -117,9 +117,9 @@ func (m *Monitor) buildContainerFromClusterResource(
 		false,
 	)
 
-	// Clamp memory and disk values to prevent >100% usage
+	// Clamp memory values to prevent >100% usage
 	// (Proxmox can report used > total for LXC due to cgroup accounting,
-	// shared pages, or thin-provisioned disk overcommit)
+	// or shared pages)
 	clampedMemUsed := memUsed
 	if clampedMemUsed > memTotal && memTotal > 0 {
 		clampedMemUsed = memTotal
@@ -141,34 +141,21 @@ func (m *Monitor) buildContainerFromClusterResource(
 		source: memorySource, providerObservedAt: observedAtOr(res.ObservedAt, sampleTime),
 		previous: previousMemory, linkedAgent: agentHost,
 	}, time.Now())
-	diskUsed := res.Disk
-	if diskUsed > res.MaxDisk && res.MaxDisk > 0 {
-		diskUsed = res.MaxDisk
-	}
-	diskFree := int64(res.MaxDisk) - int64(diskUsed)
-	if diskFree < 0 {
-		diskFree = 0
-	}
 
 	lastSeen := time.Now()
 	container := models.Container{
-		ID:       guestID,
-		VMID:     res.VMID,
-		Name:     res.Name,
-		Node:     res.Node,
-		Pool:     strings.TrimSpace(res.Pool),
-		Instance: instanceName,
-		Status:   res.Status,
-		Type:     "lxc",
-		CPU:      safeFloat(res.CPU),
-		CPUs:     res.MaxCPU,
-		Memory:   memory,
-		Disk: models.Disk{
-			Total: int64(res.MaxDisk),
-			Used:  int64(diskUsed),
-			Free:  diskFree,
-			Usage: safePercentage(float64(diskUsed), float64(res.MaxDisk)),
-		},
+		ID:             guestID,
+		VMID:           res.VMID,
+		Name:           res.Name,
+		Node:           res.Node,
+		Pool:           strings.TrimSpace(res.Pool),
+		Instance:       instanceName,
+		Status:         res.Status,
+		Type:           "lxc",
+		CPU:            safeFloat(res.CPU),
+		CPUs:           res.MaxCPU,
+		Memory:         memory,
+		Disk:           containerDiskUsage(res.MaxDisk, res.Disk, res.DiskUsage),
 		NetworkIn:      networkInValue,
 		NetworkOut:     networkOutValue,
 		DiskRead:       diskReadValue,

@@ -1101,3 +1101,47 @@ func TestPerNodeLXCMemoryObservationMatchesClusterPath(t *testing.T) {
 		})
 	}
 }
+
+func TestLXCDiskUsageUnknownSurvivesRootSeeding(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		total, used uint64
+		presence    proxmox.DiskUsagePresence
+		want        float64
+	}{
+		{"missing", 1000, 0, proxmox.DiskUsagePresence{Explicit: true, Total: true}, -1},
+		{"no-capacity", 0, 0, proxmox.DiskUsagePresence{}, -1},
+		{"measured-zero", 1000, 0, proxmox.DiskUsagePresence{Explicit: true, Used: true, Total: true}, 0},
+		{"legacy", 1000, 980, proxmox.DiskUsagePresence{}, 98},
+		{"overcommit", 1000, 1200, proxmox.DiskUsagePresence{}, 100},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			disk := containerDiskUsage(tc.total, tc.used, tc.presence)
+			ct := models.Container{Disk: disk}
+			ensureContainerRootDiskEntry(&ct)
+			if disk.Usage != tc.want || len(ct.Disks) != 1 || ct.Disks[0].Usage != tc.want {
+				t.Fatalf("seeding changed measurement validity: aggregate=%+v root=%+v", disk, ct.Disks)
+			}
+			if tc.want >= 0 && ct.Disks[0].Used+ct.Disks[0].Free != ct.Disks[0].Total {
+				t.Fatal("measured bytes became incoherent")
+			}
+			if tc.want < 0 && ct.Disks[0].Free != 0 {
+				t.Fatal("unknown used space invented free space")
+			}
+		})
+	}
+}
+
+func TestLXCDiskUsageIndependentAgentRootRemainsCurrent(t *testing.T) {
+	now := time.Now()
+	ct := models.Container{VMID: 106, Name: "independent", Status: "running", Disk: containerDiskUsage(1000, 0, proxmox.DiskUsagePresence{Explicit: true, Total: true})}
+	ensureContainerRootDiskEntry(&ct)
+	root := models.Disk{Total: 1000, Used: 0, Free: 1000, Usage: 0, Mountpoint: "/", Type: "rootfs"}
+	m := &Monitor{state: models.NewState(), proxmoxLXCFilesystemsCache: map[string]agentLXCFilesystemCacheEntry{
+		agentLXCFilesystemCacheKey("site", "node", 106): {agentID: "fixture-agent", name: ct.Name, disks: []models.Disk{root}, expiresAt: now.Add(time.Minute)},
+	}}
+	m.enrichContainerWithAgentLXCFilesystems("site", "node", &ct, now)
+	if ct.Disk != root || len(ct.Disks) != 1 || ct.Disks[0] != root {
+		t.Fatal("missing API counters suppressed an independent current measured zero")
+	}
+}

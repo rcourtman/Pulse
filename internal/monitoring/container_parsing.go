@@ -40,13 +40,13 @@ func ensureContainerRootDiskEntry(container *models.Container) {
 		used = total
 	}
 
-	free := total - used
-	if free < 0 {
-		free = 0
+	free := container.Disk.Free
+	if container.Disk.Usage >= 0 {
+		free = maxInt64(0, total-used)
 	}
 
 	usage := container.Disk.Usage
-	if total > 0 && usage <= 0 {
+	if total > 0 && usage == 0 {
 		usage = safePercentage(float64(used), float64(total))
 	}
 

@@ -379,3 +379,43 @@ func TestIncompleteBackupTasksLeaveIndependentGuestCountersUsable(t *testing.T) 
 		t.Fatalf("task failure contaminated independent status: %+v", status)
 	}
 }
+
+func TestLXCDiskPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name, wire string
+		known      bool
+	}{
+		{"zero", `{"maxdisk":1000,"disk":0}`, true},
+		{"used", `{"maxdisk":1000,"disk":980}`, true},
+		{"missing-used", `{"maxdisk":1000}`, false},
+		{"null-used", `{"maxdisk":1000,"disk":null}`, false},
+		{"missing-total", `{"disk":0}`, false},
+		{"null-total", `{"maxdisk":null,"disk":0}`, false},
+		{"missing-both", `{}`, false},
+		{"untrusted-presence", `{"maxdisk":1000,"DiskUsage":{"Explicit":false,"Used":true,"Total":true}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ct Container
+			var res ClusterResource
+			if err := json.Unmarshal([]byte(tc.wire), &ct); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal([]byte(tc.wire), &res); err != nil {
+				t.Fatal(err)
+			}
+			if !ct.DiskUsage.Explicit || ct.DiskUsage.Known() != tc.known || ct.DiskUsage != res.DiskUsage {
+				t.Fatalf("lost HTTP field presence: container=%+v cluster=%+v", ct.DiskUsage, res.DiskUsage)
+			}
+			encoded, err := json.Marshal(ct)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(encoded), "DiskUsage") {
+				t.Fatal("internal presence escaped into API JSON")
+			}
+		})
+	}
+	if !(DiskUsagePresence{}).Known() {
+		t.Fatal("legacy in-process producer lost compatibility")
+	}
+}
