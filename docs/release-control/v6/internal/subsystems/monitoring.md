@@ -8052,6 +8052,21 @@ the temperature SSH key on disk) and from every system-settings save
 settings API), so repairing the key — or saving settings after repairing SSH
 access any other way — is retried on the next cycle rather than after a window
 that has compounded to fifteen minutes.
+Numeric socket destinations bypass DNS, preserving a scoped IPv6 literal's
+case-sensitive interface zone. The cache's `LookupIP` adapter cannot represent
+that zone in `net.IP`; turning a literal into an answer must not change its
+socket destination. Hostnames still use the same cached answers as discovery
+policy. Existing address-family filters, duplicate removal, caller cancellation,
+socket budgets, authority, TLS and certificate pin checks are unchanged.
+`pkg/tlsutil/literal_destination_test.go` checks exact zone preservation, literal
+sockets without DNS, named cache reuse and cancellation.
+`internal/api/configapi/scoped_literal_journey_test.go` follows scoped IPv6
+through the ordinary saved/draft PVE, PBS and PMG handlers with actual local TLS,
+password authentication, wrong-pin refusal and known-pin recovery. Its emitted
+responses feed the unchanged connection editor in
+`scripts/check-proxmox-scoped-literal.cjs`. Synthetic loopback proof does not
+establish native link-local routing, certificate renewal or guest recovery.
+
 The shared socket dialler also tries the usable addresses in that one cached
 answer rather than discarding all but the first. It preserves answer order,
 filters explicit IPv4/IPv6 networks and deduplicates equivalent literals.
