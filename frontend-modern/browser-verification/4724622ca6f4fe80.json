@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "2f5da4413c78d00aa5c54243583ecce97c9282eb",
+  "changed_paths": [
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/notifications.ts": "1b3f5597988663ada86c6838ce4163a31b804a2e08c102a2a227566cd3402092",
+    "frontend-modern/src/components/Alerts/WebhookConfigForm.tsx": "2ac17e2e1b154019f48012fcbfc670d52a8d115e4aff748a8c4b50041f52ab8d"
+  },
+  "routes": [
+    "/browser-tests/notification-recovery-boundary.html?send-tests (existing full Notifications tab, actual API adapters, state owners, forms, toasts and CSS; same-origin synthetic producer)"
+  ],
+  "states": [
+    "Email, Apprise and saved/draft webhook tests reject missing or contradictory 2xx acknowledgements as unconfirmed, without a success toast or echoing an unconfirmed diagnostic.",
+    "Affirmative responses retain success; deliveryPaused:true retains the warning rather than claiming ordinary alert delivery. A genuine HTTP 400 keeps its provider-rejection feedback.",
+    "The unsaved webhook edit and saved inventory survive every test. The actual hovered draft Test control has 17.06:1 text contrast in light desktop and 9.45:1 in 320px dark WebKit, above 4.5:1."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow WebKit touch operate all four real test controls: 26 explicit operations, exactly one same-origin POST per operation, actual CSRF path retained, no configuration or queue mutation.",
+    "Rejected, paused and confirmed results cover all four controls; both journeys preserve transport failure feedback. No horizontal overflow, page errors or unexpected/external requests. Both contexts/browsers and server close."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-21T00:10:30.434306Z",
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  },
+  "pixel_review": "All eight final capture files opened with native view_image and presented to the model. Unconfirmed feedback, paused caveat and affirmative feedback are readable on desktop and 320px dark. The formerly blank-looking dark draft Test label is now visible after tap/hover, beside enabled Cancel and Update controls; no horizontal clipping. Eight first-pass captures were also inspected and their adverse contrast finding is retained.",
+  "driver": "frontend-modern/browser-tests/notification-test-acknowledgement.cjs",
+  "binding": "Exact 2f5da4413c78d00aa5c54243583ecce97c9282eb / source-3yyvlt0z: command/client 0, complete hash-matched raw output, guest ready/stopped; 289 tests, types, all lint audits, production build/embed, budgets and driver syntax pass. All 2576 source/five served-artifact hashes match final browser execution.",
+  "limits": "Synthetic UI acceptance, not native provider/recipient or ordinary-alert delivery, installed recovery, protected publication or release availability. The initial visual failure and unused first static attribution typo remain retained, not relabelled as clean proof."
+}
