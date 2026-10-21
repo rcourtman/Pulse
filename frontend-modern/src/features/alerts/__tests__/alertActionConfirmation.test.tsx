@@ -53,18 +53,21 @@ describe('alert action confirmation through real adapters and state', () => {
   afterEach(() => vi.useRealTimers());
 
   describe.each(actions)('%s', (action) => {
-    it.each(unconfirmed)('does not acknowledge a malformed/rejected 2xx body: %j', async (body) => {
-      vi.mocked(apiFetchJSON).mockResolvedValue(body);
-      await expect(call(action)).rejects.toThrow(/could not be confirmed/);
-      expect(apiFetchJSON).toHaveBeenCalledTimes(1);
-      expect(apiFetchJSON).toHaveBeenCalledWith(`/api/alerts/${action}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          alertIdentifier: initial.id,
-          ...(action === 'snooze' ? { until } : {}),
-        }),
-      });
-    });
+    it.each(unconfirmed.map((body) => ({ body })))(
+      'does not acknowledge a malformed/rejected 2xx body: %j',
+      async ({ body }) => {
+        vi.mocked(apiFetchJSON).mockResolvedValue(body);
+        await expect(call(action)).rejects.toThrow(/could not be confirmed/);
+        expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+        expect(apiFetchJSON).toHaveBeenCalledWith(`/api/alerts/${action}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            alertIdentifier: initial.id,
+            ...(action === 'snooze' ? { until } : {}),
+          }),
+        });
+      },
+    );
     it('preserves the affirmative producer contract and sends once', async () => {
       const response =
         action === 'snooze'
