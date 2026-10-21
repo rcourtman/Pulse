@@ -442,7 +442,18 @@ module.exports = (async () => {
       await expect(
         table.locator('[tabindex="0"][aria-label^="Update available. Pulse cannot apply it:"]'),
       ).toHaveCount(1);
-      await expect(table.getByRole('button', { name: /update/i })).toHaveCount(0);
+      record.updateNamedButtons = await table
+        .getByRole('button', { name: /update/i })
+        .evaluateAll((buttons) =>
+          buttons.map((button) => ({
+            text: button.textContent,
+            label: button.getAttribute('aria-label'),
+            header: Boolean(button.closest('thead')),
+          })),
+        );
+      // The Updates column's sort button is not a container update action.
+      assert(record.updateNamedButtons.every((button) => button.header));
+      await expect(table.locator('tbody').getByRole('button', { name: /update/i })).toHaveCount(0);
       record.checks.push(
         'REST refusal is a focusable/tappable explanation, not an Update action, in both the real Docker table and full Infrastructure drawer; no POST occurs.',
       );
