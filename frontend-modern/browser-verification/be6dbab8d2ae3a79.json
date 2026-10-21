@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "ecef566e3a664685d5499d9368a1a30ea09299e2",
+  "verified_at": "2026-10-21T23:14:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "3f9a94a27f99ddbb929c2ec498b6b3654c833d0c7d1ca50d314ca8a80cccb1f9"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/proxmox/backups?view=coverage",
+    "/docs/VM_DISK_MONITORING",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Protected and mixed backup protection verdicts with visible evidence limits",
+    "By date and Coverage with the same non-health summary",
+    "Filtered and empty selections, selected zero count",
+    "Unavailable protection posture withdraws green verdicts but keeps safety guidance",
+    "Retry recovers exact server posture without changing restore evidence",
+    "Actual shipped safety Markdown in production Docs viewer",
+    "Changed shipped PBS guidance names both the current coverage label and the older health label"
+  ],
+  "interactions": [
+    "Keyboard Enter and phone touch select exact global counted targets, clear only incompatible scopes and preserve unrelated route state",
+    "View tabs preserve coverage limits and keep real restore inventory",
+    "Refresh and unavailable-posture retry use existing collected-evidence GETs only",
+    "Keyboard/touch guidance opens the real shipped safety document with no opener, no extra inventory read and no change to the backup route",
+    "Actual changed PBS Markdown is read through production Docs at its section fragment, at desktop and narrow widths",
+    "All 16 retained desktop and phone captures opened natively with view_image; no horizontal overflow"
+  ],
+  "document_sha256": {
+    "docs/PBS.md": "e9c2441c84689859cf6bddc1e7c21abe3a7ce39d298cf019f73fc4ded7286ee6",
+    "frontend-modern/public/docs/PBS.md": "e9c2441c84689859cf6bddc1e7c21abe3a7ce39d298cf019f73fc4ded7286ee6",
+    "frontend-modern/public/docs/VM_DISK_MONITORING.md": "b14299596c1bfe391ac063b5265ae5cb727895e2abeb8033265348757553a59c"
+  },
+  "engines": [
+    "Chromium 141.0.7390.37",
+    "WebKit 26.0"
+  ],
+  "playwright": "1.56.1",
+  "browser_report_sha256": "6b36160f0c971581bc4fc8c8f8ffeebaaa45d7f87ff3ef6ae09fb9b7d76fbb40",
+  "limits": "Synthetic collected evidence through production readers, router, tables and Docs. No guest operation, native thaw/liveness, restore, installed recovery, screen-reader speech, protected landing or release proof."
+}
