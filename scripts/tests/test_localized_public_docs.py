@@ -43,7 +43,8 @@ MACHINE_FACING_STRINGS = (
     "Settings → Infrastructure → Install on a host",
     "Settings → Plans → Existing purchases",
     "ppk_live_",
-    "http://<your-ip>:7655",
+    "127.0.0.1:7655:7655",
+    "../../INSTALL.md#open-a-protected-setup-connection",
     "/install.sh",
     "https://pulserelay.pro/download.html",
 )

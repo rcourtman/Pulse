@@ -19,14 +19,18 @@ Pulse is distributed as a lightweight, Alpine-based Docker image.
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-Access at `http://<your-ip>:7655`.
+This new-install example binds the published port to the Docker host's IPv4
+loopback, not every host interface. Use [protected first-time setup](INSTALL.md#open-a-protected-setup-connection)
+before entering a bootstrap token or password: verified HTTPS, a browser on
+that host, or an SSH tunnel from your workstation. Do not send setup credentials
+to a remote plain-HTTP address.
 
 ---
 
@@ -41,7 +45,7 @@ services:
     container_name: pulse
     restart: unless-stopped
     ports:
-      - "7655:7655"
+      - "127.0.0.1:7655:7655"
     volumes:
       - pulse_data:/data
     environment:
@@ -53,6 +57,18 @@ volumes:
 ```
 
 Run with: `docker compose up -d`
+
+The Compose example also publishes only on host loopback. These are new-install
+examples, not replacement definitions for an existing deployment: keep its data
+mount, image edition, credentials and network configuration. Loopback publishing
+does not configure HTTPS or change Pulse's listener inside the container.
+
+For remote agents and ordinary remote browser access, provide a reachable,
+verified HTTPS origin through your [reverse proxy](REVERSE_PROXY.md#before-configuring-the-proxy).
+A proxy in another container needs a shared private network and the Pulse
+service name, not that proxy container's `127.0.0.1`. Do not expose the plain-HTTP
+backend on every host interface to make it reachable. The setup tunnel is not
+an address to give agents or register as an SSO callback.
 
 **Freeze-enabled VM backups:** API-only monitoring can still send QEMU Guest
 Agent requests. For an affected installation, follow the
