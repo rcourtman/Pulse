@@ -80,14 +80,19 @@ const anchor = 'open-a-protected-setup-connection';
         ['i18n/de/README', 'Dieses Beispiel für Neuinstallationen', 'german-start'],
         ['i18n/es/README', 'Este ejemplo para instalaciones nuevas', 'spanish-start'],
       ]) {
-        // Use the production router: the existing all-documentation link then
-        // normal same-origin URL navigation needs no new product fixture/route.
-        await page.goto(`http://127.0.0.1:5199/browser-tests/docs-fragment-navigation.html?scenario=installation`);
-        await page.locator(`article #${anchor}`).waitFor();
-        await page.evaluate(target => { history.pushState({}, '', `/docs/${target}`); dispatchEvent(new PopStateEvent('popstate')); }, doc);
+        // Reach each guide through actual index links rather than injecting
+        // a history event. The reader and fragment focus remain unmodified.
+        await activate(page.getByRole('link', { name: 'All documentation', exact: false }).first());
+        await page.waitForURL('**/docs/README');
+        await activate(page.locator(`article a[href="/docs/${doc}"]`).first());
+        await page.waitForURL(`**/docs/${doc}`);
         const note = page.locator('article p').filter({ hasText: phrase }).first();
         await note.waitFor();
         const code = page.locator('article pre').filter({ hasText: 'docker run -d' }).first();
+        const box = await code.boundingBox();
+        result.codePanels ??= [];
+        result.codePanels.push({ doc, name, box, styles: await code.evaluate(el => ({ display: getComputedStyle(el).display, visibility: getComputedStyle(el).visibility, parent: el.parentElement.tagName, html: el.outerHTML.slice(0, 600) })) });
+        check(box && box.width > 0 && box.height > 0, `${name}/${slug}: code panel has visible geometry`);
         check((await code.innerText()).includes('-p 127.0.0.1:7655:7655'), `${name}/${slug}: loopback Docker publication`);
         await capture(slug, code);
         await activate(page.locator(`article a[href="/docs/INSTALL#${anchor}"]`).first());
