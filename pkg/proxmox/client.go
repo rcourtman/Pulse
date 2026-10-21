@@ -1165,6 +1165,7 @@ type Container struct {
 	DiskInfo   map[string]ContainerDiskUsage     `json:"diskinfo,omitempty"`
 	RootFS     string                            `json:"rootfs,omitempty"`
 	IOCounters IOCounterPresence                 `json:"-"`
+	DiskUsage  DiskUsagePresence                 `json:"-"`
 	ObservedAt time.Time                         `json:"-"`
 }
 
@@ -2478,6 +2479,7 @@ type ClusterResource struct {
 	Template   int               `json:"template,omitempty"`
 	Tags       string            `json:"tags,omitempty"`
 	IOCounters IOCounterPresence `json:"-"`
+	DiskUsage  DiskUsagePresence `json:"-"`
 	ObservedAt time.Time         `json:"-"`
 	Lock       string            `json:"lock,omitempty"`
 }

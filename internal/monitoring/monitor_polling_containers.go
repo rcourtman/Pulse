@@ -207,36 +207,20 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					previous: previousMemory, linkedAgent: agentHost,
 				}, time.Now())
 
-				diskTotalBytes := clampToInt64(container.MaxDisk)
-				diskUsedBytes := clampToInt64(container.Disk)
-				if diskTotalBytes > 0 && diskUsedBytes > diskTotalBytes {
-					diskUsedBytes = diskTotalBytes
-				}
-				diskFreeBytes := diskTotalBytes - diskUsedBytes
-				if diskFreeBytes < 0 {
-					diskFreeBytes = 0
-				}
-				diskUsagePercent := safePercentage(float64(diskUsedBytes), float64(diskTotalBytes))
-
 				// Create container model
 				modelContainer := models.Container{
-					ID:       guestID,
-					VMID:     int(container.VMID),
-					Name:     container.Name,
-					Node:     n.Node,
-					Pool:     strings.TrimSpace(container.Pool),
-					Instance: instanceName,
-					Status:   container.Status,
-					Type:     "lxc",
-					CPU:      cpuUsage,
-					CPUs:     int(container.CPUs),
-					Memory:   memory,
-					Disk: models.Disk{
-						Total: diskTotalBytes,
-						Used:  diskUsedBytes,
-						Free:  diskFreeBytes,
-						Usage: diskUsagePercent,
-					},
+					ID:             guestID,
+					VMID:           int(container.VMID),
+					Name:           container.Name,
+					Node:           n.Node,
+					Pool:           strings.TrimSpace(container.Pool),
+					Instance:       instanceName,
+					Status:         container.Status,
+					Type:           "lxc",
+					CPU:            cpuUsage,
+					CPUs:           int(container.CPUs),
+					Memory:         memory,
+					Disk:           containerDiskUsage(container.MaxDisk, container.Disk, container.DiskUsage),
 					NetworkIn:      networkInValue,
 					NetworkOut:     networkOutValue,
 					DiskRead:       diskReadValue,
@@ -274,7 +258,12 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 						modelContainer.Disk.Free = 0
 					}
 
-					modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
+					// A positive storage read can supply missing usage, but a
+					// missing capacity still cannot establish a percentage.
+					modelContainer.Disk.Usage = -1
+					if modelContainer.Disk.Total > 0 {
+						modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
+					}
 				}
 
 				m.enrichContainerMetadata(
