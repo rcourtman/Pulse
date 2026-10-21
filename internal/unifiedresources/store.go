@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	_ "modernc.org/sqlite"
 )
 
@@ -234,7 +235,7 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
 			"foreign_keys(ON)",
-			"cache_size(-64000)",
+			pdb.PageCachePragma,
 			"auto_vacuum(INCREMENTAL)",
 		},
 	}.Encode()

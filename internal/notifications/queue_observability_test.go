@@ -2,10 +2,12 @@ package notifications
 
 import (
 	"bytes"
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
 
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -116,4 +118,28 @@ func captureNotificationQueueLogs(t *testing.T) *bytes.Buffer {
 	})
 
 	return &buf
+}
+
+// The notification queue must take the shared page cache bound instead of a
+// private 64 MB cache held outside the Go heap (#1803).
+func TestNotificationQueueUsesSharedPageCacheBound(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+	assertSharedPageCacheBound(t, "notification queue", nq.db)
+}
+
+func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
+	QueryRow(query string, args ...any) *sql.Row
+}) {
+	t.Helper()
+	var size int
+	if err := conn.QueryRow(`PRAGMA cache_size`).Scan(&size); err != nil {
+		t.Fatalf("%s: read cache_size: %v", name, err)
+	}
+	if size != -pdb.MaxPageCacheKiB {
+		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
+	}
 }

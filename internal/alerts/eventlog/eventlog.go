@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
@@ -147,7 +148,7 @@ func sqliteDSN(path string) string {
 			// telemetry. FULL keeps committed events and their active-state
 			// projection durable across host power loss as well as process exit.
 			"synchronous(FULL)",
-			"cache_size(-16000)",
+			pdb.PageCachePragma,
 		},
 	}.Encode()
 }

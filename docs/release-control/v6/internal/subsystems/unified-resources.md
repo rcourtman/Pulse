@@ -718,6 +718,14 @@ read-only incident memory association. It does not rewrite event resource IDs,
 resource operator state, approvals, action request identity or execution
 capabilities. An unavailable canonical read remains an error.
 
+### Bounded SQLite page cache
+
+The resource store takes its SQLite page cache from `pdb.PageCachePragma` in
+`pkg/db/pagecache.go`, 2000 KiB per connection, not a private 64 MB
+`cache_size`. The modernc driver holds that cache outside the Go heap at about twice its size, where neither the garbage collector nor `GOMEMLIMIT` reaches it (#1803). Pages outside the cache are re-read from the
+kernel file cache, which the kernel can reclaim under memory pressure.
+`TestSQLiteResourceStoreUsesSharedPageCacheBound` pins the effective value.
+
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
 Persisted action request identity is scoped to the trusted actor and exact

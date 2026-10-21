@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
 
 func TestSQLiteManagerAddsIdentityMetadataColumnsOnUpgrade(t *testing.T) {
@@ -1048,4 +1050,28 @@ func TestSQLiteManagerChangeLogRetention(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The RBAC store must take the shared page cache bound instead of a private
+// 32 MB cache held outside the Go heap (#1803).
+func TestSQLiteManagerUsesSharedPageCacheBound(t *testing.T) {
+	manager, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer manager.Close()
+	assertSharedPageCacheBound(t, "rbac", manager.db)
+}
+
+func assertSharedPageCacheBound(t *testing.T, name string, conn interface {
+	QueryRow(query string, args ...any) *sql.Row
+}) {
+	t.Helper()
+	var size int
+	if err := conn.QueryRow(`PRAGMA cache_size`).Scan(&size); err != nil {
+		t.Fatalf("%s: read cache_size: %v", name, err)
+	}
+	if size != -pdb.MaxPageCacheKiB {
+		t.Fatalf("%s: cache_size = %d, want %d from pdb.PageCachePragma", name, size, -pdb.MaxPageCacheKiB)
+	}
 }
