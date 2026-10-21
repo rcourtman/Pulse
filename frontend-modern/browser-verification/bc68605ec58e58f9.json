@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "197242b568a425f2014caedd463965ca1b462773",
+  "verified_at": "2026-10-21T10:26:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/selfHostedPlans.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/selfHostedPlans.ts": "1ad6996e4ab7cb6d80a5949ca35a47269572fba4997c07333f199ae1c05ef36f"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Community stack built from the parent commit: mock estate, no licence, telemetry off, licence server stubbed",
+    "Plans & Billing: Current plan Community, then Available plans with the Pulse Pro card",
+    "Pro card summary reads For small teams and larger estates and lists team controls, reporting and agent profiles, external probes and commercial support before Patrol modes, Patrol fixes and 90-day history",
+    "375px plan page: card and View plans present, scrollWidth equals viewport width"
+  ],
+  "interactions": [
+    "Clicked Plans & Billing in the Settings sidebar and read the Pro card in order",
+    "Confirmed View plans still targets /auth/license-purchase-start"
+  ]
+}

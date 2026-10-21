@@ -3399,9 +3399,15 @@ default self-hosted benefit or a reason to put a paid prompt in front of
 ordinary users.
 The public offer, Pulse settings presentation, and Pulse Account handoff must
 also describe Community, Relay, and Pro as distinct jobs rather than an
-artificial feature ladder. Relay is the secure-access product. Pro is the
-Patrol-powered operations product and explicitly includes Relay connectivity,
-Pulse Mobile pairing, and push notifications. Retired Pro trial acquisition
+artificial feature ladder. Pro is the plan for small teams and larger estates
+(2026-10-21): its in-app comparison and public copy lead with team controls
+(named seats, RBAC, audit logging), reporting and agent profiles, external
+probes, and commercial support, with Patrol modes, Patrol fixes, and 90-day
+history following. Paid features for an organisation read as normal, while
+paid features an individual needs for their own setup read as a withheld free
+version (issue #1409), so Pro copy must not lead with individual-only value.
+Relay was retired on 2026-09-29 and existing Relay subscribers carry Pro
+entitlements, including Pulse Mobile pairing until the app retires. Retired Pro trial acquisition
 copy and dormant Cloud checkout catalogs must not reappear in the ordinary
 self-hosted journey; historical Cloud plan identifiers may remain only as
 customer-state labels.
