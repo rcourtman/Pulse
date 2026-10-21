@@ -40,7 +40,7 @@ const metrics: HostCustomSensorMetric[] = [
     observedAt,
   },
 ];
-const initial: Resource = {
+const guest: Resource = {
   id: 'sensor-machine',
   name: 'Hybrid machine',
   displayName: 'Hybrid machine',
@@ -66,6 +66,24 @@ const initial: Resource = {
     sensors: { custom: [] },
   },
 };
+// Reuse the production drawer/merger fixture for the API host aggregate path.
+const rootDiskOnly = new URLSearchParams(window.location.search).get('kind') === 'root-disk';
+const initial: Resource = rootDiskOnly
+  ? {
+      id: 'root-disk-host',
+      name: 'API host',
+      displayName: 'API host',
+      type: 'agent',
+      platformId: 'fixture',
+      platformType: 'proxmox-pve',
+      platformScopes: ['proxmox-pve'],
+      sourceType: 'api',
+      sources: ['proxmox'],
+      status: 'online',
+      lastSeen: Date.parse(observedAt),
+      platformData: { proxmox: { nodeName: 'API host' } },
+    }
+  : guest;
 syncAIRuntimeSettings({ discovery_enabled: false });
 function Fixture() {
   const [snapshot, setSnapshot] = createSignal<Resource[]>([structuredClone(initial)]);
@@ -79,6 +97,7 @@ function Fixture() {
       ),
     );
   (window as any).__resourceAgent = {
+    rootDisk: (disk?: Resource['disk']) => update({ disk }, ['disk']),
     report: (stale = false) =>
       update(
         {
@@ -147,7 +166,9 @@ function Fixture() {
   return (
     <WebSocketContext.Provider value={ws as any}>
       <main class="mx-auto min-h-screen max-w-4xl space-y-3 bg-surface p-3 text-base-content">
-        <h1 class="text-base font-semibold">Canonical guest agent observations</h1>
+        <h1 class="text-base font-semibold">
+          {rootDiskOnly ? 'Canonical root disk observations' : 'Canonical guest agent observations'}
+        </h1>
         <p class="text-xs text-muted">
           Synthetic stored reports. No agent, service or backup checks are sent.
         </p>

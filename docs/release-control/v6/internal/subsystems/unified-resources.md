@@ -23,6 +23,17 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Root aggregate projection preserves missing counters
+
+The existing detail mapper preserves absent capacity and used/free bytes rather
+than defaulting them to zero. It derives free space and utilization only from
+observed byte inputs and retains invalid/unavailable aggregate percentages as
+unavailable. This is a local presentation projection, not a canonical payload,
+collector, identity, freshness or History change. Mapper regressions and the
+source-bound `root-disk-observation.cjs` full-drawer fixture exercise missing,
+partial, invalid, zero, measured and removed canonical observations without
+changing their source values or closing the open disclosure.
+
 ### Native guest power qualifies only its own agent cards
 
 Canonical power-only Proxmox deltas qualify the detail drawer's retained in-guest

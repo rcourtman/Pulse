@@ -5,8 +5,9 @@ import {
   screen as primitiveScreen,
 } from '@solidjs/testing-library';
 import { DisksCard } from './cards/DisksCard';
+import { RootDiskCard } from './cards/RootDiskCard';
 import { NetworkInterfacesCard } from './cards/NetworkInterfacesCard';
-import type { Disk, HostNetworkInterface } from '@/types/api';
+import type { Disk, HostNetworkInterface, Node } from '@/types/api';
 import { traverse, transformSync, types as t } from '@babel/core';
 // @ts-expect-error babel-preset-solid ships no type declarations.
 import solidPreset from 'babel-preset-solid';
@@ -350,6 +351,29 @@ const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css')
 const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
+  it('replaces the real root usage bar with visible unavailable evidence in the same card', () => {
+    const [disk, setDisk] = createSignal<Disk>({ total: 100, used: 0 });
+    const view = renderPrimitive(() =>
+      createComponent(RootDiskCard, {
+        get node() {
+          return { disk: disk() } as Node;
+        },
+      }),
+    );
+    try {
+      const card = primitiveScreen.getByTestId('root-disk-card');
+      expect(card.querySelector('[data-stacked-disk-trigger]')).not.toBeNull();
+      setDisk({ total: 100 });
+      expect(primitiveScreen.getByRole('status')).toHaveTextContent(
+        'Usage unavailable · 100 B total',
+      );
+      expect(card.querySelector('[data-stacked-disk-trigger]')).toBeNull();
+      expect(primitiveScreen.getByTestId('root-disk-card')).toBe(card);
+    } finally {
+      view.unmount();
+      cleanup();
+    }
+  });
   it('keeps disk mounts in the parent scrolling flow rather than a hidden nested list', () => {
     const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
     expect(source).toContain('data-testid="disks-card-mounts"');

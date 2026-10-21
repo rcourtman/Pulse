@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Disk, Node } from '@/types/api';
 import { toNodeFromProxmox } from '@/components/Infrastructure/resourceDetailMappers';
 import type { Resource } from '@/types/resource';
+import { formatBytes } from '@/utils/format';
 import { RootDiskCard } from '../RootDiskCard';
 
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
@@ -56,9 +57,7 @@ describe('RootDiskCard observation availability', () => {
     ));
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-usage', String(percent / 100));
-    expect(
-      screen.getByText(percent === 0 ? '0 B / 100 GB' : `${percent.toFixed(1)} GB / 100 GB`),
-    ).toBeInTheDocument();
+    expect(screen.getByText(`${formatBytes(percent * GB)} / 100 GB`)).toBeInTheDocument();
   });
 
   it('reacts to first, partial and removed canonical readings without reopening', () => {
