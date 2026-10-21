@@ -28,8 +28,23 @@ const save = () => fs.writeFileSync(path.join(output, 'result.json'), JSON.strin
     assert.equal(report.playwright, JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
     const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
     report.binding = { source_sha: binding.source_sha, graph: binding.graph, sha256: hash(fs.readFileSync(path.join(compiled, 'binding.json'))) };
+    // A driver-only repair changes no compiled app bytes. Bind its own exact
+    // execution revision separately; all other imported/source/asset hashes
+    // must still match the completed compiler proof, including the full CSS input.
+    const driverPath = 'browser-tests/guest-disk-inventory-state.cjs';
+    const driverHash = hash(fs.readFileSync(path.join(frontend, driverPath)));
+    if (driverHash !== binding.sources[driverPath]) {
+      const execution = JSON.parse(fs.readFileSync(path.join(root, 'tmp/guest-disk-inventory-driver-binding.json')));
+      assert.equal(execution.version, 1);
+      assert.match(execution.source_sha, /^[a-f0-9]{40}$/);
+      assert.equal(execution.compiled_source_sha, binding.source_sha);
+      assert.equal(execution.compiled_binding_sha256, report.binding.sha256);
+      assert.equal(execution.driver_path, driverPath);
+      assert.equal(execution.driver_sha256, driverHash);
+      report.execution_binding = execution;
+    }
     for (const [file, digest] of Object.entries(binding.sources))
-      assert.equal(hash(fs.readFileSync(path.join(frontend, file))), digest, file);
+      assert.equal(hash(fs.readFileSync(path.join(frontend, file))), file === driverPath && report.execution_binding ? report.execution_binding.driver_sha256 : digest, file);
     for (const file of ['src/components/Workloads/GuestPhysicalDisks.tsx', 'src/components/Workloads/GuestDrawer.tsx', 'src/hooks/useUnifiedResources.ts', 'browser-tests/guest-disk-inventory-state.cjs'])
       assert(binding.sources[file], `unbound source: ${file}`);
     const assets = new Map();
@@ -61,7 +76,7 @@ const save = () => fs.writeFileSync(path.join(output, 'result.json'), JSON.strin
       report.profiles.push(record);
       page.on('pageerror', error => record.page_errors.push(error.message));
       page.on('console', message => { if (message.type() === 'error') record.console_errors.push(message.text()); });
-      page.on('requestfailed', request => record.failed.push({ path: new URL(request.url()).pathname, failure: request.failure() }));
+      page.on('requestfailed', request => record.failed.push({ url: request.url(), path: new URL(request.url()).pathname, failure: request.failure() }));
       await page.routeWebSocket('**/*', socket => socket.close());
       let mode = 'held-empty', release;
       let gate = new Promise(resolve => release = resolve);
@@ -86,10 +101,34 @@ const save = () => fs.writeFileSync(path.join(output, 'result.json'), JSON.strin
           record.responses.push({ mode: requestedMode, status, ids: status === 200 ? rows.map(row => row.id) : [] });
           return route.fulfill({ status, json: status === 200 ? { resources: rows, meta: { totalPages: 1 } } : { error: 'PRIVATE_FIXTURE_ERROR' } });
         }
-        if (url.pathname === '/api/metrics-store/history') return route.fulfill({ json: { resourceType: 'disk', resourceId: url.searchParams.get('resourceId'), metric: url.searchParams.get('metric'), points: [], metrics: {}, source: 'store', start: Date.now() - 3600000, end: Date.now() } });
+        if (url.pathname === '/api/metrics-store/history') {
+          // Match the production single/all envelope and the requested owner
+          // and range. Invalid fixture data must not masquerade as read recovery.
+          const metric = url.searchParams.get('metric');
+          const body = { resourceType: url.searchParams.get('resourceType'), resourceId: url.searchParams.get('resourceId'), range: url.searchParams.get('range') || '24h', source: 'store', start: Date.now() - 3600000, end: Date.now() };
+          if (metric) { body.metric = metric; body.points = []; }
+          else body.metrics = {};
+          return route.fulfill({ json: body });
+        }
         if (url.pathname === '/api/alerts/active') return route.fulfill({ json: [] });
         assert(['/api/license/runtime-capabilities', '/api/alerts/config', '/api/security/status', '/api/metrics-store/stats', '/api/patrol/config'].includes(url.pathname), `unexpected API: ${url.pathname}`);
         return route.fulfill({ json: url.pathname.startsWith('/api/license/') ? { capabilities: [], limits: [], max_history_days: 7, runtime: { build: 'community' } } : { enabled: true, activationState: 'active' } });
+      });
+      // Observe, never trigger, History's AbortSignal. Every cancelled request
+      // must match a distinct observed client abort; all other failures fail.
+      await page.addInitScript(() => {
+        const audit = [];
+        window.__diskInventoryFetchAudit = audit;
+        const original = window.fetch;
+        window.fetch = function(input, init) {
+          const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, window.location.href).href;
+          if (new URL(url).pathname !== '/api/metrics-store/history') return original.call(this, input, init);
+          const signal = init?.signal || (input instanceof Request ? input.signal : undefined);
+          const item = { id: audit.length, url, signal_observed: Boolean(signal), aborted: Boolean(signal?.aborted) };
+          audit.push(item);
+          signal?.addEventListener('abort', () => { item.aborted = true; }, { once: true });
+          return original.call(this, input, init);
+        };
       });
       await page.addInitScript(dark => document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.toggle('dark', dark), { once: true }), dark);
       const capture = async (label, target) => {
@@ -164,7 +203,16 @@ const save = () => fs.writeFileSync(path.join(output, 'result.json'), JSON.strin
       record.cases.push('A new successful scoped response restores only its replacement 42°C disk, and its real SMART detail opens with keyboard/touch. This is presentation, not native disk recovery.');
       await capture('replacement', row);
       assert.deepEqual(record.page_errors, []);
-      assert.deepEqual(record.failed, []);
+      record.client_fetch_audit = await page.evaluate(() => window.__diskInventoryFetchAudit);
+      const matched = new Set();
+      for (const failed of record.failed) {
+        assert.equal(failed.path, '/api/metrics-store/history', 'non-History failure');
+        assert(['net::ERR_ABORTED', 'cancelled', 'Cancelled', 'Load cancelled', 'Load request cancelled'].includes(failed.failure?.errorText), 'unexpected request failure');
+        const owner = record.client_fetch_audit.find(item => item.signal_observed && item.aborted && item.url === failed.url && !matched.has(item.id));
+        assert(owner, 'failed request has no matching observed client abort');
+        matched.add(owner.id);
+      }
+      record.verified_client_aborts = matched.size;
       assert(record.console_errors.every(message => /Failed to load resource: the server responded with a status of 503/.test(message)), 'unexpected console error');
       assert.equal(record.responses.filter(item => item.status === 503).length, 1);
       await context.close(); context = null; report.cleanup.contexts_closed++;
