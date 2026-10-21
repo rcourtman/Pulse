@@ -1242,7 +1242,7 @@ func TestConvertContainerDiskInfo(t *testing.T) {
 					Total:      0,
 					Used:       0,
 					Free:       0,
-					Usage:      0,
+					Usage:      -1,
 					Mountpoint: "/",
 					Type:       "rootfs",
 				},
