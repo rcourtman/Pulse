@@ -53,6 +53,8 @@ const report = {
 let server, browser, current, origin;
 const scoped = 'q=missing-workload&node=missing-node&type=host&location=missing-repository';
 const clearedKeys = ['q', 'node', 'type', 'location', 'source', 'day', 'view'];
+const coverageLimits =
+  'Protected rates recorded backup evidence, not current guest health. It does not prove a successful restore, guest thaw or filesystem writes.';
 function serve(req, res, next) {
   if (!req.url.startsWith('/api/')) return next();
   try {
@@ -61,6 +63,12 @@ function serve(req, res, next) {
     let payload;
     if (url.pathname === '/api/backups/pve') payload = fixtures.pve;
     else if (url.pathname === '/api/backups/pbs') payload = fixtures.pbs;
+    else if (url.pathname === '/api/recovery/postures' && current.postureUnavailable) {
+      current.requests.push({ path: url.pathname, query: url.search, status: 503 });
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end('{"error":"Synthetic unavailable observation"}');
+      return;
+    }
     else if (url.pathname === '/api/recovery/postures') payload = {
       data: url.searchParams.getAll('resourceId').map((subjectResourceId) => ({
         subjectResourceId,
@@ -111,6 +119,13 @@ function serve(req, res, next) {
       }],
       build: { target: 'esnext', outDir: compiled, emptyOutDir: true, rollupOptions: { input: path.join(frontend, 'browser-tests/backup-identity.html') } },
     });
+    // The guidance must resolve through the shipped viewer and actual Markdown,
+    // not an HTML fallback or a mock document body.
+    const doc = 'frontend-modern/public/docs/VM_DISK_MONITORING.md';
+    const docBytes = fs.readFileSync(path.join(root, doc));
+    assert.equal(hash(docBytes), binding.files[doc]);
+    fs.mkdirSync(path.join(compiled, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(compiled, 'docs/VM_DISK_MONITORING.md'), docBytes);
     report.artifacts = {};
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -125,20 +140,29 @@ function serve(req, res, next) {
       const key = Object.hasOwn(report.artifacts, requested) ? requested : 'browser-tests/backup-identity.html';
       const bytes = fs.readFileSync(path.join(compiled, key));
       assert.equal(hash(bytes), report.artifacts[key]);
-      res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(key)] || 'application/octet-stream');
+      res.setHeader('Content-Type', { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.md': 'text/markdown' }[path.extname(key)] || 'application/octet-stream');
       res.end(bytes);
     }));
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     origin = `http://127.0.0.1:${server.address().port}`;
     for (const spec of [
       { name: 'chromium', engine: chromium, width: 1440, height: 900, touch: false },
-      { name: 'webkit', engine: webkit, width: 375, height: 812, touch: true },
+      { name: 'webkit', engine: webkit, width: 320, height: 844, touch: true },
     ]) {
       current = { engine: spec.name, viewport: { width: spec.width, height: spec.height }, requests: [], checks: [], errors: [] };
       report.cases.push(current);
       browser = await spec.engine.launch(spec.touch ? { headless: true } : { headless: true, channel: 'chromium', args: ['--no-sandbox'] });
       current.browser_version = browser.version();
       const context = await browser.newContext({ viewport: current.viewport, hasTouch: spec.touch, isMobile: spec.touch, locale: 'en-GB', colorScheme: spec.touch ? 'dark' : 'light' });
+      await context.route('**/*', (route) => {
+        const request = route.request(),
+          url = new URL(request.url());
+        if (url.origin !== origin || !['GET', 'HEAD'].includes(request.method())) {
+          report.unexpected.push(`${request.method()} ${url.origin}${url.pathname}`);
+          return route.abort();
+        }
+        return route.continue();
+      });
       const page = await context.newPage();
       page.setDefaultTimeout(10000);
       await page.clock.setFixedTime(new Date('2026-10-20T00:02:00Z'));
@@ -153,6 +177,16 @@ function serve(req, res, next) {
         return route.continue();
       });
       const rows = page.locator('[data-proxmox-backup-row="coverage"]');
+      const limits = page.locator('[data-backup-coverage-limits]');
+      const checkLimits = async () => {
+        await expect(page.getByText('Backup coverage', { exact: true })).toBeVisible();
+        await expect(limits).toBeVisible();
+        await expect(limits).toContainText(coverageLimits);
+        await expect(limits.getByRole('link', { name: 'Backup safety guidance' })).toHaveAttribute(
+          'href',
+          '/docs/VM_DISK_MONITORING',
+        );
+      };
       const count = (label) => page.getByRole('button', { name: label, exact: true });
       const activate = async (target) => {
         if (spec.touch) await target.tap();
@@ -188,6 +222,8 @@ function serve(req, res, next) {
         current.checks.push('Reproduced: global 2 unprotected action toggles posture off, retains four hiding filters, and reveals zero targets.');
         await capture('count-still-empty');
       } else {
+        await checkLimits();
+        current.checks.push('The coverage summary visibly separates recorded protection from current guest health, restores, thaw and filesystem writes.');
         const expectSelection = async (label, state, ids) => {
           await expect(rows).toHaveCount(ids.length);
           assert.deepEqual(await rows.evaluateAll((items) => items.map((item) => item.dataset.proxmoxCoverageKey).sort()), ids.map((id) => `resource:${id}`).sort());
@@ -221,11 +257,14 @@ function serve(req, res, next) {
           await expectSelection(label, state, ids);
           assert.equal(current.requests.length, before, 'Navigation must not refresh inventory or posture.');
         }
+        await checkLimits();
         await capture('protected-target');
         await activate(page.getByRole('link', { name: 'By date', exact: true }));
         assert.equal(new URL(page.url()).searchParams.get('posture'), null);
         await expect(page.locator('[data-proxmox-backup-row="recoverable"]')).toHaveCount(1);
-        current.checks.push('Ordinary view tab remains usable and drops posture only; original unmatched restore record remains inspectable.');
+        await checkLimits();
+        await capture('date-coverage-limits');
+        current.checks.push('Both Coverage and By date retain the same visible protection limits while ordinary view navigation and evidence remain intact.');
         await load('/proxmox/backups/coverage?posture=protected&node=pve-0&presentation=kept');
         await expect(count('1 protected')).toHaveAttribute('aria-pressed', 'false');
         current.postureOverride = { 'count-0': 'unknown' };
@@ -239,6 +278,49 @@ function serve(req, res, next) {
         await expect(rows).toHaveCount(5);
         assert.equal(await count('0 protected').count(), 0);
         current.checks.push('A real inventory/posture refresh to zero keeps the selected count reachable; it clears scopes before toggling off, without an invented healthy target.');
+        current.postureOverride = undefined;
+        current.postureUnavailable = true;
+        await activate(page.getByRole('button', { name: 'Refresh backups', exact: true }));
+        await expect(page.getByText(/Protection posture is unavailable\./)).toBeVisible();
+        await count('5 unknown').waitFor();
+        await checkLimits();
+        await capture('unavailable-coverage-limits');
+        current.postureUnavailable = false;
+        await activate(page.getByRole('button', { name: 'Retry protection posture', exact: true }));
+        await count('1 protected').waitFor();
+        await checkLimits();
+        const readsBeforeDoc = current.requests.length;
+        const sourceUrl = page.url();
+        const popupPromise = context.waitForEvent('page');
+        await activate(limits.getByRole('link', { name: 'Backup safety guidance' }));
+        const docPage = await popupPromise;
+        await docPage.waitForURL(`${origin}/docs/VM_DISK_MONITORING`);
+        await expect(
+          docPage.getByRole('heading', { name: 'Backup safety', exact: true }),
+        ).toBeVisible();
+        await expect(docPage.locator('article')).toContainText(
+          'every filesystem covered by the backup',
+        );
+        assert.equal(await docPage.evaluate(() => window.opener === null), true);
+        const file = `${spec.name}-shipped-safety-guidance.png`;
+        await docPage.screenshot({
+          path: path.join(output, file),
+          animations: 'disabled',
+          timeout: 30000,
+        });
+        report.captures.push({
+          file,
+          state: 'actual-shipped-guidance',
+          viewport: current.viewport,
+          sha256: hash(fs.readFileSync(path.join(output, file))),
+        });
+        await docPage.close();
+        assert.equal(page.url(), sourceUrl);
+        assert.equal(current.requests.length, readsBeforeDoc);
+        await checkLimits();
+        current.checks.push(
+          'Unavailable posture withdraws green verdicts without hiding safety limits; retry restores the server verdict. Keyboard/touch opens real shipped guidance with no opener, extra inventory read, mutation or loss of the backup view.',
+        );
       }
       assert.deepEqual(current.errors, []);
       await context.close();

@@ -5,6 +5,8 @@ import { Route, Router } from '@solidjs/router';
 import { ProxmoxBackupsTable } from '../src/features/proxmox/ProxmoxBackupsTable';
 import { identityGuest } from '../src/features/proxmox/__fixtures__/backupIdentity';
 import type { Resource } from '../src/types/resource';
+import Docs from '../src/pages/Docs';
+import { DarkModeContext } from '../src/contexts/appRuntime';
 import '../src/index.css';
 
 function Fixture() {
@@ -26,6 +28,18 @@ function Fixture() {
 render(
   () => (
     <Router>
+      <Route
+        path="/docs/*docPath"
+        component={() => (
+          <DarkModeContext.Provider
+            value={() => document.documentElement.classList.contains('dark')}
+          >
+            <main class="min-h-screen bg-surface p-3 text-base-content">
+              <Docs />
+            </main>
+          </DarkModeContext.Provider>
+        )}
+      />
       <Route path="/*" component={Fixture} />
     </Router>
   ),
