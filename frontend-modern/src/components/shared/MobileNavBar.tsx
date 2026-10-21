@@ -6,7 +6,7 @@ import {
   getMobileNavAlertBadgeCounts,
   getMobileNavDestinationKey,
   getMobileNavDestinationHref,
-  getMobileNavTabAriaLabel,
+  getMobileNavTabCountSuffix,
   getMobileNavTabButtonClass,
   isMobileNavDestinationActive,
   mobileNavDestinationHasBadge,
@@ -91,6 +91,9 @@ function MobileNavDestinationContent(props: {
         <span class="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
           Pro
         </span>
+      </Show>
+      <Show when={utilityTab()}>
+        {(utility) => <span class="sr-only">{getMobileNavTabCountSuffix(utility())}</span>}
       </Show>
     </>
   );
@@ -182,11 +185,6 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 data-tab-id={destination.tab.id}
                 data-mobile-nav-destination={getMobileNavDestinationKey(destination)}
                 aria-current={active() ? 'page' : undefined}
-                aria-label={
-                  destination.kind === 'utility'
-                    ? getMobileNavTabAriaLabel(destination.tab)
-                    : undefined
-                }
                 onClick={(event) => handleDestinationLinkClick(event, destination)}
                 title={destination.tab.tooltip}
                 class={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
@@ -313,11 +311,6 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 data-tab-id={destination.tab.id}
                 data-mobile-nav-destination={getMobileNavDestinationKey(destination)}
                 aria-current={active() ? 'page' : undefined}
-                aria-label={
-                  destination.kind === 'utility'
-                    ? getMobileNavTabAriaLabel(destination.tab)
-                    : undefined
-                }
                 onClick={(event) => handleDestinationLinkClick(event, destination)}
                 title={destination.tab.tooltip}
                 class={getMobileNavTabButtonClass({ active: active(), enabled: enabled() })}
