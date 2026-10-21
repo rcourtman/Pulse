@@ -1984,3 +1984,19 @@ func TestCollectContainerPodmanCPUIntervals(t *testing.T) {
 		})
 	}
 }
+
+// Images with no registry tag to check are skipped by a manual update check,
+// not counted as checked or as registry errors.
+func TestSummarizeManualUpdateCheckSkipsUncheckableImages(t *testing.T) {
+	report := agentsdocker.Report{Containers: []agentsdocker.Container{
+		{UpdateStatus: &agentsdocker.UpdateStatus{Error: localImageUpdateStatus}},
+		{UpdateStatus: &agentsdocker.UpdateStatus{Error: "digest-pinned image"}},
+		{UpdateStatus: &agentsdocker.UpdateStatus{UpdateAvailable: true, CurrentDigest: "sha256:a"}},
+		{UpdateStatus: &agentsdocker.UpdateStatus{Error: "authentication required"}},
+	}}
+	got := summarizeManualUpdateCheck(report)
+	want := "Container update check completed: 2 checked, 1 updates available, 2 skipped, 1 registry errors"
+	if got != want {
+		t.Fatalf("summary = %q, want %q", got, want)
+	}
+}

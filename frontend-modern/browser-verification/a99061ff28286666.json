@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "29bf5e8a4735cfaa46cabcccc0c76254fad81735",
+  "verified_at": "2026-10-21T14:05:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts",
+    "frontend-modern/src/features/docker/dockerImagePresentation.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "ccdbcfc46829547ac9e1c3940b471a6b6fad2558c0cb7721c36c2a1d976c029f",
+    "frontend-modern/src/components/shared/ContainerUpdateBadge.tsx": "1d7419040931208f4c69aed65c5148b2335809164a28a37fc2bef441326f772c",
+    "frontend-modern/src/components/shared/containerUpdateBadgeModel.ts": "153d124acbdb8e2af4813bf16409fab5ad76b28e305753a068496cb51b0b73d3",
+    "frontend-modern/src/components/shared/useContainerUpdateButtonState.ts": "494a1795d9d0ceb5706bc53fd760ef8aa8a0305f98c36512ce1ec276fec2909a",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "a3973c2d7eeca063eb5cdc369cf011ed3e42bbf139701162ce0f46e80f372310",
+    "frontend-modern/src/features/docker/dockerContainerUpdateAction.ts": "6d9def6f77718588fbe6e1b040f50857c0212abd7444e7a627e34f39594b8e98",
+    "frontend-modern/src/features/docker/dockerImagePresentation.ts": "124d077230a3612d3d86c0973e95e6d8f88cccad83949824ab451f76df5d54f0",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "0bf60bbb2b5bbf11d7d867a77c263dd0388b587f174a1da62a71200c770a6ac7"
+  },
+  "routes": [
+    "/proxmox",
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Docker overview reached by in-app navigation from Proxmox with the websocket already live: one REST /api/resources request within about 0.4 s of the click (previously none)",
+    "Containers whose update the server refuses (command agent disconnected) render the locked amber Update pill, no live Update button (previously 16 live buttons)",
+    "Host agent installed without command access: explanation names the host and the Settings \u2192 Infrastructure install option",
+    "Host with no agent facet: explanation falls back to the server refusal reason",
+    "Containers on a host with stale inventory (no update capability advertised): locked pill reading Podman inventory for this host is stale",
+    "Locally built image shows Local with its tooltip instead of Check failed",
+    "Locked pill measured 74 px inside a 116 px Updates cell at 1024 px; no clipping and no page overflow at 375 px",
+    "Container drawer Worth checking row shows Image update Available with the locked Update pill and View image tags link"
+  ],
+  "interactions": [
+    "Clicked the Docker top-navigation link from /proxmox and sampled the table at 0.3, 1, 3 and 8 seconds",
+    "Hovered a locked Update pill to show its explanation tooltip",
+    "Expanded the nginx-edge container row to open its drawer",
+    "Resized to the mobile viewport and reloaded the Docker overview"
+  ]
+}

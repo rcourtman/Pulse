@@ -595,6 +595,11 @@ type UnifiedResourcesCacheEntry = {
   hasSnapshot: boolean;
   cachedAt: number;
   lastFetchAt: number;
+  // When this entry last received the REST snapshot itself. Websocket ticks
+  // and all-resources seeding refresh cachedAt but carry none of the
+  // REST-only enrichment (action readiness, source status, scoped facets),
+  // so cachedAt alone cannot say whether that enrichment is current.
+  canonicalAt: number;
   sharedFetch: Promise<Resource[]> | null;
   realtimeVersion: number;
 };
@@ -1144,6 +1149,7 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
     hasSnapshot: false,
     cachedAt: 0,
     lastFetchAt: 0,
+    canonicalAt: 0,
     sharedFetch: null,
     realtimeVersion: 0,
   };
@@ -1153,6 +1159,9 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
 
 const hasFreshUnifiedResourcesCache = (entry: UnifiedResourcesCacheEntry) =>
   entry.hasSnapshot && Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+
+const hasFreshCanonicalSnapshot = (entry: UnifiedResourcesCacheEntry) =>
+  entry.canonicalAt > 0 && Date.now() - entry.canonicalAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
 
 const setUnifiedResourcesCache = (
   entry: UnifiedResourcesCacheEntry,
@@ -1454,6 +1463,7 @@ const fetchUnifiedResourcesShared = async (
       fetched.facets,
     );
     entry.lastFetchAt = now;
+    entry.canonicalAt = now;
     return fetched.resources;
   })();
 
@@ -1739,14 +1749,29 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     // before asking REST to enrich the thinner realtime snapshot.
     canonicalRevalidationHandle = setTimeout(() => {
       canonicalRevalidationHandle = undefined;
-      if (!enabled()) {
+      if (!enabled() || cacheEntry.canonicalAt > 0) {
         return;
       }
-      void runRefetch({ source: 'initial', background: true }).catch((err) => {
-        logger.debug('[useUnifiedResources] Background canonical revalidation failed', err);
-      });
+      revalidateCanonicalSnapshot();
     }, UNIFIED_RESOURCES_WS_CANONICAL_REVALIDATE_DELAY_MS);
   };
+
+  // Forced because websocket ticks keep cachedAt fresh: an unforced refetch
+  // would return the websocket-derived rows and never reach REST.
+  const revalidateCanonicalSnapshot = () => {
+    void runRefetch({ force: true, source: 'initial', background: true }).catch((err) => {
+      logger.debug('[useUnifiedResources] Background canonical revalidation failed', err);
+    });
+  };
+
+  // A `prefer-ws-then-rest` route can mount on a snapshot it did not fetch:
+  // seeded from the all-resources cache, or painted from the websocket on an
+  // earlier visit. Either reads as fresh while lacking the REST-only
+  // enrichment, so the route revalidates now instead of trusting it.
+  const needsCanonicalRevalidationOnMount = () =>
+    revalidatesRestAfterWsInitialHydration &&
+    cacheEntry.hasSnapshot &&
+    !hasFreshCanonicalSnapshot(cacheEntry);
 
   createEffect(() => {
     orgScope();
@@ -1763,6 +1788,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     if (hasFreshUnifiedResourcesCache(cacheEntry)) {
       clearInitialHydrationTimeout();
+      if (untrack(needsCanonicalRevalidationOnMount)) {
+        revalidateCanonicalSnapshot();
+      }
       return;
     }
 
@@ -2127,6 +2155,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       } else {
         void runRefetch({ force: true, source: 'initial' }).catch(() => undefined);
       }
+    } else if (enabled() && needsCanonicalRevalidationOnMount()) {
+      revalidateCanonicalSnapshot();
     }
   });
 
