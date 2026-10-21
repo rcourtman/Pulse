@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -78,6 +79,87 @@ import (
 	"github.com/rs/zerolog"
 	tmock "github.com/stretchr/testify/mock"
 )
+
+// Exercise the proof's real CLI, child execution and on-disk receipts without
+// running a latency workload. Only capacity telemetry and sampling delays are
+// synthetic; a malformed/failed child must never become a neutral budget result.
+func TestContractChartSLOProofCLIClassifiesExecution(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "python3", "-c", `
+import hashlib, json, os, shlex, sys, tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path('testdata').resolve()))
+import chart_latency_proof as proof
+
+sleep = proof.time.sleep
+proof.time.sleep = lambda seconds: sleep(0.005)
+proof.wait_idle = lambda prefix: None
+proof.snapshot = lambda: {}
+proof.process_counters = lambda: {}
+proof.ticks = lambda pid: 0
+proof.process_io = lambda pid: {}
+os.environ['GITHUB_TOKEN'] = 'synthetic-must-not-reach-child'
+report = '    slo_bench_test.go:637: charts/workloads p50=75ms p95=107ms p99=112ms SLO=90ms\n'
+violation = '    slo_bench_test.go:637: SLO VIOLATION: p95=107ms exceeds target 90ms\n'
+passed = report + '--- PASS: TestSLO_WorkloadCharts (0.03s)\nPASS\n'
+failed = report + violation + '--- FAIL: TestSLO_WorkloadCharts (0.03s)\nFAIL\n'
+cases = [
+    ('idle-pass', False, passed, 0, 0),
+    ('idle-budget-failure', False, failed, 1, 1),
+    ('contended-pass', True, passed, 0, 78),
+    ('contended-budget-failure', True, failed, 1, 78),
+    ('contended-cleanup-error', True, failed.replace(violation, violation +
+        '    testing.go:1369: TempDir RemoveAll cleanup: directory not empty\n'), 1, 1),
+    ('contended-skip', True, report + '--- SKIP: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
+    ('contended-process-error', True, failed, 2, 1),
+    ('contended-no-report', True, '--- PASS: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
+    ('contended-wrong-budget', True, passed.replace('90ms', '550ms'), 0, 1),
+    ('contended-duplicate', True, passed + passed, 0, 1),
+]
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    for name, contended, text, child_exit, expected in cases:
+        proof.interval = lambda before, after: dict(total_ticks=100,
+            busy_pct=25 if contended else 0, guest_pct=0, steal_pct=0, swap_pages=0)
+        binary = root / (name + '.sh')
+        binary.write_text('#!/bin/sh\n'
+            'test -z "${GITHUB_TOKEN:-}" || exit 7\n'
+            'test "$1" = "-test.run=^TestSLO_WorkloadCharts$" || exit 8\n'
+            'sleep 0.03\nprintf %s ' + shlex.quote(text) + '\nexit ' + str(child_exit) + '\n')
+        binary.chmod(0o700)
+        output = root / name
+        summary = root / (name + '.summary')
+        os.environ['GITHUB_STEP_SUMMARY'] = str(summary)
+        sys.argv = ['chart_latency_proof.py', '--candidate', str(binary), '--output', str(output)]
+        observed = 0
+        try:
+            proof.main()
+        except SystemExit as error:
+            observed = error.code
+        except RuntimeError:
+            observed = 1
+        assert observed == expected, (name, observed, expected)
+        receipt = json.loads((output / 'candidate.result.json').read_text())
+        assert receipt['returncode'] == child_exit, name
+        assert receipt['binary_sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest(), name
+        assert receipt['environment']['PULSE_STRICT_LOCAL_API_SLOS'] == 'true', name
+        assert 'GITHUB_TOKEN' not in receipt['environment'], name
+        assert (output / 'candidate.log').read_text() == text, name
+        assert bool(receipt['capacity_errors']) == contended, name
+        assert receipt['command'][1:] == ['-test.run=^TestSLO_WorkloadCharts$', '-test.v',
+            '-test.count=1', '-test.cpu=2', '-test.timeout=5m'], name
+        assert summary.exists() == (expected == 78), name
+        if summary.exists():
+            assert 'inconclusive' in summary.read_text() and '(not a verdict)' in summary.read_text(), name
+        print('CLASSIFIED', name, observed)
+`)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("chart proof CLI fixture failed: %v\n%s", err, output)
+	} else {
+		t.Logf("synthetic CLI classification, not measured latency:\n%s", output)
+	}
+}
 
 func TestAgentConfigFetchAuditCapacityContract(t *testing.T) {
 	capture := &auditCaptureLogger{}
