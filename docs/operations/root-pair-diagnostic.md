@@ -10,7 +10,7 @@ The source pair is fixed in `scripts/diagnose-root-pair.py`: baseline
 `1120cce4d631bca5525cafc5b5620251998773f7` tree measured from ephemeral
 source commit `4cdf250f474ad9cde6ffb121527f021b7387603f7`; metadata retains that original
 evidence identity. Tree and HTTP source hashes must match. Both API test binaries
-use Go 1.26.9, readonly modules and identical CI
+use Go 1.26.10, readonly modules and identical CI
 embed text; compilation finishes before either warm-up. Four available CPUs
 are selected and inherited by children, GOMAXPROCS is four. After two 100ms
 warm-ups and ten seconds settling, ten rounds alternate AB/BA with one 1s

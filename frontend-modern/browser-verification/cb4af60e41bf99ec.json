@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "base_sha": "43efbb9152d772ac376cd76bf95c644771158f90",
+  "verified_at": "2026-10-21T15:27:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "0acaea4c7f13c874932af4d4afbfb984b7143f4cb0d729828636f011fa127da0"
+  },
+  "routes": [
+    "/settings/infrastructure?add=docker"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Docker inside Proxmox LXCs note reads '...This gives Pulse command access to the node, so it is not a monitoring-only install. Then turn on...' with no semicolon",
+    "The 'Allow Pulse to run commands on this host' checkbox is present once in the token step",
+    "No page-level horizontal overflow and no page errors at either viewport"
+  ],
+  "interactions": [
+    "Headless Chromium on a private pulse-dev mock stack built from this commit: signed in, opened the Docker installer, scrolled the note into view at 1280 px and 375 px, read its text and took screenshots"
+  ]
+}

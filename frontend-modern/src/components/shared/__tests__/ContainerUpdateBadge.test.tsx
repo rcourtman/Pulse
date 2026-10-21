@@ -287,6 +287,9 @@ describe('ContainerUpdateBadge', () => {
     const status = screen.getByLabelText(/installed without command access/);
     expect(status.getAttribute('aria-label')).toContain('the Pulse agent on Tower');
     expect(status.getAttribute('aria-label')).toContain('Settings → Infrastructure');
+    expect(status.getAttribute('aria-label')).toContain(
+      '"Allow Pulse to run commands on this host" selected and run it on Tower',
+    );
   });
 
   it('keeps the button enabled when the update readiness entry is available', () => {

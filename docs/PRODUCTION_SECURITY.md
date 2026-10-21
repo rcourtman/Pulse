@@ -58,7 +58,8 @@ The fresh-install posture limits that boundary:
 - Proxmox guest Docker inventory through `pct exec` is disabled by default and
   requires an explicit server setting.
 
-The advanced **legacy combined command profile** is a separate trust decision.
+The **Allow Pulse to run commands on this host** install option (the combined command
+profile) is a separate trust decision.
 It marks the root collector command-capable and gives its credential execution
 scope so the same process can accept governed server requests. Existing
 unmarked installations remain in a visible `legacy` compatibility state during

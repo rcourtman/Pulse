@@ -1,5 +1,6 @@
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { ResourceActionReadiness } from '@/types/resource';
+import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 
 export interface ContainerUpdateBadgeProps {
   updateStatus?: DockerContainerUpdateStatus;
@@ -139,8 +140,8 @@ export function getUpdateUnavailableExplanation(input: {
     if (input.hostCommandsEnabled === false) {
       return (
         `Update available. Pulse cannot apply it because the Pulse agent on ${host} was installed without command access.\n` +
-        `To allow updates from Pulse, reinstall the agent from Settings → Infrastructure with ` +
-        '"Enable legacy combined command profile" selected in the advanced install options. ' +
+        `To allow updates from Pulse, copy the install command from Settings → Infrastructure with ` +
+        `"${getUnifiedAgentCommandAccessOptionLabel()}" selected and run it on ${host}. ` +
         'Otherwise, apply the update with your container manager.'
       );
     }

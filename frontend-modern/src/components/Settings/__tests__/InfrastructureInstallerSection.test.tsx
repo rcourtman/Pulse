@@ -26,6 +26,9 @@ const stateOverrides: Record<string, unknown> = {
   getInstallProfileFlags: () => [],
   getSelectedInstallProfile: () => ({ description: 'Automatic' }),
   lookupResult: () => lookupResult,
+  enableCommands: () => false,
+  setEnableCommands: vi.fn(),
+  isGeneratingToken: () => false,
 };
 
 vi.mock('../useInfrastructureOperationsState', () => ({
@@ -145,6 +148,31 @@ describe('InfrastructureInstallerSection', () => {
 
     expect(screen.getByText(/^Last seen/)).toBe(label);
     expect(label).toHaveTextContent('Last seen 2 hours ago');
+    view.unmount();
+  });
+
+  // #1728: the only way to grant the command access container updates need sat
+  // behind "Show advanced connection and install options" under a "legacy"
+  // name, so users who wanted updates either missed it or were told not to use
+  // it. It is a token-scope choice, so it belongs in the token step.
+  it('offers command access in the token step, outside the advanced options', () => {
+    const view = render(() => <InfrastructureInstallerSection />);
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Allow Pulse to run commands on this host',
+    });
+    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toHaveAccessibleDescription(
+      /update, start, stop or restart Docker and Podman containers.*run commands as root/,
+    );
+    expect(
+      screen.getByText(
+        'Monitoring only. Pulse cannot run commands or change containers on this host.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/legacy combined/i)).not.toBeInTheDocument();
+
+    fireEvent.click(checkbox);
+    expect(stateOverrides.setEnableCommands).toHaveBeenCalledWith(true);
     view.unmount();
   });
 });

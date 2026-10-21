@@ -5,6 +5,7 @@ import {
 } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import type { NodeModalNodeType, NodeModalSetupMode } from '@/utils/nodeModalPresentation';
+import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 
 interface NodeModalSetupGuideSectionProps {
   modalProps: NodeModalProps;
@@ -151,9 +152,10 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
                     <p class="text-xs text-blue-800 dark:text-blue-200">
                       <strong>Docker inside Proxmox LXCs:</strong> this monitoring-only setup does
-                      not grant the command authority currently required for guest Docker discovery.
-                      Until the typed local helper replaces that path, use the advanced Pulse Agent
-                      installer only if you explicitly accept the combined command profile. The
+                      not grant the command access guest Docker discovery needs. For that, install
+                      Pulse Agent on the node from Settings → Infrastructure with{' '}
+                      <span class="font-medium">{getUnifiedAgentCommandAccessOptionLabel()}</span>{' '}
+                      selected, only if you accept giving Pulse command access to the node. The
                       Pulse server must also be opted in: turn on{' '}
                       <span class="font-medium">Discover Docker in LXC guests</span> in Settings →
                       System → General (admin only), or set{' '}

@@ -54,8 +54,8 @@ contents. Local `--disk-exclude` rules still take precedence.
 
 Fresh installs use a local `monitoring-only` command-authority ceiling and a
 credential without `agent:exec`. Remote configuration cannot promote that
-service. Selecting the advanced legacy combined command profile at install time
-adds `--enable-commands`, records `command-capable`, and issues an execution-
+service. Selecting **Allow Pulse to run commands on this host** at install time (the combined
+command profile) adds `--enable-commands`, records `command-capable`, and issues an execution-
 scoped credential. The root monitoring process can then also accept server
 command requests through the existing policy and approval surfaces. Existing
 unmarked services upgrade as `legacy` during the migration window so upgrades
