@@ -72,16 +72,6 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				return
 			}
 
-			vmIDs := make([]int, 0, len(containers))
-			for _, ct := range containers {
-				if ct.Template == 1 {
-					continue
-				}
-				vmIDs = append(vmIDs, int(ct.VMID))
-			}
-
-			rootUsageOverrides := m.collectContainerRootUsage(ctx, client, n.Node, vmIDs)
-
 			var nodeContainers []models.Container
 			nodeTemplateSubjects := make(map[string]struct{})
 
@@ -237,34 +227,10 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					modelContainer.Type = "oci"
 				}
 
-				if override, ok := rootUsageOverrides[int(container.VMID)]; ok {
-					overrideUsed := clampToInt64(override.Used)
-					overrideTotal := clampToInt64(override.Total)
-
-					if overrideUsed > 0 && (modelContainer.Disk.Used == 0 || overrideUsed < modelContainer.Disk.Used) {
-						modelContainer.Disk.Used = overrideUsed
-					}
-
-					if overrideTotal > 0 {
-						modelContainer.Disk.Total = overrideTotal
-					}
-
-					if modelContainer.Disk.Total > 0 && modelContainer.Disk.Used > modelContainer.Disk.Total {
-						modelContainer.Disk.Used = modelContainer.Disk.Total
-					}
-
-					modelContainer.Disk.Free = modelContainer.Disk.Total - modelContainer.Disk.Used
-					if modelContainer.Disk.Free < 0 {
-						modelContainer.Disk.Free = 0
-					}
-
-					// A positive storage read can supply missing usage, but a
-					// missing capacity still cannot establish a percentage.
-					modelContainer.Disk.Usage = -1
-					if modelContainer.Disk.Total > 0 {
-						modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
-					}
-				}
+				// Storage-content used/size describe a backing volume, not this
+				// filesystem's usage. Do not replace a live listing, invent a
+				// missing sample, or change its denominator from that inventory.
+				// Independent per-mount status / agent enrichment remains below.
 
 				m.enrichContainerMetadata(
 					ctx,

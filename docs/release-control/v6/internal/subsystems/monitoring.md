@@ -461,8 +461,10 @@ not establish installed performance, incident cause, thaw or filesystem liveness
 
 The validated Proxmox content reader returns every content kind to its existing
 consumers. Only `backup` entries may create storage-backup records or successful
-backup evidence. Container root usage accepts live `rootdir`/`images` volumes,
-never snapshot (`@`) or archive rows. Whole-response integrity, connection scope,
+backup evidence. Storage-content allocation and size are not container
+filesystem readings, even for live `rootdir`/`images` volumes. Container
+filesystem usage remains owned by the guest listing and independent per-mount
+status/agent observations. Whole-response integrity, connection scope,
 ordinary read budgets and guest-operation exclusions are unchanged.
 
 Snapshot size is a complete sum, not a lower bound from whichever disk responded.
@@ -9402,3 +9404,27 @@ resources, History and ordinary measured-zero recovery. The root-seeding and
 independent-agent controls in `monitor_pve_guest_lxc_test.go` protect the shared
 sentinel and independent observations. These synthetic GET-only checks do not
 establish guest liveness, backup restore, incident cause or installed recovery.
+
+
+### Container filesystem usage is independent of storage allocation
+
+The node fallback and cluster collectors use the same filesystem `disk`/`maxdisk`
+observation. Storage-content `used`/`size` cannot lower a current usage reading,
+replace its denominator, supply missing filesystem bytes or prevent measured-zero
+recovery. Volume naming (including a guessed disk-0), compression, thin allocation
+and other storage inventory cannot establish this filesystem's fullness. Guest
+collection no longer enumerates storage for that purpose; archive/snapshot reads
+retain their existing separate consumers and evidence rules. Per-mount status,
+current agent enrichment, configured mount metadata, identity, CPU/memory, unknown
+sentinels and ordinary recovery remain unchanged. No access grant, new request,
+threshold change or native guest operation is introduced.
+
+`TestLXCFilesystemUsageIgnoresStorageAllocation` drives both concrete HTTP clients
+through both collectors. Full/acknowledged incidents, conflicting allocation and
+capacity, wrong/lookalike volume names, missing/null counters, canonical public
+resources, in-memory History and real measured-zero recovery are exercised. The
+node collector must make zero storage/content requests. The joined ordinary
+archive/snapshot test in `pve_protection_observation_test.go` keeps independently
+measured container usage while still retaining complete content and snapshot
+alert hold/recovery. These synthetic read-only controls and consuming browser
+proof do not establish native liveness, reporter cause or installed recovery.

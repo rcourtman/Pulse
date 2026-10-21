@@ -154,8 +154,9 @@ func TestBuildPVEProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 	}
 }
 
-// Ordinary HTTP -> generic content -> all three existing consumers. The
-// provider fixture is read-only: no guest command, backup or recovery runs.
+// Ordinary HTTP preserves generic storage content for archive/snapshot consumers
+// without letting allocation bytes replace live container filesystem readings.
+// The provider fixture is read-only: no guest command, backup or recovery runs.
 func TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate(t *testing.T) {
 	const gib = uint64(1 << 30)
 	m, recoveryManager := recoveryIngestTestMonitor(t)
@@ -197,9 +198,9 @@ func TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate(t *testi
 			}
 			fmt.Fprintf(w, `{"data":[{"volid":"remote:vm-100-disk-1@weekly","content":"images","vmid":100,"size":%d}]}`, size)
 		case "/api2/json/nodes/member/storage/mixed/content":
-			// A later snapshot row must not overwrite live root usage. Nor
-			// may either live or snapshot disks become completed backups.
-			fmt.Fprintf(w, `{"data":[{"volid":"mixed:subvol-200-disk-0","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:subvol-200-disk-0@weekly","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:backup/vzdump-lxc-200.tar","content":"backup","vmid":200,"ctime":%d,"size":%d},{"volid":"mixed:iso/disc.iso","content":"iso"},{"volid":"mixed:vztmpl/template.tar","content":"vztmpl"},{"volid":"mixed:future","content":"future-kind"}]}`, 10*gib, 3*gib, 10*gib, 9*gib, created.Unix(), gib)
+			// Neither live allocation nor snapshot bytes are filesystem
+			// usage. Neither may become a completed backup, either.
+			fmt.Fprintf(w, `{"data":[{"volid":"mixed:subvol-200-disk-0","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:subvol-200-disk-0@weekly","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:backup/vzdump-lxc-200.tar","content":"backup","vmid":200,"ctime":%d,"size":%d},{"volid":"mixed:iso/disc.iso","content":"iso"},{"volid":"mixed:vztmpl/template.tar","content":"vztmpl"},{"volid":"mixed:future","content":"future-kind"}]}`, 10*gib, gib, 10*gib, 9*gib, created.Unix(), gib)
 		case "/api2/json/nodes/member/qemu/100/snapshot":
 			if phase.Load() == 4 {
 				fmt.Fprint(w, `{"data":[]}`)
@@ -209,9 +210,9 @@ func TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate(t *testi
 		case "/api2/json/nodes/member/lxc/200/snapshot":
 			fmt.Fprint(w, `{"data":[]}`)
 		case "/api2/json/nodes/member/lxc":
-			// The ordinary fallback path replaces the listing's zero usage
-			// with a measured live-root value; no QGA probe is involved.
-			fmt.Fprintf(w, `{"data":[{"vmid":200,"name":"worker","status":"stopped","maxdisk":%d,"disk":0,"maxmem":%d}]}`, 10*gib, gib)
+			// Filesystem usage is independent of storage allocation. The
+			// listing is current even when the container is not running.
+			fmt.Fprintf(w, `{"data":[{"vmid":200,"name":"worker","status":"stopped","maxdisk":%d,"disk":%d,"maxmem":%d}]}`, 10*gib, 3*gib, gib)
 		case "/api2/json/nodes/member/lxc/200/config":
 			fmt.Fprint(w, `{"data":{"hostname":"worker","ostype":"debian","rootfs":"mixed:subvol-200-disk-0,size=10G"}}`)
 		default:
