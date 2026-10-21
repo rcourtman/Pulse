@@ -160,7 +160,9 @@ describe('websocket store unified resource contract', () => {
         data: {
           lastUpdate: 300,
           resourceDelta: {
-            upserts: [{ id: guest.id, cpu: { current: 0 }, proxmox: { cpuUsageUnavailable: false } }],
+            upserts: [
+              { id: guest.id, cpu: { current: 0 }, proxmox: { cpuUsageUnavailable: false } },
+            ],
             removed: [],
             order: [guest.id],
           },
