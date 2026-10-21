@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Draft webhook test controls remain readable after touch or hover
+
+The existing draft webhook Test button uses semantic foreground and hover
+surface colours in both themes. A dark phone tap must not leave a light label
+on a hard-coded light hover fill. `WebhookConfig.test.tsx` pins the semantic
+classes; `notification-test-acknowledgement.cjs` exercises the actual draft
+control after touch/hover, checks at least 4.5:1 rendered text contrast and
+retains desktop/320px pixel inspection with the unconfirmed result. The form,
+unsaved draft, test-send and save behaviour are otherwise unchanged.
+
 ### Notification evidence reads have independent lifetimes
 
 Health, delivery attempts and held/deferred-event reads each have a 150-second

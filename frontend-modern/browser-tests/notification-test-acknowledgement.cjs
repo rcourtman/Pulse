@@ -140,6 +140,33 @@ let browser, context;
         if (kind === 'draft') { assert.equal(request.body.id, 'ops'); assert.equal(request.body.name, 'Unsaved synthetic edit'); }
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
         run.checks.push({ kind, expected, sent: run.sends.length, noOverflow: true });
+        if (kind === 'draft') {
+          // A touch can retain :hover. In the original dark form this made
+          // the light Test label disappear on a hard-coded light hover fill.
+          await button.hover();
+          const contrast = await button.evaluate(node => {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 1;
+            const ctx = canvas.getContext('2d');
+            const rgba = color => {
+              ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = color; ctx.fillRect(0, 0, 1, 1);
+              return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+            };
+            const foreground = rgba(getComputedStyle(node).color);
+            let element = node, background;
+            do { background = rgba(getComputedStyle(element).backgroundColor); element = element.parentElement; }
+            while (background[3] === 0 && element);
+            const luminance = rgb => rgb.slice(0, 3).map(channel => {
+              const value = channel / 255;
+              return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+            }).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index], 0);
+            const a = luminance(foreground), b = luminance(background);
+            return { ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05), foreground, background, hovered: node.matches(':hover') };
+          });
+          assert.equal(contrast.hovered, true);
+          assert.ok(contrast.ratio >= 4.5, `Draft Test hover contrast: ${JSON.stringify(contrast)}`);
+          run.checks.push({ draftHoverContrast: contrast });
+        }
         if (screenshot) await capture(screenshot);
       };
       for (const [kind, button, bad] of [

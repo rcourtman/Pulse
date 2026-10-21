@@ -432,7 +432,7 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
           <button
             onClick={props.testWebhookForm}
             disabled={props.testing === (props.editingId() || 'temp-new-webhook')}
-            class="min-h-11 px-3 py-1.5 border border-border rounded-sm text-xs hover:bg-slate-100 sm:min-h-0"
+            class="min-h-11 px-3 py-1.5 border border-border rounded-sm text-xs text-base-content hover:bg-surface-hover sm:min-h-0"
           >
             {getAlertWebhookTestLabel(
               props.testing === (props.editingId() || 'temp-new-webhook'),
