@@ -1032,3 +1032,42 @@ func TestGuestCPUUnknownInterruptsPendingAndPreservesAcknowledgement(t *testing.
 		})
 	}
 }
+
+func TestCanonicalGuestCPUUsesTypedIntentGrace(t *testing.T) {
+	for _, kind := range []string{"vm", "vm-pointer", "lxc", "lxc-pointer"} {
+		t.Run(kind, func(t *testing.T) {
+			m := guestObservationManager(t)
+			var tick time.Duration
+			m.intentClock = func() time.Duration { return tick }
+			document := NewAlertIntentPolicyDocument()
+			document.ResourceTypes["guest"] = map[string]AlertIntentRule{
+				MetricAlertIntentSignal("cpu"): {GraceSeconds: intPointer(60)},
+			}
+			if err := m.LoadIntentPolicies(document); err != nil {
+				t.Fatal(err)
+			}
+			vm := models.VM{ID: "site:member:106", VMID: 106, Instance: "site", Node: "member", Name: "guest", Status: "running", CPU: .98, Disk: models.Disk{Usage: -1}}
+			check := func() { m.CheckGuest(statusObservationGuest(vm, kind), "site") }
+			check()
+			tick = 59 * time.Second
+			check()
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("display label bypassed the typed guest intent grace")
+			}
+			vm.CPU = -1
+			tick = 60 * time.Second
+			check()
+			vm.CPU = .98
+			tick = 120 * time.Second
+			check()
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("explicit CPU intent grace completed across an observation gap")
+			}
+			tick = 180 * time.Second
+			check()
+			if len(m.GetActiveAlerts()) != 1 {
+				t.Fatal("fresh CPU evidence did not complete its typed intent grace")
+			}
+		})
+	}
+}

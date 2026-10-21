@@ -184,6 +184,18 @@ func testGuestCPUObservationLifecycle(t *testing.T) {
 						if n := len(m.metricsHistory.GetGuestMetrics(id, "memory", time.Hour)); n != 6 {
 							t.Fatalf("CPU gap suppressed independent memory History: %d", n)
 						}
+						// A canonical guest delay applies to LXC as well as VM,
+						// independently of the alert's retained display label.
+						cfg.MetricTimeThresholds = map[string]map[string]int{"guest": {"cpu": 60}}
+						am.UpdateConfig(cfg)
+						phase.Store(0)
+						if cpu := collect("delayed-busy"); cpu != .98 || len(am.GetActiveAlerts()) != 0 {
+							t.Fatal("configured guest CPU delay was bypassed")
+						}
+						phase.Store(1)
+						if cpu := collect("delayed-unknown"); cpu != -1 || len(am.GetActiveAlerts()) != 0 {
+							t.Fatal("unknown CPU completed a pending delay")
+						}
 						if unexpected.Load() != 0 {
 							t.Fatal("unexpected provider operations")
 						}

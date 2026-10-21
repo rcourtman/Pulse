@@ -1083,7 +1083,7 @@ func TestEdgeCases(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "Negative CPU (edge case)",
+			name: "Unavailable CPU does not match a negative-usage filter",
 			vm: models.VM{
 				CPU: -0.1,
 			},
@@ -1093,7 +1093,7 @@ func TestEdgeCases(t *testing.T) {
 				Operator: "<",
 				Value:    0.0,
 			},
-			want: true,
+			want: false,
 		},
 		{
 			name: "Very large metric value",
