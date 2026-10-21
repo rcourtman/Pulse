@@ -909,8 +909,7 @@ export function AppLayout(props: AppLayoutProps) {
                         <Icon class={NAV_TAB_ICON_CLASS} />
                       </span>
                       <span class="flex items-center gap-1">
-                        <span class="hidden xs:inline">{tab.label}</span>
-                        <span class="xs:hidden">{tab.label.charAt(0)}</span>
+                        <span>{tab.label}</span>
                         {(() => {
                           const total = tab.count ?? 0;
                           if (total <= 0) {
