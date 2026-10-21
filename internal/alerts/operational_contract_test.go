@@ -980,3 +980,39 @@ func TestCapacityForecastAlertNamesItsPlatform(t *testing.T) {
 		t.Fatalf("platformType metadata = %v, want vmware-vsphere", got)
 	}
 }
+
+// History output keeps an alert's operational record and transitions whole but
+// only its newest evidence envelope, and never changes the alert it copies
+// (#1803).
+func TestHistoryOutputKeepsTheRecordAndOnlyTheNewestEvidence(t *testing.T) {
+	observed := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	alert := Alert{
+		ID:         "disk-1",
+		ResourceID: "vm-1",
+		Level:      AlertLevelWarning,
+		StartTime:  observed,
+		LastSeen:   observed,
+		Evidence: []operationaltrust.EvidenceEnvelope{
+			{ID: "ev-new", ObservedAt: observed.Add(time.Hour)},
+			{ID: "ev-old", ObservedAt: observed},
+		},
+		OperationalRecord: &operationaltrust.OperationalRecord{ID: "record-1", EvidenceIDs: []string{"ev-old", "ev-new"}},
+		Transitions:       []operationaltrust.LifecycleTransition{{ID: "transition-1", EvidenceIDs: []string{"ev-old"}}},
+	}
+	output := canonicalizeAlertHistoryForOutput([]Alert{alert})
+	if len(output) != 1 {
+		t.Fatalf("output = %d entries", len(output))
+	}
+	if got := output[0].Evidence; len(got) != 1 || got[0].ID != "ev-new" {
+		t.Fatalf("history evidence = %+v, want only ev-new", got)
+	}
+	if got := output[0].OperationalRecord; got == nil || len(got.EvidenceIDs) != 2 {
+		t.Fatalf("the operational record must keep both evidence IDs, got %+v", got)
+	}
+	if got := output[0].Transitions; len(got) != 1 || len(got[0].EvidenceIDs) != 1 {
+		t.Fatalf("transitions must be kept whole, got %+v", got)
+	}
+	if len(alert.Evidence) != 2 {
+		t.Fatalf("shaping history output changed its input alert to %d envelopes", len(alert.Evidence))
+	}
+}

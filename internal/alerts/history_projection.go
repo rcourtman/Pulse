@@ -15,7 +15,27 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
+
+// newestHistoryEvidence keeps the newest evidence envelope, by ObservedAt and
+// then position, in a fresh slice. A history entry carries at most this one:
+// a resolved alert's full trail of up to maxOperationalEvidencePerAlert
+// envelopes was most of each entry's size, and nothing reads it from history
+// (#1803). The event log keeps every snapshot whole, and operationalRecord and
+// transitions keep their full evidence ID lists.
+func newestHistoryEvidence(evidence []operationaltrust.EvidenceEnvelope) []operationaltrust.EvidenceEnvelope {
+	if len(evidence) == 0 {
+		return nil
+	}
+	newest := 0
+	for i := range evidence {
+		if !evidence[i].ObservedAt.Before(evidence[newest].ObservedAt) {
+			newest = i
+		}
+	}
+	return []operationaltrust.EvidenceEnvelope{evidence[newest].Clone()}
+}
 
 // historyEventMark is what one folded lifecycle event contributed to its
 // occurrence. The marks let a Since window be answered from the full fold
@@ -182,6 +202,9 @@ func (p *historyProjection) fold(throughID int64) error {
 		if err := json.Unmarshal(event.Snapshot, &snapshot); err != nil {
 			return nil
 		}
+		// History keeps only the newest evidence envelope. Merging takes the
+		// incoming snapshot's evidence, so trimming here is all the fold holds.
+		snapshot.Evidence = newestHistoryEvidence(snapshot.Evidence)
 		key := historyOccurrenceKey(event.AlertID, &snapshot)
 		occ, exists := p.occurrences[key]
 		if !exists {
