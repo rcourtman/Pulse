@@ -20,6 +20,12 @@
 
 ## Purpose
 
+### Bounded alert settings recovery
+
+Unavailable notification settings retain a usable explicit Retry and the whole-policy save lock, rather than an indefinite loading indicator. The error copy states the actual lock instead of warning that the blocked save can overwrite defaults. Late retired reads cannot install state in a replacement editor.
+
+Verification: `alertConfigurationDeadline.test.tsx`, the copy assertions and the actual complete settings consumer in `alert-configuration-deadline.cjs` cover deadline/retry/save admission and desktop/narrow presentation.
+
 ### Alert evidence remains recoverable after a stalled read
 
 The existing notification cards leave loading after a 150-second evidence-read

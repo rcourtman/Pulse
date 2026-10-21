@@ -48,7 +48,10 @@ try {
       outDir,
       emptyOutDir: true,
       rollupOptions: {
-        input: path.join(root, 'browser-tests/notification-recovery-boundary.html'),
+        input: [
+          path.join(root, 'browser-tests/notification-recovery-boundary.html'),
+          path.join(root, 'browser-tests/alert-configuration-deadline.html'),
+        ],
       },
     },
   });
@@ -60,6 +63,8 @@ try {
     'browser-tests/notification-evidence-deadline.cjs',
     'browser-tests/notification-test-acknowledgement.cjs',
     'browser-tests/webhook-test-ownership.cjs',
+    'browser-tests/alert-configuration-deadline.cjs',
+    'browser-tests/alert-configuration-deadline.html',
     'browser-tests/build-notification-recovery-boundary.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));

@@ -133,8 +133,8 @@ export class AlertsAPI {
   }
 
   // Alert configuration methods
-  static async getConfig(): Promise<AlertConfig> {
-    return apiFetchJSON(`${this.baseUrl}/config`) as Promise<AlertConfig>;
+  static async getConfig(signal?: AbortSignal): Promise<AlertConfig> {
+    return apiFetchJSON(`${this.baseUrl}/config`, signal ? { signal } : undefined) as Promise<AlertConfig>;
   }
 
   static async updateConfig(config: AlertConfig): Promise<{ success: boolean }> {
@@ -148,8 +148,8 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/deadman/status`) as Promise<DeadManStatus>;
   }
 
-  static async getDeadManConfig(): Promise<{ pingUrl: string; configured: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/deadman/config`) as Promise<{
+  static async getDeadManConfig(signal?: AbortSignal): Promise<{ pingUrl: string; configured: boolean }> {
+    return apiFetchJSON(`${this.baseUrl}/deadman/config`, signal ? { signal } : undefined) as Promise<{
       pingUrl: string;
       configured: boolean;
     }>;

@@ -323,8 +323,8 @@ function confirmedTerminalFailureAction(value: unknown): NotificationTerminalFai
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
 
-  static async getAppriseConfig(): Promise<AppriseConfig> {
-    return apiFetchJSON(`${this.baseUrl}/apprise`);
+  static async getAppriseConfig(signal?: AbortSignal): Promise<AppriseConfig> {
+    return apiFetchJSON(`${this.baseUrl}/apprise`, signal ? { signal } : undefined);
   }
 
   static async getHealth(signal?: AbortSignal): Promise<NotificationHealth> {
@@ -483,8 +483,10 @@ export class NotificationsAPI {
   }
 
   // Email configuration
-  static async getEmailConfig(): Promise<EmailConfig> {
-    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
+  static async getEmailConfig(signal?: AbortSignal): Promise<EmailConfig> {
+    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`,
+      signal ? { signal } : undefined,
+    );
     const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
@@ -553,8 +555,11 @@ export class NotificationsAPI {
   }
 
   // Webhook management
-  static async getWebhooks(): Promise<Webhook[]> {
-    const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
+  static async getWebhooks(signal?: AbortSignal): Promise<Webhook[]> {
+    const data = await apiFetchJSON<Webhook[] | null>(
+      `${this.baseUrl}/webhooks`,
+      signal ? { signal } : undefined,
+    );
     return arrayOrEmpty<Webhook>(data);
   }
 

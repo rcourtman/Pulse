@@ -1,4 +1,4 @@
-// Alert evidence reads share the API client's maximum two-minute Retry-After
+// Alert configuration and delivery evidence reads share the API client's maximum two-minute Retry-After
 // allowance. Past this deadline an unanswered header/body is unavailable, not
 // evidence that delivery is healthy or that there were no attempts.
 export const NOTIFICATION_EVIDENCE_READ_TIMEOUT_MS = 150_000;

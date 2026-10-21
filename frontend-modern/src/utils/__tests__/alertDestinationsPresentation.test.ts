@@ -81,10 +81,10 @@ describe('alertDestinationsPresentation', () => {
 
   it('returns canonical destinations retry and warning copy', () => {
     expect(ALERT_DESTINATIONS_LOAD_ERROR_RISK_NOTICE).toBe(
-      'Saving now may overwrite your existing settings with defaults.',
+      'Saving is blocked until all notification settings have been reloaded.',
     );
     expect(getAlertDestinationsLoadErrorBanner('Unable to load webhook settings.')).toBe(
-      'Unable to load webhook settings. Saving now may overwrite your existing settings with defaults.',
+      'Unable to load webhook settings. Saving is blocked until all notification settings have been reloaded.',
     );
     expect(ALERT_DESTINATIONS_RETRY_LABEL).toBe('Retry');
     expect(ALERT_DESTINATIONS_RETRYING_LABEL).toBe('Retrying…');

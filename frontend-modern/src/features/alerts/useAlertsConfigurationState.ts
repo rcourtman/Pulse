@@ -26,6 +26,7 @@ import { useAlertDestinationsState } from './useAlertDestinationsState';
 import { useAlertsConfigurationSnapshotState } from './useAlertsConfigurationSnapshotState';
 import { useAlertOverridesState } from './useAlertOverridesState';
 import type { AlertTab, Override } from './types';
+import { createNotificationEvidenceReader } from './notificationEvidenceRead';
 
 export interface AlertsConfigurationSurfaceProps {
   activeTab: Accessor<AlertTab>;
@@ -53,6 +54,8 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   const [isSavingConfig, setIsSavingConfig] = createSignal(false);
   let draftRevision = 0;
   let configurationVersion = 0;
+  let disposed = false;
+  const configurationReader = createNotificationEvidenceReader();
   const [suppressDirtyFlag, setSuppressDirtyFlag] = createSignal(false);
   const guardedSetHasUnsavedChanges = (value: boolean) => {
     if (value && suppressDirtyFlag()) return;
@@ -76,6 +79,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
   });
 
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
+    if (disposed) return;
     const thisVersion = ++configurationVersion;
     // A context change invalidates unsent writes from the old editor. It cannot
     // cancel or undo a request that has already reached the server.
@@ -91,7 +95,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     );
 
     try {
-      const config = await AlertsAPI.getConfig();
+      const config = await configurationReader.read((signal) => AlertsAPI.getConfig(signal));
       if (thisVersion !== configurationVersion) return;
       configurationSnapshotState.applyConfigurationSnapshot(
         readAlertsConfigurationSnapshot(config),
@@ -176,7 +180,9 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       void loadAlertConfiguration();
     });
     onCleanup(() => {
+      disposed = true;
       ++configurationVersion;
+      configurationReader.cancel();
       unsubscribeOrgSwitched();
     });
   });
