@@ -38,9 +38,10 @@ with calls_file.open("a") as output:
 if tool == "tar":
     assert len(args) == 5 and args[0] == "-czf" and args[2] == "-C", args
     output = Path(args[1]).resolve()
-    source = (Path(args[3]) / args[4]).resolve()
+    source = Path(args[3]) / args[4]
     assert output.is_relative_to(root / "backups"), output
-    assert source in (root / "tenants", root / "control-plane"), source
+    assert source.resolve().is_relative_to(root), source
+    assert source.name in ("tenants", "control-plane"), source
     number = 1 + sum(call[0] == tool for call in previous)
     if number == scenario.get("tar_fail"):
         output.write_bytes(b"incomplete fixture archive")
@@ -48,6 +49,9 @@ if tool == "tar":
     result = subprocess.run([os.environ["REAL_TAR"], *args], check=False)
     if number == 1 and scenario.get("source_disappears"):
         (root / "control-plane").rename(root / "moved-control-plane")
+    if number == 1 and scenario.get("source_becomes_symlink"):
+        (root / "control-plane").rename(root / "moved-control-plane")
+        (root / "control-plane").symlink_to(root / "moved-control-plane", target_is_directory=True)
     sys.exit(result.returncode)
 if tool == "find":
     assert Path(args[0]).resolve() == root / "backups", args
@@ -163,6 +167,58 @@ class CloudBackupTest(unittest.TestCase):
             with tarfile.open(archives[0], "r:gz") as archive:
                 self.assertEqual(archive.extractfile(f"{directory}/fixture.txt").read(),
                                  f"synthetic {directory} data\n".encode())
+
+    def symlink_source(self, name):
+        target = self.root / ("physical-" + name)
+        (self.root / name).rename(target)
+        (self.root / name).symlink_to(target, target_is_directory=True)
+
+    def test_symlinked_tenants_root_preserves_last_archives(self):
+        self.symlink_source("tenants")
+        self.assert_stopped_before_retention(self.invoke(), before_archives=True)
+        self.assertIn("Required tenants directory is a symbolic link", self.output)
+        self.assertIn("physical directory", self.output)
+
+    def test_symlinked_control_plane_root_preserves_last_archives(self):
+        self.symlink_source("control-plane")
+        self.assert_stopped_before_retention(self.invoke(), before_archives=True)
+        self.assertIn("Required control-plane directory is a symbolic link", self.output)
+
+    def test_symlinked_root_with_trailing_slashes_is_not_admitted(self):
+        self.symlink_source("tenants")
+        self.assert_stopped_before_retention(
+            self.invoke(PULSE_TENANTS_DIR=str(self.root / "tenants") + "///"), before_archives=True)
+        self.assertIn("Required tenants directory is a symbolic link", self.output)
+
+    def test_local_only_symlinked_source_also_preserves_last_archives(self):
+        self.symlink_source("control-plane")
+        self.assert_stopped_before_retention(self.invoke(PULSE_RCLONE_REMOTE=""), before_archives=True)
+
+    def test_source_becoming_symlink_after_preflight_stops_before_retention(self):
+        result = self.invoke({"source_becomes_symlink": True})
+        self.assert_stopped_before_retention(result)
+        self.assertIn("Required control-plane directory is a symbolic link", self.output)
+        self.assertEqual(len([call for call in self.calls if call[0] == "tar"]), 1)
+        self.assert_no_uploads()
+
+    def test_parent_symlink_still_archives_the_actual_data(self):
+        (self.root / "data-alias").symlink_to(self.root, target_is_directory=True)
+        result = self.invoke(PULSE_TENANTS_DIR=str(self.root / "data-alias/tenants"), PULSE_RCLONE_REMOTE="")
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_archive_contents()
+
+    def test_nested_symlinks_remain_links_not_out_of_tree_copies(self):
+        outside = self.root / "outside-data"
+        outside.mkdir()
+        (outside / "not-part-of-source.txt").write_text("synthetic out-of-tree data\n")
+        (self.root / "tenants/outside-link").symlink_to(outside, target_is_directory=True)
+        result = self.invoke(PULSE_RCLONE_REMOTE="")
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_archive_contents()
+        archive_path = next(self.backups.glob("pulse-backup-tenants-*.tar.gz"))
+        with tarfile.open(archive_path, "r:gz") as archive:
+            self.assertTrue(archive.getmember("tenants/outside-link").issym())
+            self.assertFalse(any(name.endswith("not-part-of-source.txt") for name in archive.getnames()))
 
     def test_missing_both_sources_preserves_last_archives(self):
         self.remove_source("tenants")

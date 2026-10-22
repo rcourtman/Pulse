@@ -2,6 +2,7 @@
 # Pulse Cloud — Tarball Backup with DO Spaces Upload
 # Creates optionally encrypted tarballs of CP data + tenant directories.
 # Both source directories are required, even when remote upload is disabled.
+# Configure physical source directories: tar would store a root symlink alone.
 # Archive, encryption and configured uploads must succeed before retention.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
@@ -43,6 +44,22 @@ die() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# tar archives a command-line symlink as a link, even though Bash's -d follows
+# it. Reject that false-success path rather than enabling global dereferencing,
+# which would also copy unrelated targets of links inside the data directories.
+reject_linked_source() {
+  local src_dir="$1"
+  local label="$2"
+
+  # A trailing slash makes -L follow the link. Match the root that basename
+  # passes to tar without changing the configured path or archive layout.
+  while [[ "${src_dir}" == */ && "${src_dir}" != / ]]; do
+    src_dir="${src_dir%/}"
+  done
+  [[ ! -L "${src_dir}" ]] ||
+    die "Required ${label} directory is a symbolic link; configure its physical directory; no backup or retention performed"
+}
+
 # Admit the whole configured job before creating any new archives. Otherwise a
 # missing source can become a successful empty run that ages out good backups.
 preflight() {
@@ -55,6 +72,8 @@ preflight() {
   have find || die "find is required for local retention"
   [[ -d "${TENANTS_DIR}" ]] || die "Required tenants directory not found; no backup or retention performed"
   [[ -d "${CONTROL_PLANE_DIR}" ]] || die "Required control-plane directory not found; no backup or retention performed"
+  reject_linked_source "${TENANTS_DIR}" "tenants"
+  reject_linked_source "${CONTROL_PLANE_DIR}" "control-plane"
 
   if [[ "${ENCRYPT}" == "true" ]]; then
     have age || die "PULSE_BACKUP_ENCRYPT=true but 'age' is not installed. Install: https://github.com/FiloSottile/age"
@@ -76,6 +95,7 @@ create_tarball() {
     # continue to upload/retention with just the other source's archive.
     die "Required ${label} directory disappeared; backup incomplete, retention not performed"
   fi
+  reject_linked_source "${src_dir}" "${label}"
 
   log "creating tarball: ${label} -> ${output_path}"
   tar -czf "${output_path}" -C "$(dirname "${src_dir}")" "$(basename "${src_dir}")"

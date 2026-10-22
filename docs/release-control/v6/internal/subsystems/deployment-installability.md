@@ -25,6 +25,15 @@ encryption and remote-client prerequisites before creating archives. A source
 that disappears after admission still fails the job. Missing data is not an
 optional source and must not become an empty success that prunes previous copies.
 
+The configured source root itself must be a physical directory, not a symbolic
+link: tar otherwise exits successfully after archiving only the link. Admission
+rejects either linked root, including trailing-slash spellings, before creating
+any archives, and rechecks immediately before each archive. The error tells the
+operator to configure the physical directory; existing backups remain untouched.
+Symlinked parent paths still work, and nested symlinks remain links. The helper
+does not enable recursive link dereferencing or claim to prevent concurrent
+source mutation between its checks and tar.
+
 Both archive/encryption steps and every configured upload must succeed before
 either retention pass. Local or remote cleanup errors return failure rather
 than a finished message; retention itself can partially progress before an
@@ -34,7 +43,8 @@ application-consistent snapshots, restore verification or native guest recovery.
 
 `scripts/tests/test_cloud_backup.py` executes the full shell entrypoint with
 real tar/gzip and local retention on synthetic non-database files. It checks
-missing/disappearing sources, invalid configuration, missing selected tools,
+missing/disappearing/linked sources (also a link substituted after admission),
+unchanged parent/nested-link semantics, invalid configuration, missing selected tools,
 archive/encryption/upload failures, retention errors, actual archive bytes and
 private modes, plus successful local/remote ordering. age, rclone, Docker and
 host identity are closed recording fakes, not encryption or cloud acceptance.
