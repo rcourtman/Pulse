@@ -113,7 +113,7 @@ describe('TrueNASProtectionTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('truenas-protection-detail'));
-    expect(detail.getByText('Protection detail')).toBeInTheDocument();
+    expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('tank/apps');
     expect(detail.getByText('Protection')).toBeInTheDocument();
     expect(detail.getAllByText('Replication').length).toBeGreaterThan(1);
     expect(detail.getAllByText('Target').length).toBeGreaterThan(1);

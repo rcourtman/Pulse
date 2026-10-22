@@ -418,6 +418,7 @@ export const KubernetesClustersTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={cluster}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={8}

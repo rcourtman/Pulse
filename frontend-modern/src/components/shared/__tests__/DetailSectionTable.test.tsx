@@ -306,7 +306,8 @@ describe('DetailSectionTable', () => {
       <InlineDetailPanel
         testId="platform-detail"
         detailFor="resource-1"
-        title="Alert detail"
+        title="Disk sda"
+        status={{ variant: 'warning', label: 'Warning' }}
         summary="Warning"
         sections={[{ label: 'Alert', rows: [{ label: 'Severity', value: 'Warning' }] }]}
         detailAttributes={{ 'data-platform-alert-detail-for': 'resource-1' }}
@@ -317,10 +318,11 @@ describe('DetailSectionTable', () => {
     const panel = screen.getByTestId('platform-detail');
     expect(panel).toHaveAttribute('data-inline-detail-for', 'resource-1');
     expect(panel).toHaveAttribute('data-platform-alert-detail-for', 'resource-1');
-    expect(within(panel).getByText('Alert detail')).toBeInTheDocument();
+    expect(within(panel).getByRole('heading', { name: 'Disk sda' })).toBeInTheDocument();
+    expect(within(panel).getByLabelText('Warning')).toBeInTheDocument();
     expect(within(panel).getAllByText('Warning')).toHaveLength(2);
 
-    within(panel).getByRole('button', { name: 'Collapse resource-1 details' }).click();
+    within(panel).getByRole('button', { name: 'Collapse Disk sda details' }).click();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

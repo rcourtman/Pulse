@@ -38,6 +38,7 @@ import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
   getAlertSeverityDetailTone,
+  getAlertSeverityIndicator,
 } from '@/utils/alertSeverityPresentation';
 import {
   filterVmwareIncidents,
@@ -62,7 +63,6 @@ const buildAlertDetailSections = (incident: VmwareIncidentRow): AlertDetailSecti
         detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
-        detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),
         detailRow('Code', formatPlatformAlertCode(incident.code, 'vmware'), {
           title: incident.code,
@@ -100,11 +100,9 @@ const AlertDetail: Component<{ incident: VmwareIncidentRow; onClose: () => void 
   <InlineDetailPanel
     testId="vsphere-alert-detail"
     detailFor={props.incident.id}
-    title="vSphere health detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
-      props.incident.code,
-      'vmware',
-    )}`}
+    title={props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'vmware')}
+    status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
+    summary={props.incident.summary || props.incident.label}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-vsphere-alert-detail-for': props.incident.id }}
     onClose={props.onClose}

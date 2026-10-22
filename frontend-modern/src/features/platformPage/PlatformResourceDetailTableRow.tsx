@@ -3,6 +3,7 @@ import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetail
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import type { Resource } from '@/types/resource';
+import type { StatusIndicator } from '@/utils/status';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 
 type ResourceLike = Pick<Resource, 'id'>;
@@ -115,6 +116,8 @@ export const PlatformResourceDetailTableRow: Component<{
   open: boolean;
   detailRowId: string;
   colSpan: number;
+  /** The indicator behind the row's own status dot; the drawer header repeats it. */
+  statusIndicator?: StatusIndicator;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
@@ -132,6 +135,7 @@ export const PlatformResourceDetailTableRow: Component<{
       >
         <ResourceDetailDrawer
           resource={props.resource}
+          statusIndicator={props.statusIndicator}
           presentation="table-row"
           resolveResourceLabel={props.resolveResourceLabel}
           initialShowAccessContext={props.initialShowAccessContext}

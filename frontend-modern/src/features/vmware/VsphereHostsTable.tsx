@@ -520,6 +520,7 @@ export const VsphereHostsTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={host}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={singleVcenter() ? 10 : 11}

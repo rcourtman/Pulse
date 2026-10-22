@@ -338,6 +338,7 @@ export const TrueNASNetworkSharesTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={6}

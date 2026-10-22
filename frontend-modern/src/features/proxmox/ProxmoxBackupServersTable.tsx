@@ -743,6 +743,10 @@ export function ProxmoxBackupServersTable(props: {
                       </TableRow>
                       <PlatformResourceDetailTableRow
                         resource={row.resource}
+                        statusIndicator={{
+                          variant: row.online ? 'success' : 'danger',
+                          label: row.connectionLabel,
+                        }}
                         open={isExpanded()}
                         detailRowId={detailRowId()}
                         colSpan={visibleColumns().length}

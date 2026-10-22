@@ -691,10 +691,15 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);
 
     // Per-source detail is one click down inside the workload's row.
-    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+    const disclosure = screen.getByRole('button', { name: /expand details for pbs-docker/i });
+    await fireEvent.click(disclosure);
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
     expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+    // The drawer keeps the shared detail shell, whose phone width is capped
+    // at the table's visible area; a padding override once dropped that cap.
+    const detailCell = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
+    expect(detailCell?.firstElementChild?.className).toContain('max-w-[100cqi]');
   });
 
   it('keeps coverage evidence expanded across repeated workload snapshots', async () => {

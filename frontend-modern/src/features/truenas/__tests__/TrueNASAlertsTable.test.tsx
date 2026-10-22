@@ -157,7 +157,7 @@ describe('TrueNASAlertsTable', () => {
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
     const detail = within(screen.getByTestId('truenas-alert-detail'));
-    expect(detail.getByText('Alert detail')).toBeInTheDocument();
+    expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('sdc');
     expect(detail.getByText('Alert')).toBeInTheDocument();
     expect(detail.getByText('Source')).toBeInTheDocument();
     expect(detail.getByText('Affected resource')).toBeInTheDocument();

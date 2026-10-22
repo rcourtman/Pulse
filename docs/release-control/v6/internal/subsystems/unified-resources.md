@@ -8584,3 +8584,17 @@ retained/unavailable source classifications preserve their existing semantics.
 The connected stacked-model controls retain explicit aggregate fallback tests;
 the browser fixture checks mixed and all-unknown lists in the actual summaries
 as well as both drawers, including live replacement at narrow widths.
+
+Platform drawers repeat their row's status verdict. Every table that opens a
+`ResourceDetailDrawer` through `PlatformResourceDetailTableRow` passes the same
+`StatusIndicator` its row dot renders (`statusIndicator`), so staleness,
+impaired sources, a hot TrueNAS disk or a Kubernetes state the raw status does
+not carry (a succeeded pod, a scaled-to-zero deployment, a suspended CronJob)
+read the same in the row and in the drawer heading. The drawer's own
+`statusIndicator` remains only the fallback for callers without a row, such as
+the availability fleet view. This is presentation, not a new status source:
+no table changes how it judges a resource. The drawer heading is the shared
+`DrawerSubjectHeading` with the source and identity badges beside the name, and
+a saved web interface URL opens from the header the way it does in the Proxmox
+guest drawer. The health-issue chip left the heading because the same issue
+already leads the Overview's "Worth checking" list.

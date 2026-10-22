@@ -129,7 +129,7 @@ describe('VsphereActivityTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('vsphere-activity-detail'));
-    expect(detail.getByText('vSphere activity detail')).toBeInTheDocument();
+    expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('warehouse-api-01');
     expect(detail.getByText('Managed object')).toBeInTheDocument();
     expect(detail.getAllByText('vm-201').length).toBeGreaterThan(0);
     expect(detail.getByText('Native ID')).toBeInTheDocument();

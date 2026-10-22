@@ -510,7 +510,6 @@ export const ProxmoxCephTable: Component<{
                           <InlineDetailTableRow
                             cellId={detailRowId()}
                             colspan={visibleColumnCount()}
-                            contentClass="px-4 py-4"
                             data-inline-detail-for={cluster.id}
                           >
                             <ProxmoxCephClusterDrawer cluster={cluster} onClose={closeSelected} />

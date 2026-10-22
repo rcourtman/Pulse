@@ -467,6 +467,7 @@ export const AvailabilityChecksTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={check}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={9}

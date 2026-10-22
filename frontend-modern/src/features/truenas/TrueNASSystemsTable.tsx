@@ -462,6 +462,7 @@ export const TrueNASSystemsTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={system}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={9}
