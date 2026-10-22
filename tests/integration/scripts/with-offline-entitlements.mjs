@@ -27,6 +27,7 @@ try {
     PULSE_LICENSE_PUBLIC_KEY: issuer.publicKey, PULSE_LICENSE_SERVER_URL: issuer.url,
     PULSE_LICENSE_DEV_MODE: 'false', PULSE_MOCK_MODE: 'false', PULSE_MULTI_TENANT_ENABLED: 'true',
     PULSE_E2E_OFFLINE_ACTIVATION_KEY: issuer.activationKey,
+    PULSE_E2E_OFFLINE_PRO_ACTIVATION_KEY: issuer.proActivationKey,
   } });
   const forward = signal => child.kill(signal);
   const term = () => forward('SIGTERM');

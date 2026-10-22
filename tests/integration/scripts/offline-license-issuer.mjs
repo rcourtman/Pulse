@@ -5,7 +5,13 @@ import http from 'node:http';
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
 export async function startOfflineLicenseIssuer() {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  // Each ephemeral key stands for one licence plan, as on the real server.
   const activationKey = `ppk_live_e2e_${randomUUID()}`;
+  const proActivationKey = `ppk_live_e2e_${randomUUID()}`;
+  const plans = new Map([
+    [activationKey, { tier: 'msp', plan: 'msp_starter' }],
+    [proActivationKey, { tier: 'pro', plan: 'pro_monthly' }],
+  ]);
   const installations = new Map();
   const fingerprints = new Map();
   const grant = installation => {
@@ -13,7 +19,7 @@ export async function startOfflineLicenseIssuer() {
     const jti = `grt_${randomUUID()}`;
     const claims = { iss: 'pulse-license', aud: 'pulse-relay', sub: installation.id,
       lid: installation.license, iid: installation.id, lv: 1, st: 'active',
-      tier: 'msp', plan: 'msp_starter', iat: now, nbf: now, exp: now + 3600,
+      tier: installation.tier, plan: installation.plan, iat: now, nbf: now, exp: now + 3600,
       jti, email: 'e2e@example.invalid' };
     const input = `${encode({ alg: 'EdDSA', typ: 'JWT' })}.${encode(claims)}`;
     return { jwt: `${input}.${sign(null, Buffer.from(input), privateKey).toString('base64url')}`,
@@ -38,18 +44,20 @@ export async function startOfflineLicenseIssuer() {
         reply(400, { error: 'missing fixture fingerprint' }); return;
       }
       if (req.url === '/v1/activate') {
-        if (data.activation_key !== activationKey || data.runtime?.build !== 'community') {
+        const plan = plans.get(data.activation_key);
+        if (!plan || data.runtime?.build !== 'community') {
           reply(401, { error: 'invalid fixture activation' }); return;
         }
-        let installation = fingerprints.get(data.instance_fingerprint);
+        const binding = `${data.activation_key}\n${data.instance_fingerprint}`;
+        let installation = fingerprints.get(binding);
         if (!installation) {
           if (installations.size >= 1024) { reply(429, { error: 'fixture capacity reached' }); return; }
           installation = { id: `inst_${randomUUID()}`, license: `lic_${randomUUID()}`,
-            token: `pit_live_e2e_${randomUUID()}`, fingerprint: data.instance_fingerprint };
+            token: `pit_live_e2e_${randomUUID()}`, fingerprint: data.instance_fingerprint, ...plan };
           installations.set(installation.id, installation);
-          fingerprints.set(installation.fingerprint, installation);
+          fingerprints.set(binding, installation);
         }
-        reply(201, { license: { license_id: installation.license, state: 'active', tier: 'msp', license_version: 1 },
+        reply(201, { license: { license_id: installation.license, state: 'active', tier: installation.tier, license_version: 1 },
           installation: { installation_id: installation.id, installation_token: installation.token, status: 'active' },
           grant: grant(installation) });
         return;
@@ -73,6 +81,7 @@ export async function startOfflineLicenseIssuer() {
     url: `http://127.0.0.1:${server.address().port}`,
     publicKey: Buffer.from(publicKey.export({ format: 'jwk' }).x, 'base64url').toString('base64'),
     activationKey,
+    proActivationKey,
     close: () => new Promise((resolve, reject) => {
       server.close(error => error ? reject(error) : resolve());
       server.closeAllConnections();

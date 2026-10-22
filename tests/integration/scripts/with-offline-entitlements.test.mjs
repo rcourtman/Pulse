@@ -19,6 +19,7 @@ test('wrapper keeps issuer alive for child and closes it after child failure', a
     const assert = require('node:assert/strict');
     assert.equal(process.env.PULSE_LICENSE_DEV_MODE, 'false');
     assert.equal(process.env.PULSE_MOCK_MODE, 'false');
+    assert.match(process.env.PULSE_E2E_OFFLINE_PRO_ACTIVATION_KEY, /^ppk_live_e2e_/);
     fetch(process.env.PULSE_LICENSE_SERVER_URL + '/v1/activate', {
       method: 'POST', body: JSON.stringify({activation_key: process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY,
       instance_fingerprint: 'test', runtime: {build: 'community'}})

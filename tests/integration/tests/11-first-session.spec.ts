@@ -465,9 +465,7 @@ test.describe.serial("First-session experience", () => {
     // content. Scope assertions to main content, not the settings sidebar.
     const licenseContent = page
       .getByRole("main")
-      .getByText(
-        /Current plan|Existing purchases|Use existing key|activation key/i,
-      )
+      .getByText(/Current plan|License recovery/i)
       .first();
     await expect(
       licenseContent,
