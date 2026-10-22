@@ -858,6 +858,67 @@ class CloudBackupTest(unittest.TestCase):
         (self.bin / "rclone").unlink()
         self.assert_stopped_before_retention(self.invoke(), before_archives=True)
 
+    def test_remote_dry_run_stops_before_archives_uploads_or_retention(self):
+        self.check_remote_execution_setting_rejected("RCLONE_DRY_RUN")
+
+    def test_interactive_remote_stops_before_archives_uploads_or_retention(self):
+        self.check_remote_execution_setting_rejected("RCLONE_INTERACTIVE")
+
+    def check_remote_execution_setting_rejected(self, setting):
+        for mode in ("false", "true"):
+            for value in ("1", "t", "T", "TRUE", "true", "True"):
+                with self.subTest(setting=setting, encrypted=mode, value=value):
+                    self.backups.chmod(0o750)
+                    before_mode = self.backups.stat().st_mode
+                    result = self.invoke(PULSE_BACKUP_ENCRYPT=mode, **{setting: value})
+                    self.assert_stopped_before_retention(result, before_archives=True)
+                    self.assertEqual(self.backups.stat().st_mode, before_mode)
+                    self.assertIn(f"{setting} must be unset or false", self.output)
+                    for archive in self.old:
+                        self.assertEqual((self.remote / archive.name).read_bytes(), b"retained previous fixture")
+
+    def test_invalid_remote_execution_settings_fail_closed_without_echoing_values(self):
+        for setting in ("RCLONE_DRY_RUN", "RCLONE_INTERACTIVE"):
+            for value in ("yes", "false ", "SYNTHETIC-PRIVATE-SETTING-CANARY"):
+                with self.subTest(setting=setting, value=value):
+                    result = self.invoke(**{setting: value})
+                    self.assert_stopped_before_retention(result, before_archives=True)
+                    self.assertIn(f"{setting} must be unset or false", self.output)
+                    self.assertNotIn(f"{setting}={value}", self.output)
+                    self.assertNotIn("SYNTHETIC-PRIVATE-SETTING-CANARY", self.output)
+
+    def test_false_remote_execution_settings_keep_normal_uploads_and_retention(self):
+        for mode in ("false", "true"):
+            for value in ("", "false", "False", "FALSE", "0", "f", "F"):
+                with self.subTest(encrypted=mode, value=value):
+                    self.check_retention_scope(PULSE_BACKUP_ENCRYPT=mode,
+                                               RCLONE_DRY_RUN=value, RCLONE_INTERACTIVE=value)
+                    self.assertEqual(sum(call[:2] == ["rclone", "copyto"] for call in self.calls), 3)
+
+    def test_rclone_execution_settings_do_not_change_local_only_jobs(self):
+        for mode in ("false", "true"):
+            with self.subTest(encrypted=mode):
+                result = self.invoke(PULSE_RCLONE_REMOTE="", PULSE_BACKUP_ENCRYPT=mode,
+                                     RCLONE_DRY_RUN="true", RCLONE_INTERACTIVE="true")
+                self.assertEqual(result.returncode, 0, self.output)
+                self.assert_no_uploads()
+                self.assertTrue(all(not archive.exists() for archive in self.old))
+
+    @unittest.skipUnless(REAL_RCLONE, "real rclone is not installed")
+    def test_real_rclone_dry_run_success_is_not_an_upload(self):
+        source = self.root / "dry-run-source.txt"
+        source.write_bytes(b"synthetic dry-run copy fixture")
+        target = self.remote / "dry-run-target.txt"
+        env = dict(self.env, RCLONE_DRY_RUN="true")
+        command = [REAL_RCLONE, "--config", os.devnull, "copyto", str(source), str(target)]
+        dry = subprocess.run(command, env=env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(dry.returncode, 0, dry.stdout + dry.stderr)
+        self.assertFalse(target.exists(), "dry run unexpectedly uploaded fixture bytes")
+        actual = subprocess.run(command, env=dict(env, RCLONE_DRY_RUN="false"),
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(actual.returncode, 0, actual.stdout + actual.stderr)
+        self.assertEqual(target.read_bytes(), source.read_bytes())
+
     def test_missing_tar_or_retention_tool_stops_before_archiving(self):
         for name in ("tar", "find", "rmdir", "mv"):
             with self.subTest(name=name):
@@ -1394,7 +1455,8 @@ def run_native_suite():
                           "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}), flush=True)
     loader = unittest.TestLoader()
     required = {"test_real_age_recovers_archives_and_private_metadata",
-                "test_real_rclone_local_backend_preserves_unowned_objects"}
+                "test_real_rclone_local_backend_preserves_unowned_objects",
+                "test_real_rclone_dry_run_success_is_not_an_upload"}
     if not required.issubset(loader.getTestCaseNames(CloudBackupTest)):
         print("Native backup cases are missing; no tests started", file=sys.stderr)
         return 2

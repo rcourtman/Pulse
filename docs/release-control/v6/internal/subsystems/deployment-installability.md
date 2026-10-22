@@ -25,6 +25,22 @@ encryption and remote-client prerequisites before creating archives. A source
 that disappears after admission still fails the job. Missing data is not an
 optional source and must not become an empty success that prunes previous copies.
 
+Remote jobs also require `RCLONE_DRY_RUN` and `RCLONE_INTERACTIVE` to be unset,
+empty or an explicit false boolean (`false`/`False`/`FALSE`, `0`, `f` or `F`).
+A dry-run or declined interactive upload can return success without copying
+data, while local retention still deletes old backups. The helper refuses true
+or unrecognised settings before archive creation, staging permission changes,
+uploads or retention. It names the setting, never its value, and does not unset
+it or force an actual upload/deletion contrary to the operator's intent. This
+is not a new dry-run mode; local-only jobs remain independent of rclone settings.
+Entrypoint cases cover both encryption modes, all boolean spellings, invalid
+private values, unchanged old local/remote copies and normal false/unset jobs.
+When supplied, real rclone's empty-config local backend additionally establishes
+that an inherited dry run returns zero without copying and false performs the
+same copy. That case is mandatory in the existing required native CI suite.
+These are failure-admission and local-backend checks, not cloud upload integrity,
+provider acceptance, application consistency or native guest recovery proof.
+
 The configured source root itself must be a physical directory, not a symbolic
 link: tar otherwise exits successfully after archiving only the link. Admission
 rejects either linked root, including trailing-slash spellings, before creating
