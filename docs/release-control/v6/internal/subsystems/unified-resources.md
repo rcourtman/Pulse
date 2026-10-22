@@ -23,6 +23,25 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Service connection states stay conservative in an open drawer
+
+The PBS/PMG service State row uses complete recognised provider states, never
+the `healthy` substring in `unhealthy` or an unfamiliar description. Explicit
+resource `offline` takes precedence over a retained healthy service facet.
+Blank health falls back to the observed resource state; a reachable service
+with a resource-level storage warning remains distinguishable from a failed
+connection. Unknown explicit values retain neutral, escaped literal text.
+
+An open service card recomputes its state and tone after carrier-only changes,
+nested health changes and same-identity snapshot reconciliation. Its disclosure,
+state row and keyboard focus stay in place; PBS and PMG do not borrow each
+other's health. `serviceHealthPresentation.test.ts` and
+`ResourceDetailDrawer.service-cards.test.tsx` cover those boundaries. The
+read-only `service-connection.cjs` fixture exercises the production normalizer,
+state helper, full drawers and CSS at desktop and 320px using keyboard/touch.
+This is connection-state presentation proof, not a new current-metric/job
+observation, native PBS/PMG recovery, guest responsiveness, thaw or restore.
+
 ### Root aggregate projection preserves missing counters
 
 The existing detail mapper preserves absent capacity and used/free bytes rather
