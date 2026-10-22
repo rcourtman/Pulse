@@ -29,8 +29,8 @@ Pulse uses a split config model:
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
-- **OIDC config**: `oidc.enc` (encrypted)
-- **SSO config**: `sso.enc` (encrypted)
+- **Legacy single-provider OIDC config**: `oidc.enc` (encrypted)
+- **UI/API-managed OIDC and SAML providers**: `sso.enc` (encrypted, including mappings and secrets)
 - **API tokens**: `api_tokens.json`
 - **AI config**: `ai.enc` (encrypted)
 - **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
@@ -68,6 +68,8 @@ These are defaults, not a backup inventory. Check the active deployment's
 `PULSE_DATA_DIR`, mounts and any external stores before copying or restoring
 files. Metrics can use a separate `PULSE_METRICS_DB_PATH`; see
 [Metrics storage](METRICS_HISTORY.md#storage-location).
+Use the [recovery-state checklist](CONFIGURATION.md#back-up-recoverable-state)
+before choosing what to preserve; selected settings files alone are not a full backup.
 
 The audit paths above are the default store, not a licence-dependent guarantee
 that storage initialised successfully. Runtime-specific storage can differ;
