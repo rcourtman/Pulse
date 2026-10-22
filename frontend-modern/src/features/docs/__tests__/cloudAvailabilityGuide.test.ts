@@ -14,11 +14,15 @@ const renderGuide = (name: string): HTMLElement => {
 };
 const prose = (article: HTMLElement): string => article.textContent!.replace(/\s+/g, ' ');
 const section = (article: HTMLElement, id: string): HTMLElement => {
-  const heading = article.querySelector(`#${id}`)!;
+  const heading = article.querySelector(`[id="${id}"]`)!;
   expect(heading, id).not.toBeNull();
   const result = document.createElement('div');
-  for (let node = heading.nextElementSibling; node && !/^H[1-3]$/.test(node.tagName);
-    node = node.nextElementSibling) result.append(node.cloneNode(true));
+  for (
+    let node = heading.nextElementSibling;
+    node && !/^H[1-3]$/.test(node.tagName);
+    node = node.nextElementSibling
+  )
+    result.append(node.cloneNode(true));
   return result;
 };
 
@@ -44,9 +48,9 @@ describe('shipped Cloud availability guidance', () => {
       expect(content).toMatch(/Cloud is not generally available/);
       expect(content).toContain('not a public sign-up or provisioning offer');
     }
-    expect(faq.querySelector(
-      'a[href="/docs/CLOUD#1-confirm-existing-hosted-access"]',
-    )).not.toBeNull();
+    expect(
+      faq.querySelector('a[href="/docs/CLOUD#1-confirm-existing-hosted-access"]'),
+    ).not.toBeNull();
     expect(faq.querySelector('a[href="/docs/PULSE_PRO#cloud"]')).not.toBeNull();
     expect(plans.querySelector('a[href="/docs/CLOUD"]')).not.toBeNull();
   });
@@ -58,17 +62,25 @@ describe('shipped Cloud availability guidance', () => {
     expect(content).toContain('rather than purchasing again');
     expect(content).toContain('Keep any working source installation intact');
     expect(prose(article)).toContain('do not cancel it or discard the source');
-    expect(article.querySelector('a[href="/docs/UNIFIED_AGENT#private-file-installation-linux-macos-and-nas"]'))
-      .not.toBeNull();
-    for (const fragment of ['migrating-tofrom-cloud', 'cloud--self-hosted',
-      'verify-the-move-before-retiring-the-source', '4-set-up-mobile-access']) {
+    expect(
+      article.querySelector(
+        'a[href="/docs/UNIFIED_AGENT#private-file-installation-linux-macos-and-nas"]',
+      ),
+    ).not.toBeNull();
+    for (const fragment of [
+      'migrating-tofrom-cloud',
+      'cloud--self-hosted',
+      'verify-the-move-before-retiring-the-source',
+      '4-set-up-mobile-access',
+    ]) {
       expect(article.querySelector(`[id="${fragment}"]`), fragment).not.toBeNull();
     }
   });
 
   it('preserves the old account fragment in the actual sanitised renderer', () => {
     const article = renderGuide('CLOUD');
-    const target = article.querySelector('[id="1-create-your-account"]') ??
+    const target =
+      article.querySelector('[id="1-create-your-account"]') ??
       article.querySelector('[id="user-content-1-create-your-account"]');
     expect(target).not.toBeNull();
     const scroll = vi.fn();
@@ -78,7 +90,9 @@ describe('shipped Cloud availability guidance', () => {
       scrollToDocFragment(article, '#1-create-your-account');
       expect(scroll).toHaveBeenCalledWith({ block: 'start' });
       expect(document.activeElement).toBe(target);
-    } finally { article.remove(); }
+    } finally {
+      article.remove();
+    }
     expect(article.querySelector('script, iframe, form')).toBeNull();
   });
 

@@ -112,10 +112,10 @@ const slugSection = async (page, id) => page.locator(`[id="${id}"]`).evaluate(he
       await page.evaluate(() => window.__cloud_help_shell = 'preserved');
       await activate(page.locator('article a[href="/docs/CLOUD#1-confirm-existing-hosted-access"]'));
       await page.waitForURL('**/docs/CLOUD#1-confirm-existing-hosted-access');
-      await page.locator('#1-confirm-existing-hosted-access').waitFor();
+      await page.locator('[id="1-confirm-existing-hosted-access"]').waitFor();
       assert.equal(await page.evaluate(() => window.__cloud_help_shell), 'preserved');
       assert((await slugSection(page, '1-confirm-existing-hosted-access')).includes('rather than purchasing again'));
-      await capture('existing-access', '#1-confirm-existing-hosted-access');
+      await capture('existing-access', '[id="1-confirm-existing-hosted-access"]');
       record.checks.push('FAQ existing fragment, availability first, keyboard/touch same-shell link');
       await activate(page.locator('article a[href="/docs/PULSE_PRO"]').first());
       await page.waitForURL('**/docs/PULSE_PRO');
@@ -133,7 +133,7 @@ const slugSection = async (page, id) => page.locator(`[id="${id}"]`).evaluate(he
       const legacy = await context.newPage();
       await legacy.goto(`${origin}/docs/CLOUD#1-create-your-account`);
       await legacy.waitForFunction(() => document.activeElement?.id === '1-create-your-account');
-      assert(await legacy.locator('#1-confirm-existing-hosted-access').evaluate(el =>
+      assert(await legacy.locator('[id="1-confirm-existing-hosted-access"]').evaluate(el =>
         el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().top < innerHeight));
       await legacy.close();
       record.checks.push('old account fragment still focuses and reveals replacement access section');
