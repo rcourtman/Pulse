@@ -156,7 +156,7 @@ if tool == "rclone":
         assert len(args) in (3, 4) and args[3:] in ([], ["--error-on-no-transfer"]), args
         assert Path(args[1]).resolve().is_relative_to(backups), args
         assert Path(args[1]).is_file(), args
-        assert args[2] == "fixture-remote:bucket/pulse-cloud-tarballs/" + Path(args[1]).name, args
+        assert args[2] == os.environ["PULSE_RCLONE_REMOTE"] + "/pulse-cloud-tarballs/" + Path(args[1]).name, args
         number = 1 + sum(call[:2] == [tool, "copyto"] for call in previous)
         if number == scenario.get("upload_fail"):
             sys.exit(10)
@@ -172,7 +172,7 @@ if tool == "rclone":
         (remote / Path(args[1]).name).write_bytes(Path(args[1]).read_bytes())
         sys.exit(0)
     if args[0] == "delete":
-        assert args[:3] == ["delete", "fixture-remote:bucket/pulse-cloud-tarballs", "--min-age"], args
+        assert args[:3] == ["delete", os.environ["PULSE_RCLONE_REMOTE"] + "/pulse-cloud-tarballs", "--min-age"], args
         assert args[3].endswith("d") and args[3][:-1].isdigit(), args
         if scenario.get("remote_retention_fail"):
             sys.exit(11)
@@ -410,6 +410,38 @@ class CloudBackupTest(unittest.TestCase):
         self.assertEqual(marker.read_bytes(), b"synthetic directory content")
         self.assertEqual({path: path.read_bytes() for path in preserved}, preserved)
         self.assert_no_uploads()
+
+    def check_remote_configuration_not_logged(self, mode, failed_copy=None):
+        # Exercise the real helper's own log formatting, not native rclone
+        # parsing. This opaque synthetic destination reaches only the closed
+        # fixture adapter, which verifies the exact unchanged argument.
+        remote = "fixture-remote,SYNTHETIC-REMOTE-CONFIGURATION-CANARY:private-bucket"
+        scenario = {"upload_fail": failed_copy} if failed_copy else {}
+        result = self.invoke(scenario, PULSE_BACKUP_ENCRYPT=mode, PULSE_RCLONE_REMOTE=remote)
+        if failed_copy:
+            self.assert_stopped_before_retention(result)
+        else:
+            self.assertEqual(result.returncode, 0, self.output)
+        copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+        self.assertEqual(len(copies), failed_copy or 3, self.calls)
+        for call in copies:
+            self.assertEqual(call[3], remote + "/pulse-cloud-tarballs/" + Path(call[2]).name)
+        self.assertNotIn("SYNTHETIC-REMOTE-CONFIGURATION-CANARY", self.output)
+        self.assertNotIn(remote, self.output)
+        for call in copies:
+            self.assertIn("uploading backup file: " + Path(call[2]).name, self.output)
+        self.assertEqual(self.output.count("upload complete:"), (failed_copy - 1) if failed_copy else 3)
+
+    def test_success_logs_identify_files_without_remote_configuration(self):
+        for mode in ("false", "true"):
+            with self.subTest(encrypted=mode):
+                self.check_remote_configuration_not_logged(mode)
+
+    def test_failed_upload_logs_do_not_echo_remote_configuration(self):
+        for mode in ("false", "true"):
+            for failed_copy in (1, 2, 3):
+                with self.subTest(encrypted=mode, failed_copy=failed_copy):
+                    self.check_remote_configuration_not_logged(mode, failed_copy)
 
     def test_failed_upload_cannot_expire_archives_or_metadata_in_either_store(self):
         self.assert_stopped_before_retention(self.invoke({"upload_fail": 3}))

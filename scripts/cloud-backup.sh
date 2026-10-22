@@ -254,7 +254,11 @@ upload_remote() {
   filename="$(basename "${file_path}")"
   local dest="${PULSE_RCLONE_REMOTE}/${remote_prefix}/${filename}"
 
-  log "uploading to remote: ${dest}"
+  # The destination is opaque operator configuration and may be private. Our
+  # own progress messages need only identify the generated backup file; do not
+  # echo connection settings or destination names. Keep client diagnostics
+  # unchanged for the operator, not as a general rclone-output redaction claim.
+  log "uploading backup file: ${filename}"
   # An existing-destination skip can return exit zero. Require a transfer for
   # each of this job's three new files before local
   # retention may delete any previous recovery copy. Do not disable the user's
@@ -262,7 +266,7 @@ upload_remote() {
   if ! rclone copyto "${file_path}" "${dest}" --error-on-no-transfer; then
     die "Remote upload failed or transferred no file; no retention performed; preserve local backup files and check rclone configuration and output"
   fi
-  log "upload complete: ${dest}"
+  log "upload complete: ${filename}"
 }
 
 # Rotate local backups (keep last N days)
