@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Actual server startup and completion paths against a closed service manager.
 
-Only the fixed unit lookup is relocated. Installer transport, user/directory
-setup and marker/completion side effects are closed fixtures. No host service,
-network, privileged installation or installed recovery is exercised.
+Only the fixed unit lookup is relocated. Installer transport, dependency and
+user/directory setup and marker/completion side effects are closed fixtures.
+No host service, network, privileged installation or installed recovery is
+exercised.
 """
 
 import json
@@ -102,6 +103,7 @@ read_configured_update_channel() { printf 'stable\n'; }
 safe_read() { printf -v "$2" '%s' "$([[ "$FLOW" == reinstall ]] && echo 2 || echo 1)"; }
 run_upgrade_readiness_preflight() { record preflight; }
 backup_existing() { record backup; }
+install_dependencies() { record dependencies; }
 create_user() { record user; }
 setup_directories() { record directories; }
 download_pulse() { record download; }
@@ -126,7 +128,7 @@ exit "$status"
 
 
 class ServerInstallerStart(unittest.TestCase):
-    def exercise(self, scenario, *, prior_active=False, flow="start"):
+    def exercise(self, scenario, *, prior_active=False, flow="start", harness=HARNESS):
         with tempfile.TemporaryDirectory(prefix="pulse-start-fixture-") as temporary:
             f = Path(temporary)
             tools = f / "tools"
@@ -139,14 +141,24 @@ class ServerInstallerStart(unittest.TestCase):
             self.assertEqual(source.count(marker), 1)
             body = marker + source.split(marker, 1)[1].split("\n}\n", 1)[0] + "\n}\n"
             self.assertIn("/etc/systemd/system/", body)
-            # No real /etc lookup or systemctl operation is possible.
-            (f / "relocated-start.sh").write_text(body.replace("/etc/systemd/system/", str(f / "units") + "/"))
+            # No real /etc lookup or systemctl operation is possible. Keep a
+            # separate fail-closed package-setup boundary beneath the recorder:
+            # accidentally omitting that stub must not reach apt on the runner.
+            self.assertEqual(source.count("install_dependencies() {"), 1)
+            guard = r'''
+install_dependencies() {
+    printf 'unexpected-dependency-setup\n' >> "$FIXTURE/events"
+    exit 97
+}
+'''
+            (f / "relocated-start.sh").write_text(
+                body.replace("/etc/systemd/system/", str(f / "units") + "/") + guard)
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
             env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), SCENARIO=scenario,
                        PRIOR_ACTIVE=str(prior_active).lower(), FLOW=flow,
                        PATH=str(tools) + os.pathsep + os.environ["PATH"],
                        PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"))
-            r = subprocess.run(["bash", "-c", HARNESS], cwd=f, env=env,
+            r = subprocess.run(["bash", "-c", harness], cwd=f, env=env,
                                capture_output=True, text=True, timeout=10)
             def lines(name):
                 return (f / name).read_text().splitlines() if (f / name).exists() else []
@@ -195,9 +207,20 @@ class ServerInstallerStart(unittest.TestCase):
             with self.subTest(flow=flow):
                 r, _, events = self.exercise("caller-refused", flow=flow)
                 self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertEqual(events.count("dependencies"), int(flow == "fresh"))
+                self.assertNotIn("unexpected-dependency-setup", events)
                 self.assertIn("start-refused", events)
                 self.assertNotIn("marker", events)
                 self.assertNotIn("complete", events)
+
+    def test_missing_dependency_recorder_stays_inside_the_fixture(self):
+        stub = "install_dependencies() { record dependencies; }\n"
+        self.assertEqual(HARNESS.count(stub), 1)
+        r, calls, events = self.exercise(
+            "caller-refused", flow="fresh", harness=HARNESS.replace(stub, ""))
+        self.assertEqual(r.returncode, 97, r.stdout + r.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(events, ["unexpected-dependency-setup"])
 
     def test_every_installer_caller_requires_real_active_observation_before_completion(self):
         for flow in ("fresh", "pinned", "menu", "reinstall", "source"):
@@ -205,6 +228,8 @@ class ServerInstallerStart(unittest.TestCase):
                 with self.subTest(flow=flow, scenario=scenario):
                     r, calls, events = self.exercise(scenario, flow=flow)
                     self.assertEqual(r.returncode, expected_exit, r.stdout + r.stderr)
+                    self.assertEqual(events.count("dependencies"), int(flow == "fresh"))
+                    self.assertNotIn("unexpected-dependency-setup", events)
                     self.assertEqual("marker" in events, expected_exit == 0)
                     self.assertEqual("complete" in events, expected_exit == 0)
                     self.assertEqual(calls.count(["start", "pulse-fixture"]), 1)
