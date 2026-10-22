@@ -20106,10 +20106,10 @@ func TestContract_PulseIntelligenceOverviewPinsPatrolPrimaryCore(t *testing.T) {
 		"Pulse Assistant",
 		"Pulse MCP",
 		"contextual explanation, approval, and handoff surface for Patrol findings",
-		"Pulse Assistant and `pulse-mcp` are sibling surfaces over Pulse Intelligence, not competing implementations, and neither replaces the other",
-		"Assistant remains the in-app Pro surface",
-		"New operational capabilities should be added to the canonical API manifest first",
-		"MCP-only actions and Assistant-only copies of the same business logic are drift",
+		"Pulse has no in-app chat window",
+		"connect an MCP client such as Claude Code, Codex, or OpenCode to `pulse-mcp`",
+		"New operational capabilities are added to the canonical API manifest first",
+		"MCP-only copies of the same business logic are drift",
 	} {
 		if !strings.Contains(normalized, required) {
 			t.Errorf("docs/AI.md must pin Pulse Intelligence Core Patrol-primary product framing; missing %q", required)
