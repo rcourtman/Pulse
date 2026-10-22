@@ -62,8 +62,10 @@ release**, when `main` has changed. The next minor release candidate becomes
 eligible **one day earlier**, reserving the full 24-hour soak. Preparation and
 qualification can move publication later. A candidate carries everything on
 `main` at its cut, not a selected set of fixes. Repairs go on `main`, not onto
-an older release line. An early cut can bring the next minor release forward
-when an important fix should not wait. Patch releases are not scheduled.
+an older release line. An important fix does not bring the weekly candidate or
+stable release forward. Before the RC is due, daily betas provide earlier
+access on Preview when a published beta contains the fix. Patch releases are
+not scheduled.
 
 The candidate soaks for 24 hours on the opt-in preview channel, then is promoted
 unchanged to stable unless an open issue labelled `release-blocker` stops

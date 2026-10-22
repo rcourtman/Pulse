@@ -66,7 +66,7 @@ describe('public issue follow-through guidance', () => {
     expect(prose(paragraph)).toContain('another unanswered reminder is not required');
   });
 
-  it('keeps the weekly target, early eligibility and delay consistent with release help', () => {
+  it('keeps the fixed weekly target and beta access consistent with release help', () => {
     const article = renderGuide('AI_TRANSPARENCY', source);
     const releaseHelp = renderGuide(
       'RELEASE_PROCESS',
@@ -78,8 +78,21 @@ describe('public issue follow-through guidance', () => {
       expect(text).toContain('one day earlier');
       expect(text).toContain('full 24-hour soak');
       expect(text).toContain('Preparation and qualification can move publication later');
+      expect(text).toContain(
+        'An important fix does not bring the weekly candidate or stable release forward',
+      );
+      expect(text).toContain('published beta');
+      expect(text).not.toMatch(/(?:early cut|important fix) can bring/i);
+      expect(text).not.toContain('can bring that cut forward');
       expect(text).not.toContain('Every 14 days after the last stable release');
     }
+    const releaseText = prose(releaseHelp);
+    expect(releaseText).toContain("Work merged during the soak reaches the next cycle's betas");
+    expect(releaseText).toContain('Only a candidate regression replaces a soaking candidate');
+    expect(releaseText).toContain('an unrelated fix does not restart its soak');
+    expect(releaseText).toContain(
+      'regression from the previous stable release or a failed release attempt',
+    );
     expect(article.querySelector('a[href="/docs/RELEASE_PROCESS"]')).not.toBeNull();
   });
 

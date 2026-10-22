@@ -13,6 +13,10 @@ DOCUMENTS = (
     ROOT / "docs/AI_TRANSPARENCY.md",
     ROOT / "frontend-modern/public/docs/AI_TRANSPARENCY.md",
 )
+RELEASE_DOCUMENTS = (
+    ROOT / "docs/RELEASE_PROCESS.md",
+    ROOT / "frontend-modern/public/docs/RELEASE_PROCESS.md",
+)
 
 
 class TransparencyDocsTest(unittest.TestCase):
@@ -27,10 +31,46 @@ class TransparencyDocsTest(unittest.TestCase):
         self.assertIn("Preparation and qualification can move publication later", text)
         self.assertIn("everything on `main` at its cut, not a selected set of fixes", text)
         self.assertIn("Repairs go on `main`, not onto an older release line", text)
-        self.assertIn("An early cut can bring the next minor release forward", text)
+        self.assert_fixed_candidate_schedule(text)
         self.assertIn("Patch releases are not scheduled", text)
         self.assertNotIn("Every 14 days after the last stable release", text)
         self.assertNotIn("takes only backports", text)
+
+    def assert_fixed_candidate_schedule(self, text):
+        self.assertIn(
+            "An important fix does not bring the weekly candidate or stable release forward", text
+        )
+        self.assertNotRegex(text, r"(?i)(?:early cut|important fix) can bring")
+        self.assertNotIn("can bring that cut forward", text)
+
+    def test_release_help_and_triage_disclosure_share_the_fixed_schedule(self):
+        for path in (*DOCUMENTS, *RELEASE_DOCUMENTS):
+            with self.subTest(document=path):
+                self.assert_fixed_candidate_schedule(" ".join(path.read_text().split()))
+        self.assertEqual(RELEASE_DOCUMENTS[0].read_bytes(), RELEASE_DOCUMENTS[1].read_bytes())
+
+    def test_schedule_oracle_rejects_an_urgent_cut_or_soak_replacement(self):
+        for path in (*DOCUMENTS, *RELEASE_DOCUMENTS):
+            text = " ".join(path.read_text().split())
+            for claim in (
+                "An early cut can bring the next minor release forward.",
+                "An important fix can bring the next candidate cut forward.",
+                "An important fix can bring that cut forward, or replace a soaking candidate.",
+            ):
+                with self.subTest(document=path, claim=claim):
+                    with self.assertRaises(AssertionError):
+                        self.assert_fixed_candidate_schedule(text + " " + claim)
+
+    def test_soak_changes_wait_unless_the_candidate_regresses(self):
+        for path in RELEASE_DOCUMENTS:
+            text = " ".join(path.read_text().split())
+            with self.subTest(document=path):
+                self.assertIn("use a published beta that contains the fix", text)
+                self.assertIn("Work merged during the soak reaches the next cycle's betas", text)
+                self.assertIn("Only a candidate regression replaces a soaking candidate", text)
+                self.assertIn("an unrelated fix does not restart its soak", text)
+                self.assertIn("required checks and its full 24-hour soak", text)
+                self.assertIn("regression from the previous stable release or a failed release attempt", text)
 
     def test_all_main_minor_cycle_not_selective_backports(self):
         for path, text in self.documents():
