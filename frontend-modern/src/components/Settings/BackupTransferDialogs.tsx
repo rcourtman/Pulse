@@ -296,12 +296,17 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   type="file"
                   disabled={busy()}
                   accept=".json"
+                  aria-describedby="backup-import-file-help"
                   onChange={(event) => {
                     const file = event.currentTarget.files?.[0] ?? null;
                     props.setImportFile(file);
                   }}
                   class={controlClass('cursor-pointer')}
                 />
+                <p id="backup-import-file-help" class={`${formHelpText} mt-1`}>
+                  Maximum file size: 1 MiB. The backup and password together must also fit the
+                  server's 1 MiB request limit.
+                </p>
               </div>
 
               <div class={formField}>

@@ -21,6 +21,11 @@ interface UseBackupTransferFlowParams {
   securityStatus: Accessor<SecurityStatus | null>;
 }
 
+// Match handleImportConfig's existing 1 MiB HTTP body budget. Bound the file
+// before reading it as well: a large JSON wrapper is not a safe way to submit
+// even a small archive. The serialized request gets its own UTF-8 byte check.
+const MAX_CONFIG_IMPORT_BYTES = 1024 * 1024;
+
 // Preserve UI, legacy and CLI archives without treating arbitrary parsed JSON
 // (including null, arrays or non-string data) as encrypted configuration.
 const encryptedArchive = (content: string): string | null => {
@@ -117,6 +122,16 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       }
 
       if (!active(current)) return;
+      const body = JSON.stringify({ passphrase: current.passphrase, ...(data ? { data } : {}) });
+      if (
+        current.kind === 'import' &&
+        new TextEncoder().encode(body).byteLength > MAX_CONFIG_IMPORT_BYTES
+      ) {
+        setTransferError(
+          'The backup and password exceed the 1 MiB request limit. No import request was sent. Keep the original backup intact.',
+        );
+        return;
+      }
       setTransferStatus({ kind: current.kind, phase: 'request' });
       // Never replay configuration replacement on an auth/CSRF/rate-limit error.
       // Abort stops dispatch if CSRF preparation yields while the view leaves;
@@ -125,7 +140,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
         method: 'POST',
         retry: false,
         signal: current.controller.signal,
-        body: JSON.stringify({ passphrase: current.passphrase, ...(data ? { data } : {}) }),
+        body,
       });
       if (!active(current)) return;
       if (!acknowledgedTransfer(result)) throw new Error('Unconfirmed configuration transfer');
@@ -209,6 +224,12 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     const file = importFile();
     if (!passphrase || !file) {
       setTransferError('Choose a configuration backup and enter its password.');
+      return;
+    }
+    if (file.size > MAX_CONFIG_IMPORT_BYTES) {
+      setTransferError(
+        'The selected file exceeds the 1 MiB limit. No import request was sent. Keep the original backup intact.',
+      );
       return;
     }
     await begin({ kind: 'import', passphrase, file, controller: new AbortController() });
