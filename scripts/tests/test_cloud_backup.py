@@ -2,10 +2,12 @@
 """Run the hosted tarball helper against disposable, non-database fixtures.
 
 Real tar/gzip and local retention operate only on those fixtures. age, rclone,
-Docker and host identity are closed recording fakes; this proves orchestration,
-not encryption, application consistency, cloud delivery or restore readiness.
+Docker and host identity are closed recording fakes for orchestration controls.
+One round-trip uses real age/age-keygen when supplied or installed; no test
+establishes application consistency, cloud delivery or native restore readiness.
 """
 
+import io
 import json
 import os
 from pathlib import Path
@@ -21,6 +23,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(os.environ.get("PULSE_CLOUD_BACKUP_TEST_SCRIPT", ROOT / "scripts/cloud-backup.sh"))
 BASH = shutil.which("bash")
+REAL_AGE = os.environ.get("PULSE_CLOUD_BACKUP_TEST_REAL_AGE") or shutil.which("age")
+REAL_AGE_KEYGEN = os.environ.get("PULSE_CLOUD_BACKUP_TEST_REAL_AGE_KEYGEN") or shutil.which("age-keygen")
+METADATA_MARKER = b"synthetic-private-command-argument"
 
 FAKE = r'''import json
 import os
@@ -98,7 +103,8 @@ if tool == "hostname" and not args:
     print("fixture-host")
     sys.exit(0)
 if tool == "docker" and args == ["ps", "-a", "--no-trunc"]:
-    print("CONTAINER ID  IMAGE  NAMES")
+    print("CONTAINER ID  IMAGE  COMMAND  NAMES")
+    print('fixture-id  fixture-image  "fixture-worker synthetic-private-command-argument"  fixture-tenant')
     sys.exit(0)
 sys.exit(90)
 '''
@@ -205,12 +211,12 @@ class CloudBackupTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_each_existing_output_is_preserved_before_archives_or_retention(self):
-        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted"), 1):
+        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted", "meta-encrypted"), 1):
             with self.subTest(label=label):
                 timestamp = f"20261022-02{index:04d}"
                 encrypted = label.endswith("-encrypted")
-                suffix = ".txt" if label == "meta" else ".tar.gz" + (".age" if encrypted else "")
                 name = label.removesuffix("-encrypted")
+                suffix = (".txt" if name == "meta" else ".tar.gz") + (".age" if encrypted else "")
                 existing = self.backups / f"pulse-backup-{name}-{timestamp}{suffix}"
                 existing.write_bytes(b"previous completed fixture")
                 result = self.invoke(FIXTURE_TIMESTAMP=timestamp,
@@ -221,12 +227,12 @@ class CloudBackupTest(unittest.TestCase):
                 self.assertEqual(list(self.backups.glob(".pulse-backup-*.lock")), [])
 
     def test_output_symlinks_cannot_overwrite_an_existing_file(self):
-        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted"), 1):
+        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted", "meta-encrypted"), 1):
             with self.subTest(label=label):
                 timestamp = f"20261022-03{index:04d}"
                 encrypted = label.endswith("-encrypted")
-                suffix = ".txt" if label == "meta" else ".tar.gz" + (".age" if encrypted else "")
                 name = label.removesuffix("-encrypted")
+                suffix = (".txt" if name == "meta" else ".tar.gz") + (".age" if encrypted else "")
                 target = self.backups / f"preserved-{index}.txt"
                 target.write_bytes(b"synthetic unrelated file")
                 existing = self.backups / f"pulse-backup-{name}-{timestamp}{suffix}"
@@ -402,16 +408,21 @@ class CloudBackupTest(unittest.TestCase):
                 self.assert_no_uploads()
 
     def test_encryption_failures_preserve_last_archives_and_skip_uploads(self):
-        for number in (1, 2):
+        for number in (1, 2, 3):
             with self.subTest(number=number):
                 self.assert_stopped_before_retention(self.invoke({"age_fail": number}, PULSE_BACKUP_ENCRYPT="true"))
                 self.assert_no_uploads()
 
     def test_each_upload_must_succeed_before_either_retention(self):
-        for number in (1, 2, 3):
-            with self.subTest(number=number):
-                self.assert_stopped_before_retention(self.invoke({"upload_fail": number}))
-                self.assertEqual(len([call for call in self.calls if call[:2] == ["rclone", "copyto"]]), number)
+        for mode in ("false", "true"):
+            for number in (1, 2, 3):
+                with self.subTest(mode=mode, number=number):
+                    self.assert_stopped_before_retention(
+                        self.invoke({"upload_fail": number}, PULSE_BACKUP_ENCRYPT=mode))
+                    copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+                    self.assertEqual(len(copies), number)
+                    if mode == "true":
+                        self.assertTrue(all(call[2].endswith(".age") for call in copies))
 
     def test_local_retention_error_is_not_a_success_and_stops_remote_retention(self):
         result = self.invoke({"local_retention_fail": True})
@@ -436,6 +447,11 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_archive_contents()
         self.assert_no_uploads()
         self.assertFalse(any(path.exists() for path in self.old))
+        metadata = list(self.backups.glob("pulse-backup-meta-*.txt"))
+        self.assertEqual(len(metadata), 1)
+        self.assertIn(METADATA_MARKER, metadata[0].read_bytes())
+        self.assertEqual(metadata[0].stat().st_mode & 0o777, 0o600)
+        self.assertEqual(list(self.backups.glob("*.age")), [])
 
     def test_upload_and_rotation_follow_both_archives(self):
         result = self.invoke(PULSE_BACKUP_RETENTION="0030")
@@ -461,8 +477,95 @@ class CloudBackupTest(unittest.TestCase):
             self.assertEqual(archive.stat().st_mode & 0o777, 0o600)
         copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
         self.assertEqual(len(copies), 3)
-        self.assertTrue(all(call[1] == "copyto" and call[2].endswith(".age") for call in copies[:2]))
-        self.assertTrue(copies[2][2].endswith(".txt"))
+        self.assertTrue(all(call[2].endswith(".age") for call in copies))
+        self.assertTrue(copies[2][2].endswith(".txt.age"))
+        metadata = list(self.backups.glob("pulse-backup-meta-*.txt.age"))
+        self.assertEqual(len(metadata), 1)
+        self.assertTrue(metadata[0].read_bytes().startswith(b"FAKE-AGE\n"))
+        self.assertEqual(metadata[0].stat().st_mode & 0o777, 0o600)
+        self.assertEqual(list(self.backups.glob("*.txt")), [])
+        encryptions = [call for call in self.calls if call[0] == "age"]
+        self.assertEqual(len(encryptions), 3)
+        self.assertLess(max(self.calls.index(call) for call in encryptions), self.calls.index(copies[0]))
+
+    def test_local_only_encryption_also_covers_metadata(self):
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", PULSE_RCLONE_REMOTE="")
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_no_uploads()
+        self.assertEqual(len(list(self.backups.glob("*.age"))), 3)
+        self.assertEqual(list(self.backups.glob("*.txt")), [])
+        self.assertEqual(list(self.backups.glob("*.tar.gz")), [])
+
+    def test_metadata_encryption_failure_preserves_private_evidence_without_upload(self):
+        result = self.invoke({"age_fail": 3}, PULSE_BACKUP_ENCRYPT="true")
+        self.assert_stopped_before_retention(result)
+        self.assert_no_uploads()
+        # The failed run is not an encrypted success. Keep its partial files
+        # private for diagnosis, just as for an archive encryption failure.
+        self.assertEqual(len(list(self.backups.glob("*.txt"))), 1)
+        for path in self.backups.glob("pulse-backup-*-20261022-*"):
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.backups.stat().st_mode & 0o777, 0o700)
+
+    def test_existing_encrypted_metadata_is_reserved_in_both_modes(self):
+        for mode, timestamp in (("false", "20261022-070001"), ("true", "20261022-070002")):
+            with self.subTest(mode=mode):
+                existing = self.backups / f"pulse-backup-meta-{timestamp}.txt.age"
+                existing.write_bytes(b"retained encrypted inventory fixture")
+                result = self.invoke(PULSE_BACKUP_ENCRYPT=mode, FIXTURE_TIMESTAMP=timestamp)
+                self.assert_stopped_before_retention(result)
+                self.assertEqual(self.calls, [])
+                self.assertEqual(set(self.backups.iterdir()), {*self.old, existing})
+                self.assertEqual(existing.read_bytes(), b"retained encrypted inventory fixture")
+                existing.unlink()
+
+    def test_same_second_retry_preserves_all_encrypted_outputs(self):
+        timestamp = "20261022-080001"
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", FIXTURE_TIMESTAMP=timestamp)
+        self.assertEqual(result.returncode, 0, self.output)
+        completed = {p: p.read_bytes() for p in self.backups.iterdir()}
+        self.assertEqual(len(completed), 3)
+        self.assertTrue(all(p.name.endswith(".age") for p in completed))
+        result = self.invoke({"age_fail": 3}, PULSE_BACKUP_ENCRYPT="true", FIXTURE_TIMESTAMP=timestamp)
+        self.assertNotEqual(result.returncode, 0, self.output)
+        self.assertEqual(self.calls, [])
+        self.assertEqual({p: p.read_bytes() for p in self.backups.iterdir()}, completed)
+
+    @unittest.skipUnless(REAL_AGE and REAL_AGE_KEYGEN, "real age and age-keygen are not supplied or installed")
+    def test_real_age_recovers_archives_and_private_metadata(self):
+        identity = self.root / "fixture-age-identity"
+        # Keys exist only in this disposable fixture. Never print keygen's
+        # private output or include identity bytes in assertion diagnostics.
+        keygen = subprocess.run([REAL_AGE_KEYGEN, "-o", str(identity)], capture_output=True, timeout=5)
+        self.assertEqual(keygen.returncode, 0, "fixture age identity creation failed")
+        identity.chmod(0o600)
+        public = subprocess.run([REAL_AGE_KEYGEN, "-y", str(identity)], capture_output=True, timeout=5)
+        self.assertEqual(public.returncode, 0, "fixture age recipient derivation failed")
+        (self.bin / "age").unlink()
+        (self.bin / "age").symlink_to(REAL_AGE)
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", PULSE_BACKUP_AGE_RECIPIENT=public.stdout.decode().strip())
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assertEqual(list(self.backups.glob("*.txt")), [])
+        self.assertEqual(list(self.backups.glob("*.tar.gz")), [])
+        encrypted = list(self.backups.glob("*.age"))
+        self.assertEqual(len(encrypted), 3)
+        for path in encrypted:
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn(METADATA_MARKER, path.read_bytes())
+            decrypted = subprocess.run([REAL_AGE, "--decrypt", "-i", str(identity), str(path)],
+                                       capture_output=True, timeout=5)
+            self.assertEqual(decrypted.returncode, 0, "fixture age decryption failed")
+            if path.name.endswith(".txt.age"):
+                self.assertIn(METADATA_MARKER, decrypted.stdout)
+                self.assertIn(b"encrypted: true\n", decrypted.stdout)
+            else:
+                directory = "tenants" if "-tenants-" in path.name else "control-plane"
+                with tarfile.open(fileobj=io.BytesIO(decrypted.stdout), mode="r:gz") as archive:
+                    self.assertEqual(archive.extractfile(f"{directory}/fixture.txt").read(),
+                                     f"synthetic {directory} data\n".encode())
+        copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+        self.assertEqual(len(copies), 3)
+        self.assertTrue(all(call[2].endswith(".age") for call in copies))
 
 
 if __name__ == "__main__":
