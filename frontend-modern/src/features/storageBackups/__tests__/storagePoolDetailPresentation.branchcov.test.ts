@@ -256,6 +256,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
     expect(buildStoragePoolDetailZfsSummary(record)).toEqual({
       state: 'ONLINE',
       scan: '',
+      scanErrors: 0,
       errorSummary: null,
       devices: [],
       datasets: [],
@@ -278,6 +279,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
     expect(buildStoragePoolDetailZfsSummary(record)).toEqual({
       state: 'DEGRADED',
       scan: '',
+      scanErrors: 0,
       errorSummary: null,
       devices: [],
       datasets: [],
@@ -300,6 +302,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
     expect(buildStoragePoolDetailZfsSummary(record)).toEqual({
       state: 'ONLINE',
       scan: 'scrub ok',
+      scanErrors: 0,
       errorSummary: null,
       devices: [{ name: 'sdc', type: '', state: '', errorSummary: '', message: '' }],
       datasets: [],
@@ -322,6 +325,7 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
     expect(buildStoragePoolDetailZfsSummary(record)).toEqual({
       state: 'FAULTED',
       scan: '',
+      scanErrors: 0,
       errorSummary: 'Errors: R:1 W:0 C:0',
       devices: [],
       datasets: [],

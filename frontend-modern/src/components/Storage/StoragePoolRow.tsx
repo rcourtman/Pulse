@@ -28,19 +28,22 @@ import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBack
 import type { Resource } from '@/types/resource';
 import {
   getStoragePoolCellPaddingClass,
+  getStoragePoolTableColumns,
   isStoragePoolColumnVisible,
   type StoragePoolTableColumnId,
   type StoragePoolTableLayoutMode,
 } from '@/features/storageBackups/storagePagePresentation';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
-import { StoragePoolDetail } from './StoragePoolDetail';
+import { StoragePoolDrawer } from './StoragePoolDrawer';
 import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { createRowTextSelectionGuard } from '@/components/shared/Table';
+import type { Alert } from '@/types/api';
 
 interface StoragePoolRowProps {
   layoutMode: StoragePoolTableLayoutMode;
@@ -57,6 +60,8 @@ interface StoragePoolRowProps {
   alertHeadlineClass?: string;
   physicalDisks: Resource[];
   getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
+  /** The pool's open alerts, for its drawer; the same set its row is tinted by. */
+  alerts?: Alert[];
   alertDataAttrs: {
     'data-row-id': string;
     'data-alert-state': string;
@@ -239,13 +244,19 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
       </tr>
       <Show when={props.expanded}>
-        <StoragePoolDetail
-          record={props.record}
-          physicalDisks={props.physicalDisks}
-          getDiskAlertResourceIds={props.getDiskAlertResourceIds}
-          summarySeriesId={props.summarySeriesId}
-          controlsId={detailControlsId()}
-        />
+        <InlineDetailTableRow
+          cellId={detailControlsId()}
+          colspan={getStoragePoolTableColumns('').length}
+          data-inline-detail-for={props.summarySeriesId}
+        >
+          <StoragePoolDrawer
+            record={props.record}
+            physicalDisks={props.physicalDisks}
+            getDiskAlertResourceIds={props.getDiskAlertResourceIds}
+            alerts={props.alerts}
+            onClose={props.onToggleExpand}
+          />
+        </InlineDetailTableRow>
       </Show>
     </>
   );

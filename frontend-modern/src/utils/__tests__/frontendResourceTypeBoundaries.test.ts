@@ -1306,14 +1306,14 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).toContain('StatusDot');
     expect(storagePoolDetailSource).toContain('getLinkedDiskHealthDotVariant');
     expect(storagePoolDetailSource).toContain('getLinkedDiskTemperatureTextClass');
-    expect(storagePoolDetailSource).toContain('getZfsScanTextClass');
-    expect(storagePoolDetailSource).toContain('getZfsErrorTextClass');
-    expect(storagePoolDetailSource).toContain('StorageDetailKeyValueRow');
-    expect(storagePoolDetailSource).toContain('STORAGE_DETAIL_CARD_CLASS');
+    // The pool Overview is built like the guest and node drawers: alerts,
+    // Worth checking, drawer charts, then one closed Details of sections.
     expect(storagePoolDetailSource).toContain('useStoragePoolDetailModel');
-    expect(storagePoolDetailSource).toContain('STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS');
-    expect(storagePoolDetailSource).toContain('FormSelect');
-    expect(storagePoolDetailSource).toContain('label="Capacity history range"');
+    expect(storagePoolDetailSource).toContain('DrawerAttentionSection');
+    expect(storagePoolDetailSource).toContain('DrawerExceptionList');
+    expect(storagePoolDetailSource).toContain('GuestDrawerHistory');
+    expect(storagePoolDetailSource).toContain('TechnicalDetailsDisclosure');
+    expect(storagePoolDetailSource).toContain('DetailSectionTable');
     expect(storagePoolDetailSource).not.toContain('<select');
     expect(storagePoolDetailSource).not.toContain('const ConfigRow: Component');
     expect(storagePoolDetailSource).not.toContain('const chartResourceType = createMemo');
@@ -1637,20 +1637,14 @@ describe('frontend resource type boundaries', () => {
     expect(diskDetailPresentationSource).toContain('export const DISK_DETAIL_LIVE_CHARTS');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_CARD_CLASS');
     expect(storageDetailPresentationSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
-    expect(storagePoolDetailSource).toContain('filterSelectClass');
     expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_EMPTY_CLASS');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_ROW_CLASS');
     expect(storageDetailPresentationSource).toContain(
       'export const STORAGE_DISK_DETAIL_HEADER_CLASS',
-    );
-    expect(storageDetailPresentationSource).toContain(
-      'export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS',
     );
     expect(storageDetailKeyValueRowSource).toContain('InfoCardKeyValueRow');
     expect(storageDetailKeyValueRowSource).toContain('desktopAt="sm"');
     expect(storageDetailMetricCardSource).toContain('STORAGE_DETAIL_CARD_CLASS');
-    expect(storagePoolDetailSource).toContain('<tr class={STORAGE_DETAIL_ROW_CLASS}>');
-    expect(storagePoolDetailSource).not.toContain('border-t border-border');
+    expect(storagePoolDetailSource).not.toContain('<tr class=');
     expect(storagePoolDetailSource).not.toContain('col-span-2');
     expect(storagePoolDetailSource).not.toContain('text-base-content truncate flex-1');
     expect(zfsPresentationSource).toContain('export const getZfsDeviceBlockClass');

@@ -225,16 +225,30 @@ describe('zfsDeviceEvidenceLabels filter and formatting (via "Affected vdevs")',
 // =========================================================================
 
 describe('poolHealth canonical state tone', () => {
-  it('tones success for canonicalState "ONLINE"', () => {
+  it('omits the canonical state when it repeats the pool state', () => {
     const resource = storageRes({ poolHealth: { canonicalState: 'ONLINE' } });
-    const row = findRow(resource, 'Canonical state');
+    expect(findRow(resource, 'State')?.value).toBe('Online');
+    expect(findRow(resource, 'Pool health')).toBeUndefined();
+  });
+
+  it('tones success for a differing canonicalState "ONLINE"', () => {
+    const resource = storageRes({
+      zfsPoolState: 'RESILVERING',
+      poolHealth: { canonicalState: 'ONLINE' },
+    });
+    const row = findRow(resource, 'Pool health');
     expect(row?.value).toBe('ONLINE');
     expect(row?.tone).toBe('success');
   });
 
+  it('tones danger for a faulted canonicalState', () => {
+    const resource = storageRes({ poolHealth: { canonicalState: 'FAULTED' } });
+    expect(findRow(resource, 'Pool health')?.tone).toBe('danger');
+  });
+
   it('tones default for a canonicalState outside the known sets', () => {
     const resource = storageRes({ poolHealth: { canonicalState: 'SUSPENDED' } });
-    const row = findRow(resource, 'Canonical state');
+    const row = findRow(resource, 'Pool health');
     expect(row?.value).toBe('SUSPENDED');
     expect(row?.tone).toBe('default');
   });

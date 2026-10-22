@@ -135,6 +135,7 @@ describe('flattenSnapshotRows (via Snapshot tree section)', () => {
       label: 'snap-9',
       value: 'snap-9',
       tone: 'default',
+      wrap: true,
     });
   });
 
@@ -174,8 +175,8 @@ describe('flattenSnapshotRows (via Snapshot tree section)', () => {
       },
     ]);
     expect(rows).toEqual([
-      { label: 'root', value: 'current · poweredOn', tone: 'accent' },
-      { label: '- child', value: 'poweredOn', tone: 'default' },
+      { label: 'root', value: 'current · poweredOn', tone: 'accent', wrap: true },
+      { label: '- child', value: 'poweredOn', tone: 'default', wrap: true },
     ]);
   });
 });

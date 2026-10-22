@@ -19,6 +19,7 @@ import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 import { getDockerContainerUpdateAction } from '@/features/docker/dockerContainerUpdateAction';
+import { getDockerImageOperationalPresentation } from '@/features/docker/dockerImagePresentation';
 import {
   dockerContainerRestartAttentionLabel,
   dockerContainerRestartCountTitle,
@@ -31,7 +32,10 @@ import {
   type DockerContainerStatePresentation,
 } from '@/features/docker/dockerContainerStatePresentation';
 import { formatInteger } from './resourceDetailMappers';
-import { buildKubernetesControllerSection } from './resourceDetailDrawerKubernetesModel';
+import {
+  buildKubernetesControllerSection,
+  getKubernetesPodFacts,
+} from './resourceDetailDrawerKubernetesModel';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 
 interface ResourceSummaryPresentationProps {
@@ -40,6 +44,11 @@ interface ResourceSummaryPresentationProps {
   showPlatformId: boolean;
   content?: 'all' | 'overview' | 'technical';
   dataTestId?: string;
+  /**
+   * The estate's other resources. An image drawer reads its consumers and
+   * their update checks from the containers here, as the images table does.
+   */
+  relatedResources?: readonly Resource[];
 }
 
 const dockerContainerMeta = (resource: Resource): NonNullable<Resource['docker']> | null => {
@@ -161,7 +170,6 @@ const dockerSection = (
   updateNextSteps: () => JSX.Element,
 ): DetailSection => {
   const labels = docker.labels ?? {};
-  const labelEntries = Object.entries(labels);
   const createdAt = dockerTimestampMillis(docker.createdAt);
   const startedAt = dockerTimestampMillis(docker.startedAt);
   const finishedAt = dockerTimestampMillis(docker.finishedAt);
@@ -263,31 +271,149 @@ const dockerSection = (
     blockWriteBytes !== null
       ? makeDetailRow('Block I/O write', formatBytes(blockWriteBytes))
       : null,
-    labelEntries.length > 0
-      ? richRow(
-          'Labels',
-          labelEntries.map(([key, value]) => (value ? `${key}: ${value}` : key)).join(', '),
-          <div class="flex flex-wrap gap-1">
-            <For each={labelEntries}>
-              {([key, value]) => (
-                <MetadataBadge
-                  size="xs"
-                  shape="rounded"
-                  wrap
-                  title={value ? `${key}: ${value}` : key}
-                >
-                  {key}
-                  <Show when={value}>: {value}</Show>
-                </MetadataBadge>
-              )}
-            </For>
-          </div>,
-          { wrap: true },
-        )
-      : null,
+    labelsRow(labels),
   ]);
 
   return { label: 'Container', rows, testId: 'resource-docker-container-section' };
+};
+
+const labelsRow = (labels: Record<string, string> | undefined): DetailRow | null => {
+  const entries = Object.entries(labels ?? {});
+  if (entries.length === 0) return null;
+  return richRow(
+    'Labels',
+    entries.map(([key, value]) => (value ? `${key}: ${value}` : key)).join(', '),
+    <div class="flex flex-wrap gap-1">
+      <For each={entries}>
+        {([key, value]) => (
+          <MetadataBadge size="xs" shape="rounded" wrap title={value ? `${key}: ${value}` : key}>
+            {key}
+            <Show when={value}>: {value}</Show>
+          </MetadataBadge>
+        )}
+      </For>
+    </div>,
+    { wrap: true },
+  );
+};
+
+const badgeListRow = (label: string, values: readonly string[]): DetailRow | null => {
+  const visible = values.map((value) => value.trim()).filter(Boolean);
+  if (visible.length === 0) return null;
+  return richRow(
+    label,
+    visible.join(', '),
+    <div class="flex flex-wrap gap-1">
+      <For each={visible}>
+        {(value) => (
+          <MetadataBadge size="xs" shape="rounded" wrap title={value}>
+            {value}
+          </MetadataBadge>
+        )}
+      </For>
+    </div>,
+    { wrap: true },
+  );
+};
+
+const relatedDockerContainers = (related: readonly Resource[] | undefined): Resource[] =>
+  (related ?? []).filter((candidate) => candidate.type === 'app-container' && candidate.docker);
+
+const dockerImageConsumersLabel = (count: number, summary: string): string => {
+  if (count <= 0) return 'Unused';
+  const noun = `${count} container${count === 1 ? '' : 's'}`;
+  return summary && summary !== noun ? `${noun}: ${summary}` : noun;
+};
+
+// An image's update verdict is its consumers' (the images table judges it the
+// same way). An available update is something to act on and a failed check
+// something wrong, so either is lifted in front; so is an image in use that
+// has never been checked, since nobody knows whether it is behind.
+const dockerImageSection = (
+  resource: Resource,
+  related: readonly Resource[] | undefined,
+): DetailSection | null => {
+  if (resource.type !== 'docker-image') return null;
+  const docker = resource.docker;
+  if (!docker) return null;
+  const operational = getDockerImageOperationalPresentation(
+    resource,
+    relatedDockerContainers(related),
+  );
+  const notChecked = operational.updateLabel === 'Not checked';
+  const sizeBytes = dockerByteTotal(docker.sizeBytes);
+  const sharedBytes = dockerByteTotal(docker.sharedSizeBytes);
+  const rows = compactDetailRows([
+    makeDetailRow('Update check', operational.updateLabel, {
+      title: operational.updateDetail,
+      tone:
+        operational.updateTone === 'danger'
+          ? 'danger'
+          : operational.updateTone === 'warning'
+            ? 'accent'
+            : operational.updateTone === 'success'
+              ? 'success'
+              : 'default',
+      lift: operational.updateTone === 'warning' || (notChecked && operational.consumerCount > 0),
+    }),
+    makeDetailRow(
+      'Used by',
+      dockerImageConsumersLabel(operational.consumerCount, operational.consumerSummary),
+      { wrap: true },
+    ),
+    sizeBytes !== null && sizeBytes > 0 ? makeDetailRow('Size', formatBytes(sizeBytes)) : null,
+    sharedBytes !== null && sharedBytes > 0
+      ? makeDetailRow('Shared size', formatBytes(sharedBytes))
+      : null,
+    badgeListRow('Tags', docker.repoTags ?? []),
+    makeDetailRow('Image ID', trimmedDockerValue(docker.imageId), {
+      valueClass: 'break-all font-mono text-[10px]',
+      wrap: true,
+    }),
+    makeDetailRow('Digests', (docker.repoDigests ?? []).map((value) => value.trim()).join(', '), {
+      valueClass: 'break-all font-mono text-[10px]',
+      wrap: true,
+    }),
+    labelsRow(docker.labels),
+  ]);
+  return { label: 'Image', rows, testId: 'resource-docker-image-section' };
+};
+
+const dockerVolumeConsumersLabel = (refCount: number | undefined): string | null => {
+  if (typeof refCount !== 'number' || !Number.isFinite(refCount) || refCount < 0) return null;
+  if (refCount === 0) return 'Unused';
+  return `${refCount} container${refCount === 1 ? '' : 's'}`;
+};
+
+const dockerVolumeSection = (resource: Resource, now: number): DetailSection | null => {
+  if (resource.type !== 'docker-volume') return null;
+  const docker = resource.docker;
+  if (!docker) return null;
+  const sizeBytes = dockerByteTotal(docker.sizeBytes);
+  const createdAt = dockerTimestampMillis(docker.createdAt);
+  const options = Object.entries(docker.options ?? {});
+  const rows = compactDetailRows([
+    makeDetailRow('Driver', trimmedDockerValue(docker.driver)),
+    makeDetailRow('Scope', trimmedDockerValue(docker.scope)),
+    makeDetailRow('Mountpoint', trimmedDockerValue(docker.mountpoint), {
+      valueClass: 'break-all font-mono text-[10px]',
+      wrap: true,
+    }),
+    // Docker reports -1 when it has not measured a volume's size.
+    sizeBytes !== null ? makeDetailRow('Size', formatBytes(sizeBytes)) : null,
+    makeDetailRow('Used by', dockerVolumeConsumersLabel(docker.refCount)),
+    createdAt
+      ? makeDetailRow('Created', formatRelativeTime(createdAt, { now }), {
+          title: new Date(createdAt).toLocaleString(),
+        })
+      : null,
+    badgeListRow(
+      'Options',
+      options.map(([key, value]) => (value ? `${key}=${value}` : key)),
+    ),
+    labelsRow(docker.labels),
+  ]);
+  return { label: 'Volume', rows, testId: 'resource-docker-volume-section' };
 };
 
 // A resource that is not reporting must say so in front, not only in Details:
@@ -437,6 +563,10 @@ export const useResourceSummarySections = (
       props.content !== 'overview' && docker
         ? dockerSection(props.resource, docker, now(), updateNextSteps)
         : null,
+      props.content !== 'overview'
+        ? dockerImageSection(props.resource, props.relatedResources)
+        : null,
+      props.content !== 'overview' ? dockerVolumeSection(props.resource, now()) : null,
       props.content !== 'overview' ? buildKubernetesControllerSection(props.resource, now()) : null,
       props.content !== 'overview'
         ? {
@@ -449,15 +579,54 @@ export const useResourceSummarySections = (
   };
 };
 
+// The images and volumes tables keep the name, size and verdict on a phone and
+// hide the host, consumers, driver and scope, so the facts line states those.
+const dockerInventoryFacts = (
+  resource: Resource,
+  related: readonly Resource[] | undefined,
+): string[] | null => {
+  const docker = resource.docker;
+  if (!docker) return null;
+  const host = trimmedDockerValue(docker.hostname);
+  if (resource.type === 'docker-image') {
+    const operational = getDockerImageOperationalPresentation(
+      resource,
+      relatedDockerContainers(related),
+    );
+    return [
+      operational.consumerCount > 0 ? `Used by ${operational.consumerSummary}` : 'Unused',
+      host ? `Host ${host}` : '',
+    ].filter(Boolean);
+  }
+  if (resource.type === 'docker-volume') {
+    const driver = trimmedDockerValue(docker.driver);
+    const scope = trimmedDockerValue(docker.scope);
+    const consumers = dockerVolumeConsumersLabel(docker.refCount);
+    return [
+      [driver ? `${driver} driver` : '', scope ? `${scope} scope` : ''].filter(Boolean).join(', '),
+      consumers === 'Unused' ? consumers : consumers ? `Used by ${consumers}` : '',
+      host ? `Host ${host}` : '',
+    ].filter(Boolean);
+  }
+  return null;
+};
+
 /**
  * The facts line under a resource drawer's charts: what the row does not
  * already say. A container states its image and Compose project and service
- * (a phone row hides the image); a host its
+ * (a phone row hides the image); an image or volume its consumers and host; a
+ * pod its namespace, owner and node; a host its
  * CPU count, the RAM and disk the row's percentages are of, and its primary
  * address. An offline resource states sizes only, not used amounts that would
  * read as live.
  */
-export const getResourceDrawerFacts = (resource: Resource, primaryIp?: string): string[] => {
+export const getResourceDrawerFacts = (
+  resource: Resource,
+  primaryIp?: string,
+  relatedResources?: readonly Resource[],
+): string[] => {
+  const inventory = dockerInventoryFacts(resource, relatedResources);
+  if (inventory) return inventory;
   const docker = dockerContainerMeta(resource);
   if (docker) {
     const labels = docker.labels;
@@ -486,6 +655,7 @@ export const getResourceDrawerFacts = (resource: Resource, primaryIp?: string): 
   };
   const cpus = resource.agent?.cpuCount ?? 0;
   return [
+    ...getKubernetesPodFacts(resource),
     cpus > 0 ? `${cpus} logical CPUs` : '',
     size(resource.memory, 'RAM'),
     size(resource.disk, 'disk'),

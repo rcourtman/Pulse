@@ -3,6 +3,7 @@ import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { resolvePhysicalDiskMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import {
@@ -34,7 +35,6 @@ import {
   PHYSICAL_DISK_COL_ROLE_CLASS,
   PHYSICAL_DISK_COL_SIZE_CLASS,
   PHYSICAL_DISK_COL_TEMP_CLASS,
-  PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS,
   PHYSICAL_DISK_EMPTY_CARD_CLASS,
   PHYSICAL_DISK_EMPTY_FALLBACK_CLASS,
   PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS,
@@ -91,16 +91,19 @@ import {
 } from '@/features/storageBackups/diskPresentation';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import { PlatformWindowedRows } from '@/features/platformPage/sharedPlatformPage';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { getStorageSourceOption } from '@/utils/storageSources';
-import { DiskDetail } from './DiskDetail';
+import { DiskDrawer } from './DiskDrawer';
 import { useDiskListModel } from './useDiskListModel';
 
 interface DiskListProps {
   disks: Resource[];
   /** Alert override keys of the machine reporting each disk; absent means none. */
   getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
+  /** A disk's own open alerts, for its drawer. */
+  getDiskAlerts?: (disk: Resource) => Alert[];
   nodes: Resource[];
   selectedNode: string | null;
   sourceFilter?: string;
@@ -113,6 +116,9 @@ interface DiskListProps {
   onSelectedDiskChange: (diskId: string | null) => void;
   onHoverChange?: (diskId: string | null) => void;
 }
+
+// The disk table's columns: the colgroup below declares one <col> for each.
+const PHYSICAL_DISK_TABLE_COLUMN_COUNT = 9;
 
 export const DiskList: Component<DiskListProps> = (props) => {
   const tableWidth = useObservedElementWidth();
@@ -567,19 +573,18 @@ export const DiskList: Component<DiskListProps> = (props) => {
                       </TableCell>
                     </TableRow>
                     <Show when={isSelected()}>
-                      <TableRow data-inline-detail-for={summarySeriesId()}>
-                        <TableCell
-                          id={detailControlsId()}
-                          colSpan={9}
-                          class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
-                        >
-                          <DiskDetail
-                            disk={disk}
-                            nodes={props.nodes}
-                            alertResourceIds={props.getDiskAlertResourceIds?.(disk)}
-                          />
-                        </TableCell>
-                      </TableRow>
+                      <InlineDetailTableRow
+                        cellId={detailControlsId()}
+                        colspan={PHYSICAL_DISK_TABLE_COLUMN_COUNT}
+                        data-inline-detail-for={summarySeriesId()}
+                      >
+                        <DiskDrawer
+                          disk={disk}
+                          alertResourceIds={props.getDiskAlertResourceIds?.(disk)}
+                          alerts={props.getDiskAlerts?.(disk)}
+                          onClose={() => model.toggleSelectedDisk(disk)}
+                        />
+                      </InlineDetailTableRow>
                     </Show>
                   </>
                 );

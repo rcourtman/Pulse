@@ -21,6 +21,24 @@ import {
 
 const asTrimmedString = (value?: string | null): string => (value || '').trim();
 
+// Names, addresses and paths an operator copies into vCenter or a shell wrap
+// in full instead of ending in an ellipsis.
+const wrapRow = (
+  label: string,
+  value?: string | null,
+  options: Parameters<typeof makeRow>[2] = {},
+) => makeRow(label, value, { ...options, wrap: true });
+
+// Tools and vNIC state only mean something while the VM runs: a powered-off
+// VM has no running Tools and no connected adapters by design. Without a
+// reported power state the readings are taken at face value.
+const isPoweredOff = (vmware?: ResourceVMwareMeta): boolean => {
+  const state = asTrimmedString(vmware?.powerState)
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  return state === 'poweredoff' || state === 'suspended' || state === 'off';
+};
+
 const summarizeList = (values: string[] | undefined): string =>
   (values ?? []).map(asTrimmedString).filter(Boolean).join(', ');
 
@@ -107,7 +125,7 @@ const flattenSnapshotRows = (
 ): DetailRow[] => {
   const rows: DetailRow[] = [];
   for (const snapshot of snapshots ?? []) {
-    const snapshotRow = makeRow(
+    const snapshotRow = wrapRow(
       `${depth > 0 ? `${'-'.repeat(depth)} ` : ''}${snapshotDisplayName(snapshot)}`,
       snapshotValue(snapshot) || asTrimmedString(snapshot.snapshot),
       { tone: snapshot.current ? 'accent' : 'default' },
@@ -161,11 +179,14 @@ const adapterValue = (adapter: ResourceVMwareNetworkAdapter): string => {
 const adapterTone = (adapter: ResourceVMwareNetworkAdapter): DetailValueTone =>
   asTrimmedString(adapter.state).toLowerCase() === 'not_connected' ? 'warning' : 'default';
 
-const networkAdapterRows = (adapters: ResourceVMwareNetworkAdapter[] | undefined): DetailRow[] =>
+const networkAdapterRows = (
+  adapters: ResourceVMwareNetworkAdapter[] | undefined,
+  poweredOff: boolean,
+): DetailRow[] =>
   compactRows(
     (adapters ?? []).map((adapter) =>
-      makeRow(adapterDisplayName(adapter), adapterValue(adapter), {
-        tone: adapterTone(adapter),
+      wrapRow(adapterDisplayName(adapter), adapterValue(adapter), {
+        tone: poweredOff ? 'default' : adapterTone(adapter),
       }),
     ),
   );
@@ -246,7 +267,7 @@ const toolsSummary = (tools?: ResourceVMwareTools): string => {
   return '';
 };
 
-const toolsRows = (tools?: ResourceVMwareTools): DetailRow[] => {
+const toolsRows = (tools: ResourceVMwareTools | undefined, poweredOff: boolean): DetailRow[] => {
   if (!tools) return [];
   const versionStatus = asTrimmedString(tools.versionStatus).toUpperCase();
   const versionAttention = Boolean(versionStatus) && !['CURRENT', 'OK'].includes(versionStatus);
@@ -258,7 +279,8 @@ const toolsRows = (tools?: ResourceVMwareTools): DetailRow[] => {
   return compactRows([
     makeRow('Run state', formatEnumLabel(tools.runState), {
       tone: getWarningTone(
-        Boolean(asTrimmedString(tools.runState)) &&
+        !poweredOff &&
+          Boolean(asTrimmedString(tools.runState)) &&
           !['RUNNING', 'STARTED'].includes(asTrimmedString(tools.runState).toUpperCase()),
       ),
     }),
@@ -313,7 +335,7 @@ const virtualDiskValue = (disk: ResourceVMwareVirtualDisk): string => {
 const virtualDiskRows = (disks: ResourceVMwareVirtualDisk[] | undefined): DetailRow[] =>
   compactRows(
     (disks ?? []).map((disk) =>
-      makeRow(virtualDiskDisplayName(disk), virtualDiskValue(disk), { tone: 'default' }),
+      wrapRow(virtualDiskDisplayName(disk), virtualDiskValue(disk), { tone: 'default' }),
     ),
   );
 
@@ -347,11 +369,41 @@ const buildSignalValue = (count: number | undefined, label: string, summary?: st
   return parts.join(' · ');
 };
 
-const getStatusTone = (status?: string | null): DetailValueTone => {
+// vCenter's overall status colours, in plain words: red is a problem, yellow
+// may be one, green is fine and gray is not known.
+const OVERALL_STATUS_PRESENTATION: Record<string, { label: string; tone: DetailValueTone }> = {
+  red: { label: 'Problem (red)', tone: 'danger' },
+  yellow: { label: 'Warning (yellow)', tone: 'warning' },
+  green: { label: 'OK (green)', tone: 'success' },
+  gray: { label: 'Unknown (gray)', tone: 'default' },
+};
+
+const overallStatusRow = (status?: string | null): DetailRow | null => {
   const normalized = asTrimmedString(status).toLowerCase();
-  if (normalized === 'red') return 'warning';
-  if (normalized) return 'accent';
-  return 'default';
+  const presentation = OVERALL_STATUS_PRESENTATION[normalized];
+  return presentation
+    ? makeRow('Overall status', presentation.label, { tone: presentation.tone })
+    : makeRow('Overall status', asTrimmedString(status));
+};
+
+// A host that vCenter cannot reach is the reason its row reads offline.
+const connectionStateTone = (state?: string): DetailValueTone => {
+  const normalized = asTrimmedString(state)
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  return normalized === 'disconnected' || normalized === 'notresponding' ? 'warning' : 'default';
+};
+
+// Datastores report "normal" when not in maintenance; anything else
+// (entering or in maintenance) means VMs cannot rely on it.
+const maintenanceRow = (mode?: string): DetailRow | null => {
+  const raw = asTrimmedString(mode);
+  if (!raw) return null;
+  if (raw.toLowerCase() === 'normal') return makeRow('Maintenance', 'No');
+  const words = raw.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
+  return makeRow('Maintenance', words.charAt(0).toUpperCase() + words.slice(1).toLowerCase(), {
+    tone: 'warning',
+  });
 };
 
 const getAccentTone = (hasAccent: boolean): DetailValueTone => (hasAccent ? 'accent' : 'default');
@@ -416,38 +468,37 @@ export const buildVMwareDetailSections = (
     return [];
   }
 
+  const poweredOff = isPoweredOff(vmware);
   const stateRows = compactRows([
-    makeRow('Connection', asTrimmedString(vmware.connectionName)),
-    makeRow('vCenter', asTrimmedString(vmware.vcenterHost)),
+    wrapRow('Connection', asTrimmedString(vmware.connectionName)),
+    wrapRow('vCenter', asTrimmedString(vmware.vcenterHost)),
     makeRow('Entity', vmwareEntityLabel(vmware.entityType)),
-    makeRow('Overall status', asTrimmedString(vmware.overallStatus), {
-      tone: getStatusTone(vmware.overallStatus),
-    }),
+    overallStatusRow(vmware.overallStatus),
     // Power state is already conveyed by the workload row's status dot and
     // the SYSTEM card. We only resurface Connection state here because it
     // matters when an ESXi host is disconnected and the row dot alone can't
     // tell you why.
-    makeRow('Connection state', formatEnumLabel(vmware.connectionState)),
+    makeRow('Connection state', formatEnumLabel(vmware.connectionState), {
+      tone: connectionStateTone(vmware.connectionState),
+    }),
     makeRow('Datastore type', asTrimmedString(vmware.datastoreType)),
     makeRow('Accessible', formatBoolLabel(vmware.datastoreAccessible), {
       tone: getWarningTone(vmware.datastoreAccessible === false),
     }),
     makeRow('Shared access', formatBoolLabel(vmware.multipleHostAccess)),
-    makeRow('Maintenance', asTrimmedString(vmware.maintenanceMode), {
-      tone: getWarningTone(Boolean(asTrimmedString(vmware.maintenanceMode))),
-    }),
+    maintenanceRow(vmware.maintenanceMode),
     makeRow('Network type', formatEnumLabel(vmware.networkType)),
   ]);
 
   const placementRows = compactRows([
-    makeRow('Datacenter', asTrimmedString(vmware.datacenterName)),
-    makeRow('Cluster', asTrimmedString(vmware.clusterName)),
+    wrapRow('Datacenter', asTrimmedString(vmware.datacenterName)),
+    wrapRow('Cluster', asTrimmedString(vmware.clusterName)),
     makeRow('Cluster services', formatVmwareClusterServices(vmware)),
-    makeRow('Compute resource', asTrimmedString(vmware.computeResourceName)),
-    makeRow('Folder', asTrimmedString(vmware.folderName)),
-    makeRow('Resource pool', asTrimmedString(vmware.resourcePoolName)),
-    makeRow('Runtime host', asTrimmedString(vmware.runtimeHostName)),
-    makeRow('Datastores', (vmware.datastoreNames ?? []).filter(Boolean).join(', ')),
+    wrapRow('Compute resource', asTrimmedString(vmware.computeResourceName)),
+    wrapRow('Folder', asTrimmedString(vmware.folderName)),
+    wrapRow('Resource pool', asTrimmedString(vmware.resourcePoolName)),
+    wrapRow('Runtime host', asTrimmedString(vmware.runtimeHostName)),
+    wrapRow('Datastores', (vmware.datastoreNames ?? []).filter(Boolean).join(', ')),
   ]);
 
   // UUID fields (host / instance / BIOS) and datastoreUrl are API-shaped
@@ -456,19 +507,19 @@ export const buildVMwareDetailSections = (
   // human-readable.
   const guestRows = compactRows([
     makeRow('Guest OS', asTrimmedString(vmware.guestOsFamily)),
-    makeRow('Guest hostname', asTrimmedString(vmware.guestHostname)),
-    makeRow('Guest IPs', (vmware.guestIpAddresses ?? []).filter(Boolean).join(', ')),
+    wrapRow('Guest hostname', asTrimmedString(vmware.guestHostname)),
+    wrapRow('Guest IPs', (vmware.guestIpAddresses ?? []).filter(Boolean).join(', ')),
   ]);
 
   const networkRows =
     resourceType === 'vm'
-      ? networkAdapterRows(vmware.networkAdapters)
+      ? networkAdapterRows(vmware.networkAdapters, poweredOff)
       : compactRows([
-          makeRow('Hosts', summarizeList(vmware.networkHostNames)),
-          makeRow('VMs', summarizeList(vmware.networkVmNames)),
+          wrapRow('Hosts', summarizeList(vmware.networkHostNames)),
+          wrapRow('VMs', summarizeList(vmware.networkVmNames)),
         ]);
   const vmwareHardwareRows = resourceType === 'vm' ? hardwareRows(vmware) : [];
-  const vmwareToolsRows = resourceType === 'vm' ? toolsRows(vmware.tools) : [];
+  const vmwareToolsRows = resourceType === 'vm' ? toolsRows(vmware.tools, poweredOff) : [];
   const diskRows = resourceType === 'vm' ? virtualDiskRows(vmware.virtualDisks) : [];
 
   const signalRows = compactRows([
@@ -477,6 +528,7 @@ export const buildVMwareDetailSections = (
       buildSignalValue(vmware.activeAlarmCount, 'alarm', vmware.activeAlarmSummary),
       {
         tone: getWarningTone((vmware.activeAlarmCount ?? 0) > 0),
+        wrap: true,
       },
     ),
     makeRow('Tasks', buildSignalValue(vmware.recentTaskCount, 'task', vmware.recentTaskSummary), {

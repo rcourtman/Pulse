@@ -4446,13 +4446,11 @@ the record's `details.zfsPool`, which
 `frontend-modern/src/components/Storage/StoragePoolDetail.tsx` renders that
 report inside the row expansion so degraded pools name the failing device and
 running scrub/resilver without re-promoting per-device noise into table rows.
-The pool detail key/value rows span the full Configuration card below the
-small-screen breakpoint, then return to the two-column desktop grid. Labels
-stay fixed while long node, content, and provider values wrap. Phones retain
-the compact endpoint alignment, while the desktop grid uses the shared 7rem
-label track and places each left-aligned value immediately beside its label,
-so wide drawers remain easy to scan and narrow row expansions never
-concatenate one field with the next or overflow the drawer.
+The pool's Configuration, Topology and Datasets now render as
+`DetailSectionTable` sections inside the drawer's closed Details disclosure;
+long node, content, provider, dataset and mountpoint values wrap, so narrow
+row expansions never concatenate one field with the next or overflow the
+drawer.
 The pools table must not double-list Ceph-backed storage. Cluster-internal
 pool rows synthesized from Ceph cluster telemetry (`models.StorageFromCephPool`:
 type `ceph` homed on the `cluster` pseudo-node) are consolidated into the PVE
@@ -7095,3 +7093,24 @@ drawer's status dot is the one its row shows (reachable or not), not a second
 reading of the raw status, and the Coverage detail row no longer overrides the
 shared detail shell's padding, which had dropped its phone width cap. Neither
 change alters how coverage, protection posture or restore evidence is judged.
+
+Storage pool and physical-disk drawers follow the Proxmox guest and node
+drawer shape. Both open in the shared `InlineDetailTableRow` (one open at a
+time, `aria-controls` focus restore, phone width cap) under an
+`ObjectDrawerHeader` with `DrawerSubjectHeading`, whose dot reads the same
+judgement as the row (`getStoragePoolStateIndicator`,
+`getPhysicalDiskHealthIndicator`). Overview leads with the object's own alerts
+(the set that tints its row: `getRecordAlerts`, and `getPhysicalDiskAlerts`
+matching the disk's unified keys, its Proxmox disk alias and its agent's disk
+temperature key, never a sibling, machine or node alert), then "Worth
+checking" for a bad state, reduced protection, ZFS pool and scrub errors,
+devices that are not online, linked disks with errors or reallocated sectors,
+out-of-range SMART attributes and low SSD life. Charts use the shared drawer
+history at 24 hours with the range picker in their toolbar (pool usage; disk
+temperature, I/O and wear), then a facts line, content cards (ZFS pool and
+devices, linked disks, SMART health) and one closed Details. Manage holds the
+operator state for the pool or disk's unified resource id. The separate 7-day
+pool chart, the disk drawer's own History and Live I/O sections and the
+pool-local range picker are retired; no field was dropped. The guest drawer's
+embedded physical-disk detail (`GuestPhysicalDisks` -> `DiskDetail`) keeps its
+existing layout for now.

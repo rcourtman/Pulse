@@ -1,11 +1,12 @@
 import { INFO_CARD_FRAME_CLASS } from '@/components/shared/InfoCardFrame';
 
+// Classes of the compact disk detail the guest drawer embeds for a guest's
+// physical disks (DiskDetail). The Storage page's pool and disk drawers are
+// built from the shared drawer primitives and use none of these.
+
 export const STORAGE_DETAIL_CARD_CLASS = 'rounded-md border border-border bg-surface p-3 shadow-xs';
 
 export const STORAGE_DETAIL_SECTION_TITLE_CLASS = 'text-xs font-semibold text-base-content';
-
-export const STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS =
-  'text-xs font-semibold text-base-content mb-2';
 
 export const STORAGE_DETAIL_INLINE_LABEL_CLASS =
   'text-[10px] font-medium text-muted uppercase tracking-wide';
@@ -19,23 +20,9 @@ export const STORAGE_DETAIL_META_ROW_CLASS =
 export const STORAGE_DETAIL_MONO_CHIP_CLASS =
   'text-muted font-mono bg-surface-alt px-1.5 py-0.5 rounded-sm border border-border';
 
-export const STORAGE_DETAIL_CONFIG_GRID_CLASS = 'grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]';
-export const STORAGE_DETAIL_ROW_CLASS = 'border-t border-border';
-export const STORAGE_DETAIL_CELL_CLASS = 'bg-surface-alt px-4 py-4';
-export const STORAGE_DETAIL_ROOT_GRID_CLASS = 'grid gap-4 md:grid-cols-2';
 export const STORAGE_DETAIL_HEADER_ROW_CLASS = 'flex items-center justify-between mb-2';
-export const STORAGE_DETAIL_LINKED_DISKS_LIST_CLASS = 'space-y-1';
-
 export const STORAGE_DETAIL_KEY_CLASS = 'text-muted';
 export const STORAGE_DETAIL_VALUE_CLASS = 'text-base-content font-medium';
-
-export const STORAGE_DETAIL_LINKED_DISK_ROW_CLASS =
-  'flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] py-0.5';
-export const STORAGE_DETAIL_LINKED_DISK_PATH_CLASS = 'font-mono text-muted min-w-16 truncate';
-export const STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS = 'text-base-content min-w-32 flex-1 truncate';
-export const STORAGE_DETAIL_SPACED_STACK_CLASS = 'space-y-3';
-export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS = 'col-span-2';
-export const STORAGE_DETAIL_MUTED_TEXT_CLASS = 'text-muted';
 
 export const STORAGE_DETAIL_EMPTY_CLASS = `${INFO_CARD_FRAME_CLASS} text-center text-[11px] text-muted`;
 

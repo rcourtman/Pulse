@@ -52,6 +52,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     nodes,
     physicalDisks,
     getDiskAlertResourceIds,
+    getDiskAlerts,
     cephResources,
     alertsEnabled,
   } = useStoragePageResources({ resourceSource: options.resourceSource });
@@ -107,6 +108,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
   const {
     records,
     getRecordAlertState,
+    getRecordAlerts,
     nodeOptions,
     diskNodeOptions,
     nodeOnlineByLabel,
@@ -315,6 +317,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     nodeOptions,
     physicalDisks,
     getDiskAlertResourceIds,
+    getDiskAlerts,
     nodes,
     groupedRecords,
     expandedGroups,
@@ -324,6 +327,7 @@ export const useStoragePageModel = (options: UseStoragePageModelOptions = {}) =>
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
+    getRecordAlerts,
     hoveredStorageResourceId,
     isLoadingPools,
     selectedDiskId,

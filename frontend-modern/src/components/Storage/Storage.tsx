@@ -57,6 +57,7 @@ const Storage: Component<StorageProps> = (props) => {
     activeSummaryStorageResourceId,
     physicalDisks,
     getDiskAlertResourceIds,
+    getDiskAlerts,
     nodes,
     groupedRecords,
     expandedGroups,
@@ -68,6 +69,7 @@ const Storage: Component<StorageProps> = (props) => {
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
+    getRecordAlerts,
     hoveredStorageResourceId,
     isLoadingPools,
     selectedDiskId,
@@ -139,6 +141,7 @@ const Storage: Component<StorageProps> = (props) => {
           view={view}
           physicalDisks={physicalDisks}
           getDiskAlertResourceIds={getDiskAlertResourceIds}
+          getDiskAlerts={getDiskAlerts}
           nodes={nodes}
           sourceFilter={sourceFilter}
           healthFilter={healthFilter}
@@ -157,6 +160,7 @@ const Storage: Component<StorageProps> = (props) => {
           nodeOnlineByLabel={nodeOnlineByLabel}
           highlightedRecordId={highlightedRecordId}
           getRecordAlertState={getRecordAlertState}
+          getRecordAlerts={getRecordAlerts}
           isLoadingPools={isLoadingPools}
           clearPinnedSummaryScope={clearPinnedSummaryScope}
           highlightedSummaryResourceId={activeSummaryStorageResourceId}

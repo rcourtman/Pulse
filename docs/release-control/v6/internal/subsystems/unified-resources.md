@@ -8598,3 +8598,19 @@ no table changes how it judges a resource. The drawer heading is the shared
 a saved web interface URL opens from the header the way it does in the Proxmox
 guest drawer. The health-issue chip left the heading because the same issue
 already leads the Overview's "Worth checking" list.
+
+Platform drawer content follows the guest and node Overview. The TrueNAS,
+Kubernetes and vSphere sections join the summary sections in one split
+(`buildResourceDrawerOverviewInventory`): warning and danger rows not already
+stated by an open alert lift into "Worth checking", sections whose test id
+marks them as content cards (pod containers, TrueNAS pool health and disk
+SMART) render in view, and every other section sits in the one closed Details
+as a plain `DetailSectionTable`; the nested "Show TrueNAS / Kubernetes /
+vSphere" disclosures are gone. Kubernetes Deployments, autoscalers, Services,
+Ingresses, volume claims, persistent volumes and storage classes gain their own
+sections from fields the resource already carries, a replica shortfall or a
+Pending/Lost/Failed phase lifts, and a pod's namespace, owner and node join its
+facts line. Docker image and volume drawers describe the image or volume (update
+check, consumers, size, tags, digests; driver, scope, mountpoint, labels), with
+an available or failed update check lifted. Copyable identifiers wrap. This
+changes presentation only: no status, alert or ownership rule moves.

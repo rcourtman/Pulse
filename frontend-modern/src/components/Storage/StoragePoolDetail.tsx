@@ -1,316 +1,239 @@
-import { Component, For, Show, createEffect, createMemo } from 'solid-js';
-import { FormSelect } from '@/components/shared/FormSelect';
-import { filterSelectClass } from '@/components/shared/FilterToolbar';
-import { HistoryChart } from '@/components/shared/HistoryChart';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { Component, For, Show, Suspense, createMemo, lazy } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
-import { maxHistoryDays } from '@/stores/license';
 import {
-  getUnlockedHistoryRangeOptions,
-  resolveHistoryRangeWithinLimit,
-} from '@/components/Storage/historyRangeAccess';
+  compactDetailRows,
+  makeDetailRow,
+  type DetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  TechnicalDetailsDisclosure,
+  TechnicalDetailsSection,
+} from '@/components/shared/TechnicalDetailsDisclosure';
+import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
+import { getDrawerChartAlerts } from '@/components/Workloads/drawerOverviewModel';
+import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
+import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import {
   getLinkedDiskHealthDotVariant,
+  getLinkedDiskTemperatureSeverity,
   getLinkedDiskTemperatureTextClass,
 } from '@/features/storageBackups/diskDetailPresentation';
-import { PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS } from '@/features/storageBackups/diskPresentation';
-import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
-  STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
-  getZfsDeviceStateTextClass,
-  getZfsErrorTextClass,
-  getZfsScanTextClass,
-} from '@/features/storageBackups/storagePoolDetailPresentation';
-import {
-  STORAGE_DETAIL_CARD_CLASS,
-  STORAGE_DETAIL_CELL_CLASS,
-  STORAGE_DETAIL_CONFIG_GRID_CLASS,
-  STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS,
-  STORAGE_DETAIL_HEADER_ROW_CLASS,
-  STORAGE_DETAIL_LINKED_DISK_PATH_CLASS,
-  STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS,
-  STORAGE_DETAIL_LINKED_DISK_ROW_CLASS,
-  STORAGE_DETAIL_LINKED_DISKS_LIST_CLASS,
-  STORAGE_DETAIL_MUTED_TEXT_CLASS,
-  STORAGE_DETAIL_ROOT_GRID_CLASS,
-  STORAGE_DETAIL_ROW_CLASS,
-  STORAGE_DETAIL_SECTION_TITLE_CLASS,
-  STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS,
-} from '@/features/storageBackups/detailPresentation';
+  PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS,
+  type PhysicalDiskAlertResourceIdResolver,
+} from '@/features/storageBackups/diskPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
-import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
+import type { StoragePoolDetailLinkedDisk } from '@/features/storageBackups/storagePoolDetailPresentation';
+import {
+  STORAGE_POOL_DRAWER_CHARTED_METRICS,
+  STORAGE_POOL_DRAWER_HISTORY_GROUPS,
+  buildStoragePoolDrawerDetailSections,
+  buildStoragePoolDrawerExceptionRows,
+  buildStoragePoolDrawerZfsSections,
+  getStoragePoolDrawerCurrentMetrics,
+  getStoragePoolDrawerDeferredMetrics,
+  getStoragePoolDrawerFacts,
+  getStoragePoolLinkedDiskSummary,
+} from '@/features/storageBackups/storagePoolDrawerPresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { formatTemperature } from '@/utils/temperature';
-import { StorageDetailKeyValueRow } from './StorageDetailKeyValueRow';
 import { useStoragePoolDetailModel } from './useStoragePoolDetailModel';
+
+// Loaded once a pool drawer opens, so the Storage table chunk does not carry it.
+const GuestDrawerHistory = lazy(() =>
+  import('@/components/Workloads/GuestDrawerHistory').then(({ GuestDrawerHistory }) => ({
+    default: GuestDrawerHistory,
+  })),
+);
 
 interface StoragePoolDetailProps {
   record: StorageRecord;
   physicalDisks: Resource[];
   getDiskAlertResourceIds?: PhysicalDiskAlertResourceIdResolver;
-  summarySeriesId: string;
-  controlsId?: string;
+  /** The pool's own open alerts, matched the way its row matches them. */
+  alerts?: Alert[];
+  historyRange?: HistoryTimeRange;
+  onHistoryRangeChange?: (range: HistoryTimeRange) => void;
+  /** True while Overview is the visible tab; hidden charts do not poll. */
+  historyEnabled?: boolean;
 }
 
+const cleanText = (value: string | null | undefined): string => (value || '').trim();
+
+/**
+ * The pool drawer's Overview: its alerts, what is worth checking, its
+ * capacity trend, a facts strip, its ZFS devices and linked disks, then the
+ * configuration, topology and datasets behind a closed Details disclosure.
+ */
 export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
+  const now = useRelativeTimeNow();
   const { getDiskTemperatureThresholds } = useAlertsActivation();
-  const {
-    chartRange,
-    setChartRange,
-    chartTarget,
-    configRows,
-    topologyRows,
-    zfsSummary,
-    linkedDisks,
-  } = useStoragePoolDetailModel({
-    record: () => props.record,
-    physicalDisks: () => props.physicalDisks,
-    getDiskAlertResourceIds: props.getDiskAlertResourceIds,
-  });
-  const rangeOptions = createMemo(() =>
-    getUnlockedHistoryRangeOptions(STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS, maxHistoryDays()),
+  const { historyTarget, configRows, topologyRows, zfsSummary, linkedDisks } =
+    useStoragePoolDetailModel({
+      record: () => props.record,
+      physicalDisks: () => props.physicalDisks,
+      getDiskAlertResourceIds: props.getDiskAlertResourceIds,
+    });
+
+  const diskThresholds = (disk: StoragePoolDetailLinkedDisk) =>
+    getDiskTemperatureThresholds(disk.diskType, disk.alertResourceIds);
+
+  const exceptionRows = createMemo(() =>
+    buildStoragePoolDrawerExceptionRows({
+      record: props.record,
+      zfsSummary: zfsSummary(),
+      linkedDisks: linkedDisks(),
+      getDiskHeat: (disk) =>
+        getLinkedDiskTemperatureSeverity(disk.temperature, diskThresholds(disk)),
+    }),
   );
 
-  createEffect(() => {
-    const nextRange = resolveHistoryRangeWithinLimit(
-      chartRange(),
-      STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
-      maxHistoryDays(),
-    );
-    if (nextRange !== chartRange()) {
-      setChartRange(nextRange);
-    }
-  });
+  const linkedDiskRow = (disk: StoragePoolDetailLinkedDisk): DetailRow | null =>
+    makeDetailRow(disk.devPath, getStoragePoolLinkedDiskSummary(disk) || disk.model, {
+      layout: 'stacked',
+      wrap: true,
+      valueContent: (
+        <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-left font-normal whitespace-normal">
+          <StatusDot variant={getLinkedDiskHealthDotVariant(disk.hasIssue)} size="sm" ariaHidden />
+          <span class="wrap-break-word text-base-content">{disk.model}</span>
+          <Show when={disk.role}>
+            <span class="text-muted">{disk.role}</span>
+          </Show>
+          <Show when={disk.sizeLabel}>
+            <span class="text-muted">{disk.sizeLabel}</span>
+          </Show>
+          <Show when={disk.state}>
+            <span class="text-muted">{disk.state}</span>
+          </Show>
+          <Show when={disk.ioLabel}>
+            <span class="text-muted">{disk.ioLabel}</span>
+          </Show>
+          <Show when={disk.spunDown}>
+            <span class="text-muted">spun down</span>
+          </Show>
+          <Show when={disk.errorCount > 0}>
+            <span class="font-semibold text-amber-700 dark:text-amber-300">
+              {disk.errorCount.toLocaleString()} errors
+            </span>
+          </Show>
+          <Show when={disk.temperature > 0}>
+            <span
+              class={`font-medium ${
+                disk.temperatureLastKnownTitle
+                  ? PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS
+                  : getLinkedDiskTemperatureTextClass(disk.temperature, diskThresholds(disk))
+              }`}
+              title={disk.temperatureLastKnownTitle}
+            >
+              {formatTemperature(disk.temperature)}
+              <Show when={disk.temperatureLastKnownTitle}>
+                <span class="sr-only">, last known</span>
+              </Show>
+            </span>
+          </Show>
+        </span>
+      ),
+    });
+
+  // The pool's device tree and the physical disks behind it stay in front:
+  // they answer "which disk" when Worth checking names a problem.
+  const deviceSections = createMemo((): DetailSection[] => [
+    ...buildStoragePoolDrawerZfsSections(zfsSummary()),
+    ...(linkedDisks().length > 0
+      ? [
+          {
+            label: `Physical disks (${linkedDisks().length})`,
+            testId: 'storage-pool-linked-disks',
+            rows: compactDetailRows(linkedDisks().map(linkedDiskRow)),
+          },
+        ]
+      : []),
+  ]);
+
+  const detailSections = createMemo(() =>
+    buildStoragePoolDrawerDetailSections({
+      configRows: configRows(),
+      topologyRows: topologyRows(),
+      zfsSummary: zfsSummary(),
+    }),
+  );
+  const detailSubtitle = () =>
+    detailSections()
+      .map((section) => section.label.replace(/\s*\(\d+\)$/, '').toLowerCase())
+      .join(', ');
+
+  const facts = createMemo(() => getStoragePoolDrawerFacts(props.record));
+  const chartAlerts = createMemo(() =>
+    getDrawerChartAlerts(props.alerts, STORAGE_POOL_DRAWER_CHARTED_METRICS),
+  );
 
   return (
-    <tr class={STORAGE_DETAIL_ROW_CLASS} data-inline-detail-for={props.summarySeriesId}>
-      <td id={props.controlsId} colSpan={99} class={STORAGE_DETAIL_CELL_CLASS}>
-        <div class="space-y-3">
-          {/* The capacity trend leads: "is this pool filling up?" is answered
-              before topology and devices. There is no separate History tab
-              repeating it. */}
-          <div class={STORAGE_DETAIL_CARD_CLASS} data-testid="storage-pool-capacity-trend">
-            <div class={STORAGE_DETAIL_HEADER_ROW_CLASS}>
-              <h4 class={STORAGE_DETAIL_SECTION_TITLE_CLASS}>Capacity Trend</h4>
-              <FormSelect
-                label="Capacity history range"
-                labelClass="sr-only"
-                fieldBaseClass="contents"
-                value={chartRange()}
-                onChange={(event) => setChartRange(event.currentTarget.value as HistoryTimeRange)}
-                selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
-              >
-                <For each={rangeOptions()}>
-                  {(option) => <option value={option.value}>{option.label}</option>}
-                </For>
-              </FormSelect>
-            </div>
-            <HistoryChart
-              resourceType={chartTarget().resourceType}
-              resourceId={chartTarget().resourceId || props.record.id}
-              metric="usage"
-              label="Usage"
-              unit="%"
-              height={140}
-              range={chartRange()}
-              hideSelector
-              compact
-              hideLock
-            />
-          </div>
+    <div class="space-y-3" data-testid="storage-pool-drawer-overview">
+      <DrawerAttentionSection
+        items={(props.alerts ?? []).map((alert) => ({
+          id: alert.id,
+          ...getAlertAttentionCopy(alert, now),
+          subject: cleanText(alert.resourceName) || props.record.name,
+          metric: alertTypeDisplayLabel(alert.type),
+          severity: alert.level,
+          acknowledged: alert.acknowledged,
+        }))}
+      />
+      <Show when={(props.alerts ?? []).length === 0}>
+        <p data-testid="drawer-no-attention" class="text-xs font-medium text-base-content">
+          {ALERTS_EMPTY_STATE}
+        </p>
+      </Show>
 
-          <div class={STORAGE_DETAIL_ROOT_GRID_CLASS}>
-            <Show when={topologyRows().length > 0}>
-              <div class={STORAGE_DETAIL_CARD_CLASS}>
-                <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>Topology</h4>
-                <div class={STORAGE_DETAIL_CONFIG_GRID_CLASS}>
-                  <For each={topologyRows()}>
-                    {(row) => <StorageDetailKeyValueRow label={row.label} value={row.value} />}
-                  </For>
-                </div>
-              </div>
-            </Show>
+      <DrawerExceptionList testId="storage-pool-drawer-exceptions" rows={exceptionRows()} />
 
-            <div class={STORAGE_DETAIL_CARD_CLASS}>
-              <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>Configuration</h4>
-              <div class={STORAGE_DETAIL_CONFIG_GRID_CLASS}>
-                <For each={configRows()}>
-                  {(row) => <StorageDetailKeyValueRow label={row.label} value={row.value} />}
-                </For>
-              </div>
-            </div>
+      <Suspense fallback={<div class="h-48" aria-hidden="true" />}>
+        <GuestDrawerHistory
+          target={historyTarget()}
+          range={props.historyRange ?? GUEST_DRAWER_HISTORY_DEFAULT_RANGE}
+          onRangeChange={props.onHistoryRangeChange}
+          enabled={props.historyEnabled ?? true}
+          groups={STORAGE_POOL_DRAWER_HISTORY_GROUPS}
+          currentMetrics={getStoragePoolDrawerCurrentMetrics(props.record)}
+          deferredMetrics={getStoragePoolDrawerDeferredMetrics(props.record)}
+          alerts={chartAlerts()}
+        />
+      </Suspense>
 
-            <Show when={zfsSummary()}>
-              <div class={STORAGE_DETAIL_CARD_CLASS}>
-                <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>ZFS Pool</h4>
-                <div class={STORAGE_DETAIL_CONFIG_GRID_CLASS}>
-                  <StorageDetailKeyValueRow label="State" value={zfsSummary()!.state} />
-                  <Show when={zfsSummary()!.scan}>
-                    <div class={STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS}>
-                      <span class={STORAGE_DETAIL_MUTED_TEXT_CLASS}>Scan: </span>
-                      <span class={getZfsScanTextClass()}>{zfsSummary()!.scan}</span>
-                    </div>
-                  </Show>
-                  <Show when={zfsSummary()!.errorSummary}>
-                    <div class={`${STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS} ${getZfsErrorTextClass()}`}>
-                      {zfsSummary()!.errorSummary}
-                    </div>
-                  </Show>
-                  <Show when={zfsSummary()!.devices.length > 0}>
-                    <div class={`${STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS} space-y-0.5 pt-1`}>
-                      <For each={zfsSummary()!.devices}>
-                        {(device) => (
-                          <div class={STORAGE_DETAIL_LINKED_DISK_ROW_CLASS}>
-                            <span class={STORAGE_DETAIL_LINKED_DISK_PATH_CLASS} title={device.name}>
-                              {device.name}
-                            </span>
-                            <Show when={device.type}>
-                              <span class={STORAGE_DETAIL_MUTED_TEXT_CLASS}>{device.type}</span>
-                            </Show>
-                            <span class={getZfsDeviceStateTextClass(device.state)}>
-                              {device.state}
-                            </span>
-                            <Show when={device.errorSummary}>
-                              <span class={getZfsErrorTextClass()}>{device.errorSummary}</span>
-                            </Show>
-                            <Show when={device.message}>
-                              <span class={`${STORAGE_DETAIL_MUTED_TEXT_CLASS} italic`}>
-                                {device.message}
-                              </span>
-                            </Show>
-                          </div>
-                        )}
-                      </For>
-                    </div>
-                  </Show>
-                  <Show when={zfsSummary()!.datasets.length > 0}>
-                    <div class={`${STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS} space-y-2 pt-2`}>
-                      <div class="text-xs font-medium text-base-content">
-                        Datasets ({zfsSummary()!.datasets.length})
-                      </div>
-                      <div class="table-scroll-shell overflow-x-auto rounded-sm border border-border">
-                        <table class="w-full min-w-0 table-fixed text-left text-xs">
-                          <thead class="bg-surface-alt text-muted">
-                            <tr>
-                              <th class="px-2 py-1.5 font-medium">Dataset</th>
-                              <th class="px-2 py-1.5 font-medium">Used</th>
-                              <th class="px-2 py-1.5 font-medium">Available</th>
-                              <th class="storage-dataset-referenced-column px-2 py-1.5 font-medium">
-                                Referenced
-                              </th>
-                              <th class="hidden px-2 py-1.5 font-medium sm:table-cell">
-                                Mountpoint
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <For each={zfsSummary()!.datasets}>
-                              {(dataset) => (
-                                <tr class={STORAGE_DETAIL_ROW_CLASS}>
-                                  <td
-                                    class="max-w-64 truncate px-2 py-1.5 font-mono"
-                                    title={dataset.name}
-                                  >
-                                    {dataset.name}
-                                  </td>
-                                  <td class="whitespace-nowrap px-2 py-1.5 font-mono">
-                                    {dataset.usedLabel}
-                                  </td>
-                                  <td class="whitespace-nowrap px-2 py-1.5 font-mono">
-                                    {dataset.availableLabel}
-                                  </td>
-                                  <td class="storage-dataset-referenced-column whitespace-nowrap px-2 py-1.5 font-mono">
-                                    {dataset.referencedLabel}
-                                  </td>
-                                  <td
-                                    class="hidden max-w-48 truncate px-2 py-1.5 text-muted sm:table-cell"
-                                    title={dataset.mountpoint}
-                                  >
-                                    {dataset.mountpoint ||
-                                      (dataset.type === 'volume' ? 'zvol' : '—')}
-                                  </td>
-                                </tr>
-                              )}
-                            </For>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </Show>
-                </div>
-              </div>
-            </Show>
-
-            <Show when={linkedDisks().length > 0}>
-              <div class={STORAGE_DETAIL_CARD_CLASS}>
-                <h4 class={STORAGE_DETAIL_SECTION_TITLE_SPACED_CLASS}>
-                  Physical Disks ({linkedDisks().length})
-                </h4>
-                <div class={STORAGE_DETAIL_LINKED_DISKS_LIST_CLASS}>
-                  <For each={linkedDisks()}>
-                    {(disk) => (
-                      <div class={STORAGE_DETAIL_LINKED_DISK_ROW_CLASS}>
-                        <span class={STORAGE_DETAIL_LINKED_DISK_PATH_CLASS} title={disk.devPath}>
-                          {disk.devPath}
-                        </span>
-                        <StatusDot
-                          variant={getLinkedDiskHealthDotVariant(disk.hasIssue)}
-                          size="sm"
-                          ariaHidden
-                        />
-                        <span class={STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS}>{disk.model}</span>
-                        <Show when={disk.role}>
-                          <span class="shrink-0 rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] uppercase text-muted">
-                            {disk.role}
-                          </span>
-                        </Show>
-                        <Show when={disk.sizeLabel}>
-                          <span class="shrink-0 font-mono text-muted">{disk.sizeLabel}</span>
-                        </Show>
-                        <Show when={disk.state}>
-                          <span class="shrink-0 text-muted">{disk.state}</span>
-                        </Show>
-                        <Show when={disk.ioLabel}>
-                          <span class="shrink-0 font-mono text-muted">{disk.ioLabel}</span>
-                        </Show>
-                        <Show when={disk.spunDown}>
-                          <span class="shrink-0 text-muted">spun down</span>
-                        </Show>
-                        <Show when={disk.errorCount > 0}>
-                          <span class="shrink-0 font-semibold text-amber-700 dark:text-amber-300">
-                            {disk.errorCount.toLocaleString()} errors
-                          </span>
-                        </Show>
-                        <Show when={disk.temperature > 0}>
-                          <span
-                            class={`font-medium ${
-                              disk.temperatureLastKnownTitle
-                                ? PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS
-                                : getLinkedDiskTemperatureTextClass(
-                                    disk.temperature,
-                                    getDiskTemperatureThresholds(
-                                      disk.diskType,
-                                      disk.alertResourceIds,
-                                    ),
-                                  )
-                            }`}
-                            title={disk.temperatureLastKnownTitle}
-                          >
-                            {formatTemperature(disk.temperature)}
-                            <Show when={disk.temperatureLastKnownTitle}>
-                              <span class="sr-only">, last known</span>
-                            </Show>
-                          </span>
-                        </Show>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-          </div>
+      <Show when={facts().length > 0}>
+        <div
+          data-testid="storage-pool-drawer-facts"
+          class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
+        >
+          <For each={facts()}>
+            {(fact) => <span class="max-w-full whitespace-normal wrap-anywhere">{fact}</span>}
+          </For>
         </div>
-      </td>
-    </tr>
+      </Show>
+
+      <Show when={deviceSections().length > 0}>
+        <TechnicalDetailsSection dataTestId="storage-pool-devices" sections={deviceSections()} />
+      </Show>
+
+      <Show when={detailSections().length > 0}>
+        <TechnicalDetailsDisclosure
+          dataTestId="storage-pool-technical-details"
+          title="Details"
+          keepMounted
+          subtitle={detailSubtitle()}
+          class="border-t border-border pt-2"
+          contentClass="mt-2"
+          sections={detailSections()}
+        />
+      </Show>
+    </div>
   );
 };

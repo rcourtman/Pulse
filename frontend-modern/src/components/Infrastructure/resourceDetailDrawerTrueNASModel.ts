@@ -26,6 +26,7 @@ import {
 } from '@/features/storageBackups/diskTemperaturePresentation';
 import type { TrueNASDiskTemperatureThresholdResolver } from '@/features/truenas/truenasPageModel';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
+import { drawerContentCardTestId } from './resourceDetailDrawerOverviewModel';
 
 export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
 
@@ -92,6 +93,36 @@ const row = makeDetailRow;
 const compactRows = compactDetailRows;
 const compactSections = compactDetailSections;
 
+// Identifiers and paths an operator copies (hostnames, serials, dataset
+// paths, addresses) wrap in full instead of ending in an ellipsis.
+const wrapRow = (
+  label: string,
+  value?: string | null,
+  options: Parameters<typeof makeDetailRow>[2] = {},
+) => makeDetailRow(label, value, { ...options, wrap: true });
+
+const joinList = (values: readonly string[]): string =>
+  values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(', ');
+
+// The health rows often repeat one summary under several labels (a degraded
+// pool's risk, posture and protection all say so). The first label keeps it.
+const withoutRepeatedValues = (
+  rows: Array<ResourceDetailDrawerTrueNASRow | null>,
+): ResourceDetailDrawerTrueNASRow[] => {
+  const seen = new Set<string>();
+  return compactRows(rows).filter((detailRow) => {
+    // Short values ("Yes", "2 services") legitimately repeat; sentences do not.
+    if (!/\s/.test(detailRow.value) || detailRow.value.length < 16) return true;
+    const key = detailRow.value.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const isTrueNASScopedResource = (resource: Resource): boolean =>
   resource.platformType === 'truenas' ||
   resource.platformScopes?.includes('truenas') === true ||
@@ -152,13 +183,13 @@ const buildTrueNASSystemSections = (
     .filter((value): value is string => Boolean(value));
   const pids = services.flatMap((service) => service.pids ?? []).filter((pid) => pid > 0);
   const systemRows = compactRows([
-    row('Hostname', asString(truenas.hostname) ?? asString(resource.name)),
+    wrapRow('Hostname', asString(truenas.hostname) ?? asString(resource.name)),
     row('Version', asString(truenas.version)),
     row('Uptime', formatDurationSeconds(truenas.uptimeSeconds ?? resource.uptime)),
     row('Status', normalizeDelimitedLabel(resource.status)),
   ]);
 
-  const healthRows = compactRows([
+  const healthRows = withoutRepeatedValues([
     row('Storage risk', normalizeDelimitedLabel(truenas.storageRisk?.level), {
       tone: truenas.storageRisk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
     }),
@@ -186,7 +217,7 @@ const buildTrueNASSystemSections = (
     ...(['running', 'attention', 'stopped', 'disabled'] as TrueNASServiceStatus[]).map((status) =>
       row(
         serviceStatusLabel(status),
-        serviceCounts[status] > 0 ? `${serviceCounts[status]}` : null,
+        serviceCounts[status] > 0 ? formatDetailCountValue(serviceCounts[status], 'service') : null,
         {
           tone: serviceStatusTone(status),
         },
@@ -225,6 +256,7 @@ const storageStateTone = (
   const state = (storage.zfsPoolState ?? storage.arrayState ?? resource.status).toLowerCase();
   if (state === 'online' || state === 'healthy' || state === 'mounted') return 'success';
   if (state === 'degraded' || state === 'warning' || state === 'offline') return 'warning';
+  if (['faulted', 'unavail', 'removed', 'suspended'].includes(state)) return 'danger';
   return 'default';
 };
 
@@ -292,6 +324,20 @@ const zfsDeviceEvidenceLabels = (storage: ResourceStorageMeta): string[] =>
       return `${name}${context ? ` (${context})` : ''}: ${state}${errors}`;
     });
 
+// A pool's health is its content, the way RAID is a Proxmox node's: it stays
+// in view on the Overview. A dataset or share has no pool health of its own.
+const isTrueNASPool = (storage: ResourceStorageMeta): boolean =>
+  Boolean(storage.zfsPool || storage.poolHealth) ||
+  asString(storage.topology)?.toLowerCase() === 'pool' ||
+  asString(storage.type)?.toLowerCase().includes('pool') === true;
+
+const canonicalPoolStateTone = (state?: string): ResourceDetailDrawerTrueNASRowTone => {
+  if (state === 'ONLINE') return 'success';
+  if (state === 'DEGRADED' || state === 'OFFLINE') return 'warning';
+  if (state === 'FAULTED' || state === 'UNAVAIL') return 'danger';
+  return 'default';
+};
+
 const buildTrueNASStorageSections = (
   resource: Resource,
   storage: ResourceStorageMeta,
@@ -300,13 +346,16 @@ const buildTrueNASStorageSections = (
     .map((reason) => asString(reason.summary))
     .filter((value): value is string => Boolean(value));
   const zfsDeviceEvidence = zfsDeviceEvidenceLabels(storage);
+  const stateLabel = storageStateLabel(resource, storage);
+  const stateRow = row('State', stateLabel, { tone: storageStateTone(resource, storage) });
+  const canonicalState = asString(storage.poolHealth?.canonicalState);
+  const pool = isTrueNASPool(storage);
   const storageRows = compactRows([
     row('Kind', storageKindLabel(storage)),
-    row('State', storageStateLabel(resource, storage), {
-      tone: storageStateTone(resource, storage),
-    }),
-    row('Pool', asString(storage.pool) ?? asString(resource.parentName)),
-    row('Path', asString(storage.path)),
+    // A pool states its state in its health card; a dataset here.
+    pool ? null : stateRow,
+    wrapRow('Pool', asString(storage.pool) ?? asString(resource.parentName)),
+    wrapRow('Path', asString(storage.path)),
     row('Protection', storageProtectionLabel(storage.protection)),
     row('Shared', yesNoValue(storage.shared)),
   ]);
@@ -320,18 +369,17 @@ const buildTrueNASStorageSections = (
     row('Consumers', formatDetailIntegerValue(storage.consumerCount)),
   ]);
 
-  const healthRows = compactRows([
-    row('Canonical state', asString(storage.poolHealth?.canonicalState), {
-      tone:
-        storage.poolHealth?.canonicalState === 'ONLINE'
-          ? 'success'
-          : ['DEGRADED', 'FAULTED', 'OFFLINE', 'UNAVAIL'].includes(
-                storage.poolHealth?.canonicalState ?? '',
-              )
-            ? 'warning'
-            : 'default',
-    }),
-    row('Native state', asString(storage.poolHealth?.nativeState)),
+  // What the operator reads first: is the pool OK, and if not, why and what
+  // to do. Evidence codes and native states stay under Details.
+  const healthRows = withoutRepeatedValues([
+    pool ? stateRow : null,
+    row(
+      'Pool health',
+      canonicalState && canonicalState.toLowerCase() !== stateLabel?.toLowerCase()
+        ? canonicalState
+        : null,
+      { tone: canonicalPoolStateTone(canonicalState ?? undefined) },
+    ),
     row('Risk', normalizeDelimitedLabel(storage.risk?.level), {
       tone: storage.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
     }),
@@ -339,7 +387,7 @@ const buildTrueNASStorageSections = (
     row('Posture', asString(storage.postureSummary), {
       tone: storage.postureSummary ? 'warning' : 'default',
     }),
-    row('Protection reduced', booleanValue(storage.protectionReduced), {
+    row('Protection reduced', yesNoValue(storage.protectionReduced), {
       tone: storage.protectionReduced ? 'warning' : 'success',
     }),
     row('Protection summary', asString(storage.protectionSummary), {
@@ -350,34 +398,36 @@ const buildTrueNASStorageSections = (
       tone: storage.zfsPool?.scanDetails?.errors ? 'warning' : 'default',
     }),
     row('ZFS errors', zfsErrorLabel(storage), { tone: 'warning' }),
-    row('Affected vdevs', summarizeList(zfsDeviceEvidence, 2), {
-      title: zfsDeviceEvidence.join(', '),
-      tone: 'warning',
-    }),
-    row('Reasons', summarizeList(riskReasons, 2), {
-      title: riskReasons.join(', '),
-      tone: 'warning',
-    }),
-    row('Recommended', asString(storage.poolHealth?.recommendation), {
+    wrapRow('Affected vdevs', joinList(zfsDeviceEvidence), { tone: 'warning' }),
+    wrapRow('Reasons', joinList(riskReasons), { tone: 'warning' }),
+    wrapRow('Recommended', asString(storage.poolHealth?.recommendation), {
       title: asString(storage.poolHealth?.summary) ?? undefined,
     }),
-    row('Evidence', summarizeList(storage.poolHealth?.evidenceCodes ?? [], 4), {
-      title: (storage.poolHealth?.evidenceCodes ?? []).join(', '),
-    }),
+  ]);
+
+  const evidenceRows = compactRows([
+    row('Native state', asString(storage.poolHealth?.nativeState)),
+    wrapRow('Evidence', joinList(storage.poolHealth?.evidenceCodes ?? [])),
     row('Evidence source', asString(storage.poolHealth?.source)),
   ]);
 
   return compactSections([
     { label: 'Storage', rows: storageRows },
     { label: 'Capacity', rows: capacityRows },
-    { label: 'Health', rows: healthRows },
+    {
+      label: 'Health',
+      rows: healthRows,
+      ...(pool ? { testId: drawerContentCardTestId('truenas-pool-health') } : {}),
+    },
+    { label: 'Health evidence', rows: evidenceRows },
   ]);
 };
 
 const diskStateTone = (disk: ResourcePhysicalDiskMeta): ResourceDetailDrawerTrueNASRowTone => {
   const health = disk.health?.toLowerCase();
   if (health === 'passed' || health === 'healthy' || health === 'ok') return 'success';
-  if (health === 'degraded' || health === 'failed' || health === 'warning') return 'warning';
+  if (health === 'failed') return 'danger';
+  if (health === 'degraded' || health === 'warning') return 'warning';
   return 'default';
 };
 
@@ -443,10 +493,10 @@ const buildTrueNASDiskSections = (
     .map((reason) => asString(reason.summary))
     .filter((value): value is string => Boolean(value));
   const identityRows = compactRows([
-    row('Device', asString(disk.devPath) ?? asString(resource.name)),
-    row('Model', asString(disk.model)),
-    row('Serial', asString(disk.serial)),
-    row('WWN', asString(disk.wwn)),
+    wrapRow('Device', asString(disk.devPath) ?? asString(resource.name)),
+    wrapRow('Model', asString(disk.model)),
+    wrapRow('Serial', asString(disk.serial)),
+    wrapRow('WWN', asString(disk.wwn)),
     row('Type', diskTypeLabel(disk.diskType)),
     row('Size', formatDetailBytesValue(disk.sizeBytes)),
   ]);
@@ -460,7 +510,7 @@ const buildTrueNASDiskSections = (
     ),
     row('RPM', formatDetailIntegerValue(disk.rpm)),
     row('Role', normalizeDelimitedLabel(disk.storageRole)),
-    row('Group', asString(disk.storageGroup) ?? asString(resource.parentName)),
+    wrapRow('Group', asString(disk.storageGroup) ?? asString(resource.parentName)),
     row('State', normalizeDelimitedLabel(disk.storageState)),
     row('Spun down', yesNoValue(disk.spunDown)),
   ]);
@@ -492,16 +542,15 @@ const buildTrueNASDiskSections = (
     row('Risk', normalizeDelimitedLabel(disk.risk?.level), {
       tone: disk.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
     }),
-    row('Reasons', summarizeList(riskReasons, 2), {
-      title: riskReasons.join(', '),
-      tone: 'warning',
-    }),
+    wrapRow('Reasons', joinList(riskReasons), { tone: 'warning' }),
   ]);
 
+  // Health and SMART readings are the disk's content, the way the Proxmox node
+  // drawer shows its disks: they stay in view on the Overview.
   return compactSections([
     { label: 'Disk', rows: identityRows },
-    { label: 'Health', rows: healthRows },
-    { label: 'SMART', rows: smartRows },
+    { label: 'Health', rows: healthRows, testId: drawerContentCardTestId('truenas-disk-health') },
+    { label: 'SMART', rows: smartRows, testId: drawerContentCardTestId('truenas-disk-smart') },
     { label: 'Risk', rows: riskRows },
   ]);
 };
@@ -552,18 +601,28 @@ const buildTrueNASAppSections = (
   const volumeLabels = appVolumeLabels(app);
   const imageLabels = (app.images ?? []).map((image) => image.trim()).filter(Boolean);
   const networkLabels = appNetworkLabels(app);
+  const appState = asString(app.state)?.toLowerCase();
   const appRows = compactRows([
+    // A stopped app is a choice the row already shows; a crashed one is not.
     row('State', normalizeDelimitedLabel(app.state), {
-      tone: app.state?.toLowerCase() === 'running' ? 'success' : 'warning',
+      tone:
+        appState === 'running'
+          ? 'success'
+          : appState === 'crashed' || appState === 'error' || appState === 'failed'
+            ? 'danger'
+            : 'default',
     }),
     row('Version', asString(app.humanVersion) ?? asString(app.version)),
     row('Containers', formatDetailIntegerValue(containerCount)),
     row('Custom app', yesNoValue(app.customApp)),
+    // An available update is something to act on, as for a Docker container:
+    // the Overview lifts it in front.
     row(
       'App updates',
       app.upgradeAvailable === undefined ? null : app.upgradeAvailable ? 'Available' : 'Current',
       {
-        tone: app.upgradeAvailable ? 'warning' : 'success',
+        tone: app.upgradeAvailable ? 'accent' : 'success',
+        lift: app.upgradeAvailable === true,
       },
     ),
     row(
@@ -573,22 +632,23 @@ const buildTrueNASAppSections = (
         : app.imageUpdatesAvailable
           ? 'Available'
           : 'Current',
-      { tone: app.imageUpdatesAvailable ? 'warning' : 'success' },
+      {
+        tone: app.imageUpdatesAvailable ? 'accent' : 'success',
+        lift: app.imageUpdatesAvailable === true,
+      },
     ),
     row('Notes', asString(app.notes)),
   ]);
 
   const networkRows = compactRows([
-    row('Host IPs', summarizeList(app.usedHostIps ?? []), {
-      title: (app.usedHostIps ?? []).join(', '),
-    }),
-    row('Ports', summarizeList(portLabels), { title: portLabels.join(', ') }),
-    row('Networks', summarizeList(networkLabels), { title: networkLabels.join(', ') }),
+    wrapRow('Host IPs', joinList(app.usedHostIps ?? [])),
+    wrapRow('Ports', joinList(portLabels)),
+    wrapRow('Networks', joinList(networkLabels)),
   ]);
 
   const storageRows = compactRows([
-    row('Volumes', summarizeList(volumeLabels), { title: volumeLabels.join(', ') }),
-    row('Images', summarizeList(imageLabels, 2), { title: imageLabels.join(', ') }),
+    wrapRow('Volumes', joinList(volumeLabels)),
+    wrapRow('Images', joinList(imageLabels)),
   ]);
 
   return compactSections([
@@ -644,8 +704,10 @@ const buildTrueNASVMSections = (
   const sameState = state?.toLowerCase() === domainState?.toLowerCase();
   const machine = [asString(vm.machineType), asString(vm.archType)].filter(Boolean).join(' / ');
   const computeRows = compactRows([
+    // A stopped VM is a choice the row already shows. Condition below says
+    // when it should be running.
     row('State', state ?? domainState, {
-      tone: (vm.state ?? vm.domainState)?.toLowerCase() === 'running' ? 'success' : 'warning',
+      tone: (vm.state ?? vm.domainState)?.toLowerCase() === 'running' ? 'success' : 'default',
     }),
     row('Domain state', sameState ? null : domainState),
     row('Condition', vmConditionLabel(resource, vm), { tone: 'warning' }),
@@ -654,14 +716,14 @@ const buildTrueNASVMSections = (
     row('Memory', formatDetailBytesValue(vm.memoryBytes)),
     row('Minimum memory', formatDetailBytesValue(vm.minMemoryBytes)),
     row('CPU mode', normalizeDelimitedLabel(vm.cpuMode)),
-    row('CPU model', asString(vm.cpuModel)),
+    wrapRow('CPU model', asString(vm.cpuModel)),
   ]);
 
   const runtimeRows = compactRows([
     row('Bootloader', asString(vm.bootloader)),
     row('Machine', machine),
     row('Process ID', formatDetailIntegerValue(vm.pid)),
-    row('UUID', asString(vm.uuid)),
+    wrapRow('UUID', asString(vm.uuid)),
   ]);
 
   const deviceRows = compactRows([
@@ -699,8 +761,11 @@ const shareStateLabel = (share: ResourceTrueNASShareMeta): string => {
   return 'Enabled';
 };
 
+// A disabled share is a choice; a locked one (its encrypted dataset is
+// locked) cannot serve clients until someone unlocks it.
 const shareStateTone = (share: ResourceTrueNASShareMeta): ResourceDetailDrawerTrueNASRowTone => {
-  if (share.enabled === false || share.locked) return 'warning';
+  if (share.enabled === false) return 'default';
+  if (share.locked) return 'warning';
   return 'success';
 };
 
@@ -727,9 +792,9 @@ const buildTrueNASShareSections = (
   const shareRows = compactRows([
     row('State', shareStateLabel(share), { tone: shareStateTone(share) }),
     row('Protocol', shareProtocolLabel(share)),
-    row('Dataset', asString(share.dataset)),
-    row('Path', asString(share.path)),
-    row('Relative path', asString(share.relativePath)),
+    wrapRow('Dataset', asString(share.dataset)),
+    wrapRow('Path', asString(share.path)),
+    wrapRow('Relative path', asString(share.relativePath)),
     row('Comment', asString(share.comment)),
   ]);
 
@@ -743,9 +808,9 @@ const buildTrueNASShareSections = (
   ]);
 
   const clientRows = compactRows([
-    row('Aliases', summarizeList(aliases), { title: aliases.join(', ') }),
-    row('Hosts', summarizeList(hosts), { title: hosts.join(', ') }),
-    row('Networks', summarizeList(networks), { title: networks.join(', ') }),
+    wrapRow('Aliases', joinList(aliases)),
+    wrapRow('Hosts', joinList(hosts)),
+    wrapRow('Networks', joinList(networks)),
     row('Security', summarizeList(security), { title: security.join(', ') }),
     row('Map root', shareUserGroupLabel(share.mapRootUser, share.mapRootGroup)),
     row('Map all', shareUserGroupLabel(share.mapAllUser, share.mapAllGroup)),

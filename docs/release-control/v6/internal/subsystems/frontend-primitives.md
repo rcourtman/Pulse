@@ -10011,3 +10011,11 @@ remains visible beside invalid capacity without formatting NaN/Infinity bytes.
 Model/component controls cover non-finite, absent and non-positive capacity;
 `workload-disk-metrics.cjs` checks both Bars (including the tooltip) and Sparklines
 through the same REST reading at desktop and phone widths.
+
+The storage pool drawer left the `form-select-shell` consumer list: its usage
+chart now takes its range from the shared drawer history toolbar
+(`GuestDrawerHistory`), the same control as the guest and node drawers, rather
+than a pool-local `FormSelect`. The guest drawer's embedded disk detail keeps
+its `FormSelect`. Guardrails that pinned the retired pool card classes now pin
+the drawer pieces the pool Overview composes (attention section, Worth
+checking, drawer history, closed Details of `DetailSectionTable` sections).

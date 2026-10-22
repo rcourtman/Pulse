@@ -9,8 +9,15 @@ import { DiskList } from '@/components/Storage/DiskList';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { eventBus } from '@/stores/events';
 
-vi.mock('@/components/Storage/DiskDetail', () => ({
-  DiskDetail: (props: { disk: Resource }) => <div data-testid="disk-detail">{props.disk.id}</div>,
+vi.mock('@/components/Storage/DiskDrawer', () => ({
+  DiskDrawer: (props: { disk: Resource; onClose: () => void }) => (
+    <div data-testid="disk-detail">
+      {props.disk.id}
+      <button type="button" onClick={() => props.onClose()}>
+        Close drawer
+      </button>
+    </div>
+  ),
 }));
 
 const buildNode = (id: string, name: string): Resource =>
@@ -552,6 +559,38 @@ describe('DiskList', () => {
 
     fireEvent.click(screen.getByText('Cache SSD'));
     expect(screen.getByTestId('disk-detail')).toHaveTextContent('sdb');
+  });
+
+  it('opens the disk drawer in the shared inline detail row its disclosure controls', () => {
+    const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
+    const onSelectedDiskChange = vi.fn((id: string | null) => setSelectedDiskId(id));
+    render(() => (
+      <DiskList
+        disks={[buildDisk('sda', 'tower')]}
+        nodes={[]}
+        selectedNode={null}
+        searchTerm=""
+        selectedDiskId={selectedDiskId()}
+        onSelectedDiskChange={onSelectedDiskChange}
+      />
+    ));
+
+    const row = document.querySelector('[data-row-id="sda"]') as HTMLElement;
+    const disclosure = within(row).getByRole('button');
+    fireEvent.click(disclosure);
+    const drawer = screen.getByTestId('disk-detail');
+    const cell = drawer.closest('td')!;
+    expect(cell.id).toBe(disclosure.getAttribute('aria-controls'));
+    expect(cell.closest('tr')).toHaveAttribute(
+      'data-inline-detail-for',
+      row.getAttribute('data-summary-series-id'),
+    );
+    // The shared detail row caps its content to the table width on phones.
+    expect(drawer.parentElement).toHaveClass('max-w-[100cqi]');
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close drawer' }));
+    expect(onSelectedDiskChange).toHaveBeenLastCalledWith(null);
+    expect(screen.queryByTestId('disk-detail')).toBeNull();
   });
 
   it('renders canonical Settings Infrastructure guidance for empty physical disks', () => {

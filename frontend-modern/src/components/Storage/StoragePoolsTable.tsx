@@ -26,6 +26,7 @@ import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
@@ -48,6 +49,8 @@ type StoragePoolsTableProps = {
   nodeOnlineByLabel: Map<string, boolean>;
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
+  /** A pool's open alerts, for its drawer: the set that tints its row. */
+  getRecordAlerts?: (recordId: string) => Alert[];
   isLoading: boolean;
   highlightedSummarySeriesId?: string | null;
   onHoverChange?: (recordId: string | null) => void;
@@ -176,6 +179,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                       alertHeadlineClass={rowModel().alertHeadlineClass}
                       physicalDisks={props.physicalDisks}
                       getDiskAlertResourceIds={props.getDiskAlertResourceIds}
+                      alerts={props.getRecordAlerts?.(record.id)}
                       alertDataAttrs={rowModel().alertDataAttrs}
                     />
                   );

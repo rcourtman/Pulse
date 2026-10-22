@@ -63,6 +63,8 @@ export type StoragePoolDetailZfsDevice = {
 export type StoragePoolDetailZfsSummary = {
   state: string;
   scan: string;
+  /** Errors the current or last scrub/resilver found; 0 when none or unreported. */
+  scanErrors: number;
   errorSummary: string | null;
   devices: StoragePoolDetailZfsDevice[];
   datasets: Array<{
@@ -262,6 +264,10 @@ export function buildStoragePoolDetailZfsSummary(
   return {
     state: pool.state,
     scan: pool.scan && pool.scan !== 'none' ? pool.scan : '',
+    scanErrors:
+      typeof pool.scanDetails?.errors === 'number' && Number.isFinite(pool.scanDetails.errors)
+        ? Math.max(0, pool.scanDetails.errors)
+        : 0,
     errorSummary: hasErrors
       ? getZfsErrorSummary(pool.readErrors, pool.writeErrors, pool.checksumErrors)
       : null,

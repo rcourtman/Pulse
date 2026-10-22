@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, within } from '@solidjs/testing-library';
+import { render, within } from '@solidjs/testing-library';
 
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
@@ -61,15 +61,19 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
-const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
-  // Platform context sits inside the Overview's one Details disclosure.
-  const details = getByTestId('resource-technical-details') as HTMLDetailsElement;
-  details.open = true;
-  fireEvent(details, new Event('toggle'));
+const details = (getByTestId: (id: string) => HTMLElement) =>
+  within(getByTestId('resource-technical-details'));
+
+const worthChecking = (queryByTestId: (id: string) => HTMLElement | null) => {
+  const list = queryByTestId('resource-drawer-exceptions');
+  return list ? within(list) : null;
 };
 
+// TrueNAS sections sit in the Overview's one Details disclosure as plain
+// tables (no second "Show TrueNAS" toggle), their problems are lifted to
+// "Worth checking", and a pool's or disk's health stays in view as a card.
 describe('ResourceDetailDrawer TrueNAS details', () => {
-  it('opens native TrueNAS system detail immediately for inline platform rows', () => {
+  it("lifts a TrueNAS system's storage problems and keeps the rest under Details", () => {
     const resource = baseResource({
       id: 'truenas-system-1',
       type: 'agent',
@@ -92,33 +96,29 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
       },
     });
 
-    const { getByRole, getByTestId } = render(() => (
-      <ResourceDetailDrawer
-        resource={resource}
-        presentation="table-row"
-        initialShowTrueNASDetails
-      />
+    const { getByTestId, queryByRole, queryByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} presentation="table-row" />
     ));
-    expandPlatformDetails(getByTestId);
 
-    expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
-    const trueNASSection = getByTestId('resource-truenas-details-section');
-    const summary = getByTestId('resource-technical-details');
+    expect(queryByRole('button', { name: 'Show TrueNAS' })).toBeNull();
+    const lifted = worthChecking(queryByTestId);
+    expect(lifted?.getByText('ZFS pool archive is DEGRADED')).toBeInTheDocument();
     expect(
-      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_PRECEDING,
-    ).toBeTruthy();
-    const section = within(trueNASSection);
-    expect(section.getByText('System')).toBeInTheDocument();
-    expect(section.getByText('Storage Health')).toBeInTheDocument();
-    expect(section.getAllByText('Services').length).toBeGreaterThan(1);
-    expect(section.getByText('TrueNAS-SCALE-24.10.2')).toBeInTheDocument();
-    expect(section.getByText('SMB, NFS, SSH, SMART')).toBeInTheDocument();
-    expect(
-      section.getByText('Snapshots are current but replication is degraded'),
+      lifted?.getByText('Snapshots are current but replication is degraded'),
     ).toBeInTheDocument();
+    // An enabled service that is stopped is worth a look.
+    expect(lifted?.getByText('Stopped')).toBeInTheDocument();
+    expect(lifted?.getByText('1 service')).toBeInTheDocument();
+
+    const inventory = details(getByTestId);
+    expect(inventory.getByText('System')).toBeInTheDocument();
+    expect(inventory.getByText('TrueNAS-SCALE-24.10.2')).toBeInTheDocument();
+    expect(inventory.getByText('SMB, NFS, SSH, SMART')).toBeInTheDocument();
+    // Lifted rows move rather than repeat.
+    expect(inventory.queryByText('ZFS pool archive is DEGRADED')).toBeNull();
   });
 
-  it('renders native TrueNAS VM detail only after the TrueNAS section is expanded', () => {
+  it('keeps native TrueNAS VM detail under Details', () => {
     const resource = baseResource({
       id: 'truenas-vm-1',
       type: 'vm',
@@ -139,29 +139,23 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
       },
     });
 
-    const { getByText, getByRole, getByTestId, getAllByText, queryByText } = render(() => (
+    const { getByTestId, queryByTestId } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
-    expandPlatformDetails(getByTestId);
 
-    expect(getAllByText('TrueNAS').length).toBeGreaterThan(0);
-    expect(getByText('Running, 4 vCPU, 8.00 GB, 3 devices')).toBeInTheDocument();
-    expect(queryByText('Bootloader')).toBeNull();
-
-    fireEvent.click(getByRole('button', { name: 'Show TrueNAS' }));
-
-    const section = within(getByTestId('resource-truenas-details-section'));
-    expect(section.getByText('Compute')).toBeInTheDocument();
-    expect(section.getByText('Runtime')).toBeInTheDocument();
-    expect(section.getByText('Devices')).toBeInTheDocument();
-    expect(section.getByText('Flags')).toBeInTheDocument();
-    expect(section.getByText('Bootloader')).toBeInTheDocument();
-    expect(section.getByText('UEFI')).toBeInTheDocument();
-    expect(section.getByText('Secure boot')).toBeInTheDocument();
-    expect(section.getAllByText('Enabled').length).toBeGreaterThan(1);
+    expect(queryByTestId('resource-drawer-exceptions')).toBeNull();
+    expect((getByTestId('resource-technical-details') as HTMLDetailsElement).open).toBe(false);
+    const inventory = details(getByTestId);
+    expect(inventory.getByText('Compute')).toBeInTheDocument();
+    expect(inventory.getByText('Runtime')).toBeInTheDocument();
+    expect(inventory.getByText('Devices')).toBeInTheDocument();
+    expect(inventory.getByText('Flags')).toBeInTheDocument();
+    expect(inventory.getByText('Bootloader')).toBeInTheDocument();
+    expect(inventory.getByText('UEFI')).toBeInTheDocument();
+    expect(inventory.getAllByText('Enabled').length).toBeGreaterThan(1);
   });
 
-  it('renders native TrueNAS app detail without Docker runtime controls', () => {
+  it('lifts an available TrueNAS app update without Docker runtime controls', () => {
     const resource = baseResource({
       id: 'truenas-app-1',
       type: 'app-container',
@@ -189,82 +183,23 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
       },
     });
 
-    const { getByText, getByRole, getByTestId, queryByText } = render(() => (
+    const { getByTestId, queryByTestId, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
-    expandPlatformDetails(getByTestId);
 
-    expect(getByText('Running, 2 containers, 1 port, 1 update')).toBeInTheDocument();
     expect(queryByText('Docker runtime')).toBeNull();
+    const lifted = worthChecking(queryByTestId);
+    expect(lifted?.getByText('App updates')).toBeInTheDocument();
+    expect(lifted?.getByText('Available')).toBeInTheDocument();
 
-    fireEvent.click(getByRole('button', { name: 'Show TrueNAS' }));
-
-    const section = within(getByTestId('resource-truenas-details-section'));
-    expect(section.getByText('App')).toBeInTheDocument();
-    expect(section.getByText('Networking')).toBeInTheDocument();
-    expect(section.getByText('Storage')).toBeInTheDocument();
-    expect(section.getByText('0.0.0.0:30443 -> 443/tcp')).toBeInTheDocument();
-    expect(section.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
+    const inventory = details(getByTestId);
+    expect(inventory.getByText('App')).toBeInTheDocument();
+    expect(inventory.getByText('Networking')).toBeInTheDocument();
+    expect(inventory.getByText('0.0.0.0:30443 -> 443/tcp')).toBeInTheDocument();
+    expect(inventory.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
   });
 
-  it('can open native TrueNAS detail immediately for inline platform rows', () => {
-    const resource = baseResource({
-      id: 'truenas-app-1',
-      type: 'app-container',
-      displayName: 'nextcloud',
-      truenas: {
-        app: {
-          name: 'nextcloud',
-          state: 'RUNNING',
-          humanVersion: '29.0.0',
-          containerCount: 2,
-          upgradeAvailable: true,
-          imageUpdatesAvailable: false,
-          usedPorts: [
-            {
-              containerPort: 443,
-              protocol: 'tcp',
-              hostPorts: [{ hostIp: '0.0.0.0', hostPort: 30443 }],
-            },
-          ],
-          volumes: [{ source: '/mnt/tank/apps/nextcloud', destination: '/data' }],
-        },
-      },
-    });
-
-    const { getByRole, getByTestId } = render(() => (
-      <ResourceDetailDrawer
-        resource={resource}
-        presentation="table-row"
-        initialShowTrueNASDetails
-      />
-    ));
-    expandPlatformDetails(getByTestId);
-
-    const summary = getByTestId('resource-technical-details');
-    const technicalDetails = getByTestId('resource-technical-details') as HTMLDetailsElement;
-    technicalDetails.open = true;
-    fireEvent(technicalDetails, new Event('toggle'));
-    expect(getByTestId('resource-technical-summary-section').querySelector('table')).toBeTruthy();
-    expect(() => getByTestId('resource-current-state-section')).toThrow();
-    expect(getByTestId('resource-identity-section').tagName).toBe('TBODY');
-    expect(summary.querySelector('[class*="shadow-xs"]')).not.toBeNull();
-    expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
-    const trueNASSection = getByTestId('resource-truenas-details-section');
-    expect(
-      trueNASSection.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_PRECEDING,
-    ).toBeTruthy();
-    const section = within(trueNASSection);
-    expect(trueNASSection.querySelector('table')).toBeTruthy();
-    expect(
-      getByTestId('resource-truenas-details-section').querySelector('[class*="cyan"]'),
-    ).toBeNull();
-    expect(section.getByText('App')).toBeInTheDocument();
-    expect(section.getByText('0.0.0.0:30443 -> 443/tcp')).toBeInTheDocument();
-    expect(section.getByText('/mnt/tank/apps/nextcloud -> /data')).toBeInTheDocument();
-  });
-
-  it('renders native TrueNAS share detail from SMB and NFS inventory', () => {
+  it('keeps native TrueNAS share detail under Details', () => {
     const resource = baseResource({
       id: 'truenas-share-1',
       type: 'network-share',
@@ -285,25 +220,18 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
       },
     });
 
-    const { getByText, getByRole, getByTestId } = render(() => (
-      <ResourceDetailDrawer resource={resource} />
-    ));
-    expandPlatformDetails(getByTestId);
+    const { getByTestId } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(getByText('SMB, Enabled, tank/media, Read/write')).toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Show TrueNAS' }));
-
-    const section = within(getByTestId('resource-truenas-details-section'));
-    expect(section.getByText('Share')).toBeInTheDocument();
-    expect(section.getByText('Access')).toBeInTheDocument();
-    expect(section.getByText('Clients')).toBeInTheDocument();
-    expect(section.getByText('/mnt/tank/media')).toBeInTheDocument();
-    expect(section.getByText('Read/write')).toBeInTheDocument();
-    expect(section.getByText('media')).toBeInTheDocument();
+    const inventory = details(getByTestId);
+    expect(inventory.getByText('Share')).toBeInTheDocument();
+    expect(inventory.getByText('Access')).toBeInTheDocument();
+    expect(inventory.getByText('Clients')).toBeInTheDocument();
+    expect(inventory.getByText('/mnt/tank/media')).toBeInTheDocument();
+    expect(inventory.getByText('Read/write')).toBeInTheDocument();
+    expect(inventory.getByText('media')).toBeInTheDocument();
   });
 
-  it('opens native TrueNAS storage detail immediately for inline storage rows', () => {
+  it("shows a degraded pool's health in front and its ZFS errors under Worth checking", () => {
     const resource = baseResource({
       id: 'truenas-pool-1',
       type: 'storage',
@@ -322,6 +250,8 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
         platform: 'truenas',
         protection: 'zfs',
         zfsPoolState: 'DEGRADED',
+        zfsReadErrors: 1,
+        zfsChecksumErrors: 2,
         risk: {
           level: 'warning',
           reasons: [
@@ -338,22 +268,58 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
       },
     });
 
-    const { getByRole, getByTestId } = render(() => (
-      <ResourceDetailDrawer
-        resource={resource}
-        presentation="table-row"
-        initialShowTrueNASDetails
-      />
+    const { getByTestId, queryByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} presentation="table-row" />
     ));
-    expandPlatformDetails(getByTestId);
 
-    expect(getByRole('button', { name: 'Hide TrueNAS' })).toBeInTheDocument();
-    const section = within(getByTestId('resource-truenas-details-section'));
-    expect(getByTestId('resource-truenas-details-section').querySelector('table')).toBeTruthy();
-    expect(section.getByText('Storage')).toBeInTheDocument();
-    expect(section.getByText('Capacity')).toBeInTheDocument();
-    expect(section.getByText('Health')).toBeInTheDocument();
-    expect(section.getByText('ZFS')).toBeInTheDocument();
-    expect(section.getAllByText('ZFS pool archive is DEGRADED')).toHaveLength(3);
+    // The pool's own summary is stated once, by the alerts block.
+    expect(
+      within(getByTestId('drawer-attention-section')).getByText('ZFS pool archive is DEGRADED'),
+    ).toBeInTheDocument();
+    const lifted = worthChecking(queryByTestId);
+    expect(lifted?.getByText('ZFS errors')).toBeInTheDocument();
+    expect(lifted?.getByText('Read 1 · Write 0 · Checksum 2')).toBeInTheDocument();
+    expect(lifted?.queryByText('ZFS pool archive is DEGRADED')).toBeNull();
+
+    // Pool health is a content card outside the closed Details.
+    const cards = getByTestId('resource-drawer-cards');
+    expect(cards.closest('[data-testid="resource-technical-details"]')).toBeNull();
+    expect(within(cards).getByText('Health')).toBeInTheDocument();
+    expect(within(cards).getByText('DEGRADED')).toBeInTheDocument();
+
+    const inventory = details(getByTestId);
+    expect(inventory.getByText('Storage')).toBeInTheDocument();
+    expect(inventory.getByText('Capacity')).toBeInTheDocument();
+    expect(inventory.getByText('ZFS')).toBeInTheDocument();
+  });
+
+  it("shows a disk's health and SMART readings in front", () => {
+    const resource = baseResource({
+      id: 'truenas-disk-1',
+      type: 'physical_disk',
+      displayName: 'sdc',
+      platformScopes: ['truenas'],
+      physicalDisk: {
+        devPath: '/dev/sdc',
+        model: 'WD Red Pro',
+        serial: 'WD-WX12A3456',
+        diskType: 'sata',
+        sizeBytes: 24 * 1024 ** 4,
+        health: 'PASSED',
+        smart: { powerOnHours: 10_240, reallocatedSectors: 4 },
+      },
+    });
+
+    const { getByTestId, queryByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    const cards = within(getByTestId('resource-drawer-cards'));
+    // The Health card and its Health row.
+    expect(cards.getAllByText('Health')).toHaveLength(2);
+    expect(cards.getByText('SMART')).toBeInTheDocument();
+    expect(cards.getByText('Passed')).toBeInTheDocument();
+    expect(worthChecking(queryByTestId)?.getByText('Reallocated')).toBeInTheDocument();
+    expect(details(getByTestId).getByText('WD-WX12A3456')).toBeInTheDocument();
   });
 });
