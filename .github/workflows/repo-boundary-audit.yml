@@ -19,6 +19,10 @@ jobs:
 
       - name: Install boundary audit dependencies
         run: |
+          # Ubuntu packages only: the runner image's Microsoft source is not needed and
+          # its outage (403 on 22 October 2026) failed v6.6.0-rc.6's required audit.
+          # An image without that source is fine, so a missing match never fails.
+          sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends ripgrep
 
