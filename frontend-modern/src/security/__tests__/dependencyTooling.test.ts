@@ -34,6 +34,8 @@ describe('reviewed formatter behaviour', () => {
 
 describe('patched transitive dependency compatibility', () => {
   it.each([
+    'dompurify',
+    'vite-plugin-sri-gen',
     'solid-js',
     'seroval',
     'seroval-plugins',
