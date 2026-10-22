@@ -3783,6 +3783,12 @@ service-history reads plus denial/recovery without fabricated samples.
    not the per-node shape the PVE API returns: a shared PBS storage is one
    cluster-scoped row listing its reporting nodes (issue 1049), never one row
    per node with a different usage figure on each.
+   Cluster-scoped PVE inventory that no single node owns (shared storage under
+   a `cluster` or `shared` owner, and Ceph clusters) is sighted once per PVE
+   cohort rotation while any reporting node is online, the cadence
+   `mock.ProxmoxRefreshInterval` reports, because the node-keyed cohort
+   selection never matches its owner; real PVE polls stamp these rows on every
+   poll.
    Demo Docker container names are unique per host, as Docker itself enforces:
    a container profile reused for a second round on one host takes a numbered
    suffix instead of producing two rows with one name.

@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -1154,6 +1155,77 @@ func TestFixtureGraphSlowTicksKeepProxmoxGuestSightingsFresh(t *testing.T) {
 					}
 				}
 				graph.UpdateMetricCohort(cfg, now, (tick-1)%mockMetricCohortCount, mockMetricCohortCount)
+			}
+		})
+	}
+}
+
+// Shared storage (ceph-rbd, cephfs-data, the cluster PBS stores) and the
+// Ceph cluster belong to no single PVE node, so the node-keyed cohort
+// selection never re-sighted them: they kept their startup stamp and read as
+// stale Proxmox sources on every mock tick rate, including the default.
+func TestFixtureGraphSlowTicksKeepProxmoxClusterSightingsFresh(t *testing.T) {
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	for _, interval := range []time.Duration{2 * time.Second, 7 * time.Second, 15 * time.Second, 60 * time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			cfg := DefaultConfig
+			cfg.NodeCount = 8
+			cfg.VMsPerNode = 6
+			cfg.LXCsPerNode = 4
+			cfg.DockerHostCount = 0
+			cfg.GenericHostCount = 0
+			cfg.K8sClusterCount = 0
+			cfg.UpdateInterval = interval
+
+			base := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+			graph := buildFixtureGraph(cfg, base)
+			nodeNames := make(map[string]struct{}, len(graph.State.Nodes))
+			for _, node := range graph.State.Nodes {
+				nodeNames[node.Name] = struct{}{}
+			}
+			var shared []string
+			for _, storage := range graph.State.Storage {
+				if _, owned := nodeNames[storage.Node]; !owned && storage.Status == "available" {
+					shared = append(shared, storage.ID)
+				}
+			}
+			if !slices.ContainsFunc(shared, func(id string) bool { return strings.HasSuffix(id, "-ceph-rbd") }) {
+				t.Fatalf("fixture estate has no available shared ceph-rbd storage: %v", shared)
+			}
+			if len(graph.State.CephClusters) == 0 {
+				t.Fatal("fixture estate has no Ceph cluster")
+			}
+
+			bound := proxmoxSightingBudget
+			if interval > bound {
+				bound = interval
+			}
+			// Measure just before each tick lands, when sightings are oldest,
+			// and keep each resource's worst age over two full rotations.
+			oldest := make(map[string]time.Duration)
+			observe := func(key string, age time.Duration) {
+				if age > oldest[key] {
+					oldest[key] = age
+				}
+			}
+			for tick := 1; tick <= 2*mockMetricCohortCount; tick++ {
+				now := base.Add(time.Duration(tick) * interval)
+				for _, storage := range graph.State.Storage {
+					if slices.Contains(shared, storage.ID) {
+						observe("shared storage "+storage.ID+" (node "+storage.Node+")", now.Sub(storage.LastSeen))
+					}
+				}
+				for _, cluster := range graph.State.CephClusters {
+					observe("Ceph cluster "+cluster.ID, now.Sub(cluster.LastUpdated))
+				}
+				graph.UpdateMetricCohort(cfg, now, (tick-1)%mockMetricCohortCount, mockMetricCohortCount)
+			}
+			keys := slices.Sorted(maps.Keys(oldest))
+			for _, key := range keys {
+				if oldest[key] > bound {
+					t.Errorf("%s last sighted up to %s ago, want within %s", key, oldest[key], bound)
+				}
 			}
 		})
 	}

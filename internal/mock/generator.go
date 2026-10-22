@@ -6385,6 +6385,10 @@ type fixtureMetricSelection struct {
 	// whose refresh cadence can differ from the node cohort's rotation. Zero
 	// falls back to uptimeStep.
 	supplementalUptimeStep int64
+	// includeProxmoxClusterScope selects PVE inventory that no single node
+	// owns: shared storage merged under a cluster-level owner ("cluster",
+	// "shared") and Ceph clusters. A nil proxmoxNodeNames always includes it.
+	includeProxmoxClusterScope bool
 }
 
 func (selection fixtureMetricSelection) includesProxmoxNode(nodeName string) bool {
@@ -6393,6 +6397,10 @@ func (selection fixtureMetricSelection) includesProxmoxNode(nodeName string) boo
 	}
 	_, ok := selection.proxmoxNodeNames[nodeName]
 	return ok
+}
+
+func (selection fixtureMetricSelection) includesProxmoxClusterScope() bool {
+	return selection.proxmoxNodeNames == nil || selection.includeProxmoxClusterScope
 }
 
 func updateFixtureStateMetricsSelectedAt(
@@ -6478,8 +6486,11 @@ func updateFixtureStateMetricsSelectedAt(
 	// stamp is backdated so the UI shows a stale sighting, not "never".
 	staleSighting := refreshNow.Add(-10 * time.Minute)
 	offlineNodes := make(map[string]struct{})
+	proxmoxNodes := make(map[string]struct{}, len(data.Nodes))
+	onlineInstances := make(map[string]struct{})
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
+		proxmoxNodes[node.Name] = struct{}{}
 		if node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0 {
 			offlineNodes[node.Name] = struct{}{}
 			if node.LastSeen.IsZero() {
@@ -6487,10 +6498,40 @@ func updateFixtureStateMetricsSelectedAt(
 			}
 			continue
 		}
+		onlineInstances[node.Instance] = struct{}{}
 		if !selection.includesProxmoxNode(node.Name) {
 			continue
 		}
 		node.LastSeen = refreshNow
+	}
+	// Cluster-scoped inventory arrives on every PVE poll through whichever
+	// member node answers, so it is sighted on the cluster-scope cadence
+	// while any of its reporting nodes (or, when none are listed, any node
+	// of its instance) is online. Cohort selection by node name alone never
+	// matches its "cluster"/"shared" owner, which left it unsighted.
+	clusterScoped := func(owner string) bool {
+		_, isNode := proxmoxNodes[owner]
+		return !isNode
+	}
+	clusterReported := func(instance string, reporters []string) bool {
+		if len(reporters) == 0 {
+			_, online := onlineInstances[instance]
+			return online
+		}
+		for _, name := range reporters {
+			if _, offline := offlineNodes[name]; !offline {
+				if _, known := proxmoxNodes[name]; known {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	storageSelected := func(storage *models.Storage) bool {
+		if clusterScoped(storage.Node) {
+			return selection.includesProxmoxClusterScope()
+		}
+		return selection.includesProxmoxNode(storage.Node)
 	}
 	stampGuestSighting := func(nodeName string, lastSeen *time.Time) {
 		if !selection.includesProxmoxNode(nodeName) {
@@ -6524,7 +6565,29 @@ func updateFixtureStateMetricsSelectedAt(
 		stampGuestMemoryObservation(data.Containers[i].Node, data.Containers[i].Status, &data.Containers[i].Memory)
 	}
 	for i := range data.Storage {
-		stampGuestSighting(data.Storage[i].Node, &data.Storage[i].LastSeen)
+		storage := &data.Storage[i]
+		if !clusterScoped(storage.Node) {
+			stampGuestSighting(storage.Node, &storage.LastSeen)
+			continue
+		}
+		if !selection.includesProxmoxClusterScope() {
+			continue
+		}
+		if clusterReported(storage.Instance, storage.Nodes) {
+			storage.LastSeen = refreshNow
+		} else if storage.LastSeen.IsZero() {
+			storage.LastSeen = staleSighting
+		}
+	}
+	if selection.includesProxmoxClusterScope() {
+		for i := range data.CephClusters {
+			cluster := &data.CephClusters[i]
+			if clusterReported(cluster.Instance, nil) {
+				cluster.LastUpdated = refreshNow
+			} else if cluster.LastUpdated.IsZero() {
+				cluster.LastUpdated = staleSighting
+			}
+		}
 	}
 
 	if !config.RandomMetrics {
@@ -6585,7 +6648,7 @@ func updateFixtureStateMetricsSelectedAt(
 
 	for i := range data.Storage {
 		storage := &data.Storage[i]
-		if !selection.includesProxmoxNode(storage.Node) || storage.ID == "" || storage.Total <= 0 || storage.Status != "available" {
+		if !storageSelected(storage) || storage.ID == "" || storage.Total <= 0 || storage.Status != "available" {
 			continue
 		}
 		ApplyStorageUsage(storage, SampleMetric("storage", storage.ID, "usage", refreshNow))

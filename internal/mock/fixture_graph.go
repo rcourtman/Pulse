@@ -126,6 +126,10 @@ func (g *FixtureGraph) UpdateMetricCohort(
 		includeSupplemental:    includeSupplemental,
 		uptimeStep:             currentMockUpdateStepInt64() * int64(proxmoxCohorts),
 		supplementalUptimeStep: currentMockUpdateStepInt64() * supplementalTicks,
+		// Shared storage and Ceph belong to no single node, so they are
+		// sighted once per PVE rotation, the cadence ProxmoxRefreshInterval
+		// reports and the mock Proxmox stale threshold derives from.
+		includeProxmoxClusterScope: proxmoxCohortIndex == 0,
 	})
 	if includeSupplemental {
 		rebaseMockReplicationJobs(g.State.ReplicationJobs, now)
