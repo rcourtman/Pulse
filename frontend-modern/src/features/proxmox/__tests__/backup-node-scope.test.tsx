@@ -117,7 +117,11 @@ describe('source-scoped backup Node filter', () => {
     await fireEvent.click(screen.getByRole('link', { name: 'By date' }));
     await waitFor(() => expect(rows('recoverable')).toHaveLength(1));
     expect(rows('recoverable')[0]).toHaveTextContent('east-vm');
-    expect(new URLSearchParams(window.location.search).get('node')).toBe(nodeKey('east', 'pve-1'));
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('node')).toBe(
+        nodeKey('east', 'pve-1'),
+      ),
+    );
     expect(new URLSearchParams(window.location.search).get('keep')).toBe('node-proof');
   });
   it('retains a unique old name bookmark and clears the filter without clearing unrelated URL state', async () => {

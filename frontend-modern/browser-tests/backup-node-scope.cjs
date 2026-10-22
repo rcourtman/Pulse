@@ -234,7 +234,7 @@ async function capture(page, name, locator) {
       if (
         spec.touch &&
         (await disclosure.count()) &&
-        (await disclosure.getAttribute('aria-expanded')) === 'false'
+        !(await page.getByRole('button', { name: /^Node:/ }).isVisible())
       )
         await activate(disclosure, spec.touch);
       const renamed = page.getByRole('button', {
@@ -264,7 +264,7 @@ async function capture(page, name, locator) {
       if (
         spec.touch &&
         (await disclosure.count()) &&
-        (await disclosure.getAttribute('aria-expanded')) === 'false'
+        !(await page.getByRole('button', { name: /^Node:/ }).isVisible())
       )
         await activate(disclosure, spec.touch);
       await activate(page.getByRole('button', { name: 'Remove Node filter' }), spec.touch);
