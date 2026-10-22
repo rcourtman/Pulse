@@ -710,6 +710,11 @@ export const ProxmoxBackupsTable: Component<{
       { replace: true },
     );
 
+  const savedScopes = [
+    { name: 'node', selection: nodeSelection, rows: 'workloads or restore points' },
+    { name: 'backup location', selection: locationSelection, rows: 'restore points' },
+  ];
+
   return (
     <div class="space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -800,24 +805,20 @@ export const ProxmoxBackupsTable: Component<{
         >
           <div class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
-            <Show when={nodeUnavailable()}>
-              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                {nodeSelection().state === 'ambiguous'
-                  ? 'The saved node matches more than one Proxmox source.'
-                  : 'The saved node is not in the current inventory.'}{' '}
-                No workloads or restore points are selected. Choose a node or clear filters. This
-                does not mean no backups exist.
-              </p>
-            </Show>
-            <Show when={locationUnavailable()}>
-              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                {locationSelection().state === 'ambiguous'
-                  ? 'The saved backup location matches more than one source.'
-                  : 'The saved backup location is not in the current inventory.'}{' '}
-                No restore points are selected. Choose a backup location or clear filters. This does
-                not mean no backups exist.
-              </p>
-            </Show>
+            <For each={savedScopes}>
+              {(scope) => (
+                <Show when={['ambiguous', 'missing'].includes(scope.selection().state)}>
+                  <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                    The saved {scope.name}{' '}
+                    {scope.selection().state === 'ambiguous'
+                      ? 'matches more than one source.'
+                      : 'is not in the current inventory.'}{' '}
+                    No {scope.rows} are selected. Choose a {scope.name} or clear filters. This does
+                    not mean no backups exist.
+                  </p>
+                </Show>
+              )}
+            </For>
             <Show when={protectionPostures.response.error}>
               <div class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center gap-2`}>
                 <p role="status" class="min-w-0 flex-1 basis-64">

@@ -56,6 +56,9 @@ describe('backup node scope identity', () => {
       b = node('b', 'east', 'pve-a', 'Other alias');
     expect(backupNodeOptions([a, b])).toEqual(backupNodeOptions([b, a]));
     expect(backupNodeOptions([a, b])).toHaveLength(1);
+    expect(resolveBackupNodeSelection([a, b], backupNodeScope(a)!.key)).toEqual(
+      resolveBackupNodeSelection([b, a], backupNodeScope(a)!.key),
+    );
     expect(resolveBackupNodeSelection([a, b], 'Shared').state).toBe('matched');
   });
   it.each(['instance', 'nativeNode'] as const)(

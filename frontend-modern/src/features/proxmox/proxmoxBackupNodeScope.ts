@@ -1,4 +1,5 @@
 import type { WorkloadReference } from './proxmoxBackupRecoveryModel';
+import { resolveBackupLocationSelection } from './proxmoxBackupLocation';
 
 export type BackupNodeSelection =
   | { state: 'all' }
@@ -50,20 +51,24 @@ export function resolveBackupNodeSelection(
   workloads: readonly WorkloadReference[],
   selected: string,
 ): BackupNodeSelection {
-  if (!selected) return { state: 'all' };
-  const options = backupNodeOptions(workloads);
-  const exact = options.find((option) => option.value === selected);
-  if (exact) return { state: 'matched', key: exact.value, label: exact.label };
-  const aliases = new Set(
+  // Node scopes and repository scopes use the same exact-key/unique-alias
+  // rule. Supply only node observations; never mix the two inventories.
+  const labels = new Map(backupNodeOptions(workloads).map(({ value, label }) => [value, label]));
+  return resolveBackupLocationSelection(
     workloads.flatMap((workload) => {
       const scope = backupNodeScope(workload);
-      return scope?.alias === selected ? [scope.key] : [];
+      return scope
+        ? [
+            {
+              locationKey: scope.key,
+              locationLabel: labels.get(scope.key)!,
+              legacyLocationKey: scope.alias,
+            },
+          ]
+        : [];
     }),
+    selected,
   );
-  if (aliases.size === 0) return { state: 'missing' };
-  if (aliases.size > 1) return { state: 'ambiguous' };
-  const match = options.find((option) => aliases.has(option.value))!;
-  return { state: 'matched', key: match.value, label: match.label };
 }
 
 export function backupNodeMatches(workload: WorkloadReference, selection: BackupNodeSelection) {

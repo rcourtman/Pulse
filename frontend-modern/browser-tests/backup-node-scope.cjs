@@ -182,7 +182,7 @@ async function capture(page, name, locator) {
       });
       const warning = page
         .getByRole('status')
-        .filter({ hasText: 'The saved node matches more than one Proxmox source.' });
+        .filter({ hasText: 'The saved node matches more than one source.' });
       await expect(warning).toBeVisible();
       await expect(rows('coverage')).toHaveCount(0);
       await capture(page, `${spec.name}-ambiguous`, warning);
