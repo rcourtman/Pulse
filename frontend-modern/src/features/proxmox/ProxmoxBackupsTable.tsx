@@ -616,7 +616,10 @@ export const ProxmoxBackupsTable: Component<{
         label: 'Node',
         group: 'scope',
         options: nodeOptions,
-        value: nodeFilter,
+        value: () => {
+          const selected = nodeSelection();
+          return selected.state === 'matched' ? selected.key : nodeFilter();
+        },
         setValue: setNodeFilter,
         defaultValue: '',
         formatChipValue: () => {

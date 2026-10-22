@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -124,6 +124,15 @@ describe('source-scoped backup Node filter', () => {
     url('coverage', 'Shared');
     mount([east]);
     await waitFor(() => expect(rows()).toHaveLength(1));
+    await fireEvent.click(screen.getByRole('button', { name: 'Node: east / Shared (pve-1)' }));
+    const selected = within(screen.getByRole('listbox', { name: 'Node' })).getByRole('option', {
+      name: 'east / Shared (pve-1)',
+    });
+    expect(selected).toHaveAttribute('aria-selected', 'true');
+    await fireEvent.keyDown(screen.getByRole('textbox', { name: 'Filter Node values' }), {
+      key: 'Enter',
+    });
+    expect(new URLSearchParams(window.location.search).get('node')).toBe(nodeKey('east', 'pve-1'));
     await fireEvent.click(screen.getByRole('button', { name: 'Remove Node filter' }));
     await waitFor(() =>
       expect(new URLSearchParams(window.location.search).has('node')).toBe(false),
