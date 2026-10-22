@@ -74,9 +74,10 @@ is a third, limited backup; it is not a substitute for either procedure above.
    and enter its passphrase. Import replaces the included configuration and
    API-token records; it does not merge them with the destination's records.
 4. Check the result before changing DNS or agent addresses. A success message
-   establishes neither full recovery nor fresh monitoring. If import reports a
-   reload/apply failure, settings may already have been written: preserve both
-   installations and inspect the error before repeating it.
+   establishes neither full recovery nor fresh monitoring. If import is not
+   confirmed, the connection is lost, or reload/apply fails, settings may already
+   have changed. Follow the [unconfirmed-import checks](#import-was-not-confirmed)
+   before trying again; keep both installations intact.
 
 Keep the archive, passphrase, configuration files and credentials out of issue
 threads. Use the authenticated settings form rather than a command containing
@@ -114,6 +115,24 @@ destination before returning traffic to the intact source; check agent URLs
 and avoid two active writers. There is no guaranteed five-minute recovery time.
 
 ## Troubleshooting
+
+### Import was not confirmed
+
+**Could not confirm the import** means Pulse's browser did not receive an
+accepted success response. A timeout, lost connection or incomplete response
+does not prove the archive was rejected or that the destination is unchanged.
+
+Keep your working administrator session open and inspect the destination's
+included settings without saving them. Do not sign out, repeat the import or
+restore another backup just to find out what happened. Closing the dialog or
+leaving the page does not undo an import that reached the server.
+
+Preserve both installations, the original archive and its passphrase. If you
+cannot establish the destination's state safely, stop the cutover and use the
+safe reporting guidance below; do not delete data or regenerate encryption keys.
+Retain the operation time and already observed result, not a second attempt.
+
+### Other transfer problems
 
 - **Wrong passphrase or rejected file:** use the original export file and its
   exact passphrase. Do not delete destination data or regenerate encryption
