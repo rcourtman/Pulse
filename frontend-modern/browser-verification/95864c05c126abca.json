@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "4d987d66c0d06f12cc67987b6cffad2b811feac2",
+  "verified_at": "2026-10-22T06:03:14.017483Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/utils/serviceHealthPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "321e3ffa634d6d5cb047855fbddeadcbe28e9e814a3ecdad30b0b3c73b15a3e5",
+    "frontend-modern/src/utils/serviceHealthPresentation.ts": "8041cfecbe43f2a013b1083ab703dd4d037f8fa803f58df28c89ee8ecd8566f1"
+  },
+  "routes": [
+    "/browser-tests/service-connection.html?transport=direct|canonical (production resource normalizer, shared state producer, full PBS/PMG drawers and shipped CSS; synthetic observations only)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Explicit offline status outranks a retained healthy facet. Native unhealthy is adverse, not a healthy substring. Unrecognised descriptions and literal markup remain neutral escaped text.",
+    "Healthy, offline, unhealthy, degraded, error, blank health, a reachable service with resource-level warning, and ordinary recovery all classify conservatively. PBS and PMG stay independent."
+  ],
+  "interactions": [
+    "Four complete desktop Chromium / 320px touch WebKit direct/canonical contexts run 26 state checks each, including carrier-only changes, nested health changes and same-identity reconciliation. Same-open State rows and desktop focus persist.",
+    "Native Enter and touch tap close and reopen the service disclosure without claiming the destroyed row stayed mounted. No page errors, API or off-origin requests; browser and preview server close.",
+    "All six retained captures opened with native view_image at original detail: desktop light and 320px dark State text, red adverse/neutral unknown/green recovered tones, focus and panel fit inspected. The initial fixture-only WebKit dark-mode exception remains retained; strict checks were not weakened."
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "4d987d66c0d06f12cc67987b6cffad2b811feac2",
+  "producer_receipt": "source-rymjwnyk",
+  "runtime_source": "68c90896a2fac35ef16e84972493786539ca8bf0",
+  "runtime_suite_receipt": "source-heavosvz",
+  "browser_report_sha256": "1c39daa5f16b17ba3e8f3cb1626d9bb5326b3a3b29c1f2787b804d9768e10d14",
+  "static_binding_sha256": "9fee769180587687302f1d6cf11801614c0ecd4e7d0f3340f48eee4ccfa76e7b",
+  "limits": "Synthetic connection-state presentation proof only. No native PBS/PMG poll/recovery, current job/metric freshness, guest thaw, filesystem liveness, restore or release availability. Original mobile-WebKit Docs history/reload evidence is not cleared."
+}
