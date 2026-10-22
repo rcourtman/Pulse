@@ -283,7 +283,11 @@ describe('troubleshooting workflow entry', () => {
       if (/^H[1-4]$/.test(next.tagName)) break;
       section.appendChild(next.cloneNode(true));
     }
-    expect([...section.querySelectorAll('tbody tr')].map((row) => prose(row.firstElementChild as HTMLElement))).toEqual([
+    expect(
+      [...section.querySelectorAll('tbody tr')].map((row) =>
+        prose(row.firstElementChild as HTMLElement),
+      ),
+    ).toEqual([
       'Healthy',
       'Degraded',
       'Unhealthy or Offline',
@@ -297,7 +301,8 @@ describe('troubleshooting workflow entry', () => {
       'same failed dataset resumes ordinary collection',
       'do not rotate secrets, re-add the connection or install an agent',
       'a healthy connection does not establish thaw or filesystem liveness',
-    ]) expect(text).toContain(phrase);
+    ])
+      expect(text).toContain(phrase);
     expect(section.querySelector('pre')).toBeNull();
     expect([...section.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
       '/docs/PBS#connection-failed-error',
@@ -305,9 +310,14 @@ describe('troubleshooting workflow entry', () => {
       '/docs/VM_DISK_MONITORING#backup-safety',
     ]);
     for (const name of ['PBS', 'MAIL_GATEWAY']) {
-      expect(renderGuide(name).querySelector(
-        'a[href="/docs/TROUBLESHOOTING#pbs-or-mail-gateway-state-disagrees-with-a-failed-read"]',
-      )?.hasAttribute('data-doc-link'), name).toBe(true);
+      expect(
+        renderGuide(name)
+          .querySelector(
+            'a[href="/docs/TROUBLESHOOTING#pbs-or-mail-gateway-state-disagrees-with-a-failed-read"]',
+          )
+          ?.hasAttribute('data-doc-link'),
+        name,
+      ).toBe(true);
     }
   });
 
