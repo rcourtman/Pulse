@@ -26,7 +26,7 @@ hinzu und öffne Pulse im Browser deines Telefons.
 
 GitHub-Release-Assets und das öffentliche Docker-Image `rcourtman/pulse` sind
 Community-Builds. Aktiviere deinen Lizenzschlüssel unter
-**Settings → Plans → Existing purchases**, um Pro-Funktionen freizuschalten.
+**Settings → Plans & Billing → License recovery**, um Pro-Funktionen freizuschalten.
 
 Diese Community-Builds enthalten nicht die privaten Pulse-Pro-Runtime-Hooks
 für Audit Log, Audit Webhooks, RBAC und governed remediation. Für diese
