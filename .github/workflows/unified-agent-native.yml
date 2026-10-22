@@ -29,10 +29,13 @@ on:
       # Keep direct source and Python fixture edits in native admission.
       - 'install.sh'
       - 'scripts/pulse-auto-update.sh'
+      - 'scripts/tests/test_auto_update_completion.py'
       - 'scripts/tests/test_auto_update_service_state.py'
       - 'scripts/tests/test_auto_update_systemd.py'
       - 'scripts/tests/test_agent_removal_systemd.py'
       - 'scripts/tests/test_server_service_discovery.py'
+      - 'scripts/tests/test_server_installer_start.py'
+      - 'scripts/tests/test_server_update_repair.py'
       - 'scripts/installtests/**'
       - 'go.mod'
       - 'go.sum'
@@ -60,10 +63,13 @@ on:
       - 'scripts/install.ps1'
       - 'install.sh'
       - 'scripts/pulse-auto-update.sh'
+      - 'scripts/tests/test_auto_update_completion.py'
       - 'scripts/tests/test_auto_update_service_state.py'
       - 'scripts/tests/test_auto_update_systemd.py'
       - 'scripts/tests/test_agent_removal_systemd.py'
       - 'scripts/tests/test_server_service_discovery.py'
+      - 'scripts/tests/test_server_installer_start.py'
+      - 'scripts/tests/test_server_update_repair.py'
       - 'scripts/installtests/**'
       - 'go.mod'
       - 'go.sum'
@@ -169,14 +175,15 @@ jobs:
           timeout --version | grep -q 'GNU coreutils'
 
       # Server/LXC fixtures execute Linux-only scripts, not a macOS installer.
-      # Keep their Bash/GNU metadata, archive and rename semantics local to that step;
+      # Keep their Bash/GNU metadata, archive, rename and no-replacement link
+      # (DSM Upstart `ln -T`) semantics local to both fixture steps;
       # native macOS agent/runtime tests still use the runner's own utilities.
       - name: Supply Linux server installer fixture tools on macOS
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          brew install bash gnu-tar gawk
+          brew install bash gnu-tar gawk wget
           linux_bash="$(brew --prefix bash)/bin/bash"
           test -x "$linux_bash"
           "$linux_bash" -c '(( BASH_VERSINFO[0] >= 5 ))'
@@ -200,6 +207,12 @@ jobs:
           test -x "$gnu_awk"
           "$gnu_awk" --version | grep -q 'GNU Awk'
           ln -s "$gnu_awk" "$fixture_bin/awk"
+          # Server download fixtures use the real GNU client, not saved macOS
+          # wget defaults or a version/transport double. Keep it step-local.
+          gnu_wget="$(brew --prefix wget)/bin/wget"
+          test -x "$gnu_wget"
+          "$gnu_wget" --version | grep -q 'GNU Wget'
+          ln -s "$gnu_wget" "$fixture_bin/wget"
           printf 'PULSE_INSTALLER_FIXTURE_BIN=%s\n' "$fixture_bin" >> "$GITHUB_ENV"
 
       # Observe the existing generated NAS watchdog/collector control before
