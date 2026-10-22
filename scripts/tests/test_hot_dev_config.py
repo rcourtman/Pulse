@@ -185,6 +185,47 @@ Path(os.environ["FIXTURE_CAPTURE"]).write_text(json.dumps({n: os.environ.get(n) 
                 artifact.unlink()
         self.assert_installed_unchanged()
 
+    def test_backup_key_is_not_selected_for_orphaned_ciphertext(self):
+        data = self.repo / "tmp/dev-config"
+        data.mkdir(parents=True)
+        self.write_orphaned_data(data)
+        self.launch()
+        self.assertFalse(self.capture.exists(), self.output)
+        self.assertFalse((data / ".encryption.key").exists())
+        self.assertIn("Encryption key is missing but encrypted data exists", self.output)
+        self.assertEqual((data / "nodes.enc").read_text(), "synthetic-orphaned-nodes")
+        self.assertEqual((data / ".encryption.key.bak-first").read_text(), "synthetic-unproven-first-key")
+        self.assertEqual((data / ".encryption.key.bak-second").read_text(), "synthetic-unproven-second-key")
+        self.assert_installed_unchanged()
+
+    def write_orphaned_data(self, data):
+        (data / "nodes.enc").write_text("synthetic-orphaned-nodes")
+        (data / ".encryption.key.bak-first").write_text("synthetic-unproven-first-key")
+        (data / ".encryption.key.bak-second").write_text("synthetic-unproven-second-key")
+
+    def test_explicit_direct_mode_does_not_guess_missing_installed_key(self):
+        (self.installed / ".encryption.key").unlink()
+        self.write_orphaned_data(self.installed)
+        self.seed.pop(".encryption.key")
+        self.seed.update({name: (self.installed / name).read_text()
+                          for name in ("nodes.enc", ".encryption.key.bak-first", ".encryption.key.bak-second")})
+        self.launch(HOT_DEV_USE_PROD_DATA="true")
+        self.assertFalse(self.capture.exists(), self.output)
+        self.assertFalse((self.installed / ".encryption.key").exists())
+        self.assertIn("Encryption key is missing but encrypted data exists", self.output)
+        self.assert_installed_unchanged()
+
+    def test_explicit_copy_missing_installed_key_refuses_before_backend(self):
+        (self.installed / ".encryption.key").unlink()
+        self.seed.pop(".encryption.key")
+        self.seed[".encryption.key.bak-fixture"] = "synthetic-unproven-key"
+        (self.installed / ".encryption.key.bak-fixture").write_text(self.seed[".encryption.key.bak-fixture"])
+        self.launch(HOT_DEV_IMPORT_PROD_CONFIG="true")
+        self.assertFalse(self.capture.exists(), self.output)
+        self.assertFalse((self.installed / ".encryption.key").exists())
+        self.assertFalse((self.repo / "tmp/dev-config/nodes.enc").exists())
+        self.assert_installed_unchanged()
+
     def test_empty_encrypted_file_does_not_block_fresh_dev_key(self):
         data = self.repo / "tmp/dev-config"
         data.mkdir(parents=True)

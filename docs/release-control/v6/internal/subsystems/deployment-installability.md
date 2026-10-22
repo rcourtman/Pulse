@@ -394,6 +394,54 @@ without privilege escalation. Only failure observations use closed adapters;
 no installed/runtime data, process, database or external service is involved.
 The ordinary script-smoke inventory discovers this verifier.
 
+### Development import never chooses a recovery key or repairs installed data
+
+The existing explicit lab-copy helper, `scripts/sync-production-config.sh`,
+reads installed files only. It must never restore the first backup key found,
+generate a replacement key or discard ciphertext. Nonempty encrypted current
+files or backups without a current key, an empty/linked/special key, or a
+conflicting development key refuse before import changes. Installed and
+development paths must resolve to non-overlapping trees (GNU `realpath` is
+required). Selected file links, dangling links and special files also refuse;
+a destination hard link is replaced rather than written through. Plaintext
+source nodes cannot be silently hidden by retained encrypted development nodes.
+These are accidental-use and recovery guards, not hostile concurrent-path
+containment, key-format validation or proof that a key decrypts the ciphertext.
+
+The allowed file set remains the current key, nodes, system settings, guest
+metadata, email, webhooks, API tokens and AI configuration. Installed `.env`,
+OIDC, session/CSRF state, history and alerts are not imported; their development
+counterparts are never reset or cleared. Missing installation and identical
+selected contents are no-ops. Legacy plaintext nodes can be copied without
+inventing a key. Fresh-key generation remains the launcher's responsibility,
+subject to its orphaned-ciphertext guard. The launcher also no longer selects
+a backup key by filename, in direct installed-data or separate-development mode.
+Existing explicit installed-data selectors and their warnings stay unchanged.
+
+All selected source reads and private copies of overwritten development files
+are staged before publication. A failed read, snapshot copy or observed source
+change leaves existing destination file contents/modes intact. Complete files
+are published by per-file rename; the private `.config-import.*/previous`
+snapshot preserves overwritten development files alongside their existing
+matching key. Successful unchanged imports create no snapshot. A publication
+failure can leave a partial set of complete files: retain the previous snapshot
+and unpublished staged files, report failure, and start no service from the
+helper. These renames are not an atomic multi-file transaction, lock on live
+configuration, authenticated key/ciphertext pairing, application consistency,
+SIGKILL cleanup or power-loss guarantee. This is not a full-state backup,
+installed recovery or native guest-thaw proof.
+
+`scripts/tests/test_dev_config_import.py` uses the actual helper with only the
+fixed installed pathname mapped to disposable, synthetic files. Native copy,
+comparison and rename controls check preservation, private modes, idempotence,
+legacy import, exclusions, aliases/overlap, key conflicts, orphaned backups,
+links/special files and hard links. Closed peers inject copy, source-change and
+publication failures; the actual toggle caller refuses before mode changes or
+runtime stop/restart. `test_hot_dev_config.py` also exercises the actual launcher
+in both explicit modes and with orphaned development ciphertext: unproven key
+backups remain untouched and no backend is launched. Build/process/backend
+peers are inert, not an application or browser proof.
+
 ### Development does not implicitly import installed credentials or targets
 
 The hot-dev launcher defaults both installed-data selectors to `false`.
