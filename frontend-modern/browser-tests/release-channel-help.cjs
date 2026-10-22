@@ -96,12 +96,18 @@ const result = { result: 'incomplete', source_sha: binding.source_sha,
       for (const phrase of ['every 24 hours', 'when there are changes since the previous beta',
         'No beta is cut within a day', 'no soak and is never promoted to stable',
         'A fix merged after a beta was cut is not in that beta',
-        'only when a stable release containing it ships', 'not a selected patch release or a testing exemption',
+        'only when a stable release containing it ships',
+        'An important fix does not bring the weekly candidate or stable release forward',
+        "Work merged during the soak reaches the next cycle's betas",
+        'Only a candidate regression replaces a soaking candidate',
+        'an unrelated fix does not restart its soak',
         'seven days after the last stable release', 'one day earlier',
         'reserving the full 24-hour soak', 'Preparation and qualification can move publication later',
         'Do not repeat a guest freeze',
         'if the problem persists, reply on the original issue']) assert(text.includes(phrase), phrase);
       assert(!text.includes('urgent hotfix exception'));
+      assert(!text.includes('can bring that cut forward'));
+      assert(!text.includes('An important fix can bring'));
       assert(!text.includes('Fourteen days after the last stable release'));
       record.checks.push('shipped update-guide entry; daily-beta scope, cut/inclusion, stable separation, weekly stable target, early eligibility, unchanged candidate checks and safe retest');
       await page.goto(`${origin}/docs/RELEASE_PROCESS#daily-betas`, { waitUntil: 'domcontentloaded' });
