@@ -210,9 +210,10 @@ async function capture(page, name, locator) {
       if (spec.touch)
         await choices.getByRole('option', { name: 'east / Shared (pve-a)', exact: true }).tap();
       else {
-        const search = page.getByRole('textbox', { name: 'Filter Node values' });
-        await search.fill('east / Shared (pve-a)');
-        await search.press('Enter');
+        await activate(
+          choices.getByRole('option', { name: 'east / Shared (pve-a)', exact: true }),
+          false,
+        );
       }
       await expect(rows('coverage')).toHaveCount(2);
       await capture(page, `${spec.name}-coverage`, rows('coverage').first());
