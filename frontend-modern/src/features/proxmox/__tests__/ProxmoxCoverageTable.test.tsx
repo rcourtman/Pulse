@@ -224,6 +224,10 @@ describe('ProxmoxCoverageTable column visibility', () => {
     const location = panel.querySelector('[data-coverage-evidence-location]');
     expect(location).toHaveClass('wrap-anywhere');
     expect(location).not.toHaveClass('truncate');
+    // The source label wraps in the drawer too; a long snapshot name is not cut.
+    expect(within(panel).getByText('PBS', { selector: 'td span' })).toHaveClass(
+      'whitespace-normal',
+    );
     expect(panel.querySelector('.grid')).toBeNull();
     expect(within(panel).getByText('Provider evidence', { selector: 'th' })).toBeInTheDocument();
 

@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "base_sha": "df7a9004bde5c7f470da6851b38488429db2b364",
+  "verified_at": "2026-10-22T16:52:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "a45d5f3047e6ecfd7b5488b2569e5f836cd0b1a652575d6e9fc2d0a0b19f2a5d",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "aa804dab439ced91961393d2bfc3b22cf6c0284511d4fccf8693ac233269d4ec",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "103951c5b8b8ff0aa83f2f80db868b3ead2a57e63cf1a6786919b30b8932da62",
+    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx": "d6014d3517db0c5834cc94d113d517eea5e2f48fbe2d28e58157417004a09986",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "c6774dce5cdb7490dd1eace76fd5ced0827972c47c64640ffb1400db5362f2e2",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx": "c24436255d6a397cabb88696ba5ca64942f25d294d473bdbdf5bea578da3231d",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "0f970cc1519f7040df14e60a7e0bd5f2a39b7628f1711b88b8c3c90168e8ee73",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "8a455e47e4e7b84d0fe4822de7d3c0dd0fd9dc63b3569c8583a7b530df780207",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx": "6619780245bb88b9ab4c838516034add894c1c50e75a4ebbab8aff8b0d34aec5",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "28095a70ff866610206aa44a61bdbe4704139c0e90cbc66757db8b1ad542e766",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "c931a28d6612ac748c492b7e5c7f30e482b6ccf55934f75942b9c064715a0100",
+    "frontend-modern/src/routing/resourceLinks.ts": "31e328d30d7c67d3c3cda9dd9ea271ed0ff641cd5b6b0c2750b30732ba1314de"
+  },
+  "routes": [
+    "/truenas/overview",
+    "/truenas/protection",
+    "/truenas/storage?q=sdc",
+    "/truenas/storage?q=archive%2Fbackups",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this change on the full mock estate, signed in through the real login",
+    "TrueNAS alert drawer for disk sdc shows an \"Open sdc\" header link to /truenas/storage?q=sdc; following it lands on the Storage tab with sdc in the search box and the table narrowed to the disk under its pool",
+    "TrueNAS protection drawer for archive/backups links to /truenas/storage?q=archive%2Fbackups and lands narrowed to that dataset",
+    "Proxmox Coverage drawer restore evidence (11 rows) has no clipped values; long snapshot source labels wrap",
+    "No console or page errors at either width; disk-live-refresh browser proof passes in desktop Chromium and phone WebKit"
+  ],
+  "interactions": [
+    "Disclosure opens the record drawer; clicking the owner link navigates in-app",
+    "The Storage tab's search box shows the URL filter and its clear button clears it"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "chromium-1234 headless"
+  },
+  "scope": "Full authenticated application on a mock estate; mock data, not live provider connections."
+}

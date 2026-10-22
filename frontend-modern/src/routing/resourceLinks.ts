@@ -44,6 +44,12 @@ export const KUBERNETES_PATH = '/kubernetes';
 export const KUBERNETES_DEFAULT_TAB = 'overview';
 export const TRUENAS_PATH = '/truenas';
 export const TRUENAS_DEFAULT_TAB = 'overview';
+// The storage tab's kind filter, and the search each tab's table reads, so a
+// link can open a tab already narrowed to one pool, app, VM or share.
+export const TRUENAS_QUERY_PARAMS = {
+  kind: 'kind',
+  query: 'q',
+} as const;
 export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const ALERT_THRESHOLDS_PATH = '/alerts/thresholds';

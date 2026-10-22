@@ -187,12 +187,17 @@ export const TrueNASAppsTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   const alertsActivation = useAlertsActivation();
   const tableState = createPlatformTableFilterState({
     resources: () => props.apps,
     initialStatus: 'all' as TrueNASAppStatusFilter,
     filter: filterTrueNASApps,
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-app-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);

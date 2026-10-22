@@ -1,10 +1,19 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TrueNASAlertsTable } from '@/features/truenas/TrueNASAlertsTable';
 import { buildTrueNASIncidentRows } from '@/features/truenas/truenasPageModel';
 import type { Resource } from '@/types/resource';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const makeDisk = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -45,7 +54,7 @@ describe('TrueNASAlertsTable', () => {
   it('refreshes an expanded incident through critical escalation and recovery', async () => {
     const disk = makeDisk();
     const [resources, setResources] = createSignal([disk]);
-    render(() => (
+    renderInRouter(() => (
       <TrueNASAlertsTable
         incidents={buildTrueNASIncidentRows(resources())}
         scope={resources()}
@@ -100,7 +109,7 @@ describe('TrueNASAlertsTable', () => {
       ],
     });
     const [resources, setResources] = createSignal([disk, otherDisk]);
-    render(() => (
+    renderInRouter(() => (
       <TrueNASAlertsTable
         incidents={buildTrueNASIncidentRows(resources())}
         scope={resources()}
@@ -132,7 +141,7 @@ describe('TrueNASAlertsTable', () => {
     const disk = makeDisk();
     const incidents = buildTrueNASIncidentRows([disk]);
 
-    render(() => (
+    renderInRouter(() => (
       <TrueNASAlertsTable
         incidents={incidents}
         scope={[disk]}
@@ -158,6 +167,11 @@ describe('TrueNASAlertsTable', () => {
     expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
     const detail = within(screen.getByTestId('truenas-alert-detail'));
     expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('sdc');
+    // The drawer opens the Storage tab narrowed to the disk the alert is about.
+    expect(detail.getByRole('link', { name: /^Open / })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/truenas\/storage\?q=/),
+    );
     expect(detail.getByText('Alert')).toBeInTheDocument();
     expect(detail.getByText('Source')).toBeInTheDocument();
     expect(detail.getByText('Affected resource')).toBeInTheDocument();

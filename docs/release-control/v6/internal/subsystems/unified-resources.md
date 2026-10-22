@@ -8643,3 +8643,16 @@ Proxmox node and Docker host drawers gain the guest drawer's Open action,
 Docker host readings are withheld while it is offline or stale, its Manage
 lists operator state first and shows its action history, and a guest's own
 agent reports its physical disks' temperature alerts inside the guest drawer.
+
+TrueNAS tabs keep their table search in the URL (`TRUENAS_QUERY_PARAMS.query`,
+`?q=`), read and written by the Storage, Apps, VMs, Shares, Services and
+Protection tables through the shared filter state's external search, so a link
+can open a tab already narrowed to one object and the table's own search box
+shows and clears it. `buildResourcePagePath` emits that filter for TrueNAS
+pools, datasets, disks, apps, VMs and shares (a disk named only by an alert,
+with no registry resource, gets none, as on Proxmox), which gives the TrueNAS
+alert and protection record drawers the same "Open <name>" owner link as the
+other platforms. A TrueNAS system still opens the Overview tab unfiltered,
+because its table has no search box, so service drawers keep no owner link.
+The Overview alerts table keeps its own search. No resource identity, status
+or alert rule changes.

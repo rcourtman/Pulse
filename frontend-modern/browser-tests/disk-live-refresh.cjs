@@ -62,6 +62,9 @@ const { chromium, webkit } = require('playwright');
       );
       const fixture = page.getByTestId('disk-live-refresh-fixture');
       const row = fixture.locator('[data-row-id="disk-one"]');
+      // A phone-width health column shows the short verdict
+      // (getPhysicalDiskHealthCompactLabel); the full one stays in the DOM, hidden.
+      const shownReplaceLabel = scenario.name === 'webkit' ? 'Replace' : 'Replace Now';
       await row.getByText('Healthy', { exact: true }).waitFor();
       await row.getByText('Archive SSD', { exact: true }).click();
       const disclosure = row.getByRole('button', { name: 'Collapse Archive SSD', exact: true });
@@ -93,7 +96,7 @@ const { chromium, webkit } = require('playwright');
         fixture.screenshot({ path: path.join(artifacts, `${scenario.name}-${state}.png`) });
 
       await snapshot('fault');
-      await row.getByText('Replace Now', { exact: true }).waitFor();
+      await row.getByText(shownReplaceLabel, { exact: true }).waitFor();
       for (const text of ['Archive SSD (fault)', '4%', '63°C'])
         assert.equal(await row.getByText(text, { exact: true }).count(), 1);
       assert.equal(await row.getByText('Healthy', { exact: true }).count(), 0);
@@ -128,7 +131,7 @@ const { chromium, webkit } = require('playwright');
       await screenshot('recovered');
 
       await snapshot('fault');
-      await row.getByText('Replace Now', { exact: true }).waitFor();
+      await row.getByText(shownReplaceLabel, { exact: true }).waitFor();
       await page.locator('[data-filter="attention"]').evaluate((button) => button.click());
       assert.equal(await row.getByText('Replace Now', { exact: true }).count(), 1);
       await snapshot('healthy');
