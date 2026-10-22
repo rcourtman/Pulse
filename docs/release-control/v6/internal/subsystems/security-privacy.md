@@ -18,6 +18,19 @@
 
 ## Purpose
 
+### Apprise subprocess output is counted without capture
+
+The fixed CLI sender drains both output streams into a constant-space byte
+counter. Provider output, which may contain credentials or private alert text,
+is neither accumulated for diagnostics nor retained in an `exec.ExitError`.
+Only the total byte count reaches existing structured logs. Executable choice,
+exact target/payload arguments, context cancellation, typed failures, retry
+policy and delivery verdicts are unchanged. `apprise_exec_test.go` exercises
+real synthetic process pipes and exit/cancellation paths; existing CLI
+confidentiality and firing/recovery/Test controls preserve their assertions.
+This is output-memory isolation, not a provider sandbox or installed-delivery
+proof; historical logs and other subprocesses are outside this change.
+
 ### Single-alert response failures do not echo diagnostics
 
 Client admission of acknowledgement/restore/snooze/resume bodies requires the

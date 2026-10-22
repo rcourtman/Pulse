@@ -517,7 +517,16 @@ configuration reads/edits and private admitted queue configuration are unchanged
 `errors.Is`/`errors.As`, but formats only fixed safe reasons or a numeric CLI exit.
 HTTP status remains the authoritative retry verdict; response bodies are drained
 only to the existing size limit and discarded. CLI diagnostics retain byte and
-target counts, not output or target values. Shared URL validation and redirect
+target counts, not output or target values. The CLI executor drains stdout and
+stderr directly into a count-only writer rather than buffering their contents.
+Memory retained for output is constant, independent of provider verbosity; both
+streams still drain through process completion. The original fixed executable,
+arguments, context deadline, typed exit errors and delivery/retry verdicts remain
+unchanged. `apprise_exec_test.go` exercises the actual process pipes with 16 MiB
+of synthetic output on success and failure, silent completion, active deadline,
+pre-start cancellation and missing executable, plus concurrent allocation-free
+byte counting. It does not contact a provider or prove installed delivery.
+Shared URL validation and redirect
 checks use an opaque Apprise diagnostic label, including allowlist debug logs;
 ordinary webhook diagnostics retain their existing redaction. Endpoint, mounted
 path, escaped configuration key, target arguments, authentication headers,
