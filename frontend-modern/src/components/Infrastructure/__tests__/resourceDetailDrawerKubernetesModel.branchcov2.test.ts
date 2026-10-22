@@ -66,6 +66,7 @@ describe('containerRow (via Containers section)', () => {
       value: 'unknown · not ready · ghcr.io/acme/api:1.2.3',
       title: 'unknown · not ready · ghcr.io/acme/api:1.2.3',
       tone: 'warning',
+      wrap: true,
     });
   });
 
@@ -84,6 +85,7 @@ describe('containerRow (via Containers section)', () => {
       value: 'running · ready · ghcr.io/acme/api:1.2.3',
       title: 'running · ready · ghcr.io/acme/api:1.2.3',
       tone: 'default',
+      wrap: true,
     });
   });
 
@@ -101,6 +103,7 @@ describe('containerRow (via Containers section)', () => {
       value: 'waiting (ImagePullBackOff) · not ready',
       title: 'waiting (ImagePullBackOff) · not ready: manifest not found',
       tone: 'warning',
+      wrap: true,
     });
   });
 
@@ -315,6 +318,7 @@ describe('buildKubernetesDetailSections', () => {
     expect(sectionByLabel(node, 'Kubernetes node')?.rows).toContainEqual({
       label: 'OS image',
       value: 'Flatcar 3600.0.0',
+      wrap: true,
     });
   });
 

@@ -1,5 +1,6 @@
 import type { StorageRecord } from './models';
 import { formatRelativeTime } from '@/utils/format';
+import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
 import {
   getStorageRecordIssueSummary,
   getStorageRecordStatus,
@@ -46,10 +47,12 @@ export function getStoragePoolIssueTextClass(record: StorageRecord): string {
   return 'text-base-content';
 }
 
-export function getStoragePoolStateTextClass(record: StorageRecord): string {
-  if (record.freshness === 'stale') {
-    return 'text-amber-700 dark:text-amber-300';
-  }
+export type StoragePoolStateTone = 'danger' | 'warning' | 'ok' | 'unknown';
+
+// One judgement of the State cell's word: the cell's colour and the pool
+// drawer's status dot both read it, so the two cannot disagree.
+export function getStoragePoolStateTone(record: StorageRecord): StoragePoolStateTone {
+  if (record.freshness === 'stale') return 'warning';
   const normalized = getStoragePoolStateLabel(record).trim().toLowerCase();
   if (
     normalized === 'critical' ||
@@ -58,12 +61,36 @@ export function getStoragePoolStateTextClass(record: StorageRecord): string {
     normalized === 'offline' ||
     normalized === 'unavailable'
   ) {
-    return 'text-red-700 dark:text-red-300';
+    return 'danger';
   }
   if (normalized === 'warning' || normalized === 'warn' || normalized === 'degraded') {
-    return 'text-amber-700 dark:text-amber-300';
+    return 'warning';
   }
+  if (!normalized || normalized === '—' || normalized === 'unknown') return 'unknown';
+  return 'ok';
+}
+
+export function getStoragePoolStateTextClass(record: StorageRecord): string {
+  const tone = getStoragePoolStateTone(record);
+  if (tone === 'danger') return 'text-red-700 dark:text-red-300';
+  if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
   return 'text-base-content';
+}
+
+const STORAGE_POOL_STATE_VARIANTS: Record<StoragePoolStateTone, StatusIndicatorVariant> = {
+  danger: 'danger',
+  warning: 'warning',
+  ok: 'success',
+  unknown: 'muted',
+};
+
+/** The pool drawer's status dot: the State cell's word and its judgement. */
+export function getStoragePoolStateIndicator(record: StorageRecord): StatusIndicator {
+  const label = getStoragePoolStateLabel(record);
+  return {
+    variant: STORAGE_POOL_STATE_VARIANTS[getStoragePoolStateTone(record)],
+    label: label === '—' ? 'Unknown' : label,
+  };
 }
 
 // The rebuild summary the backend promotes into the protection label is a

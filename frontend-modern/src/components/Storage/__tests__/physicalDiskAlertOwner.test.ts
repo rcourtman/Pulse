@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
   getAgentMachineAlertOverrideKeys,
   getPhysicalDiskAlertResourceIds,
+  getPhysicalDiskAlerts,
   indexPhysicalDiskOwners,
 } from '@/components/Storage/physicalDiskAlertOwner';
 
@@ -61,5 +63,55 @@ describe('physical disk alert owner', () => {
     expect(getPhysicalDiskAlertResourceIds(disk('node-bare'), owners)).toEqual([]);
     expect(getPhysicalDiskAlertResourceIds(disk('vm-not-loaded'), owners)).toEqual([]);
     expect(getPhysicalDiskAlertResourceIds(disk(undefined), owners)).toEqual([]);
+  });
+
+  describe('the alerts a disk drawer lists', () => {
+    const alertOn = (id: string, resourceId: string, level: Alert['level'] = 'warning'): Alert =>
+      ({
+        id,
+        type: 'disk-temperature',
+        level,
+        resourceId,
+        resourceName: resourceId,
+        node: 'tower',
+        instance: 'lab',
+        message: id,
+        value: 0,
+        threshold: 0,
+        startTime: '2026-10-20T00:00:00Z',
+        acknowledged: false,
+      }) as Alert;
+    const agentDisk = resource({
+      id: 'disk-agent-sda',
+      type: 'physical_disk',
+      parentId: 'agent-tower',
+      physicalDisk: { devPath: '/dev/sda' },
+      canonicalIdentity: { aliases: ['lab:tower:disk:dev-sda', 'tower'] },
+    });
+    const active = {
+      own: alertOn('own', 'disk-agent-sda'),
+      pve: alertOn('pve', 'lab:tower:disk:dev-sda', 'critical'),
+      agent: alertOn('agent', 'agent:host-tower/disk_temp:sda'),
+      sibling: alertOn('sibling', 'agent:host-tower/disk_temp:sdb'),
+      machine: alertOn('machine', 'agent:host-tower'),
+      node: alertOn('node', 'tower'),
+    };
+
+    it('lists its own, its Proxmox disk key and its agent temperature key, most severe first', () => {
+      expect(
+        getPhysicalDiskAlerts(agentDisk, owners, active, true).map((alert) => alert.id),
+      ).toEqual(['pve', 'own', 'agent']);
+    });
+
+    it("never lists a sibling disk's, its machine's or its node's alerts", () => {
+      const ids = getPhysicalDiskAlerts(agentDisk, owners, active, true).map((alert) => alert.id);
+      expect(ids).not.toContain('sibling');
+      expect(ids).not.toContain('machine');
+      expect(ids).not.toContain('node');
+    });
+
+    it('lists nothing while alert detection is off', () => {
+      expect(getPhysicalDiskAlerts(agentDisk, owners, active, false)).toEqual([]);
+    });
   });
 });

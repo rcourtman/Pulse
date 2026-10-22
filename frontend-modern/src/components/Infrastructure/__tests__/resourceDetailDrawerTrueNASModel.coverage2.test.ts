@@ -165,17 +165,18 @@ describe('formatDurationSeconds (via System "Uptime" row)', () => {
 // summarizeList
 // =========================================================================
 
-describe('summarizeList (via App list rows)', () => {
+// Copyable lists (addresses, images) are shown in full and wrap.
+describe('app list rows', () => {
   it('joins values within the default visible count', () => {
     expect(findRow(appRes({ usedHostIps: ['10.0.0.1', '10.0.0.2'] }), 'Host IPs')?.value).toBe(
       '10.0.0.1, 10.0.0.2',
     );
   });
 
-  it('appends a +N suffix when values exceed the visible count', () => {
-    expect(findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd', 'e'] }), 'Host IPs')?.value).toBe(
-      'a, b, c +2',
-    );
+  it('lists every value rather than a +N suffix, wrapped', () => {
+    const row = findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd', 'e'] }), 'Host IPs');
+    expect(row?.value).toBe('a, b, c, d, e');
+    expect(row?.wrap).toBe(true);
   });
 
   it('omits the row when the list is empty', () => {
@@ -188,9 +189,9 @@ describe('summarizeList (via App list rows)', () => {
     );
   });
 
-  it('respects a custom visible count (Images uses 2)', () => {
+  it('lists every image', () => {
     expect(findRow(appRes({ images: ['img1', 'img2', 'img3', 'img4'] }), 'Images')?.value).toBe(
-      'img1, img2 +2',
+      'img1, img2, img3, img4',
     );
   });
 
@@ -198,9 +199,9 @@ describe('summarizeList (via App list rows)', () => {
     expect(findRow(appRes({ images: ['img1', 'img2'] }), 'Images')?.value).toBe('img1, img2');
   });
 
-  it('populates the title attribute with the full list', () => {
+  it('needs no separate title for the full list', () => {
     expect(findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd'] }), 'Host IPs')?.title).toBe(
-      'a, b, c, d',
+      undefined,
     );
   });
 });
@@ -593,8 +594,9 @@ describe('shareStateLabel (via Share "State" row value)', () => {
 // =========================================================================
 
 describe('shareStateTone (via Share "State" row tone)', () => {
-  it('returns warning when enabled === false', () => {
-    expect(findRow(shareRes({ enabled: false }), 'State')?.tone).toBe('warning');
+  // A disabled share is a choice, not something to check.
+  it('returns default when enabled === false', () => {
+    expect(findRow(shareRes({ enabled: false }), 'State')?.tone).toBe('default');
   });
 
   it('returns warning when locked is true', () => {
@@ -722,14 +724,20 @@ describe('buildTrueNASAppSections additional branches', () => {
     expect(findRow(appRes({ state: 'running' }), 'State')?.tone).toBe('success');
   });
 
-  it('sets State tone to warning when not running', () => {
-    expect(findRow(appRes({ state: 'stopped' }), 'State')?.tone).toBe('warning');
+  // A stopped app is a choice the row shows; a crashed one is a problem.
+  it('keeps the default tone for a stopped app', () => {
+    expect(findRow(appRes({ state: 'stopped' }), 'State')?.tone).toBe('default');
   });
 
-  it('shows "Available" with warning tone when upgrade is available', () => {
+  it('sets State tone to danger for a crashed app', () => {
+    expect(findRow(appRes({ state: 'CRASHED' }), 'State')?.tone).toBe('danger');
+  });
+
+  it('shows "Available" as an actionable row when upgrade is available', () => {
     const row = findRow(appRes({ upgradeAvailable: true }), 'App updates');
     expect(row?.value).toBe('Available');
-    expect(row?.tone).toBe('warning');
+    expect(row?.tone).toBe('accent');
+    expect(row?.lift).toBe(true);
   });
 
   it('shows "Current" with success tone when no upgrade', () => {
@@ -742,10 +750,11 @@ describe('buildTrueNASAppSections additional branches', () => {
     expect(findRow(appRes({ state: 'running' }), 'App updates')).toBeUndefined();
   });
 
-  it('shows "Available" with warning tone when image updates are available', () => {
+  it('shows "Available" as an actionable row when image updates are available', () => {
     const row = findRow(appRes({ imageUpdatesAvailable: true }), 'Image updates');
     expect(row?.value).toBe('Available');
-    expect(row?.tone).toBe('warning');
+    expect(row?.tone).toBe('accent');
+    expect(row?.lift).toBe(true);
   });
 
   it('shows "Current" with success tone when no image updates', () => {
@@ -802,8 +811,9 @@ describe('buildTrueNASVMSections additional branches', () => {
     expect(findRow(resource, 'Domain state')?.value).toBe('Paused');
   });
 
-  it('sets State tone to warning for a non-running state', () => {
-    expect(findRow(vmRes({ state: 'stopped', vcpus: 1 }), 'State')?.tone).toBe('warning');
+  // Condition says when a stopped VM should be running; State alone is not a problem.
+  it('keeps the default State tone for a non-running state', () => {
+    expect(findRow(vmRes({ state: 'stopped', vcpus: 1 }), 'State')?.tone).toBe('default');
   });
 
   it('uses domainState for State when state is absent', () => {
@@ -937,7 +947,7 @@ describe('buildTrueNASDiskSections additional branches', () => {
     expect(row?.tone).toBe('default');
   });
 
-  it('shows Risk reasons with summarizeList +N suffix', () => {
+  it('lists every risk reason', () => {
     const resource = diskRes({
       risk: {
         level: 'warning',
@@ -948,7 +958,7 @@ describe('buildTrueNASDiskSections additional branches', () => {
         ],
       },
     });
-    expect(findRow(resource, 'Reasons')?.value).toBe('reason one, reason two +1');
+    expect(findRow(resource, 'Reasons')?.value).toBe('reason one, reason two, reason three');
     expect(findRow(resource, 'Risk')?.value).toBe('Warning');
     expect(findRow(resource, 'Risk')?.tone).toBe('warning');
   });
@@ -988,19 +998,19 @@ describe('buildTrueNASStorageSections additional branches', () => {
     expect(findRow(resource, 'Risk')?.tone).toBe('default');
   });
 
-  it('shows Protection reduced (booleanValue) with warning tone when true', () => {
+  it('shows Protection reduced as Yes with warning tone when true', () => {
     const row = findRow(storageRes({ protectionReduced: true }), 'Protection reduced');
-    expect(row?.value).toBe('Enabled');
+    expect(row?.value).toBe('Yes');
     expect(row?.tone).toBe('warning');
   });
 
-  it('shows Protection reduced (booleanValue) with success tone when false', () => {
+  it('shows Protection reduced as No with success tone when false', () => {
     const row = findRow(storageRes({ protectionReduced: false }), 'Protection reduced');
-    expect(row?.value).toBe('Disabled');
+    expect(row?.value).toBe('No');
     expect(row?.tone).toBe('success');
   });
 
-  it('shows risk reasons with +N suffix', () => {
+  it('lists every storage risk reason', () => {
     const resource = storageRes({
       risk: {
         level: 'warning',
@@ -1011,7 +1021,7 @@ describe('buildTrueNASStorageSections additional branches', () => {
         ],
       },
     });
-    expect(findRow(resource, 'Reasons')?.value).toBe('reason one, reason two +1');
+    expect(findRow(resource, 'Reasons')?.value).toBe('reason one, reason two, reason three');
   });
 
   it('shows posture summary with warning tone when present', () => {

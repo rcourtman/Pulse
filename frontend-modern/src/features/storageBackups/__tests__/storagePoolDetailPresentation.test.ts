@@ -200,6 +200,7 @@ describe('storagePoolDetailPresentation', () => {
     expect(buildStoragePoolDetailZfsSummary(record)).toEqual({
       state: 'ONLINE',
       scan: 'scrub repaired 0B',
+      scanErrors: 0,
       errorSummary: 'Errors: R:1 W:2 C:3',
       devices: [
         { name: 'sda', type: 'disk', state: 'ONLINE', errorSummary: '', message: '' },

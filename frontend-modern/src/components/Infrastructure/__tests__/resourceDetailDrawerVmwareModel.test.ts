@@ -24,13 +24,13 @@ describe('resourceDetailDrawerVmwareModel', () => {
     const placement = findSection(buildVMwareDetailSections('vm', vmware), 'Placement');
 
     expect(placement?.rows).toEqual([
-      { label: 'Datacenter', value: 'Lab DC' },
-      { label: 'Cluster', value: 'Compute Cluster' },
+      { label: 'Datacenter', value: 'Lab DC', wrap: true },
+      { label: 'Cluster', value: 'Compute Cluster', wrap: true },
       { label: 'Cluster services', value: 'HA enabled · DRS disabled' },
-      { label: 'Compute resource', value: 'Compute Cluster' },
-      { label: 'Resource pool', value: 'Production' },
-      { label: 'Runtime host', value: 'esxi-01.lab.local' },
-      { label: 'Datastores', value: 'shared-vsan' },
+      { label: 'Compute resource', value: 'Compute Cluster', wrap: true },
+      { label: 'Resource pool', value: 'Production', wrap: true },
+      { label: 'Runtime host', value: 'esxi-01.lab.local', wrap: true },
+      { label: 'Datastores', value: 'shared-vsan', wrap: true },
     ]);
   });
 
@@ -58,8 +58,8 @@ describe('resourceDetailDrawerVmwareModel', () => {
       value: 'Distributed Portgroup',
     });
     expect(findSection(sections, 'Network')?.rows).toEqual([
-      { label: 'Hosts', value: 'esxi-01.lab.local, esxi-02.lab.local' },
-      { label: 'VMs', value: 'warehouse-api-01, etl-batch-01' },
+      { label: 'Hosts', value: 'esxi-01.lab.local, esxi-02.lab.local', wrap: true },
+      { label: 'VMs', value: 'warehouse-api-01, etl-batch-01', wrap: true },
     ]);
   });
 
@@ -195,6 +195,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
         label: 'Hard disk 1',
         value: 'SCSI 0:1 · 100 GB · nvme-primary · VMDK_FILE · [nvme-primary] app-01/app-01.vmdk',
         tone: 'default',
+        wrap: true,
       },
     ]);
 
@@ -206,6 +207,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
         value:
           'VMXNET3 · VM Network · 00:50:56:aa:bb:cc · CONNECTED · starts connected · guest control',
         tone: 'default',
+        wrap: true,
       },
     ]);
 
@@ -216,12 +218,67 @@ describe('resourceDetailDrawerVmwareModel', () => {
         label: 'pre-upgrade',
         value: 'poweredOn · 2026-03-28 18:15 UTC · quiesced',
         tone: 'default',
+        wrap: true,
       },
       {
         label: '- post-migration-checkpoint',
         value: 'current · poweredOn · 2026-03-29 18:15 UTC · not quiesced',
         tone: 'accent',
+        wrap: true,
       },
     ]);
+  });
+
+  it('lifts real vCenter problems and leaves settled states alone', () => {
+    const tone = (sections: ReturnType<typeof buildVMwareDetailSections>, label: string) =>
+      sections.flatMap((section) => section.rows).find((row) => row.label === label);
+
+    const datastore = buildVMwareDetailSections('storage', {
+      datastoreAccessible: false,
+      maintenanceMode: 'enteringMaintenance',
+      overallStatus: 'yellow',
+    });
+    expect(tone(datastore, 'Accessible')).toMatchObject({ value: 'No', tone: 'warning' });
+    expect(tone(datastore, 'Maintenance')).toMatchObject({
+      value: 'Entering maintenance',
+      tone: 'warning',
+    });
+    expect(tone(datastore, 'Overall status')).toMatchObject({
+      value: 'Warning (yellow)',
+      tone: 'warning',
+    });
+
+    // vCenter reports "normal" for a datastore outside maintenance.
+    const settled = buildVMwareDetailSections('storage', {
+      maintenanceMode: 'normal',
+      overallStatus: 'green',
+    });
+    expect(tone(settled, 'Maintenance')).toEqual({ label: 'Maintenance', value: 'No' });
+    expect(tone(settled, 'Overall status')?.tone).toBe('success');
+
+    const host = buildVMwareDetailSections('agent', { connectionState: 'NOT_RESPONDING' });
+    expect(tone(host, 'Connection state')).toMatchObject({
+      value: 'Not Responding',
+      tone: 'warning',
+    });
+  });
+
+  it('does not flag Tools or vNICs of a powered-off VM', () => {
+    const sections = buildVMwareDetailSections('vm', {
+      powerState: 'POWERED_OFF',
+      tools: { runState: 'NOT_RUNNING' },
+      networkAdapters: [{ label: 'Network adapter 1', state: 'NOT_CONNECTED' }],
+    });
+    const rows = sections.flatMap((section) => section.rows);
+    expect(rows.find((row) => row.label === 'Run state')?.tone).toBe('default');
+    expect(rows.find((row) => row.label === 'Network adapter 1')?.tone).toBe('default');
+
+    const running = buildVMwareDetailSections('vm', {
+      powerState: 'POWERED_ON',
+      tools: { runState: 'NOT_RUNNING' },
+    });
+    expect(
+      running.flatMap((section) => section.rows).find((row) => row.label === 'Run state')?.tone,
+    ).toBe('warning');
   });
 });

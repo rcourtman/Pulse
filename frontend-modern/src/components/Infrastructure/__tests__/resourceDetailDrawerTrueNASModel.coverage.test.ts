@@ -157,7 +157,7 @@ describe('truenasServiceStatus / serviceStatusLabel / serviceStatusTone', () => 
       expect(presentStatusRows).toEqual([testCase.status]);
 
       const row = findRow(resource, testCase.status);
-      expect(row?.value).toBe('1');
+      expect(row?.value).toBe('1 service');
       expect(row?.tone).toBe(testCase.tone);
     });
   }
@@ -185,8 +185,8 @@ describe('diskStateTone', () => {
     expect(findRow(diskResource({ health: 'OK' }), 'Health')?.tone).toBe('success');
   });
 
-  it('maps failed to warning', () => {
-    expect(findRow(diskResource({ health: 'FAILED' }), 'Health')?.tone).toBe('warning');
+  it('maps failed to danger', () => {
+    expect(findRow(diskResource({ health: 'FAILED' }), 'Health')?.tone).toBe('danger');
   });
 
   it('maps unrecognized health to default', () => {

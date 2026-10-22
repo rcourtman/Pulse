@@ -8,6 +8,7 @@ import {
   getCompactStoragePoolProtectionTitle,
   getStoragePoolIssueTextClass,
   getStoragePoolProtectionTextClass,
+  getStoragePoolStateIndicator,
   getStoragePoolStateLabel,
   getStoragePoolStateTextClass,
 } from '@/features/storageBackups/rowPresentation';
@@ -156,5 +157,44 @@ describe('storage row presentation', () => {
     } as unknown as StorageRecord;
     expect(getCompactStoragePoolIssueLabel(record)).toBe('DEGRADED');
     expect(getCompactStoragePoolIssueSummary(record)).toBe('2 read, 1 checksum errors');
+  });
+});
+
+describe('getStoragePoolStateIndicator', () => {
+  it("gives the pool drawer's dot the State cell's word and judgement", () => {
+    const withState = (state: string, freshness?: StorageRecord['freshness']) =>
+      ({
+        ...baseRecord(),
+        freshness,
+        details: {
+          zfsPool: {
+            name: 'tank',
+            state,
+            readErrors: 0,
+            writeErrors: 0,
+            checksumErrors: 0,
+            devices: [],
+          },
+        },
+      }) as StorageRecord;
+    expect(getStoragePoolStateIndicator(withState('ONLINE'))).toEqual({
+      variant: 'success',
+      label: 'Online',
+    });
+    expect(getStoragePoolStateIndicator(withState('DEGRADED'))).toEqual({
+      variant: 'warning',
+      label: 'Degraded',
+    });
+    expect(getStoragePoolStateIndicator(withState('FAULTED'))).toEqual({
+      variant: 'danger',
+      label: 'Faulted',
+    });
+    expect(getStoragePoolStateIndicator(withState('ONLINE', 'stale'))).toEqual({
+      variant: 'warning',
+      label: 'Stale',
+    });
+    // The cell colour and the dot read one judgement.
+    expect(getStoragePoolStateTextClass(withState('FAULTED'))).toContain('text-red-700');
+    expect(getStoragePoolStateTextClass(withState('DEGRADED'))).toContain('text-amber-700');
   });
 });

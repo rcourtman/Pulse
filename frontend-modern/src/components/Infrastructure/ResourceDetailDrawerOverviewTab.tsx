@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import type {
@@ -17,7 +17,6 @@ import {
   getAlertStatedRowLabels,
   getDrawerChartAlerts,
   isDrawerAvailabilityHealthy,
-  partitionDrawerExceptionRows,
 } from '@/components/Workloads/drawerOverviewModel';
 import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
 import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
@@ -44,7 +43,10 @@ import { ResourceFacetSummary } from './ResourceFacetSummary';
 import { getResourceDrawerFacts, useResourceSummarySections } from './ResourceDetailSummary';
 import { ResourceInvestigationContextTables } from './ResourceInvestigationContextTables';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
-import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import {
+  TechnicalDetailsDisclosure,
+  TechnicalDetailsSection,
+} from '@/components/shared/TechnicalDetailsDisclosure';
 import {
   DrawerAttentionSection,
   type DrawerAttentionItem,
@@ -64,6 +66,7 @@ import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
+import { buildResourceDrawerOverviewInventory } from './resourceDetailDrawerOverviewModel';
 import { AvailabilityProbeStatusCards } from './AvailabilityProbeStatusCard';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
@@ -77,66 +80,6 @@ interface ResourceDetailDrawerOverviewTabProps {
 
 const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
   Boolean(value && Object.keys(value).length > 0);
-
-const TrueNASDetailsDisclosure: Component<{
-  drawer: UseResourceDetailDrawerStateResult;
-  class?: string;
-  contentClass?: string;
-}> = (props) => (
-  <SupportDisclosure
-    title="TrueNAS"
-    summary={props.drawer.trueNASDetailsSummary()}
-    expanded={props.drawer.showTrueNASDetails()}
-    onToggle={() => props.drawer.setShowTrueNASDetails((value) => !value)}
-    showLabel="Show TrueNAS"
-    hideLabel="Hide TrueNAS"
-    class={props.class}
-    contentClass={props.contentClass ?? 'mt-3 space-y-3'}
-    dataTestId="resource-truenas-details-section"
-  >
-    <DetailSectionTable sections={props.drawer.trueNASDetailSections()} />
-  </SupportDisclosure>
-);
-
-const KubernetesDetailsDisclosure: Component<{
-  drawer: UseResourceDetailDrawerStateResult;
-  class?: string;
-  contentClass?: string;
-}> = (props) => (
-  <SupportDisclosure
-    title="Kubernetes"
-    summary={props.drawer.kubernetesDetailsSummary()}
-    expanded={props.drawer.showKubernetesDetails()}
-    onToggle={() => props.drawer.setShowKubernetesDetails((value) => !value)}
-    showLabel="Show Kubernetes"
-    hideLabel="Hide Kubernetes"
-    class={props.class}
-    contentClass={props.contentClass ?? 'mt-3 space-y-3'}
-    dataTestId="resource-kubernetes-details-section"
-  >
-    <DetailSectionTable sections={props.drawer.kubernetesDetailSections()} />
-  </SupportDisclosure>
-);
-
-const VMwareDetailsDisclosure: Component<{
-  drawer: UseResourceDetailDrawerStateResult;
-  class?: string;
-  contentClass?: string;
-}> = (props) => (
-  <SupportDisclosure
-    title="vSphere"
-    summary={props.drawer.vmwareDetailsSummary()}
-    expanded={props.drawer.showVMwareDetails()}
-    onToggle={() => props.drawer.setShowVMwareDetails((value) => !value)}
-    showLabel="Show vSphere"
-    hideLabel="Hide vSphere"
-    class={props.class}
-    contentClass={props.contentClass ?? 'mt-3 space-y-3'}
-    dataTestId="resource-vmware-details-section"
-  >
-    <DetailSectionTable sections={props.drawer.vmwareDetailSections()} />
-  </SupportDisclosure>
-);
 
 const machineHostDetailsTitle = (resource: Resource): string =>
   isPulseAgentPlatformResource(resource) ? 'Machine' : 'Host';
@@ -333,7 +276,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     drawer.sortedResourceTimeline().length > 0 ||
     drawer.resourceTimelineCount() > 0 ||
     Boolean(drawer.facetBundleError());
-  const { activeAlerts } = useWebSocket();
+  const webSocket = useWebSocket();
+  const { activeAlerts } = webSocket;
+  // An image's consumers and update verdict come from the containers that use
+  // it, as on the images table. Only an image drawer reads the estate.
+  const relatedResources = () =>
+    resource().type === 'docker-image' ? (webSocket.state?.resources ?? []) : undefined;
   const alertsActivation = useAlertsActivation();
   const resourceAlerts = () =>
     getAlertsForUnifiedResource(resource(), activeAlerts, alertsActivation.detectionEnabled());
@@ -391,8 +339,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   };
 
   // Inventory follows the Proxmox drawers: anything wrong is lifted in front,
-  // one facts line adds what the row does not say, and the rest waits under a
-  // closed Details section rather than as a grid of equal-weight cards.
+  // the object's own content (a pod's containers, a pool's or disk's health)
+  // stays in view, one facts line adds what the row does not say, and the
+  // rest waits under a closed Details section rather than as a grid of
+  // equal-weight cards. Platform sections (TrueNAS, Kubernetes, vSphere) join
+  // the same split, so a pool's ZFS errors or a cordoned node reach the front.
   const summarySections = useResourceSummarySections({
     get resource() {
       return resource();
@@ -401,33 +352,42 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     get showPlatformId() {
       return showPlatformId();
     },
+    get relatedResources() {
+      return relatedResources();
+    },
     content: 'all',
   });
-  const inventory = () =>
-    partitionDrawerExceptionRows(
-      summarySections(),
-      getAlertStatedRowLabels(
+  const platformSections = () => [
+    ...drawer.trueNASDetailSections(),
+    ...drawer.kubernetesDetailSections(),
+    ...drawer.vmwareDetailSections(),
+  ];
+  // One split per change, shared by the lifted rows, cards and Details.
+  const inventory = createMemo(() =>
+    buildResourceDrawerOverviewInventory({
+      summarySections: summarySections(),
+      platformSections: platformSections(),
+      statedRowLabels: getAlertStatedRowLabels(
         getOwnAlertsForUnifiedResource(
           resource(),
           activeAlerts,
           alertsActivation.detectionEnabled(),
         ),
       ),
-    );
+      statedMessages: attentionItems().map((item) => item.message),
+    }),
+  );
   const exceptionRows = () => inventory().lifted;
+  const contentCards = () => inventory().cards;
   const detailSections = () => inventory().details;
   const detailsSubtitle = () =>
     detailSections()
       .map((section) => section.label.toLowerCase())
       .join(', ');
-  const facts = () => getResourceDrawerFacts(resource(), drawer.identityIpValues()[0]);
+  const facts = () =>
+    getResourceDrawerFacts(resource(), drawer.identityIpValues()[0], relatedResources());
   const hasPlatformDetails = () =>
-    drawer.hasServiceDetails() ||
-    drawer.hasVMwareDetails() ||
-    drawer.hasTrueNASDetails() ||
-    drawer.hasKubernetesDetails() ||
-    drawer.hasHostDetails() ||
-    drawer.hasInvestigationContext();
+    drawer.hasServiceDetails() || drawer.hasHostDetails() || drawer.hasInvestigationContext();
   const availabilityChecks = () => [
     ...(resource().availability ? [resource().availability!] : []),
     ...(resource().availabilityChecks ?? []),
@@ -471,6 +431,9 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             />
           </div>
         )}
+      </Show>
+      <Show when={contentCards().length > 0}>
+        <TechnicalDetailsSection dataTestId="resource-drawer-cards" sections={contentCards()} />
       </Show>
       <Show when={availabilityChecks().length > 0 && !availabilityHealthy()}>
         <div class="flex flex-wrap gap-3 *:min-w-[240px] *:flex-1">
@@ -517,8 +480,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               />
             </div>
           </Show>
-          {/* Provider, service and host context share the one Details
-              entrance rather than a second disclosure beside it. */}
+          {/* Platform sections (TrueNAS, Kubernetes, vSphere) are already in
+              the table above. Service, host and investigation context are
+              cards and panels rather than rows, so they keep their own
+              blocks, still behind this one Details entrance. */}
           <Show when={hasPlatformDetails()}>
             <section data-testid="resource-platform-details" class="space-y-2">
               <h4 class="text-[11px] font-medium uppercase tracking-wide text-muted">
@@ -528,14 +493,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 data-testid="resource-support-sections"
                 class="flex flex-wrap gap-3 *:flex-1 *:basis-[calc(50%-0.375rem)] *:min-w-[260px] *:max-w-full *:overflow-hidden"
               >
-                <Show when={drawer.hasTrueNASDetails()}>
-                  <TrueNASDetailsDisclosure drawer={drawer} class="h-full" />
-                </Show>
-
-                <Show when={drawer.hasKubernetesDetails()}>
-                  <KubernetesDetailsDisclosure drawer={drawer} class="h-full" />
-                </Show>
-
                 <Show when={drawer.hasInvestigationContext()}>
                   <SupportDisclosure
                     title="Context"
@@ -1101,10 +1058,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                       }}
                     </Show>
                   </SupportDisclosure>
-                </Show>
-
-                <Show when={drawer.hasVMwareDetails()}>
-                  <VMwareDetailsDisclosure drawer={drawer} class="h-full" />
                 </Show>
 
                 <Show when={drawer.hasHostDetails()}>

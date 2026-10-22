@@ -6,8 +6,8 @@ import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 import type { Resource } from '@/types/resource';
 import type { State } from '@/types/api';
 
-vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChart: () => <div>History fixture</div>,
+vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
+  GuestDrawerHistory: () => <div>History fixture</div>,
 }));
 
 const pool = (owner: string | undefined): Resource =>
@@ -51,15 +51,9 @@ describe('Storage pool ownership through live snapshots', () => {
       disk('b', 'host-b', 'Peer disk', 99),
     ]);
     const record = () => buildStorageRecords({ state: {} as State, resources: [resource()] })[0];
-    render(() => (
-      <table>
-        <tbody>
-          <StoragePoolDetail record={record()} physicalDisks={disks()} summarySeriesId="tank" />
-        </tbody>
-      </table>
-    ));
+    render(() => <StoragePoolDetail record={record()} physicalDisks={disks()} />);
 
-    expect(screen.getByText('Physical Disks (1)')).toBeVisible();
+    expect(screen.getByText('Physical disks (1)')).toBeVisible();
     expect(screen.getByText('Local disk')).toBeVisible();
     expect(screen.queryByText('Peer disk')).not.toBeInTheDocument();
     expect(screen.queryByText('99 errors')).not.toBeInTheDocument();
@@ -68,18 +62,23 @@ describe('Storage pool ownership through live snapshots', () => {
     expect(screen.queryByText('Local disk')).not.toBeInTheDocument();
     expect(screen.getByText('Peer disk')).toBeVisible();
     expect(screen.getByText('99 errors')).toBeVisible();
+    // The peer disk's errors and heat are now this pool's to check.
+    expect(screen.getByTestId('storage-pool-drawer-exceptions')).toHaveTextContent(
+      '/dev/sda: 99 errors',
+    );
     expect(screen.getByText('82°C')).toBeVisible();
     expect(screen.getByText('Peer disk')).toBeVisible();
 
     setResource(pool(undefined));
-    expect(screen.queryByText(/Physical Disks/)).not.toBeInTheDocument();
-    expect(screen.getByText('ZFS Pool')).toBeVisible();
+    expect(screen.queryByText(/Physical disks/)).not.toBeInTheDocument();
+    expect(screen.getByText('ZFS pool')).toBeVisible();
+    expect(screen.queryByTestId('storage-pool-drawer-exceptions')).toBeNull();
     setResource(pool('host-a'));
     setDisks([disk('a', 'host-a', 'Local disk', 4)]);
     expect(screen.getByText('Local disk')).toBeVisible();
     expect(screen.getByText('4 errors')).toBeVisible();
     setDisks([]);
-    expect(screen.queryByText(/Physical Disks/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Physical disks/)).not.toBeInTheDocument();
     expect(screen.queryByText('4 errors')).not.toBeInTheDocument();
   });
 });

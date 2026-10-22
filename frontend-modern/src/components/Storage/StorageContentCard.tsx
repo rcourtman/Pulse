@@ -5,6 +5,7 @@ import { DiskList } from '@/components/Storage/DiskList';
 import StoragePoolsTable from '@/components/Storage/StoragePoolsTable';
 import { STORAGE_CONTENT_CARD_BODY_CLASS } from '@/features/storageBackups/storagePagePresentation';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
@@ -17,6 +18,8 @@ type StorageContentCardProps = {
   view: () => StorageView;
   physicalDisks: () => Resource[];
   getDiskAlertResourceIds: PhysicalDiskAlertResourceIdResolver;
+  /** A disk's own open alerts, for its drawer. */
+  getDiskAlerts?: (disk: Resource) => Alert[];
   nodes: () => Resource[];
   sourceFilter: () => string;
   healthFilter: () => StorageHealthFilter;
@@ -35,6 +38,8 @@ type StorageContentCardProps = {
   nodeOnlineByLabel: () => Map<string, boolean>;
   highlightedRecordId: () => string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
+  /** A pool's open alerts, for its drawer: the set that tints its row. */
+  getRecordAlerts?: (recordId: string) => Alert[];
   isLoadingPools: () => boolean;
   clearPinnedSummaryScope: () => void;
   highlightedSummaryResourceId: () => string | null;
@@ -70,6 +75,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           <DiskList
             disks={props.physicalDisks()}
             getDiskAlertResourceIds={props.getDiskAlertResourceIds}
+            getDiskAlerts={props.getDiskAlerts}
             nodes={props.nodes()}
             sourceFilter={props.sourceFilter()}
             healthFilter={props.healthFilter()}
@@ -99,6 +105,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           nodeOnlineByLabel={props.nodeOnlineByLabel()}
           highlightedRecordId={props.highlightedRecordId()}
           getRecordAlertState={props.getRecordAlertState}
+          getRecordAlerts={props.getRecordAlerts}
           isLoading={props.isLoadingPools()}
           highlightedSummarySeriesId={props.highlightedSummaryResourceId()}
           onHoverChange={props.setHoveredStorageResourceId}

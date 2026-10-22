@@ -468,16 +468,25 @@ describe('getStatusTone (via Overall status row)', () => {
       'Overall status',
     );
 
-  it('maps red to warning', () => {
-    expect(statusRow('red')).toEqual({ label: 'Overall status', value: 'red', tone: 'warning' });
+  it('maps red to a danger-toned problem', () => {
+    expect(statusRow('red')).toEqual({
+      label: 'Overall status',
+      value: 'Problem (red)',
+      tone: 'danger',
+    });
   });
 
-  it('maps any other non-empty status to accent', () => {
+  it('maps yellow to warning and green to success', () => {
     expect(statusRow('yellow')).toEqual({
       label: 'Overall status',
-      value: 'yellow',
-      tone: 'accent',
+      value: 'Warning (yellow)',
+      tone: 'warning',
     });
+    expect(statusRow('green')?.tone).toBe('success');
+  });
+
+  it('keeps an unrecognised status as reported, untoned', () => {
+    expect(statusRow('purple')).toEqual({ label: 'Overall status', value: 'purple' });
   });
 
   it('drops the row for an empty status (default tone branch)', () => {
@@ -605,6 +614,7 @@ describe('flattenSnapshotRows (via Snapshot tree section)', () => {
       label: 'now',
       value: 'current · poweredOn',
       tone: 'accent',
+      wrap: true,
     });
   });
 });

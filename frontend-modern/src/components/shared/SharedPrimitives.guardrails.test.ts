@@ -740,7 +740,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/SystemLogsPanel.tsx',
       'src/components/Storage/DiskDetail.tsx',
       'src/components/Storage/StoragePageControls.tsx',
-      'src/components/Storage/StoragePoolDetail.tsx',
       'src/components/Workloads/GuestDrawerHistory.tsx',
       'src/components/shared/FilterBar/AddFilterMenu.tsx',
       'src/components/shared/FilterToolbar.tsx',
@@ -1333,8 +1332,11 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
     expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');
 
+    // The pool drawer charts usage with the shared drawer history (range picker
+    // in its toolbar); the guest drawer's embedded disk detail keeps its own.
+    expect(diskDetailSource).toContain('filterSelectClass');
+    expect(storagePoolDetailSource).toContain('GuestDrawerHistory');
     for (const storageDetailSource of [diskDetailSource, storagePoolDetailSource]) {
-      expect(storageDetailSource).toContain('filterSelectClass');
       expect(storageDetailSource).not.toContain('activeTab()');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_HEADER_SELECT_CLASS');
@@ -7974,9 +7976,9 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerVmwareModelSource).not.toContain('const formatCount');
 
     expect(resourceDetailDrawerOverviewTabSource).toContain('DetailSectionTable');
-    expect(resourceDetailDrawerOverviewTabSource).toContain(
-      '<DetailSectionTable sections={props.drawer.vmwareDetailSections()} />',
-    );
+    // vSphere sections join the one Overview split (lifted rows, cards,
+    // Details) instead of a nested vSphere disclosure of their own.
+    expect(resourceDetailDrawerOverviewTabSource).toContain('...drawer.vmwareDetailSections(),');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain('TrueNASDetailSectionTable');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain('vmwareRowToneClass');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain(

@@ -1599,7 +1599,6 @@
         { "path": "src/components/Settings/SystemLogsPanel.tsx" },
         { "path": "src/components/Storage/DiskDetail.tsx" },
         { "path": "src/components/Storage/StoragePageControls.tsx" },
-        { "path": "src/components/Storage/StoragePoolDetail.tsx" },
         { "path": "src/components/Workloads/GuestDrawerHistory.tsx" },
         { "path": "src/components/shared/FilterBar/AddFilterMenu.tsx" },
         { "path": "src/components/shared/FilterToolbar.tsx" },

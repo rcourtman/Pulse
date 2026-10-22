@@ -6,8 +6,10 @@ import {
   buildKubernetesControllerSection,
   buildKubernetesDetailSections,
   buildKubernetesDetailsSummary,
+  getKubernetesPodFacts,
   hasKubernetesDetailSections,
 } from '../resourceDetailDrawerKubernetesModel';
+import { isDrawerContentCard } from '../resourceDetailDrawerOverviewModel';
 
 const makeResource = ({
   id,
@@ -99,8 +101,8 @@ describe('buildKubernetesDetailSections', () => {
 
     const section = sectionByLabel(node, 'Kubernetes node');
     expect(section?.rows).toEqual([
-      { label: 'OS image', value: 'Ubuntu 22.04.5 LTS' },
-      { label: 'Kernel', value: '6.6.32-1-lts' },
+      { label: 'OS image', value: 'Ubuntu 22.04.5 LTS', wrap: true },
+      { label: 'Kernel', value: '6.6.32-1-lts', wrap: true },
       { label: 'Architecture', value: 'amd64' },
       { label: 'Capacity', value: '24 cores / 64.0 GB / 110 pods' },
       { label: 'Allocatable', value: '21 cores / 60.0 GB / 105 pods' },
@@ -117,6 +119,7 @@ describe('buildKubernetesDetailSections', () => {
     expect(sectionByLabel(mergedNode, 'Kubernetes node')?.rows).toContainEqual({
       label: 'OS image',
       value: 'Fedora CoreOS 40',
+      wrap: true,
     });
   });
 
@@ -134,8 +137,8 @@ describe('buildKubernetesDetailSections', () => {
 
     const section = sectionByLabel(cluster, 'Cluster');
     expect(section?.rows).toEqual([
-      { label: 'API server', value: 'https://prod.k8s.local:6443' },
-      { label: 'Context', value: 'prod-admin' },
+      { label: 'API server', value: 'https://prod.k8s.local:6443', wrap: true },
+      { label: 'Context', value: 'prod-admin', wrap: true },
       { label: 'Agent version', value: '0.9.1' },
       { label: 'Pending uninstall', value: 'Yes', tone: 'warning' },
     ]);
@@ -231,8 +234,8 @@ describe('buildKubernetesControllerSection', () => {
       { label: 'Active', value: '1' },
       { label: 'Succeeded', value: '8' },
       { label: 'Failed', value: '2', tone: 'danger' },
-      { label: 'Namespace', value: 'batch' },
-      { label: 'Cluster', value: 'prod' },
+      { label: 'Namespace', value: 'batch', wrap: true },
+      { label: 'Cluster', value: 'prod', wrap: true },
     ]);
   });
 
@@ -296,8 +299,8 @@ describe('buildKubernetesControllerSection', () => {
       { label: 'Last success', value: `${absolute('2026-05-23T02:00:00Z')} (1d ago)`, wrap: true },
       { label: 'Suspended', value: 'Yes', tone: 'warning' },
       { label: 'Active', value: '0' },
-      { label: 'Namespace', value: 'batch' },
-      { label: 'Cluster', value: 'prod' },
+      { label: 'Namespace', value: 'batch', wrap: true },
+      { label: 'Cluster', value: 'prod', wrap: true },
     ]);
   });
 
@@ -319,13 +322,14 @@ describe('buildKubernetesControllerSection', () => {
     );
     expect(statefulSet?.label).toBe('StatefulSet');
     expect(statefulSet?.rows).toEqual([
-      { label: 'Service', value: 'checkout-headless' },
+      { label: 'Service', value: 'checkout-headless', wrap: true },
       { label: 'Target', value: '3 pods' },
       { label: 'Current', value: '3' },
-      { label: 'Ready', value: '2' },
+      // Fewer ready pods than the target is a shortfall the Overview lifts.
+      { label: 'Ready', value: '2 of 3', tone: 'warning' },
       { label: 'Available', value: '2' },
       { label: 'Updated', value: '2' },
-      { label: 'Namespace', value: 'apps' },
+      { label: 'Namespace', value: 'apps', wrap: true },
     ]);
 
     const daemonSet = buildKubernetesControllerSection(
@@ -353,7 +357,7 @@ describe('buildKubernetesControllerSection', () => {
       { label: 'Updated', value: '5' },
       { label: 'Unavailable', value: '1', tone: 'warning' },
       { label: 'Misscheduled', value: '0', tone: 'default' },
-      { label: 'Namespace', value: 'observability' },
+      { label: 'Namespace', value: 'observability', wrap: true },
     ]);
   });
 
@@ -377,5 +381,263 @@ describe('buildKubernetesControllerSection', () => {
       { label: 'Fully labeled', value: '4' },
       { label: 'Observed generation', value: '7' },
     ]);
+  });
+});
+
+describe('Kubernetes network, storage and scaling sections', () => {
+  it('states a Deployment shortfall as "n of target" so the Overview lifts it', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'checkout',
+        type: 'k8s-deployment',
+        kubernetes: {
+          namespace: 'apps',
+          desiredReplicas: 3,
+          updatedReplicas: 3,
+          readyReplicas: 2,
+          observedGeneration: 4,
+        },
+      }),
+    );
+    expect(section?.label).toBe('Deployment');
+    expect(section?.rows).toEqual([
+      { label: 'Target', value: '3 pods' },
+      { label: 'Updated', value: '3' },
+      { label: 'Ready', value: '2 of 3', tone: 'warning' },
+      // Kubernetes omits a zero count: none available.
+      { label: 'Available', value: '0 of 3', tone: 'warning' },
+      { label: 'Observed generation', value: '4' },
+      { label: 'Namespace', value: 'apps', wrap: true },
+    ]);
+  });
+
+  it('reads a settled Deployment as plain counts with nothing to lift', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'checkout',
+        type: 'k8s-deployment',
+        kubernetes: {
+          desiredReplicas: 2,
+          updatedReplicas: 2,
+          readyReplicas: 2,
+          availableReplicas: 2,
+        },
+      }),
+    );
+    expect(section?.rows.some((row) => row.tone === 'warning')).toBe(false);
+    expect(section?.rows.find((row) => row.label === 'Ready')?.value).toBe('2');
+  });
+
+  it('describes an autoscaler and flags one held at its maximum', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'web-hpa',
+        type: 'k8s-horizontal-pod-autoscaler',
+        kubernetes: {
+          targetKind: 'Deployment',
+          targetName: 'web',
+          minReplicas: 2,
+          maxReplicas: 5,
+          currentReplicas: 5,
+          desiredReplicas: 5,
+          metricTypes: ['Resource', 'Pods'],
+        },
+      }),
+    );
+    expect(section?.label).toBe('Autoscaler');
+    expect(section?.rows).toEqual([
+      { label: 'Target', value: 'Deployment web', wrap: true },
+      { label: 'Range', value: '2 to 5 pods' },
+      { label: 'Current', value: '5 pods' },
+      { label: 'Desired', value: '5 pods' },
+      { label: 'Scaling', value: 'At its maximum of 5 pods', tone: 'warning' },
+      { label: 'Metrics', value: 'Resource, Pods', wrap: true },
+    ]);
+  });
+
+  it('shows a Service address, ports and selector in full', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'web',
+        type: 'k8s-service',
+        kubernetes: {
+          namespace: 'apps',
+          clusterName: 'prod',
+          serviceType: 'NodePort',
+          clusterIp: '10.96.12.4',
+          externalIps: ['203.0.113.7'],
+          servicePorts: [
+            { name: 'http', port: 80, targetPort: '8080', protocol: 'TCP', nodePort: 30080 },
+            { port: 443, targetPort: '443', protocol: 'TCP' },
+          ],
+          selector: { app: 'web', tier: 'frontend' },
+        },
+      }),
+    );
+    expect(section?.label).toBe('Service');
+    expect(section?.rows).toEqual([
+      { label: 'Type', value: 'NodePort' },
+      { label: 'Cluster IP', value: '10.96.12.4', wrap: true },
+      { label: 'External IPs', value: '203.0.113.7', wrap: true },
+      { label: 'Ports', value: 'http 80→8080/TCP (node 30080), 443/TCP', wrap: true },
+      { label: 'Selector', value: 'app=web, tier=frontend', wrap: true },
+      { label: 'Namespace', value: 'apps', wrap: true },
+      { label: 'Cluster', value: 'prod', wrap: true },
+    ]);
+  });
+
+  it('shows an Ingress class, hosts and addresses', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'web-ingress',
+        type: 'k8s-ingress',
+        kubernetes: {
+          className: 'nginx',
+          hosts: ['shop.example.com', 'www.shop.example.com'],
+          addresses: ['198.51.100.20'],
+        },
+      }),
+    );
+    expect(section?.rows).toEqual([
+      { label: 'Class', value: 'nginx' },
+      { label: 'Hosts', value: 'shop.example.com, www.shop.example.com', wrap: true },
+      { label: 'Addresses', value: '198.51.100.20', wrap: true },
+    ]);
+  });
+
+  it('flags a claim that cannot bind and names its volume and size', () => {
+    const pending = buildKubernetesControllerSection(
+      makeResource({
+        id: 'data-claim',
+        type: 'k8s-persistent-volume-claim',
+        kubernetes: {
+          phase: 'Pending',
+          storageClass: 'fast',
+          requestedBytes: 10 * 1024 ** 3,
+          accessModes: ['ReadWriteOnce'],
+        },
+      }),
+    );
+    expect(pending?.label).toBe('Volume claim');
+    expect(pending?.rows).toEqual([
+      { label: 'Phase', value: 'Pending', tone: 'warning' },
+      { label: 'Storage class', value: 'fast' },
+      { label: 'Requested', value: '10 GB' },
+      { label: 'Access modes', value: 'ReadWriteOnce' },
+    ]);
+
+    const bound = buildKubernetesControllerSection(
+      makeResource({
+        id: 'data-claim',
+        type: 'k8s-persistent-volume-claim',
+        kubernetes: { phase: 'Bound', volumeName: 'pvc-0f3a', capacityBytes: 10 * 1024 ** 3 },
+      }),
+    );
+    expect(bound?.rows).toEqual([
+      { label: 'Phase', value: 'Bound', tone: 'default' },
+      { label: 'Volume', value: 'pvc-0f3a', wrap: true },
+      { label: 'Capacity', value: '10 GB' },
+    ]);
+  });
+
+  it('shows a persistent volume claim reference and reclaim policy', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'pvc-0f3a',
+        type: 'k8s-persistent-volume',
+        kubernetes: {
+          phase: 'Failed',
+          claimNamespace: 'apps',
+          claimName: 'data-claim',
+          capacityBytes: 10 * 1024 ** 3,
+          storageClass: 'fast',
+          accessModes: ['ReadWriteOnce'],
+          reclaimPolicy: 'Retain',
+        },
+      }),
+    );
+    expect(section?.label).toBe('Persistent volume');
+    expect(section?.rows).toEqual([
+      { label: 'Phase', value: 'Failed', tone: 'danger' },
+      { label: 'Claim', value: 'apps/data-claim', wrap: true },
+      { label: 'Capacity', value: '10 GB' },
+      { label: 'Storage class', value: 'fast' },
+      { label: 'Access modes', value: 'ReadWriteOnce' },
+      { label: 'Reclaim policy', value: 'Retain' },
+    ]);
+  });
+
+  it('describes a storage class', () => {
+    const section = buildKubernetesControllerSection(
+      makeResource({
+        id: 'fast',
+        type: 'k8s-storage-class',
+        kubernetes: {
+          provisioner: 'rancher.io/local-path',
+          reclaimPolicy: 'Delete',
+          volumeBindingMode: 'WaitForFirstConsumer',
+          allowVolumeExpansion: false,
+          parameterKeys: ['nodePath'],
+        },
+      }),
+    );
+    expect(section?.rows).toEqual([
+      { label: 'Provisioner', value: 'rancher.io/local-path', wrap: true },
+      { label: 'Reclaim policy', value: 'Delete' },
+      { label: 'Binding mode', value: 'WaitForFirstConsumer' },
+      { label: 'Volume expansion', value: 'Not allowed' },
+      { label: 'Parameters', value: 'nodePath', wrap: true },
+    ]);
+  });
+});
+
+describe('Kubernetes pod content and facts', () => {
+  it("keeps a pod's containers as an Overview content card", () => {
+    const containers = sectionByLabel(
+      makeResource({
+        id: 'pod-1',
+        type: 'pod',
+        kubernetes: { podContainers: [{ name: 'api', ready: true, state: 'running' }] },
+      }),
+      'Containers (1)',
+    );
+    expect(containers && isDrawerContentCard(containers)).toBe(true);
+  });
+
+  it('does not flag the finished containers of a completed pod', () => {
+    const rows = sectionByLabel(
+      makeResource({
+        id: 'job-pod',
+        type: 'pod',
+        kubernetes: {
+          podPhase: 'Succeeded',
+          podContainers: [{ name: 'run', ready: false, state: 'terminated', reason: 'Completed' }],
+        },
+      }),
+      'Containers (1)',
+    )?.rows;
+    expect(rows?.[0].tone).toBe('default');
+  });
+
+  it('states namespace, owner and node for a pod only', () => {
+    expect(
+      getKubernetesPodFacts(
+        makeResource({
+          id: 'web-7d9-abc',
+          type: 'pod',
+          kubernetes: {
+            namespace: 'apps',
+            ownerKind: 'ReplicaSet',
+            ownerName: 'web-7d9',
+            nodeName: 'worker-2',
+          },
+        }),
+      ),
+    ).toEqual(['Namespace apps', 'ReplicaSet web-7d9', 'Node worker-2']);
+    expect(
+      getKubernetesPodFacts(
+        makeResource({ id: 'web', type: 'k8s-deployment', kubernetes: { namespace: 'apps' } }),
+      ),
+    ).toEqual([]);
   });
 });
