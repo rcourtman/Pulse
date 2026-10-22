@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "d169fc91ef6dce60ccbcc78795510f4bfe6a4c23",
+  "verified_at": "2026-10-22T03:27:16.642Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/CLOUD.md",
+    "frontend-modern/public/docs/CLOUD.md"
+  ],
+  "content_sha256": {
+    "docs/CLOUD.md": "ee63ead37599bb7e7d1a02cc0ef38677aaa4ab963c01eefa360cad9b287aa8c5",
+    "frontend-modern/public/docs/CLOUD.md": "ee63ead37599bb7e7d1a02cc0ef38677aaa4ab963c01eefa360cad9b287aa8c5"
+  },
+  "routes": [
+    "/docs/CLOUD",
+    "/docs/CLOUD#4-set-up-mobile-access",
+    "/docs/WEBHOOKS#-quick-setup",
+    "/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing",
+    "/docs/RELAY#troubleshooting",
+    "/docs/PULSE_PRO"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 960
+    }
+  ],
+  "states": [
+    "Cloud introduction, feature row and setup use existing HTTPS browser access, not automatic Relay or a new app pairing",
+    "Retirement date, existing paired-phone continuity and continuing Pro/current-price terms remain readable in light desktop and dark narrow Docs",
+    "No page/console/HTTP errors or horizontal page overflow; browser and local server cleanup complete"
+  ],
+  "interactions": [
+    "Keyboard Enter and touch tap on the feature link reach the preserved setup anchor",
+    "All four setup destination links reach the exact rendered guide/fragment through the production Docs router and renderer; served Markdown bytes match the source build",
+    "All three captures opened natively at original detail; the two narrow captures are byte-identical and represent one visible state"
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "d169fc91ef6dce60ccbcc78795510f4bfe6a4c23",
+  "producer_receipt": "source-bf71spg_",
+  "limits": "Actual Docs/Markdown/router/CSS in fixture shell. Changed guide and destinations only; no account/Relay/app/notification/installation/release, whole frontend suite or long-history/reload acceptance."
+}
