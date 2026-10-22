@@ -269,7 +269,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         });
         for (const [state, expected, red] of [
           ['Rounded up', '74.6%', false],
-          ['Rounded down', '90.1%', true],
+          ['Rounded down', '90.0%', true],
           ['Full', '95.0%', true],
           ['Zero', '0.0%', false],
         ]) {

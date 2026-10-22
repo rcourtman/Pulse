@@ -76,7 +76,7 @@ describe.each([false, true])('PBS capacity agreement, canonical=%s', (canonical)
     });
     expect(region).toHaveTextContent('Datastore capacity is unknown.');
     expect(region).toHaveTextContent('This does not mean the datastore is empty.');
-    if (patch.total !== Number.MIN_VALUE) {
+    if (!('total' in patch) || patch.total !== Number.MIN_VALUE) {
       expect(region).toHaveTextContent(
         'The reported percentage disagrees with the used and total bytes.',
       );
@@ -88,6 +88,8 @@ describe.each([false, true])('PBS capacity agreement, canonical=%s', (canonical)
   it.each([
     ['rounded down', { used: 9010, usagePercent: 90 }, '90.1%', 'bg-red-500'],
     ['rounded up', { used: 7460, usagePercent: 75 }, '74.6%', 'bg-emerald-500'],
+    ['rounded warning boundary', { used: 7500, usagePercent: 74.5 }, '75.0%', 'bg-amber-500'],
+    ['rounded danger boundary', { used: 9000, usagePercent: 89.5 }, '90.0%', 'bg-red-500'],
     ['half-point rounding', { usagePercent: 94.5 }, '95.0%', 'bg-red-500'],
     ['no supplied percentage', { usagePercent: undefined }, '95.0%', 'bg-red-500'],
     ['overfull byte counts', { used: 11000, usagePercent: 110 }, '110.0%', 'bg-red-500'],

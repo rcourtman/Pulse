@@ -56,7 +56,7 @@ function Fixture() {
     if (state() === 'Rounded up')
       store = { ...store, used: 7460, usagePercent: 75, available: 2540 };
     if (state() === 'Rounded down')
-      store = { ...store, used: 9010, usagePercent: 90, available: 990 };
+      store = { ...store, used: 9000, usagePercent: 89.5, available: 1000 };
     if (state() === 'Overflow ratio')
       store = { ...store, total: Number.MIN_VALUE, used: Number.MAX_VALUE, usagePercent: 40 };
     if (state() === 'Error') store = { ...store, error: 'PRIVATE_PROVIDER_ERROR_SENTINEL' };
