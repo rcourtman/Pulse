@@ -76,4 +76,47 @@ describe('getServiceHealthPresentation', () => {
       textClass: 'text-muted',
     });
   });
+
+  it.each(['healthy', 'online', 'unhealthy', 'degraded', 'error', 'syncing', '', null])(
+    'keeps explicit offline status authoritative over %s service health',
+    (health) => {
+      expect(getServiceHealthPresentation(' Offline ', health)).toMatchObject({
+        label: 'Offline',
+        dot: 'bg-red-500',
+      });
+      expect(getServiceHealthSummaryPresentation('offline', health).tone).toBe('warning');
+    },
+  );
+
+  it('marks the provider unhealthy state as adverse, not healthy', () => {
+    expect(getServiceHealthPresentation('online', ' Unhealthy ')).toMatchObject({
+      label: 'Unhealthy',
+      dot: 'bg-red-500',
+    });
+    expect(getServiceHealthSummaryPresentation('online', 'unhealthy').tone).toBe('warning');
+  });
+
+  it.each([
+    'not healthy',
+    'healthy-but-unreachable',
+    'unhealthy: timeout',
+    'warning cleared',
+    'error resolved',
+    '<healthy>',
+  ])('preserves unrecognised state %s without inventing a verdict', (health) => {
+    expect(getServiceHealthPresentation('online', health)).toEqual({
+      label: health,
+      bg: 'bg-surface-alt',
+      text: 'text-muted',
+      dot: 'bg-slate-400',
+    });
+    expect(getServiceHealthSummaryPresentation('online', health).tone).toBe('muted');
+  });
+
+  it('falls back from blank health but retains a reachable service despite a storage warning', () => {
+    expect(getServiceHealthPresentation('online', '  ').label).toBe('Healthy');
+    expect(getServiceHealthPresentation('warning', ' Healthy ').label).toBe('Healthy');
+    expect(getServiceHealthPresentation('degraded', 'healthy').label).toBe('Healthy');
+    expect(getServiceHealthPresentation('online', 'degraded').label).toBe('Degraded');
+  });
 });

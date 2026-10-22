@@ -732,10 +732,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
                     <Show when={drawer.pbsData()}>
                       {(pbs) => {
-                        const connection = getServiceHealthPresentation(
-                          resource().status,
-                          pbs().connectionHealth,
-                        );
+                        const connection = () =>
+                          getServiceHealthPresentation(resource().status, pbs().connectionHealth);
                         return (
                           <div class="rounded-sm border border-indigo-200 bg-indigo-50 p-3 dark:border-indigo-700 dark:bg-indigo-900/25">
                             <div class="mb-2 flex items-center justify-between gap-2">
@@ -754,8 +752,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <div class="space-y-1.5 text-[11px]">
                               <InfoCardKeyValueRow
                                 label="State"
-                                value={connection.label}
-                                valueClass={connection.text}
+                                value={connection().label}
+                                valueClass={connection().text}
                               />
                               <Show when={pbs().version}>
                                 <InfoCardKeyValueRow label="Version" value={pbs().version} />
@@ -983,10 +981,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
                     <Show when={drawer.pmgData()}>
                       {(pmg) => {
-                        const connection = getServiceHealthPresentation(
-                          resource().status,
-                          pmg().connectionHealth,
-                        );
+                        const connection = () =>
+                          getServiceHealthPresentation(resource().status, pmg().connectionHealth);
                         return (
                           <div class="rounded-sm border border-rose-200 bg-rose-50 p-3 dark:border-rose-700 dark:bg-rose-900/25">
                             <div class="mb-2 flex items-center justify-between gap-2">
@@ -1005,8 +1001,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                             <div class="space-y-1.5 text-[11px]">
                               <InfoCardKeyValueRow
                                 label="State"
-                                value={connection.label}
-                                valueClass={connection.text}
+                                value={connection().label}
+                                valueClass={connection().text}
                               />
                               <Show when={pmg().version}>
                                 <InfoCardKeyValueRow label="Version" value={pmg().version} />
