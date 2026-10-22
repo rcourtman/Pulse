@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "a3f9feb53e557bc1dfa4dd7e0feceb84ca883a4f",
+  "verified_at": "2026-10-22T07:36:54.469063Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts",
+    "frontend-modern/src/utils/format.ts",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "86d59a7e2e870c28bd5bad3f9daf73ca8c4f90b6484b2a22daec8b817f9009ff",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "2f9ef0583ec6eb4fb6aac8e720cbe5f0b501844c4128425d4836708d154b9d98",
+    "frontend-modern/src/components/Workloads/guestDrawerModel.ts": "60fc404d4145298f6cdfa0b611971e9905a4bcc6eb4451abd4aafa6c453d9c05",
+    "frontend-modern/src/utils/format.ts": "96afed253504a0d26bb9a83da5b739668192b04eb6aa2570c159e107dc1e75ad",
+    "frontend-modern/src/utils/workloadGuestPresentation.ts": "8fc90db1263767c861868ce9f8be3c96acb3b784d8b53b018bba40fdf801ea28"
+  },
+  "routes": [
+    "/browser-tests/backup-completion-time.html (production GuestRow, backup badge/indicator/disclosures and full GuestDrawer; synthetic existing observations and policy only)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Missing completion displays Not found and No completed backup found, with the collected/matched inventory limitation in the dialog/hover and full drawer. No universal absence or first-ever backup claim.",
+    "Running remains separate from completed, absent, invalid or future evidence. Actual UTC completion/age/threshold and independent guest-read safety precautions remain; same-open replacements update and withdraw scope appropriately."
+  ],
+  "interactions": [
+    "49 native journey checks across desktop Chromium and dark 320px touch WebKit cover VM/LXC, badge and hidden-column indicator, Enter/tap, Escape and focus return, no row activation, same-open updates, non-UTC display and passive clocks.",
+    "Two complementary closed-row layout checks retain unobscured Not found badges at both viewports. All sixteen final captures were opened with native view_image at original detail. Full explanatory text, narrow fit, complete-time controls and safety warnings were visually inspected.",
+    "All requests are safe synthetic GETs; no off-origin traffic, unexpected request, page or console error. Contexts, browsers and preview server closed."
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "a3f9feb53e557bc1dfa4dd7e0feceb84ca883a4f",
+  "source_suite_receipt": "source-gl2as7fz",
+  "source_suite_source": "47b625de24b8f0eebd993b02a2ccd683cf0ab6eb",
+  "browser_build_receipt": "source-b9110obe",
+  "browser_report_sha256": "42d616f708c460dc2a59d0d6a72fa9db6e532b64d22b40ab9f94d717ee4bfd8d",
+  "closed_row_report_sha256": "20f0748895424d97491f9d8468cbef07cdd673a040456a499e54fd6982d7ec21",
+  "limits": "Synthetic existing Web evidence presentation, not attribution/collection repair, native guest/backup/restore recovery, thaw, filesystem liveness or release availability. The unrelated original Docs history/reload gap remains."
+}
