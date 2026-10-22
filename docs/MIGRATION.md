@@ -73,6 +73,8 @@ is a third, limited backup; it is not a substitute for either procedure above.
    **Settings → System → Recovery → Restore Configuration**, select the file
    and enter its passphrase. Import replaces the included configuration and
    API-token records; it does not merge them with the destination's records.
+   If Pulse reports that no import request was sent because of a size limit,
+   follow the [unsent-import checks](#import-was-not-sent).
 4. Check the result before changing DNS or agent addresses. A success message
    establishes neither full recovery nor fresh monitoring. If import is not
    confirmed, the connection is lost, or reload/apply fails, settings may already
@@ -115,6 +117,27 @@ destination before returning traffic to the intact source; check agent URLs
 and avoid two active writers. There is no guaranteed five-minute recovery time.
 
 ## Troubleshooting
+
+### Import was not sent
+
+The two size-limit messages containing **No import request was sent** mean this
+attempt stopped in the browser, before import was dispatched:
+
+- A selected file over **1 MiB (1,048,576 bytes)** is rejected before it is read.
+- The complete UTF-8 JSON request, including encrypted data and the passphrase,
+  must also fit within **1 MiB**. A smaller file can still exceed this budget
+  once packaged for the request.
+
+Neither message establishes a corrupt backup or a wrong passphrase. Keep the
+original file intact and use its exact passphrase; do not split, truncate or
+edit the encrypted archive, shorten its passphrase or bypass the limit through
+another import route. Preserve both installations and stop the cutover if the
+configuration cannot be transferred. For help, report only the file's byte size,
+source/destination versions and the displayed message, not the file or passphrase.
+
+This describes **only this attempt**, not the destination's existing state. If
+an earlier attempt lost its response, follow the [unconfirmed-import
+checks](#import-was-not-confirmed) below; a later size check does not undo it.
 
 ### Import was not confirmed
 

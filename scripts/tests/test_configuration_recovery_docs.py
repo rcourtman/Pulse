@@ -108,6 +108,31 @@ class ConfigurationRecoveryDocsTest(unittest.TestCase):
         self.assertIn("Could not confirm the import. Settings may already have changed.",
                       read("frontend-modern/src/components/Settings/useBackupTransferFlow.ts"))
 
+    def test_unsent_import_size_checks_do_not_clear_an_earlier_uncertain_write(self):
+        text = read("docs/MIGRATION.md")
+        self.assertIn("[unsent-import checks](#import-was-not-sent)", text)
+        unsent = " ".join(text.split("### Import was not sent\n", 1)[1]
+                          .split("\n### ", 1)[0].split())
+        for boundary in ("No import request was sent", "1 MiB (1,048,576 bytes)",
+                         "before it is read", "complete UTF-8 JSON request",
+                         "including encrypted data and the passphrase",
+                         "A smaller file can still exceed", "original file intact",
+                         "do not split, truncate", "stop the cutover",
+                         "not the file or passphrase", "only this attempt",
+                         "earlier attempt lost its response",
+                         "#import-was-not-confirmed", "does not undo it"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, unsent)
+        # These checks bind help to the two existing local guards and server
+        # budget. Runtime dispatch behaviour has its own executable coverage.
+        producer = read("frontend-modern/src/components/Settings/useBackupTransferFlow.ts")
+        self.assertEqual(producer.count("No import request was sent."), 2)
+        self.assertIn("const MAX_CONFIG_IMPORT_BYTES = 1024 * 1024;", producer)
+        self.assertIn("file.size > MAX_CONFIG_IMPORT_BYTES", producer)
+        self.assertIn("new TextEncoder().encode(body).byteLength > MAX_CONFIG_IMPORT_BYTES", producer)
+        self.assertIn("http.MaxBytesReader(w, r.Body, 1024*1024)",
+                      read("internal/api/configapi/config_export_import_handlers.go"))
+
     def test_deployment_inventory_links_to_the_same_recovery_checklist(self):
         self.assertIn("CONFIGURATION.md#back-up-recoverable-state", read("docs/DEPLOYMENT_MODELS.md"))
 
