@@ -49,9 +49,9 @@ cover successful copies and failures at each of the three upload positions,
 using a synthetic destination canary through the real helper. The closed adapter
 asserts the destination argument is forwarded unchanged, and failure controls
 preserve previous recovery copies and stop retention. These checks establish
-helper log formatting, not native rclone parsing or client-output redaction.
-Client diagnostics remain captured unchanged for the operator and can still be
-private; arbitrary external-client output is not covered by this guarantee.
+helper log formatting, not native rclone parsing. The remote-operation privacy
+contract below additionally suppresses client stdout/stderr; separately configured
+provider logs remain outside the helper's guarantee.
 
 Every configured remote `copyto` also uses `--error-on-no-transfer`. A zero-exit
 skip of an existing destination is not evidence of
