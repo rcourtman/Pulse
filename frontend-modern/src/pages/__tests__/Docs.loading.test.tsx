@@ -110,9 +110,10 @@ describe('Docs load failures and explicit same-guide retry', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Loading documentation');
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
     pending.resolve(markdown(faq));
-    expect(await screen.findByRole('heading', { name: 'FAQ' })).toBeInTheDocument();
+    // FAQ is also the loading title fallback; wait for the fetched section.
+    const heading = await screen.findByRole('heading', { name: 'Answer' });
+    expect(screen.getByRole('heading', { name: 'FAQ' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
-    const heading = screen.getByRole('heading', { name: 'Answer' });
     await waitFor(() => expect(document.activeElement).toBe(heading));
   });
 
