@@ -313,9 +313,10 @@ describe('WorkloadsFilter', () => {
         />
       ));
 
-      expect(screen.getByTestId('workload-history-hover-hint')).toHaveTextContent(
-        'Hover a guest to preview history',
-      );
+      const hint = screen.getByTestId('workload-history-hover-hint');
+      expect(hint).toHaveTextContent('Hover a guest to preview history');
+      // A passive tip reads below the toolbar's controls, not brighter than them.
+      expect(hint).toHaveClass('text-muted');
       unmount();
 
       render(() => (

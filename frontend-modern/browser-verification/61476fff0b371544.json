@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "79709eea0fdc9262437bb7b31deddd1f6c24ba19",
+  "verified_at": "2026-10-22T09:23:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsFilter.tsx": "0d81265e207264a848b490c5a3b0c7ee49607aff2c49397c45a6504c2af48cac"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "mock demo estate (8 nodes, 77 guests), bars mode, history hover, first visit: hint shown in the muted control tone (rgb 148,163,184, same as the View button) beside the History range control",
+    "after the first populated row preview: hint hidden with its box kept, toolbar and table unchanged",
+    "after reload once the hint was seen: hint not rendered",
+    "390px phone width: hint not rendered"
+  ],
+  "interactions": [
+    "hovered a guest row to open the history preview and clear the hint",
+    "reloaded the overview to confirm the seen hint stays gone",
+    "compared computed colours of the hint and the View button at 1280px"
+  ]
+}
