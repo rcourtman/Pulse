@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "f5c1983db3da4cd8f49cd6e706e1659ddd1dbedf",
+  "verified_at": "2026-10-22T09:29:55.219853Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/pages/Docs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/pages/Docs.tsx": "03620424d47752d65e207d1d38eaed377a7419119ce30bfa512074e5cc4a7b9b"
+  },
+  "routes": [
+    "/docs/FAQ?reader=fixture#what-do-pro-and-cloud-unlock",
+    "/docs/README"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 920
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual Docs page, router, renderer, shared Button and stylesheet consume the shipped FAQ in a local fixture shell.",
+    "HTTP 401/403 are refused access; 503 and network interruption are retryable unavailability; 404/410 and successful HTML fallback remain missing. No upstream body is shown.",
+    "Initial loading, repeated failed and successful read, a pending retry and obsolete late response after index navigation.",
+    "Light desktop and dark narrow error, retry and recovered-section pixels inspected. Three narrow error captures were completed after the real theme transition settled."
+  ],
+  "interactions": [
+    "Keyboard Enter and narrow touch retry fetch only the same guide, preserve the URL/query/fragment/history length and shell, then focus and reveal the requested section.",
+    "No automatic retry; pending aria-disabled control rejects duplicate activation without losing keyboard focus, including after another failure.",
+    "Index remains reachable during a pending retry; the late old FAQ cannot replace the index.",
+    "Inspected all ten original current captures plus three settled narrow replacements; no clipped changed copy or horizontal overflow in settled states."
+  ],
+  "browser": {
+    "client": "1.56.1",
+    "desktop": {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    "narrow": {
+      "engine": "WebKit",
+      "version": "26.0",
+      "touch": true
+    }
+  },
+  "source_commit": "f5c1983db3da4cd8f49cd6e706e1659ddd1dbedf",
+  "scope": "Existing Docs reading/retry only, with synthetic HTTP faults and actual shipped successful FAQ. Not full authenticated installation, production access, screen-reader qualification or the separate adverse Docs Back/reload runtime investigation."
+}
