@@ -814,6 +814,10 @@ leaving broadcast headroom to coalesce several sampler invalidations. A cohort
 must not rebase unchanged guest, node, storage, or disk evidence, and the
 provider-backed fixture set refreshes once per full rotation rather than on
 every tick.
+A slower mock tick rotates the PVE estate through a divisor of those cohorts
+that keeps every node sighted within thirty seconds, down to every node per
+tick, so per-second churn never exceeds the two-second default while running
+guests stay inside the Proxmox freshness threshold.
 Mock replication timing is advanced in that same full-rotation refresh, and
 only a job whose schedule phase has passed is rewritten, so keeping demo
 replication on schedule adds no per-tick change for jobs that did not run.

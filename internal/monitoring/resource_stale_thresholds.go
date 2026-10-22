@@ -55,21 +55,36 @@ func resourcePollIntervalsForConfig(cfg *config.Config) resourcePollIntervals {
 // Monitor.resourceStaleThresholds instead, which honours the runtime polling
 // overrides its scheduler reads.
 func ResourceStaleThresholdsForConfig(cfg *config.Config) map[unifiedresources.DataSource]time.Duration {
-	return resourceStaleThresholdsForConfig(cfg, mock.IsMockEnabled(), mock.SupplementalRefreshInterval)
+	return resourceStaleThresholdsForConfig(cfg, mock.IsMockEnabled(), currentMockResourceCadences())
+}
+
+// mockResourceCadences are the mock update loop's wall-clock refresh
+// cadences, which stand in for poll intervals while mock mode is on. A nil
+// cadence leaves its sources on the polled derivation.
+type mockResourceCadences struct {
+	proxmox      func() time.Duration
+	supplemental func() time.Duration
+}
+
+func currentMockResourceCadences() mockResourceCadences {
+	return mockResourceCadences{
+		proxmox:      mock.ProxmoxRefreshInterval,
+		supplemental: mock.SupplementalRefreshInterval,
+	}
 }
 
 func resourceStaleThresholdsForConfig(
 	cfg *config.Config,
 	mockEnabled bool,
-	mockSupplementalCadence func() time.Duration,
+	mockCadences mockResourceCadences,
 ) map[unifiedresources.DataSource]time.Duration {
-	return resourceStaleThresholdsForIntervals(resourcePollIntervalsForConfig(cfg), mockEnabled, mockSupplementalCadence)
+	return resourceStaleThresholdsForIntervals(resourcePollIntervalsForConfig(cfg), mockEnabled, mockCadences)
 }
 
 func resourceStaleThresholdsForIntervals(
 	intervals resourcePollIntervals,
 	mockEnabled bool,
-	mockSupplementalCadence func() time.Duration,
+	mockCadences mockResourceCadences,
 ) map[unifiedresources.DataSource]time.Duration {
 	thresholds := map[unifiedresources.DataSource]time.Duration{
 		unifiedresources.SourceProxmox: resourceStaleThresholdForPollInterval(
@@ -91,14 +106,28 @@ func resourceStaleThresholdsForIntervals(
 	// way the entries above derive theirs, so a slow mock tick (e.g. a large
 	// PULSE_MOCK_UPDATE_INTERVAL on the public demo) does not flag every
 	// provider-owned row as a stale source between refreshes.
-	if mockEnabled && mockSupplementalCadence != nil {
+	if mockEnabled && mockCadences.supplemental != nil {
 		supplemental := resourceStaleThresholdForPollInterval(
-			mockSupplementalCadence(),
+			mockCadences.supplemental(),
 			defaultPlatformResourceStaleThreshold,
 		)
 		thresholds[unifiedresources.SourceTrueNAS] = supplemental
 		thresholds[unifiedresources.SourceVMware] = supplemental
 		thresholds[unifiedresources.SourceAvailability] = supplemental
+	}
+	// Mock PVE nodes and guests are sighted on the update loop's Proxmox
+	// cohort cadence, not the configured PVE poll interval. That cadence
+	// stays inside the default threshold unless a single tick is slower than
+	// its budget; then the threshold derives from it, never dropping below
+	// the configured derivation.
+	if mockEnabled && mockCadences.proxmox != nil {
+		proxmox := resourceStaleThresholdForPollInterval(
+			mockCadences.proxmox(),
+			defaultProxmoxResourceStaleThreshold,
+		)
+		if proxmox > thresholds[unifiedresources.SourceProxmox] {
+			thresholds[unifiedresources.SourceProxmox] = proxmox
+		}
 	}
 	return thresholds
 }
@@ -166,7 +195,7 @@ func (m *Monitor) resourceStaleThresholds() map[unifiedresources.DataSource]time
 	return resourceStaleThresholdsForIntervals(
 		m.resourcePollIntervals(),
 		mock.IsMockEnabled(),
-		mock.SupplementalRefreshInterval,
+		currentMockResourceCadences(),
 	)
 }
 
