@@ -21,6 +21,30 @@
 
 ## Purpose
 
+### Backup artifact identity must be unambiguous before row reconciliation
+
+The existing collected-inventory reader rejects repeated opaque artifact IDs
+within each PBS snapshot, PVE backup-file or guest-snapshot collection. Identical
+duplicates overcount evidence; conflicting duplicates cannot select a first or
+last winner for retained rows and their evidence dialogs. The whole affected
+source uses its existing fixed format-error and isolated retry path, withdrawing
+its previous artifacts and open evidence when the read fails. Independently
+readable source evidence remains usable; missing points do not mean no backups
+exist. No raw record, source name or response body enters the error message.
+
+IDs remain opaque and case-sensitive. The separately prefixed artifact kinds
+may reuse an ID without collision, and task observations retain their existing
+chronology/conflict handling. Distinct points of one workload are not duplicates.
+No collection, protection policy, guest operation or native recovery changes.
+
+`proxmoxBackupInventory.identity.test.ts` covers identical/conflicting duplicates
+in either order and identity compatibility. `ProxmoxBackupsTable.test.tsx` covers
+in-flight replacement with open evidence, source-local withdrawal and recovery.
+`browser-tests/backup-inventory-identity.cjs` exercises synthetic HTTP through
+the production readers, mapper, router and both tables at desktop and 320px
+touch widths. These are presentation/reader proofs, not thaw, filesystem-write,
+restore, installed or release acceptance.
+
 ### Infrastructure agent cards honour native guest power
 
 The existing canonical detail drawer qualifies its selected in-guest agent report

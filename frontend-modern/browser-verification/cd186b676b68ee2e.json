@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "b1b1222626dc8a18e10db41dc663505d60f49039",
+  "verified_at": "2026-10-21T23:58:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupInventory.ts": "42130a7b1438c5208ad1f22197d2697ef0ddb3d67f2a8e7b5c62ccb8c766365b"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Conflicting duplicate IDs in each PBS snapshot, PVE file and guest-snapshot collection fail only the affected inventory",
+    "Last accepted artifact and its open evidence dialog withdraw when an in-flight read returns duplicate IDs",
+    "Independent source remains readable and counts explicitly reflect partial reads, not an empty inventory",
+    "Held isolated retry keeps the warning until an accepted unique observation arrives",
+    "Recovered current point shows the same opaque ID, current verification, archive path or snapshot description in its actual consuming surface",
+    "Coverage is usable after recovery; unrelated URL state survives view navigation"
+  ],
+  "interactions": [
+    "Desktop keyboard Enter/Escape and narrow WebKit touch exercise refresh, evidence details and source-local retry",
+    "Open an accepted point while a refresh is pending, then settle a conflicting response and verify its dialog and artifact disappear",
+    "Open the existing phone Filters disclosure to read its partial count",
+    "Inspect recovered full archive path in the actual table and current verification in the evidence dialog",
+    "Modal close returns focus to its own current point; view tabs preserve unrelated query state",
+    "All14 final captures opened with the native view_image tool; readable desktop/light and320px/dark pixels with no document horizontal overflow"
+  ],
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "playwright": "1.56.1",
+  "browser_report_sha256": "a1d47bb5d33cd95c3f6c941e7afcc8e9af43b6fe33da062c62d4acfea026a132",
+  "limits": "Synthetic HTTP through production reader, model, router and tables. No native guest/backup recovery, independent thaw, filesystem liveness, installed acceptance, publication or release proof. Identical duplicates and opaque/cross-kind/task compatibility are additionally covered by unit tests, not claimed as extra browser cases."
+}

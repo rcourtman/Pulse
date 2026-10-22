@@ -124,17 +124,36 @@ function collection<T>(
   return value as T[];
 }
 
+function artifacts<T extends { id: string }>(
+  data: Record<string, unknown>,
+  key: string,
+  shape: RowShape,
+  allowNil = false,
+): T[] {
+  const rows = collection<T>(data, key, shape, allowNil);
+  // These opaque IDs own retained rows and evidence dialogs. Neither response
+  // order nor a silent deduplication may choose between duplicate observations.
+  // Collections have separate kind prefixes; task observations are not keyed
+  // artifact rows and retain their existing chronology/conflict handling.
+  const ids = new Set<string>();
+  for (const row of rows) {
+    if (ids.has(row.id)) throw new BackupInventoryFormatError();
+    ids.add(row.id);
+  }
+  return rows;
+}
+
 export function parsePVEBackupInventory(payload: unknown): PVEBackupsPayload {
   const data = inventoryData(payload);
   return {
     backupTasks: collection<BackupTask>(data, 'backupTasks', taskShape, true),
-    storageBackups: collection<StorageBackup>(data, 'storageBackups', archiveShape, true),
-    guestSnapshots: collection<GuestSnapshot>(data, 'guestSnapshots', snapshotShape, true),
+    storageBackups: artifacts<StorageBackup>(data, 'storageBackups', archiveShape, true),
+    guestSnapshots: artifacts<GuestSnapshot>(data, 'guestSnapshots', snapshotShape, true),
   };
 }
 
 export function parsePBSBackupInventory(payload: unknown): PBSBackupsPayload {
-  return { backups: collection<PBSBackup>(inventoryData(payload), 'backups', pbsShape) };
+  return { backups: artifacts<PBSBackup>(inventoryData(payload), 'backups', pbsShape) };
 }
 
 export async function readBackupInventoryJSON(response: Response): Promise<unknown> {
