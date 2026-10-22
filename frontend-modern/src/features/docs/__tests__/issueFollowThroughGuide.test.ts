@@ -90,7 +90,9 @@ describe('public issue follow-through guidance', () => {
     expect(releaseText).toContain("Work merged during the soak reaches the next cycle's betas");
     expect(releaseText).toContain('Only a candidate regression replaces a soaking candidate');
     expect(releaseText).toContain('an unrelated fix does not restart its soak');
-    expect(releaseText).toContain('regression from the previous stable release or a failed release attempt');
+    expect(releaseText).toContain(
+      'regression from the previous stable release or a failed release attempt',
+    );
     expect(article.querySelector('a[href="/docs/RELEASE_PROCESS"]')).not.toBeNull();
   });
 
