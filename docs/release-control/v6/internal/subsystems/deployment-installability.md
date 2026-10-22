@@ -6460,16 +6460,18 @@ the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
 The frontend development-tool dependency boundary must retain patched Vitest
-and mocker versions at or above `4.1.11`, with the V8 coverage provider matched
+and mocker versions at or above `4.1.12`, with the V8 coverage provider matched
 to the runner, and a `js-yaml` override at or above `4.3.2`. These floors prevent
-reintroducing redirect-mock file reads (GHSA-82fw-gwwq-j7x9) and empty-merge CPU
+reintroducing unauthenticated manual-mock registration (GHSA-qxg6-89mg-rqv8),
+Windows traversal bypass of the redirect-mock file-read fix (GHSA-xp26-3454-mjgp,
+superseding the `4.1.11` GHSA-82fw-gwwq-j7x9 floor), and empty-merge CPU
 exhaustion (GHSA-2883-xcg3-v3hh) through the locked development graph. The
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proof must
 check manifest floors and all installed lockfile copies, including nested
 copies; a successful production build alone does not establish this property.
 The dependency-free `scripts/check-frontend-vitest.mjs` check also runs before
 ordinary frontend dependency installation. Stable caret floors on reviewed
-Vitest 4.x may advance beyond `4.1.11` without a historical text-pin failure;
+Vitest 4.x may advance beyond `4.1.12` without a historical text-pin failure;
 the lock must satisfy both declarations, retain their root-lock copies and
 exactly align every runner/mocker/coverage copy. Broad or malformed ranges,
 prereleases, unreviewed majors, missing packages and mismatched nested copies
