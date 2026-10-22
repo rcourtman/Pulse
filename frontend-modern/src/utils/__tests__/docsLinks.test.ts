@@ -559,7 +559,8 @@ describe('docsLinks', () => {
     expect(migration).toContain('not a full backup of the installation');
     expect(migration).toContain('Stop Pulse before taking that');
     expect(migration).toContain('matching `.encryption.key`');
-    expect(migration).toContain('reload/apply failure');
+    expect(migration).toContain('reload/apply fails');
+    expect(migration).toContain('[unconfirmed-import checks](#import-was-not-confirmed)');
     expect(migration).toContain('it does not merge');
     expect(migration).toContain('UNIFIED_AGENT.md#moving-pulse-to-a-new-address');
     expect(migration).not.toContain('Update the `--token` flag');
