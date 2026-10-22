@@ -85,6 +85,7 @@ let server;
       locale: spec.locale,
     });
     let context;
+    let page;
     try {
       context = await browser.newContext({
         viewport: spec.viewport,
@@ -94,7 +95,7 @@ let server;
         isMobile: !!spec.isMobile,
         hasTouch: !!spec.hasTouch,
       });
-      const page = await context.newPage();
+      page = await context.newPage();
       page.setDefaultTimeout(8000);
       await page.clock.install({ time: start - 300_000 });
       await page.clock.pauseAt(start);
@@ -133,6 +134,16 @@ let server;
               max_history_days: 90,
               runtime: { build: 'community', label: 'Fixture community' },
             };
+          else if (url.pathname === '/api/metrics-store/history')
+            body = {
+              resourceType: url.searchParams.get('resourceType'),
+              resourceId: url.searchParams.get('resourceId'),
+              range: url.searchParams.get('range'),
+              start: start - 86_400_000,
+              end: start,
+              source: 'mock_synthetic',
+              metrics: {},
+            };
           else if (url.pathname === '/api/alerts/active') body = [];
           else if (url.pathname === '/api/resources')
             body = { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 1 } };
@@ -170,6 +181,7 @@ let server;
         timeout: 30000,
       });
       await page.getByTestId('proof-policy').getByText('Policy read', { exact: true }).waitFor();
+      await page.getByText('No stored history in this range', { exact: true }).first().waitFor();
       // The full drawer's existing Details section is closed by default.
       await page.getByTestId('guest-technical-details').locator('summary').click();
       if (spec.colorScheme === 'dark')
@@ -182,7 +194,7 @@ let server;
       const dialog = () => page.getByRole('dialog', { name: /^Backup status details for / });
       const drawerTime = () =>
         page
-          .getByTestId('guest-technical-details')
+          .getByTestId('guest-drawer-overview')
           .getByText('Last completed backup', { exact: true })
           .locator('xpath=ancestor::tr')
           .locator('time');
@@ -282,8 +294,10 @@ let server;
         assert(
           result.requests
             .slice(beforeTick)
-            .every((r) => r.path === '/api/ai/intelligence/anomalies'),
-          'passive tick adds no requests beyond the unchanged row anomaly poll',
+            .every((r) =>
+              ['/api/ai/intelligence/anomalies', '/api/metrics-store/history'].includes(r.path),
+            ),
+          'passive tick adds only the existing independent row-anomaly and Overview history polls',
         );
         await record(`${type}: running activity and passive age do not renew completion`);
         await page.selectOption('#proof-state', 'ended');
@@ -294,7 +308,7 @@ let server;
           !(await dialog().innerText()).includes('outside the collected or matched inventory'),
         );
         assert(
-          !(await page.getByTestId('guest-technical-details').innerText()).includes(
+          !(await page.getByTestId('guest-drawer-overview').innerText()).includes(
             'outside the collected or matched inventory',
           ),
         );
@@ -316,7 +330,7 @@ let server;
           assert(disclosure.includes(detail));
           assert(!/never|first backup|no completed backup yet/i.test(disclosure));
           assert.equal(disclosure.includes('Backup running now'), state === 'absent');
-          assert((await page.getByTestId('guest-technical-details').innerText()).includes(detail));
+          assert((await page.getByTestId('guest-drawer-overview').innerText()).includes(detail));
           assert.equal(
             (await badge().innerText()).trim(),
             state === 'absent' ? 'Running' : 'Not found',
@@ -349,7 +363,9 @@ let server;
         assert(
           result.requests
             .slice(beforeFuture)
-            .every((r) => r.path === '/api/ai/intelligence/anomalies'),
+            .every((r) =>
+              ['/api/ai/intelligence/anomalies', '/api/metrics-store/history'].includes(r.path),
+            ),
         );
         await record(`${type}: now-valid supplied time reappears, no new observation manufactured`);
         await close(badge());
@@ -400,8 +416,24 @@ let server;
       await record(
         'missing name-cell indicator is keyboard/touch accessible without a false absence claim',
       );
-      await page.getByTestId('guest-technical-details').scrollIntoViewIfNeeded();
+      await page.getByTestId('guest-drawer-exceptions').scrollIntoViewIfNeeded();
       await capture('missing-drawer');
+    } catch (error) {
+      // Retain pixels at the failing step instead of requiring an unchanged rerun.
+      if (page && !page.isClosed()) {
+        try {
+          const p = path.join(output, `${spec.name}-failure.png`);
+          await page.screenshot({ path: p, fullPage: true, timeout: 5000 });
+          result.captures.push({
+            path: path.relative(root, p),
+            bytes: fs.statSync(p).size,
+            sha256: hash(fs.readFileSync(p)),
+          });
+        } catch (captureError) {
+          result.captureError = String(captureError);
+        }
+      }
+      throw error;
     } finally {
       if (context) {
         await context.close();
