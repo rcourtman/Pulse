@@ -143,6 +143,7 @@ const renderLayout = (
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
+    setKioskMode(false);
     setViewportWidth(1440);
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
@@ -160,6 +161,7 @@ describe('AppLayout navigation icons', () => {
     aiChatStore.setEnabled(false);
     clearRuntimeBranding();
     cleanup();
+    setKioskMode(false);
   });
 
   const getInfrastructureLink = (name: string) => {
@@ -323,7 +325,7 @@ describe('AppLayout navigation icons', () => {
         'The live connection is open, but monitoring data has not arrived on this connection. Any retained readings may be out of date. Keep working sessions open.',
     };
     const [status, setStatus] = createSignal(pending);
-    renderLayout(platformResources(), '/proxmox/overview', undefined, ['monitoring:read'], status);
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['settings:read'], status);
     const warning = screen.getByRole('status', { name: 'Waiting for monitoring data' });
     expect(warning).toHaveTextContent('Any retained readings may be out of date');
     expect(warning).toHaveTextContent('Keep working sessions open');
@@ -346,6 +348,24 @@ describe('AppLayout navigation icons', () => {
     setStatus(pending);
     expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toBeInTheDocument();
     expect(proxmox).toHaveFocus();
+  });
+
+  it('keeps the data-wait notice in a kiosk session without granting navigation or settings', () => {
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['monitoring:read'], () => ({
+      kind: 'awaiting-data',
+      label: 'Waiting for data',
+      detail: 'Monitoring data has not arrived on this connection.',
+      tone: 'warning',
+    }));
+    expect(isKioskMode()).toBe(true);
+    expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toHaveTextContent(
+      'Monitoring data has not arrived on this connection.',
+    );
+    expect(
+      screen.queryByRole('navigation', { name: 'Primary navigation' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Settings/ })).not.toBeInTheDocument();
   });
 
   it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {
