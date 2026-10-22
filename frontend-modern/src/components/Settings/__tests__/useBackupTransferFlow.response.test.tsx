@@ -61,8 +61,8 @@ const invalidAcknowledgements = [
 
 describe('configuration transfer completion contract', () => {
   let downloaded: BlobPart[][];
-  let createURL: ReturnType<typeof vi.fn>;
-  let revokeURL: ReturnType<typeof vi.fn>;
+  let createURL: ReturnType<typeof vi.fn<typeof URL.createObjectURL>>;
+  let revokeURL: ReturnType<typeof vi.fn<typeof URL.revokeObjectURL>>;
   let click: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     vi.resetAllMocks();
@@ -78,8 +78,8 @@ describe('configuration transfer completion contract', () => {
         }
       },
     );
-    createURL = vi.fn(() => 'blob:synthetic-backup');
-    revokeURL = vi.fn();
+    createURL = vi.fn<typeof URL.createObjectURL>(() => 'blob:synthetic-backup');
+    revokeURL = vi.fn<typeof URL.revokeObjectURL>();
     class DownloadURL extends URL {
       static createObjectURL = createURL;
       static revokeObjectURL = revokeURL;

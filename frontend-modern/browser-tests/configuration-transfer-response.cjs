@@ -198,7 +198,14 @@ let server, browser;
               .evaluate((el) => el.files[0].name),
             'synthetic-backup.json',
           );
-        assert.equal(await page.getByRole('region', { name: 'Notifications' }).innerText(), '');
+        // The dialog deliberately makes background toast siblings inert. Check
+        // their contents too, rather than overlooking concealed success feedback.
+        assert.equal(
+          await page
+            .getByRole('region', { name: 'Notifications', includeHidden: true })
+            .innerText(),
+          '',
+        );
         assert.equal(await page.evaluate(() => window.fixtureDocumentIdentity), documentIdentity);
         assert.ok(await dialog.getByRole('button', { name: 'Cancel', exact: true }).isEnabled());
         failures.push({
