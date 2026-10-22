@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 
 import type { Alert, Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -377,6 +378,68 @@ describe('DockerHostsTable', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('type', 'button');
     expect(screen.getByRole('tab', { name: 'Manage' })).toHaveAttribute('type', 'button');
     expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
+  });
+
+  it('narrows the containers from a row click and keeps the drawer on the chevron', () => {
+    window.history.pushState({}, '', '/docker/overview');
+    const onShow = vi.fn();
+    const [selectedId, setSelectedId] = createSignal<string | null>(null);
+
+    render(() => (
+      <DockerHostsTable
+        resources={[makeDockerHost()]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+        containerScope={{
+          sectionId: 'docker-containers-section',
+          isSelected: (host) => selectedId() === host.id,
+          onShow,
+        }}
+      />
+    ));
+
+    const hostRow = screen.getByText('docker-01').closest('tr')!;
+    const chevron = hostRow.querySelector('[data-row-action="true"]')!;
+    // The row no longer opens the drawer, so phones keep the chevron.
+    expect(chevron).not.toHaveClass('sr-only');
+
+    fireEvent.click(hostRow);
+    expect(onShow).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent:docker-01' }));
+    expect(screen.queryByTestId('docker-host-drawer')).toBeNull();
+
+    const nameButton = screen.getByRole('button', { name: 'Show containers on docker-01' });
+    expect(nameButton).toHaveAttribute('aria-controls', 'docker-containers-section');
+    expect(nameButton).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(nameButton);
+    expect(onShow).toHaveBeenCalledTimes(2);
+
+    setSelectedId('agent:docker-01');
+    expect(hostRow).toHaveAttribute('data-summary-row-active', 'true');
+    expect(nameButton).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(chevron);
+    expect(screen.getByTestId('docker-host-drawer')).toBeInTheDocument();
+    expect(onShow).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the plain host name and row-click drawer where nothing is scoped', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[makeDockerHost()]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        title="Swarm hosts"
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: /^Show containers on/ })).toBeNull();
+    const hostRow = screen.getByText('docker-01').closest('tr')!;
+    expect(hostRow.querySelector('[data-row-action="true"]')).toHaveClass('sr-only');
+    fireEvent.click(hostRow);
+    expect(screen.getByTestId('docker-host-drawer')).toBeInTheDocument();
   });
 
   it('opens a saved Docker host web interface without toggling the row', () => {

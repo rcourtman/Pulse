@@ -45,7 +45,9 @@ import {
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
+  getPlatformResourceDetailRowInteractionProps,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { PlatformHostScopeNameButton } from '@/features/platformPage/PlatformHostScope';
 import type { Resource } from '@/types/resource';
 
 // vSphere ESXi hosts are virtualization hypervisors managed by vCenter,
@@ -147,6 +149,15 @@ export const VsphereHostsTable: Component<{
   emptyDescription: string;
   title?: string;
   showToolbar?: boolean;
+  /**
+   * When set, a row click narrows the page's VM table to that host (as on the
+   * Proxmox overview) and the chevron alone opens the host's drawer.
+   */
+  vmScope?: {
+    sectionId: string;
+    selectedHostId: () => string | null;
+    onShow: (host: Resource) => void;
+  };
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
@@ -160,6 +171,12 @@ export const VsphereHostsTable: Component<{
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-host-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const singleVcenter = createMemo(() => isSingleVmwareVcenter(props.scope));
+  // A scoping table keeps the details chevron on phones, so the host column
+  // takes the width Uptime does not need.
+  const phoneWidths = () =>
+    props.vmScope
+      ? { host: 'platform-table-mobile-w-38', uptime: 'platform-table-mobile-w-10' }
+      : { host: 'platform-table-mobile-w-30', uptime: 'platform-table-mobile-w-20' };
 
   const vmCountByHost = createMemo(() => {
     const map = new Map<string, number>();
@@ -240,7 +257,7 @@ export const VsphereHostsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class="platform-table-mobile-w-30 md:w-[15%]"
+                  class={`${phoneWidths().host} md:w-[15%]`}
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -312,7 +329,7 @@ export const VsphereHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="uptime"
-                  class="platform-table-mobile-w-20 w-[16%] md:w-[6%]"
+                  class={`${phoneWidths().uptime} w-[16%] md:w-[6%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
@@ -376,6 +393,12 @@ export const VsphereHostsTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(host);
                     const isExpanded = () => drawer.isExpanded(host);
+                    const isVmScopeSelected = () => props.vmScope?.selectedHostId() === host.id;
+                    const rowInteraction = getPlatformResourceDetailRowInteractionProps({
+                      expanded: false,
+                      onToggle: () =>
+                        props.vmScope ? props.vmScope.onShow(host) : drawer.toggle(host),
+                    });
                     const hostAlertStyles = createMemo(() =>
                       getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
                     );
@@ -391,14 +414,18 @@ export const VsphereHostsTable: Component<{
                         <TableRow
                           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${hostAlertBg()}`}
                           data-vsphere-host-row={host.id}
-                          onClick={() => drawer.toggle(host)}
+                          data-summary-row-active={isVmScopeSelected() ? 'true' : undefined}
+                          onClick={rowInteraction.onClick}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
+                            <div
+                              class={`flex min-w-0 items-center ${props.vmScope ? 'gap-1 sm:gap-2' : 'gap-2'}`}
+                            >
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
                                 resourceLabel={name()}
                                 controlsId={detailRowId()}
+                                hideWhenRowTappableOnMobile={!props.vmScope}
                                 onToggle={() => drawer.toggle(host)}
                               />
                               <StatusDot
@@ -411,7 +438,17 @@ export const VsphereHostsTable: Component<{
                                 class="min-w-0 truncate font-semibold text-base-content"
                                 title={name()}
                               >
-                                {name()}
+                                <Show when={props.vmScope} fallback={name()}>
+                                  {(scope) => (
+                                    <PlatformHostScopeNameButton
+                                      name={name()}
+                                      workloadNoun="VMs"
+                                      controlsId={scope().sectionId}
+                                      selected={isVmScopeSelected()}
+                                      onSelect={() => scope().onShow(host)}
+                                    />
+                                  )}
+                                </Show>
                               </span>
                               <Show when={mobilePowerException()}>
                                 {(power) => (

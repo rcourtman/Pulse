@@ -4,6 +4,7 @@ import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@/types/resource';
 import type { PlatformIssue } from '@/features/platformPage/PlatformIssueReason';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
+import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
 
 export type VmwarePageTabId = 'overview' | 'storage' | 'networks' | 'health' | 'activity';
 export type VmwareDatastoreStatusFilter =
@@ -197,6 +198,39 @@ export const isSingleVmwareVcenter = (resources: readonly Resource[]): boolean =
 
 export const vmwareVcenterLabel = (resource: Resource): string =>
   resource.vmware?.connectionName?.trim() || resource.vmware?.vcenterHost?.trim() || '';
+
+/**
+ * The VM-table scope a vSphere host row narrows to: the scope the workload
+ * table already gave one of the host's own VMs (`workloadScopeById`, keyed by
+ * VM resource ID), so host and VM rows never disagree. A VM names its host by
+ * the host's managed object ID, which only one vCenter connection gives that
+ * host. A host with no listed VMs gets a scope that names it and matches
+ * nothing, so the table reads "VMs on <host>" and is empty.
+ */
+export const getVsphereHostWorkloadScope = (
+  host: Resource,
+  resources: readonly Resource[],
+  workloadScopeById: ReadonlyMap<string, string>,
+): string => {
+  const hostObjectId = host.vmware?.managedObjectId?.trim() || '';
+  const connectionId = host.vmware?.connectionId?.trim() || '';
+  for (const resource of resources) {
+    if (
+      hostObjectId &&
+      resource.type === 'vm' &&
+      resource.vmware?.runtimeHostId?.trim() === hostObjectId &&
+      (resource.vmware?.connectionId?.trim() || '') === connectionId
+    ) {
+      const scope = workloadScopeById.get(resource.id);
+      if (scope) return scope;
+    }
+  }
+  return workloadNodeScopeId({
+    node: host.name,
+    instance:
+      host.vmware?.clusterName ?? host.vmware?.datacenterName ?? host.vmware?.connectionName ?? '',
+  });
+};
 
 export const getVmwareResourceDisplayStatus = (resource: Resource): string =>
   hasImpairedResourceSource(resource, 'vmware-vsphere') ? 'degraded' : resource.status;

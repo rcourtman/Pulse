@@ -24,7 +24,6 @@ import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel'
 import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS } from '@/components/shared/summaryInteractionA11y';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -52,6 +51,7 @@ import {
   getPlatformResourceDetailRowInteractionProps,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { PlatformHostScopeNameButton } from '@/features/platformPage/PlatformHostScope';
 import { type ProxmoxEstateTopology } from '@/features/platformPage/platformEstateOverviewModel';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
@@ -566,24 +566,15 @@ export const ProxmoxNodesTable: Component<{
                                     : `Open ${name()} web interface`
                                 }
                               >
-                                <button
-                                  type="button"
-                                  class={`block max-w-full truncate rounded-xs text-left ${SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS}`}
-                                  aria-label={`Show guests on ${name()}`}
-                                  aria-controls="proxmox-guests-section"
-                                  aria-pressed={isGuestFilterSelected()}
-                                  title={
-                                    isGuestFilterSelected()
-                                      ? `Clear guest filter for ${name()}`
-                                      : `Show guests on ${name()}`
-                                  }
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    showGuests();
-                                  }}
+                                <PlatformHostScopeNameButton
+                                  name={name()}
+                                  workloadNoun="guests"
+                                  controlsId="proxmox-guests-section"
+                                  selected={isGuestFilterSelected()}
+                                  onSelect={showGuests}
                                 >
                                   {visibleNodeLabel()}
-                                </button>
+                                </PlatformHostScopeNameButton>
                               </ResourceNameWithWebInterfaceLink>
                             </div>
                             <Show when={!isOnline()}>
