@@ -8656,3 +8656,15 @@ other platforms. A TrueNAS system still opens the Overview tab unfiltered,
 because its table has no search box, so service drawers keep no owner link.
 The Overview alerts table keeps its own search. No resource identity, status
 or alert rule changes.
+
+Drawer detail rows that carry a sentence rather than a value wrap instead of
+cutting off with an ellipsis: the TrueNAS pool and disk storage, protection,
+rebuild, risk, posture and scan summaries, and the vSphere hardware upgrade and
+VMware Tools install errors, set the row's `wrap`. Short values stay on one
+line. The availability fleet view opens the shared resource drawer as a
+full-width grid item directly after the selected tile (a dense grid keeps the
+other tiles packed), so it lands beneath that tile's row instead of below the
+whole fleet; the fleet list is reconciled by resource id so a live snapshot
+updates the open drawer in place rather than remounting it, and closing it from
+its header returns focus to the tile. No resource identity, status or
+availability rule changes.

@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "2130d8962b09529c5fb0f0551d6adf3d5a9d7339",
+  "verified_at": "2026-10-22T18:13:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "27cb22683f596c8c7d4f0db9e2793f236b2f70cd0daeb21be6b41a94d6523680",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts": "0e7e6412fc453a8a1b85969c87da13f420d57f5beaa53422968a67994bcaa850",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "81a497f53b7f54a22187d5fdb3c08bcea794c0f996ead5b6d49317c54b2532d1"
+  },
+  "routes": [
+    "/standalone/availability?view=fleet",
+    "/truenas/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this change on the full mock estate, signed in through the real login",
+    "Availability fleet: opening the second tile puts the shared resource drawer 8px beneath that tile's row, spanning the full grid width, with the remaining tiles packed after it",
+    "Closing the fleet drawer from its header collapse button removes it and returns keyboard focus to the tile",
+    "TrueNAS storage pool drawer: the storage, protection and posture sentences (\"ZFS pool archive is DEGRADED...\") wrap with no clipped values at desktop width",
+    "No console or page errors at either width"
+  ],
+  "interactions": [
+    "Clicking a fleet tile opens the drawer below it; the drawer header's collapse button closes it",
+    "Expanding a TrueNAS pool row opens its drawer"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "chromium-1234 headless"
+  },
+  "scope": "Full authenticated application on a mock estate; mock data, not live provider connections."
+}

@@ -94,7 +94,9 @@ const compactRows = compactDetailRows;
 const compactSections = compactDetailSections;
 
 // Identifiers and paths an operator copies (hostnames, serials, dataset
-// paths, addresses) wrap in full instead of ending in an ellipsis.
+// paths, addresses) and the sentences TrueNAS reports (risk, posture,
+// protection, rebuild and scan summaries) wrap in full instead of ending in an
+// ellipsis that a phone cannot hover to read.
 const wrapRow = (
   label: string,
   value?: string | null,
@@ -193,20 +195,20 @@ const buildTrueNASSystemSections = (
     row('Storage risk', normalizeDelimitedLabel(truenas.storageRisk?.level), {
       tone: truenas.storageRisk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
     }),
-    row('Storage summary', asString(truenas.storageRiskSummary), { tone: 'warning' }),
-    row('Storage posture', asString(truenas.storagePostureSummary), {
+    wrapRow('Storage summary', asString(truenas.storageRiskSummary), { tone: 'warning' }),
+    wrapRow('Storage posture', asString(truenas.storagePostureSummary), {
       tone: truenas.storagePostureSummary ? 'warning' : 'default',
     }),
     row('Protection reduced', yesNoValue(truenas.protectionReduced), {
       tone: truenas.protectionReduced ? 'warning' : 'success',
     }),
-    row('Protection summary', asString(truenas.protectionSummary), {
+    wrapRow('Protection summary', asString(truenas.protectionSummary), {
       tone: truenas.protectionSummary ? 'warning' : 'default',
     }),
     row('Rebuild active', yesNoValue(truenas.rebuildInProgress), {
       tone: truenas.rebuildInProgress ? 'warning' : 'success',
     }),
-    row('Rebuild', asString(truenas.rebuildSummary)),
+    wrapRow('Rebuild', asString(truenas.rebuildSummary)),
   ]);
 
   const serviceRows = compactRows([
@@ -383,18 +385,18 @@ const buildTrueNASStorageSections = (
     row('Risk', normalizeDelimitedLabel(storage.risk?.level), {
       tone: storage.risk?.level?.toLowerCase() === 'warning' ? 'warning' : 'default',
     }),
-    row('Risk summary', asString(storage.riskSummary), { tone: 'warning' }),
-    row('Posture', asString(storage.postureSummary), {
+    wrapRow('Risk summary', asString(storage.riskSummary), { tone: 'warning' }),
+    wrapRow('Posture', asString(storage.postureSummary), {
       tone: storage.postureSummary ? 'warning' : 'default',
     }),
     row('Protection reduced', yesNoValue(storage.protectionReduced), {
       tone: storage.protectionReduced ? 'warning' : 'success',
     }),
-    row('Protection summary', asString(storage.protectionSummary), {
+    wrapRow('Protection summary', asString(storage.protectionSummary), {
       tone: storage.protectionSummary ? 'warning' : 'default',
     }),
-    row('Rebuild', asString(storage.rebuildSummary)),
-    row('Scan / resilver', zfsScanLabel(storage), {
+    wrapRow('Rebuild', asString(storage.rebuildSummary)),
+    wrapRow('Scan / resilver', zfsScanLabel(storage), {
       tone: storage.zfsPool?.scanDetails?.errors ? 'warning' : 'default',
     }),
     row('ZFS errors', zfsErrorLabel(storage), { tone: 'warning' }),
