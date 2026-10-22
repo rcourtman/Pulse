@@ -151,12 +151,17 @@ if tool == "age":
     sys.exit(8 if number == scenario.get("age_fail") else 0)
 if tool == "rclone":
     remote = root / "remote"
+    if scenario.get("private_client_output"):
+        # Clients can repeat connection-string credentials in either stream,
+        # on success as well as failure. Never contact a real remote here.
+        print("SYNTHETIC-CLIENT-STDOUT " + os.environ["PULSE_RCLONE_REMOTE"])
+        print("SYNTHETIC-CLIENT-STDERR " + os.environ["PULSE_RCLONE_REMOTE"], file=sys.stderr)
     if args[0] == "copyto":
         # Accept the unchanged helper for explicit exact-parent controls too.
         assert len(args) in (3, 4) and args[3:] in ([], ["--error-on-no-transfer"]), args
         assert Path(args[1]).resolve().is_relative_to(backups), args
         assert Path(args[1]).is_file(), args
-        assert args[2] == "fixture-remote:bucket/pulse-cloud-tarballs/" + Path(args[1]).name, args
+        assert args[2] == os.environ["PULSE_RCLONE_REMOTE"] + "/pulse-cloud-tarballs/" + Path(args[1]).name, args
         number = 1 + sum(call[:2] == [tool, "copyto"] for call in previous)
         if number == scenario.get("upload_fail"):
             sys.exit(10)
@@ -172,7 +177,7 @@ if tool == "rclone":
         (remote / Path(args[1]).name).write_bytes(Path(args[1]).read_bytes())
         sys.exit(0)
     if args[0] == "delete":
-        assert args[:3] == ["delete", "fixture-remote:bucket/pulse-cloud-tarballs", "--min-age"], args
+        assert args[:3] == ["delete", os.environ["PULSE_RCLONE_REMOTE"] + "/pulse-cloud-tarballs", "--min-age"], args
         assert args[3].endswith("d") and args[3][:-1].isdigit(), args
         if scenario.get("remote_retention_fail"):
             sys.exit(11)
@@ -415,6 +420,71 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_stopped_before_retention(self.invoke({"upload_fail": 3}))
         for path in self.old:
             self.assertEqual((self.remote / path.name).read_bytes(), b"retained previous fixture")
+
+    def assert_private_remote_log(self):
+        self.assertNotIn("SYNTHETIC-PRIVATE-REMOTE", self.output)
+        self.assertNotIn("SYNTHETIC-CLIENT-STDOUT", self.output)
+        self.assertNotIn("SYNTHETIC-CLIENT-STDERR", self.output)
+        copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+        self.assertTrue(copies, self.calls)
+        self.assertTrue(all("SYNTHETIC-PRIVATE-REMOTE" in call[3] for call in copies), copies)
+        self.assertTrue(all(call[4:] == ["--error-on-no-transfer"] for call in copies), copies)
+
+    def private_remote(self):
+        # A valid rclone connection-string shape, with synthetic values only.
+        return ":s3,access_key_id=SYNTHETIC-PRIVATE-REMOTE,secret_access_key=SYNTHETIC-PRIVATE-REMOTE:bucket"
+
+    def assert_current_recovery_archives(self, encrypted):
+        for label, directory in (("tenants", "tenants"), ("cp", "control-plane")):
+            suffix = ".tar.gz.age" if encrypted else ".tar.gz"
+            path = self.backups / f"pulse-backup-{label}-{self.timestamp}{suffix}"
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            content = path.read_bytes()
+            if encrypted:
+                self.assertTrue(content.startswith(b"FAKE-AGE\n"))
+                content = content.removeprefix(b"FAKE-AGE\n")
+            with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+                self.assertEqual(archive.extractfile(f"{directory}/fixture.txt").read(),
+                                 f"synthetic {directory} data\n".encode())
+
+    def test_remote_success_logs_keep_destination_and_client_output_private(self):
+        for mode in ("false", "true"):
+            with self.subTest(mode=mode):
+                result = self.invoke({"private_client_output": True},
+                                     PULSE_BACKUP_ENCRYPT=mode, PULSE_RCLONE_REMOTE=self.private_remote())
+                self.assertEqual(result.returncode, 0, self.output)
+                self.assert_private_remote_log()
+                self.assertEqual(self.output.count("upload complete:"), 3, self.output)
+                self.assertIn("=== tarball backup finished ===", self.output)
+                self.assert_remote_retention_scope()
+                self.assert_current_recovery_archives(encrypted=mode == "true")
+
+    def test_remote_upload_error_logs_keep_private_data_and_preserve_recovery(self):
+        for mode in ("false", "true"):
+            for number in (1, 2, 3):
+                with self.subTest(mode=mode, number=number):
+                    result = self.invoke({"upload_fail": number, "private_client_output": True},
+                                         PULSE_BACKUP_ENCRYPT=mode, PULSE_RCLONE_REMOTE=self.private_remote())
+                    self.assert_skipped_upload_stops_retention(result, number)
+                    self.assert_private_remote_log()
+                    self.assertIn("rclone exit 10", self.output)
+                    self.assert_current_recovery_archives(encrypted=mode == "true")
+
+    def test_remote_retention_error_logs_keep_private_data_and_completed_archives(self):
+        for mode in ("false", "true"):
+            with self.subTest(mode=mode):
+                result = self.invoke({"remote_retention_fail": True, "private_client_output": True},
+                                     PULSE_BACKUP_ENCRYPT=mode, PULSE_RCLONE_REMOTE=self.private_remote())
+                self.assertNotEqual(result.returncode, 0, self.output)
+                self.assert_private_remote_log()
+                self.assertIn("Remote retention failed", self.output)
+                self.assertIn("rclone exit 11", self.output)
+                self.assertNotIn("=== tarball backup finished ===", self.output)
+                self.assertEqual(self.output.count("upload complete:"), 3, self.output)
+                self.assert_remote_retention_scope()
+                self.assert_current_recovery_archives(encrypted=mode == "true")
+                for path in self.old:
+                    self.assertEqual((self.remote / path.name).read_bytes(), b"retained previous fixture")
 
     def assert_skipped_upload_stops_retention(self, result, number):
         self.assert_stopped_before_retention(result)

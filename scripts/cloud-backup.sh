@@ -13,6 +13,7 @@
 # Archive, encryption and configured uploads must succeed before retention.
 # Remote jobs reject rclone dry-run/interactive settings, never override them.
 # Every remote copy must transfer its file, not merely exit zero after a skip.
+# Remote definitions and client output can contain credentials; logs omit both.
 # Local retention also ages out this helper's old top-level partial evidence.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
@@ -254,15 +255,20 @@ upload_remote() {
   filename="$(basename "${file_path}")"
   local dest="${PULSE_RCLONE_REMOTE}/${remote_prefix}/${filename}"
 
-  log "uploading to remote: ${dest}"
+  log "uploading backup file: ${filename}"
   # An existing-destination skip can return exit zero. Require a transfer for
   # each of this job's three new files before local
   # retention may delete any previous recovery copy. Do not disable the user's
   # selection rules or force overwrites; a skipped copy must instead stop here.
-  if ! rclone copyto "${file_path}" "${dest}" --error-on-no-transfer; then
-    die "Remote upload failed or transferred no file; no retention performed; preserve local backup files and check rclone configuration and output"
+  # Connection strings and client diagnostics can repeat private credentials.
+  # Keep them out of the helper's log even on success or verbose client settings.
+  # Retain the phase/exit instead of trying to redact arbitrary provider text.
+  if rclone copyto "${file_path}" "${dest}" --error-on-no-transfer >/dev/null 2>&1; then
+    log "upload complete: ${filename}"
+  else
+    local status=$?
+    die "Remote upload failed or transferred no file; no retention performed; rclone exit ${status}; preserve local backup files and check remote configuration and access"
   fi
-  log "upload complete: ${dest}"
 }
 
 # Rotate local backups (keep last N days)
@@ -299,9 +305,12 @@ rotate_remote() {
   log "rotating remote backups (${RETENTION_DAYS} day retention)"
   # Anchor each include at the remote root, then exclude everything else.
   # Sharing the prefix must not make unrelated objects eligible for deletion.
-  if ! rclone delete "${remote_dir}" --min-age "${RETENTION_DAYS}d" \
-    --max-depth 1 "${filters[@]}" --exclude '*' 2>/dev/null; then
-    die "Remote retention failed; backup uploads completed, but cleanup may be incomplete"
+  if rclone delete "${remote_dir}" --min-age "${RETENTION_DAYS}d" \
+    --max-depth 1 "${filters[@]}" --exclude '*' >/dev/null 2>&1; then
+    return 0
+  else
+    local status=$?
+    die "Remote retention failed; rclone exit ${status}; backup uploads completed, but cleanup may be incomplete; check remote configuration and access"
   fi
 }
 

@@ -64,6 +64,19 @@ in `--require-native`; optional skips cannot establish their result. A client's
 transfer verdict is not independent remote content verification, atomic set
 publication, provider acceptance, application consistency or restored workloads.
 
+The helper's remote-operation log contains only the generated backup filename,
+phase and numeric rclone failure exit. It never echoes the configured remote or
+copies client stdout/stderr into that log: connection-string credentials and
+provider diagnostics are private even on successful or verbose invocations.
+It passes the configured destination, transfer requirement and retention filters
+unchanged. Upload failure still stops later copies and both retention passes;
+retention failure preserves the new completed archives and remains a failed job.
+Closed-client entrypoint cases cover successful jobs, each upload failure and
+remote-retention failure in both encryption modes, asserting private canaries
+are absent from logs while checking destination argv, archive bytes and recovery
+copy preservation. This is helper-log privacy, not provider-log redaction,
+real-client admission, cloud delivery or restored-workload acceptance.
+
 The configured source root itself must be a physical directory, not a symbolic
 link: tar otherwise exits successfully after archiving only the link. Admission
 rejects either linked root, including trailing-slash spellings, before creating
