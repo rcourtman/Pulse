@@ -134,13 +134,14 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           controls[kind] = scopes[kind].getByRole('button', { name: 'Hide service', exact: true });
           await states[kind].evaluate((node) => (node.dataset.retainedState = 'original'));
         }
-        const expectState = async (kind, label, tone) => {
+        const expectState = async (kind, label, tone, sameOpen = true) => {
           const text = states[kind].getByText(label, { exact: true });
           await expect(text).toBeVisible();
           await expect(text).toHaveClass(new RegExp(`(?:^|\\s)${tone}(?:\\s|$)`));
-          await expect(states[kind]).toHaveAttribute('data-retained-state', 'original');
+          if (sameOpen)
+            await expect(states[kind]).toHaveAttribute('data-retained-state', 'original');
           await expect(controls[kind]).toBeVisible();
-          transitions.push({ kind, label, tone, text: await states[kind].innerText() });
+          transitions.push({ kind, label, tone, sameOpen, text: await states[kind].innerText() });
         };
         const update = async (method, kind, ...args) =>
           page.evaluate(
@@ -213,7 +214,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         for (const kind of ['pbs', 'pmg']) {
           await activate(controls[kind]);
           await activate(scopes[kind].getByRole('button', { name: 'Show service', exact: true }));
-          await expectState(kind, 'Healthy', 'text-green-700');
+          await expectState(kind, 'Healthy', 'text-green-700', false);
         }
         await noOverflow();
         assert.deepEqual(errors, []);
