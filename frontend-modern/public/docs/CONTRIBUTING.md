@@ -188,6 +188,20 @@ listeners; they are not the safe reproduction entrypoint. Mock-mode switching
 can also restart a development runtime. Do not use these commands against a
 running installation or connect the disposable instance to real infrastructure.
 
+### Cleaning development build output
+
+Stop the disposable development runtime before cleaning its checkout. `make clean`
+removes the server binary and frontend build copies; `make distclean` also removes
+known generated build and dependency-cache directories. Reinstall dependencies
+with `npm ci` and `npm --prefix frontend-modern ci` when needed.
+
+Neither command resets Pulse: local data, environment files, assistant settings,
+logs and recovery files outside the known build outputs are preserved. Tracked
+outputs and symbolic links (including linked parent directories) are skipped.
+If Git cannot verify the checkout or inspect its tracked files, cleanup stops
+before removing anything. Removal failures are reported without using `sudo`.
+Cleanup does not stop processes or restore anything an earlier cleanup deleted.
+
 The checked-in `.air.toml` also has an installed `/opt/pulse-enterprise` build
 path; it is not a portable backend-only shortcut for an arbitrary clone.
 Private Pro source is not required for Community reproduction.
