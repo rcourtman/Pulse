@@ -1,4 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -99,5 +100,72 @@ describe('KubernetesEventsTable', () => {
         row.getAttribute('data-kubernetes-event-row'),
       ),
     ).toEqual(['warning-event', 'normal-event']);
+  });
+  it('opens an event as a record about its involved object', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T15:00:00Z'));
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <KubernetesEventsTable
+              resources={[
+                makeResource({
+                  id: 'warning-event',
+                  name: 'checkout-api-123.17f',
+                  displayName: 'checkout-api-123.17f',
+                  type: 'k8s-event',
+                  kubernetes: {
+                    clusterName: 'prod',
+                    namespace: 'apps',
+                    resourceKind: 'Event',
+                    eventType: 'Warning',
+                    reason: 'FailedScheduling',
+                    involvedKind: 'Pod',
+                    involvedName: 'checkout-api-123',
+                    count: 3,
+                    firstSeen: '2026-05-24T12:00:00Z',
+                    createdAt: '2026-05-24T13:00:00Z',
+                    message: '0/3 nodes are available',
+                  },
+                }),
+              ]}
+              emptyIcon={<span />}
+              emptyTitle="No events"
+              emptyDescription="No events"
+              showToolbar={false}
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    const disclosure = screen.getByRole('button', {
+      name: 'Expand details for checkout-api-123.17f',
+    });
+    fireEvent.click(disclosure);
+
+    const panel = document.querySelector<HTMLElement>('[data-testid="kubernetes-event-detail"]')!;
+    const detail = within(panel);
+    expect(disclosure).toHaveAttribute('aria-controls', 'kubernetes-event-drawer-warning-event');
+    expect(detail.getByRole('heading', { name: 'Pod/checkout-api-123' })).toBeInTheDocument();
+    expect(detail.getByLabelText('Warning')).toBeInTheDocument();
+    expect(detail.getByText('0/3 nodes are available')).toBeInTheDocument();
+    expect(detail.getByText('FailedScheduling')).toBeInTheDocument();
+    expect(detail.getByText('3 times')).toBeInTheDocument();
+    expect(detail.getByText('First seen')).toBeInTheDocument();
+    expect(detail.getAllByTitle('2026-05-24T13:00:00Z')[0]).toHaveTextContent(/\(2h ago\)$/);
+    expect(detail.getByRole('link', { name: 'Open checkout-api-123' })).toHaveAttribute(
+      'href',
+      '/kubernetes/workloads?q=checkout-api-123',
+    );
+    // An event is a record, not a monitored object: no Manage tab or
+    // maintenance window for something Kubernetes discards within the hour.
+    expect(detail.queryByRole('tab', { name: 'Manage' })).toBeNull();
+
+    fireEvent.click(detail.getByRole('button', { name: 'Collapse Pod/checkout-api-123 details' }));
+    expect(document.querySelector('[data-testid="kubernetes-event-detail"]')).toBeNull();
   });
 });

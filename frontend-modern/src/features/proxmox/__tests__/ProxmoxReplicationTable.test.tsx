@@ -1,4 +1,6 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
@@ -11,6 +13,14 @@ import {
   formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
 import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const replicationJob = (overrides: Partial<ReplicationJob> = {}): ReplicationJob => ({
   id: 'replication-100',
@@ -62,7 +72,7 @@ describe('ProxmoxReplicationTable', () => {
   it('renders replication duration cells through the shared duration format', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_300_000);
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[replicationJob()]}
         error={undefined}
@@ -79,7 +89,7 @@ describe('ProxmoxReplicationTable', () => {
   });
 
   it('preserves explicit replication duration labels from the backend', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[
           replicationJob({
@@ -101,7 +111,7 @@ describe('ProxmoxReplicationTable', () => {
   it('reveals the whole error from the row disclosure at desktop width', async () => {
     const error =
       "command 'zfs send -- rpool/data/vm-100-disk-0@__replicate_100-0__' failed: exit code 255";
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[replicationJob({ lastSyncStatus: 'error', failCount: 3, error })]}
         error={undefined}
@@ -117,11 +127,75 @@ describe('ProxmoxReplicationTable', () => {
       screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
     );
 
+    // A failed job's drawer is headed by its guest and states why it failed.
+    const panel = screen.getByTestId('replication-job-detail');
+    expect(panel).toHaveAttribute('data-inline-detail-for', 'replication-100');
+    expect(screen.getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
     const detail = document.querySelector('[data-replication-job-error]');
     expect(detail).toHaveTextContent(error);
-    // The expansion wraps; only the one-line row cell truncates.
-    expect(detail?.className).toContain('wrap-break-word');
+    // The drawer wraps the error; only the one-line row cell truncates.
+    expect(detail?.parentElement?.className).toContain('wrap-anywhere');
     expect(detail?.className).not.toContain('truncate');
+    // The error is the summary, so it is not repeated as a section.
+    expect(within(panel).queryByText('Error', { selector: 'th' })).not.toBeInTheDocument();
+  });
+
+  it('keys the disclosure to the job and links the drawer to the replicated guest', async () => {
+    renderInRouter(() => (
+      <ProxmoxReplicationTable
+        jobs={[replicationJob({ guestType: 'lxc', guestNode: 'pve-a' })]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+
+    const toggle = screen.getByRole('button', { name: 'Expand details for replication job 100-0' });
+    expect(toggle).toHaveAttribute('aria-controls', 'replication-job-detail-replication-100');
+    await fireEvent.click(toggle);
+
+    expect(document.getElementById('replication-job-detail-replication-100')).not.toBeNull();
+    const link = screen.getByRole('link', { name: 'Open web' });
+    expect(link).toHaveAttribute('href', '/proxmox/overview?resource=pve%3Apve-a%3A100');
+    const panel = screen.getByTestId('replication-job-detail');
+    for (const section of ['Job', 'Route', 'Schedule']) {
+      expect(within(panel).getByText(section, { selector: 'th' })).toBeInTheDocument();
+    }
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse web details' }));
+    expect(screen.queryByTestId('replication-job-detail')).not.toBeInTheDocument();
+  });
+
+  it('leads a pending job drawer with its error and omits the link without a guest', async () => {
+    renderInRouter(() => (
+      <ProxmoxReplicationTable
+        jobs={[
+          replicationJob({
+            lastSyncStatus: 'pending',
+            error: 'target unreachable',
+            guestId: undefined,
+            guestName: undefined,
+          }),
+        ]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    const sections = [...document.querySelectorAll('[data-testid="replication-job-detail"] th')];
+    expect(sections[0]).toHaveTextContent('Error');
+    expect(
+      within(screen.getByTestId('replication-job-detail')).getByText('target unreachable'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('gives the error column more room than the 8% that clipped it', () => {
@@ -168,7 +242,7 @@ describe('ProxmoxReplicationTable relative times', () => {
       nextSyncUnix: (start + 10 * 60_000) / 1000,
     });
   const renderTable = () =>
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[job()]}
         error={undefined}
@@ -210,15 +284,17 @@ describe('ProxmoxReplicationTable relative times', () => {
       screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
     );
     const detail = (label: string) =>
-      screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
+      screen.getByText(label, { selector: 'td' }).nextElementSibling as HTMLElement;
 
     expect(detail('Last sync')).toHaveTextContent('5m ago');
     expect(detail('Next sync')).toHaveTextContent('in 10m');
+    expect(screen.getByText('Last synced 5m ago · next sync in 10m')).toBeInTheDocument();
 
     twoHoursLater();
 
     expect(detail('Last sync')).toHaveTextContent('2h ago');
     expect(detail('Next sync')).toHaveTextContent('1h overdue');
-    expect(detail('Next sync')).toHaveClass('text-red-600');
+    expect(detail('Next sync')).toHaveClass('text-rose-700');
+    expect(screen.getByText('Last synced 2h ago · next sync 1h overdue')).toBeInTheDocument();
   });
 });

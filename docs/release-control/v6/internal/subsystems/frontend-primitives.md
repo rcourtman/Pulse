@@ -10019,3 +10019,16 @@ than a pool-local `FormSelect`. The guest drawer's embedded disk detail keeps
 its `FormSelect`. Guardrails that pinned the retired pool card classes now pin
 the drawer pieces the pool Overview composes (attention section, Worth
 checking, drawer history, closed Details of `DetailSectionTable` sections).
+
+`features/platformPage/RecordOwnerLink.tsx` is the one owner link for record
+drawers: an `InlineDetailPanel` `actions` button, styled as a drawer header
+action, that opens the object a record is about through
+`buildResourcePagePath`. It renders only when that path carries a parameter
+the target page reads to open or filter to the object (`buildRecordOwnerPath`),
+so a record never offers a link that lands on a whole tab. Platform record
+drawers compose it instead of hand-built anchors, and every record drawer is
+an `InlineDetailPanel` inside `InlineDetailTableRow`: the Docker Swarm tables
+share one panel in `DockerNativeTableShared.tsx`, Kubernetes records share
+`KubernetesRecordDetail.tsx`, and hand-written `dl`/grid detail rows are
+retired from Docker networks and storage usage, Proxmox replication, coverage
+and recoverable points, and Agent Doctor.

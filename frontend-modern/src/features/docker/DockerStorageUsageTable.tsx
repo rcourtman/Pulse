@@ -3,6 +3,14 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
+import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
@@ -29,6 +37,7 @@ import {
   hasDockerStorageUsageBucket,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import { dockerResourceName } from './DockerNativeTableShared';
 
 const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
   if (!hasDockerStorageUsageBucket(bucket)) return <span class="text-muted">—</span>;
@@ -46,9 +55,61 @@ const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
   );
 };
 
-const bucketDetail = (bucket?: DockerStorageUsageMeta): string => {
-  if (!hasDockerStorageUsageBucket(bucket)) return '—';
-  return `${formatPlatformTableBytesValue(bucket?.totalSizeBytes ?? 0, '0 B')} total · ${bucket?.activeCount ?? 0}/${bucket?.totalCount ?? 0} active · ${formatPlatformTableBytesValue(bucket?.reclaimableBytes ?? 0, '0 B')} reclaimable`;
+const STORAGE_BUCKETS: ReadonlyArray<{
+  label: string;
+  bucket: (host: Resource) => DockerStorageUsageMeta | undefined;
+}> = [
+  { label: 'Images', bucket: (host) => host.docker?.imagesUsage },
+  { label: 'Containers', bucket: (host) => host.docker?.containersUsage },
+  { label: 'Volumes', bucket: (host) => host.docker?.volumesUsage },
+  { label: 'Build cache', bucket: (host) => host.docker?.buildCacheUsage },
+];
+
+const bucketSection = (label: string, bucket?: DockerStorageUsageMeta): DetailSection | null => {
+  if (!hasDockerStorageUsageBucket(bucket)) return null;
+  const reclaimable = bucket?.reclaimableBytes ?? 0;
+  return {
+    label,
+    rows: compactDetailRows([
+      makeDetailRow('Size', formatPlatformTableBytesValue(bucket?.totalSizeBytes ?? 0, '0 B')),
+      makeDetailRow('In use', `${bucket?.activeCount ?? 0} of ${bucket?.totalCount ?? 0}`),
+      makeDetailRow('Reclaimable', formatPlatformTableBytesValue(reclaimable, '0 B'), {
+        tone: reclaimable > 0 ? 'accent' : 'muted',
+      }),
+    ]),
+  };
+};
+
+// What the operator came for: how much `docker system prune` would give back.
+const storageSummary = (host: Resource): string => {
+  const reclaimable = STORAGE_BUCKETS.reduce(
+    (total, entry) => total + (entry.bucket(host)?.reclaimableBytes ?? 0),
+    0,
+  );
+  return reclaimable > 0
+    ? `${formatPlatformTableBytesValue(reclaimable, '0 B')} reclaimable in total`
+    : 'Nothing reclaimable';
+};
+
+const StorageUsageDetail: Component<{ host: Resource; onClose: () => void }> = (props) => {
+  const hostname = () =>
+    asTrimmedString(props.host.docker?.hostname) || dockerResourceName(props.host);
+  return (
+    <InlineDetailPanel
+      testId="docker-storage-detail"
+      detailFor={props.host.id}
+      title={dockerResourceName(props.host)}
+      status={getSimpleStatusIndicator(props.host.status)}
+      summary={storageSummary(props.host)}
+      actions={
+        <RecordOwnerLink subject={{ id: props.host.id, name: hostname(), type: 'docker-host' }} />
+      }
+      sections={compactDetailSections(
+        STORAGE_BUCKETS.map((entry) => bucketSection(entry.label, entry.bucket(props.host))),
+      )}
+      onClose={props.onClose}
+    />
+  );
 };
 
 export const DockerStorageUsageTable: Component<{
@@ -211,35 +272,7 @@ export const DockerStorageUsageTable: Component<{
                             colspan={5}
                             data-inline-docker-storage-detail-for={host.id}
                           >
-                            <div class="grid gap-x-4 gap-y-2 text-[11px] sm:grid-cols-2">
-                              <div class="sm:col-span-2 text-xs font-semibold text-base-content">
-                                {name()}
-                              </div>
-                              <div>
-                                <span class="text-muted">Images</span>
-                                <div class="wrap-break-word font-mono text-base-content">
-                                  {bucketDetail(host.docker?.imagesUsage)}
-                                </div>
-                              </div>
-                              <div>
-                                <span class="text-muted">Containers</span>
-                                <div class="wrap-break-word font-mono text-base-content">
-                                  {bucketDetail(host.docker?.containersUsage)}
-                                </div>
-                              </div>
-                              <div>
-                                <span class="text-muted">Volumes</span>
-                                <div class="wrap-break-word font-mono text-base-content">
-                                  {bucketDetail(host.docker?.volumesUsage)}
-                                </div>
-                              </div>
-                              <div>
-                                <span class="text-muted">Build cache</span>
-                                <div class="wrap-break-word font-mono text-base-content">
-                                  {bucketDetail(host.docker?.buildCacheUsage)}
-                                </div>
-                              </div>
-                            </div>
+                            <StorageUsageDetail host={host} onClose={() => drawer.close(host)} />
                           </InlineDetailTableRow>
                         </Show>
                       </>

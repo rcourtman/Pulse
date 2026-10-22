@@ -1,9 +1,19 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { VsphereActivityTable } from '@/features/vmware/VsphereActivityTable';
 import { buildVmwareActivityRows, filterVmwareActivity } from '@/features/vmware/vmwarePageModel';
 import type { Resource } from '@/types/resource';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const makeVm = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -82,7 +92,7 @@ describe('VsphereActivityTable', () => {
   it('renders native vSphere activity rows with inline details', async () => {
     const activity = buildVmwareActivityRows([makeVm()]);
 
-    render(() => (
+    renderInRouter(() => (
       <VsphereActivityTable
         activity={activity}
         emptyIcon={<span />}
@@ -136,6 +146,11 @@ describe('VsphereActivityTable', () => {
     expect(detail.getByText('task-901')).toBeInTheDocument();
     expect(detail.getByText('Description')).toBeInTheDocument();
     expect(detail.getByText('Reconfigure virtual machine CPU reservation')).toBeInTheDocument();
+    // The activity links to the VM it happened to, opening that VM's drawer.
+    expect(detail.getByRole('link', { name: 'Open warehouse-api-01' })).toHaveAttribute(
+      'href',
+      '/vmware/overview?resource=vm-201',
+    );
 
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
@@ -168,7 +183,7 @@ describe('VsphereActivityTable', () => {
       makeVm({ recentChanges: [...vm.recentChanges!, unset] }),
     ]);
 
-    render(() => (
+    renderInRouter(() => (
       <VsphereActivityTable
         activity={activity}
         emptyIcon={<span />}
@@ -204,7 +219,7 @@ describe('VsphereActivityTable', () => {
     expect(detail.queryByText('Message')).not.toBeInTheDocument();
   });
   it('drops the vCenter column when one vCenter is connected', () => {
-    render(() => (
+    renderInRouter(() => (
       <VsphereActivityTable
         activity={buildVmwareActivityRows([makeVm()])}
         emptyIcon={<span />}

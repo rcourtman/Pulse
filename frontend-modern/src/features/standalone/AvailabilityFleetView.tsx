@@ -18,6 +18,8 @@ import {
 import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabilityProbeAgents';
 import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
 
+const AVAILABILITY_FLEET_DETAIL_ID = 'availability-fleet-detail';
+
 type AvailabilityFleetHistoryState = 'reachable' | 'unreachable' | 'indeterminate' | 'unknown';
 
 const statePresentation: Record<
@@ -239,6 +241,10 @@ export const AvailabilityFleetView: Component<{
   });
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     props.resources.find((resource) => resource.id === resourceId)?.name;
+  // Tiles are disclosures for the one drawer below the grid: a second click
+  // on the open tile closes it, as a second click on a table row does.
+  const toggleResource = (resourceId: string) =>
+    setSelectedResourceId((current) => (current === resourceId ? undefined : resourceId));
 
   return (
     <section aria-label="Availability fleet" class="space-y-3">
@@ -299,6 +305,7 @@ export const AvailabilityFleetView: Component<{
                 emptyText: 'Not checked',
                 now: now(),
               });
+            const isSelected = () => selectedResourceId() === resource.id;
             const latency = () => {
               const value = availability()?.latencyMillis;
               return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -309,10 +316,16 @@ export const AvailabilityFleetView: Component<{
             return (
               <button
                 type="button"
-                class="group min-w-0 rounded-md border border-border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                class="group min-w-0 rounded-md border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                classList={{
+                  'border-border': !isSelected(),
+                  'border-blue-500 bg-surface-hover ring-1 ring-blue-500/40': isSelected(),
+                }}
                 aria-label={`Open details for ${resource.name}`}
+                aria-expanded={isSelected()}
+                aria-controls={AVAILABILITY_FLEET_DETAIL_ID}
                 data-availability-fleet-tile={resource.id}
-                onClick={() => setSelectedResourceId(resource.id)}
+                onClick={() => toggleResource(resource.id)}
               >
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -379,15 +392,26 @@ export const AvailabilityFleetView: Component<{
         </For>
       </div>
 
-      <Show when={selectedResource()}>
-        {(resource) => (
-          <ResourceDetailDrawer
-            resource={resource()}
-            resolveResourceLabel={resolveResourceLabel}
-            onClose={() => setSelectedResourceId(undefined)}
-          />
-        )}
-      </Show>
+      {/* The same check reads the same here as in the table view: the
+          table-row drawer, headed by the dot its tile shows. Keyed by id, so
+          switching tiles resets the drawer's tabs. */}
+      <div id={AVAILABILITY_FLEET_DETAIL_ID} data-testid="availability-fleet-detail">
+        <Show when={selectedResourceId()} keyed>
+          <Show when={selectedResource()}>
+            {(resource) => (
+              <div class="rounded-sm border border-border bg-surface px-2 py-3 sm:px-4 sm:py-4">
+                <ResourceDetailDrawer
+                  resource={resource()}
+                  statusIndicator={getStandaloneResourceStatusIndicator(resource(), now())}
+                  presentation="table-row"
+                  resolveResourceLabel={resolveResourceLabel}
+                  onClose={() => setSelectedResourceId(undefined)}
+                />
+              </div>
+            )}
+          </Show>
+        </Show>
+      </div>
     </section>
   );
 };

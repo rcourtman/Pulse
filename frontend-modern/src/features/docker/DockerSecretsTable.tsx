@@ -23,8 +23,17 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { getSimpleStatusIndicator } from '@/utils/status';
+import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  dockerDetailTimestampRow,
+  dockerLabelsSection,
+  dockerReportedBySection,
   dockerHostName,
   dockerLabelsSummary,
   dockerResourceName,
@@ -60,6 +69,27 @@ const getDockerSecretSortValue = (
       return null;
   }
 };
+
+// Pulse reads a secret's metadata from the Swarm manager, never its data.
+const SECRET_SUMMARY = "Pulse sees this secret's metadata only, never its value.";
+
+const buildSecretDetailSections = (
+  resource: Resource,
+  now: number,
+): Array<DetailSection | null> => [
+  {
+    label: 'Secret',
+    rows: compactDetailRows([
+      makeDetailRow('Driver', asTrimmedString(resource.docker?.driver)),
+      makeDetailRow('Template', asTrimmedString(resource.docker?.templatingDriver)),
+      makeDetailRow('Secret ID', asTrimmedString(resource.docker?.secretId), { wrap: true }),
+      dockerDetailTimestampRow('Created', resource.docker?.objectCreatedAt, now),
+      dockerDetailTimestampRow('Updated', resource.docker?.objectUpdatedAt, now),
+    ]),
+  },
+  dockerReportedBySection(resource),
+  dockerLabelsSection('Labels', resource.docker?.labels),
+];
 
 export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -240,14 +270,12 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
                             data-inline-docker-secret-detail-for={resource.id}
                           >
                             <DockerNativeDetailPanel
-                              title={dockerResourceName(resource)}
-                              fields={[
-                                ['Driver', dockerTextValue(resource.docker?.driver)],
-                                ['Template', dockerTextValue(resource.docker?.templatingDriver)],
-                                ['Created', dockerTextValue(resource.docker?.objectCreatedAt)],
-                                ['Labels', dockerLabelsSummary(resource.docker?.labels)],
-                                ['Host', dockerHostName(resource)],
-                              ]}
+                              testId="docker-secret-detail"
+                              resource={resource}
+                              status={getSimpleStatusIndicator(resource.status)}
+                              summary={SECRET_SUMMARY}
+                              sections={(now) => buildSecretDetailSections(resource, now)}
+                              onClose={() => drawer.close(resource)}
                             />
                           </InlineDetailTableRow>
                         </Show>

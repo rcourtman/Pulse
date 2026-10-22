@@ -8614,3 +8614,18 @@ facts line. Docker image and volume drawers describe the image or volume (update
 check, consumers, size, tags, digests; driver, scope, mountpoint, labels), with
 an available or failed update check lifted. Copyable identifiers wrap. This
 changes presentation only: no status, alert or ownership rule moves.
+
+Platform record drawers (alerts, events, tasks, services, configs, secrets,
+networks, replication jobs, storage usage, vSphere activity) are
+`InlineDetailPanel`s headed by their subject with the row's own status, a
+plain one-line summary, wrapping sections and, where the app has a route that
+focuses the owning object, an "Open <name>" link (`RecordOwnerLink`, built on
+`buildResourcePagePath`; it is omitted rather than shown when the target page
+cannot focus that object). The five Swarm tables share one record panel in
+`DockerNativeTableShared.tsx` (human dates, every label, the reporting host).
+Kubernetes Events, ConfigMaps, Secrets and RBAC objects open record drawers
+instead of the full object drawer, so an event shows its message, reason,
+count and involved object and no longer offers maintenance windows; a
+Secret's key names and values are never shown. Namespaces keep the object
+drawer because they carry alerts. No resource identity, status or alert rule
+changes.

@@ -1,9 +1,19 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { KubernetesAlertsTable } from '../KubernetesAlertsTable';
 import { buildKubernetesIncidentRows } from '../kubernetesPageModel';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const makeResource = ({
   id,
@@ -28,6 +38,38 @@ afterEach(() => {
 });
 
 describe('KubernetesAlertsTable', () => {
+  it('links an alert drawer to its pod, filtered on the workloads tab', async () => {
+    const incidents = buildKubernetesIncidentRows([
+      makeResource({
+        id: 'pod-payments',
+        type: 'pod',
+        name: 'payments-worker-abc',
+        displayName: 'payments-worker-abc',
+        kubernetes: { clusterName: 'prod-eu', namespace: 'services' },
+        incidents: [
+          { code: 'k8s_pod_crashloop', severity: 'critical', summary: 'CrashLoopBackOff' },
+        ],
+      }),
+    ]);
+    renderInRouter(() => (
+      <KubernetesAlertsTable
+        incidents={incidents}
+        emptyIcon={<span />}
+        emptyTitle="No alerts"
+        emptyDescription="No alerts"
+        showToolbar={false}
+      />
+    ));
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for payments-worker-abc' }),
+    );
+    expect(screen.getByRole('link', { name: 'Open payments-worker-abc' })).toHaveAttribute(
+      'href',
+      '/kubernetes/workloads?q=payments-worker-abc',
+    );
+  });
+
   it('renders incident rows critical → warning → info with severity-coloured dots', () => {
     const incidents = buildKubernetesIncidentRows([
       makeResource({
@@ -66,7 +108,7 @@ describe('KubernetesAlertsTable', () => {
       }),
     ]);
 
-    render(() => (
+    renderInRouter(() => (
       <KubernetesAlertsTable
         incidents={incidents}
         emptyIcon={<span />}
@@ -93,7 +135,7 @@ describe('KubernetesAlertsTable', () => {
   });
 
   it('renders the empty-state fallback when given no incidents', () => {
-    render(() => (
+    renderInRouter(() => (
       <KubernetesAlertsTable
         incidents={[]}
         emptyIcon={<span data-testid="empty-icon" />}

@@ -23,7 +23,19 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import { DockerNativeDetailPanel, dockerStateTextToneClass } from './DockerNativeTableShared';
+import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import {
+  DockerNativeDetailPanel,
+  dockerDetailTimestampRow,
+  dockerDetailToneForVariant,
+  dockerLabelsSection,
+  dockerReportedBySection,
+  dockerStateTextToneClass,
+} from './DockerNativeTableShared';
 import type { Resource } from '@/types/resource';
 import {
   compareDockerServices,
@@ -86,6 +98,67 @@ const formatServiceUpdate = (
     : 'Updating';
   const title = [state, message, completedAt].filter(Boolean).join(' | ') || label;
   return { label, title };
+};
+
+// The drawer says in words what the row's dot and counts say: how many
+// replicas run against how many are wanted, and any rollout under way.
+const serviceSummary = (service: Resource): string => {
+  const desired = service.docker?.desiredTasks ?? 0;
+  const running = service.docker?.runningTasks ?? 0;
+  const replicas =
+    desired <= 0
+      ? 'Scaled to 0 replicas'
+      : `${running} of ${desired} ${desired === 1 ? 'replica' : 'replicas'} running`;
+  const update = formatServiceUpdate(service.docker?.serviceUpdate);
+  const message = asTrimmedString(service.docker?.serviceUpdate?.message);
+  if (!asTrimmedString(service.docker?.serviceUpdate?.state)) return replicas;
+  return [replicas, `update ${update.label.toLowerCase()}`, message].filter(Boolean).join(' · ');
+};
+
+const buildServiceDetailSections = (
+  service: Resource,
+  now: number,
+): Array<DetailSection | null> => {
+  const update = service.docker?.serviceUpdate;
+  const updateState = asTrimmedString(update?.state);
+  const ports = formatPorts(service.docker);
+  return [
+    {
+      label: 'Service',
+      rows: compactDetailRows([
+        makeDetailRow('Stack', dockerServiceStack(service)),
+        makeDetailRow('Image', asTrimmedString(service.docker?.image), { wrap: true }),
+        makeDetailRow('Mode', asTrimmedString(service.docker?.mode)),
+        makeDetailRow('Ports', ports === '—' ? null : ports, { wrap: true }),
+        makeDetailRow('Service ID', asTrimmedString(service.docker?.serviceId), { wrap: true }),
+      ]),
+    },
+    {
+      label: 'Replicas',
+      rows: compactDetailRows([
+        makeDetailRow('Desired', String(service.docker?.desiredTasks ?? 0)),
+        makeDetailRow('Running', String(service.docker?.runningTasks ?? 0), {
+          tone: dockerDetailToneForVariant(dockerServiceReplicaStatus(service).variant),
+        }),
+        typeof service.docker?.completedTasks === 'number'
+          ? makeDetailRow('Completed', String(service.docker.completedTasks))
+          : null,
+      ]),
+    },
+    {
+      label: 'Update',
+      rows: compactDetailRows([
+        makeDetailRow('State', formatServiceUpdate(update).label, {
+          title: updateState || undefined,
+          tone: dockerDetailToneForVariant(dockerServiceUpdateAttention(service)?.variant),
+        }),
+        makeDetailRow('Message', asTrimmedString(update?.message), { wrap: true }),
+        dockerDetailTimestampRow('Completed', update?.completedAt, now),
+      ]),
+    },
+    dockerReportedBySection(service),
+    dockerLabelsSection('Labels', service.docker?.labels),
+  ];
 };
 
 const DOCKER_SERVICE_SORT_KEYS = [
@@ -405,17 +478,12 @@ export const DockerServicesTable: Component<{
                             data-inline-docker-service-detail-for={service.id}
                           >
                             <DockerNativeDetailPanel
-                              title={name()}
-                              fields={[
-                                ['Stack', stack()],
-                                ['Image', image()],
-                                ['Mode', mode()],
-                                ['Desired', String(service.docker?.desiredTasks ?? 0)],
-                                ['Running', String(service.docker?.runningTasks ?? 0)],
-                                ['Update', update().title || update().label],
-                                ['Ports', formatPorts(service.docker)],
-                                ['Host', host()],
-                              ]}
+                              testId="docker-service-detail"
+                              resource={service}
+                              status={indicator()}
+                              summary={serviceSummary(service)}
+                              sections={(now) => buildServiceDetailSections(service, now)}
+                              onClose={() => drawer.close(service)}
                             />
                           </InlineDetailTableRow>
                         </Show>

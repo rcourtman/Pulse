@@ -7114,3 +7114,13 @@ pool chart, the disk drawer's own History and Live I/O sections and the
 pool-local range picker are retired; no field was dropped. The guest drawer's
 embedded physical-disk detail (`GuestPhysicalDisks` -> `DiskDetail`) keeps its
 existing layout for now.
+
+The Backups record drawers follow the shared record panel. Replication jobs
+lead with a failure, then Job, Route and Schedule, keyed by job id and linking
+to the guest. Coverage opens one workload at a time across the live and
+unmatched tables, leads with restore evidence (location and details wrap),
+keeps provider evidence as a section and links to a matched guest.
+Recoverable restore points, which had no drawer and lost their location on
+phones, now open a record drawer with source, location, created, size, state,
+verification and protection. Coverage posture, restore evidence and recovery
+rules are unchanged.

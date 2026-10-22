@@ -2,7 +2,16 @@ import { For, Show, createEffect, createMemo, type Accessor, type JSX } from 'so
 
 import { createStore, reconcile } from 'solid-js/store';
 
+import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -19,6 +28,7 @@ import {
   getPlatformResourceDetailRowInteractionProps,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
@@ -26,6 +36,7 @@ import {
   getWorkloadRecoveryPostureLabel,
   type WorkloadCoverageRow,
 } from './proxmoxBackupRecoveryModel';
+import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
@@ -93,6 +104,12 @@ const statusWordToneClass = (variant: StatusIndicatorVariant): string => {
   return 'text-base-content';
 };
 
+const statusDetailTone = (variant: StatusIndicatorVariant): DetailValueTone | undefined => {
+  if (variant === 'danger') return 'danger';
+  if (variant === 'warning') return 'warning';
+  return undefined;
+};
+
 const compactPostureLabel = (posture: WorkloadCoverageRow['posture']): string => {
   switch (posture) {
     case 'protected':
@@ -136,6 +153,50 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
   return 'Pulse cannot tell yet whether this guest is backed up.';
 };
 
+// Provider evidence quality (did the job run, is history complete, can Pulse
+// read it) explains a posture; it is detail, not the answer.
+const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] =>
+  compactDetailSections([
+    {
+      label: 'Workload',
+      rows: compactDetailRows([
+        makeDetailRow('Type', row.workload.typeLabel),
+        makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, row.workload.vmid),
+        makeDetailRow('Node', row.workload.node),
+        makeDetailRow('Latest task', row.latestTask?.label, {
+          tone: row.latestTask
+            ? statusDetailTone(taskWordVariant(row.latestTask.label))
+            : undefined,
+        }),
+      ]),
+    },
+    {
+      label: 'Provider evidence',
+      rows: compactDetailRows(
+        (row.protectionPosture?.providerStates ?? []).map((provider) =>
+          makeDetailRow(
+            providerLabel(provider.provider),
+            [
+              `Job ${evidenceQualityLabel(provider.jobState)}`,
+              `History ${evidenceQualityLabel(provider.historyCompleteness)}`,
+              `Access ${evidenceQualityLabel(provider.permissions)}`,
+            ].join(' · '),
+            {
+              layout: 'stacked',
+              valueContent: (
+                <span class="flex flex-wrap gap-x-3 text-left font-normal leading-snug">
+                  <span>Job {evidenceQualityLabel(provider.jobState)}</span>
+                  <span>History {evidenceQualityLabel(provider.historyCompleteness)}</span>
+                  <span>Access {evidenceQualityLabel(provider.permissions)}</span>
+                </span>
+              ),
+            },
+          ),
+        ),
+      ),
+    },
+  ]);
+
 // "Workload coverage" table: one row per workload answering "does this have a
 // backup?" across PBS snapshots / PVE backup files / guest snapshots, each
 // expanding to its restore evidence. Presentational — the parent owns the
@@ -153,7 +214,8 @@ export function ProxmoxCoverageTable(props: {
   sortKey: Accessor<CoverageSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
   onSort: (key: CoverageSortKey) => void;
-  expandedKeys: ReadonlySet<string>;
+  /** The one workload whose drawer is open, across the live and unmatched tables. */
+  expandedKey: string | null;
   onToggleExpand: (key: string) => void;
   // The task column auto-hides when no workload has task history. Per-source
   // ages (PBS snapshot, PVE file, guest snapshot) live in the row expansion.
@@ -295,7 +357,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <For each={tableWindow.visibleItems()}>
                 {(row) => {
-                  const isExpanded = () => props.expandedKeys.has(row.key);
+                  const isExpanded = () => props.expandedKey === row.key;
                   const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
@@ -463,186 +525,173 @@ export function ProxmoxCoverageTable(props: {
                           colspan={columnCount()}
                           data-inline-detail-for={row.key}
                         >
-                          <div class="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] sm:grid-cols-4">
-                            <span>
-                              <span class="font-medium text-base-content">Type:</span>{' '}
-                              <span class="text-muted">{row.workload.typeLabel}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Target:</span>{' '}
-                              <span class="font-mono text-muted">{row.workload.vmid || '—'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Node:</span>{' '}
-                              <span class="text-muted">{row.workload.node || '—'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Workload:</span>{' '}
-                              <span class="text-muted">{row.workload.label}</span>
-                            </span>
-                          </div>
-                          <div class="mb-2 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content">
-                            <span class="font-medium">
-                              {getWorkloadRecoveryPostureLabel(row.posture)}:
-                            </span>{' '}
-                            {postureExplanation(row)}
-                          </div>
-                          <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
-                            <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
-                              <div class="bg-surface-alt px-2 py-1 text-[11px] font-medium text-base-content">
-                                Provider evidence
-                              </div>
-                              <div class="divide-y divide-border-subtle">
-                                <For each={row.protectionPosture?.providerStates ?? []}>
-                                  {(provider) => (
-                                    <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1.5 text-[11px] sm:grid-cols-4">
-                                      <span class="font-medium text-base-content">
-                                        {providerLabel(provider.provider)}
-                                      </span>
-                                      <span class="text-muted">
-                                        Job {evidenceQualityLabel(provider.jobState)}
-                                      </span>
-                                      <span class="text-muted">
-                                        History {evidenceQualityLabel(provider.historyCompleteness)}
-                                      </span>
-                                      <span class="text-muted">
-                                        Access {evidenceQualityLabel(provider.permissions)}
-                                      </span>
-                                    </div>
-                                  )}
-                                </For>
-                              </div>
-                            </div>
-                          </Show>
-                          <Show
-                            when={evidence().length > 0}
-                            fallback={
-                              <div class="text-xs text-muted">
-                                No restore evidence has been discovered for this workload.
-                              </div>
+                          <InlineDetailPanel
+                            testId="proxmox-coverage-detail"
+                            detailFor={row.key}
+                            title={row.workload.name || row.workload.label}
+                            status={{
+                              variant: coveragePostureVariant(row.posture),
+                              label: getWorkloadRecoveryPostureLabel(row.posture),
+                            }}
+                            summary={postureExplanation(row)}
+                            actions={
+                              <RecordOwnerLink
+                                subject={proxmoxBackupWorkloadSubject(row.workload)}
+                              />
                             }
+                            sections={buildCoverageDetailSections(row)}
+                            onClose={() => props.onToggleExpand(row.key)}
                           >
-                            <div class="overflow-hidden">
-                              <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
-                                <span class="font-medium text-base-content">Restore evidence</span>
-                                <Show when={row.artifacts.length > evidence().length}>
-                                  <span class="text-muted">
-                                    Showing {evidence().length} of {row.artifacts.length}
-                                  </span>
-                                </Show>
-                              </div>
-                              <PlatformDetailTable class="table-fixed text-[11px]">
-                                <PlatformDetailTableHeader>
-                                  <TableHead class={getPlatformTableHeadClassForKind('name')}>
-                                    Source
-                                  </TableHead>
-                                  <Show
-                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'location')}
-                                  >
-                                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                                      Location
-                                    </TableHead>
+                            <Show
+                              when={evidence().length > 0}
+                              fallback={
+                                <InlineNotice
+                                  tone={
+                                    row.posture === 'unprotected' || row.posture === 'attention'
+                                      ? 'warning'
+                                      : 'info'
+                                  }
+                                  role="status"
+                                  class="text-xs"
+                                >
+                                  No restore points found for this workload.
+                                </InlineNotice>
+                              }
+                            >
+                              <div class="overflow-hidden rounded-sm border border-border bg-surface">
+                                <div class="flex items-center justify-between gap-2 bg-surface-alt px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                                  <span>Restore evidence</span>
+                                  <Show when={row.artifacts.length > evidence().length}>
+                                    <span class="normal-case tracking-normal">
+                                      Showing {evidence().length} of {row.artifacts.length}
+                                    </span>
                                   </Show>
-                                  <TableHead
-                                    class={getPlatformTableHeadClassForKind('numeric-value')}
-                                  >
-                                    {PROXMOX_BACKUP_COLUMN_LABELS.created}
-                                  </TableHead>
-                                  <Show
-                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
-                                  >
+                                </div>
+                                <PlatformDetailTable class="table-fixed text-[11px]">
+                                  <PlatformDetailTableHeader>
+                                    <TableHead class={getPlatformTableHeadClassForKind('name')}>
+                                      Source
+                                    </TableHead>
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(
+                                        layoutMode(),
+                                        'location',
+                                      )}
+                                    >
+                                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                                        Location
+                                      </TableHead>
+                                    </Show>
                                     <TableHead
                                       class={getPlatformTableHeadClassForKind('numeric-value')}
                                     >
-                                      Size
+                                      {PROXMOX_BACKUP_COLUMN_LABELS.created}
                                     </TableHead>
-                                  </Show>
-                                  <TableHead class={getPlatformTableHeadClassForKind('badge')}>
-                                    State
-                                  </TableHead>
-                                  <Show
-                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'details')}
-                                  >
-                                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                                      {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
+                                    >
+                                      <TableHead
+                                        class={getPlatformTableHeadClassForKind('numeric-value')}
+                                      >
+                                        Size
+                                      </TableHead>
+                                    </Show>
+                                    <TableHead class={getPlatformTableHeadClassForKind('badge')}>
+                                      State
                                     </TableHead>
-                                  </Show>
-                                </PlatformDetailTableHeader>
-                                <PlatformDetailTableBody class="divide-border-subtle">
-                                  <For each={evidence()}>
-                                    {(artifact) => (
-                                      <TableRow>
-                                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                                          <ArtifactSourceBadge artifact={artifact} />
-                                        </TableCell>
-                                        <Show
-                                          when={isCoverageEvidenceColumnVisible(
-                                            layoutMode(),
-                                            'location',
-                                          )}
-                                        >
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(
+                                        layoutMode(),
+                                        'details',
+                                      )}
+                                    >
+                                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                                        {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                      </TableHead>
+                                    </Show>
+                                  </PlatformDetailTableHeader>
+                                  <PlatformDetailTableBody class="divide-border-subtle">
+                                    <For each={evidence()}>
+                                      {(artifact) => (
+                                        <TableRow>
                                           <TableCell
-                                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                            class={getPlatformTableCellClassForKind('name')}
                                           >
-                                            <span class="block truncate" title={artifact.location}>
-                                              {artifact.location}
-                                            </span>
+                                            <ArtifactSourceBadge artifact={artifact} />
                                           </TableCell>
-                                        </Show>
-                                        <TableCell
-                                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                                        >
-                                          <ProxmoxBackupAgeText artifact={artifact} />
-                                        </TableCell>
-                                        <Show
-                                          when={isCoverageEvidenceColumnVisible(
-                                            layoutMode(),
-                                            'size',
-                                          )}
-                                        >
-                                          <TableCell
-                                            class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
+                                          <Show
+                                            when={isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'location',
+                                            )}
                                           >
-                                            <Show
-                                              when={artifact.size && artifact.size > 0}
-                                              fallback={<span class="text-muted">No size</span>}
+                                            <TableCell
+                                              class={`${getPlatformTableCellClassForKind('text')} whitespace-normal text-base-content`}
                                             >
-                                              {formatPlatformTableBytesValue(artifact.size)}
-                                            </Show>
-                                          </TableCell>
-                                        </Show>
-                                        <TableCell
-                                          class={getPlatformTableCellClassForKind('badge')}
-                                        >
-                                          <ArtifactStateBadge
-                                            artifact={artifact}
-                                            label={artifactStateLabel(artifact)}
-                                          />
-                                        </TableCell>
-                                        <Show
-                                          when={isCoverageEvidenceColumnVisible(
-                                            layoutMode(),
-                                            'details',
-                                          )}
-                                        >
+                                              <span
+                                                class="block wrap-anywhere"
+                                                data-coverage-evidence-location
+                                              >
+                                                {artifact.location}
+                                              </span>
+                                            </TableCell>
+                                          </Show>
                                           <TableCell
-                                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                                           >
-                                            <span
-                                              class="block truncate"
-                                              title={artifact.detailTitle ?? artifact.detail}
-                                            >
-                                              {artifact.detail || '—'}
-                                            </span>
+                                            <ProxmoxBackupAgeText artifact={artifact} />
                                           </TableCell>
-                                        </Show>
-                                      </TableRow>
-                                    )}
-                                  </For>
-                                </PlatformDetailTableBody>
-                              </PlatformDetailTable>
-                            </div>
-                          </Show>
+                                          <Show
+                                            when={isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'size',
+                                            )}
+                                          >
+                                            <TableCell
+                                              class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
+                                            >
+                                              <Show
+                                                when={artifact.size && artifact.size > 0}
+                                                fallback={<span class="text-muted">No size</span>}
+                                              >
+                                                {formatPlatformTableBytesValue(artifact.size)}
+                                              </Show>
+                                            </TableCell>
+                                          </Show>
+                                          <TableCell
+                                            class={getPlatformTableCellClassForKind('badge')}
+                                          >
+                                            <ArtifactStateBadge
+                                              artifact={artifact}
+                                              label={artifactStateLabel(artifact)}
+                                            />
+                                          </TableCell>
+                                          <Show
+                                            when={isCoverageEvidenceColumnVisible(
+                                              layoutMode(),
+                                              'details',
+                                            )}
+                                          >
+                                            <TableCell
+                                              class={`${getPlatformTableCellClassForKind('text')} whitespace-normal text-base-content`}
+                                            >
+                                              <span
+                                                class="block wrap-anywhere"
+                                                title={artifact.detailTitle}
+                                                data-coverage-evidence-detail
+                                              >
+                                                {artifact.detail || '—'}
+                                              </span>
+                                            </TableCell>
+                                          </Show>
+                                        </TableRow>
+                                      )}
+                                    </For>
+                                  </PlatformDetailTableBody>
+                                </PlatformDetailTable>
+                              </div>
+                            </Show>
+                          </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>
                     </>

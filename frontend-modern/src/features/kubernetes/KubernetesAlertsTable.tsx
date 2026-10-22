@@ -24,6 +24,7 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
 import {
   formatPlatformAlertCode,
@@ -104,6 +105,16 @@ const AlertDetail: Component<{ incident: KubernetesIncidentRow; onClose: () => v
     }
     status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
     summary={props.incident.summary || props.incident.label}
+    actions={
+      <RecordOwnerLink
+        subject={{
+          id: props.incident.resourceId,
+          name: props.incident.resourceName,
+          type: props.incident.resourceType,
+          resource: props.incident.resource,
+        }}
+      />
+    }
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-kubernetes-alert-detail-for': props.incident.id }}
     onClose={props.onClose}
