@@ -77,7 +77,8 @@ const renderLayout = (
   connectionStatus: Accessor<AppConnectionStatus> = () => ({
     kind: 'connected',
     label: 'Connected',
-    detail: 'Backend and live data stream are connected.',
+    detail:
+      'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
     tone: 'healthy',
   }),
   stateOverrides: Accessor<Partial<State>> = () => ({}),
@@ -142,6 +143,7 @@ const renderLayout = (
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
+    setKioskMode(false);
     setViewportWidth(1440);
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
@@ -159,6 +161,7 @@ describe('AppLayout navigation icons', () => {
     aiChatStore.setEnabled(false);
     clearRuntimeBranding();
     cleanup();
+    setKioskMode(false);
   });
 
   const getInfrastructureLink = (name: string) => {
@@ -311,6 +314,59 @@ describe('AppLayout navigation icons', () => {
       });
       expect(proxmox).toHaveFocus();
     }
+  });
+
+  it('keeps the data-wait warning readable without hover and removes it without replacing navigation', async () => {
+    const pending: AppConnectionStatus = {
+      kind: 'awaiting-data',
+      label: 'Waiting for data',
+      tone: 'warning',
+      detail:
+        'The live connection is open, but monitoring data has not arrived on this connection. Any retained readings may be out of date. Keep working sessions open.',
+    };
+    const [status, setStatus] = createSignal(pending);
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['settings:read'], status);
+    const warning = screen.getByRole('status', { name: 'Waiting for monitoring data' });
+    expect(warning).toHaveTextContent('Any retained readings may be out of date');
+    expect(warning).toHaveTextContent('Keep working sessions open');
+    expect(warning.querySelector('button')).toBeNull();
+    const proxmox = getInfrastructureLink('Proxmox');
+    proxmox.focus();
+    setStatus({
+      kind: 'connected',
+      label: 'Connected',
+      detail: 'Monitoring state received.',
+      tone: 'healthy',
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('status', { name: 'Waiting for monitoring data' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(getInfrastructureLink('Proxmox')).toBe(proxmox);
+    expect(proxmox).toHaveFocus();
+    setStatus(pending);
+    expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toBeInTheDocument();
+    expect(proxmox).toHaveFocus();
+  });
+
+  it('keeps the data-wait notice in a kiosk session without granting navigation or settings', () => {
+    setKioskMode(true);
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['monitoring:read'], () => ({
+      kind: 'awaiting-data',
+      label: 'Waiting for data',
+      detail: 'Monitoring data has not arrived on this connection.',
+      tone: 'warning',
+    }));
+    expect(isKioskMode()).toBe(true);
+    expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toHaveTextContent(
+      'Monitoring data has not arrived on this connection.',
+    );
+    expect(
+      screen.queryByRole('navigation', { name: 'Primary navigation' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Settings/ })).not.toBeInTheDocument();
   });
 
   it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {

@@ -278,6 +278,11 @@ export function createWebSocketStore(url: string) {
   // Display admission survives transport reconnects, but not an organisation
   // change. Alerts/status alone cannot establish an empty resource estate.
   const [resourceSnapshotReceived, setResourceSnapshotReceived] = createSignal(false);
+  // Unlike display admission above, delivery evidence belongs to this
+  // connection only. A welcome, pong, alert-only frame or retained estate
+  // cannot establish that this connection has delivered monitoring state.
+  const [connectionResourceSnapshotReceived, setConnectionResourceSnapshotReceived] =
+    createSignal(false);
   const createInitialState = (): State => ({
     // Canonical v6 state comes from unified resources.
     connectedInfrastructure: [],
@@ -728,6 +733,7 @@ export function createWebSocketStore(url: string) {
   };
 
   const resetConnectionBaseline = () => {
+    setConnectionResourceSnapshotReceived(false);
     rawServerResources = null;
     deferredResourceIds.clear();
     deferredResourceKeys.clear();
@@ -1355,6 +1361,12 @@ export function createWebSocketStore(url: string) {
             }
             if (nextResources !== undefined) {
               commitResources(nextResources, changedResourceIds, changedResourceKeys);
+              // REST oversized-state recovery is usable delivery too, but
+              // does not establish the socket's delta baseline. Only an
+              // explicit array (including an empty estate) proves delivery.
+              if (Array.isArray(message.data.resources)) {
+                setConnectionResourceSnapshotReceived(true);
+              }
             }
             // Sync active alerts from state
             if (message.data.activeAlerts !== undefined) {
@@ -1883,6 +1895,7 @@ export function createWebSocketStore(url: string) {
     reconnecting,
     initialDataReceived,
     resourceSnapshotReceived,
+    connectionResourceSnapshotReceived,
     activeAlertsHydrationStatus,
     updateProgress,
     resourceChange,

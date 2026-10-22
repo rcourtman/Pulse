@@ -9140,3 +9140,15 @@ The read-only `backup-location-scope.cjs` HTTP/browser protocol exercises deskto
 keyboard and 320px touch using the production decoders, model, tables and CSS.
 This changes inventory selection, not collection, protection verdicts, guest
 operations, thaw, filesystem liveness or native backup recovery.
+
+### Resource admission and current-connection delivery are different
+
+`resourceSnapshotReceived` retains display admission through reconnects. The
+separate `connectionResourceSnapshotReceived` flag resets at connection retirement
+and replacement, including organisation changes. Only an explicit resource array
+successfully committed by the current connection's socket or REST recovery may
+set it. An empty array is valid delivery, not a failed estate; alert-only,
+malformed, baseline-less or retired messages are not delivery. This flag does not
+establish current readings, ongoing collection, guest liveness or thaw.
+`websocket-unified.test.ts` covers socket/REST, empty, retained and retired paths;
+the shell keeps retained readings visible with an explicit data-wait warning.

@@ -3848,3 +3848,14 @@ actual committed graph. The early source-hash preflight is reused, not relaxed;
 Portal frontend tests, type checking and its actual build still qualify an
 updated runner; a corrected hash alone is not build proof. No billing, access,
 account scope, entitlement or installed runtime is changed by this update.
+
+### Scoped shell delivery evidence
+
+The existing shell must not present a healthy connection merely because the
+transport opens or prior-connection resource admission is retained. Its pending
+monitoring warning consumes the current connection's resource-snapshot receipt,
+without reauthenticating, changing tenant admission or adding full-state startup
+reads. Organisation replacement clears both resource admission and delivery;
+reconnect clears only delivery. A received snapshot is not freshness proof.
+`App.architecture.test.ts`, `useAppRuntimeState.test.ts` and `AppLayout.test.tsx`
+protect this presentation/authentication boundary and preserve navigation/focus.

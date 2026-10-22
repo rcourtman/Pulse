@@ -173,7 +173,7 @@ export function ConnectionStatusBadge(props: {
       return 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3';
     }
     if (status().tone === 'warning') {
-      return 'degraded bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 py-1 px-2';
+      return 'degraded bg-amber-200 dark:bg-amber-950 text-amber-800 dark:text-amber-100 py-1 px-2';
     }
     if (status().kind === 'reconnecting') {
       return 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1 px-2';
@@ -971,6 +971,18 @@ export function AppLayout(props: AppLayoutProps) {
         class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow-sm sm:mb-2"
       >
         <div class="pulse-panel">
+          <Show when={props.connectionStatus().kind === 'awaiting-data'}>
+            <aside
+              class="m-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 sm:m-4"
+              role="status"
+              aria-labelledby="monitoring-data-status-title"
+            >
+              <h2 id="monitoring-data-status-title" class="font-semibold">
+                Waiting for monitoring data
+              </h2>
+              <p class="mt-1 leading-6">{props.connectionStatus().detail}</p>
+            </aside>
+          </Show>
           <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
             {props.children}
           </Suspense>

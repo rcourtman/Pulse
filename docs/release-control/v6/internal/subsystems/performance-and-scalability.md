@@ -4630,3 +4630,13 @@ The registered API CLI and installtest workflow controls execute synthetic
 children/telemetry and the actual evidence/writer shells, not a latency
 workload. See `workload-chart-reporting-completion-2026-10-21.md` in `../records/`
 for the source proposal, adverse governance result and available hosted sample.
+
+### Connection-owned monitoring delivery presentation
+
+Socket open alone cannot turn the shell green. The existing runtime consumes a
+constant-size resource-snapshot receipt flag, reset for each connection, without
+new requests, timers, estate copies or cadence assumptions. A valid full resource
+array, including empty or oversized-state REST recovery, establishes delivery;
+status/alert ticks and baseline-less deltas do not. The flag is not freshness or
+collector-liveness proof. `websocket-unified.test.ts`, `useAppRuntimeState.test.ts`
+and the shell/browser consumer cover pending, received and retained reconnect.
