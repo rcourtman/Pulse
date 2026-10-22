@@ -309,7 +309,9 @@ func TestUninstallSensorProxyScriptRemovesTempFootprintAndManagedKeys(t *testing
 		t.Fatalf("write authorized_keys: %v", err)
 	}
 
-	cmd := exec.Command("bash", repoFile("scripts", "uninstall-sensor-proxy.sh"), "--uninstall", "--purge", "--quiet")
+	// This fixture owns only a disposable local footprint, not a cluster
+	// inventory. Do not rely on failed discovery silently selecting this host.
+	cmd := exec.Command("bash", repoFile("scripts", "uninstall-sensor-proxy.sh"), "--uninstall", "--purge", "--quiet", "--local-only")
 	cmd.Env = append(os.Environ(),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"PULSE_SENSOR_PROXY_BINARY_PATH="+binaryPath,
