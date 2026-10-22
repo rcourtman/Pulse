@@ -54,6 +54,21 @@ error. Existing archive paths, filenames, contents, encryption opt-in, remote
 prefix and retention ages stay unchanged. This is orchestration safety, not
 application-consistent snapshots, restore verification or native guest recovery.
 
+Both retention passes are limited to the helper's six generated filename
+shapes: `pulse-backup-{tenants,cp}-YYYYMMDD-HHMMSS.tar.gz` and
+`pulse-backup-meta-YYYYMMDD-HHMMSS.txt`, each optionally suffixed `.age`.
+Every timestamp position must be a digit; this is filename ownership, not
+calendar validation. Local cleanup only considers top-level regular files,
+not directories, symlinks or nested copies. Remote cleanup anchors the same
+includes at the prefix root, limits traversal to one level and excludes all
+other objects. Unrelated prefix/suffix lookalikes and operator-created material
+remain untouched. Metadata expires alongside archives in either encryption mode,
+so older plaintext inventories no longer accumulate indefinitely. Existing
+local `find -mtime` and remote `rclone --min-age` age boundaries are unchanged;
+neither pass promises atomic deletion or keeps an expired file just because
+it belongs to an earlier encryption mode. Successful new output/upload admission
+is still required before any expiry.
+
 Encryption also covers the newly generated metadata inventory: full Docker
 commands can contain private arguments. With `PULSE_BACKUP_ENCRYPT=true`, all
 three outputs use the same age recipient, local metadata is `.txt.age`, and no
@@ -62,7 +77,8 @@ must finish before any upload or retention; a failure retains private partial
 files (0600 under the 0700 staging directory), returns nonzero and preserves
 older backups. The reserved output set includes both `.txt` and `.txt.age` in
 both modes. Unencrypted mode retains its existing filenames and contents.
-This does not encrypt, remove or repair plaintext metadata from earlier jobs.
+Encryption does not retrofit or repair earlier plaintext metadata; ordinary
+retention now expires it when eligible, after a new job has succeeded.
 
 `scripts/tests/test_cloud_backup.py` executes the full shell entrypoint with
 real tar/gzip and local retention on synthetic non-database files. It checks
@@ -76,9 +92,15 @@ The metadata encryption/upload/failure controls use a closed age recorder;
 when real age/age-keygen are installed or explicitly supplied, a separate
 full-entrypoint case generates an isolated fixture key and decrypts both real
 tarballs and private metadata. The fixture identity is never printed or retained.
-rclone, Docker and host identity remain closed recording fakes; neither the
-orchestration controls nor the real local round-trip establish cloud delivery,
-application consistency or installed recovery.
+Retention cases exercise actual local deletion across old/young plain and
+encrypted archives and inventories, unrelated/lookalike/nested files, links and
+directories. The closed rclone adapter models synthetic uploads and expiry,
+and independently checks the exact rooted filter set and traversal bound. An
+optional real-rclone local-backend case exercises that filter engine with an
+empty configuration and only disposable local paths; absence is an explicit
+skip, not native filter proof. Docker and host identity remain closed fakes.
+Neither the orchestration controls nor real local-client cases establish cloud
+delivery, application consistency or installed recovery.
 
 ### Retired mock-alert cleanup preserves history and monitoring
 

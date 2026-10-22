@@ -2,8 +2,8 @@
 """Run the hosted tarball helper against disposable, non-database fixtures.
 
 Real tar/gzip and local retention operate only on those fixtures. age, rclone,
-Docker and host identity are closed recording fakes for orchestration controls.
-One round-trip uses real age/age-keygen when supplied or installed; no test
+Docker and host identity are closed fakes for orchestration controls. Optional
+real age and local-backend rclone cases run when supplied or installed; no test
 establishes application consistency, cloud delivery or native restore readiness.
 """
 
@@ -25,7 +25,12 @@ SCRIPT = Path(os.environ.get("PULSE_CLOUD_BACKUP_TEST_SCRIPT", ROOT / "scripts/c
 BASH = shutil.which("bash")
 REAL_AGE = os.environ.get("PULSE_CLOUD_BACKUP_TEST_REAL_AGE") or shutil.which("age")
 REAL_AGE_KEYGEN = os.environ.get("PULSE_CLOUD_BACKUP_TEST_REAL_AGE_KEYGEN") or shutil.which("age-keygen")
+REAL_RCLONE = os.environ.get("PULSE_CLOUD_BACKUP_TEST_REAL_RCLONE") or shutil.which("rclone")
 METADATA_MARKER = b"synthetic-private-command-argument"
+STAMP_PATTERN = "[0-9]" * 8 + "-" + "[0-9]" * 6
+OWNED_TYPES = (("tenants", ".tar.gz"), ("cp", ".tar.gz"), ("meta", ".txt"))
+OWNED_PATTERNS = {f"pulse-backup-{label}-{STAMP_PATTERN}{suffix}{encrypted}"
+                  for label, suffix in OWNED_TYPES for encrypted in ("", ".age")}
 
 FAKE = r'''import json
 import os
@@ -70,8 +75,13 @@ if tool == "tar":
     sys.exit(result.returncode)
 if tool == "find":
     assert Path(args[0]).resolve() == root / "backups", args
-    assert args[1:4] == ["-name", "pulse-backup-*.tar.gz*", "-mtime"], args
-    assert len(args) == 6 and args[-1] == "-delete", args
+    # Admit the unchanged parent as well for explicit regression controls.
+    if args[1] == "-name":
+        assert args[1:4] == ["-name", "pulse-backup-*.tar.gz*", "-mtime"], args
+        assert len(args) == 6 and args[-1] == "-delete", args
+    else:
+        assert args[1:6] == ["-maxdepth", "1", "-type", "f", "("], args
+        assert args[-4] == ")" and args[-3] == "-mtime" and args[-1] == "-delete", args
     if scenario.get("local_retention_fail"):
         sys.exit(9)
     sys.exit(subprocess.run([os.environ["REAL_FIND"], *args], check=False).returncode)
@@ -84,16 +94,58 @@ if tool == "age":
     number = 1 + sum(call[0] == tool for call in previous)
     sys.exit(8 if number == scenario.get("age_fail") else 0)
 if tool == "rclone":
+    remote = root / "remote"
     if args[0] == "copyto":
         assert len(args) == 3, args
         assert Path(args[1]).resolve().is_relative_to(root / "backups"), args
         assert Path(args[1]).is_file(), args
         assert args[2] == "fixture-remote:bucket/pulse-cloud-tarballs/" + Path(args[1]).name, args
         number = 1 + sum(call[:2] == [tool, "copyto"] for call in previous)
-        sys.exit(10 if number == scenario.get("upload_fail") else 0)
+        if number == scenario.get("upload_fail"):
+            sys.exit(10)
+        if os.environ.get("REAL_RCLONE"):
+            sys.exit(subprocess.run([os.environ["REAL_RCLONE"], "--config", os.devnull, "copyto",
+                                    args[1], str(remote / Path(args[1]).name)], check=False).returncode)
+        (remote / Path(args[1]).name).write_bytes(Path(args[1]).read_bytes())
+        sys.exit(0)
     if args[0] == "delete":
-        assert len(args) == 4 and args[:3] == ["delete", "fixture-remote:bucket/pulse-cloud-tarballs", "--min-age"], args
-        sys.exit(11 if scenario.get("remote_retention_fail") else 0)
+        assert args[:3] == ["delete", "fixture-remote:bucket/pulse-cloud-tarballs", "--min-age"], args
+        assert args[3].endswith("d") and args[3][:-1].isdigit(), args
+        if scenario.get("remote_retention_fail"):
+            sys.exit(11)
+        if os.environ.get("REAL_RCLONE"):
+            sys.exit(subprocess.run([os.environ["REAL_RCLONE"], "--config", os.devnull, "delete",
+                                    str(remote), *args[2:]], check=False).returncode)
+        # Closed local model of rclone's include/exclude/age contract, not proof
+        # of the real client's filter engine or any provider's behaviour.
+        import fnmatch
+        import time
+        includes, excludes, max_depth = [], [], None
+        for option, value in zip(args[4::2], args[5::2], strict=True):
+            if option == "--include":
+                includes.append(value)
+            elif option == "--exclude":
+                excludes.append(value)
+            elif option == "--max-depth":
+                max_depth = int(value)
+            else:
+                sys.exit(90)
+        cutoff = time.time() - int(args[3][:-1]) * 86400
+        for path in remote.rglob("*"):
+            relative = path.relative_to(remote)
+            if path.is_symlink() or not path.is_file() or path.stat().st_mtime >= cutoff:
+                continue
+            if max_depth is not None and len(relative.parts) > max_depth:
+                continue
+            matches = lambda pattern: fnmatch.fnmatchcase("/" + relative.as_posix(), pattern)
+            if includes:
+                selected = any(matches(pattern) for pattern in includes)
+            else:
+                selected = not any(matches(pattern) or fnmatch.fnmatchcase(relative.as_posix(), pattern)
+                                   for pattern in excludes)
+            if selected:
+                path.unlink()
+        sys.exit(0)
 if tool == "date":
     assert args[0] == "-u" and len(args) == 2, args
     assert args[1] in ("+%Y%m%d-%H%M%S", "+%Y-%m-%dT%H:%M:%SZ"), args
@@ -119,17 +171,23 @@ class CloudBackupTest(unittest.TestCase):
         self.bin.mkdir()
         self.backups = self.root / "backups"
         self.backups.mkdir()
+        self.remote = self.root / "remote"
+        self.remote.mkdir()
         self.log = self.root / "log/backup.log"
         self.old = []
         for name in ("tenants", "control-plane"):
             directory = self.root / name
             directory.mkdir()
             (directory / "fixture.txt").write_text(f"synthetic {name} data\n")
-        for name in ("tenants", "cp"):
-            archive = self.backups / f"pulse-backup-{name}-20000101-000000.tar.gz"
-            archive.write_bytes(b"retained previous fixture")
-            os.utime(archive, (946684800, 946684800))
-            self.old.append(archive)
+        for label, suffix in OWNED_TYPES:
+            for encrypted in ("", ".age"):
+                name = f"pulse-backup-{label}-20000101-000000{suffix}{encrypted}"
+                archive = self.backups / name
+                for parent in (self.backups, self.remote):
+                    old = parent / name
+                    old.write_bytes(b"retained previous fixture")
+                    os.utime(old, (946684800, 946684800))
+                self.old.append(archive)
         # PATH admits only these local utilities and closed fakes. No real
         # Docker, encryption client or cloud client can be reached.
         for name in ("mkdir", "touch", "chmod", "dirname", "basename", "du", "cut", "rm", "rmdir", "gzip"):
@@ -183,6 +241,97 @@ class CloudBackupTest(unittest.TestCase):
 
     def assert_no_uploads(self):
         self.assertFalse(any(call[0] == "rclone" for call in self.calls), self.calls)
+
+    def assert_remote_retention_scope(self):
+        deletes = [call for call in self.calls if call[:2] == ["rclone", "delete"]]
+        self.assertEqual(len(deletes), 1, self.calls)
+        options = list(zip(deletes[0][5::2], deletes[0][6::2], strict=True))
+        self.assertEqual(len(options), 8, options)
+        self.assertEqual({value for option, value in options if option == "--include"},
+                         {"/" + pattern for pattern in OWNED_PATTERNS})
+        self.assertEqual([(option, value) for option, value in options if option != "--include"],
+                         [("--max-depth", "1"), ("--exclude", "*")])
+
+    def retention_fixtures(self, parent):
+        """Old unrelated files and young owned files must survive byte-for-byte."""
+        preserved = {}
+        unrelated = ("operator-notes.txt", "pulse-backup-other-20000101-000000.tar.gz",
+                     "pulse-backup-tenants-latest.tar.gz", "pulse-backup-cp-20000101-000000.tar.gz.sha256",
+                     "pulse-backup-meta-20000101-000000.txt.age.extra",
+                     "pulse-backup-tenants-2000010X-000000.tar.gz",
+                     "pulse-backup-cp-20000101-00000X.tar.gz.age",
+                     "pulse-backup-meta-20000101-000000.tar.gz",
+                     "nested/pulse-backup-tenants-20000101-000000.tar.gz",
+                     "nested/pulse-backup-meta-20000101-000000.txt.age")
+        for name in unrelated:
+            path = parent / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"synthetic unrelated preserved data")
+            os.utime(path, (946684800, 946684800))
+            preserved[path] = path.read_bytes()
+        for label, suffix in OWNED_TYPES:
+            for encrypted in ("", ".age"):
+                path = parent / f"pulse-backup-{label}-20990101-000000{suffix}{encrypted}"
+                path.write_bytes(b"synthetic young preserved backup")
+                os.utime(path, (4102444800, 4102444800))
+                preserved[path] = path.read_bytes()
+        return preserved
+
+    def check_retention_scope(self, **env):
+        preserved = {}
+        for parent in (self.backups, self.remote):
+            preserved.update(self.retention_fixtures(parent))
+        result = self.invoke(**env)
+        self.assertEqual(result.returncode, 0, self.output)
+        for path, content in preserved.items():
+            self.assertTrue(path.is_file(), f"unowned or young file removed: {path.relative_to(self.root)}")
+            self.assertEqual(path.read_bytes(), content)
+        for path in self.old:
+            self.assertFalse(path.exists(), f"expired owned file survived: {path.name}")
+            self.assertFalse((self.remote / path.name).exists(), f"expired remote fixture survived: {path.name}")
+        self.assert_remote_retention_scope()
+
+    def test_retention_expires_only_owned_top_level_files_in_both_formats(self):
+        self.check_retention_scope()
+
+    def test_encrypted_job_also_expires_earlier_plaintext_metadata(self):
+        self.check_retention_scope(PULSE_BACKUP_ENCRYPT="true")
+
+    def test_remote_retention_uses_rooted_generated_name_filters(self):
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_remote_retention_scope()
+
+    def test_local_retention_preserves_links_and_directories_with_backup_names(self):
+        preserved = self.retention_fixtures(self.backups)
+        directory = self.backups / "pulse-backup-cp-20000202-000000.tar.gz"
+        directory.mkdir()
+        marker = directory / "operator-owned.txt"
+        marker.write_bytes(b"synthetic directory content")
+        os.utime(directory, (946684800, 946684800))
+        target = self.root / "unrelated-target.txt"
+        target.write_bytes(b"synthetic link target")
+        linked = self.backups / "pulse-backup-meta-20000202-000000.txt"
+        linked.symlink_to(target)
+        os.utime(linked, (946684800, 946684800), follow_symlinks=False)
+        result = self.invoke(PULSE_RCLONE_REMOTE="")
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assertTrue(linked.is_symlink())
+        self.assertEqual(target.read_bytes(), b"synthetic link target")
+        self.assertEqual(marker.read_bytes(), b"synthetic directory content")
+        self.assertEqual({path: path.read_bytes() for path in preserved}, preserved)
+        self.assert_no_uploads()
+
+    def test_failed_upload_cannot_expire_archives_or_metadata_in_either_store(self):
+        self.assert_stopped_before_retention(self.invoke({"upload_fail": 3}))
+        for path in self.old:
+            self.assertEqual((self.remote / path.name).read_bytes(), b"retained previous fixture")
+
+    @unittest.skipUnless(REAL_RCLONE, "real rclone is not supplied or installed; native filter engine unverified")
+    def test_real_rclone_local_backend_preserves_unowned_objects(self):
+        # The adapter replaces only the fixed fixture destination with a local
+        # path. Real rclone sees no remote config, network or provider identity.
+        self.check_retention_scope(REAL_RCLONE=REAL_RCLONE)
 
     def assert_archive_contents(self):
         for label, directory in (("tenants", "tenants"), ("cp", "control-plane")):
