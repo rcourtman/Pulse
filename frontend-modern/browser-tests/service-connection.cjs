@@ -109,10 +109,15 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           if (!request.url().startsWith(origin + '/')) external.push(request.url());
         });
         if (name === 'narrow')
-          await page.addInitScript(() => document.documentElement.classList.add('dark'));
+          await page.addInitScript(() => {
+            const applyDark = () => document.documentElement.classList.add('dark');
+            if (document.documentElement) applyDark();
+            else document.addEventListener('DOMContentLoaded', applyDark, { once: true });
+          });
         await page.goto(`${origin}/browser-tests/service-connection.html?transport=${transport}`, {
           waitUntil: 'networkidle',
         });
+        if (name === 'narrow') await expect(page.locator('html')).toHaveClass('dark');
         const activate = async (locator) => {
           if (name === 'narrow') await locator.tap();
           else {
