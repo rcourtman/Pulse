@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Existing backup Node filter names source scope
+
+The shared filter bar receives distinct connection/native-node options from
+`proxmoxBackupNodeScope.ts`. Its Node chip shows the resolved label or an explicit
+ambiguous/unavailable saved selection, never an encoded key. Coverage, By date
+and the activity chart apply the same identity, while a unique legacy name URL
+still works. No filter primitive, route or navigation is added. The source-bound
+`backup-node-scope.cjs` fixture checks keyboard and narrow touch use, visible
+scope notices, rename/navigation continuity and recovery by clearing Node.
+
+The existing backup activity chart uses a local lazy/Suspense/error boundary:
+loading or failure never replaces the surrounding filter bar, inventory or
+backup evidence with an app-level blank screen. No new route is added. The
+source-bound node-scope browser fixture exercises delayed chunk completion,
+interactive day filtering and a failed chunk at desktop and narrow widths.
+
 ### Root disk availability is visible without hover
 
 The existing machine detail's Root Disk card renders a wrapping, neutral

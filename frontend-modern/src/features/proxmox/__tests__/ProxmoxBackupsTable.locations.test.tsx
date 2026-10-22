@@ -108,8 +108,12 @@ describe('Backups exact location filters', () => {
     await waitFor(() => expect(locations()).toHaveLength(1));
     expect(locations()[0]).toContain('pbs-server / main / (root)');
     expect(screen.queryByText('pbs-server / Main / (root)')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('location')).toBe(
+        'backup-location-v2:["pbs","pbs-server","main"]',
+      ),
+    );
     const saved = new URLSearchParams(window.location.search).get('location');
-    expect(saved).toBe('backup-location-v2:["pbs","pbs-server","main"]');
     await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
     await screen.findByRole('button', { name: /expand details for east-100/i });
     await fireEvent.click(screen.getByRole('button', { name: /expand details for east-100/i }));

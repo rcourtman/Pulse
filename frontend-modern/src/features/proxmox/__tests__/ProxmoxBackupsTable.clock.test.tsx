@@ -52,7 +52,10 @@ const activityCount = () =>
       0,
     );
 
-beforeEach(() => {
+beforeEach(async () => {
+  // These are wall-clock controls, not cold-chunk controls. The browser fixture
+  // separately holds/fails the actual chart request while inventory stays usable.
+  await import('../BackupActivityChart');
   vi.useFakeTimers();
   vi.setSystemTime(start);
   vi.stubGlobal('scrollTo', vi.fn());

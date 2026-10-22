@@ -157,6 +157,8 @@ describe('By date activity scope', () => {
       mount(query);
       await screen.findByRole('button', { name: 'Refresh backups' });
       await waitFor(() => expect(recordRows()).toBe(rows));
+      // Inventory is deliberately usable before the date-only renderer loads.
+      await screen.findByRole('group', { name: 'Activity range' });
       expect(activityCount()).toBe(count);
       expect(
         Boolean(

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "e909aacaf4bfc544ea7941d01577a1331b3c7ad9",
+  "verified_at": "2026-10-22T01:34:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "e0f006c5e101c151e8bb3f90013a2bb33c5b5b31ccb2449f69d47ad9c9e83a48",
+    "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts": "62929c7caee48ca728523bc4530dbe9d9ba271bbec72f207f6555e7e96ce1544"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Ambiguous legacy Node URL selects no rows with an explicit warning, not a pooled fleet",
+    "Connection/native-node choices distinguish repeated aliases, same-node names, same-connection native nodes and case-distinct connections",
+    "Exact scope includes the guest without restore points and survives navigation and a display rename",
+    "Vanished selection stays unavailable, never widens; clearing Node recovers independent points and preserves unrelated URL state",
+    "Coverage never requests the separate activity chunk; delayed and failed By date chunk leave inventory and filters rendered",
+    "Loaded activity day selection and clearing retain the chosen node and its point",
+    "Actual evidence dialog identifies the selected source/point and retains verification and guest-health limitations"
+  ],
+  "interactions": [
+    "Keyboard Enter and narrow touch select exact scope options, clear Node, navigate views, refresh and inspect evidence",
+    "Synthetic collected-observation replacement renames and removes the selected node without altering backend source ownership",
+    "Held actual chart HTTP chunk then released it, exercised day selection/clear; fresh clients receive a deliberate503 for the chart and retain point rows",
+    "All16 retained captures opened with native view_image at original detail; desktop/light and320px/dark pixels inspected with no document horizontal overflow"
+  ],
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "playwright": "1.56.1",
+  "browser_report_sha256": "3169de985674a94549e31a410f76e77a564210b60961433d22a484bb4e922003",
+  "limits": "Synthetic collected HTTP observations, not native recovery, guest liveness, #2681 resolution, publication or release proof."
+}
