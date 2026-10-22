@@ -332,6 +332,20 @@ updates the existing chart without resetting its selected controls. The producti
 table/presentation regressions and `backup-activity-volume.cjs` exercise desktop
 and 320px touch CSS/interaction. No route or backup/guest action is introduced.
 
+### Contradictory PBS capacity stays unknown in the existing disclosure
+
+A reported percentage cannot override contradictory used/total bytes in the
+Backups table. The same byte ratio drives display and warning thresholds;
+whole-number percentage rounding is accepted within 0.5 percentage points.
+Larger disagreements read Unknown and the named datastore disclosure explains
+why, without choosing a healthy or full reading or displaying provider errors.
+Its existing keyboard/touch action, open context and same-identity updates
+remain intact. Corrected and measured-zero values recover normally.
+`ProxmoxBackupServersTable.capacityConsistency.test.tsx` and the source-bound
+`pbs-capacity-consistency.cjs` cover these states through the production page,
+row producer, canonical adapter, table and CSS at desktop and 320px touch widths.
+No new surface, data collection, threshold or guest-health claim is added.
+
 ### PBS datastore capacity explanations are not hover-only
 
 Unavailable and Unknown capacity cells open the existing full-width resource

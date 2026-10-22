@@ -145,6 +145,30 @@ details, live resource replacement and keyboard/narrow-touch interactions.
 This is backup-evidence attribution, not collection, native recovery,
 guest thaw or filesystem-liveness proof.
 
+### PBS datastore capacity must agree before it reads as measured usage
+
+The existing Backups server table derives both displayed usage and warning
+thresholds from the same finite used/total byte ratio. An optional reported
+percentage must be finite, non-negative and agree within half a percentage
+point (allowing whole-number rounding). A larger disagreement is Unknown,
+not a green empty datastore or a selected worst/best reading. An overflowing
+byte ratio remains Unknown even beside a finite percentage. Existing explicit
+read failures and offline status still take precedence.
+
+The existing named datastore disclosure explains a percentage/byte conflict
+without exposing provider errors or presenting either reading as measured
+capacity. Same-identity replacement retains its open context; corrected byte
+counts restore normal usage, including measured zero and overfull readings.
+No provider data, collection, thresholds, backup inventory, guest health or
+restore verdict is rewritten.
+
+`ProxmoxBackupServersTable.capacityConsistency.test.tsx` covers direct/canonical
+resources, disagreement in either direction, rounding, overflow, ordinary
+recovery and mounted disclosure/focus. `browser-tests/pbs-capacity-consistency.cjs`
+exercises the production Backups page/row producer/table, canonical projection,
+keyboard and 320px touch WebKit with source-bound synthetic observations. This
+is truthful presentation, not a native PBS poll or installed recovery.
+
 ### PBS offline state cannot be overridden by retained connection health
 
 The Backups server table honours an explicit canonical `offline` status even

@@ -166,12 +166,20 @@ function datastoreCapacity(datastore: ResourcePBSDatastore | undefined, online: 
   ) {
     return { state: 'unknown' as const, percent: undefined };
   }
-  const percent =
-    datastore.usagePercent !== undefined
-      ? datastore.usagePercent
-      : (datastore.used / datastore.total) * 100;
-  if (!Number.isFinite(percent) || percent < 0) {
+  const percent = (datastore.used / datastore.total) * 100;
+  const reportedPercent = datastore.usagePercent;
+  if (
+    !Number.isFinite(percent) ||
+    percent < 0 ||
+    (reportedPercent !== undefined && (!Number.isFinite(reportedPercent) || reportedPercent < 0))
+  ) {
     return { state: 'unknown' as const, percent: undefined };
+  }
+  // Allow a supplied percentage rounded to a whole number, but never choose
+  // between materially contradictory readings. Render and classify the same
+  // byte ratio so accepted rounding cannot hide a capacity warning.
+  if (reportedPercent !== undefined && Math.abs(reportedPercent - percent) > 0.5) {
+    return { state: 'unknown' as const, percent: undefined, conflict: true };
   }
   return { state: 'available' as const, percent };
 }
@@ -587,7 +595,9 @@ export function ProxmoxBackupServersTable(props: {
                   const capacityNotice = () =>
                     capacityEvidence().state === 'unavailable'
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
-                      : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
+                      : capacityEvidence().conflict
+                        ? 'Datastore capacity is unknown. The reported percentage disagrees with the used and total bytes. This does not mean the datastore is empty.'
+                        : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
                   const capacityLabel = () =>
                     capacityEvidence().state === 'unavailable' ? 'Unavailable' : 'Unknown';
                   const rowIdentity = { id: row.key };

@@ -16,6 +16,11 @@ const states = [
   'Offline',
   'Primary offline',
   'Primary warning',
+  'False empty',
+  'False full',
+  'Rounded up',
+  'Rounded down',
+  'Overflow ratio',
   'Zero',
   'Full',
   'Error',
@@ -44,6 +49,16 @@ function Fixture() {
     if (state() === 'Zero') store = { ...store, used: 0, usagePercent: 0, available: 10000 };
     if (state() === 'Full' || state() === 'Primary warning')
       store = { ...store, used: 9500, usagePercent: 95, available: 500 };
+    if (state() === 'False empty')
+      store = { ...store, used: 9500, usagePercent: 0, available: 500 };
+    if (state() === 'False full')
+      store = { ...store, used: 1000, usagePercent: 99, available: 9000 };
+    if (state() === 'Rounded up')
+      store = { ...store, used: 7460, usagePercent: 75, available: 2540 };
+    if (state() === 'Rounded down')
+      store = { ...store, used: 9000, usagePercent: 89.5, available: 1000 };
+    if (state() === 'Overflow ratio')
+      store = { ...store, total: Number.MIN_VALUE, used: Number.MAX_VALUE, usagePercent: 40 };
     if (state() === 'Error') store = { ...store, error: 'PRIVATE_PROVIDER_ERROR_SENTINEL' };
     if (detailsMode) store.name = `main/${'capacity-'.repeat(14)}<literal-name>`;
     const pbs = {

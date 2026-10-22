@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "ec5cfdbddfcce08fc40776014b4062d44d8d8ac0",
+  "verified_at": "2026-10-22T05:24:28.657561Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "4f40f6ff51bd503e80b60207fbaa9e94a25ecc67db7c9b1de76623c9ae2a3076"
+  },
+  "routes": [
+    "/browser-tests/pbs-capacity.html?details=1&transport=direct|canonical (production Backups page, row producer, canonical resource adapter, table, drawer and shipped CSS; synthetic local observations/HTTP only)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "A nearly full store with reported 0%, or a low-used store with reported 99%, stays Unknown and explains the percentage/byte disagreement. It never presents either conflicting reading or current dedup as measured capacity.",
+    "Rounding within 0.5 percentage points uses one byte-derived display and warning. The consuming 90% danger boundary remains red even when the supplied percentage is 89.5. Valid measured zero, 95% and storage-warning readings recover normally.",
+    "An overflowing byte ratio stays Unknown; explicit offline state still makes capacity Unavailable before normal reachable recovery."
+  ],
+  "interactions": [
+    "Desktop native Tab/Enter/Space and 320px touch WebKit activation exercise the named existing datastore disclosure. Same-identity replacement preserves the row/open context and keyboard focus between conflicts; corrected values replace the explanation in place.",
+    "Four complete direct/canonical contexts, one PVE and one PBS inventory GET per context, no writes, off-origin requests or page errors; browser and preview server close successfully.",
+    "All six retained captures opened with native view_image at original detail. Desktop light and narrow dark Unknown labels, complete wrapping explanation, full identity disclosure, visible desktop focus outline and red recovered capacity were inspected without horizontal clipping."
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "ec5cfdbddfcce08fc40776014b4062d44d8d8ac0",
+  "producer_receipt": "source-e32v9hfb",
+  "runtime_producer": "f65208b8ed2a62083e35a87f7abc1fd3292b7f8e",
+  "browser_report_sha256": "0423a24fac359133f9677679a9b742815a3d98b458245e07991311acfaf34cc9",
+  "static_binding_sha256": "6c7c7dc0b94660afe2bf73c205f81ce9224b64fa2d8de7e752c770514da73d49",
+  "limits": "Synthetic consuming presentation proof, not a native PBS poll, current datastore measurement, guest thaw, every-filesystem liveness, restore or published availability. The original contained WebKit Docs history/reload result remains adverse and is not cleared."
+}
