@@ -328,7 +328,8 @@ describe('documentation table keyboard admission', () => {
   it('keeps independent table stops and ordinary internal and external links', () => {
     const container = document.createElement('article');
     container.innerHTML = renderDocMarkdown(
-      table + '\n\n' +
+      table +
+        '\n\n' +
         '| Internal | External |\n| --- | --- |\n| [Install](INSTALL.md) | [Site](https://example.com) |\n\n' +
         '[After](FAQ.md)',
       'CONFIGURATION',
@@ -336,7 +337,9 @@ describe('documentation table keyboard admission', () => {
     expect(container.querySelectorAll('[data-doc-table-scroll][tabindex="0"]')).toHaveLength(2);
     const links = Array.from(container.querySelectorAll('a'));
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/docs/INSTALL', 'https://example.com', '/docs/FAQ',
+      '/docs/INSTALL',
+      'https://example.com',
+      '/docs/FAQ',
     ]);
     expect(links.every((link) => !link.hasAttribute('tabindex'))).toBe(true);
     expect(links[0]).toHaveAttribute('data-doc-link');

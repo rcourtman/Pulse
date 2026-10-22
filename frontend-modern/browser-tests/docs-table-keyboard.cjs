@@ -98,7 +98,10 @@ fs.mkdirSync(output, { recursive: true });
       assert(record.accessibility.includes('region "Scrollable table"'));
       assert(record.accessibility.includes('columnheader "Security Level"'));
       for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
-      if (width === 320) await page.waitForFunction(() => document.querySelector('[data-doc-table-scroll]').scrollLeft > 0);
+      if (width === 320) await page.waitForFunction(() => {
+        const e = document.querySelector('[data-doc-table-scroll]');
+        return e.scrollLeft >= e.scrollWidth - e.clientWidth - 1;
+      });
       record.afterKeys = await geometry();
       if (width === 320) {
         assert(record.before.scrollWidth > record.before.clientWidth);
