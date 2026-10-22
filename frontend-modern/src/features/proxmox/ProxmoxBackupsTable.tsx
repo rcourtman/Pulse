@@ -37,6 +37,11 @@ import type {
 import type { Resource } from '@/types/resource';
 import { BackupActivityChart } from './BackupActivityChart';
 import {
+  backupNodeMatches,
+  backupNodeOptions,
+  resolveBackupNodeSelection,
+} from './proxmoxBackupNodeScope';
+import {
   buildBackupActivityTimeline,
   type BackupActivityMetricMode,
   type BackupActivityRangeDays,
@@ -205,10 +210,6 @@ export const ProxmoxBackupsTable: Component<{
   const nodeFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.node);
   const setNodeFilter = (value: string): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.node]: value || null }, { replace: true });
-  const nodeMatches = (node: string | undefined): boolean => {
-    const selected = nodeFilter();
-    return !selected || node === selected;
-  };
 
   const locationFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.location);
   const setLocationFilter = (value: string): void =>
@@ -335,22 +336,19 @@ export const ProxmoxBackupsTable: Component<{
   const locationUnavailable = () =>
     locationSelection().state === 'ambiguous' || locationSelection().state === 'missing';
 
-  // Node options for the scope filter: the distinct nodes across the workload
-  // set, "All nodes" first. PBS snapshots carry no node, so this scopes the
-  // node-bearing rows only.
-  const nodeOptions = createMemo<FilterSelectOption[]>(() => {
-    const nodes = new Set<string>();
-    for (const row of recoveryModel().coverageRows) {
-      const node = row.workload.node?.trim();
-      if (node) nodes.add(node);
-    }
-    return [
-      { value: '', label: 'All nodes' },
-      ...[...nodes]
-        .sort((a, b) => a.localeCompare(b))
-        .map((node) => ({ value: node, label: node })),
-    ];
-  });
+  // Use the complete source inventory, not the already-filtered rows. The same
+  // node scope owns Coverage, restore points and their activity chart.
+  const nodeWorkloads = createMemo(() => [
+    ...recoveryModel().coverageRows.map((row) => row.workload),
+    ...recoveryModel().recoverableArtifacts.map((artifact) => artifact.workload),
+  ]);
+  const nodeSelection = createMemo(() => resolveBackupNodeSelection(nodeWorkloads(), nodeFilter()));
+  const nodeOptions = createMemo<FilterSelectOption[]>(() => [
+    { value: '', label: 'All nodes' },
+    ...backupNodeOptions(nodeWorkloads()),
+  ]);
+  const nodeUnavailable = () =>
+    nodeSelection().state === 'ambiguous' || nodeSelection().state === 'missing';
 
   const locationOptions = createMemo<FilterSelectOption[]>(() => {
     const locations = new Map<string, string>();
@@ -408,7 +406,7 @@ export const ProxmoxBackupsTable: Component<{
     const term = search().trim().toLowerCase();
     const filter = coverageFilter();
     const list = coverageRowsForLocation().filter((row) => {
-      if (!nodeMatches(row.workload.node)) return false;
+      if (!backupNodeMatches(row.workload, nodeSelection())) return false;
       if (!typeMatches(row.workload.type)) return false;
       if (filter !== 'all' && row.posture !== filter) return false;
       return coverageRowMatchesSearch(row, term);
@@ -530,7 +528,7 @@ export const ProxmoxBackupsTable: Component<{
     const term = search().trim().toLowerCase();
     const filter = recoverableFilter();
     return recoveryModel().recoverableArtifacts.filter((artifact) => {
-      if (!nodeMatches(artifact.workload.node)) return false;
+      if (!backupNodeMatches(artifact.workload, nodeSelection())) return false;
       if (!typeMatches(artifact.workload.type)) return false;
       if (!locationMatches(artifact)) return false;
       if (
@@ -621,6 +619,14 @@ export const ProxmoxBackupsTable: Component<{
         value: nodeFilter,
         setValue: setNodeFilter,
         defaultValue: '',
+        formatChipValue: () => {
+          const selected = nodeSelection();
+          return selected.state === 'matched'
+            ? selected.label
+            : selected.state === 'ambiguous'
+              ? 'Ambiguous saved node'
+              : 'Unavailable saved node';
+        },
       },
       {
         id: 'location',
@@ -791,6 +797,15 @@ export const ProxmoxBackupsTable: Component<{
         >
           <div class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+            <Show when={nodeUnavailable()}>
+              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                {nodeSelection().state === 'ambiguous'
+                  ? 'The saved node matches more than one Proxmox source.'
+                  : 'The saved node is not in the current inventory.'}{' '}
+                No workloads or restore points are selected. Choose a node or clear filters. This
+                does not mean no backups exist.
+              </p>
+            </Show>
             <Show when={locationUnavailable()}>
               <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
                 {locationSelection().state === 'ambiguous'

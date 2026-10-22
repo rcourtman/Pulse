@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Backup node filters preserve exact Proxmox scope
+
+Coverage, By date and its activity chart share a versioned node filter keyed by
+configured connection and native node identity, not friendly display name. Two
+connections may repeat both labels; two native nodes in one connection may share
+an alias. Neither case pools their targets or evidence. Complete node identities
+remain selected through display renames and response reordering, including guests
+with no restore points. Incomplete node/source identity stays local to its
+workload rather than borrowing another source.
+
+Unique old display-name bookmarks remain usable. Ambiguous or vanished selections
+retain the URL, show a clear notice/chip and select no rows; they do not silently
+become All. Clearing just Node preserves unrelated URL state. The existing node
+menu labels the connection and, when needed, native node name. Provider identity,
+artifact ownership, server-owned protection, collection and guest operations are
+unchanged. `backup-node-scope.test.tsx`, `proxmoxBackupNodeScope.test.ts` and the
+source-bound `browser-tests/backup-node-scope.cjs` consumer cover these rules.
+This is source/presentation proof, not installed recovery or issue #2681 closure.
+
 ### Backup artifact identity must be unambiguous before row reconciliation
 
 The existing collected-inventory reader rejects repeated opaque artifact IDs

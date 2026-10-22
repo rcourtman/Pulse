@@ -1671,10 +1671,10 @@
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/availability_test.go",
-          "internal/hostagent/cluster_sensors_regression_test.go",
-          "internal/hostagent/cluster_sensors_ssh_test.go",
+              "internal/hostagent/cluster_sensors_regression_test.go",
+              "internal/hostagent/cluster_sensors_ssh_test.go",
               "internal/hostagent/cluster_sensors_test.go",
-          "internal/hostagent/command_client_test.go",
+              "internal/hostagent/command_client_test.go",
               "internal/hostagent/commands_deploy_test.go",
               "internal/hostagent/commands_host_update_test.go",
               "internal/hostagent/commands_storage_cleanup_test.go",
@@ -6758,7 +6758,7 @@
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/pve_backup_guest_warning_test.go",
               "internal/monitoring/pve_backup_log_attribution_test.go",
-        "internal/monitoring/pve_backup_log_budget_test.go",
+              "internal/monitoring/pve_backup_log_budget_test.go",
               "internal/monitoring/pve_backup_task_barrier_test.go",
               "internal/monitoring/pve_disabled_storage_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
@@ -8334,7 +8334,8 @@
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
         "internal/api/configapi/setup_script_render.go",
-        "internal/proxmoxidentity/backup_identity.go"
+        "internal/proxmoxidentity/backup_identity.go",
+        "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -8436,7 +8437,8 @@
               "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
-              "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
+              "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts",
+              "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -8450,7 +8452,9 @@
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.taskDetail.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",
-              "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
+              "tests/integration/tests/90-operational-trust-protection-posture.spec.ts",
+              "frontend-modern/src/features/proxmox/__tests__/backup-node-scope.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupNodeScope.test.ts"
             ]
           },
           {
