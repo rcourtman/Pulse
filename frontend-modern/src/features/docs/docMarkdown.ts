@@ -114,6 +114,10 @@ export function renderDocMarkdown(markdown: string, currentDocPath: string): str
     // are rewritten to viewer routes below. 'class' stays out for the same
     // UI-redressing reason the chat renderer excludes it.
     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'id', 'align'],
+    // Focus, names and table semantics below are viewer-owned. In particular,
+    // an author-supplied scroll marker must not bypass the trusted wrapper.
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ARIA_ATTR: false,
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|[^a-z0-9+.-]|[^:]*$)/i,
   });
 
@@ -126,7 +130,10 @@ export function renderDocMarkdown(markdown: string, currentDocPath: string): str
  * Making the table itself `display: block; overflow-x: auto` is not enough:
  * its rows still lay out past the block box, so a wide table pushes the whole
  * page into horizontal scrolling on a phone. A wrapping element is what
- * actually contains the overflow.
+ * actually contains the overflow. Give it an explicit, named keyboard stop:
+ * WebKit does not automatically focus scroll containers as Chromium does.
+ * Keep the stop at every width so zoom/resizing needs no layout observer, and
+ * leave native arrow scrolling and Tab/link behaviour to the browser.
  */
 export function wrapTables(container: HTMLElement): void {
   container.querySelectorAll('table').forEach((table) => {
@@ -138,7 +145,13 @@ export function wrapTables(container: HTMLElement): void {
     if (parent?.dataset?.docTableScroll !== undefined) return;
     const wrapper = window.document.createElement('div');
     wrapper.dataset.docTableScroll = '';
-    wrapper.className = 'max-w-full overflow-x-auto';
+    wrapper.tabIndex = 0;
+    wrapper.setAttribute('role', 'region');
+    wrapper.setAttribute('aria-label', 'Scrollable table');
+    // Keep a visible target for keyboard and pointer focus alike; native
+    // :focus-visible heuristics need not govern this read-only region.
+    wrapper.className =
+      'max-w-full overflow-x-auto focus:outline-2 focus:outline-offset-2 focus:outline-blue-600 dark:focus:outline-blue-400';
     table.replaceWith(wrapper);
     wrapper.appendChild(table);
   });

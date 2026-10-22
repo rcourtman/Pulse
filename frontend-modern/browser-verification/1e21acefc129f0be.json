@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "38a77d49f78d5928a8608de490ba3d1a9421fcf4",
+  "verified_at": "2026-10-22T02:43:11.708Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docs/docMarkdown.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docs/docMarkdown.ts": "850f8cd5134b777550703cdcddd3b5dccf0b11be2dda6724f55ac3bcb511f160"
+  },
+  "routes": [
+    "/docs/CONFIGURATION",
+    "/docs/KEYBOARD_FIXTURE"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 960
+    }
+  ],
+  "states": [
+    "Every table retains native table/columnheader semantics inside a named keyboard-focusable scroll region",
+    "Desktop tables fit; narrow Chromium and WebKit reveal Security Level with real arrow events and a settled 2px focus outline",
+    "Author ARIA/focus/data markers cannot bypass or hide a table in the actual sanitized consumer; in-table and following links keep native order",
+    "No page/console/HTTP errors or document horizontal overflow in the four-case matrix; browser/server cleanup completes"
+  ],
+  "interactions": [
+    "Real Tab, ArrowRight, ArrowLeft, Shift+Tab and Tab leave the table without trapping focus; no scrollLeft setter or source/DOM focus patch",
+    "In-table native keyboard/touch link activation reaches the current recovery checklist and Back restores one wrapper",
+    "Chromium compositor touch pan and WebKit touch link activation use the actual Docs/router/CSS; native WebKit swipe is not claimed",
+    "All five final captures opened with native view_image at original detail and visually inspected in light/dark desktop/narrow states"
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "38a77d49f78d5928a8608de490ba3d1a9421fcf4",
+  "producer_receipt": "source-dgf19wdp",
+  "browser_report_sha256": "4fe00a392bb3ddc7b527b504ee2cb7ec450774c16dfdae4cdd1a0845be6f3419",
+  "limits": "Actual Docs/Markdown/router/CSS; fixture shell and one inert test document. Not screen-reader, native Safari touch-pan, installed-release, backup/SSO recovery, or the separate long-history/reload assessment."
+}
