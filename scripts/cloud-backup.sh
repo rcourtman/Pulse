@@ -7,6 +7,7 @@
 # Configure physical source directories: tar would store a root symlink alone.
 # Staging must be outside both source trees, including through path aliases.
 # Source directory names are literal tar members, never options or file lists.
+# Ambient TAR_OPTIONS must not omit data or change the archive/link policy.
 # Helpers sharing a staging directory reserve names before writing any output.
 # Archive, encryption and configured uploads must succeed before retention.
 # Retention only removes this helper's top-level archives and metadata.
@@ -179,14 +180,16 @@ create_tarball() {
     # reject a failed tar even when age successfully encrypts its partial stream.
     # End option parsing: a source named --files-from=... is still a directory,
     # not authority to replace the archive's input with another file list.
-    tar -czf - -C "${parent_dir}" -- "${source_name}" |
+    # Operator shell defaults must not silently exclude or rename recovery
+    # data, dereference nested links, or suppress tar's failure reporting.
+    TAR_OPTIONS='' tar -czf - -C "${parent_dir}" -- "${source_name}" |
       age -r "${AGE_RECIPIENT}" -o "${output_path}.age"
     log "encrypted tarball created: ${output_path}.age ($(du -sh "${output_path}.age" | cut -f1))"
     return 0
   fi
 
   log "creating tarball: ${label} -> ${output_path}"
-  tar -czf "${output_path}" -C "${parent_dir}" -- "${source_name}"
+  TAR_OPTIONS='' tar -czf "${output_path}" -C "${parent_dir}" -- "${source_name}"
   log "tarball created: ${output_path} ($(du -sh "${output_path}" | cut -f1))"
 }
 
