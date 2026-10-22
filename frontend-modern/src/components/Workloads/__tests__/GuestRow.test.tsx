@@ -3320,12 +3320,12 @@ describe('backup column', () => {
     expect(badge?.className).not.toContain('text-red');
   });
 
-  it('reserves red for supported guests without a backup', () => {
+  it('retains the missing-evidence caution for supported guests without a matched completion', () => {
     const { container } = renderGuestRow({
       guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
       visibleColumnIds: ['name', 'backup'],
     });
-    expect(screen.getByText('None')).toBeTruthy();
+    expect(screen.getByText('Not found')).toBeTruthy();
     const badge = container.querySelector(
       '[aria-label="Backup status: no completed backup found"]',
     );
