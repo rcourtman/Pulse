@@ -124,13 +124,18 @@ function BackupInventoryCount(props: {
 }
 
 function serverIsOnline(resource: Resource): boolean {
-  const status = (resource.status ?? '').toLowerCase();
+  const status = (resource.status ?? '').trim().toLowerCase();
+  // The canonical PBS producer gives an explicit offline state precedence.
+  // A retained healthy facet cannot make its capacity or host metrics current.
+  // Warning/degraded may describe storage risk on a reachable server.
+  if (status === 'offline') return false;
   const conn = (resource.pbs?.connectionHealth ?? '').trim().toLowerCase();
   if (conn) return conn === 'healthy' || conn === 'ok';
   return status === 'online' || status === 'running';
 }
 
 function connectionLabel(resource: Resource): string {
+  if ((resource.status ?? '').trim().toLowerCase() === 'offline') return 'Offline';
   const conn = resource.pbs?.connectionHealth?.trim();
   if (conn) return conn.charAt(0).toUpperCase() + conn.slice(1);
   return serverIsOnline(resource) ? 'Online' : 'Offline';

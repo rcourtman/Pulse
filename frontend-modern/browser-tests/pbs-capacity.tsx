@@ -9,7 +9,18 @@ import { ProxmoxBackupsTable } from '../src/features/proxmox/ProxmoxBackupsTable
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import '../src/index.css';
 
-const states = ['Healthy', 'Failure', 'Unknown', 'Offline', 'Zero', 'Full', 'Error', 'No stores'];
+const states = [
+  'Healthy',
+  'Failure',
+  'Unknown',
+  'Offline',
+  'Primary offline',
+  'Primary warning',
+  'Zero',
+  'Full',
+  'Error',
+  'No stores',
+];
 const normal = {
   name: 'main',
   total: 10000,
@@ -31,7 +42,8 @@ function Fixture() {
     if (state() === 'Unknown')
       store = { ...store, total: 0, used: 0, available: 0, usagePercent: 0 };
     if (state() === 'Zero') store = { ...store, used: 0, usagePercent: 0, available: 10000 };
-    if (state() === 'Full') store = { ...store, used: 9500, usagePercent: 95, available: 500 };
+    if (state() === 'Full' || state() === 'Primary warning')
+      store = { ...store, used: 9500, usagePercent: 95, available: 500 };
     if (state() === 'Error') store = { ...store, error: 'PRIVATE_PROVIDER_ERROR_SENTINEL' };
     if (detailsMode) store.name = `main/${'capacity-'.repeat(14)}<literal-name>`;
     const pbs = {
@@ -63,7 +75,12 @@ function Fixture() {
       platformId: 'pbs-main',
       platformType: 'proxmox-pbs',
       sourceType: 'api',
-      status: 'online',
+      status:
+        state() === 'Primary offline'
+          ? 'offline'
+          : state() === 'Primary warning'
+            ? 'warning'
+            : 'online',
       lastSeen: Date.parse('2026-10-04T12:00:00Z'),
       cpu: { current: 12 },
       memory: { current: 40, total: 10000, used: 4000 },

@@ -277,7 +277,30 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         await region.evaluate((node) => {
           window.__capacityRegionWitness = node;
         });
+        await update('Primary offline');
+        const firstRow = table.locator('tbody > tr').first();
+        const status = firstRow.locator('td').nth(1);
+        await status.getByText('Offline', { exact: true }).waitFor();
+        await region.getByText(/Datastore capacity is unavailable/).waitFor();
+        assert(!(await firstRow.textContent()).includes('%'));
+        assert(!(await firstRow.textContent()).includes('2.0×'));
+        assert(!(await region.textContent()).includes('Used:'));
+        assert(await region.evaluate((node) => window.__capacityRegionWitness === node));
+        assert.equal(await warning.getAttribute('aria-expanded'), 'true');
+        checks.push({
+          state: 'primary offline / retained healthy facet',
+          geometry: await checkGeometry(region),
+        });
+        await capture('primary-offline', region);
+        await update('Primary warning');
+        await status.getByText('Healthy', { exact: true }).waitFor();
+        await region.getByText(/Used: 95\.0%/).waitFor();
+        checks.push({
+          state: 'reachable primary storage warning',
+          geometry: await checkGeometry(region),
+        });
         await update('Offline');
+        await status.getByText('Offline', { exact: true }).waitFor();
         await region.getByText(/Datastore capacity is unavailable/).waitFor();
         await update('Zero');
         await region.getByText(/Used: 0\.0%/).waitFor();
