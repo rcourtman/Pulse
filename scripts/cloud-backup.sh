@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Pulse Cloud — Tarball Backup with DO Spaces Upload
-# Creates encrypted tarballs of CP data + tenant directories, uploads to DO Spaces.
+# Creates optionally encrypted tarballs of CP data + tenant directories.
+# Both source directories are required, even when remote upload is disabled.
+# Archive, encryption and configured uploads must succeed before retention.
+# A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
 #
 # Usage: ./scripts/cloud-backup.sh
@@ -40,6 +43,28 @@ die() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Admit the whole configured job before creating any new archives. Otherwise a
+# missing source can become a successful empty run that ages out good backups.
+preflight() {
+  [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ && ! "${RETENTION_DAYS}" =~ ^0+$ ]] ||
+    die "PULSE_BACKUP_RETENTION must be a positive whole number of days"
+  [[ "${ENCRYPT}" == "true" || "${ENCRYPT}" == "false" ]] ||
+    die "PULSE_BACKUP_ENCRYPT must be true or false"
+
+  have tar || die "tar is required"
+  have find || die "find is required for local retention"
+  [[ -d "${TENANTS_DIR}" ]] || die "Required tenants directory not found; no backup or retention performed"
+  [[ -d "${CONTROL_PLANE_DIR}" ]] || die "Required control-plane directory not found; no backup or retention performed"
+
+  if [[ "${ENCRYPT}" == "true" ]]; then
+    have age || die "PULSE_BACKUP_ENCRYPT=true but 'age' is not installed. Install: https://github.com/FiloSottile/age"
+    [[ -n "${AGE_RECIPIENT}" ]] || die "PULSE_BACKUP_ENCRYPT=true but PULSE_BACKUP_AGE_RECIPIENT is not set"
+  fi
+  if [[ -n "${PULSE_RCLONE_REMOTE:-}" ]]; then
+    have rclone || die "PULSE_RCLONE_REMOTE set but rclone is not installed"
+  fi
+}
+
 # Create tarball of a directory
 create_tarball() {
   local src_dir="$1"
@@ -47,8 +72,9 @@ create_tarball() {
   local label="$3"
 
   if [[ ! -d "${src_dir}" ]]; then
-    log "WARN: ${label} directory not found: ${src_dir} — skipping"
-    return 0
+    # Recheck after preflight as a source may disappear during the job. Never
+    # continue to upload/retention with just the other source's archive.
+    die "Required ${label} directory disappeared; backup incomplete, retention not performed"
   fi
 
   log "creating tarball: ${label} -> ${output_path}"
@@ -63,12 +89,6 @@ encrypt_file() {
 
   if [[ "${ENCRYPT}" != "true" ]]; then
     return 0
-  fi
-
-  have age || die "PULSE_BACKUP_ENCRYPT=true but 'age' is not installed. Install: https://github.com/FiloSottile/age"
-
-  if [[ -z "${AGE_RECIPIENT}" ]]; then
-    die "PULSE_BACKUP_ENCRYPT=true but PULSE_BACKUP_AGE_RECIPIENT is not set"
   fi
 
   log "encrypting: ${input_path}"
@@ -87,8 +107,6 @@ upload_remote() {
     return 0
   fi
 
-  have rclone || die "PULSE_RCLONE_REMOTE set but rclone is not installed"
-
   local filename
   filename="$(basename "${file_path}")"
   local dest="${PULSE_RCLONE_REMOTE}/${remote_prefix}/${filename}"
@@ -103,7 +121,9 @@ rotate_local() {
   [[ -d "${BACKUP_DIR}" ]] || return 0
 
   log "rotating local backups (keeping last ${RETENTION_DAYS} days)"
-  find "${BACKUP_DIR}" -name "pulse-backup-*.tar.gz*" -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null || true
+  if ! find "${BACKUP_DIR}" -name "pulse-backup-*.tar.gz*" -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null; then
+    die "Local retention failed; new backup artifacts are retained, but cleanup may be incomplete"
+  fi
 }
 
 # Rotate remote backups
@@ -114,7 +134,9 @@ rotate_remote() {
 
   local remote_dir="${PULSE_RCLONE_REMOTE}/pulse-cloud-tarballs"
   log "rotating remote backups (${RETENTION_DAYS} day retention)"
-  rclone delete "${remote_dir}" --min-age "${RETENTION_DAYS}d" 2>/dev/null || true
+  if ! rclone delete "${remote_dir}" --min-age "${RETENTION_DAYS}d" 2>/dev/null; then
+    die "Remote retention failed; backup uploads completed, but cleanup may be incomplete"
+  fi
 }
 
 main() {
@@ -126,7 +148,7 @@ main() {
 
   log "=== tarball backup started ==="
 
-  have tar || die "tar is required"
+  preflight
 
   local timestamp
   timestamp="$(date -u +'%Y%m%d-%H%M%S')"
