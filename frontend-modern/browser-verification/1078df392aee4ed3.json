@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "5a630df9aaba0dcdb58f401daee45a3b02ebb851",
+  "source_commit": "5a630df9aaba0dcdb58f401daee45a3b02ebb851",
+  "verified_at": "2026-10-22T11:15:51.271314Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/Chat/MessageItem.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/Chat/MessageItem.tsx": "063af8521031dbe4e067d2cd5a38733cde38f7f29fe8551493c1e29d98f0101a"
+  },
+  "routes": [
+    "/docs/FAQ",
+    "/docs/SECURITY#report-a-vulnerability",
+    "/assistant-proof"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 880
+    }
+  ],
+  "states": [
+    "Actual Docs/router/renderer and Assistant MessageItem consume benign and untrusted local Markdown under the committed dependency graph.",
+    "Light desktop and dark 320px touch view: fenced code retains the dark pre surface; inline-code pill styling does not repaint it.",
+    "Updated axe4.14.0 completes eight WCAG2A/AA/2.1AA scans without violations or incomplete results.",
+    "All eight settled captures inspected with the native image tool; no page overflow or clipped changed reading content."
+  ],
+  "interactions": [
+    "Keyboard and touch activate the actual rendered reading controls; Docs tables retain their named focus stop.",
+    "Rewritten links read the shipped Security guide and focus its fragment without replacing the shell; Docs links stay same-tab after Assistant sanitizer hooks initialise.",
+    "Assistant content updates through the actual Markdown morph/highlighter. Scripts, namespace vectors, handlers, styles and executable links are removed; safe links keep opener protection. Existing inert Assistant data attributes remain allowed, unlike Docs.",
+    "Computed syntax contrast is at least9.67:1 and plain code16.29:1 against the dark pre in both engines, above unchanged4.5:1 minimum."
+  ],
+  "browser": {
+    "client": "1.56.1",
+    "desktop": {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    "narrow": {
+      "engine": "WebKit",
+      "version": "26.0",
+      "touch": true
+    }
+  },
+  "scope": "Existing reading/sanitizer/code-contrast only, with a synthetic read-only shell. No backend, model, account, external destination, native update, release or stopped history/reload control."
+}
