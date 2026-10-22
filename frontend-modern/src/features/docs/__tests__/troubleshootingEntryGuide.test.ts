@@ -107,6 +107,10 @@ const workflowDestinations = [
   ],
   ['TrueNAS readings are stale or absent:', ['/docs/TRUENAS#stale-truenas-data']],
   [
+    'PBS or Mail Gateway State disagrees with a failed read:',
+    ['/docs/TROUBLESHOOTING#pbs-or-mail-gateway-state-disagrees-with-a-failed-read'],
+  ],
+  [
     'PBS is Active but missing from monitoring:',
     [
       '/docs/PBS#pbs-is-active-but-missing-from-monitoring',
@@ -267,6 +271,43 @@ describe('troubleshooting workflow entry', () => {
       expect(target?.tagName, href).toMatch(/^H[1-6]$/);
       expect(link.hasAttribute('data-doc-link'), href).toBe(true);
       expect(link.hasAttribute('target'), href).toBe(false);
+    }
+  });
+
+  it('keeps service State separate from dataset and workload recovery', () => {
+    const guide = renderGuide('TROUBLESHOOTING');
+    const heading = guide.querySelector('#pbs-or-mail-gateway-state-disagrees-with-a-failed-read');
+    expect(heading?.tagName).toBe('H4');
+    const section = document.createElement('section');
+    for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
+      if (/^H[1-4]$/.test(next.tagName)) break;
+      section.appendChild(next.cloneNode(true));
+    }
+    expect([...section.querySelectorAll('tbody tr')].map((row) => prose(row.firstElementChild as HTMLElement))).toEqual([
+      'Healthy',
+      'Degraded',
+      'Unhealthy or Offline',
+      'Unknown, a blank State or an unfamiliar label',
+    ]);
+    const text = prose(section);
+    for (const phrase of [
+      'A retained green State does not overrule a failed read',
+      'do not restart Pulse or repeat Test',
+      'a fresh sibling dataset does not clear the failed read',
+      'same failed dataset resumes ordinary collection',
+      'do not rotate secrets, re-add the connection or install an agent',
+      'a healthy connection does not establish thaw or filesystem liveness',
+    ]) expect(text).toContain(phrase);
+    expect(section.querySelector('pre')).toBeNull();
+    expect([...section.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual([
+      '/docs/PBS#connection-failed-error',
+      '/docs/MAIL_GATEWAY#troubleshooting-without-changing-the-gateway',
+      '/docs/VM_DISK_MONITORING#backup-safety',
+    ]);
+    for (const name of ['PBS', 'MAIL_GATEWAY']) {
+      expect(renderGuide(name).querySelector(
+        'a[href="/docs/TROUBLESHOOTING#pbs-or-mail-gateway-state-disagrees-with-a-failed-read"]',
+      )?.hasAttribute('data-doc-link'), name).toBe(true);
     }
   });
 
