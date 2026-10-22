@@ -210,24 +210,20 @@ checkpoint controls also assert the breach date; restart controls cover both
 durable active state and the JSON mirror, unchanged mirror bytes/mtime, and
 legacy unknown-date recovery through a new breach.
 
-### Held breach dates in attention and Assistant
+### Held breach dates in attention
 
 `getMetricAlertLastBreachAt` selects a valid timezone-qualified ISO
 `metricStatus.lastBreachAt` before a valid legacy `Alert.lastSeen`.
 Unknown, malformed, impossible-calendar and Go-zero dates stay undated; the
 occurrence start, current poll and recovery start are never substitutes.
 Attention, overview/incident hover and active History share this selection.
-Relative ages use the caller's clock. Assistant model-only context carries
-the normalised UTC ISO date as `Last Breach At` when known, separate from
-the retained breach value and live reading/clear rule. The existing compact
-Chat attachment is unchanged; no removed detail surface is restored.
-Missing live status after restart keeps the existing recorded-message path.
-The scoped target and explicit operator-approval boundary are unchanged.
+Relative ages use the caller's clock. Missing live status after restart
+keeps the existing recorded-message path. The Assistant hand-off that also
+carried the date as `Last Breach At` model context was retired with the chat
+window on 2026-10-22.
 
-Verification: date-selection/attention controls in `helpers.test.ts`,
-`alertAssistantHandoffModel.test.ts` and final-byte desktop/phone production
-surface fixture `browser-tests/held-breach-time.cjs`. These are synthetic
-source/rendering controls, not native readings, inference, notification
+Verification: date-selection/attention controls in `helpers.test.ts`. These
+are synthetic source controls, not native readings, inference, notification
 provider delivery or restart recovery acceptance.
 
 ### Alert card and open incident lead with the live reading — issue #2068
@@ -271,10 +267,11 @@ a screen-reader or speech-input user could not tell rows apart.
 start time, since history repeats one alert over time; "Hide timeline for
 ..." while open, with `aria-expanded`) and Resource with
 `getAlertHistoryResourceActionLabel` (rows on one resource share it because
-they open the same panel). The Assistant icon names its alert through the
-`alerts.assistant.iconLabel` and `alerts.assistant.iconLabelAt` catalog keys
-from the host's `subjectLabel` and `subjectTime`; a locked button keeps its
-locked explanation and the hover title is unchanged. Each name begins with
+they open the same panel). The icon-only Investigate button, which replaced
+the Assistant icon on 2026-10-22, names its alert through the
+`alerts.investigate.iconLabel` and `alerts.investigate.iconLabelAt` catalog
+keys from the host's `subjectLabel` and `subjectTime`, while its hover title
+stays the generic action name. Each name begins with
 the visible label (`AlertHistoryItemActions.test.tsx`,
 `AlertHistoryMobileList.test.tsx`, `InvestigateAlertButton.test.tsx`,
 `alertIncidentPresentation.test.ts`).
@@ -975,15 +972,11 @@ default construction path still restores.
 58. `internal/alerts/active_lifecycle.go`
 59. `internal/alerts/active_cleanup.go`
 60. `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`
-61. `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`
-62. `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
-63. `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`
 64. `internal/alerts/storage_override_identity.go`
 65. `internal/alerts/unified_eval.go`
 66. `frontend-modern/src/components/Alerts/ThresholdsTable.tsx`
 67. `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsData.ts`
 68. `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsPlatformData.ts`
-69. `frontend-modern/src/utils/alertTargetTypes.ts`
 70. `frontend-modern/src/types/alerts.ts`
 71. `frontend-modern/src/stores/websocket.ts`
 72. `frontend-modern/src/utils/alerts.ts`
@@ -1255,37 +1248,27 @@ timeline says the alert moved instead of "Alert resolved: <breach message>".
    `frontend-modern/src/stores/alertsActivation.ts` so browser display colors
    consume the same configured alert thresholds and override identity chain as
    the alert runtime instead of hard-coded per-surface thresholds.
-7. Add or change alert investigation handoffs through
-   `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` and
-   `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`.
-   On resource-backed active alert cards, Patrol is the primary doer: the
-   visible primary action must run a manual scoped Patrol trigger such as
-   "Have Patrol investigate" through the `ai-runtime` manual Patrol route
-   contract. Pulse Assistant remains a secondary explicit explanation path:
-   Assistant handoffs must preserve alert context, force request-scoped
-   approval mode, send bounded model-only handoff context plus structured
-   resource references through the shared Assistant chat transport, and render a
-   compact Alerts-owned briefing in the Assistant drawer without transferring
-   raw command payloads. The labelled Explain action dispatches the shared
-   explanation request through `aiChatStore.explain`, retaining selected alert
-   evidence through normal send and retry without replacing the composer draft.
-   Ordinary context-only opens remain free of inference. The Patrol trigger
-   and the Assistant explanation request must stay distinct.
-8. Add or change Pulse Assistant incident timeline handoffs through
-   `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
-   and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;
-   these handoffs must preserve sanitized incident facts and timeline event
-   summaries, force request-scoped approval mode, send the same sanitized facts
-   as model-only handoff context plus structured resource references through
-   the shared Assistant chat transport, and keep raw command/output details in
-   the incident or approval surface rather than the chat handoff. Incident
-   handoffs must not add suggested prompt chips or route-owned remediation
-   instructions; the configured model owns investigation and next-step
-   reasoning after it receives the context.
+7. Add or change alert investigation through
+   `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`.
+   On resource-backed alerts Patrol is the doer: the action runs a manual
+   scoped Patrol trigger through the `ai-runtime` manual Patrol route contract
+   (`POST /api/ai/patrol/run` with the alert's resource, identifier, and type),
+   and Patrol's findings land on the Patrol page. The button stays hidden when
+   AI is not configured, when the session cannot start a Patrol run
+   (`settingsCapabilities.patrolRun`, which mirrors the run route's
+   RequireAdmin + `ai:execute` gate; auth-free installs pass), and for Pulse
+   system alerts that have no resource to scope. A click while the request is
+   in flight starts no second run. Alerts must not grow a second AI path beside it; the Assistant chat
+   hand-offs that used to sit here were retired on 2026-10-22.
+8. Keep alert incident timelines in place through
+   `frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx`: the
+   incident panel and timeline cards carry sanitized incident facts, raw
+   command/output details stay in the incident or approval surface, and the
+   timeline must not add chat hand-offs, suggested prompt chips, or
+   route-owned remediation instructions.
 9. Add or change alert target resource types through
-   `internal/alerts/specs/types.go`, `internal/alerts/config/identity.go`,
-   `internal/alerts/unified_eval.go`, and
-   `frontend-modern/src/utils/alertTargetTypes.ts`. Supported target types
+   `internal/alerts/specs/types.go`, `internal/alerts/config/identity.go`, and
+   `internal/alerts/unified_eval.go`. Supported target types
    must share the unified evaluator, the canonical threshold/override identity
    chain, and the standard notification delivery path.
 10. Add or change the alert notification destinations catalog through
@@ -1570,8 +1553,7 @@ The alert resource-incident panel
 dropped its "Open in Infrastructure / Workloads / Storage / Recovery"
 cross-jump chip strip on 2026-05-16 when the surrounding platform-first
 migration retired broad surface-link chips. The panel now keeps
-investigation flow in-place through `IncidentAssistantHandoffButton` and the
-shared incident-timeline cards; it must not reintroduce a chip strip that
+investigation flow in place through the shared incident-timeline cards; it must not reintroduce a chip strip that
 links to the retired top-level routes, and the supporting
 `buildResolvedResourceSurfaceLinks` helper was deleted from
 `frontend-modern/src/routing/resourceLinks.ts` as part of the same pass.
@@ -3099,14 +3081,12 @@ copy consumed by `frontend-modern/src/pages/Alerts.tsx`,
 `frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx`,
 `frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts`,
 `frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx`,
-`frontend-modern/src/components/Alerts/IncidentEventFilters.tsx`,
-`frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`, and
-`frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`.
+`frontend-modern/src/components/Alerts/IncidentEventFilters.tsx`, and
+`frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`.
 Machine-facing alert identifiers, alert types, resource IDs, resource names,
 node names, source-system messages, commands, command output, event payloads,
-log text, and the English Assistant model-context labels must remain
-untranslated; only the user-visible briefing labels and alert controls may use
-the active app locale.
+and log text must remain untranslated; only the user-visible alert controls
+may use the active app locale.
 
 The Recovery section is a thresholds deep link: `/alerts/thresholds/proxmox#backups`
 expands and scrolls to it like `#pbs` and `#pmg` (`useThresholdsTableState.test.tsx`).
@@ -3703,9 +3683,7 @@ names the selected resource through the unified-resource lookup it is given
 selected history row carried while no unified record matches. It imports nothing from
 `frontend-modern/src/routing/resourceLinks.ts`, and it offers no resource
 cross-jump links: investigation continues in place through the incident
-timeline cards or hands off to Pulse Assistant through
-`IncidentAssistantHandoffButton`, as the retired cross-jump chip note above
-describes. Future incident-link work
+timeline cards, as the retired cross-jump chip note above describes. Future incident-link work
 must not reintroduce a chip set, local infrastructure-link assembly, or
 provider-local route strings inside the alert feature shell;
 `frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts` pins the panel
@@ -5150,3 +5128,15 @@ metrics target being set to find the same alerts. Inside a guest drawer, a
 physical disk's agent temperature alerts (`agent:<id>/disk_temp:<device>`) are
 matched through the guest's own agent id. No alert is created, cleared or
 retyped by this; it changes which open alerts a drawer lists.
+
+Alert Investigate became a Patrol run on 2026-10-22, when the browser
+Assistant chat window was retired. Active alert cards and History rows keep one
+Investigate action (`InvestigateAlertButton`), which starts a targeted Patrol
+check through `POST /api/ai/patrol/run` with the alert's resource ID,
+identifier, and type, then confirms with a toast that points at the Patrol
+page. It is offered only to sessions that route accepts, read from the new
+`settingsCapabilities.patrolRun` security-status field. The "Ask Pulse Assistant" icon, the incident-timeline Assistant hand-off,
+and their hand-off models (`alertAssistantHandoffModel.ts`,
+`incidentAssistantHandoffModel.ts`, `IncidentAssistantHandoffButton.tsx`) are
+gone, as is the chat-only `alertTargetTypes.ts` resolver. The `alerts.assistant.*`
+catalog keys became `alerts.investigate.*` in English, German, and Spanish.

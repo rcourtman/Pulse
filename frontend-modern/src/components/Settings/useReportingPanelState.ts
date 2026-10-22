@@ -2,7 +2,7 @@ import { createEffect, createSignal, onMount, onCleanup, untrack } from 'solid-j
 import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
@@ -292,9 +292,9 @@ export const useReportingPanelState = () => {
   };
 
   // The Patrol weekly summary only has content when Patrol can run, which is
-  // the same session capability that shows the Patrol navigation and the
-  // Assistant launcher: AI switched on with a provider configured.
-  const patrolDigestAvailable = () => aiChatStore.enabled === true;
+  // the same session capability that shows the Patrol navigation: AI switched
+  // on with a provider configured.
+  const patrolDigestAvailable = () => aiAvailabilityStore.enabled === true;
 
   const setScheduleKind = (kind: ReportScheduleKind) => {
     setScheduleForm((current) => applyReportScheduleKind(current, kind));

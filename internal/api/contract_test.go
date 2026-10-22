@@ -12403,6 +12403,131 @@ func TestContract_SecurityStatusSystemSettingsReadTracksSettingsReadScope(t *tes
 	}
 }
 
+func TestContract_SecurityStatusPatrolRunTracksRunRouteGate(t *testing.T) {
+	cases := []struct {
+		name       string
+		scopes     []string
+		cookieUser string
+		want       bool
+	}{
+		{name: "ai execute grants a Patrol run", scopes: []string{config.ScopeAIExecute}, want: true},
+		{name: "ai chat alone withholds it", scopes: []string{config.ScopeAIChat}, want: false},
+		{name: "monitoring read alone withholds it", scopes: []string{config.ScopeMonitoringRead}, want: false},
+		// The route checks a session cookie even when a token authenticated
+		// the request, so a non-admin session riding along refuses it.
+		{name: "a non-admin session beside the token withholds it", scopes: []string{config.ScopeAIExecute}, cookieUser: "sso:outsider@example.com", want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rawToken := fmt.Sprintf("contract-patrolrun-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
+			record := newTokenRecord(t, rawToken, tc.scopes, nil)
+			cfg := newTestConfigWithTokens(t, record)
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+			var cookie *http.Cookie
+			if tc.cookieUser != "" {
+				cookie = capabilitySessionCookie(t, tc.cookieUser)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+			req.Header.Set("X-API-Token", rawToken)
+			if cookie != nil {
+				req.AddCookie(cookie)
+			}
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+			}
+
+			var payload struct {
+				SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode security status payload: %v", err)
+			}
+			if payload.SettingsCapabilities.PatrolRun != tc.want {
+				t.Fatalf("settingsCapabilities.patrolRun = %v, want %v",
+					payload.SettingsCapabilities.PatrolRun, tc.want)
+			}
+
+			// Alert Investigate trusts this capability, so the run route must
+			// agree with it.
+			probe := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", strings.NewReader("{}"))
+			probe.Header.Set("X-API-Token", rawToken)
+			probe.Header.Set("Content-Type", "application/json")
+			if cookie != nil {
+				probe.AddCookie(cookie)
+			}
+			probeRec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(probeRec, probe)
+			refused := probeRec.Code == http.StatusForbidden || probeRec.Code == http.StatusUnauthorized
+			if refused == tc.want {
+				t.Fatalf("POST /api/ai/patrol/run = %d, which contradicts patrolRun=%v",
+					probeRec.Code, tc.want)
+			}
+		})
+	}
+}
+
+// ensureAdminSession refuses a token bound to a tenant organization whatever
+// scopes it holds, so patrolRun must too. The route itself rejects an unknown
+// organization earlier, so this compares against ensureAdminSession directly.
+func TestSecurityStatusPatrolRunRefusesOrgBoundToken(t *testing.T) {
+	rawToken := "contract-patrolrun-orgbound.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
+	record.OrgID = "t-client01"
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	caps := router.securityStatusSettingsCapabilitiesFromSnapshot(router.buildSecurityStatusAuthSnapshot(req))
+	if caps.PatrolRun {
+		t.Fatalf("patrolRun = true for an org-bound token; ensureAdminSession refuses it")
+	}
+
+	routeReq := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	routeReq.Header.Set("X-API-Token", rawToken)
+	attachAPITokenRecord(routeReq, &record)
+	if ensureAdminSession(cfg, httptest.NewRecorder(), routeReq) {
+		t.Fatalf("precondition: ensureAdminSession admitted an org-bound token")
+	}
+}
+
+// An instance administrator who opens a client organization keeps instance
+// authority: ensureAdminSession admits them on an org-scoped request, so the
+// capability must too, while the org's own owner is still refused.
+func TestSecurityStatusPatrolRunFollowsInstanceAdminOnOrgScopedSession(t *testing.T) {
+	cfg := platformAdminConfig(t, "admin")
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	org := &models.Organization{
+		ID:          "t-client01",
+		DisplayName: "Client Workspace",
+		OwnerUserID: "u_provider_owner",
+		Members: []models.OrganizationMember{
+			{UserID: "u_provider_owner", Role: models.OrgRoleOwner},
+		},
+	}
+
+	for user, want := range map[string]bool{"admin": true, "u_provider_owner": false} {
+		if got := ensureAdminSession(router.config, httptest.NewRecorder(), orgScopedSessionRequest(t, user, org)); got != want {
+			t.Fatalf("precondition: ensureAdminSession(%s) = %v, want %v", user, got, want)
+		}
+	}
+
+	admin := router.securityStatusSettingsCapabilitiesFromSnapshot(
+		router.buildSecurityStatusAuthSnapshot(orgScopedSessionRequest(t, "admin", org)))
+	if !admin.PatrolRun {
+		t.Fatalf("patrolRun = false for the instance admin on an org-scoped session; ensureAdminSession admits them")
+	}
+	owner := router.securityStatusSettingsCapabilitiesFromSnapshot(
+		router.buildSecurityStatusAuthSnapshot(orgScopedSessionRequest(t, "u_provider_owner", org)))
+	if owner.PatrolRun {
+		t.Fatalf("patrolRun = true for the org owner; Patrol runs stay instance administration")
+	}
+}
+
 func TestContract_SecurityStatusAdminOnlySettingsCapabilitiesTrackMountRoutes(t *testing.T) {
 	surfaces := []struct {
 		name   string
@@ -14116,6 +14241,20 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 				},
 			}),
 			want: `{"type":"question","data":{"session_id":"session-1","question_id":"question-1","questions":[{"id":"target","type":"select","question":"Which node should I inspect?","header":"Target","options":[{"label":"Node A","value":"node-a","description":"Primary compute node"},{"label":"Node B","value":"node-b","description":"Replica node"}]}]}}`,
+		},
+		{
+			// A steering client settles its queued follow-up from this event;
+			// with the browser's generated chat types gone, this snapshot is
+			// the only pin on its wire shape.
+			name: "steer_applied",
+			event: mustStreamEvent(t, "steer_applied", chat.SteerAppliedData{
+				SessionID:       "session-1",
+				MessageID:       "message-7",
+				ClientMessageID: "client-3",
+				Prompt:          "also check the backups",
+				Turn:            2,
+			}),
+			want: `{"type":"steer_applied","data":{"session_id":"session-1","message_id":"message-7","client_message_id":"client-3","prompt":"also check the backups","turn":2}}`,
 		},
 		{
 			name: "done",
@@ -19594,34 +19733,6 @@ func TestContract_AgentCapabilitiesFrontendTypesAreGeneratedFromManifest(t *test
 	} {
 		if strings.Contains(panel, forbidden) {
 			t.Errorf("Agent integrations panel must consume manifest-backed MCP adapter helpers instead of local setup snippets; found %s", forbidden)
-		}
-	}
-
-	assistantChatSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "components", "AI", "Chat", "index.tsx"))
-	if err != nil {
-		t.Fatalf("read AI Chat index.tsx: %v", err)
-	}
-	assistantChat := string(assistantChatSource)
-	for _, required := range []string{
-		`getAgentSurfaceToolPosturePresentation`,
-		`type AgentSurfaceToolContract`,
-		`AIChatAPI.getAssistantSurfaceTools()`,
-		`data-testid="assistant-surface-tools-health"`,
-	} {
-		if !strings.Contains(assistantChat, required) {
-			t.Errorf("Assistant chat shell must consume the authenticated runtime surface-tool contract through the shared frontend client; missing %s", required)
-		}
-	}
-	for _, forbidden := range []string{
-		`'pulse_query'`,
-		`"pulse_query"`,
-		`'pulse_read'`,
-		`"pulse_read"`,
-		`'pulse_question'`,
-		`"pulse_question"`,
-	} {
-		if strings.Contains(assistantChat, forbidden) {
-			t.Errorf("Assistant chat shell must not hardcode native Assistant tool names for surface posture; found %s", forbidden)
 		}
 	}
 }
@@ -26573,6 +26684,7 @@ func TestSecurityStatusOrgBoundSettingsFollowOrgManagementRule(t *testing.T) {
 
 			instanceWide := map[string]bool{
 				"systemSettingsRead":  caps.SystemSettingsRead,
+				"patrolRun":           caps.PatrolRun,
 				"diagnosticsRead":     caps.DiagnosticsRead,
 				"systemLogsRead":      caps.SystemLogsRead,
 				"authenticationRead":  caps.AuthenticationRead,

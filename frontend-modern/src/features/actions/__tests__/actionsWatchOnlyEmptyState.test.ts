@@ -23,7 +23,7 @@ describe('getActionsWatchOnlyEmptyState', () => {
     expect(
       getActionsWatchOnlyEmptyState({ ...base, aiEnabled: false, patrolModesUnlocked: true }),
     ).toBeUndefined();
-    expect(actionsSource).toContain('aiEnabled: aiChatStore.enabled === true');
+    expect(actionsSource).toContain('aiEnabled: aiAvailabilityStore.enabled === true');
   });
 
   it('returns nothing when Patrol is not in Watch only', () => {

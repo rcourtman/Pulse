@@ -126,7 +126,7 @@ describe('DiagnosticsResultsPanel', () => {
     expect(screen.getByText('230 MB')).toBeInTheDocument();
   });
 
-  it('labels Pulse Assistant diagnostics as native runtime status', () => {
+  it('labels the shared AI runtime diagnostics as Patrol investigation status', () => {
     const diagnosticsData = {
       version: '6.0.0',
       runtime: 'go',
@@ -167,8 +167,10 @@ describe('DiagnosticsResultsPanel', () => {
       </Router>
     ));
 
-    expect(screen.getByText('Pulse Assistant Service')).toBeInTheDocument();
-    expect(screen.getByText('Assistant runtime')).toBeInTheDocument();
+    expect(screen.getByText('AI runtime')).toBeInTheDocument();
+    expect(screen.getByText('Runs Patrol investigations')).toBeInTheDocument();
+    expect(screen.getByText('Runtime connection')).toBeInTheDocument();
+    expect(screen.queryByText('Pulse Assistant Service')).not.toBeInTheDocument();
     expect(screen.queryByText('MCP Connection')).not.toBeInTheDocument();
   });
 

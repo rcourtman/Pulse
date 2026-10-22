@@ -8,7 +8,6 @@ import snoozeActionSource from '@/features/alerts/AlertSnoozeAction.tsx?raw';
 import incidentFiltersSource from '@/components/Alerts/IncidentEventFilters.tsx?raw';
 import incidentTimelineSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import investigateButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
-import assistantHandoffSource from '@/components/Alerts/alertAssistantHandoffModel.ts?raw';
 
 const migratedAlertsSurfaceSources = [
   alertsPageSource,
@@ -20,7 +19,6 @@ const migratedAlertsSurfaceSources = [
   incidentFiltersSource,
   incidentTimelineSource,
   investigateButtonSource,
-  assistantHandoffSource,
 ] as const;
 
 const migratedAlertsOverviewCopy = [
@@ -78,10 +76,9 @@ describe('alerts overview localization guardrails', () => {
     expect(alertCardSource).toContain('getAlertOverviewPrimaryActionLabel');
     expect(statsCardsSource).toContain('getAlertOverviewStatsLabels');
     expect(acknowledgementStateSource).toContain('getAlertOverviewAcknowledgedNotification');
-    expect(investigateButtonSource).toContain('alerts.assistant.button.full');
-    expect(investigateButtonSource).toContain('alerts.assistant.explain.menuLabel');
-    expect(investigateButtonSource).toContain('alerts.assistant.patrol.title');
-    expect(assistantHandoffSource).toContain('alerts.assistant.subject');
+    expect(investigateButtonSource).toContain('alerts.investigate.label');
+    expect(investigateButtonSource).toContain('alerts.investigate.title');
+    expect(investigateButtonSource).toContain('alerts.investigate.triggered');
     expect(incidentTimelineSource).toContain('getAlertTimelineNotePlaceholder');
     expect(incidentFiltersSource).toContain('getAlertTimelineEventTypeLabel');
   });

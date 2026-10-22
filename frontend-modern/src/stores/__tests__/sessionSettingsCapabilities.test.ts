@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   sessionCanReadInfrastructureSettings,
+  sessionCanRunPatrol,
   sessionSettingsCapabilities,
   syncSessionSettingsCapabilities,
 } from '@/stores/sessionSettingsCapabilities';
@@ -88,5 +89,31 @@ describe('sessionSettingsCapabilities', () => {
     });
 
     expect(sessionCanReadInfrastructureSettings()).toBe(false);
+  });
+
+  it('offers a Patrol run only where the run route accepts the session', () => {
+    expect(sessionCanRunPatrol()).toBe(false);
+
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: capabilities({ patrolRun: true }),
+    });
+    expect(sessionCanRunPatrol()).toBe(true);
+
+    syncSessionSettingsCapabilities({
+      requiresAuth: true,
+      settingsCapabilities: capabilities({ patrolRun: false, systemSettingsRead: true }),
+    });
+    expect(sessionCanRunPatrol()).toBe(false);
+  });
+
+  it('lets an auth-free install start a Patrol run without capabilities', () => {
+    // RequireAdmin leaves routes open when no authentication is configured,
+    // and security status then carries no capability set at all.
+    syncSessionPresentationPolicy({ requiresAuth: false, settingsCapabilities: undefined });
+    expect(sessionCanRunPatrol()).toBe(true);
+
+    syncSessionPresentationPolicy({ settingsCapabilities: capabilities({}) });
+    expect(sessionCanRunPatrol()).toBe(false);
   });
 });

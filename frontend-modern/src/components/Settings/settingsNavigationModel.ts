@@ -30,7 +30,7 @@ export type SettingsTab =
   | 'system-recovery'
   | 'system-ai'
   | 'system-ai-patrol'
-  | 'system-ai-assistant'
+  | 'system-ai-agents'
   | 'system-relay'
   | 'system-billing'
   | 'support-diagnostics'
@@ -73,7 +73,7 @@ export interface SettingsNavItem {
   label: string;
   // Search-only aliases (never rendered). Lets sidebar search find a page by
   // terms its label/description can't carry, e.g. "mcp" or "claude" for the
-  // Assistant page's external-agent connector setup.
+  // External agents connector setup.
   keywords?: string[];
   icon: Component<{ class?: string; strokeWidth?: number }>;
   iconProps?: { strokeWidth?: number };
@@ -119,7 +119,10 @@ export const SETTINGS_PROVIDER_MODELS_PATH = `${SETTINGS_PULSE_INTELLIGENCE_PATH
 const PULSE_INTELLIGENCE_PREFIX = SETTINGS_PULSE_INTELLIGENCE_PATH;
 const PULSE_INTELLIGENCE_PROVIDER_PREFIX = SETTINGS_PROVIDER_MODELS_PATH;
 const PULSE_INTELLIGENCE_PATROL_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/patrol`;
-const PULSE_INTELLIGENCE_ASSISTANT_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/assistant`;
+const PULSE_INTELLIGENCE_AGENTS_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/agents`;
+// Settings > Assistant held the external-agent setup until the Assistant chat
+// retired; its links land on External agents.
+export const PULSE_INTELLIGENCE_LEGACY_ASSISTANT_PATH = `${PULSE_INTELLIGENCE_PREFIX}/assistant`;
 const PULSE_INTELLIGENCE_DISCOVERY_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/discovery`;
 const LEGACY_SYSTEM_AI_PREFIX = '/settings/system-ai';
 const RETIRED_SETTINGS_WORKLOADS_PREFIX = '/settings/workloads';
@@ -206,10 +209,13 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   ) {
     return settingsTabPath('system-ai');
   }
-  // The AI Service Context page was retired with AI Discovery; old links land
-  // on Assistant settings.
-  if (normalizedPath === PULSE_INTELLIGENCE_DISCOVERY_PREFIX) {
-    return settingsTabPath('system-ai-assistant');
+  // The AI Service Context page was retired with AI Discovery and the
+  // Assistant page with the Assistant chat; old links land on External agents.
+  if (
+    normalizedPath === PULSE_INTELLIGENCE_DISCOVERY_PREFIX ||
+    normalizedPath === PULSE_INTELLIGENCE_LEGACY_ASSISTANT_PATH
+  ) {
+    return settingsTabPath('system-ai-agents');
   }
   if (normalizedPath === SUPPORT_PREFIX) {
     return SUPPORT_DIAGNOSTICS_PREFIX;
@@ -243,8 +249,8 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.startsWith(PULSE_INTELLIGENCE_PATROL_PREFIX)) {
     return 'system-ai-patrol';
   }
-  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_ASSISTANT_PREFIX)) {
-    return 'system-ai-assistant';
+  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_AGENTS_PREFIX)) {
+    return 'system-ai-agents';
   }
   if (canonicalPath.startsWith(PULSE_INTELLIGENCE_PROVIDER_PREFIX)) {
     return 'system-ai';
@@ -337,12 +343,13 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'system-ai-patrol':
     case 'patrol':
       return 'system-ai-patrol';
+    case 'system-ai-agents':
+    case 'agents':
     case 'system-ai-assistant':
     case 'assistant':
-      return 'system-ai-assistant';
     case 'system-ai-discovery':
     case 'discovery':
-      return 'system-ai-assistant';
+      return 'system-ai-agents';
     case 'system-relay':
       return 'system-relay';
     case 'system-billing':
@@ -420,8 +427,8 @@ export function settingsTabPath(tab: SettingsTab): string {
       return PULSE_INTELLIGENCE_PROVIDER_PREFIX;
     case 'system-ai-patrol':
       return PULSE_INTELLIGENCE_PATROL_PREFIX;
-    case 'system-ai-assistant':
-      return PULSE_INTELLIGENCE_ASSISTANT_PREFIX;
+    case 'system-ai-agents':
+      return PULSE_INTELLIGENCE_AGENTS_PREFIX;
     case 'system-relay':
       return '/settings/system-relay';
     case 'system-billing':
@@ -447,7 +454,7 @@ const ROUTEABLE_SETTINGS_PATHS = new Set<string>([
   settingsTabPath('system-recovery'),
   settingsTabPath('system-ai'),
   settingsTabPath('system-ai-patrol'),
-  settingsTabPath('system-ai-assistant'),
+  settingsTabPath('system-ai-agents'),
   settingsTabPath('system-relay'),
   settingsTabPath('system-billing'),
   SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,

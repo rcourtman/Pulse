@@ -22,9 +22,6 @@
     "Proxmox": {
       "baselineGzip": 80339
     },
-    "Chat": {
-      "baselineGzip": 67677
-    },
     "AIIntelligence": {
       "baselineGzip": 73662
     },
@@ -48,9 +45,6 @@
     },
     "TrueNAS": {
       "baselineGzip": 17053
-    },
-    "vendor-highlight": {
-      "baselineGzip": 13743
     },
     "vendor-icons": {
       "baselineGzip": 11486
@@ -79,14 +73,11 @@
     "UpdatesSettingsPanel": {
       "baselineGzip": 9687
     },
-    "aiControlLevelPresentation": {
-      "baselineGzip": 9630
-    },
     "AuditLogPanel": {
       "baselineGzip": 8806
     },
     "useUnifiedResources": {
-      "baselineGzip": 7595
+      "baselineGzip": 10267
     },
     "ActionReviewDialog": {
       "baselineGzip": 10414

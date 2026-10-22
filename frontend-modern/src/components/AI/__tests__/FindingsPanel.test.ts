@@ -56,16 +56,12 @@ const patrolWorkspaceSource = readFileSync(
   resolve(__dirname, '..', '..', '..', 'features', 'patrol', 'PatrolIntelligenceWorkspace.tsx'),
   'utf-8',
 );
-const patrolInvestigationContextModelSource = readFileSync(
-  resolve(__dirname, '..', '..', '..', 'features', 'patrol', 'patrolInvestigationContextModel.ts'),
-  'utf-8',
-);
 const aiFindingPresentationSource = readFileSync(
   resolve(__dirname, '..', '..', '..', 'utils', 'aiFindingPresentation.ts'),
   'utf-8',
 );
 
-describe('FindingsPanel assistant handoff', () => {
+describe('FindingsPanel source wiring', () => {
   it('routes bounded APT evidence through the canonical finding presenter in collapsed and expanded detail', () => {
     expect(findingsPanelSource).toContain('getFindingEvidencePresentation');
     expect(findingsPanelSource).toContain('{getFindingEvidencePresentation(finding)}');
@@ -105,47 +101,6 @@ describe('FindingsPanel assistant handoff', () => {
     expect(patrolWorkspaceSource).toContain('patrolProHandoff=');
   });
 
-  it('routes Patrol investigation records into the Assistant briefing context', () => {
-    expect(findingsPanelSource).toContain('buildPatrolAssistantFindingHandoffFromUnifiedFinding');
-    expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');
-    expect(findingsPanelSource).toContain(
-      'buildPatrolAssistantProposedFixBriefingInputFromApproval',
-    );
-    expect(findingsPanelSource).toContain('aiChatStore.open(handoff.context)');
-    expect(findingsPanelSource).not.toContain('autoSendInitialPrompt');
-    expect(findingsPanelSource).not.toContain('openWithPrompt');
-    expect(patrolInvestigationContextModelSource).toContain(
-      'investigationOutcome: finding.investigationOutcome',
-    );
-    expect(patrolInvestigationContextModelSource).toContain(
-      'investigationStatus: finding.investigationStatus',
-    );
-    expect(patrolInvestigationContextModelSource).toContain(
-      'remediationId: finding.remediationPlanId',
-    );
-    expect(patrolInvestigationContextModelSource).toContain('resourceId: finding.resourceId');
-    expect(patrolInvestigationContextModelSource).toContain('detectedAt: finding.detectedAt');
-    expect(patrolInvestigationContextModelSource).toContain('lastSeenAt: finding.lastSeenAt');
-    expect(patrolInvestigationContextModelSource).toContain(
-      'investigationRecord: finding.investigationRecord',
-    );
-    expect(findingsPanelSource).toContain('pendingApproval: pendingApprovalBriefing');
-    expect(findingsPanelSource).toContain('proposedFix,');
-    expect(findingsPanelSource).not.toContain('nextStepAction,');
-    expect(findingsPanelSource).toContain('AIAPI.getInvestigation(finding.id)');
-    expect(findingsPanelSource).toContain('await aiIntelligenceStore.loadPendingApprovals()');
-  });
-
-  it('routes remediation plan handoffs through the command-free Patrol handoff model', () => {
-    expect(findingsPanelSource).not.toContain('buildPatrolRemediationPlanAssistantPrompt');
-    expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantModelContext');
-    expect(findingsPanelSource).toContain('buildPatrolRemediationPlanAssistantBriefing');
-    expect(findingsPanelSource).toContain('handoffContext,');
-    expect(findingsPanelSource).toContain('autonomousMode: false');
-    expect(findingsPanelSource).not.toContain('Command: `');
-    expect(findingsPanelSource).not.toContain('Rollback: `');
-  });
-
   it('renders previousResolvedFixSummary as operational memory in the expanded card', () => {
     // The previous-fix summary is captured at regression time and surfaced
     // in chat context for Assistant. The expanded card must also show it
@@ -156,8 +111,12 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('Last time this resolved');
   });
 
-  it('does not expose intent-specific Assistant routing from finding actions', () => {
-    expect(findingsPanelSource).toContain('Open in Assistant');
+  it('keeps finding actions free of Assistant routing now the chat is retired', () => {
+    expect(findingsPanelSource).not.toContain('Open in Assistant');
+    expect(findingsPanelSource).not.toContain('aiChatStore');
+    expect(findingsPanelSource).not.toContain('openFindingInAssistant');
+    expect(findingsPanelSource).not.toContain('Ask Assistant');
+    expect(findingsPanelSource).not.toContain('remediationPlans');
     expect(findingsPanelSource).not.toContain('handleExplainFinding');
     expect(findingsPanelSource).not.toContain('handleInvestigateFinding');
     expect(findingsPanelSource).not.toContain('handleWhyFinding');
@@ -229,16 +188,6 @@ describe('FindingsPanel assistant handoff', () => {
 
   it('keeps expanded finding actions behind a canonical primary action and explicit outcome menu', () => {
     expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation(finding)');
-    expect(findingsPanelSource).toContain('getPrimaryAssistantFindingAction');
-    expect(findingsPanelSource).toContain('const shouldShowAssistantPrimaryAction =');
-    expect(findingsPanelSource).toContain('const shouldShowAssistantManageAction =');
-    expect(findingsPanelSource).toContain(
-      '<Show when={!primaryAction && shouldShowAssistantPrimaryAction}>',
-    );
-    expect(findingsPanelSource).toContain('<Show when={shouldShowAssistantManageAction}>');
-    expect(findingsPanelSource).not.toContain(
-      'fallback={\n              <button\n                type="button"\n                onClick={(e) => {\n                  e.stopPropagation();\n                  void openFindingInAssistant(finding);',
-    );
     expect(findingsPanelSource).toContain('Resolve or dismiss');
     expect(findingsPanelSource).toContain('min-w-48');
     expect(findingsPanelSource).not.toContain('min-w-40');
@@ -380,23 +329,6 @@ describe('FindingsPanel assistant handoff', () => {
     );
     expect(findingsPanelSource).not.toContain('formatTime(finding.remindAt');
     expect(findingsPanelSource).toContain('text-amber-600 dark:text-amber-400');
-  });
-
-  it('keeps remediation artifacts as compact Assistant context only', () => {
-    // Patrol findings should not grow a frontend-authored proposal surface.
-    // Any existing artifact is a pointer for Assistant review, not a visible
-    // fix plan, capacity proposal, or approval bypass.
-    expect(findingsPanelSource).toContain('Assistant context');
-    expect(findingsPanelSource).toContain('Ask Assistant');
-    expect(findingsPanelSource).toContain('handleOpenPlanInAssistant');
-    expect(findingsPanelSource).toContain('handleDismissPlan');
-    expect(findingsPanelSource).not.toContain('capacity_forecast');
-    expect(findingsPanelSource).not.toContain('Capacity-forecast proposal');
-    expect(findingsPanelSource).not.toContain('Approve proposal');
-    expect(findingsPanelSource).not.toContain('handleApproveProposedPlan');
-    expect(findingsPanelSource).not.toContain('AIAPI.approveRemediationPlan(plan.id)');
-    expect(findingsPanelSource).not.toContain('Remediation Plan');
-    expect(findingsPanelSource).not.toContain('<For each={plan().steps}>');
   });
 
   it('renders the operator-facing Impact line without a Pulse-authored recommendation line', () => {
@@ -952,7 +884,6 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('getFindingPrimaryActionPresentation');
       expect(findingsPanelSource).toContain('{action().label}');
       expect(findingsPanelSource).toContain('href={action().href}');
-      expect(findingsPanelSource).toContain('shouldShowAssistantManageAction');
     });
 
     it('does not cross-jump expanded findings to broad Infrastructure or aggregate workspace routes', () => {
@@ -982,10 +913,9 @@ describe('aiFindingPresentation', () => {
       );
     });
 
-    it('loads remediation artifacts through the shared Patrol store instead of probing the API directly', () => {
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.loadRemediationPlans()');
-      expect(findingsPanelSource).toContain('aiIntelligenceStore.remediationPlans');
-      expect(findingsPanelSource).not.toContain('AIAPI.getRemediationPlans()');
+    it('does not load legacy remediation plans', () => {
+      expect(findingsPanelSource).not.toContain('loadRemediationPlans');
+      expect(findingsPanelSource).not.toContain('getRemediationPlans');
     });
 
     it('can source Patrol findings from the direct Patrol store boundary', () => {
@@ -1194,9 +1124,6 @@ describe('aiFindingPresentation', () => {
     it('routes visible finding titles through the shared title presentation helper', () => {
       expect(findingsPanelSource).toContain('const title = getFindingTitlePresentation(finding);');
       expect(findingsPanelSource).toContain('{title.label}');
-      expect(findingsPanelSource).toContain(
-        'findingTitle={getFindingTitlePresentation(finding).label}',
-      );
     });
 
     it('uses the shared finding subject presentation instead of raw patrol service resource tokens', () => {

@@ -26,16 +26,16 @@ describe('aiCostPresentation', () => {
   it('exports canonical AI cost presentation copy', () => {
     expect(AI_COST_PANEL_TITLE).toBe('Provider Usage & Spend');
     expect(AI_COST_PANEL_DESCRIPTION).toBe(
-      'Token usage and estimated spend across providers backing Pulse Assistant and Patrol.',
+      'Token usage and estimated spend across providers backing Patrol and other AI features.',
     );
     expect(AI_COST_PROVIDER_MODEL_PAIR_LABEL).toBe('Provider/model pairs');
-    expect(AI_COST_ASSISTANT_USE_CASE_LABEL).toBe('Pulse Assistant');
+    expect(AI_COST_ASSISTANT_USE_CASE_LABEL).toBe('Pulse Mobile chat');
     expect(AI_COST_PATROL_USE_CASE_LABEL).toBe('Patrol');
     expect(AI_COST_BUDGET_LABEL).toBe('30-day budget (USD)');
     expect(AI_COST_RESET_HISTORY_LABEL).toBe('Reset usage history');
     expect(AI_COST_TARGET_TABLE_LABEL).toBe('Usage by task');
     expect(AI_COST_EMPTY_STATE).toBe(
-      'Provider usage data will appear here once Pulse Assistant or Patrol activity is recorded.',
+      'Provider usage data will appear here once Patrol or other AI activity is recorded.',
     );
     expect(AI_COST_DAILY_USD_EMPTY_STATE).toBe(
       'Daily spend trend will appear here once provider activity is recorded.',

@@ -1,14 +1,14 @@
 export const AI_COST_PANEL_TITLE = 'Provider Usage & Spend';
 export const AI_COST_PANEL_DESCRIPTION =
-  'Token usage and estimated spend across providers backing Pulse Assistant and Patrol.';
+  'Token usage and estimated spend across providers backing Patrol and other AI features.';
 export const AI_COST_PROVIDER_MODEL_PAIR_LABEL = 'Provider/model pairs';
 export const AI_COST_TARGET_TABLE_LABEL = 'Usage by task';
-export const AI_COST_ASSISTANT_USE_CASE_LABEL = 'Pulse Assistant';
+export const AI_COST_ASSISTANT_USE_CASE_LABEL = 'Pulse Mobile chat';
 export const AI_COST_PATROL_USE_CASE_LABEL = 'Patrol';
 export const AI_COST_BUDGET_LABEL = '30-day budget (USD)';
 export const AI_COST_RESET_HISTORY_LABEL = 'Reset usage history';
 export const AI_COST_EMPTY_STATE =
-  'Provider usage data will appear here once Pulse Assistant or Patrol activity is recorded.';
+  'Provider usage data will appear here once Patrol or other AI activity is recorded.';
 export const AI_COST_PROVIDER_TABLE_EMPTY_STATE = 'No provider usage recorded for this range.';
 export const AI_COST_DAILY_USD_EMPTY_STATE =
   'Daily spend trend will appear here once provider activity is recorded.';

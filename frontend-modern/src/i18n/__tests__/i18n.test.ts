@@ -507,54 +507,24 @@ describe('i18n foundation', () => {
     }
   });
 
-  it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
+  it('keeps Patrol and placeholders intact in alert investigate copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
-      expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');
-      expect(I18N_MESSAGES[locale]['alerts.assistant.sourceLabel']).toBe('Pulse Alerts');
-      expect(I18N_MESSAGES[locale]['alerts.assistant.locked.proRequired']).toContain('Pro');
-      expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toBeTruthy();
-      expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toContain('Patrol');
-      expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.title']).toContain('Patrol');
-      expect(I18N_MESSAGES[locale]['alerts.assistant.explain.menuLabel']).toContain('Assistant');
-      // History rows name each Assistant button after its alert, resource
+      expect(I18N_MESSAGES[locale]['alerts.investigate.label']).toContain('Patrol');
+      expect(I18N_MESSAGES[locale]['alerts.investigate.title']).toContain('Patrol');
+      // History rows name each Investigate button after its alert, resource
       // and start time; every locale must keep all three placeholders.
-      for (const key of ['alerts.assistant.iconLabel', 'alerts.assistant.iconLabelAt'] as const) {
-        expect(I18N_MESSAGES[locale][key]).toContain('Pulse Assistant');
+      for (const key of [
+        'alerts.investigate.iconLabel',
+        'alerts.investigate.iconLabelAt',
+      ] as const) {
+        expect(I18N_MESSAGES[locale][key]).toContain('Patrol');
         expect(I18N_MESSAGES[locale][key]).toContain('{alertType}');
         expect(I18N_MESSAGES[locale][key]).toContain('{resourceName}');
       }
-      expect(I18N_MESSAGES[locale]['alerts.assistant.iconLabelAt']).toContain('{startedAt}');
-      expect(
-        t(
-          'alerts.assistant.action.investigate',
-          {
-            alertIdentifier: 'alert:vm-101:cpu',
-          },
-          locale,
-        ),
-      ).toContain('alert:vm-101:cpu');
-      expect(
-        t(
-          'alerts.assistant.subject',
-          {
-            level: 'warning',
-            alertType: 'cpu',
-            resourceName: 'db-vm-01',
-          },
-          locale,
-        ),
-      ).toContain('db-vm-01');
-      expect(
-        t(
-          'alerts.assistant.subject',
-          {
-            level: 'warning',
-            alertType: 'cpu',
-            resourceName: 'db-vm-01',
-          },
-          locale,
-        ),
-      ).toContain('cpu');
+      expect(I18N_MESSAGES[locale]['alerts.investigate.iconLabelAt']).toContain('{startedAt}');
+      expect(t('alerts.investigate.triggered', { resourceName: 'db-vm-01' }, locale)).toContain(
+        'db-vm-01',
+      );
     }
   });
 

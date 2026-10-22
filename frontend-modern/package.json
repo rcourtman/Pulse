@@ -54,7 +54,6 @@
   "dependencies": {
     "@solidjs/router": "^0.10.10",
     "dompurify": "^3.4.15",
-    "highlight.js": "^11.12.0",
     "lucide-solid": "^0.577.0",
     "marked": "^17.0.1",
     "qrcode": "^1.5.4",

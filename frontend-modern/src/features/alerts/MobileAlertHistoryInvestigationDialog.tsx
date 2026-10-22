@@ -21,7 +21,6 @@ interface MobileAlertHistoryInvestigationDialogProps {
   investigation: MobileAlertHistoryInvestigation;
   state: AlertHistoryState;
   onClose: () => void;
-  onAssistantHandoff?: () => void;
 }
 
 export function MobileAlertHistoryInvestigationDialog(
@@ -67,7 +66,6 @@ export function MobileAlertHistoryInvestigationDialog(
           <Switch>
             <Match when={props.investigation.kind === 'timeline'}>
               <IncidentTimelinePanel
-                onAssistantHandoff={props.onAssistantHandoff ?? props.onClose}
                 loading={() => props.state.incidentLoading()[rowKey()]}
                 error={() => props.state.incidentErrors()[rowKey()]}
                 timeline={() => props.state.incidentTimelines()[rowKey()]}
@@ -90,7 +88,6 @@ export function MobileAlertHistoryInvestigationDialog(
               <AlertResourceIncidentsPanel
                 state={props.state}
                 onClose={props.onClose}
-                onAssistantHandoff={props.onAssistantHandoff ?? props.onClose}
                 showCloseAction={false}
                 showTitle={false}
               />

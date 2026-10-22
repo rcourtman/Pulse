@@ -15,11 +15,11 @@ import {
   type PatrolStatus,
 } from '@/api/patrol';
 import {
-  AIChatAPI,
-  type AssistantWorkflowPromptActivitySurface,
   PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
   PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
-} from '@/api/aiChat';
+  recordWorkflowPromptActivity,
+  type WorkflowPromptActivitySurface,
+} from '@/api/workflowPrompts';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import {
   aiRuntimeSettings,
@@ -54,11 +54,11 @@ import { schedulePatrolRunAcceptanceReconciliation } from './patrolRunAcceptance
 type PatrolTab = 'findings' | 'history';
 
 const recordPatrolWorkflowStarterActivityForSurface = async (
-  surface: AssistantWorkflowPromptActivitySurface,
+  surface: WorkflowPromptActivitySurface,
   logContext: string,
 ): Promise<void> => {
   try {
-    await AIChatAPI.recordWorkflowPromptActivity({
+    await recordWorkflowPromptActivity({
       name: PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
       surface,
     });

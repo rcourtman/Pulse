@@ -595,28 +595,4 @@ test.describe("Mobile viewport flows", () => {
     expect(bodyScrollWidth).toBeLessThanOrEqual(viewportWidth + 1);
   });
 
-  test("AI assistant button is visible above nav bar", async ({ page }) => {
-    await page.goto("/infrastructure");
-    await expect(page.locator("#root")).toBeVisible();
-
-    const nav = page.getByRole("navigation", { name: "Mobile navigation" });
-    await expect(nav).toBeVisible();
-
-    const aiButton = page.getByRole("button", {
-      name: /Ask Pulse Assistant about/,
-    });
-    await expect(aiButton).toBeVisible();
-
-    const navBox = await nav.boundingBox();
-    const aiBox = await aiButton.boundingBox();
-
-    expect(navBox, "Expected nav bounding box").toBeTruthy();
-    expect(aiBox, "Expected AI button bounding box").toBeTruthy();
-
-    const navTop = (navBox as { y: number }).y;
-    const aiBottom =
-      (aiBox as { y: number; height: number }).y +
-      (aiBox as { height: number }).height;
-    expect(aiBottom).toBeLessThanOrEqual(navTop + 1);
-  });
 });

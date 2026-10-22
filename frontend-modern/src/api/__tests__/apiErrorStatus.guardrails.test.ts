@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import aiSource from '@/api/ai.ts?raw';
-import aiChatSource from '@/api/aiChat.ts?raw';
 import agentProfilesSource from '@/api/agentProfiles.ts?raw';
 import alertsSource from '@/api/alerts.ts?raw';
 import agentMetadataSource from '@/api/agentMetadata.ts?raw';
@@ -87,15 +86,6 @@ describe('API error-status guardrails', () => {
     expect(aiSource).not.toContain('readAPIErrorMessage(');
     expect(aiSource).not.toContain('} catch {\n      return null;');
     expect(aiSource).not.toContain('normalizeUnifiedFinding(');
-
-    expect(aiChatSource).toContain('assertAPIResponseOK(response,');
-    expect(aiChatSource).toContain('consumeJSONEventStream<StreamEvent>(response,');
-    expect(aiChatSource).not.toContain('JSON.parse(');
-    expect(aiChatSource).not.toContain('TextDecoder');
-    expect(aiChatSource).not.toContain('getReader(');
-    expect(aiChatSource).not.toContain('STREAM_TIMEOUT_MS');
-    expect(aiChatSource).not.toContain('private static encodeSegment(');
-    expect(aiChatSource).not.toContain('readAPIErrorMessage(');
 
     expect(agentProfilesSource).toContain('withAPIErrorStatusFallback');
     expect(agentProfilesSource).toContain('withAPIErrorStatusNull');
@@ -188,7 +178,6 @@ describe('API error-status guardrails', () => {
 
   it('routes canonical collection normalization through responseUtils', () => {
     expect(aiSource).toContain('arrayOrEmpty<UnifiedFindingRecord>(response.findings)');
-    expect(aiSource).toContain("objectArrayFieldOrEmpty<RemediationPlan>(data, 'plans')");
     expect(aiSource).toContain("objectArrayFieldOrEmpty<ApprovalRequest>(response, 'approvals')");
     expect(aiSource).not.toContain('response.approvals || []');
     expect(aiSource).not.toContain('Array.isArray(data?.plans)');

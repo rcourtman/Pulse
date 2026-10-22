@@ -1,7 +1,6 @@
 import { For, Show, createMemo } from 'solid-js';
 
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
-import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Card } from '@/components/shared/Card';
 import type { Alert, Incident } from '@/types/api';
@@ -42,7 +41,6 @@ interface AlertResourceIncidentsPanelProps {
   state: AlertHistoryState;
   getResource?: (resourceId: string) => Resource | undefined;
   onClose?: () => void;
-  onAssistantHandoff?: () => void;
   showCloseAction?: boolean;
   showTitle?: boolean;
 }
@@ -207,10 +205,6 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                                 </span>
                               </Show>
                             </div>
-                            <IncidentAssistantHandoffButton
-                              incident={incident}
-                              onAssistantHandoff={props.onAssistantHandoff}
-                            />
                           </div>
                           <Show when={incident.history?.hasMoreChanges}>
                             <p class="text-xs text-muted" role="status">

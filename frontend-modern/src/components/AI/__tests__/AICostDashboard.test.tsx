@@ -220,7 +220,7 @@ describe('AICostDashboard', () => {
   it('displays chat and patrol token breakdowns', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
+      expect(screen.getByText('Pulse Mobile chat')).toBeInTheDocument();
     });
     expect(screen.getByText('36,000 tokens')).toBeInTheDocument();
     expect(screen.getByText('Patrol')).toBeInTheDocument();

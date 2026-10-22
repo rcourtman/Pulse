@@ -15,7 +15,7 @@ import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { SearchField } from '@/components/shared/SearchField';
 import type { ModelInfo } from '@/types/ai';
-import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';
+import { AI_MODEL_PICKER_EMPTY_STATE } from '@/utils/aiSettingsPresentation';
 import {
   formatAIModelRouteLabel,
   getAIProviderDisplayName,
@@ -84,7 +84,7 @@ const DEFAULT_BUTTON_CLASS =
 
 const DEFAULT_LABEL_CLASS = 'max-w-[90px] truncate font-medium sm:max-w-[180px]';
 const DEFAULT_DROPDOWN_CLASS = 'w-80';
-const DEFAULT_EMPTY_STATE = AI_CHAT_MODEL_SELECTOR_EMPTY_STATE;
+const DEFAULT_EMPTY_STATE = AI_MODEL_PICKER_EMPTY_STATE;
 const DEFAULT_DROPDOWN_MAX_HEIGHT = 384;
 const DEFAULT_LIST_MAX_HEIGHT = 288;
 const MIN_DROPDOWN_MAX_HEIGHT = 120;

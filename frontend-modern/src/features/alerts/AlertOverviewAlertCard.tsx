@@ -202,17 +202,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     </Show>
   );
   const investigateAction = () => (
-    <InvestigateAlertButton
-      alert={props.alert}
-      resourceType={
-        typeof props.alert.metadata?.resourceType === 'string'
-          ? (props.alert.metadata.resourceType as string)
-          : undefined
-      }
-      variant="text"
-      size="sm"
-      patrolOption
-    />
+    <InvestigateAlertButton alert={props.alert} variant="text" size="sm" />
   );
 
   // Incident alerts land on canonical agent/vm/storage/network resources, so

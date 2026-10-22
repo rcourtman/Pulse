@@ -25,7 +25,7 @@ const STANDARD_SETTINGS_ROUTES = [
   "/settings/monitoring/availability",
   "/settings/pulse-intelligence/provider",
   "/settings/pulse-intelligence/patrol",
-  "/settings/pulse-intelligence/assistant",
+  "/settings/pulse-intelligence/agents",
   "/settings/pulse-intelligence/billing/plan",
   "/settings/system-general",
   "/settings/system-network",
@@ -66,7 +66,7 @@ const SETTINGS_ROUTES = [
 const SETTINGS_ROUTE_REDIRECTS = [
   {
     route: "/settings/pulse-intelligence/discovery",
-    expectedPath: "/settings/pulse-intelligence/assistant",
+    expectedPath: "/settings/pulse-intelligence/agents",
   },
   {
     route: "/settings/pulse-intelligence/billing/usage",

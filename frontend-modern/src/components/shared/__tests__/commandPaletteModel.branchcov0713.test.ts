@@ -4,7 +4,6 @@ import {
   buildCommandPaletteCommands,
   filterCommandPaletteCommands,
   normalizeCommandPaletteQuery,
-  type CommandPaletteAssistantActions,
   type CommandPaletteCommandPaths,
   type CommandPaletteModalCommand,
 } from '@/components/shared/commandPaletteModel';
@@ -13,13 +12,10 @@ import {
 //
 //   1. buildCommandPaletteCommands  — COMPLETELY uncovered by the sibling
 //      suites (branchcov0712 / branchcov0712c only test filterCommandPaletteCommands).
-//      Every branch is exercised here: the `if (options.assistantActions)`
-//      truthy/falsy arms, the `assistantOpenPresentation ?? {default}` LEFT vs
-//      RIGHT arm, each of the six `primaryPlatformNavigationIsVisible(...)`
-//      per-platform visible/not-visible arms, the always-pushed tail commands,
-//      and the wiring of every `action` closure (platform actions call
-//      `navigate(path)` with the correct path; assistant actions call the right
-//      assistantActions method).
+//      Every branch is exercised here: each of the six
+//      `primaryPlatformNavigationIsVisible(...)` per-platform visible/not-visible
+//      arms, the always-pushed tail commands, and the wiring of every `action`
+//      closure (platform actions call `navigate(path)` with the correct path).
 //   2. normalizeCommandPaletteQuery — only exercised INDIRECTLY via the filter
 //      in the sibling suites. Here it is tested directly across every step of
 //      its `toLowerCase().trim().replace(/\s+/g, '')` pipeline and every
@@ -79,64 +75,14 @@ function makeNavigateSpy() {
   return { navigate, calls };
 }
 
-// Builds a fully-populated CommandPaletteAssistantActions where every method is
-// independently spy-counted, so we can assert exactly which method a given
-// assistant command's action fires.
-function makeAssistantActions(): {
-  actions: CommandPaletteAssistantActions;
-  spies: Record<keyof CommandPaletteAssistantActions, number>;
-} {
-  const spies: Record<keyof CommandPaletteAssistantActions, number> = {
-    open: 0,
-    help: 0,
-    newSession: 0,
-    sessions: 0,
-    models: 0,
-    providers: 0,
-    status: 0,
-    undo: 0,
-    redo: 0,
-  };
-  const actions: CommandPaletteAssistantActions = {
-    open: () => {
-      spies.open += 1;
-    },
-    help: () => {
-      spies.help += 1;
-    },
-    newSession: () => {
-      spies.newSession += 1;
-    },
-    sessions: () => {
-      spies.sessions += 1;
-    },
-    models: () => {
-      spies.models += 1;
-    },
-    providers: () => {
-      spies.providers += 1;
-    },
-    status: () => {
-      spies.status += 1;
-    },
-    undo: () => {
-      spies.undo += 1;
-    },
-    redo: () => {
-      spies.redo += 1;
-    },
-  };
-  return { actions, spies };
-}
-
 // ===========================================================================
 // 1. buildCommandPaletteCommands
 // ===========================================================================
 
 describe('commandPaletteModel.branchcov0713', () => {
   describe('buildCommandPaletteCommands', () => {
-    describe('`if (options.assistantActions)` — falsy arm (no assistant block)', () => {
-      it('omits every assistant-* command when assistantActions is absent', () => {
+    describe('no Assistant commands', () => {
+      it('offers no assistant-* commands (the Assistant chat is retired)', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -147,7 +93,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         expect(ids.filter((id) => id.startsWith('assistant-'))).toStrictEqual([]);
       });
 
-      it('returns exactly the three always-pushed tail commands when nothing is visible and no assistant', () => {
+      it('returns exactly the three always-pushed tail commands when nothing is visible', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -159,134 +105,6 @@ describe('commandPaletteModel.branchcov0713', () => {
           'nav-patrol',
           'nav-settings',
         ]);
-      });
-    });
-
-    describe('`if (options.assistantActions)` — truthy arm (nine assistant commands)', () => {
-      it('prepends all nine assistant commands in the exact fixed order', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        // First nine entries are the assistant block, in source order.
-        expect(commands.slice(0, 9).map((c) => c.id)).toStrictEqual([
-          'assistant-open',
-          'assistant-help',
-          'assistant-new-session',
-          'assistant-switch-session',
-          'assistant-switch-model',
-          'assistant-provider-settings',
-          'assistant-status',
-          'assistant-undo-last-turn',
-          'assistant-redo-last-turn',
-        ]);
-      });
-
-      it('emits nine assistant + three tail = twelve commands when no platform is visible', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        expect(commands).toHaveLength(12);
-      });
-
-      it('pins the exact static labels/descriptions of the eight non-open assistant commands', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        const byId = new Map(commands.map((c) => [c.id, c]));
-        expect(byId.get('assistant-help')?.label).toBe('Show Assistant commands');
-        expect(byId.get('assistant-help')?.description).toBe('/help');
-        expect(byId.get('assistant-new-session')?.label).toBe('New Assistant session');
-        expect(byId.get('assistant-new-session')?.description).toBe('/new');
-        expect(byId.get('assistant-switch-session')?.label).toBe('Switch Assistant session');
-        expect(byId.get('assistant-switch-session')?.description).toBe('/sessions');
-        expect(byId.get('assistant-switch-model')?.label).toBe('Switch Assistant model');
-        expect(byId.get('assistant-switch-model')?.description).toBe('/models');
-        expect(byId.get('assistant-provider-settings')?.label).toBe(
-          'Open Assistant provider settings',
-        );
-        expect(byId.get('assistant-provider-settings')?.description).toBe('/providers');
-        expect(byId.get('assistant-status')?.label).toBe('Check Assistant status');
-        expect(byId.get('assistant-status')?.description).toBe('/status');
-        expect(byId.get('assistant-undo-last-turn')?.label).toBe('Undo last Assistant turn');
-        expect(byId.get('assistant-undo-last-turn')?.description).toBe('/undo');
-        expect(byId.get('assistant-redo-last-turn')?.label).toBe('Redo last Assistant turn');
-        expect(byId.get('assistant-redo-last-turn')?.description).toBe('/redo');
-      });
-    });
-
-    describe('`assistantOpenPresentation ?? {default}` — RIGHT (absent) arm', () => {
-      it('falls back to the default label and description when presentation is omitted', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-          // assistantOpenPresentation intentionally omitted
-        });
-        const open = commands.find((c) => c.id === 'assistant-open');
-        expect(open?.label).toBe('Ask about this view');
-        expect(open?.description).toBe('Use the current Pulse view as context');
-      });
-    });
-
-    describe('`assistantOpenPresentation ?? {default}` — LEFT (present) arm', () => {
-      it('uses the caller-provided label and description verbatim', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-          assistantOpenPresentation: {
-            label: 'Ask about the dashboard',
-            description: 'Feed the current dashboard to the assistant',
-          },
-        });
-        const open = commands.find((c) => c.id === 'assistant-open');
-        expect(open?.label).toBe('Ask about the dashboard');
-        expect(open?.description).toBe('Feed the current dashboard to the assistant');
-      });
-
-      it('does NOT contaminate the eight other assistant commands with the custom presentation', () => {
-        // Only assistant-open consumes the presentation; the rest keep static copy.
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-          assistantOpenPresentation: {
-            label: 'Unique Presentation Label',
-            description: 'unique-presentation-desc',
-          },
-        });
-        const others = commands.filter(
-          (c) => c.id.startsWith('assistant-') && c.id !== 'assistant-open',
-        );
-        expect(others).toHaveLength(8);
-        for (const cmd of others) {
-          expect(cmd.label).not.toBe('Unique Presentation Label');
-          expect(cmd.description).not.toBe('unique-presentation-desc');
-        }
       });
     });
 
@@ -491,10 +309,9 @@ describe('commandPaletteModel.branchcov0713', () => {
       });
     });
 
-    describe('command shortcuts (only platform + tail commands carry them)', () => {
-      it('assigns the documented shortcut to each platform/tail command and none to assistant commands', () => {
+    describe('command shortcuts', () => {
+      it('assigns the documented shortcut to each platform/tail command', () => {
         const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
           platformVisibility: makeVisibility({
@@ -506,7 +323,6 @@ describe('commandPaletteModel.branchcov0713', () => {
             standalone: true,
           }),
           navigate,
-          assistantActions: actions,
         });
         const byId = new Map(commands.map((c) => [c.id, c]));
         expect(byId.get('nav-proxmox')?.shortcut).toBe('g p');
@@ -520,15 +336,6 @@ describe('commandPaletteModel.branchcov0713', () => {
         expect(byId.get('nav-alerts')?.shortcut).toBe('g a');
         expect(byId.get('nav-patrol')?.shortcut).toBe('g r');
         expect(byId.get('nav-settings')?.shortcut).toBe('g t');
-        // Assistant commands deliberately have no shortcut property.
-        for (const id of [
-          'assistant-open',
-          'assistant-help',
-          'assistant-new-session',
-          'assistant-redo-last-turn',
-        ]) {
-          expect(byId.get(id)?.shortcut).toBeUndefined();
-        }
       });
     });
 
@@ -660,99 +467,6 @@ describe('commandPaletteModel.branchcov0713', () => {
       });
     });
 
-    describe('action closure wiring — assistant actions fire the correct method exactly once', () => {
-      it('routes assistant-open -> assistantActions.open', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions, spies } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        commands.find((c) => c.id === 'assistant-open')!.action();
-        expect(spies.open).toBe(1);
-        // No other assistant method was invoked.
-        expect(spies.help).toBe(0);
-        expect(spies.newSession).toBe(0);
-      });
-
-      it('routes assistant-help -> assistantActions.help', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions, spies } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        commands.find((c) => c.id === 'assistant-help')!.action();
-        expect(spies.help).toBe(1);
-        expect(spies.open).toBe(0);
-      });
-
-      it('routes assistant-new-session -> newSession, assistant-switch-session -> sessions', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions, spies } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        commands.find((c) => c.id === 'assistant-new-session')!.action();
-        commands.find((c) => c.id === 'assistant-switch-session')!.action();
-        expect(spies.newSession).toBe(1);
-        expect(spies.sessions).toBe(1);
-      });
-
-      it('routes assistant-switch-model -> models and assistant-provider-settings -> providers', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions, spies } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        commands.find((c) => c.id === 'assistant-switch-model')!.action();
-        commands.find((c) => c.id === 'assistant-provider-settings')!.action();
-        expect(spies.models).toBe(1);
-        expect(spies.providers).toBe(1);
-      });
-
-      it('routes assistant-status -> status, assistant-undo-last-turn -> undo, assistant-redo-last-turn -> redo', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions, spies } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        commands.find((c) => c.id === 'assistant-status')!.action();
-        commands.find((c) => c.id === 'assistant-undo-last-turn')!.action();
-        commands.find((c) => c.id === 'assistant-redo-last-turn')!.action();
-        expect(spies.status).toBe(1);
-        expect(spies.undo).toBe(1);
-        expect(spies.redo).toBe(1);
-      });
-
-      it('does NOT call navigate when an assistant action runs (assistant actions are independent of routing)', () => {
-        const { navigate, calls } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        commands.find((c) => c.id === 'assistant-open')!.action();
-        commands.find((c) => c.id === 'assistant-help')!.action();
-        expect(calls).toStrictEqual([]);
-      });
-    });
-
     describe('keywords arrays are populated (spot-check representative commands)', () => {
       it('attaches the exact proxmox keyword set to nav-proxmox', () => {
         const { navigate } = makeNavigateSpy();
@@ -771,58 +485,6 @@ describe('commandPaletteModel.branchcov0713', () => {
           'ceph',
           'vm',
           'lxc',
-        ]);
-      });
-
-      it('attaches the seven-term keyword set to assistant-open', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility(),
-          navigate,
-          assistantActions: actions,
-        });
-        expect(commands.find((c) => c.id === 'assistant-open')?.keywords).toStrictEqual([
-          'assistant',
-          'ai',
-          'chat',
-          'ask',
-          'pulse',
-          'view',
-          'context',
-        ]);
-      });
-    });
-
-    describe('combined realistic build (assistant + all platforms visible)', () => {
-      it('produces 9 assistant + 8 platform + 3 tail = 20 commands with unique ids', () => {
-        const { navigate } = makeNavigateSpy();
-        const { actions } = makeAssistantActions();
-        const commands = buildCommandPaletteCommands({
-          paths: makePaths(),
-          platformVisibility: makeVisibility({
-            proxmox: true,
-            docker: true,
-            kubernetes: true,
-            truenas: true,
-            vmware: true,
-            standalone: true,
-          }),
-          navigate,
-          assistantActions: actions,
-          assistantOpenPresentation: { label: 'L', description: 'D' },
-        });
-        expect(commands).toHaveLength(20);
-        const ids = commands.map((c) => c.id);
-        expect(new Set(ids).size).toBe(ids.length);
-        // First command is the customized assistant-open.
-        expect(commands[0]).toMatchObject({ id: 'assistant-open', label: 'L', description: 'D' });
-        // Last three are the always-pushed tail.
-        expect(commands.slice(-3).map((c) => c.id)).toStrictEqual([
-          'nav-alerts',
-          'nav-patrol',
-          'nav-settings',
         ]);
       });
     });

@@ -1920,30 +1920,16 @@ path. `frontend-modern/src/pages/Dashboard.tsx`,
 surfaces for KPI cards, problem-resource rows, or top-infrastructure
 identities. New summary cards must live on their owning product route and
 prove their data path there.
-32. Keep assistant and other globally mounted consumers off deleted dashboard
-summary state. Globally mounted helpers such as
-`frontend-modern/src/components/AI/Chat/index.tsx` must read the live websocket snapshot or existing unified-resource cache
-rather than forcing root navigation to pay for a replacement dashboard
-overview transport. When the assistant shell changes presentation,
-`frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical
-owner for launcher, drawer, session-menu, and empty-state copy so hot-path
-consumers do not grow one-off inline strings or extra state branches alongside
-the mounted shell. Blocking shared dialogs must also suppress closed assistant
-affordances through the shared dialog runtime instead of leaving the mounted
-shell clickable behind another overlay.
-    Approval presentation inside that mounted assistant shell must stay
-    state-local to the existing drawer/session state and backend approval
-    endpoints. Deny/skip failure handling may preserve the pending approval
-    card, but it must not add polling, resource hydration, or mounted-shell work
-    to recover UI state.
-    That same mounted-shell hot path must protect usable width on constrained
-    viewports. When the shared assistant drawer opens inside
-    `frontend-modern/src/components/AI/Chat/index.tsx`, it may not shrink the
-    infrastructure or dashboard operating surface below a workable narrow-width
-    floor just because the assistant stays mounted in the app shell; below the
-    canonical dock threshold, the assistant must switch to an overlay drawer so
-    table filters, grouped rows, and other hot-path controls keep their
-    existing layout budget instead of paying a second collapse cost.
+32. Keep globally mounted consumers off deleted dashboard summary state.
+    Globally mounted shell helpers must read the live websocket snapshot or
+    the existing unified-resource cache rather than forcing root navigation to
+    pay for a replacement dashboard overview transport, and must not grow
+    one-off inline strings or extra state branches on that hot path. The
+    browser Assistant drawer this obligation was written for was retired on
+    2026-10-22, so no chat shell stays mounted in the app shell any more; a
+    future globally mounted AI surface inherits this same budget, including
+    the rule that it may not shrink a primary operating surface below a
+    workable width.
 34. Keep the retired dashboard page-header path absent from the compact hot
     path. New page headers must stay pure presentation on their owning route
     and must not introduce a second data load, widen suspense ownership, or
@@ -4426,3 +4412,14 @@ windowing budget, runway and mounted-row counts are unchanged. The Docker host
 drawer loads its history charts lazily inside `Suspense` like the node and
 guest drawers, keeping them out of the table chunk, and its action history is
 fetched only when Manage opens.
+
+The app shell lost its largest globally mounted consumer on 2026-10-22, when
+the browser Assistant chat window was retired: the drawer, its launcher, and
+its lazily loaded `Chat` and `vendor-highlight` chunks are gone, and the
+production build ships roughly 100 kB less gzipped JavaScript than the main it
+branched from. `useAppRuntimeState.ts` now seeds AI availability through
+`frontend-modern/src/stores/aiAvailability.ts`, and the Workloads keyboard
+handler in `useWorkloadsControlsState.ts` no longer checks for a focused chat
+composer. `.bundlesize.json` drops the retired chunks; `useUnifiedResources`
+grew to about 10 kB gzipped because Rollup moved the shared filter toolbar
+modules into it once the `Chat` chunk stopped sharing them.

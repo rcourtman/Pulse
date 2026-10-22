@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/api/ai', () => ({
   AIAPI: {
     getUnifiedFindings: vi.fn(),
-    getRemediationPlans: vi.fn(),
     getPendingApprovals: vi.fn(),
     getIntelligenceSummary: vi.fn(),
   },
@@ -749,16 +748,6 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
     expect(aiIntelligenceStore.pendingApprovalCount).toBe(0);
     expect(aiIntelligenceStore.approvalsError).toBeNull();
-  });
-
-  it('fails remediation plan loading closed in public demo mode', async () => {
-    vi.mocked(presentationPolicyIsDemoMode).mockReturnValue(true);
-
-    await aiIntelligenceStore.loadRemediationPlans();
-
-    expect(AIAPI.getRemediationPlans).not.toHaveBeenCalled();
-    expect(aiIntelligenceStore.remediationPlans).toEqual([]);
-    expect(aiIntelligenceStore.plansError).toBeNull();
   });
 
   it('drops expired approvals from Patrol counts and restores needs-attention immediately', async () => {

@@ -108,19 +108,12 @@ export const FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS = {
 
 export const ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: [
-    'alerts.assistant.duration.hoursMinutes',
-    'alerts.assistant.level.info',
-    'alerts.assistant.sourceLabel',
     'alerts.tabs.group.configuration',
     'alerts.tabs.group.status',
     'alerts.timeline.event.aiAnalysis',
     'alerts.timeline.event.runbook',
   ],
   es: [
-    'alerts.assistant.duration.hoursMinutes',
-    'alerts.assistant.duration.minute',
-    'alerts.assistant.duration.minutes',
-    'alerts.assistant.sourceLabel',
     'alerts.nav.title',
     'alerts.page.default.title',
     'alerts.tabs.destinations',

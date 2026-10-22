@@ -33,7 +33,7 @@ import {
   PULSE_MCP_SETUP_PATH,
   PULSE_MCP_TOKEN_SETUP_PATH,
   PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET,
-  SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH,
+  SETTINGS_PULSE_INTELLIGENCE_AGENTS_PATH,
   SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH,
   SETTINGS_PULSE_INTELLIGENCE_PATH,
   isExternalAgentSetupHash,
@@ -140,15 +140,13 @@ describe('resource link routing contract', () => {
   it('keeps external agent setup in Pulse Intelligence while token creation stays in API Access', () => {
     expect(SETTINGS_API_ACCESS_PATH).toBe('/settings/security/api');
     expect(SETTINGS_PULSE_INTELLIGENCE_PATH).toBe('/settings/pulse-intelligence');
-    expect(SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH).toBe(
-      '/settings/pulse-intelligence/assistant',
-    );
+    expect(SETTINGS_PULSE_INTELLIGENCE_AGENTS_PATH).toBe('/settings/pulse-intelligence/agents');
     expect(SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH).toBe(
       '/settings/pulse-intelligence/discovery',
     );
     expect(EXTERNAL_AGENT_SETUP_ANCHOR).toBe('external-agent-setup');
     expect(EXTERNAL_AGENT_SETUP_PATH).toBe(
-      '/settings/pulse-intelligence/assistant#external-agent-setup',
+      '/settings/pulse-intelligence/agents#external-agent-setup',
     );
     expect(PULSE_MCP_SETUP_ANCHOR).toBe('pulse-mcp-setup');
     expect(PULSE_MCP_SETUP_PATH).toBe(EXTERNAL_AGENT_SETUP_PATH);

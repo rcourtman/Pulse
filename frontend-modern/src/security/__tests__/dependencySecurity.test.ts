@@ -236,7 +236,6 @@ describe('frontend dependency security floors', () => {
     const floors: Array<[string, [number, number, number]]> = [
       // GHSA-p98j-92pf-mc4p (IN_PLACE afterSanitize hook XSS) affects 3.4.13-3.4.15.
       ['dompurify', [3, 4, 16]],
-      ['highlight.js', [11, 12, 0]],
       ['solid-js', [1, 9, 15]],
       ['@types/node', [26, 6, 3]],
       ['lucide-solid', [0, 577, 0]],

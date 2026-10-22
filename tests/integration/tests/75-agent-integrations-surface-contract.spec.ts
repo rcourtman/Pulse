@@ -46,10 +46,10 @@ test.describe("Agent integrations surface contract", () => {
         response.request().method() === "GET",
     );
 
-    await page.goto("/settings/pulse-intelligence/assistant", {
+    await page.goto("/settings/pulse-intelligence/agents", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/pulse-intelligence\/assistant/, {
+    await page.waitForURL(/\/settings\/pulse-intelligence\/agents/, {
       timeout: 15_000,
     });
     await expect(

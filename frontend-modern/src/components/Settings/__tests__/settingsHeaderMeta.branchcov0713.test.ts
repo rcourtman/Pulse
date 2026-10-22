@@ -47,7 +47,7 @@ const ALL_TABS: readonly SettingsTab[] = [
   'system-recovery',
   'system-ai',
   'system-ai-patrol',
-  'system-ai-assistant',
+  'system-ai-agents',
   'system-relay',
   'system-billing',
   'support-diagnostics',
@@ -146,11 +146,10 @@ describe('getSettingsHeaderMeta', () => {
       });
     });
 
-    it('localizes system-ai-assistant to the English baseline (sibling only pinned es/de)', () => {
-      expect(en['system-ai-assistant']).toEqual({
-        title: 'Assistant',
-        description:
-          'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
+    it('localizes system-ai-agents to the English baseline (sibling only pinned es/de)', () => {
+      expect(en['system-ai-agents']).toEqual({
+        title: 'External agents',
+        description: "Connect Claude Code, Codex, and other MCP clients to Pulse's governed tools.",
       });
     });
 

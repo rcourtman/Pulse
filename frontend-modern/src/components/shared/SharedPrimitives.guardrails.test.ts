@@ -11,11 +11,6 @@ import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
 import demoBannerSource from '@/components/DemoBanner.tsx?raw';
 import commercialMigrationBannerSource from '@/components/CommercialMigrationBanner.tsx?raw';
 import gitHubStarBannerSource from '@/components/GitHubStarBanner.tsx?raw';
-import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
-import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
-import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
-import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
-import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
@@ -132,7 +127,6 @@ import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?r
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
-import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
@@ -721,9 +715,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/WebhookConfigForm.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
       'src/components/OrgSwitcher.tsx',
-      'src/components/Settings/AIChatMaintenanceSection.tsx',
       'src/components/Settings/AIModelSelectionSection.tsx',
-      'src/components/Settings/AIRuntimeControlsSection.tsx',
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/AuditLogPanel.tsx',
       'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
@@ -976,7 +968,7 @@ describe('shared primitive guardrails', () => {
       "import { SearchField } from '@/components/shared/SearchField';",
     );
     expect(aiModelPickerSource).toContain(
-      "import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';",
+      "import { AI_MODEL_PICKER_EMPTY_STATE } from '@/utils/aiSettingsPresentation';",
     );
     expect(aiModelPickerSource).toContain('const notableModels = createMemo');
     expect(aiModelPickerSource).toContain('(model) => !model.notable');
@@ -1710,11 +1702,6 @@ describe('shared primitive guardrails', () => {
     expect(upgradeLinkSource).toContain('preserveOpener={local.destination.preserveOpener}');
     expect(upgradeLinkSource).not.toContain('window.open');
     expect(upgradeLinkSource).not.toContain('useNavigate(');
-
-    expect(upgradeNavigationHookSource).toContain('export function useUpgradeNavigation');
-    expect(upgradeNavigationHookSource).toContain('useNavigate()');
-    expect(upgradeNavigationHookSource).toContain('navigateToUpgradeDestination');
-    expect(upgradeNavigationHookSource).not.toContain('window.open');
 
     expect(upgradeNavigationSource).toContain('export interface UpgradeDestination');
     expect(upgradeNavigationSource).toContain('isExternalUpgradeHref');
@@ -3131,29 +3118,8 @@ describe('shared primitive guardrails', () => {
     const standaloneAgentMachineActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'standalone-agent-machine-action-icon-local-shell',
     );
-    const aiChatActionIconHeaderGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-action-icon-header-local-shell',
-    );
-    const aiChatActionIconAccentGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-action-icon-accent-local-shell',
-    );
-    const aiChatActionIconPrimarySendGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-action-icon-primary-send-local-shell',
-    );
-    const aiChatActionIconWarningGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-action-icon-warning-local-shell',
-    );
-    const aiChatActionIconFooterGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-action-icon-footer-local-shell',
-    );
-    const aiChatMessageQueuedActionGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-message-queued-action-icon-local-shell',
-    );
-    const aiChatMessageCopyValueGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-message-copy-value-local-shell',
-    );
-    const aiChatToolCopyValueGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'ai-chat-tool-copy-value-local-shell',
+    const patrolToolCopyValueGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'patrol-tool-copy-value-local-shell',
     );
     const commandCopyGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-command-copy-local-shell',
@@ -3259,7 +3225,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(registeredRule?.canonical?.export).toBe('Button');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/AI/Chat/ChatMessages.tsx',
       'src/components/patrol/ApprovalBanner.tsx',
       'src/components/patrol/ApprovalSection.tsx',
       'src/components/ErrorBoundary.tsx',
@@ -3535,7 +3500,6 @@ describe('shared primitive guardrails', () => {
     expect(approvalSectionSource).toContain('<Button');
     expect(approvalSectionSource).toContain('<ButtonLink');
     expect(approvalSectionSource).toContain('variant="primary"');
-    expect(approvalSectionSource).toContain('variant="ghost"');
     expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
     expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
     expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-blue-600 hover:bg-blue-700');
@@ -3977,8 +3941,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/AlertResourceTableMobile.tsx',
       'src/components/Alerts/AlertResourceTableRow.tsx',
       'src/components/Alerts/ResourceTable.tsx',
-      'src/components/AI/Chat/index.tsx',
-      'src/components/AI/Chat/MessageItem.tsx',
       'src/components/Settings/RolesPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/features/standalone/AgentsMachinesTable.tsx',
@@ -4016,27 +3978,6 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             '<svg',
             'text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5',
-          ]),
-        }),
-        expect.objectContaining({
-          path: 'src/components/AI/Chat/index.tsx',
-          patterns: expect.arrayContaining([
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
-            'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
-            'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
-            'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
-            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
-            'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
-            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
-          ]),
-        }),
-        expect.objectContaining({
-          path: 'src/components/AI/Chat/MessageItem.tsx',
-          patterns: expect.arrayContaining([
-            'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
           ]),
         }),
         expect.objectContaining({
@@ -4086,72 +4027,17 @@ describe('shared primitive guardrails', () => {
     expect(standaloneAgentMachineActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
-    expect(aiChatMessageQueuedActionGuard?.canonical?.path).toBe(
-      'src/components/shared/Button.tsx',
-    );
-    expect(aiChatMessageQueuedActionGuard?.canonical?.export).toBe('ActionIconButton');
-    expect(aiChatMessageQueuedActionGuard?.allPatterns).toEqual([
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
-    ]);
-    expect(aiChatMessageQueuedActionGuard?.scopes).toEqual([
-      'src/components/AI/Chat/MessageItem.tsx',
-    ]);
-    expect(aiChatMessageQueuedActionGuard?.allowedPaths ?? []).toHaveLength(0);
-    expect(aiChatMessageQueuedActionGuard?.ignoredPaths).toEqual([
-      'src/components/shared/Button.test.tsx',
-    ]);
-    for (const guard of [
-      aiChatActionIconHeaderGuard,
-      aiChatActionIconAccentGuard,
-      aiChatActionIconPrimarySendGuard,
-      aiChatActionIconWarningGuard,
-      aiChatActionIconFooterGuard,
-    ]) {
-      expect(guard?.canonical?.path).toBe('src/components/shared/Button.tsx');
-      expect(guard?.canonical?.export).toBe('ActionIconButton');
-      expect(guard?.scopes).toEqual(['src/components/AI/Chat']);
-      expect(guard?.allowedPaths ?? []).toHaveLength(0);
-      expect(guard?.ignoredPaths).toEqual([
-        'src/components/AI/Chat/__tests__/AIChat.test.tsx',
-        'src/components/shared/Button.test.tsx',
-      ]);
-    }
-    expect(aiChatActionIconHeaderGuard?.allPatterns).toEqual([
-      'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
-    ]);
-    expect(aiChatActionIconAccentGuard?.allPatterns).toEqual([
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950',
-    ]);
-    expect(aiChatActionIconPrimarySendGuard?.allPatterns).toEqual([
-      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700',
-    ]);
-    expect(aiChatActionIconWarningGuard?.allPatterns).toEqual([
-      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100',
-    ]);
-    expect(aiChatActionIconFooterGuard?.allPatterns).toEqual([
-      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
-    ]);
     expect(copyValueRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/AI/Chat/MessageItem.tsx',
-      'src/components/AI/Chat/ToolExecutionBlock.tsx',
+      'src/components/patrol/ToolExecutionBlock.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/shared/WebInterfaceUrlField.tsx',
     ]);
     expect(copyValueRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          path: 'src/components/AI/Chat/MessageItem.tsx',
-          patterns: expect.arrayContaining([
-            'lucide-solid/icons/copy',
-            "lucide-solid/icons/check';",
-            'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
-            'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
-          ]),
-        }),
-        expect.objectContaining({
-          path: 'src/components/AI/Chat/ToolExecutionBlock.tsx',
+          path: 'src/components/patrol/ToolExecutionBlock.tsx',
           patterns: expect.arrayContaining([
             'lucide-solid/icons/copy',
             "lucide-solid/icons/check';",
@@ -4160,22 +4046,16 @@ describe('shared primitive guardrails', () => {
         }),
       ]),
     );
-    for (const guard of [aiChatMessageCopyValueGuard, aiChatToolCopyValueGuard]) {
-      expect(guard?.canonical?.path).toBe('src/components/shared/Button.tsx');
-      expect(guard?.canonical?.export).toBe('CopyValueButton');
-      expect(guard?.allowedPaths ?? []).toHaveLength(0);
-      expect(guard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
-    }
-    expect(aiChatMessageCopyValueGuard?.scopes).toEqual(['src/components/AI/Chat/MessageItem.tsx']);
-    expect(aiChatMessageCopyValueGuard?.allPatterns).toEqual([
-      'inline-flex h-7 w-7',
-      'border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
-      'CopyIcon class="h-3.5 w-3.5"',
+    expect(patrolToolCopyValueGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(patrolToolCopyValueGuard?.canonical?.export).toBe('CopyValueButton');
+    expect(patrolToolCopyValueGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(patrolToolCopyValueGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
     ]);
-    expect(aiChatToolCopyValueGuard?.scopes).toEqual([
-      'src/components/AI/Chat/ToolExecutionBlock.tsx',
+    expect(patrolToolCopyValueGuard?.scopes).toEqual([
+      'src/components/patrol/ToolExecutionBlock.tsx',
     ]);
-    expect(aiChatToolCopyValueGuard?.allPatterns).toEqual([
+    expect(patrolToolCopyValueGuard?.allPatterns).toEqual([
       'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
       'CopyIcon class="h-3 w-3"',
     ]);
@@ -4285,51 +4165,10 @@ describe('shared primitive guardrails', () => {
     expect(objectDrawerHeaderSource).toContain('pointer-events-none');
     expect(objectDrawerHeaderSource).toContain('ChevronUpIcon');
     expect(objectDrawerHeaderSource).toContain('aria-label={local.collapseLabel}');
-    expect(chatMessagesSource).toContain('@/components/shared/Button');
-    expect(chatMessagesSource).not.toContain(
-      'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
-    );
-    expect(aiChatSource).toContain('@/components/shared/Button');
-    expect(aiChatSource).toContain('ActionIconButton');
-    for (const retiredActionIconShell of [
-      'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
-      'shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
-      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
-      'rounded-sm p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900/25 dark:hover:text-blue-300',
-      'order-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-0',
-      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900/25',
-      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900/25',
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
-      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-xs transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
-      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
-    ]) {
-      expect(aiChatSource).not.toContain(retiredActionIconShell);
-    }
     expect(agentsMachinesTableSource).toContain('@/components/shared/Button');
     expect(agentsMachinesTableSource).toContain('ActionIconButton');
     expect(agentsMachinesTableSource).not.toContain(
       'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60',
-    );
-    expect(messageItemSource).toContain('@/components/shared/Button');
-    expect(messageItemSource).toContain('ActionIconButton');
-    expect(messageItemSource).toContain('CopyValueButton');
-    expect(messageItemSource).not.toContain('lucide-solid/icons/copy');
-    expect(messageItemSource).not.toContain("lucide-solid/icons/check';");
-    expect(messageItemSource).not.toContain(
-      'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
-    );
-    expect(messageItemSource).not.toContain(
-      'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-xs transition-opacity hover:text-base-content',
-    );
-    expect(messageItemSource).not.toContain(
-      'inline-flex h-5 w-5 items-center justify-center rounded-sm text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
-    );
-    expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
-    expect(toolExecutionBlockSource).toContain('CopyValueButton');
-    expect(toolExecutionBlockSource).not.toContain('lucide-solid/icons/copy');
-    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
-    expect(toolExecutionBlockSource).not.toContain(
-      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-2 focus:ring-blue-500/30',
     );
     expect(resourceDetailDrawerDebugTabSource).toContain('@/components/shared/Button');
     expect(resourceDetailDrawerDebugTabSource).not.toContain(
@@ -8113,8 +7952,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/SearchField.tsx');
     expect(registeredRule?.canonical?.export).toBe('SearchField');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/AI/Chat/AssistantCommandHelpDialog.tsx',
-      'src/components/AI/Chat/index.tsx',
       'src/components/Settings/InfrastructureSourcePicker.tsx',
       'src/components/Settings/ResourcePicker.tsx',
       'src/components/Settings/UserAssignmentsPanel.tsx',
@@ -8164,8 +8001,6 @@ describe('shared primitive guardrails', () => {
     expect(resourcePickerSource).not.toContain('onInput={(e) => setTagFilter');
 
     for (const source of [
-      assistantCommandHelpDialogSource,
-      aiChatSource,
       infrastructureSourcePickerSource,
       resourcePickerSource,
       userAssignmentsPanelSource,

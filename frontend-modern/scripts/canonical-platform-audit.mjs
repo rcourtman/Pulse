@@ -89,8 +89,6 @@ const ALLOWLIST = new Set([
   'src/utils/auditWebhookPresentation.ts',
   'src/utils/auditLogPresentation.ts',
   'src/utils/diagnosticsPresentation.ts',
-  'src/utils/aiChatPresentation.ts',
-  'src/utils/aiControlLevelPresentation.ts',
   'src/utils/aiCostPresentation.ts',
   'src/utils/aiSettingsPresentation.ts',
   'src/utils/aiPatrolSchedulePresentation.ts',
@@ -621,10 +619,10 @@ const HELPER_RULES = [
       'Do not define local overview or AI empty-state copy in component code. Use the shared presentation utilities instead.',
   },
   {
-    rule: 'canonical-ai/no-local-chat-empty-state-copy',
-    regex: /No previous conversations|No matching models\./g,
+    rule: 'canonical-ai/no-local-model-picker-empty-state-copy',
+    regex: /No matching models\./g,
     message:
-      'Do not define local AI chat empty-state copy in component code. Use @/utils/aiChatPresentation instead.',
+      'Do not define local AI model picker empty-state copy in component code. Use @/utils/aiSettingsPresentation instead.',
   },
   {
     rule: 'canonical-relay/no-local-onboarding-copy',
@@ -657,13 +655,6 @@ const HELPER_RULES = [
     regex: /\b(?:const|function)\s+summarizeServiceHealthTone\b/g,
     message:
       'Do not define local service summary tone helpers in component code. Use @/utils/serviceHealthPresentation instead.',
-  },
-  {
-    rule: 'canonical-ai/no-local-control-level-presentation-helper',
-    regex:
-      /\bconst\s+normalizeControlLevel\s*=|\bform\.controlLevel\s*===\s*['"]autonomous['"][\s\S]{0,320}bg-red-100|\bform\.controlLevel\s*===\s*['"]controlled['"][\s\S]{0,320}bg-amber-100/g,
-    message:
-      'Do not define local AI control-level normalization or presentation helpers in component code. Use @/utils/aiControlLevelPresentation instead.',
   },
   {
     rule: 'canonical-ai/no-local-settings-readiness-presentation-helper',
