@@ -13,8 +13,8 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `email.enc` | SMTP settings | 🔒 **Encrypted** |
 | `webhooks.enc` | Webhook URLs + headers | 🔒 **Encrypted** |
 | `apprise.enc` | Apprise notification config | 🔒 **Encrypted** |
-| `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
-| `sso.enc` | SAML/SSO provider config | 🔒 **Encrypted** |
+| `oidc.enc` | Legacy single-provider OIDC config | 🔒 **Encrypted** |
+| `sso.enc` | UI/API-managed OIDC and SAML providers, mappings and secrets | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
 | `ai_findings.json` | AI Patrol findings | 📝 Standard |
@@ -50,6 +50,8 @@ default. The audit database and default signing key are in the `audit/`
 subdirectory. Runtime-specific audit storage and non-default organisation
 paths can differ; see [Audit storage and safe recovery](AUDIT_LOGGING.md#storage).
 Do not reset signing or encryption keys as a troubleshooting step.
+For recoverability, follow the [recovery-state checklist](#back-up-recoverable-state);
+this table is not a complete backup inventory.
 
 Path overrides:
 - `PULSE_DATA_DIR` sets the base directory for `system.json`, encrypted files, and the bootstrap token.
@@ -1198,9 +1200,37 @@ To redirect plain-HTTP requests to HTTPS, set `HTTP_REDIRECT_PORT` to a port oth
 
 ## 🛡️ Security Best Practices
 
-1. **Permissions**: Ensure `.env` and `nodes.enc` are `600` (read/write by owner only).
-2. **Backup hygiene**: Back up `.env` separately from `system.json`.
+1. **Permissions**: Keep `.env`, `.encryption.key` and encrypted credential
+   files owner-only (`600`); protect recovery copies too.
+2. **Backup hygiene**: Preserve a matched recovery set using the checklist below,
+   not just selected settings files.
 3. **Tokens**: Use scoped API tokens for agents instead of the admin password.
+
+### Back up recoverable state
+
+`.env` and `system.json` alone are **not a full backup**. Preserve the encrypted
+files with their matching `.encryption.key`, audit history and audit signing key,
+all active data paths, organisation directories and external stores, plus
+deployment-supplied credentials and service/container configuration. Keep the
+whole recovery set private; encryption does not make it safe to attach to an
+issue. Defaults in the file table do not identify every path used by your install.
+
+Use [full-state recovery](MIGRATION.md#full-state-recovery) for a server move or
+disaster-recovery copy. Follow a stopped, consistent backup procedure or supported
+backup tooling; monitoring and alerts pause while Pulse is stopped. Validate on
+an isolated destination before retiring the source. The
+[configuration export](MIGRATION.md#configuration-transfer) and
+[updater snapshot](AUTO_UPDATE.md#what-an-update-snapshot-contains) have different,
+limited scopes; neither is a substitute for the complete recovery set.
+
+Do not restore over a running instance, mix encrypted files with another
+installation's key, regenerate keys or edit encrypted files to clear an error.
+Deleting state or forcing startup import is not a recovery shortcut. If Pulse
+is stopped for [backup safety](VM_DISK_MONITORING.md#backup-safety), keep it stopped
+until that procedure's independent recovery checks pass. For sign-in failure
+after a provider edit, preserve the working administrator session and use
+[provider-save recovery](OIDC.md#sign-in-fails-after-editing-a-provider);
+restoring unrelated files is not a repair for that sign-in defect.
 
 ---
 
