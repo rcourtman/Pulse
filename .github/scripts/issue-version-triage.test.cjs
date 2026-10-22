@@ -230,10 +230,20 @@ function createGithub({
         },
         async addLabels(payload) {
           calls.addLabels.push(payload);
+          if (github.currentIssue) {
+            const labels = new Set(github.currentIssue.labels.map(label => label.name));
+            payload.labels.forEach(name => labels.add(name));
+            github.currentIssue = { ...github.currentIssue,
+              labels: [...labels].map(name => ({ name })) };
+          }
           return { data: payload };
         },
         async removeLabel(payload) {
           calls.removeLabel.push(payload);
+          if (github.currentIssue) {
+            github.currentIssue = { ...github.currentIssue,
+              labels: github.currentIssue.labels.filter(label => label.name !== payload.name) };
+          }
           return { data: payload };
         },
         async createComment(payload) {
@@ -735,7 +745,7 @@ test("label consumer uses edited headings without changing Community-owned state
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900, 2900]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900, 2900, 2900]);
 });
 
 test("invalid headings cannot create classification or decomposition mutations", async () => {
@@ -911,7 +921,7 @@ test("syncLabels preserves visible fields after inline HTML without new contact"
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808, 2808]);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808, 2808, 2808]);
   }
 });
 
@@ -929,7 +939,7 @@ test("syncLabels consumes real fields after pasted HTML without contact or state
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801, 2801]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801, 2801, 2801]);
 });
 
 test("a hidden hint or empty topic field is not an actionable declaration", () => {
@@ -1702,10 +1712,14 @@ test("ambiguous upgrade version requests information without a retest comment", 
 
 test("queued label sync cannot overwrite newer Community label decisions", async () => {
   for (const communityAdded of [true, false]) {
-    const { github } = createGithub();
+    const { github, calls } = createGithub();
     const live = new Set(["bug", "affects-6.0.0", "needs-version-info"]);
     if (communityAdded) live.add("needs-retest-on-latest");
     live.add("operator-reviewed");
+    github.rest.issues.get = async payload => {
+      calls.getIssue.push(payload);
+      return { data: { ...github.currentIssue, labels: [...live].map(name => ({ name })) } };
+    };
     github.rest.issues.setLabels = async ({ labels }) => {
       live.clear();
       labels.forEach(label => live.add(label));
@@ -1821,7 +1835,7 @@ test("delayed events classify the current report and labels, not an old version"
   const { github, calls } = createGithub({ currentIssue });
   await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
 
-  assert.deepEqual(calls.getIssue, Array(2).fill({ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }));
+  assert.deepEqual(calls.getIssue, Array(3).fill({ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }));
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
   assert.equal(calls.getLatestRelease.length, 0);
@@ -2035,7 +2049,7 @@ test("the actual label consumer keeps copied declarations from changing report o
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902, 2902]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902, 2902, 2902, 2902]);
 });
 
 
@@ -2169,7 +2183,7 @@ test("the pre-write comparison treats label order as irrelevant", async () => {
   const read = github.rest.issues.get;
   github.rest.issues.get = async payload => {
     const result = await read(payload);
-    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, labels: [...issue.labels].reverse() } };
+    return { data: calls.getIssue.length === 1 ? result.data : { ...result.data, labels: [...result.data.labels].reverse() } };
   };
   await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.4.5" }), core: createCore() });
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
@@ -2203,7 +2217,7 @@ test("explicit unknown current versions retire only managed exact-version labels
     await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.4.5" }), core: createCore() });
     assert.deepEqual(calls.addLabels.map(call => call.labels), laterVersionKnown ? [] : [["needs-version-info"]], body);
     assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"], body);
-    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.getIssue.length, laterVersionKnown ? 2 : 3);
     assert.equal(calls.getLatestRelease.length, 0);
     assert.equal(calls.createComment.length, 0);
   }
@@ -2390,7 +2404,7 @@ for (const [filename, version] of [
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.getIssue.length, 4);
   });
 }
 
@@ -2833,7 +2847,7 @@ test("server reference correction preserves independent whole-thread evidence", 
     previousBody: "### Pulse version\nrcourtman/pulse:6.4.5" }) });
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0-beta.3"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
-  assert.equal(calls.getIssue.length, 2);
+  assert.equal(calls.getIssue.length, 4);
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
@@ -2870,4 +2884,102 @@ test("preview plan context is optional and retains existing subscriptions withou
     "Relay is no longer sold", "Do not include licence keys, account or payment details"]) {
     assert.ok(field.includes(phrase), phrase);
   }
+});
+
+// GitHub label additions and removals are separate requests. The first write
+// must not authorize the rest after a reporter or Community changes the issue.
+for (const [scenario, changes] of [
+  ["closure", { state: "closed" }],
+  ["body correction", { body: "### Pulse version\nunknown\n" }],
+  ["title correction", { title: "Corrected report" }],
+  ["Community labels", { labels: [{ name: "bug" }, { name: "needs-version-info" }] }],
+  ["pull request", { pull_request: {} }],
+]) {
+  test(`label removal stops after an addition overlaps ${scenario}`, async () => {
+    const issue = {
+      number: 3120, state: "open", title: "Current bug", updated_at: "2026-10-08T10:00:00Z",
+      body: "### Pulse version\n6.5.0\n",
+      labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+    };
+    const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+    const add = github.rest.issues.addLabels;
+    github.rest.issues.addLabels = async payload => {
+      const result = await add(payload);
+      github.currentIssue = { ...github.currentIssue, ...structuredClone(changes) };
+      return result;
+    };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+    }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+    assert.deepEqual(calls.removeLabel, [], "do not erase newer report metadata");
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("label removals recheck between writes without undoing an accepted addition", async () => {
+  const issue = { number: 3121, state: "open", title: "Current bug", updated_at: "2026-10-08T10:00:00Z",
+    body: "### Pulse version\n6.5.0\n",
+    labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+  };
+  const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+  const remove = github.rest.issues.removeLabel;
+  github.rest.issues.removeLabel = async payload => {
+    const result = await remove(payload);
+    github.currentIssue = { ...github.currentIssue, body: "### Pulse version\nunknown\n" };
+    return result;
+  };
+  await syncLabels({ github, core: createCore(), context: createContext({
+    action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+  }) });
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+  assert.ok(github.currentIssue.labels.some(label => label.name === "needs-version-info"));
+  assert.ok(github.currentIssue.labels.some(label => label.name === "affects-6.5.0"));
+  assert.equal(calls.createComment.length, 0);
+});
+
+for (const status of [403, 404, 500]) {
+  test(`a failed post-addition read (${status}) leaves remaining labels untouched`, async () => {
+    const issue = { number: 3122, state: "open", title: "Current bug", updated_at: "2026-10-08T10:00:00Z",
+      body: "### Pulse version\n6.5.0\n",
+      labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+    };
+    const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+    const read = github.rest.issues.get;
+    github.rest.issues.get = async payload => {
+      if (calls.addLabels.length) throw Object.assign(new Error("API read failed"), { status });
+      return read(payload);
+    };
+    await assert.rejects(syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+    }) }), { status });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("our own timestamp changes do not suppress a still-current label correction", async () => {
+  const issue = { number: 3123, state: "open", title: "Current bug",
+    updated_at: "2026-10-08T10:00:00Z", body: "### Pulse version\n6.5.0\n",
+    labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest"]
+      .map(name => ({ name })),
+  };
+  const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+  for (const method of ["addLabels", "removeLabel"]) {
+    const mutate = github.rest.issues[method];
+    github.rest.issues[method] = async payload => {
+      const result = await mutate(payload);
+      github.currentIssue = { ...github.currentIssue, updated_at: "2026-10-08T10:01:00Z" };
+      return result;
+    };
+  }
+  await syncLabels({ github, core: createCore(), context: createContext({
+    action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+  }) });
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+    ["affects-6.5.0", "bug", "needs-retest-on-latest"]);
+  assert.equal(calls.getIssue.length, 4);
+  assert.equal(calls.createComment.length, 0);
 });
