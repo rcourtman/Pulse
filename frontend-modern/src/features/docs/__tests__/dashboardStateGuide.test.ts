@@ -94,7 +94,7 @@ describe('dashboard connection and state-delivery help', () => {
       expect(link.hasAttribute('data-doc-link')).toBe(true);
     }
     expect(
-      guide('REVERSE_PROXY').querySelector(`a[href="/docs/REVERSE_PROXY#${fragment}"]`),
+      guide('REVERSE_PROXY').querySelector(`a[href="#${fragment}"]`),
     ).not.toBeNull();
   });
 
