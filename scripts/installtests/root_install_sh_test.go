@@ -139,7 +139,7 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 		`tar --no-same-owner --no-overwrite-dir -xzf`,
 		`validate_pulse_binary_architecture "$pulse_binary_path"`,
 		`cp "$pulse_binary_path" "$binary_stage/pulse"`,
-		`timeout 5 "$binary_stage/pulse" --version`,
+		`timeout -k 1 5 "$binary_stage/pulse" --version`,
 		`stop_pulse_for_replacement "$service_name"`,
 		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
 	} {
@@ -156,11 +156,11 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	previous = -1
 	for _, step := range []string{
 		`make build`,
-		`mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"`,
+		`mktemp -d "$staging_parent/.pulse-stage-XXXXXX"`,
 		`cp pulse "$binary_stage/pulse"`,
 		`chmod 755 "$binary_stage/pulse"`,
 		`chown pulse:pulse "$binary_stage/pulse"`,
-		`timeout 5 "$binary_stage/pulse" --version`,
+		`timeout -k 1 5 "$binary_stage/pulse" --version`,
 		`source_revision=$(git rev-parse --short HEAD)`,
 		`stop_pulse_for_replacement "$service_name"`,
 		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
@@ -666,19 +666,23 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`"tokenValue": token_value`,
 		`"authToken": setup_token`,
 		`"source": "script"`,
-		`data.get("action", "")`,
-		`data.get("type", "")`,
-		`data.get("source", "")`,
-		`data.get("host", "")`,
-		`data.get("tokenId", "")`,
-		`data.get("tokenValue", "")`,
-		`data.get("nodeId", "")`,
-		`data.get("nodeName", "")`,
-		`[[ "$register_status" != "success" ]] || [[ "$register_action" != "use_token" ]] || [[ "$register_type" != "pve" ]] || [[ "$register_source" != "script" ]]`,
+		`python3 - 3<<<"$register_response" 4<<<"$register_payload"`,
+		`data = json.load(os.fdopen(3))`,
+		`request = json.load(os.fdopen(4))`,
+		`"status": "success", "action": "use_token", "type": "pve", "source": "script"`,
+		`"host": request["host"], "tokenId": request["tokenId"], "tokenValue": request["tokenValue"]`,
+		`data.get("nodeId") != node_name`,
+		`not all(c.isprintable() for c in node_name)`,
+		`for secret in (request["tokenValue"], request["authToken"])`,
+		`Pulse auto-registration could not be confirmed; check the node in Pulse before trying again`,
 		`AUTO_NODE_REGISTERED_NAME="$register_node_name"`,
-		`curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
-		`printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`,
-		`token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
+		`printf %s "$setup_payload" | pve_auto_register_pulse_post "$pulse_url/api/setup-script-url"`,
+		`printf %s "$register_payload" | pve_auto_register_pulse_post "$pulse_url/api/auto-register"`,
+		`pve_auto_register_pulse_post() {`,
+		`--noproxy '*' --connect-timeout 5 --max-time 15 --retry 0`,
+		`--data-binary @- --write-out $'\n%{http_code}' --url "$url" 2>/dev/null`,
+		`[[ "$response" == *$'\n200' ]] || return 1`,
+		`created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
 		`pveum aclmod / -token "$token_id" -role PVEAuditor`,
 		`pveum aclmod / -token "$token_id" -role PulseMonitor`,
 		`pveum aclmod /storage -token "$token_id" -role PVEDatastoreAdmin`,
@@ -705,6 +709,8 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		t.Fatalf("root install.sh must prefer VM.GuestAgent.* privileges before legacy VM.Monitor")
 	}
 	forbidden := []string{
+		`python3 - "$register_response"`,
+		`Pulse auto-registration reported an error: $register_response`,
 		`local bootstrap_token=""`,
 		`X-Setup-Token: $bootstrap_token`,
 		`Discovered bootstrap token from container`,
@@ -850,8 +856,8 @@ func TestRootInstallScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
 		`if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then`,
 		`install_binary_symlink "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"`,
 		`ln -sf "$target" "$link_path"`,
-		`safe_systemctl enable "$update_timer_unit" || true`,
-		`safe_systemctl start "$update_timer_unit" || true`,
+		`if ! safe_systemctl enable "$update_timer_unit"; then`,
+		`if ! safe_systemctl start "$update_timer_unit"; then`,
 		`Environment="PULSE_SERVICE_NAME=$service_name"`,
 		`Environment="PULSE_INSTALL_DIR=$install_dir"`,
 		`Environment="PULSE_CONFIG_DIR=$config_dir"`,
@@ -908,7 +914,7 @@ func TestPulseAutoUpdateScriptSupportsInstanceScopedServerInstalls(t *testing.T)
 		`"PULSE_SERVICE_NAME=$service_name"`,
 		`"PULSE_INSTALL_DIR=$INSTALL_DIR"`,
 		`"PULSE_CONFIG_DIR=$CONFIG_DIR"`,
-		`systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT"`,
+		`timeout -k 1 5 systemctl is-enabled "$UPDATE_TIMER_UNIT"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -1220,41 +1226,30 @@ func TestRootInstallAutoRegisterPrefersJsonTokenForm(t *testing.T) {
 	}
 
 	jsonIdx := strings.Index(script, `--privsep 1 --output-format json 2>&1`)
-	bareIdx := strings.Index(script, "\n        token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 2>&1)")
+	bareIdx := strings.Index(script, "\n        created_token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 2>&1)")
 	if jsonIdx < 0 || bareIdx < 0 || jsonIdx > bareIdx {
 		t.Fatalf("expected JSON token form to precede the legacy table fallback (json=%d bare=%d)", jsonIdx, bareIdx)
 	}
 }
 
-func TestRootInstallAutoRegisterRotatesExistingDeterministicToken(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
-	if err != nil {
-		t.Fatalf("read root install.sh: %v", err)
-	}
-	script := string(content)
-
-	required := []string{
-		`pve_token_already_exists_error() {`,
-		`create_pve_auto_register_token() {`,
+func TestRootInstallAutoRegisterPreservesExistingDeterministicToken(t *testing.T) {
+	script := extractRootInstallShellFunction(t, "auto_register_pve_node")
+	for _, needle := range []string{
 		`create_pve_auto_register_token "$token_name" token_output token_status`,
 		`pve_token_already_exists_error "$token_output"`,
-		`pveum user token remove pulse-monitor@pve "$token_name"`,
-		`Existing Proxmox monitoring token '${token_name}' found; rotating it so Pulse receives a fresh secret`,
-	}
-	for _, needle := range required {
+		`AUTO_NODE_REGISTER_ERROR="existing monitoring token preserved"`,
+		`was preserved; skipping automatic node registration`,
+		`Check the node in Pulse; a separate installation needs its own token.`,
+	} {
 		if !strings.Contains(script, needle) {
-			t.Fatalf("install.sh missing deterministic token rotation contract: %s", needle)
+			t.Fatalf("install.sh missing existing-token preservation contract: %s", needle)
 		}
 	}
-
-	alreadyExistsIdx := strings.Index(script, `pve_token_already_exists_error "$token_output"`)
-	removeIdx := strings.Index(script, `pveum user token remove pulse-monitor@pve "$token_name"`)
-	retryIdx := strings.LastIndex(script, `create_pve_auto_register_token "$token_name" token_output token_status`)
-	if alreadyExistsIdx < 0 || removeIdx < 0 || retryIdx < 0 || !(alreadyExistsIdx < removeIdx && removeIdx < retryIdx) {
-		t.Fatalf("expected existing-token detection to remove then retry token creation (exists=%d remove=%d retry=%d)", alreadyExistsIdx, removeIdx, retryIdx)
+	if strings.Contains(script, "user token remove") {
+		t.Fatal("automatic registration must not revoke a previous installation's credential")
 	}
-	if strings.Contains(script, `pveum user token remove pulse-monitor@pve`) && !strings.Contains(script, `pve_token_already_exists_error "$token_output"`) {
-		t.Fatalf("token removal must stay gated by an explicit existing-token create error")
+	if strings.Count(script, `create_pve_auto_register_token "$token_name" token_output token_status`) != 1 {
+		t.Fatal("an existing-token or unconfirmed result must not retry credential creation")
 	}
 }
 
@@ -1267,7 +1262,9 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 
 	for _, needle := range []string{
 		`smoke_test_pve_auto_register_token() {`,
-		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes"`,
+		`pve_auto_register_api_status() {`,
+		`printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" |`,
+		`curl "${curl_args[@]}" --header @- --url "${host_url%/}/api2/json/nodes" 2>/dev/null`,
 		`AUTO_NODE_REGISTER_ERROR="token smoke check failed"`,
 		`smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`,
 	} {
@@ -1277,9 +1274,14 @@ func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *test
 	}
 
 	smokeCallIdx := strings.Index(script, `smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`)
-	registerIdx := strings.Index(script, `curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`)
+	registerIdx := strings.Index(script, `pve_auto_register_pulse_post "$pulse_url/api/auto-register"`)
 	if smokeCallIdx < 0 || registerIdx < 0 || smokeCallIdx > registerIdx {
 		t.Fatalf("expected token smoke check to run before /api/auto-register (smoke=%d register=%d)", smokeCallIdx, registerIdx)
+	}
+	preflightIdx := strings.Index(script, `preflight_pve_auto_register_api "$normalized_host_url"`)
+	createIdx := strings.Index(script, `create_pve_auto_register_token "$token_name" token_output token_status`)
+	if preflightIdx < 0 || createIdx < 0 || preflightIdx > createIdx {
+		t.Fatal("API trust/availability must be checked without a credential before creating or rotating it")
 	}
 }
 
@@ -1442,6 +1444,13 @@ func TestRefreshAutoUpdatesReplacesStaleHelperWithoutChangingEnablement(t *testi
 	autoUpdateSrc := filepath.Join(installDir, "scripts", "pulse-auto-update.sh")
 	autoUpdateDest, servicePath, timerPath := prepareAutoUpdatePaths(t, tmpDir)
 	callsPath := filepath.Join(tmpDir, "systemctl-calls")
+	// The confirmed reload runs systemctl through timeout, not safe_systemctl.
+	// Record that real boundary as well as any forbidden timer mutations below.
+	binDir := filepath.Dir(autoUpdateDest)
+	manager := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"" + callsPath + "\"\n"
+	if err := os.WriteFile(filepath.Join(binDir, "systemctl"), []byte(manager), 0755); err != nil {
+		t.Fatalf("write systemctl recorder: %v", err)
+	}
 
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
@@ -1466,6 +1475,7 @@ func TestRefreshAutoUpdatesReplacesStaleHelperWithoutChangingEnablement(t *testi
 	}
 
 	script := `
+		PATH="` + binDir + `:$PATH"
 		CONFIG_DIR="` + configDir + `"
 		INSTALL_DIR="` + installDir + `"
 		PULSE_AUTO_UPDATE_DEST="` + autoUpdateDest + `"
@@ -1478,6 +1488,7 @@ func TestRefreshAutoUpdatesReplacesStaleHelperWithoutChangingEnablement(t *testi
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
 ` + extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + `
 ` + extractInstallAutoUpdateAssetsShellFunctions(t) + `
+` + extractRootInstallShellFunction(t, "reload_auto_update_manager") + `
 ` + extractRootInstallShellFunction(t, "refresh_auto_updates") + `
 		refresh_auto_updates
 	`
@@ -2386,11 +2397,16 @@ print_info() { echo "INFO: $*"; }
 print_error() { echo "ERROR: $*"; }
 print_success() { echo "SUCCESS: $*"; }
 safe_systemctl() { return 0; }
-timeout() { shift; "$@"; }
+timeout() {
+    [[ "$1" == -k && "$2" == 1 && "$3" == 5 && "$4" == systemctl ]] || return 97
+    shift 3
+    "$@"
+}
 sleep() { :; }
 journalctl() { return 0; }
 ensure_pulse_running_after_update() { return 0; }
-` + extractRootInstallShellFunction(t, "start_pulse") + "\n"
+` + extractRootInstallShellFunction(t, "wait_for_service_active") + "\n" +
+		extractRootInstallShellFunction(t, "start_pulse") + "\n"
 
 	// Unit genuinely absent: no unit file and `systemctl cat` cannot find it.
 	// start_pulse must fail with a clear error instead of reporting success
@@ -2425,6 +2441,91 @@ start_pulse
 	if !strings.Contains(string(out), "SUCCESS:") {
 		t.Fatalf("start_pulse did not report a successful start:\n%s", out)
 	}
+}
+
+func TestRootInstallAutoUpdateReloadCompletion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "auto_update_reload.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("connected automatic-update reload controls: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Ran 6 tests in ") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete automatic-update reload controls:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
+func TestRootInstallAutoUpdateSettingsPublication(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "auto_update_settings.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("private automatic-update settings publication: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_existing_object_preserves_values_and_uses_private_atomic_publication",
+		"test_fresh_settings_are_private_and_keep_the_existing_defaults",
+		"test_missing_parser_preserves_existing_configuration_without_text_substitution",
+		"test_invalid_or_multiple_json_values_are_not_rewritten_or_enabled",
+		"test_linked_or_nonregular_configuration_is_not_followed",
+		"test_failed_stage_parse_mode_owner_or_rename_retains_original_without_timer_changes",
+		"test_interrupted_publication_cleans_its_private_staging_file",
+		"test_raced_destination_directory_is_not_written_inside",
+		"test_refused_assets_keep_saved_settings_and_never_enable_the_timer",
+		"test_enable_failure_does_not_start_retry_or_claim_success",
+		"test_start_failure_does_not_retry_roll_back_or_claim_success",
+		"test_readbacks_require_persistent_enablement_and_active_timer",
+		"test_each_hung_manager_operation_keeps_the_five_second_bound",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.AutoUpdateSettings."+name+") ... ok") {
+			t.Fatalf("settings publication control %s did not pass:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(string(out), "\nRan 13 tests in ") || !strings.Contains(string(out), "\nOK\n") {
+		t.Fatalf("incomplete settings publication verdict:\n%s", out)
+	}
+}
+
+func TestRootInstallStartRequiresObservedActivityAndCallerPropagation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_start.py"), "-v", "ServerInstallerStart")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("server startup/completion controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_unconfirmed_fresh_start_is_failure_not_future_boot_or_success",
+		"test_actual_active_read_not_start_command_exit_admits_completion",
+		"test_prior_active_update_keeps_its_one_existing_start_retry",
+		"test_missing_unit_never_reaches_enable_or_start",
+		"test_every_installer_caller_propagates_start_failure_even_in_an_or_list",
+		"test_every_installer_caller_requires_real_active_observation_before_completion",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.ServerInstallerStart."+name+") ... ok") {
+			t.Fatalf("server startup control %s did not pass:\n%s", name, out)
+		}
+	}
+	if !strings.Contains(string(out), "\nRan 6 tests in ") || !strings.Contains(string(out), "\nOK\n") {
+		t.Fatalf("incomplete server startup verdict:\n%s", out)
+	}
+}
+
+func TestServerStartupWaitSharesOneWallClockBudget(t *testing.T) {
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_installer_start.py"), "ServiceStartDeadline", []string{
+		"test_slow_inactive_reads_share_the_wall_clock_budget",
+		"test_term_resistant_read_uses_the_remaining_budget_not_five_seconds",
+		"test_active_and_delayed_start_still_require_the_exact_service_read",
+		"test_failed_plausible_active_result_does_not_admit_success",
+		"test_zero_budget_performs_no_manager_read",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"),
+		"PULSE_AUTO_UPDATER_UNDER_TEST="+repoFile("scripts", "pulse-auto-update.sh"))
 }
 
 // Reported on #1663: reinstalling after `rm -rf /etc/pulse` reached
@@ -2593,78 +2694,24 @@ func TestRootInstallResetBoundsEverySystemdObservationAndMutation(t *testing.T) 
 	}
 }
 
-// Server update staging lives under the install directory (#2785), which keeps
-// an interrupted run's ~1 GB extract across reboots. The sweep removes only
-// owner-only staging directories older than any live run, never symlinks,
-// files, look-alike names or anything else in the install directory.
-func TestRootInstallScriptSweepsOnlyStaleServerStaging(t *testing.T) {
-	installDir := filepath.Join(t.TempDir(), "install")
-	outside := filepath.Join(t.TempDir(), "outside")
-	for _, dir := range []string{
-		filepath.Join(installDir, "bin"),
-		filepath.Join(installDir, ".pulse-extract-AbC123", "bin"),
-		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789"),
-		filepath.Join(installDir, ".pulse-extract-toolong1"),
-		outside,
+func TestRootInstallScriptStagingParentPolicy(t *testing.T) {
+	body := extractRootInstallShellFunction(t, "protect_server_install_parent")
+	for _, required := range []string{
+		`root_directory_protects_entries "$parent"`,
+		`chown -h root:pulse -- "$INSTALL_DIR"`,
+		`chmod "$protected_mode" -- "$INSTALL_DIR"`,
+		`root_directory_protects_entries "$INSTALL_DIR"`,
 	} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			t.Fatal(err)
+		if !strings.Contains(body, required) {
+			t.Fatalf("staging parent must enforce %s", required)
 		}
 	}
-	files := []string{
-		filepath.Join(installDir, ".pulse-extract-AbC123", "bin", "pulse"),
-		filepath.Join(installDir, ".pulse-v6.6.0-linux-amd64-XyZ789", "pulse-v6.6.0-linux-amd64.tar.gz"),
-		filepath.Join(installDir, ".pulse-extract-file01"),
-		filepath.Join(installDir, "bin", "pulse"),
-		filepath.Join(outside, "keep"),
-	}
-	for _, file := range files {
-		if err := os.WriteFile(file, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.Symlink(outside, filepath.Join(installDir, ".pulse-extract-link01")); err != nil {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	sweep := func(minutes string) {
-		t.Helper()
-		script := `
-			set -euo pipefail
-			print_warn() { echo "$*" >&2; }
-			INSTALL_DIR="$1"
-			SERVER_STAGING_STALE_MINUTES="$2"
-` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
-` + extractRootInstallShellFunction(t, "sweep_stale_server_staging") + `
-			sweep_stale_server_staging
-		`
-		if out, err := exec.Command("bash", "-c", script, "bash", installDir, minutes).CombinedOutput(); err != nil {
-			t.Fatalf("sweep: %v\n%s", err, out)
-		}
-	}
-
-	// A live run's staging is fresh: the production age keeps it.
-	sweep("360")
-	for _, file := range files {
-		if _, err := os.Stat(file); err != nil {
-			t.Fatalf("fresh staging or unrelated file removed: %s", file)
-		}
-	}
-
-	time.Sleep(1100 * time.Millisecond)
-	sweep("0")
-	for _, removed := range []string{".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789"} {
-		if _, err := os.Lstat(filepath.Join(installDir, removed)); !os.IsNotExist(err) {
-			t.Fatalf("stale staging %s was not removed (err=%v)", removed, err)
-		}
-	}
-	for _, kept := range []string{".pulse-extract-toolong1", ".pulse-extract-file01", ".pulse-extract-link01", "bin/pulse"} {
-		if _, err := os.Lstat(filepath.Join(installDir, kept)); err != nil {
-			t.Fatalf("sweep removed non-staging entry %s: %v", kept, err)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(outside, "keep")); err != nil {
-		t.Fatalf("sweep followed a staging-named symlink: %v", err)
+	if strings.Contains(string(content), "sweep_stale_server_staging") {
+		t.Fatal("age alone must not authorise deleting another installer's staging")
 	}
 }
 
@@ -2681,7 +2728,7 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	}
 
 	installDir := filepath.Join(t.TempDir(), "install")
-	for _, dir := range []string{"bin", "scripts", ".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789", ".hidden"} {
+	for _, dir := range []string{"bin", "scripts", ".pulse-stage-AbC123", ".pulse-extract-AbC123", ".pulse-v6.6.0-linux-amd64-XyZ789", ".hidden"} {
 		if err := os.MkdirAll(filepath.Join(installDir, dir), 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -2695,6 +2742,7 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 		INSTALL_DIR="$1"
 		CALLS="$2"
 		chown() { printf '%s\n' "$*" >> "$CALLS"; }
+		protect_server_install_parent() { printf 'PROTECTED\n' >> "$CALLS"; }
 ` + extractRootInstallShellFunction(t, "is_server_staging_name") + `
 ` + extractRootInstallShellFunction(t, "chown_install_dir_for_pulse") + `
 		chown_install_dir_for_pulse
@@ -2708,7 +2756,7 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	}
 	got := strings.Split(strings.TrimSpace(string(recorded)), "\n")
 	want := []string{
-		"pulse:pulse " + installDir,
+		"PROTECTED",
 		"-R pulse:pulse " + filepath.Join(installDir, "VERSION"),
 		"-R pulse:pulse " + filepath.Join(installDir, "bin"),
 		"-R pulse:pulse " + filepath.Join(installDir, "scripts"),
@@ -2718,5 +2766,25 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("ownership calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestRootInstallScriptProtectedStagingControls(t *testing.T) {
+	cmd := exec.Command("python3", filepath.Join("..", "tests", "test_server_installer_staging.py"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("protected staging controls: %v\n%s", err, out)
+	}
+}
+
+// Exercise actual installer helpers and real local TLS/HTTP clients. Only inert
+// signed inputs are downloaded; no system installation or payload runs here.
+func TestRootInstallHTTPClientsIgnoreAmbientConfiguration(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_installer_client_config.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("server installer HTTP-client configuration controls: %v\n%s", err, out)
 	}
 }

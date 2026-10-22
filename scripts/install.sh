@@ -56,8 +56,16 @@ main() {
 
 # --- Cleanup trap ---
 TMP_FILES=()
+AGENT_STAGING_DIRS=()
+SERVER_CERTIFICATE_PROBE_PID=""
 # shellcheck disable=SC2317  # Invoked by trap, not directly
 cleanup() {
+    # The pin preflight owns only this direct OpenSSL child. Reap it before
+    # removing its output, including on timeout, interruption or shell failure.
+    if [[ -n "${SERVER_CERTIFICATE_PROBE_PID:-}" ]]; then
+        kill -KILL "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || true
+        wait "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || true
+    fi
     if [[ "${SAFE_PROFILE_TRANSACTION_ACTIVE:-false}" == "true" &&
           "${SAFE_PROFILE_TRANSACTION_COMMITTED:-false}" != "true" &&
           -n "${SAFE_PROFILE_TRANSACTION_DIR:-}" ]] &&
@@ -70,8 +78,13 @@ cleanup() {
     for f in ${TMP_FILES[@]+"${TMP_FILES[@]}"}; do
         rm -f "$f" 2>/dev/null || true
     done
+    for f in ${AGENT_STAGING_DIRS[@]+"${AGENT_STAGING_DIRS[@]}"}; do
+        rmdir "$f" 2>/dev/null || true
+    done
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- Configuration ---
 AGENT_NAME="pulse-agent"
@@ -243,6 +256,9 @@ log_error() {
     fi
 }
 
+# Ignore ambient .curlrc settings on every installer request: a saved insecure,
+# request, extra URL or tracing option must not change explicit installer policy.
+# --disable must be curl's first argument, including before our private config.
 # Feed the API token to curl through a private config file. Passing a header
 # value with -H would expose the token in the transient curl process argv.
 curl_with_pulse_token() {
@@ -250,7 +266,7 @@ curl_with_pulse_token() {
     local curl_rc=0
 
     if [[ -z "$PULSE_TOKEN" ]]; then
-        curl "$@"
+        curl --disable "$@"
         return $?
     fi
     case "$PULSE_TOKEN" in
@@ -261,7 +277,7 @@ curl_with_pulse_token() {
     TMP_FILES+=("$config_file")
     chmod 600 "$config_file"
     printf 'header = "X-API-Token: %s"\n' "$PULSE_TOKEN" > "$config_file"
-    if curl --config "$config_file" "$@"; then
+    if curl --disable --config "$config_file" "$@"; then
         curl_rc=0
     else
         curl_rc=$?
@@ -640,12 +656,13 @@ restore_selinux_contexts() {
 # After starting the agent service, poll its readiness endpoint to verify it
 # actually started. The agent exposes /readyz on the configured health address
 # once modules are initialized. The default is 127.0.0.1:9191.
-# warn_agent_token_rejected surfaces the actionable recovery path when the
-# server rejects the agent's token. Keeps the message in one place so both
-# health-check paths report it identically.
+# Keep both health-check paths factual: a denied lookup establishes neither
+# credential loss nor a need to reinstall. Preserve the existing installation
+# while the operator checks the issuing instance, record and access policy.
 warn_agent_token_rejected() {
-    log_warn "Pulse rejected this agent's API token or required reporting scope (HTTP 401/403). The saved credential cannot authenticate this agent on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across."
-    log_warn "Re-run the full agent install command from the Pulse UI to mint a fresh token. The agent will keep reporting 401/403 until the credential is replaced."
+    log_warn "Pulse rejected this agent's API token or required reporting scope (HTTP 401/403). This check does not identify the cause."
+    log_warn "Check the configured Pulse URL and the existing credential's record in Settings > API Access on that same Pulse instance. For 403, check agent:report and the endpoint's access policy; host reporting does not require command execution or administrator access."
+    log_warn "Do not reinstall, re-enrol, replace tokens or delete identity solely on this error. Keep token values and service files private. See docs/UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403."
 }
 
 # Resolve the newly downloaded/installed pulse-agent command surface used for
@@ -705,47 +722,61 @@ prepare_collector_lifecycle_token_file() {
 
     [[ -n "$PULSE_TOKEN" && "$PULSE_TOKEN" != *$'\r'* && "$PULSE_TOKEN" != *$'\n'* ]] || return 1
     temp_token=$(mktemp) || return 1
+    # Record ownership before writing any credential bytes, including when a
+    # signal interrupts preparation rather than the lifecycle command itself.
+    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE="$temp_token"
     chmod 0600 "$temp_token" || { rm -f "$temp_token"; return 1; }
     if ! printf '%s' "$PULSE_TOKEN" > "$temp_token"; then
         rm -f "$temp_token"
         return 1
     fi
     COLLECTOR_LIFECYCLE_TOKEN_FILE="$temp_token"
-    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE="$temp_token"
     return 0
 }
 
 run_collector_lifecycle_command() {
-    local command_name="$1"
-    shift
-    local lifecycle_binary=""
-    local collector_uid=""
-    local lifecycle_rc=1
-    local -a lifecycle_args
+    # Registration/removal also call this through command substitution: its
+    # temporary-file bookkeeping cannot reach the caller's EXIT cleanup. Own
+    # this one transient token in a subshell without replacing caller traps or
+    # deleting retained runtime/bootstrap files or unrelated staged artifacts.
+    (
+        local command_name="$1"
+        shift
+        local lifecycle_binary=""
+        local collector_uid=""
+        local lifecycle_rc=1
+        local -a lifecycle_args
+        COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE=""
+        trap '
+            lifecycle_rc=$?
+            if [[ -n "${COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE:-}" ]] &&
+               ! rm -f -- "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE"; then
+                [[ "$lifecycle_rc" -ne 0 ]] || lifecycle_rc=1
+            fi
+            exit "$lifecycle_rc"
+        ' EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
 
-    lifecycle_binary=$(collector_lifecycle_binary) || return 1
-    trusted_lifecycle_regular_file "$lifecycle_binary" 755 || return 1
-    prepare_collector_lifecycle_token_file || return 1
-    lifecycle_args=("$command_name" --url "$PULSE_URL" --token-file "$COLLECTOR_LIFECYCLE_TOKEN_FILE")
-    collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
-    if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
-        lifecycle_args+=(--token-owner-uid "$collector_uid")
-    fi
-    [[ -n "$CURL_CA_BUNDLE" ]] && lifecycle_args+=(--cacert "$CURL_CA_BUNDLE")
-    [[ -n "$SERVER_FINGERPRINT" ]] && lifecycle_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
-    lifecycle_args+=("$@")
+        lifecycle_binary=$(collector_lifecycle_binary) || return 1
+        trusted_lifecycle_regular_file "$lifecycle_binary" 755 || return 1
+        prepare_collector_lifecycle_token_file || return 1
+        lifecycle_args=("$command_name" --url "$PULSE_URL" --token-file "$COLLECTOR_LIFECYCLE_TOKEN_FILE")
+        collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+        if [[ "$collector_uid" =~ ^[0-9]+$ ]]; then
+            lifecycle_args+=(--token-owner-uid "$collector_uid")
+        fi
+        [[ -n "$CURL_CA_BUNDLE" ]] && lifecycle_args+=(--cacert "$CURL_CA_BUNDLE")
+        [[ -n "$SERVER_FINGERPRINT" ]] && lifecycle_args+=(--server-fingerprint "$SERVER_FINGERPRINT")
+        lifecycle_args+=("$@")
 
-    if "$lifecycle_binary" "${lifecycle_args[@]}"; then
-        lifecycle_rc=0
-    else
-        lifecycle_rc=$?
-    fi
-    if [[ -n "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE" ]]; then
-        rm -f "$COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE"
-    fi
-    COLLECTOR_LIFECYCLE_TOKEN_FILE=""
-    COLLECTOR_LIFECYCLE_TEMP_TOKEN_FILE=""
-    return "$lifecycle_rc"
+        if "$lifecycle_binary" "${lifecycle_args[@]}"; then
+            lifecycle_rc=0
+        else
+            lifecycle_rc=$?
+        fi
+        return "$lifecycle_rc"
+    )
 }
 
 # verify_agent_server_registration returns:
@@ -950,7 +981,7 @@ verify_agent_started() {
 
     while [ $iteration -lt $max_iterations ]; do
         # Check the readiness endpoint first — this is the definitive signal
-        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
+        if curl --disable -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
             verify_agent_server_registration_with_retry
             local reg_rc=$?
             if [[ $reg_rc -eq 0 ]]; then
@@ -1770,6 +1801,33 @@ except (ValueError, TypeError, KeyError, UnicodeError):
     print("TrueNAS boot-task inventory is incomplete or not owned; recovery retained.", file=sys.stderr)
     sys.exit(1)
 ' "$TRUENAS_BOOTSTRAP_SCRIPT" <<< "$observation"
+}
+
+register_truenas_agent_boot_task() {
+    local inventory="" observed="" ident="" enabled="" payload=""
+    command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 &&
+        command -v timeout >/dev/null 2>&1 || return 1
+    # Reuse removal's complete, bounded ownership check. A failed query is not
+    # an empty inventory, and duplicate/foreign tasks cannot select an update.
+    inventory=$(read_truenas_agent_removal_tasks) || return 1
+    if [[ "$inventory" != complete ]]; then
+        read -r ident enabled <<< "$inventory"
+        [[ "$inventory" == "$ident $enabled"$'\ncomplete' ]] || return 1
+    fi
+    payload=$(python3 -c 'import json,sys; print(json.dumps(dict(type="SCRIPT", script=sys.argv[1], when="POSTINIT", enabled=True, timeout=30, comment="Pulse Agent Bootstrap")))' \
+        "$TRUENAS_BOOTSTRAP_SCRIPT") || return 1
+    if [[ -z "$ident" ]]; then
+        LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.create "$payload" >/dev/null 2>&1 || return 1
+    elif [[ "$enabled" != true ]]; then
+        LC_ALL=C timeout -k 1 5 midclt call initshutdownscript.update "$ident" "$payload" >/dev/null 2>&1 || return 1
+    fi
+    # Exit zero is not persistence. Read back exactly one enabled, owned task;
+    # an update must keep its original ID. Never replay an uncertain mutation.
+    observed=$(read_truenas_agent_removal_tasks) || return 1
+    if [[ -z "$ident" ]]; then
+        read -r ident enabled <<< "$observed"
+    fi
+    [[ "$observed" == "$ident true"$'\ncomplete' ]]
 }
 
 quiesce_truenas_agent_boot_tasks_for_removal() {
@@ -3064,7 +3122,7 @@ safe_profile_probe_helper_protocol() {
         printf "\\$(printf '%03o' $((request_length / 256 % 256)))"
         printf "\\$(printf '%03o' $((request_length % 256)))"
         printf '%s' "$request"
-    } | runuser -u "$LEAST_PRIVILEGE_USER" -- curl -sS --max-time 5 \
+    } | runuser -u "$LEAST_PRIVILEGE_USER" -- curl --disable -sS --max-time 5 \
         --unix-socket "$PRIVILEGED_HELPER_SOCKET_PATH" --upload-file - telnet://localhost > "$response_file"; then
         rm -f "$response_file"
         return 1
@@ -3100,7 +3158,7 @@ safe_profile_verify_declared_health() {
     # local floor a bounded window, then perform the (separately retried)
     # authoritative server-registration proof exactly once.
     for ((attempt = 1; attempt <= 30; attempt++)); do
-        if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1 &&
+        if curl --disable -sf --max-time 2 "$health_url" >/dev/null 2>&1 &&
            systemctl is-active --quiet "${AGENT_NAME}.service" &&
            systemctl is-active --quiet "${PRIVILEGED_HELPER_NAME}.socket" &&
            safe_profile_verify_effective_target &&
@@ -3566,6 +3624,11 @@ complete_installation_flow() {
     fi
     verify_agent_started || verification_rc=$?
     if [[ $verification_rc -eq 0 ]]; then
+        if [[ "${TRUENAS_BOOT_TASK_CONFIRMED:-}" == false ]]; then
+            log_error "The agent is running, but its TrueNAS boot task was not confirmed; installation is incomplete. Reconcile the existing Init/Shutdown task before retrying; installed files and connection state were retained."
+            json_event "complete" "persistence_unconfirmed" "TrueNAS boot-task persistence was not confirmed" "$EXIT_GENERAL"
+            exit "$EXIT_GENERAL"
+        fi
         report_proxmox_registration_outcome "$state_dir" || true
         if [[ "$UPGRADE_MODE" == "true" ]]; then
             log_info "$upgrade_success_message"
@@ -3575,20 +3638,24 @@ complete_installation_flow() {
             json_event "complete" "installed" "Installation installed"
         fi
     elif [[ $verification_rc -eq 2 ]]; then
-        log_error "Pulse Agent authentication failed. The local service is running, but Pulse rejected its credential; installation is not complete. Generate a fresh scoped agent credential in Pulse and run the repair command again."
+        log_error "Pulse Agent authentication failed. The local service is running, but Pulse rejected its credential; installation is not complete. Check the existing credential and issuing instance using the guidance above; this error alone does not require a replacement or another installation."
         json_event "complete" "auth_rejected" "Pulse rejected the agent credential" "$EXIT_AUTH_REJECTED"
         exit "$EXIT_AUTH_REJECTED"
     else
         if [[ "$UPGRADE_MODE" == "true" ]]; then
-            log_warn "Upgrade complete, but the agent may not be running correctly."
-            json_event "complete" "updated_unhealthy" "Agent updated but not responding"
+            log_error "Agent files were updated, but startup was not confirmed; the upgrade is incomplete."
+            json_event "complete" "updated_unhealthy" "Agent updated but not responding" "$EXIT_SERVICE_START_FAILED"
         else
-            log_warn "Installation complete, but the agent may not be running correctly."
-            if [[ -n "$unhealthy_log_hint" ]]; then
-                log_warn "Check logs: $unhealthy_log_hint"
-            fi
-            json_event "complete" "installed_unhealthy" "Agent installed but not responding"
+            log_error "Agent files were installed, but startup was not confirmed; installation is incomplete."
+            json_event "complete" "installed_unhealthy" "Agent installed but not responding" "$EXIT_SERVICE_START_FAILED"
         fi
+        if [[ -n "$unhealthy_log_hint" ]]; then
+            log_warn "Check logs: $unhealthy_log_hint"
+        fi
+        # Every platform caller ends with exit 0. Stop here, as for a rejected
+        # credential, so neither those callers nor an OR-list can mask failure.
+        # Keep the installed files and connection state available for repair.
+        exit "$EXIT_SERVICE_START_FAILED"
     fi
 
     if [[ -n "$SAVED_INSTALL_SCRIPT" ]]; then
@@ -4129,12 +4196,81 @@ teardown_nas_agent_boot_owner() {
     confirm_nas_agent_removal_quiescent "$platform"
 }
 
-remove_qnap_autorun_block() {
-    local autorun_path="$1"
-
-    portable_sed_in_place '/^# Pulse Agent bootstrap begin$/,/^# Pulse Agent bootstrap end$/d' "$autorun_path"
-    portable_sed_in_place '/^# Pulse Agent$/d' "$autorun_path"
-    portable_sed_in_place '/start-pulse-agent\.sh/d' "$autorun_path"
+# Installation shares the removal parser's exact-entry ownership rules. A NAS
+# boot script is also the owner's script: a substring match is not permission
+# to erase an unrelated command, sibling agent or edited bootstrap.
+register_nas_agent_boot_file() {
+    local platform="$1" path="$2" parent="" directory="" mode=755 original=false observed="" uid="" original_mode=""
+    local wrapper="$STATE_DIR/start-pulse-agent.sh"
+    [[ "$platform" == Unraid || "$platform" == QNAP ]] || return 1
+    # Both generated forms use a double-quoted path. Refuse shell expansion,
+    # rather than creating a boot command different from the admitted target.
+    [[ "$wrapper" == /* && "$wrapper" != *'"'* && "$wrapper" != *'\'* &&
+       "$wrapper" != *'$'* && "$wrapper" != *'`'* &&
+       "$wrapper" != *$'\n'* && "$wrapper" != *$'\r'* ]] || return 1
+    [[ "$path" == /* && "$path" != *$'\n'* && "$path" != *$'\r'* ]] || return 1
+    parent=$(dirname "$path") || return 1
+    uid=$(id -u) || return 1
+    [[ "$uid" =~ ^[0-9]+$ && -d "$parent" && ! -L "$parent" &&
+       "$(portable_path_uid "$parent")" == "$uid" ]] || return 1
+    # An earlier incomplete install/removal owns its recovery. Do not turn a
+    # second invocation into an implicit replay or an automatic restoration.
+    for directory in "$path".pulse-install.* "$path".pulse-removal.*; do
+        [[ ! -e "$directory" && ! -L "$directory" ]] || return 1
+    done
+    observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
+    [[ "$observed" == present || "$observed" == absent ]] || return 1
+    if [[ -e "$path" || -L "$path" ]]; then
+        original=true
+        mode=$(portable_path_mode "$path") || return 1
+        [[ "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
+        original_mode="$mode"
+        # QNAP previously enabled autorun execution with chmod +x. Preserve
+        # all other bits rather than silently dropping that boot requirement.
+        if [[ "$platform" == QNAP ]]; then printf -v mode '%o' "$((8#$mode | 0111))"; fi
+    fi
+    directory=$(mktemp -d "$path.pulse-install.XXXXXX") || return 1
+    chmod 700 "$directory" || return 1
+    if [[ "$original" == true ]]; then
+        cp "$path" "$directory/original" || return 1
+        filter_nas_agent_boot_file "$platform" "$directory/original" filter > "$directory/replacement" || return 1
+    else
+        if [[ "$platform" == Unraid ]]; then
+            printf '#!/bin/bash\n' > "$directory/replacement" || return 1
+        else
+            printf '#!/bin/sh\n' > "$directory/replacement" || return 1
+        fi
+    fi
+    if [[ "$platform" == Unraid ]]; then
+        printf '# Pulse Agent\nbash "%s"\n' "$wrapper" >> "$directory/replacement" || return 1
+    else
+        render_qnap_autorun_block "$wrapper" >> "$directory/replacement" || return 1
+    fi
+    bash -n "$directory/replacement" >/dev/null 2>&1 || return 1
+    observed=$(filter_nas_agent_boot_file "$platform" "$directory/replacement" status) || return 1
+    [[ "$observed" == present ]] || return 1
+    if [[ "$original" == true ]]; then
+        nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/original" || return 1
+        if [[ "$original_mode" == "$mode" ]] && cmp -s "$path" "$directory/replacement"; then
+            rm -f -- "$directory/original" "$directory/replacement" || return 1
+            rmdir "$directory" || return 1
+            return 0
+        fi
+        # FAT has no hard links. Retire the checked original into our owned
+        # directory, then create exclusively: never follow or overwrite a
+        # concurrent destination. Failed publication leaves both versions for
+        # explicit recovery; no unchecked rollback or runtime restart follows.
+        mv "$path" "$directory/retired" || return 1
+        nas_agent_removal_file_safe "$directory/retired" && cmp -s "$directory/retired" "$directory/original" || return 1
+    fi
+    (set -o noclobber; cat "$directory/replacement" > "$path") || return 1
+    chmod "$mode" "$path" || return 1
+    [[ "$(portable_path_mode "$path")" == "$mode" ]] || return 1
+    nas_agent_removal_file_safe "$path" && cmp -s "$path" "$directory/replacement" || return 1
+    observed=$(filter_nas_agent_boot_file "$platform" "$path" status) || return 1
+    [[ "$observed" == present ]] || return 1
+    rm -f -- "$directory/original" "$directory/replacement" "$directory/retired" || return 1
+    rmdir "$directory" || return 1
 }
 
 write_qnap_wrapper_script() {
@@ -4310,16 +4446,8 @@ append_qnap_autorun_block() {
     local wrapper_script="$2"
     local state_dir="$3"
 
-    remove_qnap_autorun_block "$autorun_path"
-    if [[ ! -f "$autorun_path" ]]; then
-        echo "#!/bin/sh" > "$autorun_path"
-    fi
-
-    printf '\n' >> "$autorun_path"
-    render_qnap_autorun_block "$wrapper_script" >> "$autorun_path"
-    printf '\n' >> "$autorun_path"
-
-    chmod +x "$autorun_path"
+    [[ "$state_dir" == "$STATE_DIR" && "$wrapper_script" == "$STATE_DIR/start-pulse-agent.sh" ]] || return 1
+    register_nas_agent_boot_file QNAP "$autorun_path"
 }
 
 # --- Auto-Detection Functions ---
@@ -4389,7 +4517,7 @@ system_docker_runtime_is_active() {
 
     if [[ -S "$socket_path" ]]; then
         if command -v curl &>/dev/null; then
-            if curl -sf --max-time 3 --unix-socket "$socket_path" http://localhost/_ping &>/dev/null; then
+            if curl --disable -sf --max-time 3 --unix-socket "$socket_path" http://localhost/_ping &>/dev/null; then
                 return 0
             fi
             return 1
@@ -4763,6 +4891,10 @@ verify_pinned_server_certificate() {
     local host=""
     local target=""
     local actual=""
+    local certificate_file=""
+    local probe_status=0
+    local probe_second=0
+    local probe_interruption=0
     normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
     if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
         fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
@@ -4781,10 +4913,37 @@ verify_pinned_server_certificate() {
         if [[ "$authority" != *:* ]]; then target="${authority}:443"; fi
     fi
 
-    actual=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
-        | openssl x509 -outform DER 2>/dev/null \
+    # s_client's -timeout is DTLS-only, and GNU timeout is not a prerequisite
+    # on macOS/BSD/NAS. Own the direct child and give the entire TCP/TLS probe
+    # ten one-second waits, not just its connection phase. No pipeline child
+    # or watchdog survives a deadline or a handled installer interruption.
+    certificate_file=$(mktemp) || fail "Could not prepare Pulse server certificate verification." "$EXIT_PREFLIGHT_FAILED"
+    TMP_FILES+=("$certificate_file")
+    chmod 600 "$certificate_file" || fail "Could not prepare Pulse server certificate verification." "$EXIT_PREFLIGHT_FAILED"
+    # Do not exit in the fork/$! interval while the child is still unowned.
+    # Retain that signal, restore main's handlers, then leave through cleanup.
+    trap 'probe_interruption=130' INT
+    trap 'probe_interruption=143' TERM
+    openssl s_client -connect "$target" -servername "$host" </dev/null >"$certificate_file" 2>/dev/null &
+    SERVER_CERTIFICATE_PROBE_PID=$!
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    [[ "$probe_interruption" -eq 0 ]] || exit "$probe_interruption"
+    for ((probe_second=0; probe_second<10; probe_second++)); do
+        kill -0 "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null || break
+        sleep 1
+    done
+    if kill -0 "$SERVER_CERTIFICATE_PROBE_PID" 2>/dev/null; then
+        fail "Timed out verifying Pulse server certificate after 10 seconds; installation cannot continue." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    wait "$SERVER_CERTIFICATE_PROBE_PID" || probe_status=$?
+    SERVER_CERTIFICATE_PROBE_PID=""
+    if [[ "$probe_status" -ne 0 ]] || ! actual=$(openssl x509 -in "$certificate_file" -outform DER 2>/dev/null \
         | openssl dgst -sha256 2>/dev/null \
-        | awk '{print tolower($NF)}')
+        | awk '{print tolower($NF)}'); then
+        fail "Could not read Pulse server certificate; installation cannot continue." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    rm -f -- "$certificate_file"
     if [[ -z "$actual" || "$actual" != "$normalized" ]]; then
         fail "Pulse server certificate fingerprint mismatch. Expected ${normalized}, got ${actual:-unavailable}." "$EXIT_PREFLIGHT_FAILED"
     fi
@@ -4880,9 +5039,11 @@ build_exec_args_array() {
 
 xml_escape() {
     local value="$1"
-    value="${value//&/&amp;}"
-    value="${value//</&lt;}"
-    value="${value//>/&gt;}"
+    # Bash 5.2's patsub_replacement treats an unescaped & as the match.
+    # Quote it explicitly so both old and new Bash emit literal XML entities.
+    value="${value//&/\&amp;}"
+    value="${value//</\&lt;}"
+    value="${value//>/\&gt;}"
     printf '%s' "$value"
 }
 
@@ -5734,6 +5895,8 @@ read_collector_token_file_safely() {
     local collector_uid=""
     local token_value=""
     local token_size=""
+    local consumed_bytes=0
+    local LC_ALL=C
     local -a token_args
 
     [[ -n "$token_path" && "$token_path" == /* ]] || return 1
@@ -5766,9 +5929,18 @@ read_collector_token_file_safely() {
     # command. Only a private regular file under a trusted parent can use this
     # compatibility path; collector-owned state requires the Go reader.
     if trusted_private_lifecycle_regular_file "$token_path"; then
-        token_size=$(wc -c < "$token_path" 2>/dev/null | tr -d ' ' || true)
+        token_size=$(stat -c '%s' "$token_path" 2>/dev/null || stat -f '%z' "$token_path" 2>/dev/null) || return 1
         [[ "$token_size" =~ ^[0-9]+$ && "$token_size" -ge 1 && "$token_size" -le 4096 ]] || return 1
-        IFS= read -r token_value < "$token_path" || true
+        # read stops at the first newline and can discard NUL bytes. Account
+        # for every byte, under a byte locale, so neither can hide extra state.
+        # A bare value or exactly one final newline remains compatible; bound
+        # the read as well as the size observation if the file changes.
+        if IFS= read -r -n 4097 token_value < "$token_path"; then
+            consumed_bytes=$((${#token_value} + 1))
+        else
+            consumed_bytes=${#token_value}
+        fi
+        [[ "$token_size" -eq "$consumed_bytes" ]] || return 1
         if [[ -n "$token_value" && "$token_value" != *$'\r'* && "$token_value" != *$'\n'* ]]; then
             printf '%s\n' "$token_value"
             return 0
@@ -5946,12 +6118,22 @@ save_connection_info() {
 }
 
 # --- Parse Arguments ---
+# A malformed option must stop before reading credentials, recovering installed
+# state or changing services. Keep explicit empty values (for example disabling
+# --health-addr), but never consume the following option as a value. Syntax
+# errors are non-interactive even when --non-interactive appears later.
+require_option_value() {
+    if [[ $# -lt 2 || "${2:-}" == --* || "${2:-}" == -h ]]; then
+        NON_INTERACTIVE=true fail "Missing value for $1. Use --help for usage information." "$EXIT_MISSING_ARGS"
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --help|-h) show_help; exit 0 ;;
-        --url) PULSE_URL="$2"; shift 2 ;;
-        --token) PULSE_TOKEN="$2"; shift 2 ;;
-        --interval) INTERVAL="$2"; INTERVAL_EXPLICIT="true"; shift 2 ;;
+        --url) require_option_value "$@"; PULSE_URL="$2"; shift 2 ;;
+        --token) require_option_value "$@"; PULSE_TOKEN="$2"; shift 2 ;;
+        --interval) require_option_value "$@"; INTERVAL="$2"; INTERVAL_EXPLICIT="true"; shift 2 ;;
         --enable-host) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;
         --enable-host=true) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;
         --enable-host=false) ENABLE_HOST="false"; HOST_EXPLICIT="true"; shift ;;
@@ -5964,28 +6146,28 @@ while [[ $# -gt 0 ]]; do
         --enable-kubernetes=true) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;
         --enable-kubernetes=false) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
         --disable-kubernetes) ENABLE_KUBERNETES="false"; KUBERNETES_EXPLICIT="true"; shift ;;
-        --kubeconfig) KUBECONFIG_PATH="$2"; KUBERNETES_EXPLICIT="true"; ENABLE_KUBERNETES="true"; shift 2 ;;
+        --kubeconfig) require_option_value "$@"; KUBECONFIG_PATH="$2"; KUBERNETES_EXPLICIT="true"; ENABLE_KUBERNETES="true"; shift 2 ;;
         --enable-proxmox) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
         --enable-proxmox=true) ENABLE_PROXMOX="true"; PROXMOX_EXPLICIT="true"; shift ;;
         --enable-proxmox=false) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
         --disable-proxmox) ENABLE_PROXMOX="false"; PROXMOX_EXPLICIT="true"; shift ;;
-        --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
+        --proxmox-type) require_option_value "$@"; PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; INSECURE_EXPLICIT="true"; shift ;;
-        --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
-        --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
-        --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
+        --cacert) require_option_value "$@"; CURL_CA_BUNDLE="$2"; shift 2 ;;
+        --server-fingerprint) require_option_value "$@"; SERVER_FINGERPRINT="$2"; shift 2 ;;
+        --observers-file) require_option_value "$@"; OBSERVERS_FILE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
-        --command-authority) COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
+        --command-authority) require_option_value "$@"; COMMAND_AUTHORITY="$2"; COMMAND_AUTHORITY_SOURCE="explicit"; shift 2 ;;
         --least-privilege) LEAST_PRIVILEGE="true"; shift ;;
         --enable-privileged-helper) PRIVILEGED_HELPER_ENABLED="true"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
         --disable-privileged-helper) PRIVILEGED_HELPER_ENABLED="false"; PRIVILEGED_HELPER_EXPLICIT="true"; shift ;;
         --enable-action-runner) ACTION_RUNNER_ENABLED="true"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
         --disable-action-runner) ACTION_RUNNER_ENABLED="false"; ACTION_RUNNER_EXPLICIT="true"; shift ;;
         --uninstall-action-runner) UNINSTALL_ACTION_RUNNER="true"; shift ;;
-        --action-token-file) ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --action-token-file) require_option_value "$@"; ACTION_TOKEN_FILE_PATH="$2"; shift 2 ;;
         --grant-smart) GRANT_SMART="true"; shift ;;
         --grant-pct) GRANT_PCT="true"; shift ;;
-        --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
+        --health-addr) require_option_value "$@"; HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --safe-profile-inspect) SAFE_PROFILE_ACTION="inspect"; shift ;;
         --safe-profile-apply) SAFE_PROFILE_ACTION="apply"; shift ;;
         --safe-profile-rollback) SAFE_PROFILE_ACTION="rollback"; shift ;;
@@ -5993,20 +6175,22 @@ while [[ $# -gt 0 ]]; do
         --update) UPDATE_ONLY="true"; shift ;;
         --retarget) RETARGET_ONLY="true"; UPDATE_ONLY="true"; shift ;;
         --uninstall) UNINSTALL="true"; shift ;;
-        --agent-id) AGENT_ID="$2"; shift 2 ;;
-        --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
-        --report-ip) REPORT_IP="$2"; shift 2 ;;
-        --state-dir) STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; STATE_DIR_REMOVAL_AUTHORITY="$2"; shift 2 ;;
+        --agent-id) require_option_value "$@"; AGENT_ID="$2"; shift 2 ;;
+        --hostname) require_option_value "$@"; HOSTNAME_OVERRIDE="$2"; shift 2 ;;
+        --report-ip) require_option_value "$@"; REPORT_IP="$2"; shift 2 ;;
+        --state-dir) require_option_value "$@"; STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; STATE_DIR_REMOVAL_AUTHORITY="$2"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
-        --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
-        --disk-include) DISK_INCLUDES+=("$2"); shift 2 ;;
+        --disk-exclude) require_option_value "$@"; DISK_EXCLUDES+=("$2"); shift 2 ;;
+        --disk-include) require_option_value "$@"; DISK_INCLUDES+=("$2"); shift 2 ;;
         --non-interactive) NON_INTERACTIVE="true"; shift ;;
-        --token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;
-        --pulse-url) PULSE_URL="$2"; shift 2 ;;
-        --output) OUTPUT_FORMAT="$2"; shift 2 ;;
+        --token-file) require_option_value "$@"; TOKEN_FILE_PATH="$2"; shift 2 ;;
+        --pulse-url) require_option_value "$@"; PULSE_URL="$2"; shift 2 ;;
+        --output) require_option_value "$@"; OUTPUT_FORMAT="$2"; shift 2 ;;
         --preflight-only) PREFLIGHT_ONLY="true"; shift ;;
-        *) fail "Unknown argument: $1" ;;
+        # An unrecognised word may itself be a credential or private path.
+        # Reject syntax without echoing it or waiting for a later flag/input.
+        *) NON_INTERACTIVE=true fail "Unknown argument. Use --help for usage information." "$EXIT_MISSING_ARGS" ;;
     esac
 done
 
@@ -6277,10 +6461,37 @@ shell_export_value() {
     printf '"%s"' "$value"
 }
 
+systemd_environment_value() {
+    local value="$1"
+    local escaped="" character="" code=0 index=0
+    local LC_ALL=C
+
+    # Environment= uses systemd C-style quoting, not shell quoting. In
+    # particular % specifiers expand even inside quotes. Keep each complete
+    # assignment on one physical line and preserve the caller's literal bytes.
+    for ((index = 0; index < ${#value}; index++)); do
+        character="${value:index:1}"
+        case "$character" in
+            \\) escaped+="\\\\" ;;
+            '"') escaped+='\"' ;;
+            '%') escaped+='%%' ;;
+            *)
+                printf -v code '%d' "'$character"
+                if ((code < 32 || code == 127)); then
+                    printf -v character '\\x%02x' "$code"
+                fi
+                escaped+="$character"
+                ;;
+        esac
+    done
+    printf '"%s"' "$escaped"
+}
+
 append_service_env() {
     local env_key="$1"
     local env_val="$2"
     local shell_value=""
+    local systemd_value=""
     local plist_key=""
     local plist_value=""
 
@@ -6289,7 +6500,8 @@ append_service_env() {
     fi
 
     shell_value="$(shell_export_value "$env_val")"
-    SYSTEMD_ENV_LINES+=$'\n'"Environment=\"${env_key}=${env_val}\""
+    systemd_value="$(systemd_environment_value "${env_key}=${env_val}")"
+    SYSTEMD_ENV_LINES+=$'\n'"Environment=${systemd_value}"
     SHELL_EXPORT_LINES+=$'\n'"export ${env_key}=${shell_value}"
     UPSTART_ENV_LINES+=$'\n'"env ${env_key}=${env_val}"
     if [[ -n "$SED_EXPORT_LINES" ]]; then
@@ -6932,10 +7144,12 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
 
     # Check 4: Pulse URL reachability and agent binary availability
     if [[ -n "$PULSE_URL" ]]; then
-        CURL_TEST_ARGS=(-sfL --connect-timeout 5 -o /dev/null)
+        # A connected peer (or a redirect target) can stop sending headers or
+        # body bytes. Bound the whole read, not just connection establishment.
+        CURL_TEST_ARGS=(-sfL --connect-timeout 5 --max-time 10 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-        if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
+        if curl --disable "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
             json_event "preflight" "pulse_reachable" "Pulse URL reachable"
         else
             json_event "preflight" "pulse_unreachable" "Pulse URL not reachable" "$EXIT_PREFLIGHT_FAILED"
@@ -6949,7 +7163,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
         DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"
-        if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$DOWNLOAD_CHECK_URL"; then
+        if curl --disable "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$DOWNLOAD_CHECK_URL"; then
             PREFLIGHT_EXPECTED_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
             if [[ -n "$PREFLIGHT_EXPECTED_SHA" ]]; then
                 json_event "preflight" "agent_download_available" "Agent binary available for ${PF_ARCH_PARAM}"
@@ -6965,7 +7179,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
             : > "$PREFLIGHT_HEADERS"
             HELPER_DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?arch=${PF_ARCH_PARAM}"
-            if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$HELPER_DOWNLOAD_CHECK_URL"; then
+            if curl --disable "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$HELPER_DOWNLOAD_CHECK_URL"; then
                 PREFLIGHT_HELPER_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
                 if [[ -n "$PREFLIGHT_HELPER_SHA" ]]; then
                     json_event "preflight" "helper_download_available" "Typed helper binary available for ${PF_ARCH_PARAM}"
@@ -6981,7 +7195,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
             : > "$PREFLIGHT_HEADERS"
             RUNNER_DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?arch=${PF_ARCH_PARAM}"
-            if curl "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$RUNNER_DOWNLOAD_CHECK_URL"; then
+            if curl --disable "${CURL_DOWNLOAD_CHECK_ARGS[@]}" "$RUNNER_DOWNLOAD_CHECK_URL"; then
                 PREFLIGHT_RUNNER_SHA=$(final_response_header_value "$PREFLIGHT_HEADERS" "X-Checksum-Sha256" || true)
                 if [[ -n "$PREFLIGHT_RUNNER_SHA" ]]; then
                     json_event "preflight" "runner_download_available" "Typed action runner binary available for ${PF_ARCH_PARAM}"
@@ -7014,6 +7228,25 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
     fi
     exit "$PREFLIGHT_EXIT"
 fi
+
+# Prepare ordinary collector/helper replacements before stopping the collector.
+# TMPDIR can be on a different filesystem: moving that download directly onto
+# the live path can fall back to a destructive copy. Only a complete, executable
+# file prepared beside its destination may reach the publication rename.
+stage_verified_agent_executable() {
+    local source="$1" directory="$2" name="$3" staging_dir=""
+    AGENT_STAGED_EXECUTABLE=""
+    if [[ -d "$directory/$name" || ( -e "$directory/$name" && ! -f "$directory/$name" ) ]]; then
+        return 1
+    fi
+    mkdir -p "$directory" || return 1
+    staging_dir=$(mktemp -d "$directory/.pulse-agent-stage.XXXXXX") || return 1
+    AGENT_STAGING_DIRS+=("$staging_dir")
+    TMP_FILES+=("$staging_dir/$name")
+    cp "$source" "$staging_dir/$name" || return 1
+    chmod 0755 "$staging_dir/$name" || return 1
+    AGENT_STAGED_EXECUTABLE="$staging_dir/$name"
+}
 
 # --- Download ---
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -7052,7 +7285,7 @@ SERVER_VERSION=""
 VERSION_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30)
 if [[ "$INSECURE" == "true" ]]; then VERSION_CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then VERSION_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-if server_version_json="$(curl "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
+if server_version_json="$(curl --disable "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
     SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 fi
 
@@ -7065,7 +7298,7 @@ fi
 DOWNLOAD_URL="${PULSE_URL}/download/${BINARY_NAME}?${DOWNLOAD_QUERY}"
 log_info "Downloading agent from ${DOWNLOAD_URL}..."
 
-if ! curl "${CURL_ARGS[@]}" "$DOWNLOAD_URL"; then
+if ! curl --disable "${CURL_ARGS[@]}" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity." "$EXIT_DOWNLOAD_FAILED"
 fi
 
@@ -7104,7 +7337,7 @@ download_verified_privileged_helper() {
 
     helper_url="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?${DOWNLOAD_QUERY}"
     log_info "Downloading typed privileged helper from ${helper_url}..."
-    if ! curl "${helper_curl_args[@]}" "$helper_url"; then
+    if ! curl --disable "${helper_curl_args[@]}" "$helper_url"; then
         fail "Typed privileged helper download failed; the safe profile was not installed." "$EXIT_DOWNLOAD_FAILED"
     fi
     if [[ ! -s "$TMP_HELPER_BIN" ]]; then
@@ -7151,7 +7384,7 @@ download_verified_action_runner() {
 
     runner_url="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}"
     log_info "Downloading typed action runner from ${runner_url}..."
-    if ! curl "${runner_curl_args[@]}" "$runner_url"; then
+    if ! curl --disable "${runner_curl_args[@]}" "$runner_url"; then
         fail "Typed action runner download failed; the existing runner and collector were not changed." "$EXIT_DOWNLOAD_FAILED"
     fi
     if [[ ! -s "$TMP_ACTION_RUNNER_BIN" ]]; then
@@ -7230,6 +7463,20 @@ if [[ "$ACTION_RUNNER_ENABLED" == "true" ]]; then
 fi
 
 chmod 0755 "$TMP_BIN"
+if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
+    stage_verified_agent_executable "$TMP_BIN" "$INSTALL_DIR" "$BINARY_NAME" ||
+        fail "Could not prepare the verified agent on the installation filesystem; the existing collector has not been stopped or replaced." "$EXIT_GENERAL"
+    STAGED_COLLECTOR="$AGENT_STAGED_EXECUTABLE"
+    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
+        mkdir -p "$PRIVILEGE_HELPER_DIR"
+        chown root:root "$PRIVILEGE_HELPER_DIR"
+        chmod 0755 "$PRIVILEGE_HELPER_DIR"
+        stage_verified_agent_executable "$TMP_HELPER_BIN" "$PRIVILEGE_HELPER_DIR" "$PRIVILEGED_HELPER_BINARY_NAME" ||
+            fail "Could not prepare the verified helper on the installation filesystem; the existing collector has not been stopped or replaced." "$EXIT_GENERAL"
+        STAGED_HELPER="$AGENT_STAGED_EXECUTABLE"
+        chown root:root "$STAGED_HELPER"
+    fi
+fi
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     # The irreversible server-side reduction must run only through the staged
     # binary whose checksum/signature have just been verified. The installed
@@ -7248,6 +7495,8 @@ fi
 VERSION_PROBE_BINARY="$TMP_BIN"
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     VERSION_PROBE_BINARY="$SAFE_PROFILE_STAGED_COLLECTOR"
+else
+    VERSION_PROBE_BINARY="$STAGED_COLLECTOR"
 fi
 NEW_VERSION=$("$VERSION_PROBE_BINARY" --version 2>/dev/null | head -1 || echo "unknown")
 
@@ -7330,8 +7579,10 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
     COLLECTOR_LIFECYCLE_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 else
-    mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
-    chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
+    # Passing the containing directory selects the basename exactly once; an
+    # existing or concurrently created pulse-agent directory cannot absorb it.
+    mv -f "$STAGED_COLLECTOR" "${INSTALL_DIR}/" ||
+        fail "Could not publish the prepared agent; no service restart was attempted. Check the installation destination and retained executable before restarting the collector." "$EXIT_GENERAL"
 fi
 
 if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
@@ -7344,7 +7595,8 @@ if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
         install -o root -g root -m 0755 "$TMP_HELPER_BIN" "$SAFE_PROFILE_STAGED_HELPER"
         mv "$SAFE_PROFILE_STAGED_HELPER" "$PRIVILEGED_HELPER_BINARY_PATH"
     else
-        mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"
+        mv -f "$STAGED_HELPER" "${PRIVILEGE_HELPER_DIR}/" ||
+            fail "Could not publish the prepared helper; no service restart was attempted. Check the installation destination and retained helper before restarting the collector." "$EXIT_GENERAL"
     fi
     TMP_HELPER_BIN=""
     chown root:root "$PRIVILEGED_HELPER_BINARY_PATH"
@@ -7551,25 +7803,10 @@ done
 EOF
 
 
-    # Add to /boot/config/go if not already present
-    GO_MARKER="# Pulse Agent"
-    if [[ -f "$GO_SCRIPT" ]]; then
-        # Remove any existing Pulse agent entries (line-by-line, not range-based)
-        sed -i "/^${GO_MARKER}$/d" "$GO_SCRIPT" 2>/dev/null || true
-        sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-    else
-        # Create go script if it doesn't exist
-        echo "#!/bin/bash" > "$GO_SCRIPT"
-        chmod +x "$GO_SCRIPT"
-    fi
-
-    # Append startup entry (use bash explicitly since /boot is FAT32 and doesn't support execute bits)
-    cat >> "$GO_SCRIPT" <<EOF
-
-${GO_MARKER}
-bash ${WRAPPER_SCRIPT}
-
-EOF
+    # Preserve unrelated boot commands; ambiguous/custom Pulse launchers are
+    # an incomplete install, not a reason to delete matching lines.
+    register_nas_agent_boot_file Unraid "$GO_SCRIPT" ||
+        fail "Unraid boot registration was not confirmed; inspect the shared boot path and any .pulse-install recovery before retrying. No new watchdog was started." "$EXIT_GENERAL"
 
     log_info "Added startup entry to ${GO_SCRIPT}..."
 
@@ -7646,8 +7883,12 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     if [[ -x /etc/init.d/init_disk.sh ]]; then
         if /etc/init.d/init_disk.sh mount_flash_config 2>/dev/null && [[ -d /tmp/nasconfig_tmp ]]; then
             AUTORUN_PATH="/tmp/nasconfig_tmp/autorun.sh"
-            append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"
-            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
+            if ! append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"; then
+                /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
+                fail "QNAP boot registration was not confirmed; inspect the shared boot path and any .pulse-install recovery before retrying. No new watchdog was started." "$EXIT_GENERAL"
+            fi
+            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null ||
+                fail "QNAP boot configuration unmount was not confirmed; installation is incomplete. Reconcile the mounted flash before retrying; no new watchdog was started." "$EXIT_GENERAL"
             AUTORUN_CONFIGURED=true
             log_info "Configured autorun.sh with a deferred Pulse Agent bootstrap."
         else
@@ -7828,23 +8069,19 @@ EOF
     fi
 
     # Register Init/Shutdown task using midclt
-    if command -v midclt >/dev/null 2>&1; then
-        log_info "Registering TrueNAS Init/Shutdown task..."
-
-        # Check if task already exists
-        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
-
-        if [[ -n "$EXISTING_TASK" ]]; then
-            log_info "Init/Shutdown task already exists (id $EXISTING_TASK), updating..."
-            midclt call initshutdownscript.update "$EXISTING_TASK" '{"type":"SCRIPT","script":"'"$TRUENAS_BOOTSTRAP_SCRIPT"'","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}' >/dev/null 2>&1 || true
-        else
-            midclt call initshutdownscript.create '{"type":"SCRIPT","script":"'"$TRUENAS_BOOTSTRAP_SCRIPT"'","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}' >/dev/null 2>&1 || log_warn "Failed to create Init/Shutdown task. Please add it manually in TrueNAS UI."
-        fi
+    TRUENAS_BOOT_TASK_CONFIRMED=false
+    if register_truenas_agent_boot_task; then
+        TRUENAS_BOOT_TASK_CONFIRMED=true
+        log_info "Confirmed enabled TrueNAS Post Init bootstrap task."
     else
-        log_warn "midclt not available. Please create an Init/Shutdown task manually in TrueNAS UI:"
+        # Keep the runtime and recovery files useful even when middleware is
+        # unavailable. Completion below still saves connection state, checks
+        # runtime health and exits nonzero rather than claiming persistence.
+        log_warn "TrueNAS boot-task registration was not confirmed. Check the existing task in TrueNAS UI before retrying; do not create a duplicate."
         log_warn "  Type: Script"
         log_warn "  Script: $TRUENAS_BOOTSTRAP_SCRIPT"
         log_warn "  When: Post Init"
+        log_warn "  Enabled: Yes"
     fi
 
     # Enable and start service
@@ -7866,7 +8103,7 @@ EOF
         log_info "Logs: tail -f ${AGENT_LOG_FILE}"
     fi
     log_info ""
-    log_info "The Init/Shutdown task ensures the agent survives TrueNAS upgrades."
+    log_info "The confirmed Init/Shutdown task is configured to restore the agent after a TrueNAS upgrade."
     exit 0
 fi
 

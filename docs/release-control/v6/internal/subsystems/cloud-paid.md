@@ -15,6 +15,51 @@
 
 ## Purpose
 
+### Self-hosted purchase entry does not depend on hosted Cloud
+
+The default Buy, Upgrade and Renew handoff opens
+`https://license.pulserelay.pro/buy`, not the legacy hosted Cloud portal.
+`PULSE_ACCOUNT_PORTAL_URL` keeps its existing validated HTTPS/loopback override;
+the separate legacy hosted entitlement base is unchanged. The existing
+authenticated purchase-start handler still creates the server-side handoff,
+keeps signed return state out of the destination query, and preserves only its
+existing permitted query context. Callback origin, organisation, one-use
+redemption, activation and failure recovery remain enforced by the existing
+purchase-return path. This changes neither offers, prices, Relay availability,
+Stripe state nor entitlement policy.
+
+`TestDefaultPurchasePageDoesNotDependOnLegacyHostedBase`, the purchase-start
+handler/contract tests and the self-hosted upgrade-return browser spec bind this
+destination and its unchanged return boundaries. Local fixtures do not establish
+that `/buy` is deployed, that old Cloud links redirect, or that payment has
+completed; those need separate exact-source/served acceptance.
+
+### An unconfirmed purchase return is not payment evidence
+
+The shared `purchase=failed` arrival covers an unfinished or unpaid checkout,
+a failed lookup, and errors after a fulfilled purchase (including after local
+activation). Its Plans notice must not claim checkout completed, payment failed,
+or the current plan is unchanged. It directs the operator to the actual current
+plan and Pulse Account before another purchase, retaining existing manual-key
+recovery. No new purchase state, grant, retry or trust exception is introduced.
+
+`licensePresentation.test.ts` pins the shared copy; `ProLicensePanel.test.tsx`
+checks Community and already-active Pro, recovery routing and absence of
+activation/clear/trial writes. Browser proof consumes the previously emitted
+pending callback through the real panel. It is not installed or payment proof.
+
+### Retired mobile settings keep information separate from entitlement
+
+Pulse Mobile retirement guidance is a full-text labelled note, not a paid
+feature offer with a clamped sales description. Instances without the existing
+Relay capability can read the date and phone-alert alternatives but cannot
+pair devices or configure connections. Entitled phones keep their existing
+configuration and pairing controls until 31 March 2027. The change introduces
+no commercial offer, billing read, entitlement substitution or service change.
+
+`RelaySettingsPanel.runtime.test.tsx` and the current first-session/paid-settings
+browser consumers verify the readable notice and unchanged access boundaries.
+
 ### Reporting measurement precedes commercial feature decisions
 
 Schema-v20 reporting usage exports only aggregate generation by closed report
@@ -36,17 +81,6 @@ verifies receiver round-trip, schema/availability gates and bounds. Public
 snapshot, privacy and adoption-query tests verify the shared semantics. Receiver
 deployment and a client release are necessary before collecting fleet evidence.
 
-### Retired mobile settings keep information separate from entitlement
-
-Pulse Mobile retirement guidance is a full-text labelled note, not a paid
-feature offer with a clamped sales description. Instances without the existing
-Relay capability can read the date and phone-alert alternatives but cannot
-pair devices or configure connections. Entitled phones keep their existing
-configuration and pairing controls until 31 March 2027. The change introduces
-no commercial offer, billing read, entitlement substitution or service change.
-
-`RelaySettingsPanel.runtime.test.tsx` and the current first-session/paid-settings
-browser consumers verify the readable notice and unchanged access boundaries.
 
 ### Opt-in confirmed-operation transport keeps paid contexts unchanged
 
@@ -3801,3 +3835,27 @@ metric/recovery retention remain unchanged. This source change does not deploy
 a runtime or change customer subscriptions. Private renderer tests cover formats,
 missing/observed-zero distinction, formula-safe CSV and PDF generation. Runtime
 hook tests and final-source Pro browser delivery qualify registration/composition.
+
+
+### Portal dependency updates retain generated-source identity
+
+The portal's declared dependency manifest is a required canonical build input,
+even when a maintenance change affects only its test runner. A change to that
+input must regenerate the checked-in bundle and source-hash manifest with the
+actual committed graph. The early source-hash preflight is reused, not relaxed;
+`TestPulseAccountFrontendManifestListsCanonicalInputs` and
+`TestPulseAccountFrontendBundleStaysInSync` pin manifest inclusion and readback.
+Portal frontend tests, type checking and its actual build still qualify an
+updated runner; a corrected hash alone is not build proof. No billing, access,
+account scope, entitlement or installed runtime is changed by this update.
+
+### Scoped shell delivery evidence
+
+The existing shell must not present a healthy connection merely because the
+transport opens or prior-connection resource admission is retained. Its pending
+monitoring warning consumes the current connection's resource-snapshot receipt,
+without reauthenticating, changing tenant admission or adding full-state startup
+reads. Organisation replacement clears both resource admission and delivery;
+reconnect clears only delivery. A received snapshot is not freshness proof.
+`App.architecture.test.ts`, `useAppRuntimeState.test.ts` and `AppLayout.test.tsx`
+protect this presentation/authentication boundary and preserve navigation/focus.

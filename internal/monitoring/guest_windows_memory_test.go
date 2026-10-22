@@ -47,10 +47,15 @@ func TestGuestWindowsMeminfoEvidenceBoundary(t *testing.T) {
 			if got := m.guestWindowsMeminfoUnsupported("pve", "node", 105, now); got != tc.want {
 				t.Fatalf("OS eligibility = %t, want %t", got, tc.want)
 			}
+			// A node alias cannot erase a current receipt or renew an expired,
+			// missing or future one for this same cluster-wide guest identity.
+			if got := m.guestWindowsMeminfoUnsupported("pve", "migrated", 105, now); got != tc.want {
+				t.Fatalf("migrated OS eligibility = %t, want %t", got, tc.want)
+			}
 			for _, identity := range []struct {
 				instance, node string
 				id             int
-			}{{"other", "node", 105}, {"pve", "other", 105}, {"pve", "node", 106}} {
+			}{{"other", "node", 105}, {"pve", "other", 107}, {"pve", "node", 106}} {
 				if m.guestWindowsMeminfoUnsupported(identity.instance, identity.node, identity.id, now) {
 					t.Fatal("Windows OS evidence crossed guest identity")
 				}

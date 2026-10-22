@@ -234,8 +234,8 @@ describe('recovery feedback beside delivery health', () => {
     input.focus();
     fireEvent.input(input, { target: { value: 'Unfinished edit' } });
     for (const failure of [
-      'Unable to retry retained notification deliveries.',
-      'Unable to dismiss retained notification failures.',
+      'Retry could not be confirmed. Refresh notification activity before trying again.',
+      'Dismissal could not be confirmed. Refresh notification activity before trying again.',
     ]) {
       setMessage(failure);
       expect(screen.getByRole('status')).toBe(status);
@@ -248,8 +248,8 @@ describe('recovery feedback beside delivery health', () => {
     const [message, setMessage] = createSignal<string | null>(null);
     render(() => <AlertQueueActionFeedback message={message()} onClear={() => setMessage(null)} />);
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
-    setMessage('Unable to retry retained notification deliveries.');
-    expect(screen.getByRole('status')).toHaveTextContent('Unable to retry');
+    setMessage('Retry could not be confirmed. Refresh notification activity before trying again.');
+    expect(screen.getByRole('status')).toHaveTextContent('Retry could not be confirmed');
     const clear = screen.getByRole('button', { name: 'Clear recovery message' });
     clear.focus();
     fireEvent.click(clear);

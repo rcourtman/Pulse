@@ -196,6 +196,7 @@ const resolveTablePaddingClass = (vertical: TableAxisPadding, customClass?: stri
 export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
   colSpan?: number;
   colspan?: number;
+  scope?: JSX.ThHTMLAttributes<HTMLTableCellElement>['scope'];
   width?: string | number;
 };
 

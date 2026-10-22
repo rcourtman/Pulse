@@ -52,16 +52,22 @@ def snapshot(enabled=True):
 
 
 @contextmanager
-def server(payload, status=200):
+def server(payload, status=200, *, incomplete=False):
     calls = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             calls.append({"path": self.path, "method": self.command, "headers": dict(self.headers)})
+            body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
+            if incomplete:
+                self.send_header("Content-Length", str(len(body) + 100))
             self.end_headers()
-            self.wfile.write(payload if isinstance(payload, bytes) else json.dumps(payload).encode())
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # The bounded client may deliberately stop reading.
 
         def log_message(self, *_args):
             pass
@@ -79,7 +85,7 @@ def server(payload, status=200):
 
 class SchedulerPollingDocsTest(unittest.TestCase):
     def exercise(self, payload=None, status=200, *, header="X-API-Token", missing_header=False,
-                 refused_connection=False):
+                 refused_connection=False, incomplete=False, limiter_exit=None):
         payload = snapshot() if payload is None else payload
         with tempfile.TemporaryDirectory(prefix="pulse polling ") as temporary:
             directory = Path(temporary)
@@ -99,11 +105,28 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                             "Path(os.environ['CURL_ARGV']).write_text(json.dumps(sys.argv[1:]))\n"
                             "os.execv(os.environ['REAL_CURL'], ['curl', *sys.argv[1:]])\n")
             curl.chmod(0o700)
+            # Observe the actual partial-file size at cleanup, not just a
+            # command flag. Never replace the real limiter on the passing path.
+            cleanup_file = directory / "cleanup.jsonl"
+            remove = tools / "rm"
+            remove.write_text("#!/usr/bin/env python3\nimport json, os, sys\n"
+                              "from pathlib import Path\n"
+                              "with Path(os.environ['CLEANUP_LOG']).open('a') as log:\n"
+                              " for name in sys.argv[1:]:\n"
+                              "  p = Path(name)\n"
+                              "  if p.is_file(): log.write(json.dumps({'name': p.name, 'bytes': p.stat().st_size}) + '\\n')\n"
+                              "os.execv(os.environ['REAL_RM'], ['rm', *sys.argv[1:]])\n")
+            remove.chmod(0o700)
+            if limiter_exit is not None:
+                limiter = tools / "head"
+                limiter.write_text(f"#!/bin/sh\nexit {limiter_exit}\n")
+                limiter.chmod(0o700)
             argv_file = directory / "argv.json"
             env = dict(os.environ, HOME=str(home), TMPDIR=str(directory),
                        PATH=f"{tools}:{os.environ['PATH']}", CURL_ARGV=str(argv_file),
-                       REAL_CURL=shutil.which("curl"))
-            with server(payload, status) as (port, calls):
+                       REAL_CURL=shutil.which("curl"), REAL_RM=shutil.which("rm"),
+                       CLEANUP_LOG=str(cleanup_file))
+            with server(payload, status, incomplete=incomplete) as (port, calls):
                 # A closed fixture port supplies an actual connection refusal.
                 if refused_connection:
                     with server(payload) as (closed_port, _):
@@ -116,7 +139,22 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                 saved = list(directory.glob("pulse-scheduler.*/health.json"))
                 files = [(path.read_bytes(), stat.S_IMODE(path.stat().st_mode),
                           stat.S_IMODE(path.parent.stat().st_mode)) for path in saved]
+                self.cleanup_sizes = [json.loads(line) for line in cleanup_file.read_text().splitlines()] \
+                    if cleanup_file.exists() else []
+                self.remaining_partial = list(directory.glob("pulse-scheduler.*/response.partial"))
+                self.remaining_status = list(directory.glob("pulse-scheduler.*/http-status"))
+                if not missing_header:
+                    self.assertEqual(credential.read_text(),
+                                     f"{header}: {'Bearer ' if header == 'Authorization' else ''}{TOKEN}\n")
                 return result, calls, json.loads(argv_file.read_text()), files
+
+    def assert_unavailable(self, result, files):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(files, [])
+        self.assertEqual(self.remaining_partial, [])
+        self.assertEqual(self.remaining_status, [])
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
 
     def test_one_authenticated_request_with_both_supported_header_files(self):
         for header in ("X-API-Token", "Authorization"):
@@ -170,6 +208,47 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                 result, _, _, _ = self.exercise(payload)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("Saved scheduler snapshot:", result.stdout)
+
+    def test_oversized_unknown_length_response_is_bounded_and_removed(self):
+        # No Content-Length: a header-only curl limit would miss this response.
+        for size in (1048577, 8 * 1048576):
+            with self.subTest(size=size):
+                raw = json.dumps(snapshot()).encode()
+                result, calls, _, files = self.exercise(raw + b" " * (size - len(raw)))
+                self.assert_unavailable(result, files)
+                self.assertEqual(len(calls), 1)
+                self.assertIn("exceeds 1 MiB", result.stderr)
+                self.assertEqual([row["bytes"] for row in self.cleanup_sizes
+                                  if row["name"] == "response.partial"], [1048577])
+
+    def test_exact_limit_is_a_complete_private_snapshot(self):
+        raw = json.dumps(snapshot()).encode()
+        result, calls, _, files = self.exercise(raw + b" " * (1048576 - len(raw)))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(files[0][0]), 1048576)
+        self.assertEqual(json.loads(files[0][0]), snapshot())
+        self.assertEqual(files[0][1:], (0o600, 0o700))
+        self.assertEqual(self.remaining_partial, [])
+        self.assertEqual(self.remaining_status, [])
+
+    def test_valid_object_prefix_from_incomplete_transfer_is_not_a_snapshot(self):
+        result, calls, _, files = self.exercise(incomplete=True)
+        self.assert_unavailable(result, files)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("request or bounded write failed", result.stderr)
+
+    def test_two_valid_health_objects_are_not_one_snapshot(self):
+        raw = json.dumps(snapshot()).encode()
+        result, calls, _, files = self.exercise(raw + b"\n" + raw)
+        self.assert_unavailable(result, files)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("one complete health object", result.stderr)
+
+    def test_limiter_failure_cannot_hide_behind_a_successful_request(self):
+        result, _, _, files = self.exercise(limiter_exit=5)
+        self.assert_unavailable(result, files)
+        self.assertIn("request or bounded write failed", result.stderr)
 
     def test_disabled_empty_scheduler_is_preserved_not_reported_as_healthy(self):
         payload = dict(snapshot(False), instances=[], queue={"depth": 0}, deadLetter={"count": 0})

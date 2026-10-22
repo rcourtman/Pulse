@@ -286,6 +286,23 @@ describe('TableBody', () => {
 });
 
 describe('TableHeader', () => {
+  it('forwards the typed native header scope without changing table semantics', () => {
+    render(() => (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead scope="col">Scoped column</TableHead>
+          </TableRow>
+        </TableHeader>
+      </Table>
+    ));
+    const header = screen.getByRole('columnheader', { name: 'Scoped column' });
+    expect(header.tagName).toBe('TH');
+    expect(header).toHaveAttribute('scope', 'col');
+    expect(header).not.toHaveAttribute('role');
+    expect(header).not.toHaveAttribute('tabindex');
+  });
+
   it('keeps default header borders when no custom border classes are provided', () => {
     render(() => (
       <Table>

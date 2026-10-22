@@ -126,6 +126,55 @@ describe('websocket store unified resource contract', () => {
     vi.unstubAllGlobals();
   });
 
+  it('withdraws guest CPU on a source-owned gap and restores measured idle on delta', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      const guest = {
+        id: 'vm-106',
+        type: 'vm',
+        name: 'guest',
+        status: 'running',
+        cpu: { current: 98 },
+        memory: { current: 25 },
+        proxmox: { vmid: 106, cpuUsageUnavailable: false },
+      };
+      emitMessage({ type: 'rawData', data: { resources: [guest], lastUpdate: 100 } });
+      expect(store.state.resources[0].cpu?.current).toBe(98);
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 200,
+          resourceDelta: {
+            upserts: [{ id: guest.id, cpu: null, proxmox: { cpuUsageUnavailable: true } }],
+            removed: [],
+            order: [guest.id],
+          },
+        },
+      });
+      expect(store.state.resources[0].cpu).toBeUndefined();
+      expect(store.state.resources[0].proxmox?.cpuUsageUnavailable).toBe(true);
+      expect(store.state.resources[0].memory?.current).toBe(25);
+      emitMessage({
+        type: 'rawData',
+        data: {
+          lastUpdate: 300,
+          resourceDelta: {
+            upserts: [
+              { id: guest.id, cpu: { current: 0 }, proxmox: { cpuUsageUnavailable: false } },
+            ],
+            removed: [],
+            order: [guest.id],
+          },
+        },
+      });
+      expect(store.state.resources[0].cpu?.current).toBe(0);
+      expect(store.state.resources[0].proxmox?.cpuUsageUnavailable).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+
   it('tracks resource admission separately from status frames and retains it through reconnect only', async () => {
     const { store, dispose } = await createStoreHarness();
     try {
@@ -133,13 +182,74 @@ describe('websocket store unified resource contract', () => {
       emitMessage({ type: 'rawData', data: { lastUpdate: 1, activeAlerts: {} } });
       expect(store.initialDataReceived()).toBe(true);
       expect(store.resourceSnapshotReceived()).toBe(false);
+      expect(store.connectionResourceSnapshotReceived()).toBe(false);
       emitMessage({ type: 'rawData', data: { resources: [] } });
       expect(store.resourceSnapshotReceived()).toBe(true);
+      expect(store.connectionResourceSnapshotReceived()).toBe(true);
       mockWsInstance?.onclose?.({ code: 1013, reason: 'interruption' } as CloseEvent);
       expect(store.initialDataReceived()).toBe(false);
       expect(store.resourceSnapshotReceived()).toBe(true);
+      expect(store.connectionResourceSnapshotReceived()).toBe(false);
       store.switchUrl('ws://localhost/ws?org=another');
       expect(store.resourceSnapshotReceived()).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('requires a current resource snapshot, not an open socket, welcome, pong or alert tick', async () => {
+    apiFetchJSONMock.mockResolvedValue({ activeAlerts: [] });
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      expect(store.connected()).toBe(true);
+      expect(store.connectionResourceSnapshotReceived()).toBe(false);
+      for (const frame of [
+        { type: 'welcome', data: {} },
+        { type: 'pong', data: { timestamp: Date.now() } },
+        { type: 'rawData', data: { activeAlerts: [], lastUpdate: Date.now() } },
+        { type: 'rawData', data: { resourceDelta: { upserts: [], removed: [] } } },
+        { type: 'rawData', data: { resources: null } },
+      ]) {
+        emitMessage(frame);
+        await flushMicrotasks();
+        expect(store.connectionResourceSnapshotReceived()).toBe(false);
+      }
+      emitMessage({ type: 'initialState', data: { resources: [] } });
+      expect(store.connectionResourceSnapshotReceived()).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('withdraws delivery evidence on reconnect without discarding the retained estate', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+      emitMessage({
+        type: 'initialState',
+        data: { resources: [{ id: 'retained', type: 'agent' }] },
+      });
+      const retiredSocket = mockWsInstance!;
+      store.reconnect();
+      await waitForOpenTick();
+      expect(store.connected()).toBe(true);
+      expect(store.state.resources.map((resource) => resource.id)).toEqual(['retained']);
+      expect(store.resourceSnapshotReceived()).toBe(true);
+      expect(store.connectionResourceSnapshotReceived()).toBe(false);
+      retiredSocket.onmessage?.({
+        data: JSON.stringify({ type: 'rawData', data: { resources: [] } }),
+      } as MessageEvent);
+      emitMessage({ type: 'welcome' });
+      expect(store.connectionResourceSnapshotReceived()).toBe(false);
+      emitMessage({ type: 'initialState', data: { resources: [] } });
+      expect(store.connectionResourceSnapshotReceived()).toBe(true);
+      expect(store.state.resources).toEqual([]);
+      store.switchUrl('ws://localhost/ws?org=another');
+      await waitForOpenTick();
+      expect(store.connectionResourceSnapshotReceived()).toBe(false);
+      expect(store.resourceSnapshotReceived()).toBe(false);
+      expect(store.state.resources).toEqual([]);
     } finally {
       dispose();
     }
@@ -2102,6 +2212,7 @@ describe('websocket store unified resource contract', () => {
           'agent-host-2',
         ]);
         expect(store.initialDataReceived()).toBe(true);
+        expect(store.connectionResourceSnapshotReceived()).toBe(true);
       } finally {
         dispose();
       }

@@ -329,23 +329,33 @@ func TestClientSessionTokenAuthDoesNotRenew(t *testing.T) {
 // Its cancellation ends only its own wait: live waiters keep the login, a
 // genuine login failure still reaches them, and a login whose starter has left
 // still completes and is reused instead of being repeated.
-func TestClientSessionRenewalStarterCancellation(t *testing.T) {
+func testClientSessionRenewalStarterCancellation(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		waiter  bool
 		failure bool
+		form    bool
 	}{
 		{name: "live waiter keeps login", waiter: true},
 		{name: "login failure reaches live waiter", waiter: true, failure: true},
 		{name: "abandoned login is reused", waiter: false},
+		{name: "live waiter keeps form login", waiter: true, form: true},
+		{name: "form login failure reaches live waiter", waiter: true, failure: true, form: true},
+		{name: "abandoned form login is reused", form: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entered, finish := make(chan struct{}), make(chan struct{})
-			var authCalls, apiCalls atomic.Int32
+			var authCalls, apiCalls, jsonFallbackCalls atomic.Int32
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasSuffix(r.URL.Path, "/access/ticket") {
+					if tc.form && r.Header.Get("Content-Type") == "application/json" {
+						jsonFallbackCalls.Add(1)
+						w.WriteHeader(http.StatusUnsupportedMediaType)
+						fmt.Fprint(w, `{"message":"fixture requires form"}`)
+						return
+					}
 					n := authCalls.Add(1)
 					if n == 2 {
 						close(entered)
@@ -420,6 +430,9 @@ func TestClientSessionRenewalStarterCancellation(t *testing.T) {
 				if apiCalls.Load() != 0 {
 					t.Error("failed login admitted API reads")
 				}
+				if authCalls.Load() != 2 || (tc.form && jsonFallbackCalls.Load() != 2) {
+					t.Error("joined failure replayed login or skipped the required form fallback")
+				}
 				return
 			}
 			// A later read joins or reuses the detached login; it never logs in again.
@@ -436,6 +449,9 @@ func TestClientSessionRenewalStarterCancellation(t *testing.T) {
 			}
 			if authCalls.Load() != 2 || apiCalls.Load() != wantAPI {
 				t.Errorf("auth/api=%d/%d, want 2/%d", authCalls.Load(), apiCalls.Load(), wantAPI)
+			}
+			if tc.form && jsonFallbackCalls.Load() != 2 {
+				t.Errorf("JSON-to-form fallbacks=%d, want initial plus one shared renewal", jsonFallbackCalls.Load())
 			}
 		})
 	}

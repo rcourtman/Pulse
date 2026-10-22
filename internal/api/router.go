@@ -5099,9 +5099,14 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	// goes down.
 	schedulerHealthy := monitorHealthy
 
+	// A non-nil hub can still be stuck building state. Observe its existing
+	// work only: unauthenticated health probes must not create getters or
+	// block behind the very state locks whose progress they are checking.
+	websocketHealthy := r.wsHub != nil && r.wsHub.StateDeliveryHealthy()
+	stateDeliveryStalled := r.wsHub != nil && !websocketHealthy
 	statusCode := http.StatusOK
 	status := "healthy"
-	if !monitorHealthy || !schedulerHealthy {
+	if !monitorHealthy || !schedulerHealthy || stateDeliveryStalled {
 		statusCode = http.StatusServiceUnavailable
 		status = "unhealthy"
 	}
@@ -5120,7 +5125,7 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	response.Dependencies = map[string]bool{
 		"monitor":   monitorHealthy,
 		"scheduler": schedulerHealthy,
-		"websocket": r.wsHub != nil,
+		"websocket": websocketHealthy,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

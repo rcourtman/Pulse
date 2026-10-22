@@ -18,6 +18,10 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = "./scripts/installtests"
 PREFLIGHT = ("TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure",)
+# These safety matrices remain mandatory even though every root check now has
+# its own process budget rather than a dedicated aggregate group.
+FIXTURES = ("TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure",
+            "TestAutoUpdateServiceStateFailsClosed")
 
 
 def partition(output):
@@ -28,15 +32,18 @@ def partition(output):
         if not name.isidentifier() or name in names:
             raise ValueError("invalid or repeated Go test identity")
         names.append(name)
-    if (not set(PREFLIGHT).issubset(names)
+    if (not set(PREFLIGHT + FIXTURES).issubset(names)
             or sum(name.startswith("TestRootInstallReset") for name in names) < 1
-            or sum(name not in PREFLIGHT and not name.startswith("TestRootInstallReset")
+            or sum(name not in PREFLIGHT + FIXTURES and not name.startswith("TestRootInstallReset")
                    for name in names) < 2):
-        raise ValueError("missing preflight, general or reset installer inventory")
-    # Preserve the compiled binary's order within each workflow phase. Every
-    # discovered test, example and fuzz seed belongs to exactly one phase.
+        raise ValueError("missing preflight, fixture, general or reset installer inventory")
+    # Preserve compiled order within the general inventory and the final reset
+    # inventory. Every discovered test, example and fuzz seed runs exactly once;
+    # reset safety checks still run last, as in the previous grouped runner.
     return ([name for name in names if name in PREFLIGHT],
-            [name for name in names if name not in PREFLIGHT])
+            [name for name in names if name not in PREFLIGHT
+             and not name.startswith("TestRootInstallReset")]
+            + [name for name in names if name.startswith("TestRootInstallReset")])
 
 
 def run_check(binary, name, *, cwd, timeout="10m"):

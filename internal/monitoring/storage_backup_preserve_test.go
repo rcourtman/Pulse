@@ -36,8 +36,8 @@ func TestPreserveFailedStorageBackups(t *testing.T) {
 			},
 		},
 	}
-	toPreserve := map[string]struct{}{
-		"nas-share": {},
+	toPreserve := map[pveBackupStorageScope]struct{}{
+		{storage: "nas-share"}: {},
 	}
 
 	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
@@ -79,8 +79,8 @@ func TestPreserveFailedStorageBackupsSkipsDuplicates(t *testing.T) {
 			},
 		},
 	}
-	toPreserve := map[string]struct{}{
-		"nas-share": {},
+	toPreserve := map[pveBackupStorageScope]struct{}{
+		{storage: "nas-share"}: {},
 	}
 
 	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
@@ -116,7 +116,7 @@ func TestPreserveFailedStorageBackupsEmptyPreserveMap(t *testing.T) {
 	}
 
 	// Also test empty map (not nil)
-	merged2, storages2 := preserveFailedStorageBackups(instance, snapshot, map[string]struct{}{}, current)
+	merged2, storages2 := preserveFailedStorageBackups(instance, snapshot, map[pveBackupStorageScope]struct{}{}, current)
 	if len(merged2) != 1 {
 		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged2))
 	}
@@ -137,8 +137,8 @@ func TestPreserveFailedStorageBackupsNoMatchingBackups(t *testing.T) {
 			},
 		},
 	}
-	toPreserve := map[string]struct{}{
-		"nas-share": {}, // Storage not in snapshot
+	toPreserve := map[pveBackupStorageScope]struct{}{
+		{storage: "nas-share"}: {}, // Storage not in snapshot
 	}
 
 	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
@@ -163,8 +163,8 @@ func TestPreserveFailedStorageBackupsWrongInstance(t *testing.T) {
 			},
 		},
 	}
-	toPreserve := map[string]struct{}{
-		"nas-share": {},
+	toPreserve := map[pveBackupStorageScope]struct{}{
+		{storage: "nas-share"}: {},
 	}
 
 	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
@@ -190,8 +190,8 @@ func TestPreserveFailedStorageBackupsStorageNotInPreserveMap(t *testing.T) {
 			},
 		},
 	}
-	toPreserve := map[string]struct{}{
-		"nas-share": {}, // Only nas-share should be preserved
+	toPreserve := map[pveBackupStorageScope]struct{}{
+		{storage: "nas-share"}: {}, // Only nas-share should be preserved
 	}
 
 	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
@@ -222,10 +222,10 @@ func TestPreserveFailedStorageBackupsSortedStorageNames(t *testing.T) {
 			},
 		},
 	}
-	toPreserve := map[string]struct{}{
-		"zebra-storage":  {},
-		"alpha-storage":  {},
-		"middle-storage": {},
+	toPreserve := map[pveBackupStorageScope]struct{}{
+		{storage: "zebra-storage"}:  {},
+		{storage: "alpha-storage"}:  {},
+		{storage: "middle-storage"}: {},
 	}
 
 	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)

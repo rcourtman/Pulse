@@ -200,11 +200,17 @@ describe('UpdateInstallGuide', () => {
     isMajorUpgrade: false,
   };
 
-  it('shows the broker digest-pinned commands for a Pro docker install, never the community image', () => {
+  it.each([
+    dockerUpdate.loginCommand,
+    "docker login 'registry.pulserelay.pro' --username 'lic_test'",
+  ])('shows safe login and broker digest-pinned Pro commands: %s', (loginCommand) => {
     render(() => (
       <UpdateInstallGuide
         versionInfo={dockerVersionInfo}
-        updateInfo={{ ...availableDockerUpdateInfo, dockerUpdate }}
+        updateInfo={{
+          ...availableDockerUpdateInfo,
+          dockerUpdate: { ...dockerUpdate, loginCommand },
+        }}
         updatePlan={dockerUpdatePlan}
         isInstalling={false}
         dockerImageTag="v6.0.5"
@@ -217,6 +223,11 @@ describe('UpdateInstallGuide', () => {
     expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
     expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`)).toBeInTheDocument();
     expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText("docker login registry.pulserelay.pro --username 'lic_test'"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/printf/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Docker’s hidden Password prompt/)).toBeInTheDocument();
   });
 
   it('withholds community commands on a Pro docker install even without broker commands', () => {

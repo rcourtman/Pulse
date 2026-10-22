@@ -229,12 +229,20 @@ describe('MobileNavBar', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
-      within(nav).getByRole('link', { name: 'Alerts: 2 critical, 3 warning' }),
+      within(nav).getByRole('link', { name: 'Alerts 2 critical, 3 warning' }),
     ).toHaveTextContent('23');
-    expect(within(nav).getByRole('link', { name: 'Patrol: 2 open work items' })).toHaveTextContent(
+    expect(within(nav).getByRole('link', { name: 'Patrol 2 open work items' })).toHaveTextContent(
       'Patrol2',
     );
     expect(within(nav).queryByRole('link', { name: 'Pulse Patrol Patrol' })).toBeNull();
+    for (const link of within(nav).getAllByRole('link')) {
+      // No name override may replace the rendered destination label or force
+      // the visible badge sequence into a different synthetic label.
+      expect(link).not.toHaveAttribute('aria-label');
+    }
+    expect(
+      within(nav).getByRole('link', { name: 'Alerts 2 critical, 3 warning' }),
+    ).toHaveAccessibleName('Alerts 2 critical, 3 warning');
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
     const menu = await screen.findByRole('menu', { name: 'Switch platform' });

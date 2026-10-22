@@ -62,6 +62,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 	for _, tc := range []struct{ name, collector, badRow string }{
 		{"cluster", "cluster", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
 		{"node", "node", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
+		{"fallback", "fallback", `{"mountpoint":"/data","type":"ext4","total-bytes":9000}`},
 		{"cluster-case-mount", "cluster", `{"mountpoint":"/data","MOUNTPOINT":"/proc","type":"ext4","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
 		{"node-case-mount", "node", `{"mountpoint":"/data","MOUNTPOINT":"/proc","type":"ext4","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
 		{"cluster-case-type", "cluster", `{"mountpoint":"/data","type":"ext4","TYPE":"tmpfs","disk":[{"dev":"/dev/vdb1"}],"total-bytes":9000,"used-bytes":8820}`},
@@ -72,6 +73,10 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				switch {
+				case strings.HasSuffix(r.URL.Path, "/cluster/resources"):
+					http.Error(w, "unsupported fixture endpoint", http.StatusNotImplemented)
+				case strings.HasSuffix(r.URL.Path, "/qemu"):
+					fmt.Fprint(w, `{"data":[{"vmid":105,"name":"guest","status":"running","maxmem":1000,"mem":400,"maxdisk":10000,"cpu":0.2}]}`)
 				case strings.HasSuffix(r.URL.Path, "/config"):
 					fmt.Fprint(w, `{"data":{}}`)
 				case strings.HasSuffix(r.URL.Path, "/status/current"):
@@ -111,6 +116,13 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 			m.config, m.state, m.rateTracker = &config.Config{}, models.NewState(), NewRateTracker()
 			m.guestMetadataLimiter = make(map[string]time.Time)
 			m.resourceStore = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+			m.replacePVEClient("partial-filesystems", client)
+			projections := make(map[string]any)
+			project := func(label string) {
+				t.Helper()
+				front := m.buildBroadcastFrontendStateFromSnapshot(m.GetState(), m.mockModeFence.begin())
+				projections[label] = map[string]any{"resources": front.Resources, "history": m.GetGuestMetricsForChart("partial-filesystems:node:105", "vm", "partial-filesystems:node:105", time.Hour), "capturedAt": time.Now()}
+			}
 			res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 1000, Mem: 400, MaxDisk: 10000, CPU: .2}
 			id := makeGuestID("partial-filesystems", "node", 105)
 			publish := func(vm models.VM) {
@@ -123,7 +135,16 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 				cycleStart := time.Now()
 				previous := m.previousGuestContextForInstance("partial-filesystems").vmsByID[id]
 				var vm models.VM
-				if tc.collector == "node" {
+				if tc.collector == "fallback" {
+					if err := m.pollGuestsWithFallback(context.Background(), "partial-filesystems", &config.PVEInstance{MonitorVMs: true}, client, []proxmox.Node{{Node: "node", Status: "online"}}, map[string]string{"node": "online"}); err != nil {
+						t.Fatal(err)
+					}
+					vms := m.GetState().VMs
+					if len(vms) != 1 {
+						t.Fatal("fallback collector lost guest")
+					}
+					vm = vms[0]
+				} else if tc.collector == "node" {
 					vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "partial-filesystems", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, map[string]models.VM{id: previous}, nil)
 					if len(vms) != 1 {
 						t.Fatal("node collector lost guest")
@@ -137,10 +158,16 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 					}
 					m.checkGuestAlertsForVM("partial-filesystems", vm)
 				}
-				publish(vm)
-				m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
+				if tc.collector != "fallback" {
+					publish(vm)
+					m.recordGuestMetrics([]models.VM{vm}, nil, cycleStart)
+				} else {
+					m.updateResourceStore(m.currentStateWithScope())
+				}
 				view := m.currentModeReadState().VMs()[0]
-				if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation || !reflect.DeepEqual(previousVMFromView(view).Disks, vm.Disks) {
+				// Ordinary state publication normalizes empty arrays; compare the
+				// same representation without relaxing any filesystem contents.
+				if view.DiskStatusReason() != vm.DiskStatusReason || view.DiskObservation() != vm.DiskObservation || !reflect.DeepEqual(previousVMFromView(view).NormalizeCollections().Disks, vm.NormalizeCollections().Disks) {
 					t.Fatalf("canonical projection changed completeness, original age or mount rows: vm=%+v view=%+v", vm, previousVMFromView(view))
 				}
 				if vm.Disk.Usage >= 0 && (view.DiskTotal() != vm.Disk.Total || view.DiskUsed() != vm.Disk.Used || view.DiskPercent() != vm.Disk.Usage) {
@@ -176,6 +203,7 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 				return vm
 			}
 			initial := build()
+			project("complete")
 			if initial.Disk.Total != 10000 || initial.Disk.Used != 9800 || initial.Disk.Usage != 98 || len(initial.Disks) != 2 || initial.DiskStatusReason != "" || initial.DiskObservation.ObservedAt.IsZero() {
 				t.Fatalf("initial complete reading missing: %+v", initial)
 			}
@@ -198,10 +226,12 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 					t.Fatalf("partial poll %d became fresh or removed an unknown volume: %+v", i, retained)
 				}
 			}
+			project("partial")
 			aged := m.previousGuestContextForInstance("partial-filesystems").vmsByID[id]
 			aged.DiskObservation.ObservedAt = time.Now().Add(-recentGuestAgentEvidenceMaxAge - time.Second)
 			publish(aged)
 			expired := build()
+			project("expired")
 			if expired.Disk.Usage != -1 || expired.DiskStatusReason != "agent-error" || len(expired.Disks) != 0 || !expired.DiskObservation.ObservedAt.IsZero() {
 				t.Fatal("repeated partial responses renewed expired complete evidence")
 			}
@@ -222,12 +252,20 @@ func TestVMFilesystemIncompletePollingPreservesHistoryAndBreach(t *testing.T) {
 			time.Sleep(1100 * time.Millisecond)
 			phase.Store(2)
 			recovered := build()
+			project("recovered")
 			if recovered.Disk.Total != 1000 || recovered.Disk.Used != 0 || recovered.Disk.Usage != 0 || len(recovered.Disks) != 1 || recovered.DiskStatusReason != "" || !recovered.DiskObservation.ObservedAt.After(initial.DiskObservation.ObservedAt) || len(m.alertManager.GetActiveAlerts()) != 0 || fsCalls.Load() != 6 {
 				t.Fatalf("complete ordinary removal/zero failed to recover: %+v", recovered)
 			}
 			points := guestHistoryStoredPoints(t, m, "vm", id, "disk")
 			if len(points) != 2 || points[0] != originalHistory[0] || points[1].Value != 0 {
 				t.Fatal("History lost high reading or failed to append genuine zero")
+			}
+			if tc.collector == "fallback" {
+				wire, err := json.Marshal(projections)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("FALLBACK_HISTORY_PROJECTIONS %s", wire)
 			}
 		})
 	}

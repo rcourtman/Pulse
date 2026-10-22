@@ -1,14 +1,53 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import type { Resource } from '@/types/resource';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   PlatformResourceDetailToggleButton,
+  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
   getPlatformResourceDetailRowInteractionProps,
 } from '../PlatformResourceDetailTableRow';
 
 afterEach(cleanup);
+
+vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
+  ResourceDetailDrawer: () => <div data-testid="resource-drawer">Resource details</div>,
+}));
+
+describe('summary-specific detail evidence', () => {
+  it('admits optional row evidence only inside the open disclosure without remounting the drawer', () => {
+    const [open, setOpen] = createSignal(false);
+    const [evidence, setEvidence] = createSignal('Unavailable');
+    render(() => (
+      <table>
+        <tbody>
+          <PlatformResourceDetailTableRow
+            resource={{ id: 'resource' } as Resource}
+            open={open()}
+            detailRowId="summary-detail"
+            colSpan={3}
+            beforeDetails={<p>{evidence()}</p>}
+          />
+        </tbody>
+      </table>
+    ));
+    expect(screen.queryByText('Unavailable')).toBeNull();
+    setOpen(true);
+    const drawer = screen.getByTestId('resource-drawer');
+    const evidenceNode = screen.getByText('Unavailable');
+    expect(
+      evidenceNode.compareDocumentPosition(drawer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    setEvidence('Recovered');
+    expect(screen.getByText('Recovered')).toBe(evidenceNode);
+    expect(screen.getByTestId('resource-drawer')).toBe(drawer);
+    setOpen(false);
+    expect(screen.queryByText('Recovered')).toBeNull();
+  });
+});
 
 describe('getPlatformResourceDetailRowInteractionProps', () => {
   const renderRow = (onToggle = vi.fn()) => {

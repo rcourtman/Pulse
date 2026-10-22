@@ -13,7 +13,8 @@ describe('ConnectionStatusBadge', () => {
         connectionStatus={() => ({
           kind: 'connected',
           label: 'Connected',
-          detail: 'Backend and live data stream are connected.',
+          detail:
+            'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
           tone: 'healthy',
         })}
       />
@@ -21,8 +22,29 @@ describe('ConnectionStatusBadge', () => {
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
     expect(
-      screen.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      screen.getByRole('status', {
+        name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
+      }),
     ).toBeInTheDocument();
+  });
+
+  it('keeps a data-wait label visible and uses the readable dark warning palette', () => {
+    render(() => (
+      <ConnectionStatusBadge
+        connectionStatus={() => ({
+          kind: 'awaiting-data',
+          label: 'Waiting for data',
+          detail: 'Monitoring data has not arrived on this connection.',
+          tone: 'warning',
+        })}
+      />
+    ));
+    const badge = screen.getByRole('status', {
+      name: 'Monitoring data has not arrived on this connection.',
+    });
+    expect(badge).toHaveClass('degraded', 'dark:bg-amber-950', 'dark:text-amber-100');
+    expect(badge).not.toHaveClass('connected');
+    expect(screen.getByText('Waiting for data')).toHaveClass('opacity-100');
   });
 
   it('renders a degraded sync reconnecting state without marking the shell disconnected', () => {

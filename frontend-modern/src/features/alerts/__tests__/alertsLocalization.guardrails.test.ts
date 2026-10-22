@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
 import activeAlertsSectionSource from '@/features/alerts/AlertOverviewActiveAlertsSection.tsx?raw';
 import alertCardSource from '@/features/alerts/AlertOverviewAlertCard.tsx?raw';
@@ -64,11 +65,50 @@ const migratedAlertsOverviewCopy = [
   'Until tomorrow at 9:00',
 ] as const;
 
+// Check shipped copy, not explanatory comments which can legitimately name
+// an action. The parser handles template-expression rescanning and JSX, while
+// the printer preserves literal copy, including comment-like text within it.
+function withoutComments(source: string): string {
+  const file = ts.createSourceFile(
+    'alert-surface.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  return ts.createPrinter({ removeComments: true }).printFile(file);
+}
+
 describe('alerts overview localization guardrails', () => {
+  it('ignores comments without excluding hardcoded string or JSX copy', () => {
+    expect(withoutComments('const label = `${value} title`; // Acknowledge all')).not.toContain(
+      'Acknowledge all',
+    );
+    expect(withoutComments('const label = `${value} Acknowledge all`;')).toContain(
+      'Acknowledge all',
+    );
+
+    expect(
+      withoutComments('// Acknowledge all\n/* Active Alerts */\nconst translated = label();'),
+    ).not.toContain('Acknowledge all');
+    expect(withoutComments('/* Active Alerts */\nconst translated = label();')).not.toContain(
+      'Active Alerts',
+    );
+    expect(withoutComments('const label = "Acknowledge all"; // description')).toContain(
+      'Acknowledge all',
+    );
+    expect(withoutComments('<button>Acknowledge all</button>')).toContain('Acknowledge all');
+    expect(withoutComments('const label = "https://fixture.invalid/Acknowledge all";')).toContain(
+      'Acknowledge all',
+    );
+    expect(withoutComments('const label = "/* Active Alerts */";')).toContain('Active Alerts');
+  });
+
   it('prevents migrated alerts overview copy from reverting to hardcoded English', () => {
     for (const source of migratedAlertsSurfaceSources) {
+      const code = withoutComments(source);
       for (const copy of migratedAlertsOverviewCopy) {
-        expect(source).not.toContain(copy);
+        expect(code).not.toContain(copy);
       }
     }
 

@@ -69,6 +69,54 @@ func TestWriteBatchBoundedReturnsWhenCommitLags(t *testing.T) {
 	}
 }
 
+// A completed bounded write need not be visible yet. Persistence/reopen
+// fixtures must use Flush before stopping the store, not treat a returned
+// monitoring call as an acknowledgement. This models only the public channel
+// protocol, with no database, lock contention or scheduler-dependent disk work.
+func TestFlushWaitsForBoundedWriteAcknowledgement(t *testing.T) {
+	s := newUnservicedStore(4)
+	t.Cleanup(func() { close(s.stopCh) })
+	requireBoundedReturn(t, s, "unacknowledged observation")
+	req := <-s.writeCh
+	if req.done == nil || len(req.metrics) != 1 {
+		t.Fatalf("bounded observation lost its acknowledgement or payload: %+v", req)
+	}
+	select {
+	case <-req.done:
+		t.Fatal("bounded return manufactured a commit acknowledgement")
+	default:
+	}
+
+	flushed := make(chan struct{})
+	go func() {
+		s.Flush()
+		close(flushed)
+	}()
+	var barrier writeRequest
+	select {
+	case barrier = <-s.writeCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Flush did not enqueue a barrier for the pending observation")
+	}
+	if barrier.done == nil || len(barrier.metrics) != 0 {
+		t.Fatalf("Flush must acknowledge even an empty local buffer: %+v", barrier)
+	}
+	select {
+	case <-flushed:
+		t.Fatal("Flush returned before the worker acknowledged its barrier")
+	default:
+	}
+	// The real worker handles queued requests in order, acknowledging a barrier
+	// only after the preceding observations have been processed.
+	close(req.done)
+	close(barrier.done)
+	select {
+	case <-flushed:
+	case <-time.After(time.Second):
+		t.Fatal("Flush did not return after the worker acknowledged the barrier")
+	}
+}
+
 func TestWriteBatchBoundedReturnsOnClosedStore(t *testing.T) {
 	s := newUnservicedStore(1)
 	s.writeCh <- writeRequest{metrics: []bufferedMetric{{}}}

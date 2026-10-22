@@ -138,12 +138,12 @@ describe('ThresholdSlider', () => {
   it('applies correct color classes', () => {
     const { unmount } = render(() => <ThresholdSlider value={50} onChange={vi.fn()} type="cpu" />);
     // Blue
-    expect(screen.getByText('50%').closest('.text-blue-500')).toBeInTheDocument();
+    expect(screen.getByText('50%').closest('.text-blue-700')).toBeInTheDocument();
     unmount();
 
     render(() => <ThresholdSlider value={50} onChange={vi.fn()} type="temperature" />);
     // Rose
-    expect(screen.getByText('50°C').closest('.text-rose-500')).toBeInTheDocument();
+    expect(screen.getByText('50°C').closest('.text-rose-700')).toBeInTheDocument();
   });
 
   it('releases drag scroll lock listeners on unmount', () => {

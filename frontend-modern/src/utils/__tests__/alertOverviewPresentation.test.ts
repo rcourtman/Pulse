@@ -46,6 +46,7 @@ import {
   getAlertOverviewGroupAcknowledgeLabel,
   getAlertOverviewGroupDisclosureLabel,
   getAlertOverviewHydrationState,
+  getAlertOverviewDeliveryUnavailable,
   getAlertOverviewNodeLabel,
   getAlertOverviewPausedState,
   getAlertOverviewPrimaryActionClass,
@@ -106,6 +107,7 @@ describe('alert overview grouping presentation', () => {
       getAlertOverviewGroupDisclosureLabel({ count: 1, correlated: true, expanded: true }),
     ).toBe('Hide');
     expect(getAlertOverviewGroupAcknowledgeLabel(3)).toBe('Acknowledge all (3)');
+    expect(getAlertOverviewGroupAcknowledgeLabel(3, true)).toBe('Acknowledging...');
   });
 });
 
@@ -144,6 +146,15 @@ describe('alertOverviewPresentation', () => {
     });
   });
 
+  it('explains an unavailable notification observation without claiming delivery failed', () => {
+    expect(getAlertOverviewDeliveryUnavailable()).toEqual({
+      label: 'Alert notification status',
+      title: 'Alert notification status is unavailable.',
+      description:
+        'Pulse could not refresh the delivery or pause reason for these alerts. It will check again automatically.',
+    });
+  });
+
   it('returns canonical alert overview stat labels', () => {
     expect(ALERT_OVERVIEW_ACKNOWLEDGED_LABEL).toBe('Acknowledged');
     expect(ALERT_OVERVIEW_LAST_24_HOURS_LABEL).toBe('Triggered (24h)');
@@ -170,9 +181,11 @@ describe('alertOverviewPresentation', () => {
       'Alert snoozed until 27/08/2026, 17:00',
     );
     expect(getAlertOverviewResumedNotification()).toBe('Alert notifications resumed');
-    expect(getAlertOverviewSnoozeFailureNotification(false)).toBe('Failed to snooze alert');
+    expect(getAlertOverviewSnoozeFailureNotification(false)).toBe(
+      'Snooze could not be confirmed. Refresh alerts before trying again.',
+    );
     expect(getAlertOverviewSnoozeFailureNotification(true)).toBe(
-      'Failed to resume alert notifications',
+      'Resuming notifications could not be confirmed. Refresh alerts before trying again.',
     );
   });
 
@@ -309,7 +322,7 @@ describe('alertOverviewPresentation', () => {
     });
     expect(getAlertOverviewCardPresentation('warning', true, true)).toEqual({
       cardClassName:
-        'border border-l-4 rounded-md px-3 py-2.5 transition-all opacity-50 border-border border-l-border bg-surface-alt',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-border bg-surface-alt',
       iconClassName: 'mr-2.5 mt-0.5 shrink-0 transition-all text-green-600 dark:text-green-400',
       resourceClassName,
     });
@@ -339,6 +352,22 @@ describe('alertOverviewPresentation', () => {
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover',
     );
   });
+
+  it.each(['critical', 'warning', 'info'])(
+    'keeps acknowledged %s evidence readable without restoring severity emphasis',
+    (level) => {
+      const presentation = getAlertOverviewCardPresentation(level, true, false);
+      expect(presentation.cardClassName).not.toMatch(/opacity-/);
+      expect(presentation.cardClassName).toContain('border-l-border bg-surface-alt');
+      expect(presentation.iconClassName).toContain('text-green-600');
+      expect(getAlertOverviewCardPresentation(level, true, true).cardClassName).not.toMatch(
+        /opacity-/,
+      );
+      expect(getAlertOverviewCardPresentation(level, false, true).cardClassName).not.toMatch(
+        /opacity-/,
+      );
+    },
+  );
 
   it('keeps the Started run on the footer baseline (#2119)', () => {
     // The alert-card footer is an items-center flex row that already carries the

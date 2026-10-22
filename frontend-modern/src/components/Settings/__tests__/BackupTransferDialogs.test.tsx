@@ -1,8 +1,14 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BackupTransferDialogs } from '../BackupTransferDialogs';
+import { createSignal, type ComponentProps } from 'solid-js';
+import type { BackupTransferStatus } from '../useBackupTransferFlow';
+import type { SecurityStatus } from '@/types/config';
 
-function renderTransfer(kind: 'export' | 'import') {
+function renderTransfer(
+  kind: 'export' | 'import',
+  overrides: Partial<ComponentProps<typeof BackupTransferDialogs>> = {},
+) {
   return render(() => (
     <BackupTransferDialogs
       securityStatus={() => null}
@@ -19,12 +25,15 @@ function renderTransfer(kind: 'export' | 'import') {
       showApiTokenModal={() => false}
       apiTokenInput={() => ''}
       setApiTokenInput={vi.fn()}
+      transferStatus={() => null}
+      transferError={() => null}
       handleExport={vi.fn()}
       handleImport={vi.fn()}
       closeExportDialog={vi.fn()}
       closeImportDialog={vi.fn()}
       closeApiTokenModal={vi.fn()}
       handleApiTokenAuthenticate={vi.fn()}
+      {...overrides}
     />
   ));
 }
@@ -62,5 +71,46 @@ describe('BackupTransferDialogs', () => {
     expect(guide).toHaveAttribute('href', '/docs/MIGRATION');
     expect(guide).toHaveAttribute('target', '_blank');
     expect(guide).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('describes the file and encoded request limits on the file control', () => {
+    renderTransfer('import');
+    expect(screen.getByLabelText('Configuration File')).toHaveAccessibleDescription(
+      "Maximum file size: 1 MiB. The backup and password together must also fit the server's 1 MiB request limit.",
+    );
+  });
+
+  it('keeps import controls locked and explains that dispatch cannot be cancelled', () => {
+    renderTransfer('import', { transferStatus: () => ({ kind: 'import', phase: 'request' }) });
+    expect(screen.getByLabelText('Configuration File')).toBeDisabled();
+    expect(screen.getByLabelText('Backup Password')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Importing…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('cannot be cancelled or rolled back here');
+  });
+
+  it('announces read, reload and unconfirmed import feedback in the consuming dialog', () => {
+    const [status, setStatus] = createSignal<BackupTransferStatus | null>({
+      kind: 'import',
+      phase: 'reading',
+    });
+    const [error, setError] = createSignal<string | null>(null);
+    renderTransfer('import', { transferStatus: status, transferError: error });
+    expect(screen.getByRole('status')).toHaveTextContent('Reading the selected backup');
+    setStatus({ kind: 'import', phase: 'reloading' });
+    expect(screen.getByRole('status')).toHaveTextContent('Configuration imported');
+    setStatus(null);
+    setError('Could not confirm the import. Settings may already have changed.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Settings may already have changed');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Backup Password')).not.toBeDisabled();
+  });
+
+  it('requires the encryption minimum for login-password exports too', () => {
+    renderTransfer('export', {
+      securityStatus: () => ({ hasAuthentication: true }) as SecurityStatus,
+      exportPassphrase: () => 'short',
+    });
+    expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled();
   });
 });

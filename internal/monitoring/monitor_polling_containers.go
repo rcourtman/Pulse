@@ -72,16 +72,6 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				return
 			}
 
-			vmIDs := make([]int, 0, len(containers))
-			for _, ct := range containers {
-				if ct.Template == 1 {
-					continue
-				}
-				vmIDs = append(vmIDs, int(ct.VMID))
-			}
-
-			rootUsageOverrides := m.collectContainerRootUsage(ctx, client, n.Node, vmIDs)
-
 			var nodeContainers []models.Container
 			nodeTemplateSubjects := make(map[string]struct{})
 
@@ -127,6 +117,11 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 						int(container.VMID),
 					)
 					currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
+					// As on the cluster/resources path, the later complete status
+					// owns a stop observed between inventory and detail collection.
+					if statusSnapshot != nil && statusSnapshot.Status != "" {
+						container.Status = statusSnapshot.Status
+					}
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
 					makeGuestRateKey(instanceName, "lxc", int(container.VMID)),
@@ -140,7 +135,7 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 				)
 
 				// Set CPU to 0 for non-running containers
-				cpuUsage := safeFloat(container.CPU)
+				cpuUsage := guestCPUUsage(container.CPU)
 				if container.Status != "running" {
 					cpuUsage = 0
 				}
@@ -202,36 +197,20 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					previous: previousMemory, linkedAgent: agentHost,
 				}, time.Now())
 
-				diskTotalBytes := clampToInt64(container.MaxDisk)
-				diskUsedBytes := clampToInt64(container.Disk)
-				if diskTotalBytes > 0 && diskUsedBytes > diskTotalBytes {
-					diskUsedBytes = diskTotalBytes
-				}
-				diskFreeBytes := diskTotalBytes - diskUsedBytes
-				if diskFreeBytes < 0 {
-					diskFreeBytes = 0
-				}
-				diskUsagePercent := safePercentage(float64(diskUsedBytes), float64(diskTotalBytes))
-
 				// Create container model
 				modelContainer := models.Container{
-					ID:       guestID,
-					VMID:     int(container.VMID),
-					Name:     container.Name,
-					Node:     n.Node,
-					Pool:     strings.TrimSpace(container.Pool),
-					Instance: instanceName,
-					Status:   container.Status,
-					Type:     "lxc",
-					CPU:      cpuUsage,
-					CPUs:     int(container.CPUs),
-					Memory:   memory,
-					Disk: models.Disk{
-						Total: diskTotalBytes,
-						Used:  diskUsedBytes,
-						Free:  diskFreeBytes,
-						Usage: diskUsagePercent,
-					},
+					ID:             guestID,
+					VMID:           int(container.VMID),
+					Name:           container.Name,
+					Node:           n.Node,
+					Pool:           strings.TrimSpace(container.Pool),
+					Instance:       instanceName,
+					Status:         container.Status,
+					Type:           "lxc",
+					CPU:            cpuUsage,
+					CPUs:           int(container.CPUs),
+					Memory:         memory,
+					Disk:           containerDiskUsage(container.MaxDisk, container.Disk, container.DiskUsage),
 					NetworkIn:      networkInValue,
 					NetworkOut:     networkOutValue,
 					DiskRead:       diskReadValue,
@@ -248,29 +227,10 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					modelContainer.Type = "oci"
 				}
 
-				if override, ok := rootUsageOverrides[int(container.VMID)]; ok {
-					overrideUsed := clampToInt64(override.Used)
-					overrideTotal := clampToInt64(override.Total)
-
-					if overrideUsed > 0 && (modelContainer.Disk.Used == 0 || overrideUsed < modelContainer.Disk.Used) {
-						modelContainer.Disk.Used = overrideUsed
-					}
-
-					if overrideTotal > 0 {
-						modelContainer.Disk.Total = overrideTotal
-					}
-
-					if modelContainer.Disk.Total > 0 && modelContainer.Disk.Used > modelContainer.Disk.Total {
-						modelContainer.Disk.Used = modelContainer.Disk.Total
-					}
-
-					modelContainer.Disk.Free = modelContainer.Disk.Total - modelContainer.Disk.Used
-					if modelContainer.Disk.Free < 0 {
-						modelContainer.Disk.Free = 0
-					}
-
-					modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
-				}
+				// Storage-content used/size describe a backing volume, not this
+				// filesystem's usage. Do not replace a live listing, invent a
+				// missing sample, or change its denominator from that inventory.
+				// Independent per-mount status / agent enrichment remains below.
 
 				m.enrichContainerMetadata(
 					ctx,
@@ -287,11 +247,11 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 					sampleTime,
 				)
 
-				// Zero out metrics for non-running containers
+				// Zero runtime usage, not independent platform storage usage.
+				// The alert engine handles non-running metric suppression.
 				if container.Status != "running" {
 					modelContainer.CPU = 0
 					modelContainer.Memory.Usage = 0
-					modelContainer.Disk.Usage = 0
 					modelContainer.NetworkIn = 0
 					modelContainer.NetworkOut = 0
 					modelContainer.DiskRead = 0

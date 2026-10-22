@@ -15,6 +15,201 @@
 
 ## Purpose
 
+### Unknown guest status is not a recovery observation
+
+Only the existing affirmative `running`, `stopped`, `paused` and `suspended`
+states drive guest metric and powered-state lifecycle policy. An omitted,
+unknown, unreachable or additive provider state cannot clear an open metric or
+powered-off incident, announce that a guest is running, remove its filesystems
+or fire from placeholder usage. It preserves the last incident, occurrence,
+acknowledgement and measurement metadata. Metric activation/recovery and stopped
+confirmation/grace runs restart after this gap, including absent filesystems
+and prior-node identities. Independent backup evidence and other guests or
+instances are not interrupted. Normal configuration-save disablement and guest
+suppression remain effective; the existing confirmed non-running policy is
+unchanged. A later supported state resumes ordinary evaluation.
+
+`guest_status_observation_test.go` covers VM/LXC value and pointer entry points,
+metric and powered-state lifecycle, interrupted timing, explicit policy,
+independent evidence and exact public consumer frames. `guest_snapshot_test.go`
+binds unknown node-move observations to prior incidents and independent peer
+recovery. Offline browser verification consumes the exported frames in the
+production Alerts Overview at desktop and narrow widths. This establishes no
+guest thaw, filesystem liveness, reporter cause, installed or released recovery.
+
+### Duplicate guest filesystem identities cannot hide a breach
+
+Guest filesystem rows which resolve to the same existing alert key are evaluated
+once, using the highest observed usage, not the first row in response order.
+Selection preserves one whole row's mount/device, percentage and byte metadata;
+when percentages tie, deterministic row fields break the tie. Display inventory,
+capacity aggregation, alert ID formats, per-filesystem override keys and
+request/guest-command policy do not change. This is conservative evaluation of
+an existing shared identity, not proof that colliding labels are one filesystem
+or a new independent identity for each colliding row.
+
+Filesystem presence is independent of measurement validity. A supplied row with
+nonpositive capacity, negative/sentinel usage, non-finite usage or usage above
+100 keeps that identity's observation unavailable. It cannot become filesystem
+removal or let a healthy duplicate establish recovery. It cannot open an
+incident or complete an activation run across the gap either. Existing incident
+values, occurrence, acknowledgement and measurement metadata remain unchanged; independent
+current siblings and other guests continue to evaluate. An actually omitted
+identity in a current inventory and explicit per-filesystem disablement still
+clear the relevant incident. On a node move, current inventory presence re-homes
+the existing occurrence and its guest link before removal cleanup; the last
+valid reading and acknowledgement survive until usable recovery evidence.
+The independently usable guest aggregate fallback for inventories containing only previously skipped rows is unchanged.
+An ordinary usable inventory where every alias is below the clear threshold
+can recover the existing occurrence. Separate guest/device identities, their
+thresholds, acknowledgements, grace periods and notification lifecycle remain
+independent. Selection does not mutate caller-owned rows.
+
+`guest_snapshot_test.go` covers node moves with invalid readings and the
+VM/LXC identical and sanitized-key alias matrix in both response orders.
+`guest_filesystem_invalid_row_test.go` covers VM/LXC value and pointer paths,
+invalid-row lifecycle/events, alias order, legacy/explicit activation gaps,
+sibling recovery, authoritative removal, disablement, aggregate fallback and
+exact public Alert consumer projections.
+`guest_duplicate_identity_test.go` covers activation grace, reordering,
+acknowledgement, retained readings, invalid duplicates, overrides, peer isolation,
+one firing/recovery event and exact public Alert consumer projections. Offline
+browser verification consumes those projections in production Alerts Overview
+at desktop and narrow widths. These controls do not establish guest thaw,
+filesystem liveness, the cause of an existing report, installed recovery or
+published availability.
+
+### Overview action state follows canonical alert identity
+
+The existing windowed overview receives stable group keys and related-alert IDs,
+not fresh projection object identities. Observation resampling and optimistic
+snooze/rollback preserve the mounted card, open dialog and pending controls. A
+changed primary alert ID or a removed group/member retires the old local dialog
+instead of retargeting it or retaining a ghost. Group ordering, membership,
+severity, disclosure and window bounds do not change.
+`OverviewTab.actionidentity.test.tsx` covers primary and supporting cards,
+resampling, rejection/retry, primary replacement and removal. The actual HTTP
+browser fixture keeps the same pending dialog node across ordinary resampling.
+
+### Single-alert actions require an affirmative result
+
+Acknowledging/restoring an alert and snoozing/resuming its notifications require
+literal `success: true` without an error field. Snooze also confirms the exact
+requested instant, accepting the producer's equivalent UTC representation.
+An unconfirmed response follows the existing error/rollback path, never a success
+toast or an automatic second write. Existing acknowledgement and optimistic
+snooze semantics, monitoring, actor, request identity and delivery policy stay
+unchanged. Failure copy in English, German and Spanish directs a refresh before
+another attempt instead of asserting that an uncertain write failed.
+
+`alertActionConfirmation.test.tsx` joins real adapters/state owners, malformed
+bodies, UTC expiry, rollback and same-name isolation. The existing API,
+acknowledgement, snooze, overview and localization suites remain required;
+`alert-action-confirmation.cjs` exercises actual overview controls and translated
+toasts through a synthetic HTTP producer at desktop and narrow touch widths.
+This proves no installed suppression, notification delivery or reporter cause.
+
+### Bounded alert settings recovery
+
+The policy editor and each notification-configuration stream have a 150-second header/body read deadline, retaining the API client’s two-minute Retry-After allowance. Expiry leaves the existing load-error/reload controls usable; incomplete destinations keep whole-policy Save blocked. A new reload, reset or unmount retires pending reads and cannot apply their late answers. No write is timed out, cancelled or repeated.
+
+Verification: `alertConfigurationDeadline.test.tsx` covers all six real read adapters, save admission, retirement and explicit recovery; `alert-configuration-deadline.cjs` exercises the complete settings surface, saved values and ordinary save through a synthetic HTTP producer at desktop/narrow viewports.
+
+### Draft webhook test controls remain readable after touch or hover
+
+The existing draft webhook Test button uses semantic foreground and hover
+surface colours in both themes. A dark phone tap must not leave a light label
+on a hard-coded light hover fill. `WebhookConfig.test.tsx` pins the semantic
+classes; `notification-test-acknowledgement.cjs` exercises the actual draft
+control after touch/hover, checks at least 4.5:1 rendered text contrast and
+retains desktop/320px pixel inspection with the unconfirmed result. The form,
+unsaved draft, test-send and save behaviour are otherwise unchanged.
+
+### Notification evidence reads have independent lifetimes
+
+Health, delivery attempts and held/deferred-event reads each have a 150-second
+header/body deadline, leaving the API client's existing two-minute Retry-After
+allowance intact. Expiry aborts the transport and settles locally even when a
+reader ignores abort; the existing unavailable warning replaces loading, never
+an empty-history or healthy claim. A later response cannot clear that gap.
+An explicit refresh owns a new read and may restore evidence. The streams fail
+independently, without new polling or automatic timeout retries.
+
+Replacement and unmount cancel read transports and clear their timers. Retired
+read completions cannot update the view or start work. This is read-only
+cancellation, not cancellation or rollback of an issued Retry/Dismiss mutation;
+an acknowledged action stays acknowledged if its health/activity readback
+expires. Authentication, scopes, producer schemas, retention and sender/queue
+behaviour are unchanged. `notificationEvidenceDeadline.test.tsx` joins the real
+API adapters and state owners; existing lifecycle/order/action tests remain.
+`notification-evidence-deadline.cjs` exercises the full Notifications tab with
+real local HTTP header/body stalls, stream isolation, explicit recovery and the
+client's 120-second rate-limit wait on desktop Chromium and narrow WebKit.
+
+### Notification recovery separates incomplete evidence from an empty history
+
+The activity card visibly names incomplete attempt data without dropping its
+readable rows. Partial data never earns the no-attempts empty state; a valid
+refresh clears the gap. Unreadable collections enter the existing unavailable
+state. Retry/Dismiss rejected or malformed acknowledgements publish persistent
+unconfirmed feedback and no success toast or automatic recovery follow-up;
+operators are directed to refresh activity before another attempt.
+`AlertDeliveryLogCard.test.tsx`, health feedback/lifecycle tests and the full-tab
+`notification-recovery-boundary` browser fixture pin normal, incomplete,
+unavailable, rejected and explicitly acknowledged outcomes. This is synthetic
+consumer proof, not provider delivery or installed-queue recovery.
+
+
+### Collapsed active-alert groups retain visible severity evidence
+
+The Alerts overview keeps a correlation's designated primary, even when a
+supporting alert is more severe. Its existing related-alert disclosure shows
+counts by severity for unacknowledged supporting alerts, in critical/warning/info
+order. Acknowledged alerts stay inspectable when requested but do not inflate
+these attention badges. Ordinary observation, acknowledgement and removal update
+the summary; no alert identity, correlation, ordering or write path changes.
+
+The disclosure exposes its expanded state and, while open, the unique element
+containing its related cards. Both the disclosure and existing group-acknowledge
+action have phone-sized targets and wrap within narrow layouts. Keyboard and
+touch expansion retain every underlying card and action.
+Acknowledged cards keep their muted surface, neutral edge, badge and check icon
+without whole-card opacity, so their retained evidence remains readable. The
+existing pending-operation presentation is unchanged.
+
+`OverviewTab.emptystate.test.tsx` exercises the real overview/state/card consumer
+with both correlation kinds, ordinary resource groups, acknowledgement changes
+and independent disclosure identities. `alertOverviewPresentation.test.ts` and
+its coverage companion preserve readable acknowledged severity states. The source-bound
+`browser-tests/alert-group-severity.cjs` compares baseline and repaired desktop
+and phone views, including keyboard/touch disclosure, live recovery and a
+read-only synthetic API. This is UI evidence, not notification delivery or
+installed incident recovery.
+
+### Notification activity remains inspectable without hover
+
+The bounded delivery/held-event list has an accessible name, an explicit keyboard
+tab stop and visible focus, so older rows remain reachable in engines which do
+not automatically focus scrolling elements. Destination names, alert IDs, held
+reasons and failure diagnostics wrap within narrow layouts rather than requiring
+horizontal scrolling or a hover tooltip. Grouped deliveries expose every recorded
+alert ID through a native keyboard/touch disclosure; the compact summary is not
+the only evidence. Held-event messages are ordinary readable text, not hover-only
+titles, and remain escaped as text.
+
+Read bounds, retention, interleaving, independent unavailable states and recovery
+ownership do not change. An unavailable read still withdraws its old rows; an
+empty read removes the list and its tab stop. This presentation does not send,
+retry or dismiss notifications and is not proof of recipient delivery.
+
+Verification: `AlertDeliveryLogCard.test.tsx` and
+`useAlertDestinationsTabState.test.tsx` exercise names, disclosures, readable held
+messages and failure/recovery without stale identities. The source-bound
+`browser-tests/delivery-activity.cjs` reuses the real Notifications-tab fixture,
+compares baseline/fixed pixels, exercises keyboard scrolling and keyboard/touch
+disclosure, and checks long diagnostics at desktop and 320px through production
+HTTP readers. It refuses all writes and off-origin requests.
+
 ### Legacy alert-history compaction releases removed-row storage
 
 Expiry, duplicate-occurrence compaction and ID removal allocate backing storage
@@ -369,6 +564,31 @@ cleanup survival and recovery. Monitoring's connected evaluator tests exercise
 persisted stale/fresh data and failures through this helper. No new route,
 navigation entry, destination or monitored-resource health signal is added.
 
+
+### Future backup success times cannot establish recovery
+
+Backup-age evaluation prefers usable success times over future-dated times for
+the same subject, regardless of provider/input order. If no usable success is
+available, it keeps only that subject's existing condition without renewing its
+age, severity or observation. Other subjects continue to evaluate. Deliberate
+ignore, suppression and disablement still take effect. Future evidence alone
+creates no invented backup-age alert.
+
+The evaluator reports unusable future success evidence through the existing
+`pulse-system-backup-evaluation` warning, with a stable fingerprint and guidance
+to check Pulse/backup-server clocks. Usable evidence may resolve an age alert;
+only an evaluation without unusable monitored evidence (or deliberate global
+policy disablement) clears this warning. No timestamps, stored points or server
+clocks are rewritten. This is age-alert integrity, not independent backup
+verification, native guest recovery or a change to protection rollup display.
+
+`TestBackupFutureSuccessPreservesOnlyUnprovenSubjects`,
+`TestBackupFutureSuccessCannotHideUsableProviders` and
+`TestBackupFutureSuccessStillHonoursDeliberatePolicy` cover retention,
+provider/input order, fresh recovery and policy controls. Monitoring's
+`TestBackupFutureSuccessWarningThroughReadState` connects persisted rollups,
+canonical guest lookup, the live alert manager and the served state for consuming
+browser checks.
 
 ### RAID spare-count lifecycle — issue #2369
 
@@ -1002,6 +1222,23 @@ default construction path still restores.
 
 ## Shared Boundaries
 
+### Apprise API transport warnings describe form settings, not delivery proof
+
+Notifications names `skipTlsVerify` as skipping TLS certificate verification,
+not merely allowing self-signed certificates. For a configured HTTPS API with
+that flag, the notice explains missing certificate/hostname checks and the risk
+to API keys, destination URLs and alert content. Plain HTTP has its own warning
+regardless of the checkbox: it has no TLS and the checkbox cannot protect it.
+The policy is only Pulse-to-API; CLI mode and Apprise's delivery targets are not
+qualified by it. Unknown/incomplete addresses do not invent transport evidence.
+Warnings are accessibly associated with the URL and checkbox and update in the
+same open form without changing credentials, configuration or sending a test.
+The normal settings loader/payload and mounted section tests cover preservation;
+`apprise-transport.cjs` exercises synthetic HTTP through the production reader,
+normalizer and Notifications tab at desktop and 320px, with writes refused.
+No TLS-client, saved-policy, real delivery or installed-recovery change is implied.
+
+
 History reads must not occupy the connection used to commit alert lifecycle
 transitions. Disk-backed event logs use a bounded read-only WAL pool alongside
 the serialized durable writer. An open history snapshot cannot block a durable
@@ -1349,6 +1586,63 @@ inspectability, or convert missing/stale evidence into health.
 
 ## Current State
 
+### Missing guest rule inputs do not select a different policy (21 October 2026)
+
+Custom rule filters retain match, non-match and unavailable results. AND is
+false if any input is affirmatively false; OR is true if any input is
+affirmatively true. Otherwise an unavailable numeric input keeps membership
+unknown. Unsupported fields/operators/values remain non-matches, and measured
+zero remains a usable input. Enabled rules retain highest-priority, then
+first-in-config selection. Unknown rules below an affirmative winner cannot
+change it; unknown rules that could win remain possible policies.
+
+Resource overrides, filesystem overrides and `pulse-relaxed` are applied before
+comparing those possibilities. Only a signal whose final policy agrees across
+all possibilities may activate, update or resolve an incident. Other signals
+interrupt pending activation/recovery without changing the original occurrence,
+acknowledgement, value or evidence. An unknown filter does not freeze a previous
+rule match as authority. Independent policies continue; explicit disablement
+and overrides that remove the ambiguity still apply. A current non-match and a
+current recovery resume normal evaluation.
+
+Identity-only backup/snapshot lookups and persisted alert metadata contain no
+current metric inputs. Their numeric placeholders must never match filters;
+uncertain age policy retains the original occurrence through enumeration
+cleanup and config-save reevaluation. Global backup exclusions remain effective.
+This is a policy/evaluation boundary, not a new rule kind, persisted config
+shape, native guest probe, delivery guarantee or proof of guest liveness.
+
+Verification: `guest_rule_observation_test.go` covers all seven filter inputs,
+AND/OR shortcuts, rule priority/ties, independent signals, overrides and gap
+interruption; `TestGuestRuleMetadataIsNotZeroForBackupSnapshotOrSave` in
+`guest_snapshot_test.go` pins age/save behaviour. The actual single/cluster
+client and both collector routes cross canonical projection and alert state in
+`TestGuestRuleObservationProducerLifecycle`.
+
+
+### Typed policy identity stays separate from display labels (21 October 2026)
+
+Canonical metric intent and legacy-delay lookup use the typed spec's resource
+kind, while existing alert display labels stay unchanged. In particular,
+`Container` is not a policy alias for `system-container`; using the display
+label silently bypassed the configured guest CPU delay. Legacy untyped callers
+retain their compatibility fallback. The CPU lifecycle controls cover VM/LXC
+pending interruption and ordinary activation, plus actual collector-generated
+pending/unknown frames for the existing consumer surfaces. No configured delay,
+threshold or intent policy is weakened or redefined.
+
+### Missing guest CPU is not an idle observation (21 October 2026)
+
+The unavailable Proxmox CPU marker cannot become a unified metric candidate or
+match any numeric CPU filter (including equals, less-than and not-equal). The
+existing observation-gap reducer interrupts pending runs, preserves original
+active incidents/acknowledgements and permits ordinary measured-zero recovery.
+Independent guest memory, disk and I/O retain their own evidence and policies.
+`TestGuestCPUUnknownInterruptsPendingAndPreservesAcknowledgement` and
+`TestGuestCPUUnknownCannotMatchNumericFilters` pin this boundary; the real-client
+collector matrix also crosses the public consumer and History paths.
+
+
 ### Retired AI Discovery progress frames (2026-10-11)
 
 The websocket store no longer handles `ai_discovery_progress` frames or emits
@@ -1413,6 +1707,19 @@ restart/housekeeping proof, not a naturally elapsed day, live registry or
 destination result, or reporter confirmation of #2353's full daily cycle.
 
 ### A "no update" report without a local digest is unknown
+
+The application must preserve that occurrence until evidence reaches the
+detector. Live inventory absence is not a host-removal event: after restart,
+router/state synchronisation can run before any Docker agent reports. The
+monitoring boundary preserves saved alerts then; explicit host removal and
+affirmative comparisons still clear them. Complete mock-estate membership is
+separate. `TestDockerUpdateCollectorAdmissionPreservesOccurrence` exercises
+this application boundary through real collector/report ingestion, aged
+checkpoint restoration, 24/48-hour delays, acknowledgement, retention, unknown
+and failed checks, an explicitly synthetic legacy wire control, affirmative
+recovery and stale-report rejection. It does not replay a native day or prove
+the original reporter's installed cause. See the monitoring contract's
+"Empty live Docker inventory is not removal evidence" section.
 
 An image-update clear is a comparison: the agent must have known the local
 digest it compared. Agents before #2353 reported `UpdateAvailable: false` with
@@ -4602,6 +4909,27 @@ intent snapshots, changing alert histories and database writes remain separate.
 It changes neither alert latency nor the selected release candidate.
 
 
+### Active alert notification status must not outlive a failed read
+
+The latest failed bulk delivery-diagnosis read withdraws the prior per-alert
+reasons and marks that observation unavailable. Quiet-hours, cooldown and
+dispatch eligibility can change while the active alert IDs stay the same;
+silently retaining those reasons would present old policy as current. The
+overview explains the unavailable observation once in a persistent polite
+status region, without claiming that a notification failed or hiding alerts.
+The next successful minute read atomically replaces the reasons and clears
+the notice. An empty active set clears both without another request.
+Superseded successes and failures, and completions after disposal, cannot
+publish state; disposal also prevents new reads. The existing minute cadence,
+acknowledgement ownership and notification actions are unchanged.
+
+`useAlertOverviewState.test.tsx` pins failure, recovery, overlap, empty-set and
+teardown ownership; `OverviewTab.delivery-freshness.test.tsx` exercises the
+actual cards and single live notice. `alert-delivery-freshness.cjs` exercises
+the production API reader and overview with read-only fixtures, periodic 503s,
+ordinary recovery, desktop keyboard and narrow touch. These are observation
+and consuming-surface proofs, not installed or recipient-delivery acceptance.
+
 ### Resource incident reads retain lifecycle ownership
 
 The resource incident hook gives each started read a unique per-resource owner.
@@ -5091,8 +5419,8 @@ A callback scheduled before retirement is checked again before invocation;
 already-started activity failures cannot restore retired feedback. Calls to
 retired health/action/clear handlers do nothing, including no confirmation.
 
-An already-dispatched mutation or read is not cancelled, undone or declared
-failed by navigation. Active views retain the existing confirmation,
+An already-dispatched mutation is not cancelled, undone or declared failed
+by navigation. Read-only transports are retired on unmount as specified above. Active views retain the existing confirmation,
 acknowledgement, read ordering and persistent failure feedback. A replacement
 view owns its independent read and any deliberately confirmed action; source
 checks do not establish notification delivery or installed queue recovery.
@@ -5150,3 +5478,164 @@ metrics target being set to find the same alerts. Inside a guest drawer, a
 physical disk's agent temperature alerts (`agent:<id>/disk_temp:<device>`) are
 matched through the guest's own agent id. No alert is created, cleared or
 retyped by this; it changes which open alerts a drawer lists.
+
+### Snapshot alerts distinguish partial age and size evidence
+
+A missing, epoch/nonpositive or future snapshot creation time cannot hide an
+independent size breach or establish recovery of an existing age condition.
+Missing/nonpositive optional size likewise cannot clear an observed size breach.
+The detector carries only the same active snapshot's last accepted metric,
+frozen at its original value and observation time; it never ages held evidence
+or invents zero-day/zero-byte recovery. Messages name last-known values and
+unavailable readings, with clock guidance for future creation times. Metadata
+omits never-observed metrics and records original per-metric observation times
+and held flags. A backwards correction of Pulse’s clock does not discard
+already accepted values or rewrite their original timestamps. The primary breach's observation time is not renewed by a
+missing reading, even while the independent metric can change severity.
+
+Complete readings resume normal evaluation. A new valid creation time under a
+reused snapshot name is a replacement and does not inherit the old size.
+Deliberate policy/suppression changes and authoritative snapshot deletion still
+clear conditions. Canonical identity, occurrence, acknowledgement, thresholds,
+notification routing and snapshot collection are unchanged. Controlled source
+proof is not native guest safety, snapshot/restore acceptance or availability.
+
+Verification: `guest_snapshot_test.go` covers independent sizes with every
+invalid time shape, held age/size, mixed escalation/recovery, repeated evidence,
+legacy JSON, replacement, scope, policy and deletion. Monitoring's
+`TestSnapshotPartialEvidenceServedState` binds actual detector results to the
+served alert array for desktop/narrow consuming proof.
+### Direct percentage observations cannot imply recovery (17 October 2026)
+
+All metric evaluation entry points reject current CPU, memory, disk and usage
+percentages outside 0–100 before consulting rolling History, including direct
+agent filesystem and legacy callers that bypass unified candidate construction.
+An invalid sample interrupts activation and recovery timing without changing an
+open incident, its acknowledgement or transition ledger. Fresh continuous
+observations must satisfy any existing delay again. CPU/disk/usage keep immediate
+recovery on a valid clear reading; memory retains its configured stability.
+Explicit rule disablement
+still clears an alert independently of telemetry; zero and 100 are valid, and
+scalar temperature/rate metrics do not inherit percentage bounds.
+
+`direct_percentage_guard_test.go` exercises canonical and legacy metrics and
+the actual `CheckHost` filesystem entry point, including acknowledged incidents,
+fresh recovery and production-shaped consumer projections. The window boundary
+test in `windowed_metric_test.go` proves rejection precedes History reads.
+These are synthetic controls, not an attribution or installed recovery claim
+for a reported disk alert or notification delivery failure.
+
+
+### Group acknowledgements retain per-alert outcomes (20 October 2026)
+
+The existing Alerts overview counts only unacknowledged group members in its
+acknowledgement action. Group, individual-card and all-alert writes share the
+per-alert processing lock, so overlapping controls cannot submit duplicate
+writes while an acknowledgement is pending. Independent groups remain usable.
+The existing short processing release delay is unchanged; rejected members
+become actionable again when it completes.
+
+Group and all-alert replies use the same exact-request reconciliation. Only
+unique, explicit successful confirmations for requested canonical alert IDs
+update the shared store. Rejected, omitted or conflicting results stay active
+and produce the existing failure-count notification, alongside a success count
+when appropriate. A result for an unrequested same-name neighbour cannot change
+its acknowledgement. Already acknowledged or removed group members are not
+submitted. Acknowledgement is not resolution, deletion or proof of monitoring
+recovery; no collection, notification routing or API contract changes.
+
+`useAlertAcknowledgementState.test.tsx` checks partial/all/request failure,
+retry, missing/conflicting/duplicate replies, current membership and overlapping
+requests. `OverviewTab.groupacknowledgement.test.tsx` exercises rendered counts,
+busy/disabled controls and retained failed members. The presentation regression
+and `browser-tests/alert-group-acknowledgement.cjs` bind the same existing flow
+to desktop keyboard and narrow touch interactions through the real HTTP adapter
+and toast consumer with synthetic local responses only.
+
+Pending acknowledgement dims only disabled actions, not the whole alert card.
+The first pending-state browser audit found twelve contrast failures from
+whole-card processing opacity. Removing that opacity preserves readable current
+conditions and timestamps until a reply arrives; busy/disabled controls and the
+processing lock remain explicit. Presentation regressions cover active and
+acknowledged cards at every severity while processing.
+
+Each completed acknowledgement request releases its reservations with one
+1500ms timer and one Set copy for the entire requested batch. Reserving all
+alerts must not introduce a timer and full Set copy per alert during an alert
+flood. The shared-owner regression covers a500-member batch and cleanup.
+
+
+### Invalid threshold drafts never masquerade as saved limits (20 October 2026)
+
+The existing shared numeric threshold editor labels out-of-range, incomplete
+numeric and blank enabled-default drafts inline and exposes their errors to
+assistive technology. Invalid text never replaces the last accepted value.
+A genuinely empty override still inherits, an inherited default may remain blank,
+and the explicit Off control remains the only numeric editor action for disabling
+a limit. Existing fractional metric limits remain accepted: the spinner step
+is not a new persistence restriction. Backend policy and API shapes are unchanged.
+
+Policy Save checks every mounted numeric threshold before any configuration or
+destination write. A rejected save retains the draft, reports that no settings
+were saved, reveals a folded group if needed and focuses its first invalid
+field. Desktop row blur and the narrow card's row-save action apply the same
+validation before accepting an override, so closing a row cannot discard a
+visible invalid limit and silently stage the previous one. Correction and Off
+withdraw the corresponding error; cancellation still discards a row edit.
+
+`alertThresholdValidation.test.tsx` covers bounds, blank/default/inherit/Off,
+fractional recovery, bad-number versus empty input, scoped validation and
+folded-group focus. ResourceTable regression tests and
+`browser-tests/alert-threshold-validation.cjs` exercise the actual configuration
+surface, HTTP adapter, responsive tables and toast consumer with local synthetic
+responses. The baseline reproduces success with a visible150 limit or blank
+default while80 is sent; repaired saves must send nothing until correction,
+then persist the exact corrected limit. No production policy or notification
+operation is part of that proof.
+
+The consuming browser audit also rejects reduced-opacity informational text
+for Off limits and disabled group headings. Off remains explicit in text and
+muted/italic styling; disabled controls remain disabled. Removing whole-label
+opacity restores readable contrast without enabling alerts or altering policy.
+
+The desktop row editor's existing slider thumbs use theme-aware dark text in
+light mode and light text in dark mode, rather than low-contrast mid-tone
+colours. Fill colours and interaction are unchanged. Slider presentation and
+component regressions preserve the text/fill distinction; the browser audits
+all four metric colours, including the temperature consumer, in both themes.
+
+An unrelated parent or focus update must not overwrite the rejected native
+draft with the last accepted value or withdraw its error. The shared numeric
+editor memoizes accepted value/state boundaries. Implicit desktop row blur
+checks validity without forcing focus back during the blur event; explicit
+policy/card Save still reveals and focuses the first invalid field. The
+browser checks both the rejected value and visible error before and after its
+light/dark captures, following the pixel review that caught the earlier reset.
+
+Threshold resource snapshots are temporary objects, not editor identities.
+Desktop rows use the existing bounded renderer's logical key extractor; narrow
+cards reconcile their existing keyed items before windowing. Resampling a
+resource or changing another default must preserve the mounted numeric editor,
+its rejected native draft and its labelled error. This does not pin removed
+resources or change the existing window size, runway or source identity.
+
+The ResourceTable resampling regression covers both layouts and the browser
+changes another real global limit while a row is invalid, checks whole-policy
+Save sends nothing, and verifies that the invalid value and visible reason
+survive the capture and accessibility scan.
+
+Retaining a row must not freeze its accepted policy display. Numeric value text,
+Off styling and backup/snapshot badges read reactive props rather than taking a
+construction-time snapshot. ResourceTable controls cover accepted override,
+Off, inheritance, protection badges and connectivity after resampling in both
+layouts. The browser also compares the visible rate text and accessible name
+with the actual saved override and its removal; an HTTP-only inheritance pass
+is insufficient when the consumer still displays the previous override.
+
+### Monitoring delivery is separate from alert hydration
+
+The app shell's connection-owned resource-snapshot flag is not alert readiness.
+Welcome/pong, alert-only REST recovery and alert-only state frames cannot turn
+monitoring delivery green. Alert ownership, notification and detection semantics
+are unchanged. `websocket-unified.test.ts` exercises that separation, including
+baseline-less deltas and retained state on reconnect.

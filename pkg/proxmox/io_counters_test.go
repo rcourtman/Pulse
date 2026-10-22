@@ -348,3 +348,153 @@ func TestGuestInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 		}
 	})
 }
+
+// Task discovery is independent of current guest telemetry. Refusing a partial
+// task set must not withdraw a valid zero counter or change its observation.
+func TestIncompleteBackupTasksLeaveIndependentGuestCountersUsable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"node","status":"online"}]}`)
+		case "/api2/json/nodes/node/tasks":
+			fmt.Fprint(w, `{"data":[]}trailing`)
+		case "/api2/json/nodes/node/qemu/100/status/current":
+			fmt.Fprint(w, `{"data":{"status":"running","diskread":0,"netin":42,"lock":"backup"}}`)
+		default:
+			t.Errorf("unexpected operation %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	c := backupTestClient(t, server.URL)
+	if tasks, err := c.GetBackupTasks(context.Background()); err == nil || tasks != nil {
+		t.Fatalf("partial tasks accepted: %+v %v", tasks, err)
+	}
+	status, err := c.GetVMStatus(context.Background(), "node", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := status.IOCounters.Effective()
+	if status.Lock != "backup" || status.DiskRead != 0 || status.NetIn != 42 || !p.DiskRead || !p.NetworkIn || p.DiskWrite || status.ObservedAt.IsZero() {
+		t.Fatalf("task failure contaminated independent status: %+v", status)
+	}
+}
+
+func TestLXCDiskPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name, wire string
+		known      bool
+	}{
+		{"zero", `{"maxdisk":1000,"disk":0}`, true},
+		{"used", `{"maxdisk":1000,"disk":980}`, true},
+		{"missing-used", `{"maxdisk":1000}`, false},
+		{"null-used", `{"maxdisk":1000,"disk":null}`, false},
+		{"missing-total", `{"disk":0}`, false},
+		{"null-total", `{"maxdisk":null,"disk":0}`, false},
+		{"missing-both", `{}`, false},
+		{"untrusted-presence", `{"maxdisk":1000,"DiskUsage":{"Explicit":false,"Used":true,"Total":true}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ct Container
+			var res ClusterResource
+			if err := json.Unmarshal([]byte(tc.wire), &ct); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal([]byte(tc.wire), &res); err != nil {
+				t.Fatal(err)
+			}
+			if !ct.DiskUsage.Explicit || ct.DiskUsage.Known() != tc.known || ct.DiskUsage != res.DiskUsage {
+				t.Fatalf("lost HTTP field presence: container=%+v cluster=%+v", ct.DiskUsage, res.DiskUsage)
+			}
+			encoded, err := json.Marshal(ct)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(encoded), "DiskUsage") {
+				t.Fatal("internal presence escaped into API JSON")
+			}
+		})
+	}
+	if !(DiskUsagePresence{}).Known() {
+		t.Fatal("legacy in-process producer lost compatibility")
+	}
+}
+
+func TestLXCMountDiskPresenceDistinguishesZeroNullAndMissing(t *testing.T) {
+	for _, tc := range []struct {
+		name, wire string
+		known      bool
+	}{
+		{"zero", `{"total":1000,"used":0}`, true},
+		{"used", `{"total":1000,"used":980}`, true},
+		{"missing-used", `{"total":1000}`, false},
+		{"null-used", `{"total":1000,"used":null}`, false},
+		{"missing-total", `{"used":0}`, false},
+		{"null-total", `{"total":null,"used":0}`, false},
+		{"missing-both", `{}`, false},
+		{"null-row", `null`, false},
+		{"untrusted-presence", `{"total":1000,"DiskUsage":{"Explicit":false,"Used":true,"Total":true}}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Decode into a reused destination as well: no earlier measured
+			// counters or presence bits may survive a replacement observation.
+			ct := Container{DiskInfo: map[string]ContainerDiskUsage{"mp0": {Total: 1000, Used: 980}}}
+			if err := json.Unmarshal([]byte(`{"diskinfo":{"mp0":`+tc.wire+`}}`), &ct); err != nil {
+				t.Fatal(err)
+			}
+			mount, ok := ct.DiskInfo["mp0"]
+			if !ok || !mount.DiskUsage.Explicit || mount.DiskUsage.Known() != tc.known {
+				t.Fatalf("lost per-mount field presence: %+v", mount)
+			}
+			encoded, err := json.Marshal(ct)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(encoded), "DiskUsage") {
+				t.Fatal("internal presence leaked into JSON")
+			}
+		})
+	}
+	for _, wire := range []string{`{"used":-1}`, `{"used":"0"}`, `{"total":true}`, `{"used":18446744073709551616}`, `{"total":1.5}`} {
+		var ct Container
+		if err := json.Unmarshal([]byte(`{"diskinfo":{"rootfs":`+wire+`}}`), &ct); err == nil {
+			t.Errorf("malformed mount counter accepted: %s", wire)
+		}
+	}
+	if !(ContainerDiskUsage{Total: 1000, Used: 0}).DiskUsage.Known() {
+		t.Fatal("legacy in-process mount producer lost explicit-zero compatibility")
+	}
+}
+
+func TestGuestCPUObservationDistinguishesMissingNullAndIdle(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       float64
+	}{
+		{"missing", `{}`, -1},
+		{"null", `{"cpu":null}`, -1},
+		{"idle", `{"cpu":0}`, 0},
+		{"busy", `{"cpu":0.98}`, .98},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var vm VM
+			var ct Container
+			var resource ClusterResource
+			var status VMStatus
+			for _, target := range []any{&vm, &ct, &resource, &status} {
+				if err := json.Unmarshal([]byte(tc.body), target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, got := range []float64{vm.CPU, ct.CPU, resource.CPU, status.CPU} {
+				if got != tc.want {
+					t.Fatalf("CPU=%v, want %v (missing/null is not measured zero)", got, tc.want)
+				}
+			}
+		})
+	}
+	// Older manually constructed producers retain their measured-zero meaning.
+	if (VM{}).CPU != 0 || (Container{}).CPU != 0 || (ClusterResource{}).CPU != 0 {
+		t.Fatal("legacy in-process zero changed")
+	}
+}

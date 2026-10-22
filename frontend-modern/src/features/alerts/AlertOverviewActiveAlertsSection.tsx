@@ -1,8 +1,12 @@
-import { For, Show } from 'solid-js';
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
 
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import type { Alert } from '@/types/api';
+import {
+  formatAlertSeverityLabel,
+  getAlertSeverityBadgeClass,
+} from '@/utils/alertSeverityPresentation';
 import {
   getAlertOverviewAcknowledgedToggleLabel,
   getAlertOverviewActiveSectionTitle,
@@ -17,9 +21,10 @@ import {
 import { AlertOverviewAlertCard } from './AlertOverviewAlertCard';
 import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import { useAlertGroupExpansion } from './useAlertGroupExpansion';
+import { getCanonicalAlertId } from './identity';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
-import type { AlertOverviewState } from './useAlertOverviewState';
+import type { AlertGroup, AlertOverviewState } from './useAlertOverviewState';
 
 interface AlertOverviewActiveAlertsSectionProps {
   state: AlertOverviewState;
@@ -33,6 +38,13 @@ interface AlertOverviewActiveAlertsSectionProps {
 
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
   const { isGroupExpanded, toggleGroup } = useAlertGroupExpansion();
+  // Live snapshots and optimistic snoozes replace projection objects. Feed
+  // stable identities to the existing window renderer so an open card/dialog
+  // survives a resample, including the rollback of an unconfirmed action.
+  const groupsByKey = createMemo(
+    () => new Map(props.state.groupedAlerts().map((group) => [group.key, group])),
+  );
+  const groupKeys = createMemo(() => [...groupsByKey().keys()]);
   return (
     <div>
       <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -108,7 +120,9 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
               <button
                 type="button"
                 class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/25 text-blue-700 dark:text-blue-200 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/25 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={props.state.bulkAckProcessing()}
+                disabled={
+                  props.state.bulkAckProcessing() || props.state.processingAlerts().size > 0
+                }
                 onClick={() => {
                   void props.state.handleBulkAcknowledge();
                 }}
@@ -128,67 +142,119 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
             </div>
           </Show>
           <PlatformWindowedList
-            items={props.state.groupedAlerts}
+            items={groupKeys}
             estimatedItemHeight={104}
             enableThreshold={24}
             windowSize={32}
           >
-            {(group) => (
-              <div>
-                <AlertIncidentSynthesisSummary alert={group.primary} />
-                <AlertOverviewAlertCard
-                  alert={group.primary}
-                  state={props.state}
-                  timelineState={props.timelineState}
-                  deliveryPausedGlobally={props.deliveryPausedGlobally}
-                />
-                <Show when={group.related.length > 0}>
-                  <div class="ml-4 border-l-2 border-border pl-3 mt-1">
-                    <div class="flex items-center gap-3 py-1">
-                      <button
-                        type="button"
-                        class="text-xs text-muted hover:text-base-content transition-colors"
-                        onClick={() => toggleGroup(group.key)}
-                      >
-                        {getAlertOverviewGroupDisclosureLabel({
-                          count: group.related.length,
-                          correlated: group.correlated,
-                          expanded: isGroupExpanded(group.key),
-                        })}
-                      </button>
-                      <Show when={[group.primary, ...group.related].some((a) => !a.acknowledged)}>
+            {(key) => {
+              // A removed keyed child can read once during its teardown.
+              const group = createMemo<AlertGroup>(
+                (previous) => groupsByKey().get(key) ?? previous,
+                groupsByKey().get(key)!,
+              );
+              const relatedAlertsId = createUniqueId();
+              const relatedById = createMemo(
+                () => new Map(group().related.map((alert) => [getCanonicalAlertId(alert), alert])),
+              );
+              const relatedIds = createMemo(() => [...relatedById().keys()]);
+              const groupAlerts = () => [group().primary, ...group().related];
+              const pendingCount = () =>
+                groupAlerts().filter((alert) => !alert.acknowledged).length;
+              const acknowledging = () =>
+                groupAlerts().some((alert) =>
+                  props.state.processingAlerts().has(getCanonicalAlertId(alert)),
+                );
+              // The correlation's designated primary may be less severe than
+              // its supporting signals. Keep that identity, but do not hide
+              // unacknowledged critical alerts behind an unqualified count.
+              const relatedSeverities = createMemo(() =>
+                (['critical', 'warning', 'info'] as const)
+                  .map((level) => ({
+                    level,
+                    count: group().related.filter(
+                      (alert) => !alert.acknowledged && alert.level === level,
+                    ).length,
+                  }))
+                  .filter(({ count }) => count > 0),
+              );
+              return (
+                <div>
+                  <AlertIncidentSynthesisSummary alert={group().primary} />
+                  {/* Changing the actual primary must retire its local state,
+                      never retarget an old dialog to a different alert. */}
+                  <Show when={getCanonicalAlertId(group().primary)} keyed>
+                    <AlertOverviewAlertCard
+                      alert={group().primary}
+                      state={props.state}
+                      timelineState={props.timelineState}
+                      deliveryPausedGlobally={props.deliveryPausedGlobally}
+                    />
+                  </Show>
+                  <Show when={group().related.length > 0}>
+                    <div class="ml-4 border-l-2 border-border pl-3 mt-1">
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 py-1">
                         <button
                           type="button"
-                          class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                          onClick={() => {
-                            void props.state.handleGroupAcknowledge([
-                              group.primary,
-                              ...group.related,
-                            ]);
-                          }}
+                          class="inline-flex min-h-11 flex-wrap items-center gap-2 text-left text-xs text-muted hover:text-base-content transition-colors sm:min-h-6"
+                          aria-expanded={isGroupExpanded(key)}
+                          aria-controls={isGroupExpanded(key) ? relatedAlertsId : undefined}
+                          onClick={() => toggleGroup(key)}
                         >
-                          {getAlertOverviewGroupAcknowledgeLabel(group.related.length + 1)}
+                          <span>
+                            {getAlertOverviewGroupDisclosureLabel({
+                              count: group().related.length,
+                              correlated: group().correlated,
+                              expanded: isGroupExpanded(key),
+                            })}
+                          </span>
+                          <For each={relatedSeverities()}>
+                            {({ level, count }) => (
+                              <span class={getAlertSeverityBadgeClass(level)}>
+                                {count} {formatAlertSeverityLabel(level)}
+                              </span>
+                            )}
+                          </For>
                         </button>
+                        <Show when={pendingCount() > 0}>
+                          <button
+                            type="button"
+                            class="min-h-11 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors disabled:cursor-wait disabled:opacity-60 sm:min-h-6"
+                            disabled={acknowledging()}
+                            aria-busy={acknowledging()}
+                            onClick={() => {
+                              void props.state.handleGroupAcknowledge(groupAlerts());
+                            }}
+                          >
+                            {getAlertOverviewGroupAcknowledgeLabel(pendingCount(), acknowledging())}
+                          </button>
+                        </Show>
+                      </div>
+                      <Show when={isGroupExpanded(key)}>
+                        <div id={relatedAlertsId} class="space-y-2 mt-1">
+                          <For each={relatedIds()}>
+                            {(id) => {
+                              const alert = createMemo<Alert>(
+                                (previous) => relatedById().get(id) ?? previous,
+                                relatedById().get(id)!,
+                              );
+                              return (
+                                <AlertOverviewAlertCard
+                                  alert={alert()}
+                                  state={props.state}
+                                  timelineState={props.timelineState}
+                                  deliveryPausedGlobally={props.deliveryPausedGlobally}
+                                />
+                              );
+                            }}
+                          </For>
+                        </div>
                       </Show>
                     </div>
-                    <Show when={isGroupExpanded(group.key)}>
-                      <div class="space-y-2 mt-1">
-                        <For each={group.related}>
-                          {(alert) => (
-                            <AlertOverviewAlertCard
-                              alert={alert}
-                              state={props.state}
-                              timelineState={props.timelineState}
-                              deliveryPausedGlobally={props.deliveryPausedGlobally}
-                            />
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </div>
-                </Show>
-              </div>
-            )}
+                  </Show>
+                </div>
+              );
+            }}
           </PlatformWindowedList>
         </div>
       </Show>

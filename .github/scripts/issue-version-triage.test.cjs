@@ -5,6 +5,108 @@ const path = require("node:path");
 
 const triage = require("./issue-version-triage.cjs");
 
+// A named source in a title is still a transition, not the failing release.
+// Exercise fallback separately from the authoritative form/legacy body fields.
+const ambiguousVersionTitles = [
+  "Pulse 6.4.5 → 6.5.0 fails",
+  "Pulse 6.4.5 -> v6.5.0 fails",
+  "Pulse 6.4.5 => latest fails",
+  "Pulse 6.4.5 ↔ 6.5.0",
+  "Pulse 6.4.5 to 6.5.0 fails",
+  "Pulse 6.4.5 through 6.5.0",
+  "Pulse 6.4.5 / 6.5.0",
+  "Pulse 6.4.5 or 6.5.0",
+  "Pulse 6.4.5 and 6.5.0",
+  "Pulse 6.4.5 – 6.5.0",
+  "Pulse 6.4.5 — v6.5.0",
+  "Pulse 6.4.5 - 6.5.0",
+  "Pulse Pro server v6.4.5 → v6.5.0",
+  "Pulse version 6.4.5 → unknown",
+  "Pulse server: 6.4.5 to nightly",
+  "Pulse 6.4.5 update to 6.5.0 fails",
+  "rcourtman/pulse:6.4.5 → latest fails",
+  "license.pulserelay.pro/pulse-pro:6.4.5 / 6.5.0",
+  "[Bug]: 6.4.5 → latest fails",
+  "Bug on v6.4.5 -> unknown",
+  "6.4.5 to nightly fails",
+  "[v6 pre-release]: 6.6.0-beta.2 / latest",
+];
+
+test("title fallback never selects a transition's named source or alternative", () => {
+  for (const title of ambiguousVersionTitles) {
+    assert.equal(triage.internals.extractPulseVersion(title, "Existing observations only."), null, title);
+  }
+});
+
+test("ambiguous titles do not override an explicit current or unknown body version", () => {
+  for (const title of ambiguousVersionTitles) {
+    for (const body of ["### Pulse version\n6.5.0", "Pulse version: 6.5.0"]) {
+      assert.equal(triage.internals.extractPulseVersion(title, body), "6.5.0", title);
+    }
+    assert.equal(triage.internals.extractPulseVersion(title, "### Pulse version\nunknown"), null, title);
+  }
+});
+
+const currentVersionTitles = [
+  ["Pulse 6.5.0 with PVE 9.2.0: readings missing", "6.5.0"],
+  ["Pulse Pro server v6.5.0 with agent 6.4.5: readings missing", "6.5.0"],
+  ["Pulse 6.5.0 and agent 6.4.5 disagree", "6.5.0"],
+  ["Pulse 6.5.0 / TrueNAS CORE 13.0.0: readings missing", "6.5.0"],
+  ["Pulse 6.6.0-rc.4 with Kubernetes 1.33.0", "6.6.0-rc.4"],
+  ["Pulse 6.5.0: moving a node to another cluster loses readings", "6.5.0"],
+  ["rcourtman/pulse:6.5.0 on PVE 9.2.0", "6.5.0"],
+  ["license.pulserelay.pro/pulse-pro:6.6.0-beta.3 with agent 6.5.0", "6.6.0-beta.3"],
+  ["Bug on v6.5.0: missing readings", "6.5.0"],
+  ["[Bug]: 6.6.0-rc.4: sign-in fails", "6.6.0-rc.4"],
+];
+
+test("title ambiguity checks preserve explicit server versions beside other products", () => {
+  for (const [title, version] of currentVersionTitles) {
+    assert.equal(triage.internals.extractPulseVersion(title, "Existing observations only."), version, title);
+  }
+});
+
+test("ambiguous titles cannot create an affected-version label or a public question", async () => {
+  for (const title of ambiguousVersionTitles) for (const action of ["opened", "edited", "reopened"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 3071, title, body: "Existing observations only.",
+      labels: ["bug", "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action, issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], `${action}: ${title}`);
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+  }
+});
+
+test("title transitions preserve versions established from the whole conversation", async () => {
+  for (const title of ambiguousVersionTitles) {
+    const { github, calls } = createGithub();
+    const issue = { number: 3071, title, body: "Existing observations only.",
+      labels: ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "reopened", issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels, [], title);
+    assert.deepEqual(calls.createLabel, [], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+  }
+});
+
+test("the title consumer still classifies a single explicit server release silently", async () => {
+  for (const [title, version] of currentVersionTitles) {
+    const { github, calls } = createGithub();
+    const issue = { number: 3071, title, body: "Existing observations only.", labels: [{ name: "bug" }] };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[`affects-${version}`]], title);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [`affects-${version}`], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+  }
+});
+
 // GitHub issue forms do not submit markdown-only guidance as report fields.
 // Detailed, optional guidance belongs immediately before the input it helps;
 // test that location rather than requiring every reader to see it expanded.
@@ -16,49 +118,71 @@ function fieldGuidance(form, id) {
   return (preceding.startsWith("  - type: markdown\n") ? preceding : "") + blocks[index];
 }
 
+function assertOptionalIntakeGuidance(form, summary, evidence) {
+  const blocks = form.split(/(?=^  - type: )/m).slice(1);
+  const disclosures = [];
+  for (const block of blocks) {
+    if (!block.includes("<details")) continue;
+    assert.ok(block.startsWith("  - type: markdown\n"), "details must not be input descriptions");
+    assert.doesNotMatch(block, /<details\s+[^>]*\bopen\b/);
+    const groups = [...block.matchAll(/<details>\s*<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
+    assert.equal(groups.length, (block.match(/<details/g) || []).length, "each disclosure must close");
+    for (const [, title, content] of groups) {
+      assert.ok(title.trim(), "keyboard focus needs a meaningful summary");
+      assert.ok(content.trim(), "a disclosure must retain its guidance");
+      disclosures.push(title);
+    }
+  }
+  assert.deepEqual(disclosures.sort(), [
+    "Failed upgrade: which attempt, stop and recovery?",
+    "Several hosts or clusters: preserve which names and IDs repeat",
+    "Sign-in or permissions: keep working access",
+    "Notification delivery: Test versus ordinary alerts",
+    "Pulse CPU, memory or disk writes: comparable measurements",
+    "VM or LXC memory: guest versus hypervisor readings",
+  ].sort());
+  for (const [id, titles] of [
+    ["upgrade_context", ["Failed upgrade:"]],
+    [summary, ["Several hosts or clusters:"]],
+    [evidence, ["Sign-in or permissions:", "Notification delivery:", "Pulse CPU, memory or disk writes:", "VM or LXC memory:"]],
+  ]) {
+    const guidance = fieldGuidance(form, id);
+    for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
+  }
+  // Collection and public-disclosure warnings are never hidden in a disclosure.
+  const introduction = blocks[0];
+  assert.doesNotMatch(introduction, /<details/);
+  assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
+  assert.match(introduction, /Anything you attach here is public/);
+  const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
+  assert.match(attachment, /Review files and screenshots locally/);
+  assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+}
+
 for (const [name, summary, evidence] of [
   ["bug_report.yml", "bug_description", "logs"],
   ["v6_rc_feedback.yml", "summary", "evidence"],
 ]) {
   test(`specialist intake guidance stays optional and beside its input: ${name}`, () => {
     const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
-    const blocks = form.split(/(?=^  - type: )/m).slice(1);
-    const disclosures = [];
-    for (const block of blocks) {
-      if (!block.includes("<details")) continue;
-      assert.ok(block.startsWith("  - type: markdown\n"), "details must not be input descriptions");
-      assert.doesNotMatch(block, /<details\s+[^>]*\bopen\b/);
-      const groups = [...block.matchAll(/<details>\s*<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
-      assert.equal(groups.length, (block.match(/<details/g) || []).length, "each disclosure must close");
-      for (const [, title, content] of groups) {
-        assert.ok(title.trim(), "keyboard focus needs a meaningful summary");
-        assert.ok(content.trim(), "a disclosure must retain its guidance");
-        disclosures.push(title);
-      }
-    }
-    assert.deepEqual(disclosures.sort(), [
-      "Failed upgrade: which attempt, stop and recovery?",
-      "Several hosts or clusters: preserve which names and IDs repeat",
-      "Notification delivery: Test versus ordinary alerts",
-      "Pulse CPU, memory or disk writes: comparable measurements",
-      "VM or LXC memory: guest versus hypervisor readings",
-    ].sort());
-    for (const [id, titles] of [
-      ["upgrade_context", ["Failed upgrade:"]],
-      [summary, ["Several hosts or clusters:"]],
-      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "VM or LXC memory:"]],
-    ]) {
-      const guidance = fieldGuidance(form, id);
-      for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
-    }
-    // Collection and public-disclosure warnings are never hidden in a disclosure.
-    const introduction = blocks[0];
-    assert.doesNotMatch(introduction, /<details/);
-    assert.match(introduction, /do not run it during backups, freeze\/thaw or an unresponsive-host incident/);
-    assert.match(introduction, /Anything you attach here is public/);
-    const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
-    assert.match(attachment, /Review files and screenshots locally/);
-    assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+    assertOptionalIntakeGuidance(form, summary, evidence);
+  });
+
+  test(`sign-in guidance guard rejects absent, expanded and misplaced advice: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const signIn = form.match(/<details>\s*<summary>Sign-in or permissions: keep working access<\/summary>[\s\S]*?<\/details>/)?.[0];
+    assert.ok(signIn, "the actual sign-in disclosure is needed for these controls");
+    assert.throws(() => assertOptionalIntakeGuidance(form.replace(signIn, ""), summary, evidence));
+    assert.throws(() => assertOptionalIntakeGuidance(form.replace(signIn,
+      signIn.replace("<details>", "<details open>")), summary, evidence));
+
+    // Keep every disclosure, but move sign-in advice to the unrelated primary
+    // description. The inventory check alone must not accept that placement.
+    const blocks = form.replace(signIn, "").split(/(?=^  - type: )/m);
+    const primary = blocks.findIndex(block => block.includes(`    id: ${summary}\n`));
+    blocks[primary - 1] += `        ${signIn}\n\n`;
+    assert.throws(() => assertOptionalIntakeGuidance(blocks.join(""), summary, evidence),
+      new RegExp(`${evidence}: Sign-in or permissions:`));
   });
 }
 
@@ -66,6 +190,7 @@ function createGithub({
   latestVersion = "6.0.1",
   existingLabels = new Set(),
   existingComments = [],
+  issueEvents = [],
   issues = [],
   currentIssue = null,
 } = {}) {
@@ -75,6 +200,7 @@ function createGithub({
     getLabel: [],
     getLatestRelease: [],
     paginate: [],
+    eventHistory: [],
     addLabels: [],
     removeLabel: [],
     getIssue: [],
@@ -104,10 +230,20 @@ function createGithub({
         },
         async addLabels(payload) {
           calls.addLabels.push(payload);
+          if (github.currentIssue) {
+            const labels = new Set(github.currentIssue.labels.map(label => label.name));
+            payload.labels.forEach(name => labels.add(name));
+            github.currentIssue = { ...github.currentIssue,
+              labels: [...labels].map(name => ({ name })) };
+          }
           return { data: payload };
         },
         async removeLabel(payload) {
           calls.removeLabel.push(payload);
+          if (github.currentIssue) {
+            github.currentIssue = { ...github.currentIssue,
+              labels: github.currentIssue.labels.filter(label => label.name !== payload.name) };
+          }
           return { data: payload };
         },
         async createComment(payload) {
@@ -116,6 +252,7 @@ function createGithub({
         },
         listForRepo: Symbol("listForRepo"),
         listComments: Symbol("listComments"),
+        listEvents: Symbol("listEvents"),
       },
       repos: {
         async getLatestRelease() {
@@ -124,8 +261,12 @@ function createGithub({
         },
       },
     },
-    async paginate(endpoint) {
+    async paginate(endpoint, parameters) {
       calls.paginate.push(endpoint);
+      if (endpoint === github.rest.issues.listEvents) {
+        calls.eventHistory.push(parameters);
+        return issueEvents;
+      }
       return endpoint === github.rest.issues.listForRepo ? issues : existingComments;
     },
   };
@@ -162,6 +303,50 @@ function createCore() {
     warning() {},
   };
 }
+
+test("label sync needs only same-repository issue methods, including delayed topic history", async () => {
+  for (const delayed of [false, true]) {
+    const issue = {
+      number: 3071,
+      title: "Wrong readings",
+      body: "### Pulse version\n6.5.0\n\n### Additional actionable topics\nAlso cannot save the interval.",
+      labels: [{ name: "bug" }, { name: "needs-version-info" }],
+      updated_at: "2026-10-08T10:00:00Z",
+    };
+    const { github, calls } = createGithub({
+      currentIssue: { ...issue, state: "open", ...(delayed ? { updated_at: "2026-10-08T10:01:00Z" } : {}) },
+      issueEvents: [],
+    });
+    const issueMethods = new Set(["get", "getLabel", "createLabel", "addLabels", "removeLabel", "listEvents"]);
+    const scopedIssues = new Proxy(github.rest.issues, {
+      get(target, method) {
+        assert.ok(issueMethods.has(method), `unexpected issue API: ${String(method)}`);
+        if (method === "listEvents") return target[method];
+        return async args => {
+          assert.equal(args.owner, "rcourtman");
+          assert.equal(args.repo, "Pulse");
+          return target[method](args);
+        };
+      },
+    });
+    github.rest = new Proxy({ issues: scopedIssues }, {
+      get(target, resource) {
+        assert.equal(resource, "issues", "label sync must not require source, Actions or other repository permissions");
+        return target.issues;
+      },
+    });
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-decomposition", "affects-6.5.0"]);
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0", "needs-decomposition"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+    assert.equal(calls.eventHistory.length, delayed ? 1 : 0);
+    if (delayed) {
+      assert.deepEqual(calls.eventHistory[0], {
+        owner: "rcourtman", repo: "Pulse", issue_number: 3071, per_page: 100,
+      });
+    }
+  }
+});
 
 test("syncLabels classifies older bug reports without requesting a retest", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.0.1" });
@@ -281,6 +466,84 @@ test("syncLabels adds newly declared topics but respects a completed disposition
   }
 });
 
+test("material edits to an already populated topic field restore its review task", async () => {
+  const previousBody = "### Additional actionable topics\nHistory is also empty.\n\n" +
+    "### Additional context\nExisting observations.\n";
+  for (const value of [
+    "History is also empty.\n\nBackups also identify the wrong host.",
+    "Backups also identify the wrong host.",
+    "History is also empty, and backups identify the wrong host.",
+  ]) {
+    const issue = { number: 2926, title: "Mixed report", labels:
+      ["enhancement", "needs-human", "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+    body: previousBody.replace("History is also empty.", value) };
+    const { github, calls } = createGithub();
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]], value);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
+
+test("unchanged visible topics cannot restore a completed task on unrelated or presentation edits", async () => {
+  const previousBody = "### Additional actionable topics\nHistory is also empty.\n\n" +
+    "### Additional context\nExisting observations.\n";
+  for (const body of [
+    previousBody,
+    previousBody.replace("Existing observations.", "New logs outside the topic field."),
+    previousBody.replace("History is also empty.", "HISTORY  is\nalso empty."),
+    previousBody.replace("History is also empty.", "History is also empty.\n\n<!-- Backups identify the wrong host. -->"),
+    previousBody.replace("### Additional actionable topics", "  ## Additional actionable topics ##"),
+    previousBody.replaceAll("\n", "\r\n"),
+  ]) {
+    const issue = { number: 2927, title: "Mixed report", body, labels: [{ name: "enhancement" }] };
+    const { github, calls } = createGithub();
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels, [], body);
+    assert.deepEqual(calls.removeLabel, [], body);
+    assert.deepEqual(calls.getLabel, [], body);
+    assert.deepEqual(calls.createComment, [], body);
+    assert.equal(calls.getIssue.length, 1);
+  }
+});
+
+test("a populated-field edit respects explicit review and a fresh pre-write read", async () => {
+  const previousBody = "### Additional actionable topics\nHistory is also empty.\n";
+  const issue = { number: 2928, title: "Mixed report", state: "open", labels: [{ name: "enhancement" }],
+    updated_at: "2026-10-15T20:30:00Z",
+    body: previousBody + "\nBackups also identify the wrong host.\n" };
+  for (const scenario of ["reopened", "missing previous body", "superseded event", "closed during preparation", "already queued"]) {
+    const current = structuredClone(issue);
+    if (scenario === "superseded event") current.updated_at = "2026-10-15T20:31:00Z";
+    if (scenario === "already queued") current.labels.push({ name: "needs-decomposition" });
+    const { github, calls } = createGithub({ currentIssue: current, issueEvents: [
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: current.updated_at },
+    ] });
+    if (scenario === "closed during preparation") {
+      github.rest.issues.getLabel = async () => {
+        github.currentIssue = { ...current, state: "closed" };
+        return { data: {} };
+      };
+    }
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: scenario === "reopened" ? "reopened" : "edited", issue: current,
+      previousBody: scenario === "missing previous body" ? undefined : previousBody,
+      // A delayed event is distinct from the live read even if its body matches.
+      ...(scenario === "superseded event" ? { issue } : {}),
+    }) });
+    assert.deepEqual(calls.addLabels, [], scenario);
+    assert.deepEqual(calls.removeLabel, [], scenario);
+    assert.deepEqual(calls.createComment, [], scenario);
+    assert.deepEqual(calls.getLatestRelease, [], scenario);
+    assert.deepEqual(calls.paginate, scenario === "superseded event" ? [github.rest.issues.listEvents] : [], scenario);
+  }
+});
+
 test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
   const { classifyAdditionalActionableTopics } = triage.internals;
 
@@ -318,6 +581,76 @@ test("additional topic classification is explicit and fail-quiet for legacy form
     ),
     true
   );
+});
+
+const formattedEmptyTopics = ["None", "None known.", "N/A", "NA", "No", "Not applicable!"]
+  .flatMap(value => ["*", "_", "**", "__", "***", "`"].map(mark => `${mark}${value}${mark}`));
+
+test("formatting an empty topic answer does not declare another problem", () => {
+  for (const value of formattedEmptyTopics) {
+    const body = `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), false, value);
+  }
+});
+
+test("formatted empty answers cannot hide consequential topic content", () => {
+  for (const value of [
+    "**None**\n\nThe second host loses Docker inventory.",
+    "**None**\n### Separate backup problem\nBackups belong to the wrong host.",
+    "**None** except the second host loses Docker inventory.",
+    "**None", "~~None~~", "[None](https://example.invalid/issue)",
+    "<span>None</span>", "- **None**\n- The second host loses Docker inventory.",
+    "`<!-- None -->`", "No response",
+    "**The second host loses Docker inventory.**",
+  ]) {
+    const body = `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true, value);
+  }
+});
+
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`empty-topic formatting never invents a decomposition task on ${action}`, async () => {
+    for (const value of formattedEmptyTopics) {
+      const { github, calls } = createGithub();
+      const issue = { number: 3100, title: "One monitoring problem",
+        body: `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`,
+        labels: ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest", "operator-reviewed"]
+          .map(name => ({ name })) };
+      await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+        previousBody: "### Additional actionable topics\nNone\n\n### Pulse version\n6.5.0" }) });
+      assert.deepEqual(calls.addLabels, [], value);
+      assert.deepEqual(calls.removeLabel, [], value);
+      assert.deepEqual(calls.createLabel, [], value);
+      assert.deepEqual(calls.createComment, [], value);
+      assert.deepEqual(calls.getLatestRelease, [], value);
+      assert.deepEqual(calls.paginate, [], value);
+    }
+  });
+}
+
+test("formatted empty answers preserve an existing decomposition task", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 3101, title: "One monitoring problem",
+    body: "### Additional actionable topics\n**None**\n\n### Pulse version\n6.5.0",
+    labels: ["bug", "affects-6.5.0", "needs-decomposition", "needs-human", "needs-retest-on-latest"]
+      .map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Additional actionable topics\nA second symptom.\n\n### Pulse version\n6.5.0" }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("a real topic after a formatted empty answer still reaches review", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 3102, title: "One monitoring problem",
+    body: "### Additional actionable topics\n**None**\n\nThe second host loses Docker inventory.\n\n### Pulse version\n6.5.0",
+    labels: ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Additional actionable topics\n**None**\n\n### Pulse version\n6.5.0" }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
 });
 
 test("edited form headings accept Markdown indentation and closing hashes", () => {
@@ -405,14 +738,14 @@ test("label consumer uses edited headings without changing Community-owned state
       "   ### Additional actionable topics ###\nThe second host loses Docker inventory.\n",
     labels: ["enhancement", "needs-retest-on-latest", "needs-human", "operator-reviewed", "affects-6.4.5"]
       .map(name => ({ name })) };
-  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n### Additional actionable topics\nNone" }) });
   assert.deepEqual(calls.addLabels.map(call => call.labels),
     [["affects-6.5.0", "bug", "needs-decomposition"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900, 2900]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2900, 2900, 2900]);
 });
 
 test("invalid headings cannot create classification or decomposition mutations", async () => {
@@ -588,7 +921,7 @@ test("syncLabels preserves visible fields after inline HTML without new contact"
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808, 2808]);
+    assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2808, 2808, 2808]);
   }
 });
 
@@ -606,7 +939,7 @@ test("syncLabels consumes real fields after pasted HTML without contact or state
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801, 2801]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2801, 2801, 2801]);
 });
 
 test("a hidden hint or empty topic field is not an actionable declaration", () => {
@@ -773,21 +1106,59 @@ test("syncLabels keeps structured unknown separate from a quoted agent version",
   assert.deepEqual(calls.getLatestRelease, []);
 });
 
-test("every actionable issue form exposes the decomposition signal", () => {
+test("every actionable issue form offers secondary topics without requiring a second problem", () => {
   const templateDir = path.resolve(__dirname, "../ISSUE_TEMPLATE");
-  for (const name of [
-    "bug_report.yml",
-    "feature_request.yml",
-    "v6_rc_feedback.yml",
+  for (const [name, workaroundField] of [
+    ["bug_report.yml", "Describe the bug"],
+    ["feature_request.yml", "Alternatives considered"],
+    ["v6_rc_feedback.yml", "What happened?"],
   ]) {
     const form = fs.readFileSync(path.join(templateDir, name), "utf8");
-    assert.match(form, /id: additional_topics/);
-    assert.match(form, /label: Additional actionable topics/);
-    assert.match(
-      form,
-      /id: additional_topics[\s\S]*?validations:\s*\n\s+required: true/
-    );
+    const field = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes("    id: additional_topics\n"));
+    assert.ok(field, name);
+    assert.match(field, /label: Additional actionable topics/);
+    assert.match(field, /required: false/);
+    assert.doesNotMatch(field, /required: true|Enter "None"/);
+    assert.match(field, /Leave blank for a single (?:problem|request)/);
+    assert.match(field, /Only list separate bugs, requests or workflows/);
+    assert.ok(field.includes(`in ${workaroundField} instead.`), name);
+    const target = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes(`      label: ${workaroundField}\n`));
+    assert.ok(target, `${name}: named workaround field exists`);
   }
+});
+
+for (const response of ["", "_No response_", "None"]) {
+  test(`a single problem's workaround does not declare a secondary topic: ${JSON.stringify(response)}`, async () => {
+    const { github, calls } = createGithub();
+    const issue = {
+      number: 42,
+      title: "[Bug]: Login stops working after saving settings",
+      body: `### Describe the bug\nSaving settings breaks login. Re-entering the value restores access.\n\n` +
+        `### Additional actionable topics\n${response}\n\n### Pulse version\n6.5.0\n`,
+      labels: [{ name: "bug" }, { name: "affects-6.5.0" }],
+    };
+    await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("a genuine secondary problem still surfaces when the primary has a workaround", async () => {
+  const { github, calls } = createGithub();
+  const issue = {
+    number: 42,
+    title: "[Bug]: Login stops working after saving settings",
+    body: "### Describe the bug\nSaving settings breaks login. Re-entering the value restores access.\n\n" +
+      "### Additional actionable topics\nThe audit screen is also unreadable on a phone.\n\n### Pulse version\n6.5.0\n",
+    labels: [{ name: "bug" }, { name: "affects-6.5.0" }],
+  };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
 });
 
 test("bug and pre-release forms accept truthful evidence for installs that never started", () => {
@@ -1098,6 +1469,132 @@ test("structured Pulse version never falls back to an upgrade source or agent ve
   assert.equal(extractPulseVersion("bug on v5.1.35", "### Pulse version"), null);
 });
 
+const ambiguousVersionDeclarations = [
+  "6.4.5 -> 6.5.0",
+  "v6.4.5 → v6.5.0",
+  "6.4.5 to 6.5.0",
+  "6.4.5 upgraded to 6.5.0",
+  "6.4.5 / 6.5.0",
+  "6.4.5 or 6.5.0",
+  "6.4.5 and 6.5.0",
+  "6.4.5 – 6.5.0",
+  "6.4.5 - 6.5.0",
+  "6.4.5 through 6.5.0",
+  "v6.4.5 upgrading to v6.5.0-rc.1",
+  "6.4.5 migrated to Pulse 6.5.0",
+  "6.4.5 → unknown",
+  "6.4.5 to latest",
+  "6.4.5 -> 6.5",
+  "**6.4.5** => **6.5.0**",
+  "Pulse 6.4.5 → Pulse 6.5.0",
+  "rcourtman/pulse:6.4.5 -> rcourtman/pulse:6.5.0",
+  "license.pulserelay.pro/pulse-pro:6.4.5 → license.pulserelay.pro/pulse-pro:6.5.0",
+  "pulse-v6.4.5-linux-amd64.tar.gz -> pulse-v6.5.0-linux-amd64.tar.gz",
+];
+
+test("version fields do not select an upgrade source or guess between releases", () => {
+  for (const value of ambiguousVersionDeclarations) {
+    for (const body of [
+      `### Pulse version\n${value}\n### Agent version\n6.6.0`,
+      `Pulse version: ${value}`,
+      `### Pulse version\n\`\`\`text\n${value}\n\`\`\``,
+    ]) {
+      assert.equal(triage.internals.extractPulseVersion("Bug on v6.6.0", body), null, body);
+    }
+  }
+});
+
+test("unambiguous current versions retain upgrade history and companion context", () => {
+  for (const value of [
+    "6.5.0 (upgraded from 6.4.5)",
+    "6.5.0 (previous attempt: 6.4.5 -> 6.4.6)",
+    "server 6.5.0; agent 6.4.5",
+    "6.5.0 / agent 6.4.5",
+    "server + pulse-agent v6.5.0 (Docker, rcourtman/pulse:6.5.0)",
+    "rcourtman/pulse:6.5.0 (upgraded from 6.4.5)",
+    "pulse-v6.5.0-linux-amd64.tar.gz (previously 6.4.5)",
+  ]) {
+    assert.equal(triage.internals.extractPulseVersion("Upgrade failure",
+      `### Pulse version\n${value}`), "6.5.0", value);
+  }
+});
+
+test("ambiguous version intake stays silent and preserves whole-thread ownership", async () => {
+  for (const value of ambiguousVersionDeclarations) {
+    for (const established of [false, true]) {
+      const { github, calls } = createGithub();
+      const labels = ["bug", "needs-human", "needs-retest-on-latest",
+        ...(established ? ["affects-6.6.0"] : [])];
+      const issue = { number: 3072, title: "Upgrade stopped", body: `### Pulse version\n${value}`,
+        labels: labels.map(name => ({ name })) };
+      await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+      assert.deepEqual(calls.addLabels.map(call => call.labels),
+        established ? [] : [["needs-version-info"]], value);
+      assert.deepEqual(calls.removeLabel, [], value);
+      assert.deepEqual(calls.createComment, [], value);
+      assert.deepEqual(calls.getLatestRelease, [], value);
+      assert.deepEqual(calls.paginate, [], value);
+    }
+  }
+});
+
+test("free-form titles cannot turn platform, agent or upgrade versions into Pulse evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const title of [
+    "[Bug]: Unraid 7.3.2 reports missing disks",
+    "[Bug]: TrueNAS SCALE 25.04.2.6 has no CPU history",
+    "[Bug]: vCenter 8.0.3 collection times out",
+    "[Bug]: Docker 27.0.0 loses readings",
+    "[Bug]: Pulse Agent v6.5.0 does not report",
+    "[Bug]: pulse-agent-v6.5.0-linux-amd64.tar.gz fails",
+    "[Bug]: helm-chart-6.5.0 fails",
+    "[Bug]: Upgrade 6.4.5 → 6.5.0 stopped the LXC",
+    "[Bug]: Upgrading Pulse 6.4.5 to 6.5.0 failed",
+    "[Bug]: Migration to Pulse 6.5.0 failed",
+    "[Bug]: Migrate to Pulse 6.5.0 failed",
+    "[Bug]: 6.4.5 → 6.5.0 stops",
+    "[Bug]: Pulse 6.4.5 or Pulse 6.5.0",
+    "[Bug]: Pulse 6.5.0.4 readings",
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy free-form report."), null, title);
+    // The explicit running-instance field is still authoritative.
+    assert.equal(extractPulseVersion(title, "### Pulse version\n6.5.0\n"), "6.5.0", title);
+  }
+});
+
+test("free-form titles retain explicit server and concise legacy release evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const [title, version] of [
+    ["Pulse 6.5.0 on Unraid 7.3.2 reports missing disks", "6.5.0"],
+    ["[Bug]: Pulse server version: V6.5.0 on Docker 27.0.0", "6.5.0"],
+    ["[Bug]: Pulse Pro v6.6.0-rc.3 login", "6.6.0-rc.3"],
+    ["[Bug]: rcourtman/pulse:6.5.0 on Unraid 7.3.2", "6.5.0"],
+    ["[Bug]: license.pulserelay.pro/pulse-pro:6.6.0-rc.3 login", "6.6.0-rc.3"],
+    ["[Bug]: v6.5.0 readings are missing", "6.5.0"],
+    ["bug on v6.4.1", "6.4.1"],
+    ["6.5.0", "6.5.0"],
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy free-form report."), version, title);
+    assert.equal(extractPulseVersion(title, "### Pulse version\nunknown\n"), null, title);
+  }
+});
+
+test("title-only platform evidence stays silent and preserves whole-thread metadata", async () => {
+  for (const established of [false, true]) {
+    const { github, calls } = createGithub();
+    const labels = ["bug", "needs-retest-on-latest", "operator-reviewed",
+      ...(established ? ["affects-6.5.0"] : [])].map(name => ({ name }));
+    const issue = { number: 2805, title: "[Bug]: vCenter 8.0.3 collection times out",
+      body: "Legacy free-form report.", labels };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), established ? [] : [["needs-version-info"]]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), established ? [] : ["needs-version-info"]);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  }
+});
+
 test("legacy version fields keep unknown and incomplete values authoritative", () => {
   const { extractPulseVersion } = triage.internals;
   for (const field of ["Pulse version:", "**Pulse Version:**", "Pulse | Version", "## Pulse - Version"]) {
@@ -1187,7 +1684,7 @@ test("legacy known-version sync updates only classification labels", async () =>
     number: 2805, title: "Upgrade from v6.4.5", body: "**Pulse Version:** 6.5.0",
     labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"].map(name => ({ name })),
   };
-  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "Pulse version: 6.4.5" }), core: createCore() });
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
   assert.equal(calls.getLatestRelease.length, 0);
@@ -1215,17 +1712,21 @@ test("ambiguous upgrade version requests information without a retest comment", 
 
 test("queued label sync cannot overwrite newer Community label decisions", async () => {
   for (const communityAdded of [true, false]) {
-    const { github } = createGithub();
+    const { github, calls } = createGithub();
     const live = new Set(["bug", "affects-6.0.0", "needs-version-info"]);
     if (communityAdded) live.add("needs-retest-on-latest");
     live.add("operator-reviewed");
+    github.rest.issues.get = async payload => {
+      calls.getIssue.push(payload);
+      return { data: { ...github.currentIssue, labels: [...live].map(name => ({ name })) } };
+    };
     github.rest.issues.setLabels = async ({ labels }) => {
       live.clear();
       labels.forEach(label => live.add(label));
     };
     github.rest.issues.addLabels = async ({ labels }) => labels.forEach(label => live.add(label));
     github.rest.issues.removeLabel = async ({ name }) => live.delete(name);
-    await syncLabels({ github, core: createCore(), context: createContext({ issue: {
+    await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", previousBody: "## Pulse version\n6.0.0", issue: {
       number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
       labels: ["bug", "affects-6.0.0", "needs-version-info",
         ...(!communityAdded ? ["needs-retest-on-latest"] : [])].map(name => ({ name })),
@@ -1242,7 +1743,7 @@ test("version-label removal tolerates an absent label but propagates access fail
   for (const status of [404, 403]) {
     const { github } = createGithub();
     github.rest.issues.removeLabel = async () => { throw Object.assign(new Error("API failure"), { status }); };
-    const run = syncLabels({ github, core: createCore(), context: createContext({ issue: {
+    const run = syncLabels({ github, core: createCore(), context: createContext({ action: "edited", previousBody: "## Pulse version\n6.0.0", issue: {
       number: 1200, title: "Bug", body: "## Pulse version\n6.0.1\n",
       labels: [{ name: "bug" }, { name: "affects-6.0.0" }],
     } }) });
@@ -1327,16 +1828,16 @@ test("delayed events classify the current report and labels, not an old version"
     ...eventIssue,
     state: "open",
     body: "### Pulse version\n6.5.0\n",
-    labels: ["bug", "affects-6.4.5", "needs-version-info",
+    labels: ["bug", "needs-version-info",
       "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
     updated_at: "2026-10-08T11:00:00Z",
   };
   const { github, calls } = createGithub({ currentIssue });
   await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
 
-  assert.deepEqual(calls.getIssue, Array(2).fill({ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }));
+  assert.deepEqual(calls.getIssue, Array(3).fill({ owner: "rcourtman", repo: "Pulse", issue_number: 2800 }));
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
-  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
   assert.equal(calls.getLatestRelease.length, 0);
   assert.equal(calls.createComment.length, 0);
 });
@@ -1352,7 +1853,9 @@ test("a delayed declaration cannot restore a cleared decomposition task", async 
   for (const body of [eventIssue.body, "### Additional actionable topics\nNone\n"]) {
     const { github, calls } = createGithub({ currentIssue: {
       ...eventIssue, state: "open", body, updated_at: "2026-10-08T11:00:00Z",
-    } });
+    }, issueEvents: [
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: "2026-10-08T10:30:00Z" },
+    ] });
     await syncLabels({ github, context: createContext({ issue: eventIssue }), core: createCore() });
     assert.equal(calls.addLabels.length, 0);
     assert.equal(calls.removeLabel.length, 0);
@@ -1373,6 +1876,74 @@ test("current feedback classification supersedes a queued bug declaration", asyn
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["documentation"]]);
   assert.equal(calls.removeLabel.length, 0);
   assert.equal(calls.createComment.length, 0);
+});
+
+const feedbackChoices = [
+  ["Bug / regression", "bug"],
+  ["Documentation issue", "documentation"],
+  ["UX / workflow friction", "enhancement"],
+];
+
+for (const [originalChoice, originalClass] of feedbackChoices) {
+  for (const [, establishedClass] of feedbackChoices) {
+    if (originalClass === establishedClass) continue;
+    for (const event of ["unrelated edit", "reopen", "delayed open", "delayed type edit"]) {
+      test(`established feedback classification survives ${event}: ${originalClass} to ${establishedClass}`, async () => {
+        const body = `### Feedback type\n${originalChoice}\n### Pulse version\n6.5.0\n`;
+        const labels = [establishedClass, "affects-6.5.0", "needs-human",
+          "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"];
+        const issue = { number: 2806, title: "Reviewed mixed report", body,
+          state: "open", updated_at: "2026-10-17T01:00:00Z",
+          labels: labels.map(name => ({ name })) };
+        const delayed = event.startsWith("delayed");
+        const { github, calls } = createGithub({ currentIssue: issue });
+        const context = createContext({
+          issue: { ...issue, ...(delayed ? { updated_at: "2026-10-16T01:00:00Z" } : {}) },
+          action: event === "reopen" ? "reopened" : event === "delayed open" ? "opened" : "edited",
+          previousBody: event === "reopen" || event === "delayed open" ? undefined :
+            event === "delayed type edit" ? "### Feedback type\nOther actionable feedback\n" :
+              `${body}\nAn unrelated spelling correction.\n`,
+        });
+        await syncLabels({ github, context, core: createCore() });
+        assert.equal(calls.getIssue.length, 1, "no write should be prepared");
+        assert.deepEqual(calls.addLabels, []);
+        assert.deepEqual(calls.removeLabel, []);
+        assert.deepEqual(calls.createLabel, []);
+        assert.deepEqual(calls.createComment, []);
+        assert.deepEqual(calls.getLatestRelease, []);
+        assert.deepEqual(calls.paginate, []);
+      });
+    }
+  }
+}
+
+for (const [choice, expectedClass] of feedbackChoices) {
+  test(`a current feedback-type correction can add ${expectedClass} without discarding other topics`, async () => {
+    const oldChoice = expectedClass === "bug" ? "Documentation issue" : "Bug / regression";
+    const oldClass = expectedClass === "bug" ? "documentation" : "bug";
+    const previousBody = `### Feedback type\n${oldChoice}\n### Pulse version\n6.5.0\n`;
+    const issue = { number: 2807, title: "Changed feedback", state: "open",
+      body: `### Feedback type\n${choice}\n### Pulse version\n6.5.0\n`,
+      labels: [oldClass, "affects-6.5.0", "needs-human", "needs-decomposition"].map(name => ({ name })) };
+    const { github, calls } = createGithub();
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[expectedClass]]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("an equivalent feedback-type edit preserves established classification", async () => {
+  const issue = { number: 2808, title: "Reviewed feedback", state: "open",
+    body: "### Feedback type\n  BUG / regression <!-- original choice -->\n### Pulse version\n6.5.0\n",
+    labels: [{ name: "documentation" }, { name: "affects-6.5.0" }] };
+  const { github, calls } = createGithub();
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Feedback type\nBug / regression\n### Pulse version\n6.5.0\n" }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
 });
 
 test("a failed current-issue read stops without stale classification or mutation", async () => {
@@ -1472,13 +2043,13 @@ test("the actual label consumer keeps copied declarations from changing report o
       "Pulse version: `6.5.0`",
     labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest", "needs-human", "operator-reviewed"]
       .map(name => ({ name })) };
-  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue, previousBody: "Pulse version: 6.4.5" }) });
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
   assert.deepEqual(calls.createComment, []);
   assert.deepEqual(calls.getLatestRelease, []);
   assert.deepEqual(calls.paginate, []);
-  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902, 2902]);
+  assert.deepEqual(calls.getIssue.map(call => call.issue_number), [2902, 2902, 2902, 2902]);
 });
 
 
@@ -1605,16 +2176,16 @@ test("a mismatched pre-write issue identity fails closed", async () => {
 });
 
 test("the pre-write comparison treats label order as irrelevant", async () => {
-  const issue = { number: 2914, state: "open", title: "Bug",
+  const issue = { number: 2914, state: "open", title: "Bug", updated_at: "2026-10-08T10:00:00Z",
     labels: ["bug", "needs-human", "needs-retest-on-latest", "affects-6.4.5"].map(name => ({ name })),
     body: "### Pulse version\n6.5.0\n" };
   const { github, calls } = createGithub({ currentIssue: issue });
   const read = github.rest.issues.get;
   github.rest.issues.get = async payload => {
     const result = await read(payload);
-    return { data: calls.getIssue.length === 1 ? result.data : { ...issue, labels: [...issue.labels].reverse() } };
+    return { data: calls.getIssue.length === 1 ? result.data : { ...result.data, labels: [...result.data.labels].reverse() } };
   };
-  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.4.5" }), core: createCore() });
   assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
   assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
 });
@@ -1630,30 +2201,92 @@ test("a report with no label delta needs no additional pre-write read", async ()
   assert.equal(calls.removeLabel.length, 0);
 });
 
-test("unknown current versions retire only managed exact-version labels", async () => {
+test("explicit unknown current versions retire only managed exact-version labels", async () => {
   const preserved = ["bug", "needs-retest-on-latest", "needs-decomposition",
     "needs-human", "operator-reviewed", "affects-main", "affects-storage"];
-  for (const body of [
+  for (const laterVersionKnown of [false, true]) for (const body of [
     "### Pulse version\nunknown\n",
     "Pulse version: unknown; agent version 6.5.0",
     "### Pulse version\n6.5\n### Agent version\n6.5.0",
     "### Pulse version\n_No response_\n",
     "### Pulse version\n\n### Agent version\n6.5.0",
-    "The running version is unavailable.",
   ]) {
     const { github, calls } = createGithub();
     const issue = { number: 2916, title: "Upgrade from v6.4.5", body,
-      labels: [...preserved, "affects-6.4.5", "affects-6.6.0-beta.3"].map(name => ({ name })) };
-    await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
-    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], body);
-    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "affects-6.6.0-beta.3"], body);
-    assert.equal(calls.getIssue.length, 2);
+      labels: [...preserved, "affects-6.4.5", ...(laterVersionKnown ? ["affects-6.6.0-beta.3"] : [])].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.4.5" }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), laterVersionKnown ? [] : [["needs-version-info"]], body);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"], body);
+    assert.equal(calls.getIssue.length, laterVersionKnown ? 2 : 3);
     assert.equal(calls.getLatestRelease.length, 0);
     assert.equal(calls.createComment.length, 0);
   }
 });
 
-test("a delayed known-version event cleans metadata from the current unknown report", async () => {
+test("free-form reports preserve established version metadata without a form declaration", async () => {
+  for (const [title, body, versions] of [
+    ["Windows guest reads stop after restart", "**Environment**\n- Pulse Pro 6.5.0 (Docker), upgraded from 6.4.5\n- Guest agent 110.0.2", ["6.5.0"]],
+    ["Telegram rejects ordinary alerts", "## Environment\n\n- Pulse server v6.5.0-rc.1 (LXC), upgraded from v6.4.5", ["6.4.5", "6.5.0-rc.1"]],
+    ["ARM temperature is missing", "## Environment\n\n* Pulse v6.4.1 (Docker)\n* Unified agent v6.4.1", ["6.4.1"]],
+    ["Upgrade from v6.4.5", "The running version is unavailable.", ["6.4.5"]],
+    ["TrueNAS CORE 13.0.6 readings", "Version evidence is in an earlier comment or screenshot.", ["6.5.0"]],
+    ["Bug on v6.6.0-beta.3", "An unrelated edit to a free-form report.", ["6.5.0"]],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2922, title, body,
+      labels: ["bug", ...versions.map(version => `affects-${version}`),
+        "needs-retest-on-latest", "needs-human", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels, [], title);
+    assert.deepEqual(calls.removeLabel, [], title);
+    assert.deepEqual(calls.getLabel, [], title);
+    assert.deepEqual(calls.createLabel, [], title);
+    assert.equal(calls.getIssue.length, 1, title);
+    assert.deepEqual(calls.getLatestRelease, [], title);
+    assert.deepEqual(calls.createComment, [], title);
+    assert.deepEqual(calls.paginate, [], title);
+  }
+});
+
+test("absent version declarations do not invent evidence from unrelated labels", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2923, title: "Bug", body: "Version is unavailable.",
+    labels: ["bug", "affects-main", "affects-storage", "needs-human"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("free-form version preservation still applies other current metadata deltas", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2924, title: "Guest reads stop after restart",
+    body: "## Environment\n\n- Pulse Pro 6.5.0\n\n### Additional actionable topics\n\nHistory is also missing.\n\n### Confirmations\n\nDone.",
+    labels: ["bug", "affects-6.5.0", "needs-human"].map(name => ({ name })) };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.getLabel, ["needs-decomposition"]);
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("free-form version preservation cannot apply an unrelated stale metadata delta", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2925, title: "Bug",
+    body: "### Additional actionable topics\n\nHistory is missing too.\n\n### Confirmations\n\nDone.",
+    labels: ["bug", "affects-6.5.0"].map(name => ({ name })) };
+  github.rest.issues.getLabel = async () => {
+    github.currentIssue = { ...github.currentIssue, state: "closed" };
+    return { data: {} };
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.equal(calls.getIssue.length, 2);
+});
+
+test("a delayed known-version event preserves the current report for whole-thread review", async () => {
   const eventIssue = { number: 2917, title: "Bug", body: "### Pulse version\n6.4.5\n",
     labels: [{ name: "bug" }, { name: "affects-6.4.5" }] };
   const { github, calls } = createGithub({ currentIssue: {
@@ -1663,8 +2296,8 @@ test("a delayed known-version event cleans metadata from the current unknown rep
   } });
   await syncLabels({ github, context: createContext({ action: "edited", issue: eventIssue }), core: createCore() });
   assert.equal(calls.addLabels.length, 0);
-  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
-  assert.equal(calls.getIssue.length, 2, "a removals-only delta still needs the live-state fence");
+  assert.deepEqual(calls.removeLabel, []);
+  assert.equal(calls.getIssue.length, 1, "a superseded event has no version correction to apply");
   assert.equal(calls.createComment.length, 0);
 });
 
@@ -1676,7 +2309,7 @@ test("unknown-version removal cannot overwrite a correction during preparation",
     github.currentIssue = { ...github.currentIssue, body: "### Pulse version\n6.5.0\n" };
     return { data: {} };
   };
-  await syncLabels({ github, context: createContext({ action: "edited", issue }), core: createCore() });
+  await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.5.0" }), core: createCore() });
   assert.equal(calls.getIssue.length, 2);
   assert.equal(calls.addLabels.length, 0);
   assert.equal(calls.removeLabel.length, 0);
@@ -1758,19 +2391,595 @@ for (const [filename, version] of [
 ]) {
   test(`archive intake reconciles exact-version labels silently: ${filename}`, async () => {
     const { github, calls } = createGithub();
-    const oldArtifactLabel = `affects-${filename.replace(/^pulse-v?/, "")}`;
+    const independentlyEstablishedLabel = "affects-6.7.0";
     const issue = { number: 2921, title: "[Bug]: Failed install",
       body: `### Pulse version\n${filename}\n### Agent version\nnone`,
-      labels: ["bug", "affects-6.4.5", oldArtifactLabel, "needs-version-info", "needs-human",
+      labels: ["bug", "affects-6.4.5", independentlyEstablishedLabel, "needs-version-info", "needs-human",
         "needs-retest-on-latest"].map(name => ({ name })) };
-    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    await syncLabels({ github, context: createContext({ action: "edited", issue, previousBody: "### Pulse version\n6.4.5" }), core: createCore() });
     assert.deepEqual(calls.addLabels.map(call => call.labels), [[`affects-${version}`]]);
     assert.deepEqual(calls.removeLabel.map(call => call.name),
-      ["affects-6.4.5", oldArtifactLabel, "needs-version-info"]);
+      ["affects-6.4.5", "needs-version-info"]);
     assert.deepEqual(calls.createLabel.map(call => call.name), [`affects-${version}`]);
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
-    assert.equal(calls.getIssue.length, 2);
+    assert.equal(calls.getIssue.length, 4);
   });
 }
+
+// A later retest can establish an affected version without changing the original
+// form. #2077 has both its original 6.4.1 and a later 6.6.0 report. An unrelated
+// edit or reopen must not erase that independently reviewed evidence.
+test("unchanged version fields preserve later whole-thread version evidence", async () => {
+  for (const declaration of ["### Pulse version\n6.4.1", "Pulse version: 6.4.1",
+    "### Pulse version\nunknown"]) {
+    for (const action of ["edited", "reopened"]) {
+      const { github, calls } = createGithub();
+      const issue = { number: 2077, title: "CORE monitoring still missing",
+        body: `${declaration}\n\n### Additional context\nCorrected spelling.`,
+        labels: ["bug", "affects-6.4.1", "affects-6.6.0", "needs-human",
+          "needs-retest-on-latest"].map(name => ({ name })) };
+      await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+        previousBody: `${declaration}\n\n### Additional context\nOriginal spelling.` }) });
+      assert.deepEqual(calls.addLabels, [], `${action}: ${declaration}`);
+      assert.deepEqual(calls.removeLabel, [], `${action}: ${declaration}`);
+      assert.deepEqual(calls.createLabel, []);
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.deepEqual(calls.paginate, []);
+    }
+  }
+});
+
+test("a current version correction retires only its own previous declaration", async () => {
+  for (const current of ["6.5.0", "unknown"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2930, title: "Connection failed",
+      body: `### Pulse version\n${current}`,
+      labels: ["bug", "affects-6.4.1", "affects-6.6.0", "needs-version-info",
+        "needs-human", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(), context: createContext({ action: "edited",
+      issue, previousBody: "### Pulse version\n6.4.1" }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), current === "unknown" ? [] : [["affects-6.5.0"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.1", "needs-version-info"]);
+    assert.ok(!calls.createLabel.some(call => call.name === "needs-version-info"));
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  }
+});
+
+test("unattributed and superseded events cannot retire established versions", async () => {
+  for (const scenario of ["opened", "missing previous body", "newer live body", "newer live activity"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2931, title: "A monitoring report", body: "### Pulse version\n6.4.1",
+      labels: ["bug", "affects-6.4.1", "affects-6.6.0"].map(name => ({ name })) };
+    const context = createContext({ action: scenario === "opened" ? "opened" : "edited", issue,
+      ...(scenario === "missing previous body" ? {} : { previousBody: "### Pulse version\n6.6.0" }) });
+    if (scenario.startsWith("newer live")) {
+      github.currentIssue = { ...context.payload.issue, state: "open",
+        ...(scenario === "newer live body" ? { body: "### Pulse version\nunknown" } : {}),
+        updated_at: "2026-10-08T11:00:00Z" };
+    }
+    await syncLabels({ github, core: createCore(), context });
+    assert.deepEqual(calls.addLabels, [], scenario);
+    assert.deepEqual(calls.removeLabel, [], scenario);
+    assert.deepEqual(calls.createLabel, [], scenario);
+    assert.deepEqual(calls.createComment, [], scenario);
+  }
+});
+
+test("a newly declared version adds evidence without claiming other labels were wrong", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2932, title: "Bug", body: "### Pulse version\n6.5.0",
+    labels: ["bug", "affects-6.4.1", "needs-version-info"].map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited",
+    issue, previousBody: "Version evidence was supplied in a comment." }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["needs-version-info"]);
+  assert.deepEqual(calls.createComment, []);
+});
+
+test("preserved form versions do not hide a newly declared secondary symptom", async () => {
+  const { github, calls } = createGithub();
+  const previousBody = "### Additional actionable topics\nNone\n### Pulse version\n6.4.1";
+  const issue = { number: 2933, title: "Bug",
+    body: previousBody.replace("None", "History is also missing."),
+    labels: ["bug", "affects-6.4.1", "affects-6.6.0"].map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited",
+    issue, previousBody }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+function delayedTopicContext(action = "edited") {
+  const previousBody = "### Additional actionable topics\nNone\n\n### Additional context\nOriginal logs.";
+  const issue = {
+    number: 3030, title: "Mixed report", state: "open",
+    body: previousBody.replace("None", "History is also missing."),
+    labels: ["bug", "affects-6.6.0", "needs-human", "needs-retest-on-latest", "operator-reviewed"]
+      .map(name => ({ name })),
+    updated_at: "2026-10-17T02:00:00Z",
+  };
+  return createContext({ action, issue, previousBody });
+}
+
+for (const laterActivity of ["comment", "title edit", "unrelated body edit"]) {
+  test(`delayed topic declaration survives a later ${laterActivity}`, async () => {
+    const context = delayedTopicContext();
+    const currentIssue = { ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z" };
+    if (laterActivity === "title edit") currentIssue.title = "Clarified mixed report";
+    if (laterActivity === "unrelated body edit") currentIssue.body = currentIssue.body.replace("Original logs.", "Later logs.");
+    const { github, calls } = createGithub({ currentIssue, issueEvents: [
+      // A previous task was cleared before this new symptom was declared.
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: "2026-10-17T01:59:59Z" },
+      { event: "unlabeled", label: { name: "needs-input" }, created_at: currentIssue.updated_at },
+    ] });
+    await syncLabels({ github, context, core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+    assert.deepEqual(calls.eventHistory, [{ owner: "rcourtman", repo: "Pulse", issue_number: 3030, per_page: 100 }]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.equal(calls.getIssue.length, 2);
+
+    // A subsequent unrelated edit cannot be relied on to rescue the original
+    // declaration: it adds no task itself and must not reset Community state.
+    github.currentIssue = { ...currentIssue, labels: [...currentIssue.labels, { name: "needs-decomposition" }] };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue: github.currentIssue, previousBody: context.payload.issue.body,
+    }) });
+    assert.equal(calls.addLabels.length, 1);
+    assert.equal(calls.eventHistory.length, 1);
+  });
+}
+
+test("delayed topic declaration survives an opening overtaken by a comment", async () => {
+  const context = delayedTopicContext("opened");
+  const { github, calls } = createGithub({ currentIssue: {
+    ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z",
+  } });
+  await syncLabels({ github, context, core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+for (const removedAt of ["2026-10-17T02:00:00Z", "2026-10-17T02:00:30Z", undefined, "invalid"]) {
+  test(`delayed topic review is not restored after an explicit removal at ${removedAt}`, async () => {
+    const context = delayedTopicContext();
+    const { github, calls } = createGithub({ currentIssue: {
+      ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z",
+    }, issueEvents: [
+      ...Array.from({ length: 125 }, () => ({ event: "renamed", created_at: "2026-10-17T02:00:20Z" })),
+      { event: "unlabeled", label: { name: "needs-decomposition" }, created_at: removedAt },
+    ] });
+    await syncLabels({ github, context, core: createCore() });
+    assert.equal(calls.eventHistory.length, 1, "inspect the complete paginated aggregate, including a late removal");
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const scenario of ["changed topic", "cleared topic", "reopen", "unrelated event", "missing previous body", "missing event time", "missing current time", "future event", "already queued"]) {
+  test(`delayed topic history is not consulted for ${scenario}`, async () => {
+    const context = delayedTopicContext();
+    const currentIssue = structuredClone(context.payload.issue);
+    currentIssue.updated_at = "2026-10-17T02:01:00Z";
+    if (scenario === "changed topic") currentIssue.body = currentIssue.body.replace("History is also missing.", "A different problem.");
+    if (scenario === "cleared topic") currentIssue.body = currentIssue.body.replace("History is also missing.", "None");
+    if (scenario === "reopen") context.payload.action = "reopened";
+    if (scenario === "unrelated event") context.payload.changes.body.from = context.payload.issue.body;
+    if (scenario === "missing previous body") delete context.payload.changes;
+    if (scenario === "missing event time") delete context.payload.issue.updated_at;
+    if (scenario === "missing current time") delete currentIssue.updated_at;
+    if (scenario === "future event") context.payload.issue.updated_at = "2026-10-17T02:02:00Z";
+    if (scenario === "already queued") currentIssue.labels.push({ name: "needs-decomposition" });
+    const { github, calls } = createGithub({ currentIssue });
+    await syncLabels({ github, context, core: createCore() });
+    assert.deepEqual(calls.eventHistory, []);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const failure of ["access error", "unavailable history"]) {
+  test(`delayed topic declaration fails closed on ${failure}`, async () => {
+    const context = delayedTopicContext();
+    const { github, calls } = createGithub({ currentIssue: {
+      ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z",
+    } });
+    github.paginate = async () => {
+      if (failure === "access error") throw Object.assign(new Error("Forbidden"), { status: 403 });
+      return undefined;
+    };
+    await assert.rejects(syncLabels({ github, context, core: createCore() }));
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const change of ["close", "body edit", "label review"]) {
+  test(`delayed topic declaration keeps the pre-write guard after a concurrent ${change}`, async () => {
+    const context = delayedTopicContext();
+    const currentIssue = { ...context.payload.issue, updated_at: "2026-10-17T02:01:00Z" };
+    const { github, calls } = createGithub({ currentIssue, existingLabels: new Set(["needs-decomposition"]) });
+    github.paginate = async () => {
+      const changed = { ...currentIssue, updated_at: "2026-10-17T02:02:00Z" };
+      if (change === "close") changed.state = "closed";
+      if (change === "body edit") changed.body = changed.body.replace("History is also missing.", "None");
+      if (change === "label review") changed.labels = [...changed.labels, { name: "needs-input" }];
+      github.currentIssue = changed;
+      return [];
+    };
+    await syncLabels({ github, context, core: createCore() });
+    assert.equal(calls.getIssue.length, 2);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+
+function duplicateLabelError() {
+  return Object.assign(new Error("Repository label already exists"), {
+    status: 422,
+    response: { data: { errors: [{ resource: "Label", field: "name", code: "already_exists" }] } },
+  });
+}
+
+for (const [label, labels, body] of [
+  ["affects-6.6.0-rc.2", ["bug"], "### Pulse version\n6.6.0-rc.2\n"],
+  ["needs-version-info", ["bug"], "### Pulse version\nunknown\n"],
+  ["needs-decomposition", ["enhancement"], "### Additional actionable topics\nA separate History failure\n"],
+]) {
+  test(`concurrent issue jobs both complete after creating the same ${label} label`, async () => {
+    const definitions = new Set();
+    let missingReads = 0;
+    let releaseReads;
+    const bothMissing = new Promise(resolve => { releaseReads = resolve; });
+    const jobs = [2920, 2921].map(number => {
+      const issue = { number, title: "Report", body, labels: labels.map(name => ({ name })) };
+      const { github, calls } = createGithub({ existingLabels: definitions });
+      const readLabel = github.rest.issues.getLabel;
+      github.rest.issues.getLabel = async payload => {
+        try {
+          return await readLabel(payload);
+        } catch (error) {
+          if (error.status === 404) {
+            missingReads += 1;
+            if (missingReads === 2) releaseReads();
+            await bothMissing;
+          }
+          throw error;
+        }
+      };
+      github.rest.issues.createLabel = async payload => {
+        calls.createLabel.push(payload);
+        if (definitions.has(payload.name)) throw duplicateLabelError();
+        definitions.add(payload.name);
+        return { data: payload };
+      };
+      return { github, calls, context: createContext({ issue }) };
+    });
+
+    const results = await Promise.allSettled(jobs.map(job => syncLabels({ ...job, core: createCore() })));
+    assert.deepEqual(results.map(result => result.status), ["fulfilled", "fulfilled"]);
+    assert.equal(missingReads, 2, "both jobs must observe the initial missing definition");
+    assert.deepEqual([...definitions], [label]);
+    assert.deepEqual(jobs.map(job => job.calls.getLabel.length).sort(), [1, 2], "one conflict readback, no write retry");
+    for (const { calls, context } of jobs) {
+      assert.equal(calls.createLabel.length, 1);
+      assert.deepEqual(calls.createLabel[0], {
+        owner: "rcourtman", repo: "Pulse", name: label,
+        color: label.startsWith("affects-") ? "0e8a16" : "fbca04",
+        description: label.startsWith("affects-") ? "Bug reported against Pulse 6.6.0-rc.2"
+          : label === "needs-version-info" ? "Issue is missing required Pulse version metadata"
+            : "Issue declares additional actionable topics that need linked dispositions",
+      });
+      assert.equal(calls.getIssue.length, 2, "normal fresh pre-write check still runs");
+      assert.deepEqual(calls.addLabels, [{ owner: "rcourtman", repo: "Pulse", issue_number: context.payload.issue.number, labels: [label] }]);
+      assert.deepEqual(calls.removeLabel, []);
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+    }
+  });
+}
+
+for (const [scenario, error] of [
+  ["forbidden", Object.assign(new Error("Forbidden"), { status: 403 })],
+  ["transport uncertainty", new Error("Connection closed")],
+  ["server error", Object.assign(new Error("Server error"), { status: 500 })],
+  ["unspecified validation", Object.assign(new Error("Validation failed"), { status: 422 })],
+  ["malformed validation details", Object.assign(duplicateLabelError(), { response: { data: { errors: "already_exists" } } })],
+  ["different validation", Object.assign(duplicateLabelError(), { response: { data: { errors: [{ resource: "Label", field: "color", code: "invalid" }] } } })],
+  ["mixed duplicate and validation", Object.assign(duplicateLabelError(), { response: { data: { errors: [
+    { resource: "Label", field: "name", code: "already_exists" },
+    { resource: "Label", field: "color", code: "invalid" },
+  ] } } })],
+]) {
+  test(`label creation preserves ${scenario} without another provider read or write`, async () => {
+    const issue = { number: 2922, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+    const { github, calls } = createGithub();
+    github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw error; };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), received => received === error);
+    assert.equal(calls.getLabel.length, 1);
+    assert.equal(calls.createLabel.length, 1);
+    assert.equal(calls.getIssue.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const status of [403, 404, 500]) {
+  test(`a duplicate-label conflict requires successful definition readback (${status})`, async () => {
+    const issue = { number: 2923, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+    const { github, calls } = createGithub();
+    const readbackError = Object.assign(new Error("Readback failed"), { status });
+    github.rest.issues.getLabel = async payload => {
+      calls.getLabel.push(payload.name);
+      throw calls.getLabel.length === 1 ? Object.assign(new Error("Missing"), { status: 404 }) : readbackError;
+    };
+    github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw duplicateLabelError(); };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), error => error === readbackError);
+    assert.equal(calls.getLabel.length, 2);
+    assert.equal(calls.createLabel.length, 1);
+    assert.equal(calls.getIssue.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+for (const existing of [null, { name: "affects-6.5.0" }]) {
+  test(`duplicate-label readback cannot substitute an unavailable or different definition: ${JSON.stringify(existing)}`, async () => {
+    const issue = { number: 2924, title: "Report", body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+    const { github, calls } = createGithub();
+    const conflict = duplicateLabelError();
+    github.rest.issues.getLabel = async payload => {
+      calls.getLabel.push(payload.name);
+      if (calls.getLabel.length === 1) throw Object.assign(new Error("Missing"), { status: 404 });
+      return { data: existing };
+    };
+    github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw conflict; };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }), error => error === conflict);
+    assert.equal(calls.getLabel.length, 2);
+    assert.equal(calls.createLabel.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("duplicate-label readback cannot override a newer Community disposition", async () => {
+  const issue = { number: 2925, state: "open", title: "Report", updated_at: "2026-10-08T10:00:00Z",
+    body: "### Pulse version\n6.6.0-rc.2\n", labels: [{ name: "bug" }] };
+  const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+  github.rest.issues.getLabel = async payload => {
+    calls.getLabel.push(payload.name);
+    if (calls.getLabel.length === 1) throw Object.assign(new Error("Missing"), { status: 404 });
+    github.currentIssue = { ...issue, state: "closed" };
+    return { data: { name: payload.name } };
+  };
+  github.rest.issues.createLabel = async payload => { calls.createLabel.push(payload); throw duplicateLabelError(); };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getLabel.length, 2);
+  assert.equal(calls.createLabel.length, 1);
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+const serverReferenceDigest = "a".repeat(64);
+const serverReferenceCases = [
+  ["rcourtman/pulse:6.5.0", "6.5.0"],
+  ["rcourtman/pulse:v6.6.0-rc.2", "6.6.0-rc.2"],
+  ["license.pulserelay.pro/pulse-pro:6.6.0-beta.3", "6.6.0-beta.3"],
+  [`license.pulserelay.pro/pulse-pro:6.6.0-rc.2@sha256:${serverReferenceDigest}`, "6.6.0-rc.2"],
+  [`rcourtman/pulse:6.5.0@sha256:${serverReferenceDigest}`, "6.5.0"],
+  ["pulse-pro:6.5.0", "6.5.0"],
+  ["pulse-v6.5.0", "6.5.0"],
+  ["pulse_6.6.0-rc.2", null],
+  ["pulse-agent:6.5.0", null],
+  ["pulse-agent-v6.5.0-linux-amd64", null],
+  ["pulse-agent-helper-v6.5.0-linux-amd64", null],
+  ["pulse-agent-runner-v6.5.0-linux-amd64", null],
+  ["pulse-mcp-v6.5.0", null],
+  ["pulse-provider-msp-v6.5.0", null],
+  ["rcourtman/pulse-agent:6.5.0", null],
+  ["license.pulserelay.pro/pulse-pro:latest; agent 6.5.0", null],
+  ["rcourtman/pulse:latest (agent version 6.5.0)", null],
+  ["rcourtman/pulse:6 (last known working server 6.5.0)", null],
+  ["rcourtman/pulse:6.5.0_custom", null],
+  [`license.pulserelay.pro/pulse-pro@sha256:${serverReferenceDigest} (agent 6.5.0)`, null],
+  ["another-product:6.5.0", null],
+];
+
+for (const [reference, version] of serverReferenceCases) {
+  test(`server reference identity: ${reference}`, () => {
+    for (const body of [
+      `### Pulse version\n${reference}\n\n### Agent version\n6.4.5`,
+      `Pulse version: **\`${reference}\`**`,
+      `Pulse | Version\n\`${reference}\`\nAgent version: 6.4.5`,
+      ...(reference.includes(":") ? [`### Pulse version\n_${reference}_`] : []),
+    ]) {
+      assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5", body), version, body);
+    }
+  });
+}
+
+for (const [reference, version] of serverReferenceCases.filter(([reference]) =>
+  reference.includes(":") || reference.includes("mcp") || reference.includes("agent"))) {
+  test(`server reference silent intake: ${reference}`, async () => {
+    const { github, calls } = createGithub();
+    const issue = { number: 2933, title: "[Bug]: Missing readings",
+      body: `### Pulse version\n${reference}\n\n### Agent version\n6.4.5`,
+      labels: ["bug", "needs-human", "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    const expected = version ? `affects-${version}` : "needs-version-info";
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[expected]]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [expected]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.equal(calls.getIssue.length, 2);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  });
+}
+
+test("server reference correction preserves independent whole-thread evidence", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2934, title: "[Bug]: Missing readings",
+    body: "### Pulse version\nlicense.pulserelay.pro/pulse-pro:6.6.0-beta.3",
+    labels: ["bug", "affects-6.4.5", "affects-6.7.0", "needs-version-info", "needs-human",
+      "needs-retest-on-latest"].map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Pulse version\nrcourtman/pulse:6.4.5" }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0-beta.3"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.equal(calls.getIssue.length, 4);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
+for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+  test(`agent context does not block API-only or unknown-version reports: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const field = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes("    id: agent_version\n"));
+    assert.match(field, /required: false/);
+    assert.doesNotMatch(field, /required: true/);
+    for (const phrase of ["only if an agent is affected", "leave blank", "API-only", '"unknown"',
+      "Do not reinstall or re-enrol"]) {
+      assert.ok(field.includes(phrase), `${name}: ${phrase}`);
+    }
+    const version = form.split(/(?=^  - type: )/m)
+      .find(block => block.includes("    id: pulse_version\n"));
+    assert.match(version, /required: true/);
+    assert.ok(version.includes('"unknown"'));
+  });
+}
+
+test("preview plan context is optional and retains existing subscriptions without advertising retired tiers", () => {
+  const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE/v6_rc_feedback.yml"), "utf8");
+  const field = form.split(/(?=^  - type: )/m)
+    .find(block => block.includes("    id: license_tier\n"));
+  assert.match(field, /required: false/);
+  assert.doesNotMatch(field, /required: true/);
+  const options = [...field.matchAll(/^        - (.+)$/gm)].map(match => match[1]);
+  assert.deepEqual(options, ["Community / Free", "Pro", "Existing Relay subscription",
+    "Other / legacy tier", "Not sure"]);
+  for (const phrase of ["only if the problem depends on plan access", "not a plan to buy",
+    "Relay is no longer sold", "Do not include licence keys, account or payment details"]) {
+    assert.ok(field.includes(phrase), phrase);
+  }
+});
+
+// GitHub label additions and removals are separate requests. The first write
+// must not authorize the rest after a reporter or Community changes the issue.
+for (const [scenario, changes] of [
+  ["closure", { state: "closed" }],
+  ["body correction", { body: "### Pulse version\nunknown\n" }],
+  ["title correction", { title: "Corrected report" }],
+  ["Community labels", { labels: [{ name: "bug" }, { name: "needs-version-info" }] }],
+  ["pull request", { pull_request: {} }],
+]) {
+  test(`label removal stops after an addition overlaps ${scenario}`, async () => {
+    const issue = {
+      number: 3120, state: "open", title: "Current bug", updated_at: "2026-10-08T10:00:00Z",
+      body: "### Pulse version\n6.5.0\n",
+      labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+    };
+    const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+    const add = github.rest.issues.addLabels;
+    github.rest.issues.addLabels = async payload => {
+      const result = await add(payload);
+      github.currentIssue = { ...github.currentIssue, ...structuredClone(changes) };
+      return result;
+    };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+    }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+    assert.deepEqual(calls.removeLabel, [], "do not erase newer report metadata");
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("label removals recheck between writes without undoing an accepted addition", async () => {
+  const issue = { number: 3121, state: "open", title: "Current bug", updated_at: "2026-10-08T10:00:00Z",
+    body: "### Pulse version\n6.5.0\n",
+    labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+  };
+  const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+  const remove = github.rest.issues.removeLabel;
+  github.rest.issues.removeLabel = async payload => {
+    const result = await remove(payload);
+    github.currentIssue = { ...github.currentIssue, body: "### Pulse version\nunknown\n" };
+    return result;
+  };
+  await syncLabels({ github, core: createCore(), context: createContext({
+    action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+  }) });
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+  assert.ok(github.currentIssue.labels.some(label => label.name === "needs-version-info"));
+  assert.ok(github.currentIssue.labels.some(label => label.name === "affects-6.5.0"));
+  assert.equal(calls.createComment.length, 0);
+});
+
+for (const status of [403, 404, 500]) {
+  test(`a failed post-addition read (${status}) leaves remaining labels untouched`, async () => {
+    const issue = { number: 3122, state: "open", title: "Current bug", updated_at: "2026-10-08T10:00:00Z",
+      body: "### Pulse version\n6.5.0\n",
+      labels: ["bug", "affects-6.4.5", "needs-version-info"].map(name => ({ name })),
+    };
+    const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+    const read = github.rest.issues.get;
+    github.rest.issues.get = async payload => {
+      if (calls.addLabels.length) throw Object.assign(new Error("API read failed"), { status });
+      return read(payload);
+    };
+    await assert.rejects(syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+    }) }), { status });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.5.0"]]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("our own timestamp changes do not suppress a still-current label correction", async () => {
+  const issue = { number: 3123, state: "open", title: "Current bug",
+    updated_at: "2026-10-08T10:00:00Z", body: "### Pulse version\n6.5.0\n",
+    labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-retest-on-latest"]
+      .map(name => ({ name })),
+  };
+  const { github, calls } = createGithub({ currentIssue: structuredClone(issue) });
+  for (const method of ["addLabels", "removeLabel"]) {
+    const mutate = github.rest.issues[method];
+    github.rest.issues[method] = async payload => {
+      const result = await mutate(payload);
+      github.currentIssue = { ...github.currentIssue, updated_at: "2026-10-08T10:01:00Z" };
+      return result;
+    };
+  }
+  await syncLabels({ github, core: createCore(), context: createContext({
+    action: "edited", issue, previousBody: "### Pulse version\n6.4.5\n",
+  }) });
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+  assert.deepEqual(github.currentIssue.labels.map(label => label.name).sort(),
+    ["affects-6.5.0", "bug", "needs-retest-on-latest"]);
+  assert.equal(calls.getIssue.length, 4);
+  assert.equal(calls.createComment.length, 0);
+});

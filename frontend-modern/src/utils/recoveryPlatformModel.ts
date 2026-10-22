@@ -3,7 +3,6 @@ import type {
   RecoveryPointDisplayTransport,
   RecoveryPoint,
   RecoveryPointsResponse,
-  RecoveryPointsTransportResponse,
   RecoveryPointTransport,
 } from '@/types/recovery';
 
@@ -81,8 +80,32 @@ export const normalizeRecoveryPoint = (
   };
 };
 
-export const normalizeRecoveryPointsResponse = (
-  response: RecoveryPointsTransportResponse,
-): RecoveryPointsResponse => ({
-  data: Array.isArray(response?.data) ? response.data.map(normalizeRecoveryPoint) : [],
-});
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// This is the HTTP boundary, not an empty-inventory fallback. The handler
+// explicitly emits data: [] for an empty page. An unreadable envelope or row
+// cannot erase earlier restore evidence or pass a partly usable inventory.
+export const normalizeRecoveryPointsResponse = (response: unknown): RecoveryPointsResponse => {
+  const unreadable = () => new Error('Recovery point response is unreadable.');
+  if (!isRecord(response) || !Array.isArray(response.data)) throw unreadable();
+  const identities = new Set<string>();
+  const data = response.data.map((point: unknown) => {
+    if (
+      !isRecord(point) ||
+      !['id', 'kind', 'mode', 'outcome'].every((key) => toTrimmedString(point[key])) ||
+      !['display', 'details', 'itemRef', 'subjectRef', 'repositoryRef'].every(
+        (key) => point[key] == null || isRecord(point[key]),
+      )
+    ) {
+      throw unreadable();
+    }
+    const id = point.id as string;
+    if (identities.has(id)) throw unreadable();
+    identities.add(id);
+    // Kind, mode and outcome are open strings in the transport contract.
+    // Unrecognised outcomes remain Unknown in the consumer, not success.
+    return normalizeRecoveryPoint(point as unknown as RecoveryPointTransport);
+  });
+  return { data };
+};

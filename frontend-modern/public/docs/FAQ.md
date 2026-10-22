@@ -100,10 +100,22 @@ passwords and tokens.
 ## 🔍 Monitoring & Metrics
 
 ### What do Pro and Cloud unlock?
-Pro and Cloud unlock **hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
+
+For a self-hosted installation, Pro adds capabilities to that installation;
+it does not create a hosted server. **Pulse Cloud is not generally available.**
+A Cloud tier in the feature matrix is not a public sign-up or provisioning
+offer. If you already have hosted access, use the instance supplied by its
+operator; see [existing hosted access](CLOUD.md#1-confirm-existing-hosted-access).
+
+Pro adds **hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history** along with the broader operations feature set. Existing legacy Pro+ holders keep their current continuity, but self-hosted pricing no longer sells more monitoring volume. Pulse Patrol is available to everyone on Community with BYOK and provides scheduled, cross-system analysis that correlates real-time state, recent metrics history, and diagnostics to surface actionable findings.
 
 Example output includes trend-based capacity warnings, backup regressions, Kubernetes cluster analysis, and correlated container failures that simple threshold alerts miss.
-See [Pulse Intelligence](AI.md), [Plans and entitlements](PULSE_PRO.md), and <https://pulserelay.pro>.
+See [Pulse Intelligence](AI.md), [Plans and entitlements](PULSE_PRO.md#cloud),
+and <https://pulserelay.pro>.
+
+Already paid but a feature is still unavailable? Check
+[activation and the installed Pro runtime](PULSE_PRO.md#already-paid-but-pro-features-are-unavailable)
+before buying again or clearing a key.
 
 ### What happens to Pulse Mobile and Relay?
 

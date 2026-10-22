@@ -205,20 +205,28 @@ export const EN_MESSAGES = {
   'alerts.overview.hydration.unavailable.description':
     'Pulse could not confirm the current incident state. This page will not report an all-clear until alert data is available.',
   'alerts.overview.hydration.unavailable.title': 'Active alert status is temporarily unavailable',
+  'alerts.overview.deliveryUnavailable.region': 'Alert notification status',
+  'alerts.overview.deliveryUnavailable.title': 'Alert notification status is unavailable.',
+  'alerts.overview.deliveryUnavailable.description':
+    'Pulse could not refresh the delivery or pause reason for these alerts. It will check again automatically.',
   'alerts.overview.nodePrefix': 'on {node}',
   'alerts.overview.notification.acknowledged': 'Alert acknowledged',
-  'alerts.overview.notification.acknowledgeFailed': 'Failed to acknowledge alert',
+  'alerts.overview.notification.acknowledgeFailed':
+    'Acknowledgement could not be confirmed. Refresh alerts before trying again.',
   'alerts.overview.notification.bulkFailure.singular': 'Failed to acknowledge {count} alert.',
   'alerts.overview.notification.bulkFailure.plural': 'Failed to acknowledge {count} alerts.',
   'alerts.overview.notification.bulkFailureGeneric': 'Failed to acknowledge alerts',
   'alerts.overview.notification.bulkSuccess.singular': 'Acknowledged {count} alert.',
   'alerts.overview.notification.bulkSuccess.plural': 'Acknowledged {count} alerts.',
   'alerts.overview.notification.restored': 'Alert restored',
-  'alerts.overview.notification.restoreFailed': 'Failed to restore alert',
+  'alerts.overview.notification.restoreFailed':
+    'Restoring the alert could not be confirmed. Refresh alerts before trying again.',
   'alerts.overview.notification.resumed': 'Alert notifications resumed',
-  'alerts.overview.notification.resumeFailed': 'Failed to resume alert notifications',
+  'alerts.overview.notification.resumeFailed':
+    'Resuming notifications could not be confirmed. Refresh alerts before trying again.',
   'alerts.overview.notification.snoozed': 'Alert snoozed until {until}',
-  'alerts.overview.notification.snoozeFailed': 'Failed to snooze alert',
+  'alerts.overview.notification.snoozeFailed':
+    'Snooze could not be confirmed. Refresh alerts before trying again.',
   'alerts.overview.paused.description':
     'Toggle alerts on to resume monitoring and unlock configuration tabs',
   'alerts.overview.paused.title': 'Alerting is paused',
@@ -827,6 +835,9 @@ export const ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS = [
   'alerts.overview.hydration.retry',
   'alerts.overview.hydration.unavailable.description',
   'alerts.overview.hydration.unavailable.title',
+  'alerts.overview.deliveryUnavailable.region',
+  'alerts.overview.deliveryUnavailable.title',
+  'alerts.overview.deliveryUnavailable.description',
   'alerts.overview.nodePrefix',
   'alerts.overview.notification.acknowledged',
   'alerts.overview.notification.acknowledgeFailed',

@@ -25,6 +25,28 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('canonical drawer History honours selected guest observation provenance', () => {
+  it.each(['vm', 'system-container'] as const)(
+    'keeps non-running %s memory unavailable without claiming it is powered off',
+    (type) => {
+      for (const runtimeStatus of ['paused', 'suspended', 'stopped']) {
+        const value = baseResource({
+          type,
+          platformType: 'proxmox-pve',
+          status: 'online',
+          proxmox: { runtimeStatus },
+          memory: { current: 0, observation: { state: 'unavailable', source: 'powered-off' } },
+        });
+        const original = structuredClone(value);
+        expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
+        expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toEqual({
+          lastKnownValue: undefined,
+          message: 'Unavailable while the guest is not running.',
+        });
+        expect(value).toEqual(original);
+      }
+    },
+  );
+
   const resource = (
     state: string,
     value = 25,
@@ -80,32 +102,32 @@ describe('canonical drawer History honours selected guest observation provenance
   });
 
   it.each(['vm', 'system-container'] as const)(
-    'keeps %s agent freshness independent of provider memory interpretation',
+    'composes %s cache classification with stopped-agent freshness',
     (type) => {
-      const value = { ...resource('current', 0), type, agent: { stale: false } };
-      value.memory!.observation!.source = 'agent';
-      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBe(0);
-      value.agent.stale = true;
-      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBeUndefined();
-      expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toMatchObject({
-        lastKnownValue: 0,
-        message: expect.stringContaining('stopped reporting'),
-      });
-      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
-        '2026-10-04 12:00:00 UTC',
-      );
-      expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
-        'Last known.',
-      );
-
-      // A stale supplemental agent cannot invalidate Proxmox's independent
-      // reading or change the VM/LXC distinction of a listing measurement.
-      value.memory!.observation!.source = 'cluster-resources';
-      expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBe(0);
-      value.memory!.observation!.state = 'last-known';
-      const message = getResourceMetricsHistoryDeferredMetrics(value).memory.message;
-      expect(message).not.toContain('stopped reporting');
-      expect(message.includes('cached memory the VM can reuse')).toBe(type === 'vm');
+      for (const source of ['agent', 'cluster-resources', 'status-mem', 'guest-agent-meminfo']) {
+        const value = { ...resource('current'), type, agent: { stale: true } };
+        value.memory!.observation!.source = source;
+        const original = structuredClone(value);
+        const current = getResourceMetricsHistoryCurrentMetrics(value).memory;
+        const deferred = getResourceMetricsHistoryDeferredMetrics(value).memory;
+        if (source === 'agent') {
+          expect(current).toBeUndefined();
+          expect(deferred.lastKnownValue).toBe(25);
+          expect(deferred.message).toContain('stopped reporting');
+          expect(deferred.message).toContain('2026-10-04 12:00:00 UTC');
+        } else {
+          expect(current).toBe(25);
+          expect(deferred).toBeUndefined();
+          value.memory!.observation!.state = 'last-known';
+          const retained = getResourceMetricsHistoryDeferredMetrics(value).memory.message;
+          const includesCache =
+            source === 'status-mem' || (source === 'cluster-resources' && type === 'vm');
+          expect(retained.includes('cached memory')).toBe(includesCache);
+          expect(retained).not.toContain('stopped reporting');
+          value.memory!.observation!.state = 'current';
+        }
+        expect(value).toEqual(original);
+      }
     },
   );
 
@@ -233,7 +255,7 @@ describe('canonical drawer History honours selected guest observation provenance
         expect(getResourceMetricsHistoryCurrentMetrics(value)).toMatchObject({
           disk: undefined,
           usage: undefined,
-          memory: 0,
+          memory: undefined,
           cpu: 10,
           netin: 0,
         });
@@ -241,6 +263,17 @@ describe('canonical drawer History honours selected guest observation provenance
           lastKnownValue: undefined,
           message: 'Guest filesystem stats unavailable while the VM is stopped.',
         });
+        // The selected memory came from inside this stopped guest too. Its
+        // earlier zero is not current; a host-reported source is independent.
+        expect(
+          getResourceMetricsHistoryDeferredMetrics(value).memory.lastKnownValue,
+        ).toBeUndefined();
+        expect(getResourceMetricsHistoryDeferredMetrics(value).memory.message).toContain(
+          'guest stopped',
+        );
+        value.memory!.observation!.source = 'status-mem';
+        expect(getResourceMetricsHistoryCurrentMetrics(value).memory).toBe(0);
+        expect(getResourceMetricsHistoryDeferredMetrics(value).memory).toBeUndefined();
         value.lastSeen += 3600000;
         expect(getResourceMetricsHistoryDeferredMetrics(value).disk.lastKnownValue).toBeUndefined();
       }

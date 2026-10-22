@@ -95,6 +95,16 @@ publication or the reporter's own removal.
 
 Long rule reasons remain scrollable without hiding the confirmation heading or Cancel/Remove controls. Resource/category and exact rule ID precede the reason, so confirmation can be reviewed on narrow displays without clipping safety information.
 
+Each rule-list read or complete pre-read/DELETE/readback sequence has a 30-second
+UI deadline. Expiry aborts the request, retires its response generation, withdraws
+stale rules and closes confirmation with an explicit timeout/uncertainty message.
+Reload becomes available again; no automatic read, mutation retry or success
+claim follows expiry. A DELETE may already have reached the server, so only an
+explicit fresh reload reconciles state before any new confirmation. Completion,
+organisation/access invalidation and disposal clear the deadline. The component
+regressions and `patrol-rule-deadline.cjs` cover each stalled stage, late results,
+normal recovery and unchanged neighbouring decisions at desktop and 320px.
+
 
 ### Canonical Patrol and Assistant continuation, 2026-09-07
 
@@ -146,6 +156,24 @@ filters, keeps saved operator notes editable and clearable, and offers
 `Reopen finding` only on dismissed findings. Reopening removes the
 finding-backed suppression row, refreshes both Patrol and unified finding
 sources, and retains the note as operator context.
+
+### History resource counts and scope identities
+
+History, latest-run summaries and Assistant handoffs report the recorded
+`resources_checked` value, not an inferred completion percentage. Effective
+scope IDs can contain source/canonical aliases and transport-parent context for
+one workload. Their length is not a comparable workload total. Keep those exact
+IDs for finding filters and Assistant context, including the distinction between
+missing and explicitly empty effective scope. Zero checked resources and runtime
+errors remain visible; removing an invented denominator is not a success claim.
+`docker_checked` counts Docker host records, so its badge and fallback handoff
+text say Docker host(s), not container(s). Neither scope labels nor handoffs may
+turn the identity-list length into a resource count.
+
+Proof: `RunHistoryEntry.test.tsx` consumes the eight frozen Docker producer/run
+records in `dockerPatrolHistory.json` (source `dd73bacec9`,
+`source-ux8yc7zc`); formatting, shared summaries and backend handoff tests cover
+aliases, legacy/empty scope, zero/error results and singular/plural host labels.
 
 ## Canonical Files
 

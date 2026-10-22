@@ -149,5 +149,7 @@ export function getDiskDetailAttributeCards(
     });
   }
 
-  return cards;
+  // The fixed header explains that the whole SMART report is last known.
+  // Keep adverse counters readable, but no retained value gets a live tone.
+  return disk.lastKnown ? cards.map((card) => ({ ...card, lastKnown: true })) : cards;
 }

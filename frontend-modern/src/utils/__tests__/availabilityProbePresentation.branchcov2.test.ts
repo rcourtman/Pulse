@@ -334,7 +334,7 @@ describe('getAvailabilityProbeToneClassName — branch coverage (via presentatio
     expect(presentation?.toneClassName).toBe('text-red-600 dark:text-red-300');
   });
 
-  it('returns the success class when available is true even if status is not online', () => {
+  it('returns the success class for a fresh available result even if status is not online', () => {
     const presentation = getAvailabilityProbePresentation(
       makeResource({
         status: 'unknown',
@@ -344,8 +344,10 @@ describe('getAvailabilityProbeToneClassName — branch coverage (via presentatio
           available: true,
           latencyMillis: 5,
           lastChecked: '2026-05-06T13:00:00Z',
+          pollIntervalSeconds: 30,
         },
       }),
+      new Date('2026-05-06T13:00:10Z'),
     );
     expect(presentation?.toneClassName).toBe('text-emerald-600 dark:text-emerald-300');
   });

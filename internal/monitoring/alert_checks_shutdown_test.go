@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -49,7 +50,7 @@ func configureAlertShutdownFixture(t *testing.T) {
 // A synchronous lifecycle consumer holds an actual mock alert pass in flight.
 // No sleeps choose the overlap; the channel proves the pass has reached the
 // writer boundary before cancellation or deletion starts.
-func blockFirstShutdownAlert(t *testing.T, monitor *Monitor) (<-chan struct{}, func()) {
+func blockFirstShutdownAlert(t *testing.T, monitor *Monitor) (<-chan alerts.LifecycleEvent, func()) {
 	t.Helper()
 	manager := monitor.GetAlertManager()
 	cfg := manager.GetConfig()
@@ -57,16 +58,30 @@ func blockFirstShutdownAlert(t *testing.T, monitor *Monitor) (<-chan struct{}, f
 	cfg.ActivationState = alerts.ActivationPending
 	cfg.TimeThresholds = map[string]int{}
 	cfg.MetricTimeThresholds = nil
+	// NodeCount is not the full fixture: the canonical demo graph still adds
+	// storage, backup and mail-gateway scenarios. This is a writer-joining
+	// control, not a deadline for evaluating and persisting that whole estate.
+	// Keep the real monitor, alert manager and synchronous lifecycle writer,
+	// but select the memory alert that the test actually holds in flight.
+	cfg.DisableAllGuests, cfg.DisableAllStorage = true, true
+	cfg.DisableAllPBS, cfg.DisableAllPMG = true, true
+	cfg.BackupDefaults.Enabled, cfg.SnapshotDefaults.Enabled = false, false
+	off := &alerts.HysteresisThreshold{}
+	cfg.NodeDefaults.CPU, cfg.NodeDefaults.Disk, cfg.NodeDefaults.Temperature = off, off, off
+	cfg.AgentDefaults.CPU, cfg.AgentDefaults.Disk, cfg.AgentDefaults.Temperature = off, off, off
 	cfg.NodeDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
 	// Canonical fixtures link a host agent to the node, so the agent can own
 	// the memory alert instead of CheckNode. Admit either normal attribution.
 	cfg.AgentDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 1, Clear: 0.5}
 	manager.UpdateConfig(cfg)
-	entered, release := make(chan struct{}), make(chan struct{})
+	entered, release := make(chan alerts.LifecycleEvent, 1), make(chan struct{})
 	var enterOnce, releaseOnce sync.Once
-	unsubscribe := manager.SubscribeLifecycleCallback(func(alerts.LifecycleEvent) {
+	unsubscribe := manager.SubscribeLifecycleCallback(func(event alerts.LifecycleEvent) {
+		if event.Type != eventlog.TypeFired || event.Alert == nil || event.Alert.Type != "memory" {
+			return
+		}
 		enterOnce.Do(func() {
-			close(entered)
+			entered <- event
 			<-release
 		})
 	})
@@ -74,6 +89,29 @@ func blockFirstShutdownAlert(t *testing.T, monitor *Monitor) (<-chan struct{}, f
 	t.Cleanup(unsubscribe)
 	t.Cleanup(unblock)
 	return entered, unblock
+}
+
+func assertShutdownAlertWasWritten(t *testing.T, monitor *Monitor, admitted alerts.LifecycleEvent) {
+	t.Helper()
+	for _, active := range monitor.GetAlertManager().GetActiveAlerts() {
+		if active.ID != admitted.Alert.ID {
+			continue
+		}
+		if active.Type != "memory" || !active.StartTime.Equal(admitted.Alert.StartTime) {
+			t.Fatal("shutdown replaced the admitted memory alert occurrence")
+		}
+		events, err := monitor.GetAlertManager().AlertEvents(eventlog.Filter{AlertID: active.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, event := range events {
+			if event.Type == eventlog.TypeFired {
+				return
+			}
+		}
+		t.Fatal("shutdown dropped the admitted alert's durable fired event")
+	}
+	t.Fatal("shutdown silently dropped the admitted memory alert")
 }
 
 func awaitTenantRuntimeShutdown(t *testing.T, manager *MultiTenantMonitor, orgID string) {
@@ -114,8 +152,9 @@ func TestMonitorStartJoinsMockAlertChecksBeforeReturning(t *testing.T) {
 			t.Error("monitor did not finish after releasing the alert pass")
 		}
 	})
+	var admitted alerts.LifecycleEvent
 	select {
-	case <-entered:
+	case admitted = <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("mock pass did not reach the lifecycle writer")
 	}
@@ -131,9 +170,7 @@ func TestMonitorStartJoinsMockAlertChecksBeforeReturning(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("monitor failed to join its completed alert pass")
 	}
-	if len(monitor.GetAlertManager().GetActiveAlerts()) == 0 {
-		t.Fatal("shutdown silently dropped the admitted alert pass")
-	}
+	assertShutdownAlertWasWritten(t, monitor, admitted)
 }
 
 func TestMonitorStartJoinsConnectionAlertChecksBeforeReturning(t *testing.T) {
@@ -196,7 +233,7 @@ func TestTenantDeletionRetainsBlockedAlertPassThenRemovesCompletedRuntime(t *tes
 		t.Fatal(err)
 	}
 	manager := NewMultiTenantMonitor(&config.Config{DataPath: root}, persistence, nil)
-	var entered <-chan struct{}
+	var entered <-chan alerts.LifecycleEvent
 	var unblock func()
 	manager.SetMonitorInitializer(func(monitor *Monitor) {
 		entered, unblock = blockFirstShutdownAlert(t, monitor)
@@ -206,8 +243,9 @@ func TestTenantDeletionRetainsBlockedAlertPassThenRemovesCompletedRuntime(t *tes
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { unblock(); manager.Stop() })
+	var admitted alerts.LifecycleEvent
 	select {
-	case <-entered:
+	case admitted = <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("tenant mock pass did not reach the lifecycle writer")
 	}
@@ -232,6 +270,7 @@ func TestTenantDeletionRetainsBlockedAlertPassThenRemovesCompletedRuntime(t *tes
 	// sampler or Start. Observe the owned runtime signal, not a second race
 	// against the deliberately short refusal budget (especially under -race).
 	awaitTenantRuntimeShutdown(t, manager, "alert-owner")
+	assertShutdownAlertWasWritten(t, monitor, admitted)
 	if err := manager.BeginTenantDeletion("alert-owner"); err != nil {
 		t.Fatalf("completed alert pass prevented safe removal: %v", err)
 	}

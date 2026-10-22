@@ -175,7 +175,7 @@ func TestPollPBSBackups(t *testing.T) {
 			// groups response
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": []map[string]interface{}{
-					{"backup-type": "vm", "backup-id": "100", "owner": "root@pam", "backup-count": 1},
+					{"backup-type": "vm", "backup-id": "100", "owner": "root@pam", "backup-count": 1, "last-backup": 1600000000},
 				},
 			})
 			return

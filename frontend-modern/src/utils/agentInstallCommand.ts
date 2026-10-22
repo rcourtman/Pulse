@@ -206,7 +206,7 @@ export const buildUnixAgentInstallCommand = ({
       'token_file="$token_dir/token";',
       'unset pulse_token pulse_discard tty_state;',
       'tty_control=();',
-      'cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };',
+      'cleanup() { kill %1 2>/dev/null || :; wait 2>/dev/null || :; unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };',
       "trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;",
       // Some NAS hosts expose stty only as a BusyBox applet. Keep the selected
       // utility for both mode changes and cleanup; never fall back to echoed
@@ -215,12 +215,17 @@ export const buildUnixAgentInstallCommand = ({
       'if command -v stty >/dev/null 2>&1; then tty_control=(stty); elif command -v busybox >/dev/null 2>&1; then tty_control=(busybox stty); else echo "Silent token input requires stty or BusyBox stty. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;',
       'if ! tty_state=$("${tty_control[@]}" -g </dev/tty 2>/dev/null) || [ -z "$tty_state" ]; then echo "Cannot read terminal settings with stty or BusyBox stty. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;',
       'if ! "${tty_control[@]}" -echo </dev/tty 2>/dev/null; then echo "Cannot disable terminal echo. No token was requested and no installation was attempted." >&2; exit 1; fi;',
+      // Keep signal/EXIT cleanup outside Bash's terminal read. Its supervisor
+      // waits, then reaps the private input child before restoring the tty.
+      // Job 1 belongs to this fresh shell, including before wait has started.
+      '( trap - EXIT HUP INT TERM;',
       `if ! IFS= read -r -s -p ${shellQuoteArg('Pulse agent token (paste at this prompt, not in the command): ')} -n 4097 pulse_token </dev/tty; then echo "Token input was interrupted. No installation was attempted." >&2; exit 1; fi;`,
       'if [ "${#pulse_token}" -gt 4096 ]; then while IFS= read -r -s -n 4097 pulse_discard </dev/tty && [ "${#pulse_discard}" -eq 4097 ]; do :; done; unset pulse_discard; fi;',
-      'if ! "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null; then echo "Cannot restore terminal settings. No installation was attempted." >&2; exit 1; fi; unset tty_state;',
-      "printf '\\n' >/dev/tty;",
       'if [ -z "$pulse_token" ] || [ "${#pulse_token}" -gt 4096 ]; then echo "A non-empty token of at most 4096 characters is required." >&2; exit 1; fi;',
       'printf %s "$pulse_token" > "$token_file"; unset pulse_token;',
+      ') & wait "$!";',
+      'if ! "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null; then echo "Cannot restore terminal settings. No installation was attempted." >&2; exit 1; fi; unset tty_state;',
+      "printf '\\n' >/dev/tty;",
     );
   }
   privileged.push(`bash "$1" ${installArgs}${caCertArg}${insecureArg};`);
@@ -273,9 +278,9 @@ const buildPowerShellInstallerDownload = (
     `} else { ` +
     `[System.Net.ServicePointManager]::ServerCertificateValidationCallback = [PulseInstallerCertificateValidator]::ValidateCustomCaCallback ` +
     `}; ` +
-    `irm $pulseScriptUrl ` +
+    `irm $pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop ` +
     `} finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $pulsePrev; [PulseInstallerCertificateValidator]::CustomCa = $null } ` +
-    `} else { irm $pulseScriptUrl } }`
+    `} else { irm $pulseScriptUrl -TimeoutSec 60 -ErrorAction Stop } }`
   );
 };
 
@@ -338,8 +343,8 @@ export const buildWindowsAgentInstallCommand = ({
     ? `[PulseInstallerCertificateValidator]::AcceptAnyCallback`
     : `[PulseInstallerCertificateValidator]::ValidateCustomCaCallback`;
   const customTrustFetch = installerFetchRequiresCustomTrust
-    ? `${powerShellTlsValidatorBootstrap}$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { ${powerShellLoadCustomCa('$pulseCaCertPath')}}; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=${certificateValidationCallback}; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev; [PulseInstallerCertificateValidator]::CustomCa=$null }`
-    : `Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript`;
+    ? `${powerShellTlsValidatorBootstrap}$pulseCustomCa=$null; if (-not [string]::IsNullOrWhiteSpace($pulseCaCertPath)) { ${powerShellLoadCustomCa('$pulseCaCertPath')}}; $pulsePrev=[System.Net.ServicePointManager]::ServerCertificateValidationCallback; try { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=${certificateValidationCallback}; Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript -TimeoutSec 60 -ErrorAction Stop } finally { [System.Net.ServicePointManager]::ServerCertificateValidationCallback=$pulsePrev; [PulseInstallerCertificateValidator]::CustomCa=$null }`
+    : `Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript -TimeoutSec 60 -ErrorAction Stop`;
 
   const tokenBootstrap = normalizedToken
     ? `$pulseTokenFile=Join-Path $pulseTmp "token"; [System.IO.File]::WriteAllText($pulseTokenFile, "${powerShellQuote(normalizedToken)}", [System.Text.Encoding]::ASCII); `

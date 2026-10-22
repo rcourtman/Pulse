@@ -703,6 +703,13 @@ const hasWithdrawnProxmoxMemory = (incoming: Resource): boolean =>
   incoming.memory == null &&
   asBoolean(asRecord(asRecord(incoming.proxmox)?.memory)?.usageUnavailable) === true;
 
+// Only source-authored absence withdraws a prior CPU reading. A thin row
+// without CPU stays compatible, and a newly measured zero wins immediately.
+const hasWithdrawnProxmoxCPU = (incoming: Resource): boolean =>
+  incoming.cpu == null &&
+  asBoolean(getFacetRecord(incoming, incoming.platformData, 'proxmox')?.cpuUsageUnavailable) ===
+    true;
+
 // The source list a row carries itself: top-level on realtime rows, in
 // platformData on REST rows. Never one inferred from the facets present.
 const getOwnSourceList = (resource: Resource): string[] | undefined =>
@@ -837,6 +844,7 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     ...existingCanonical,
     ...incoming,
     ...(hasWithdrawnProxmoxMemory(incoming) ? { memory: undefined } : {}),
+    ...(hasWithdrawnProxmoxCPU(incoming) ? { cpu: undefined } : {}),
     clusterId: incoming.clusterId ?? existingCanonical.clusterId,
     platformScopes: normalizeSourcePlatformScopes(
       incoming.platformScopes ?? existingCanonical.platformScopes,
@@ -1121,6 +1129,7 @@ const applyFastResourceMergePatch = (
     next.platformData = nextPlatformData;
   }
   if (hasWithdrawnProxmoxMemory(incoming)) next.memory = undefined;
+  if (hasWithdrawnProxmoxCPU(incoming)) next.cpu = undefined;
   return next as unknown as Resource;
 };
 
@@ -1145,6 +1154,9 @@ export const buildFastResourceStorePatchOps = (
   const ops: FastResourceStorePatchOp[] = [];
   // Unavailability can also arrive with a raw Proxmox facet change rather
   // than a memory key (the canonical metric may already be absent on wire).
+  if (!keys.includes('cpu') && hasWithdrawnProxmoxCPU(row)) {
+    ops.push({ key: 'cpu', value: undefined, mode: 'set' });
+  }
   if (!keys.includes('memory') && hasWithdrawnProxmoxMemory(row)) {
     ops.push({ key: 'memory', value: undefined, mode: 'set' });
   }

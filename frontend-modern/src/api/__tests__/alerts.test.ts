@@ -11,6 +11,23 @@ describe('AlertsAPI', () => {
     vi.clearAllMocks();
   });
 
+  describe('single-alert response admission', () => {
+    it.each(['acknowledge', 'unacknowledge', 'snooze', 'unsnooze'] as const)(
+      'requires the existing affirmative %s marker, not HTTP completion',
+      async (action) => {
+        vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: false });
+        const request =
+          action === 'snooze'
+            ? AlertsAPI.snooze('synthetic:vm/100', '2026-10-21T13:00:00Z')
+            : AlertsAPI[action]('synthetic:vm/100');
+        await expect(request).rejects.toThrow(
+          'Alert action could not be confirmed. Refresh alerts before trying again.',
+        );
+        expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+      },
+    );
+  });
+
   describe('getActive', () => {
     it('fetches active alerts', async () => {
       const mockAlerts = [{ id: 'alert-1', severity: 'critical' }];
@@ -56,7 +73,7 @@ describe('AlertsAPI', () => {
 
       const result = await AlertsAPI.getConfig();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/config');
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/alerts/config', undefined);
       expect(result).toEqual(mockConfig);
     });
 

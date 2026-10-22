@@ -15,6 +15,7 @@ import {
   getAlertDestinationsDeliveryLogEmpty,
   getAlertDestinationsDeliveryLogTitle,
   getAlertDestinationsDeliveryLogUnavailable,
+  getAlertDestinationsDeliveryLogIncomplete,
   getAlertDestinationsDeliveryLogLoading,
   getAlertDestinationsHeldEventsLoading,
   getAlertDestinationsHeldEventsUnavailable,
@@ -117,6 +118,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
   const confirmedEmpty = () =>
     props.log !== null &&
     !props.unavailable &&
+    !props.log.incomplete &&
     !attemptsLoading() &&
     !props.heldEventsUnavailable &&
     !props.refreshingHeldEvents;
@@ -141,7 +143,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
   };
 
   return (
-    <Card id="notification-delivery-activity" padding="sm" class="scroll-mt-24 sm:p-4">
+    <Card id="notification-delivery-activity" padding="sm" class="min-w-0 scroll-mt-24 sm:p-4">
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
@@ -171,6 +173,11 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
             {getAlertDestinationsDeliveryLogUnavailable()}
           </p>
         </Show>
+        <Show when={!props.unavailable && props.log?.incomplete}>
+          <p class="text-sm text-amber-800 dark:text-amber-200" role="status">
+            {getAlertDestinationsDeliveryLogIncomplete()}
+          </p>
+        </Show>
         <Show when={props.heldEventsUnavailable}>
           <p class="text-sm text-red-800 dark:text-red-300" role="alert">
             {getAlertDestinationsHeldEventsUnavailable()}
@@ -196,7 +203,11 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
             </Show>
           }
         >
-          <ul class="max-h-80 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
+          <ul
+            aria-label="Notification activity"
+            tabIndex={0}
+            class="max-h-80 min-w-0 divide-y divide-gray-200 overflow-y-auto rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:divide-gray-700 dark:focus-visible:outline-blue-400"
+          >
             <For each={rows()}>
               {(row) =>
                 row.kind === 'attempt' ? (
@@ -207,15 +218,24 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                       >
                         {getAlertDeliveryLogOutcomeLabel(row.entry.outcome)}
                       </span>
-                      <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <span class="min-w-0 text-sm font-medium text-gray-900 [overflow-wrap:anywhere] dark:text-gray-100">
                         {destinationLabel(row.entry)}
                       </span>
-                      <span
-                        class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400"
-                        title={row.entry.alertIds.join(', ')}
+                      <Show
+                        when={row.entry.alertIds.length > 1}
+                        fallback={
+                          <span class="min-w-0 text-sm text-gray-600 [overflow-wrap:anywhere] dark:text-gray-400">
+                            {alertSummary(row.entry)}
+                          </span>
+                        }
                       >
-                        {alertSummary(row.entry)}
-                      </span>
+                        <details class="min-w-0 max-w-full text-sm text-gray-600 [overflow-wrap:anywhere] dark:text-gray-400">
+                          <summary class="min-h-11 cursor-pointer rounded-sm py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:min-h-0 sm:py-0 dark:focus-visible:outline-blue-400">
+                            {alertSummary(row.entry)}
+                          </summary>
+                          <p class="mt-1 whitespace-pre-wrap">{row.entry.alertIds.join('\n')}</p>
+                        </details>
+                      </Show>
                       <time
                         class="ml-auto shrink-0 text-xs text-gray-500 dark:text-gray-400"
                         dateTime={row.entry.timestamp}
@@ -229,7 +249,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                         !row.entry.success && (row.entry.failureClass || row.entry.errorMessage)
                       }
                     >
-                      <p class="text-xs leading-5 text-red-700 dark:text-red-300">
+                      <p class="min-w-0 text-xs leading-5 text-red-700 [overflow-wrap:anywhere] dark:text-red-300">
                         <Show when={row.entry.failureClass}>
                           {(failureClass) => (
                             <span class="font-medium">
@@ -243,7 +263,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                     </Show>
                   </li>
                 ) : (
-                  <li class="flex flex-col gap-1 py-2" title={row.event.message}>
+                  <li class="flex flex-col gap-1 py-2">
                     <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span
                         class={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -254,10 +274,10 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                       >
                         {row.event.type === 'notification_deferred' ? 'Deferred' : 'Held'}
                       </span>
-                      <span class="min-w-0 truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <span class="min-w-0 text-sm font-medium text-gray-900 [overflow-wrap:anywhere] dark:text-gray-100">
                         {heldResourceLabel(row.event)}
                       </span>
-                      <span class="min-w-0 truncate text-sm text-gray-600 dark:text-gray-400">
+                      <span class="min-w-0 text-sm text-gray-600 [overflow-wrap:anywhere] dark:text-gray-400">
                         {describeAlertEventReason(row.event.reason)}
                       </span>
                       <time
@@ -268,6 +288,11 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
                         {absoluteTimestamp(row.event.occurredAt)}
                       </time>
                     </div>
+                    <Show when={row.event.message}>
+                      <p class="min-w-0 text-xs leading-5 text-gray-600 [overflow-wrap:anywhere] dark:text-gray-400">
+                        {row.event.message}
+                      </p>
+                    </Show>
                   </li>
                 )
               }

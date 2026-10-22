@@ -61,22 +61,28 @@ export function useAlertWebhookDestinationsState(
   });
 
   const testWebhook = async (webhookId: string, webhookData?: Omit<Webhook, 'id'>) => {
+    // Saved and draft controls share this owner. A second request would
+    // replace the visible pending id, letting an earlier reply unlock a
+    // still-running test. Never queue or automatically repeat a send.
+    if (disposed || testingWebhook() !== null) return;
     setTestingWebhook(webhookId);
     try {
       const result = webhookData
         ? await NotificationsAPI.testWebhook(webhookData)
         : await NotificationsAPI.testNotification({ type: 'webhook', webhookId });
+      if (disposed) return;
       if (result.deliveryPaused) {
         notificationStore.warning(getAlertDestinationsTestPausedWarning());
       } else {
         notificationStore.success(getAlertWebhookTestSuccess());
       }
     } catch (error) {
+      if (disposed) return;
       const message = error instanceof Error ? error.message : getAlertWebhookTestFailure();
       const detail = (error as Error & { detail?: string })?.detail;
       showErrorWithDetail(message, detail);
     } finally {
-      setTestingWebhook(null);
+      if (!disposed) setTestingWebhook(null);
     }
   };
 

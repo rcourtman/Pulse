@@ -470,4 +470,33 @@ func TestGuestPollFailedEnumerationRetainsProducerOwnership(t *testing.T) {
 	if len(vms) != 1 || len(containers) != 0 || !reflect.DeepEqual(vms[0].Memory, original.Memory) || vms[0].CPU != .95 || vms[0].GuestAgentStatus != "deferred" || vms[0].Disk.Used != 40 || !vms[0].LastSeen.Equal(at) {
 		t.Fatalf("failed enumeration changed source ownership/membership: %+v", vms)
 	}
+	// Efficient inventory's node grace must obey the same source boundary:
+	// neither a linked reading nor an unselected raw-state guest can leak in.
+	graceVMs, graceContainers := m.preserveGuestsForGracePeriod("site-a", nil, previous,
+		[]proxmox.Node{{Node: "node", Status: "offline"}}, map[string]string{"node": "online"}, nil, nil)
+	if !reflect.DeepEqual(graceVMs, vms) || !reflect.DeepEqual(graceContainers, containers) {
+		t.Fatalf("efficient grace changed source ownership/membership: %+v", graceVMs)
+	}
+	// Effective Online is also the normal healthy state, not just grace. A
+	// current online node with accepted empty inventory must remove its guest.
+	onlineVMs, onlineContainers := m.preserveGuestsForGracePeriod("site-a", nil, previous,
+		[]proxmox.Node{{Node: "node", Status: "online"}}, map[string]string{"node": "online"}, nil, nil)
+	if len(onlineVMs) != 0 || len(onlineContainers) != 0 {
+		t.Fatal("online empty inventory was replaced by stale linked/raw state")
+	}
+}
+
+func TestGuestMetadataMigrationIdentity(t *testing.T) {
+	for _, instance := range []string{"site", "site|branch", "région | zone"} {
+		key := guestMetadataCacheKey(instance, "node-a", 105)
+		if key != guestMetadataCacheKey(instance, "node-b", 105) {
+			t.Error("migration changed the guest metadata lifecycle")
+		}
+		if key == guestMetadataCacheKey(instance, "node-a", 106) || key == guestMetadataCacheKey(instance+"|other", "node-a", 105) {
+			t.Error("independent guest/connection identity collapsed")
+		}
+		if !guestMetadataCacheBelongsToInstance(key, instance) || guestMetadataCacheBelongsToInstance(key, instance+"|other") || guestMetadataCacheBelongsToInstance(guestMetadataCacheKey(instance+"|other", "node-a", 105), instance) {
+			t.Error("connection retirement ownership changed")
+		}
+	}
 }

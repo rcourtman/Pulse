@@ -9,11 +9,13 @@ import { buildMetricKey } from '@/utils/metricsKeys';
 import { getGuestHealthIndicator, isGuestRunning } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
 import { getContainerRuntimeBadgeForRuntime } from '@/utils/resourceBadgePresentation';
-import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import {
+  getWorkloadGuestDiskRead,
+  supportsWorkloadBackupEvidence,
+} from '@/utils/workloadGuestPresentation';
 import { getWorkloadDiskUsagePercent } from '@/utils/workloadDiskUsage';
 import {
   getCanonicalWorkloadId,
-  getWorkloadPlatformScopes,
   getWorkloadMetricsKind,
   isDockerManagedAppContainer,
   resolveWorkloadType,
@@ -108,19 +110,7 @@ export function useGuestRowState(props: GuestRowProps) {
     return infoValue();
   });
 
-  const supportsBackup = createMemo(() => {
-    const type = workloadType();
-    if (type !== 'vm' && type !== 'system-container') return false;
-
-    // The shared backup scalar is currently sourced only from Proxmox
-    // vzdump/PBS inventory. An API-backed VM from another provider (notably
-    // vSphere) has no value here because the provider does not expose that
-    // contract; absence must remain unknown rather than becoming "never".
-    // Rows without canonical platform metadata are the legacy Proxmox shape
-    // and retain their existing backup presentation during migration.
-    const platformScopes = getWorkloadPlatformScopes(props.guest);
-    return platformScopes.length === 0 || platformScopes.includes('proxmox-pve');
-  });
+  const supportsBackup = createMemo(() => supportsWorkloadBackupEvidence(props.guest));
 
   const appContainerRuntimeBadge = createMemo(() => {
     if (workloadType() !== 'app-container') return null;

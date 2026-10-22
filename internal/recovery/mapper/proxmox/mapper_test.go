@@ -9,6 +9,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+func TestPVEArchiveRepositoryKeepsStorageHostSeparateFromGuest(t *testing.T) {
+	for _, storageNode := range []string{"node-a", "node-b", ""} {
+		b := models.StorageBackup{ID: "archive-" + storageNode, Storage: "archive", StorageNode: storageNode,
+			Instance: "estate", Node: "guest-current", VMID: 100, Type: "qemu", Time: time.Now().UTC(), Size: 1024}
+		points := FromPVEStorageBackups([]models.StorageBackup{b}, nil)
+		if len(points) != 1 {
+			t.Fatalf("archive missing: %+v", points)
+		}
+		p := points[0]
+		wantRepositoryNode := storageNode
+		if wantRepositoryNode == "" {
+			wantRepositoryNode = "guest-current"
+		}
+		if p.SubjectRef.Class != "guest-current" || p.RepositoryRef.Class != wantRepositoryNode ||
+			p.Details["storageNode"] != storageNode || p.Details["node"] != "guest-current" || p.ID != "pve-backup:"+b.ID {
+			t.Fatalf("recovery repository confused archive and guest ownership: %+v", p)
+		}
+	}
+}
+
 func TestSubjectResourceIDPrefersCanonicalIdentityAndFallsBackToSourceIdentity(t *testing.T) {
 	t.Parallel()
 

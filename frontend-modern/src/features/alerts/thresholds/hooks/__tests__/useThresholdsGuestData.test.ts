@@ -60,6 +60,34 @@ function filesystemData(initial: Resource) {
 }
 
 describe('useThresholdsGuestData guest filesystems', () => {
+  it.each(['paused', 'suspended', 'unknown', 'starting'])(
+    'keeps %s filesystem values last known without changing alert overrides',
+    (power) => {
+      createRoot((dispose) => {
+        const { data, setGuest } = filesystemData(filesystemGuest('', power));
+        const disk = data.guestDisksWithOverrides()[0];
+        expect(disk).toMatchObject({
+          subtitle: 'Last known 9.0 / 10.0 GB · 90.0%',
+          thresholds: { disk: 95 },
+          hasOverride: true,
+        });
+        expect(disk.readingMessage).toContain(
+          power === 'paused' || power === 'suspended'
+            ? `while the VM is ${power}`
+            : 'VM running state is unconfirmed',
+        );
+        setGuest(filesystemGuest());
+        expect(data.guestDisksWithOverrides()[0]).toMatchObject({
+          id: disk.id,
+          subtitle: '9.0 / 10.0 GB · 90.0%',
+          thresholds: { disk: 95 },
+          readingMessage: undefined,
+        });
+        dispose();
+      });
+    },
+  );
+
   it.each(guestDiskDeferrals)(
     'distinguishes retained and unavailable %s readings without losing alert settings',
     (reason, message) => {

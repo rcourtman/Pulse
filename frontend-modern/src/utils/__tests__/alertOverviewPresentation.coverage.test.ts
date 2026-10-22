@@ -21,11 +21,11 @@ describe('alertOverviewPresentation coverage', () => {
   });
 
   describe('severity projection — getAlertOverviewCardPresentation', () => {
-    it('dims an acknowledged alert with opacity-60 when it is not processing', () => {
+    it('de-emphasises an acknowledged alert without dimming its evidence', () => {
       const presentation = getAlertOverviewCardPresentation('critical', true, false);
 
       expect(presentation.cardClassName).toBe(
-        'border border-l-4 rounded-md px-3 py-2.5 transition-all opacity-60 border-border border-l-border bg-surface-alt',
+        'border border-l-4 rounded-md px-3 py-2.5 transition-all border-border border-l-border bg-surface-alt',
       );
       expect(presentation.iconClassName).toBe(
         'mr-2.5 mt-0.5 shrink-0 transition-all text-green-600 dark:text-green-400',
@@ -69,13 +69,13 @@ describe('alertOverviewPresentation coverage', () => {
   describe('ack-state projection', () => {
     it('reports a restore failure when an already-acknowledged alert fails to toggle', () => {
       expect(getAlertOverviewAcknowledgementFailureNotification(true)).toBe(
-        'Failed to restore alert',
+        'Restoring the alert could not be confirmed. Refresh alerts before trying again.',
       );
     });
 
     it('reports an acknowledge failure when an unacknowledged alert fails to toggle', () => {
       expect(getAlertOverviewAcknowledgementFailureNotification(false)).toBe(
-        'Failed to acknowledge alert',
+        'Acknowledgement could not be confirmed. Refresh alerts before trying again.',
       );
     });
 

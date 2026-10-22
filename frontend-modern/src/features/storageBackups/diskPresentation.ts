@@ -6,6 +6,7 @@ import type {
   ResourceStorageRiskReason,
 } from '@/types/resource';
 import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import {
   getSourcePlatformLabel,
   getSourcePlatformPresentation,
@@ -60,6 +61,10 @@ export interface PhysicalDiskPresentationData {
   wwn: string;
   size: number;
   health: string;
+  /** Canonical source expiry, independent of a successful inventory read. */
+  lastKnown?: boolean;
+  /** An explicit parent-owned reason, when it invalidates this agent report. */
+  lastKnownReason?: string;
   riskLevel?: string;
   riskReasons: string[];
   /** The same reasons with their codes and severities, as the API sent them. */
@@ -212,6 +217,8 @@ export const getPhysicalDiskCellPaddingClass = (layout: PhysicalDiskTableLayoutM
 // Health words that do not fit a phone-width health column fall back to a
 // shorter form; the full label stays in the wider projections and the detail.
 export const getPhysicalDiskHealthCompactLabel = (label: string): string => {
+  if (label === 'Last known') return 'Old data';
+  if (label === 'Last known risk') return 'Past risk';
   if (label === 'Needs Attention') return 'Attention';
   if (label === 'Replace Now') return 'Replace';
   if (label === 'Running Hot') return 'Hot';
@@ -443,6 +450,7 @@ export function extractPhysicalDiskPresentationData(
   resource: Resource,
   resolveTemperatureThresholds: PhysicalDiskTemperatureThresholdResolver = resolveFactoryDiskTemperatureThresholds,
   alertResourceIds: string[] = [],
+  lastKnownReason?: string,
 ): PhysicalDiskPresentationData {
   const pd = resource.physicalDisk || ((resource.platformData as any)?.physicalDisk ?? {});
   const diskNode = getPhysicalDiskNodeIdentity(resource);
@@ -475,6 +483,8 @@ export function extractPhysicalDiskPresentationData(
     target: pd.target,
     size: pd.sizeBytes || 0,
     health: pd.health || 'UNKNOWN',
+    lastKnown: Boolean(lastKnownReason) || getResourceStaleness(resource) !== null,
+    lastKnownReason,
     wearout: pd.wearout ?? -1,
     temperature: pd.temperature ?? 0,
     temperatureThresholds: resolveTemperatureThresholds(pd.diskType || '', alertResourceIds),
@@ -817,6 +827,19 @@ const PHYSICAL_DISK_WARNING_TONE = 'text-amber-700 dark:text-amber-300';
 export function getPhysicalDiskHealthStatus(
   disk: PhysicalDiskPresentationData,
 ): DiskHealthStatusPresentation {
+  const status = getReportedPhysicalDiskHealthStatus(disk);
+  if (!disk.lastKnown) return status;
+  const hasRisk = getPhysicalDiskHealthVerdict(disk).kind !== 'clear';
+  return {
+    label: hasRisk ? 'Last known risk' : 'Last known',
+    summary: `${hasRisk ? `Last reported: ${status.label}. ${status.summary} ` : ''}${disk.lastKnownReason || 'Disk source stopped reporting.'} SMART readings are last known, not current. Current disk health is unconfirmed.`,
+    tone: hasRisk ? status.tone : 'text-muted',
+  };
+}
+
+function getReportedPhysicalDiskHealthStatus(
+  disk: PhysicalDiskPresentationData,
+): DiskHealthStatusPresentation {
   const verdict = getPhysicalDiskHealthVerdict(disk);
 
   if (verdict.kind === 'replace') {
@@ -938,6 +961,7 @@ export function getPhysicalDiskLifeLabel(disk: PhysicalDiskPresentationData): st
 }
 
 export function getPhysicalDiskLifeTextClass(disk: PhysicalDiskPresentationData): string {
+  if (disk.lastKnown) return 'text-muted';
   if (!isPhysicalDiskWearoutReported(disk)) {
     return PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS;
   }

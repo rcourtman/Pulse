@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { ConnectionsAPI, type ConnectionType, type ProbeResponse } from '@/api/connections';
-import { ConnectionEditor } from '../ConnectionEditor';
+import { ConnectionEditor, type ConnectionEditorSlotContext } from '../ConnectionEditor';
 
 const connectionsApiMock = vi.hoisted(() => ({
   list: vi.fn(),
@@ -88,6 +88,98 @@ describe('ConnectionEditor', () => {
     expect(lastCall.type).toBe('pve');
     expect(lastCall.candidate?.host).toBe('https://pve.lab:8006');
     expect(lastCall.mode).toBe('add');
+  });
+
+  it.each(['detected', 'no-match', 'error'] as const)(
+    'retires completed %s on address edits before another explicit probe',
+    async (phase) => {
+      const response: ProbeResponse = {
+        candidates: [{ type: 'pve', host: 'https://alpha.example.invalid:8006', port: 8006 }],
+        probedMs: 42,
+      };
+      if (phase === 'error') mockedProbe.mockRejectedValueOnce(new Error('fixture old failure'));
+      else
+        mockedProbe.mockResolvedValueOnce(
+          phase === 'detected' ? response : { candidates: [], probedMs: 42 },
+        );
+      const renderSlot = vi.fn((_context: ConnectionEditorSlotContext) => (
+        <div data-testid="slot" />
+      ));
+      render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
+      const input = screen.getByLabelText('API endpoint');
+      const submit = screen.getByRole('button', { name: 'Probe API endpoint' });
+      fireEvent.input(input, { target: { value: 'alpha.example.invalid' } });
+      fireEvent.click(submit);
+      if (phase === 'detected') await screen.findByText('https://alpha.example.invalid:8006');
+      else if (phase === 'no-match')
+        await screen.findByText('No supported API-backed platform detected at that address.');
+      else await screen.findByRole('alert');
+
+      fireEvent.input(input, { target: { value: 'beta.example.invalid' } });
+      expect(screen.queryByText('https://alpha.example.invalid:8006')).not.toBeInTheDocument();
+      expect(screen.queryByText('Probed in 42 ms')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('No supported API-backed platform detected at that address.'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      fireEvent.input(input, { target: { value: 'alpha.example.invalid' } });
+      expect(screen.queryByText('https://alpha.example.invalid:8006')).not.toBeInTheDocument();
+      expect(mockedProbe).toHaveBeenCalledTimes(1);
+      expect(renderSlot).not.toHaveBeenCalled();
+
+      fireEvent.input(input, { target: { value: 'beta.example.invalid' } });
+      mockedProbe.mockResolvedValueOnce({
+        candidates: [{ type: 'pbs', host: 'https://beta.example.invalid:8007', port: 8007 }],
+        probedMs: 17,
+      });
+      fireEvent.click(submit);
+      fireEvent.click(
+        (await screen.findByText('https://beta.example.invalid:8007')).closest('button')!,
+      );
+      expect(renderSlot.mock.calls.at(-1)![0].candidate?.host).toBe(
+        'https://beta.example.invalid:8007',
+      );
+      expect(mockedProbe).toHaveBeenLastCalledWith('beta.example.invalid');
+    },
+  );
+
+  it('retires a pending probe when its step is left, without accepting an overlap on return', async () => {
+    let resolve!: (response: ProbeResponse) => void;
+    mockedProbe.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const [type, setType] = createSignal<ConnectionType | undefined>();
+    render(() => (
+      <ConnectionEditor
+        initialType={type()}
+        renderCredentialSlot={() => <div>Manual slot</div>}
+        onClose={() => {}}
+      />
+    ));
+    fireEvent.input(screen.getByLabelText('API endpoint'), {
+      target: { value: 'alpha.example.invalid' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Probe API endpoint' }));
+    expect(mockedProbe).toHaveBeenCalledTimes(1);
+    setType('pve');
+    await screen.findByText('Manual slot');
+    setType(undefined);
+    const input = await screen.findByLabelText('API endpoint');
+    expect(input).toHaveValue('');
+    expect(input).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Probing…' })).toBeDisabled();
+    resolve({
+      candidates: [{ type: 'pve', host: 'https://alpha.example.invalid:8006', port: 8006 }],
+      probedMs: 42,
+    });
+    await waitFor(() => expect(input).not.toBeDisabled());
+    expect(screen.queryByText('https://alpha.example.invalid:8006')).not.toBeInTheDocument();
+    expect(mockedProbe).toHaveBeenCalledTimes(1);
+    expect(input).toHaveAccessibleDescription(
+      /Detection|detected platform does not confirm credentials or certificate trust/,
+    );
   });
 
   it('renders the detect landing and can return to the source picker', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCustomSensorRows,
+  getResourceAgentReadingsLastKnownReason,
   buildTemperatureRows,
   HOST_AGENT_STOPPED_REPORTING_REASON,
   formatInteger,
@@ -349,7 +350,7 @@ describe('resourceDetailMappers', () => {
         {
           label: 'Cache hit rate',
           value: '98.5% (stale)',
-          valueTitle: '98.5% (stale) · Error · probe timed out',
+          valueTitle: '98.5% (stale) · Last reported status: Error · probe timed out',
         },
         {
           label: 'Queue depth',
@@ -422,6 +423,84 @@ describe('resourceDetailMappers', () => {
       ]);
     });
 
+    it('qualifies every retained custom value using its parent agent, preserving adverse evidence', () => {
+      const sensors = {
+        custom: [
+          {
+            id: 'service',
+            name: 'Service',
+            kind: 'boolean',
+            value: 1,
+            status: 'ok',
+            observedAt: '2026-10-20T12:00:00Z',
+          },
+          {
+            id: 'backup',
+            name: 'Backup',
+            kind: 'timestamp',
+            value: 7200,
+            status: 'critical',
+            observedAt: '2026-10-20T12:00:00Z',
+          },
+          {
+            id: 'queue',
+            name: 'Queue',
+            value: 0,
+            unit: 'items',
+            status: 'error',
+            error: 'read failed',
+            stale: true,
+            observedAt: '2026-10-20T12:00:00Z',
+          },
+          {
+            id: 'missing',
+            name: 'Missing',
+            status: 'error',
+            error: 'no result',
+            observedAt: '2026-10-20T12:00:00Z',
+          },
+        ],
+      };
+      const original = JSON.stringify(sensors);
+      const rows = buildCustomSensorRows(sensors, {
+        lastKnownReason: HOST_AGENT_STOPPED_REPORTING_REASON,
+      });
+      expect(rows.map((row) => row.value)).toEqual([
+        '2h old when observed (last known)',
+        'Unavailable',
+        '0 items (last known)',
+        'Online (last known)',
+      ]);
+      expect(rows[0].valueTitle).toContain('Last reported status: Critical');
+      expect(rows[1].valueTitle).toContain('no result');
+      expect(rows[2].valueTitle).toContain('read failed');
+      expect(
+        rows.every((row) =>
+          row.valueTitle.includes('Last known reading, not current: host agent stopped reporting'),
+        ),
+      ).toBe(true);
+      expect(JSON.stringify(sensors)).toBe(original);
+    });
+
+    it('anchors a sensor-retained timestamp age to its observation even when the parent reports', () => {
+      const rows = buildCustomSensorRows({
+        custom: [
+          {
+            id: 'backup',
+            name: 'Backup',
+            kind: 'timestamp',
+            value: 7200,
+            status: 'error',
+            stale: true,
+            error: 'source timed out',
+            observedAt: '2026-10-20T12:00:00Z',
+          },
+        ],
+      });
+      expect(rows[0].value).toBe('2h old when observed (stale)');
+      expect(rows[0].valueTitle).toContain('Last reported status: Error · source timed out');
+    });
+
     it('formats an online boolean metric with an OK status', () => {
       expect(
         buildCustomSensorRows({
@@ -459,6 +538,18 @@ describe('resourceDetailMappers', () => {
   });
 
   describe('toNodeFromProxmox', () => {
+    it('keeps an incomplete canonical root aggregate incomplete without mutating source', () => {
+      const host = createHybridHostResource();
+      host.disk = { current: 0, total: 2048 };
+      const before = structuredClone(host);
+      expect(toNodeFromProxmox(host)?.disk).toMatchObject({
+        total: 2048,
+        used: undefined,
+        free: undefined,
+        usage: undefined,
+      });
+      expect(host).toEqual(before);
+    });
     it('preserves canonical linkedAgentId for hybrid hosts', () => {
       const node = toNodeFromProxmox(createHybridHostResource());
 
@@ -497,5 +588,38 @@ describe('resourceDetailMappers', () => {
 
       expect(agent?.displayName).toBe('Tower');
     });
+  });
+});
+
+describe('native guest sensor provenance', () => {
+  it('keeps physical-host collection independent but qualifies the same report inside a stopped VM', () => {
+    const sensors = {
+      smart: [
+        {
+          device: '/dev/sda',
+          temperature: 36,
+          collection: { temperature: { state: 'available' as const } },
+        },
+      ],
+    };
+    const host = createHybridHostResource();
+    host.agent = { stale: true };
+    const reason = getResourceAgentReadingsLastKnownReason(host);
+    expect(buildTemperatureRows(sensors, { lastKnownReason: reason })[0].value).toBe('36°C');
+    const guest = {
+      ...host,
+      type: 'vm' as const,
+      proxmox: { runtimeStatus: 'stopped' },
+      agent: { stale: false },
+    };
+    const powerReason = getResourceAgentReadingsLastKnownReason(guest);
+    expect(powerReason).toBe('Proxmox reports this VM stopped');
+    const rows = buildTemperatureRows(sensors, {
+      lastKnownReason: powerReason,
+      inGuestLastKnownReason: powerReason,
+    });
+    expect(rows[0].value).toBe('36°C (last known)');
+    expect(rows[0].valueTitle).toContain(powerReason);
+    expect(sensors.smart[0].collection.temperature.state).toBe('available');
   });
 });

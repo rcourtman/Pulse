@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
+import { NodesAPI } from '@/api/nodes';
 import { NodeCredentialSlot } from '../NodeCredentialSlot';
 
 const importApprovalRequiredMessage =
@@ -24,6 +25,234 @@ describe('NodeCredentialSlot', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it.each([false, true])(
+    'shows truthful PMG account guidance in the real password form (editing: %s)',
+    (editing) => {
+      const settings = createSettings();
+      const formTest = vi.spyOn(NodesAPI, 'testConnection');
+      const savedTest = vi.spyOn(NodesAPI, 'testExistingNode');
+      render(() => (
+        <NodeCredentialSlot
+          nodeType="pmg"
+          settings={settings}
+          editingNode={
+            editing
+              ? ({
+                  id: 'pmg-fixture',
+                  type: 'pmg',
+                  name: 'Fixture',
+                  host: 'https://saved.example.invalid',
+                  user: 'existing@pmg',
+                  hasPassword: true,
+                  verifySSL: true,
+                  status: 'connected',
+                } as NodeConfigWithStatus)
+              : undefined
+          }
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      ));
+
+      expect(screen.getByText('Username and password')).toBeInTheDocument();
+      expect(screen.getAllByRole('radio')).toHaveLength(1);
+      expect(screen.getByRole('radio', { name: 'Username & Password' })).toBeChecked();
+      expect(screen.getAllByRole('note', { name: 'Mail Gateway account guidance' })).toHaveLength(
+        1,
+      );
+      expect(screen.queryByLabelText(/Token ID|Token Value/)).not.toBeInTheDocument();
+      const username = screen.getByRole('textbox', { name: /^Username/ });
+      expect(username).toHaveAttribute('placeholder', 'pulse-monitor@pmg');
+      expect(username).toHaveValue(editing ? 'existing@pmg' : '');
+      const password = screen.getByLabelText(/^Password/);
+      expect(password).toHaveValue('');
+      expect(password).toHaveAttribute('type', 'password');
+      expect(password.hasAttribute('required')).toBe(!editing);
+      fireEvent.input(username, { target: { value: 'pulse-monitor@pmg' } });
+      fireEvent.input(password, { target: { value: 'fixture-only-secret' } });
+      expect(username).toHaveValue('pulse-monitor@pmg');
+      expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+      expect(formTest).not.toHaveBeenCalled();
+      expect(savedTest).not.toHaveBeenCalled();
+      expect(settings.saveNode).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'discloses a saved %s check beside edited trust, then removes obsolete success',
+    async (nodeType) => {
+      const savedTest = vi.spyOn(NodesAPI, 'testExistingNode').mockResolvedValue({
+        status: 'success',
+        message: 'Fixture saved connection responds',
+      });
+      const formTest = vi.spyOn(NodesAPI, 'testConnection');
+      const settings = createSettings();
+      render(() => (
+        <NodeCredentialSlot
+          nodeType={nodeType}
+          settings={settings}
+          editingNode={
+            {
+              id: `${nodeType}-fixture`,
+              type: nodeType,
+              name: 'Fixture',
+              host: 'https://saved.example.invalid',
+              user: 'fixture@pam',
+              tokenName: 'fixture@pam!read',
+              hasPassword: nodeType === 'pmg',
+              verifySSL: true,
+              status: 'connected',
+            } as NodeConfigWithStatus
+          }
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      ));
+      fireEvent.input(screen.getByLabelText(/^Endpoint URL/), {
+        target: { value: 'https://entered.example.invalid' },
+      });
+      fireEvent.input(screen.getByLabelText('SSL Fingerprint (optional)'), {
+        target: { value: 'ab'.repeat(32) },
+      });
+      const testButton = screen.getByRole('button', { name: 'Test saved connection' });
+      expect(testButton).toHaveAccessibleDescription(/Unsaved changes are not tested/);
+      fireEvent.click(testButton);
+      const result = await screen.findByRole('status', { name: 'Connection test result' });
+      expect(result).toHaveTextContent('Saved connection test');
+      expect(result).toHaveTextContent('Fixture saved connection responds');
+      expect(result).toHaveTextContent('Unsaved changes are not tested');
+      expect(savedTest).toHaveBeenCalledExactlyOnceWith(
+        `${nodeType}-fixture`,
+        undefined,
+        expect.any(AbortSignal),
+      );
+      expect(savedTest.mock.calls[0][2]?.aborted).toBe(false);
+      expect(formTest).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Verify SSL certificate' }));
+      expect(
+        screen.queryByRole('status', { name: 'Connection test result' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/^Endpoint URL/)).toHaveValue('https://entered.example.invalid');
+      expect(settings.saveNode).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'retains literal, wrappable %s diagnostics and warnings without altering saved trust',
+    async (nodeType) => {
+      const pin = 'ab'.repeat(32);
+      const message = `certificate fingerprint mismatch: expected ${pin}, got ${'cd'.repeat(32)}\nCheck the independently verified certificate.`;
+      const warning = `<img src="untrusted"> ${'member'.repeat(30)}`;
+      const savedTest = vi.spyOn(NodesAPI, 'testExistingNode').mockResolvedValue({
+        status: 'error',
+        message,
+        warnings: [warning],
+      });
+      const formTest = vi.spyOn(NodesAPI, 'testConnection');
+      const settings = createSettings();
+      render(() => (
+        <NodeCredentialSlot
+          nodeType={nodeType}
+          settings={settings}
+          editingNode={
+            {
+              id: `${nodeType}-fixture`,
+              type: nodeType,
+              name: 'Fixture',
+              host: 'https://saved.example.invalid',
+              user: 'fixture@pam',
+              tokenName: 'fixture@pam!read',
+              hasToken: nodeType !== 'pmg',
+              hasPassword: nodeType === 'pmg',
+              verifySSL: true,
+              fingerprint: pin,
+              status: 'disconnected',
+            } as NodeConfigWithStatus
+          }
+          onCancel={vi.fn()}
+          onSaved={vi.fn()}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'Test saved connection' }));
+      const result = await screen.findByRole('status', { name: 'Connection test result' });
+      const messageElement = Array.from(result.querySelectorAll('p')).find(
+        (element) => element.textContent === message,
+      )!;
+      expect(messageElement).toHaveClass('whitespace-pre-wrap');
+      expect(messageElement.parentElement).toHaveClass('min-w-0', '[overflow-wrap:anywhere]');
+      expect(result.querySelector('li')).toHaveTextContent(warning);
+      expect(result.querySelector('li')).toHaveClass('whitespace-pre-wrap');
+      expect(result.querySelector('img')).toBeNull();
+      expect(result).toHaveTextContent('Unsaved changes are not tested');
+      expect(screen.getByLabelText('SSL Fingerprint (optional)')).toHaveValue(pin);
+      expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+      expect(savedTest).toHaveBeenCalledExactlyOnceWith(
+        `${nodeType}-fixture`,
+        undefined,
+        expect.any(AbortSignal),
+      );
+      expect(savedTest.mock.calls[0][2]?.aborted).toBe(false);
+      expect(formTest).not.toHaveBeenCalled();
+      expect(settings.saveNode).not.toHaveBeenCalled();
+    },
+  );
+
+  it('discloses and retires an entered-password test through the real form', async () => {
+    const formTest = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
+      status: 'success',
+      message: 'Fixture entered connection responds',
+    });
+    const savedTest = vi.spyOn(NodesAPI, 'testExistingNode');
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pmg"
+        settings={createSettings()}
+        editingNode={
+          {
+            id: 'pmg-fixture',
+            type: 'pmg',
+            name: 'Fixture',
+            host: 'https://saved.example.invalid',
+            user: 'fixture@pam',
+            hasPassword: true,
+            verifySSL: true,
+            status: 'connected',
+          } as NodeConfigWithStatus
+        }
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+    fireEvent.input(screen.getByLabelText('Password'), {
+      target: { value: 'fixture-only-secret' },
+    });
+    const button = screen.getByRole('button', { name: 'Test entered settings' });
+    expect(button).toHaveAccessibleDescription(/No settings are saved/);
+    fireEvent.click(button);
+    const result = await screen.findByRole('status', { name: 'Connection test result' });
+    expect(result).toHaveTextContent('Entered settings test');
+    expect(result).toHaveTextContent('No settings are saved');
+    expect(formTest).toHaveBeenCalledExactlyOnceWith(
+      {
+        type: 'pmg',
+        name: 'Fixture',
+        host: 'https://saved.example.invalid',
+        fingerprint: '',
+        verifySSL: true,
+        user: 'fixture@pam',
+        password: 'fixture-only-secret',
+      },
+      expect.any(AbortSignal),
+    );
+    expect(formTest.mock.calls[0][1]?.aborted).toBe(false);
+    expect(savedTest).not.toHaveBeenCalled();
+    fireEvent.input(screen.getByLabelText('Password'), { target: { value: '' } });
+    expect(
+      screen.queryByRole('status', { name: 'Connection test result' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test saved connection' })).toBeEnabled();
   });
 
   it('syncs an untouched mounted editor to a refreshed node snapshot', async () => {

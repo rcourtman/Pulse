@@ -78,15 +78,51 @@ fi
 # ============================================
 
 COMPOSE_FILE="./docker-compose.yml"
+ENV_FILE=".env"
 
-# Check if docker-compose.yml already exists (idempotency)
-if [ -f "$COMPOSE_FILE" ]; then
-    echo "⚠️  docker-compose.yml already exists"
-    echo "   Backing up to docker-compose.yml.backup"
-    cp "$COMPOSE_FILE" "${COMPOSE_FILE}.backup"
+# This is a fresh-configuration generator, not an updater. Replacing an
+# existing deployment can lose its mounts, trust and service settings; a
+# repeatedly overwritten .backup is not recovery. Also refuse Compose's other
+# default names and overrides rather than silently combining two deployments.
+for existing_compose in docker-compose.yml docker-compose.yaml compose.yml compose.yaml \
+    docker-compose.override.yml docker-compose.override.yaml compose.override.yml compose.override.yaml; do
+    if [ -e "$existing_compose" ] || [ -L "$existing_compose" ]; then
+        printf '%s\n' "ERROR: Existing Compose configuration ($existing_compose); no files changed." \
+            "Keep your existing deployment configuration, or generate a new one in an empty directory." >&2
+        exit 1
+    fi
+done
+
+# An ordinary operator-owned .env is retained. Do not follow links (including
+# dangling ones), write to a pipe, or create Compose before discovering an
+# unusable environment path.
+if { [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; } && \
+    { [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; }; then
+    printf '%s\n' "ERROR: .env must be a regular file, not a link or special path; no files changed." >&2
+    exit 1
 fi
 
-cat > "$COMPOSE_FILE" << COMPOSE_EOF
+# Render privately on the destination filesystem before exposing either file.
+# noclobber alone still leaves partial files after a failed write, and can open
+# special paths raced into place after preflight. Exclusive hard links publish
+# complete files without replacing or following any destination (including a
+# directory). POSIX link has exactly two path operands, unlike ln's implicit
+# target-directory handling. A missing/refused link must stop, not fall back.
+umask 077
+STAGING_DIR=$(mktemp -d ./.pulse-docker.XXXXXX)
+cleanup_generation() {
+    local status=$? file
+    for file in "$STAGING_DIR/compose" "$STAGING_DIR/env"; do
+        if [ -e "$file" ]; then
+            rm -- "$file" || status=1
+        fi
+    done
+    rmdir -- "$STAGING_DIR" || status=1
+    return "$status"
+}
+trap cleanup_generation EXIT
+
+cat > "$STAGING_DIR/compose" << COMPOSE_EOF
 version: '3.8'
 
 services:
@@ -115,46 +151,60 @@ volumes:
     driver: local
 COMPOSE_EOF
 
-echo "✓ Generated docker-compose.yml"
-echo ""
-
 # Create .env file with defaults
-ENV_FILE=".env"
-if [ -f "$ENV_FILE" ]; then
-    echo "⚠️  .env file already exists - not overwriting"
-    echo ""
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+    if [ ! -f "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+        printf '%s\n' "ERROR: .env changed to an unsafe path; configuration was not published." >&2
+        exit 1
+    fi
+    PRESERVE_ENV=true
 else
-    cat > "$ENV_FILE" << EOF
+    PRESERVE_ENV=false
+    cat > "$STAGING_DIR/env" << EOF
 PULSE_IMAGE=${PULSE_IMAGE}
 PULSE_PORT=${PULSE_PORT}
 TZ=$(timedatectl show -p Timezone --value 2>/dev/null || echo "UTC")
 EOF
+    if ! link "$STAGING_DIR/env" "$ENV_FILE"; then
+        printf '%s\n' "ERROR: Could not publish .env without replacing an existing path; configuration was not completed." >&2
+        exit 1
+    fi
+fi
+
+if ! link "$STAGING_DIR/compose" "$COMPOSE_FILE"; then
+    printf '%s\n' "ERROR: Could not publish docker-compose.yml without replacing an existing path; configuration was not completed." \
+        "Any complete .env already generated is retained; no existing configuration was overwritten." >&2
+    exit 1
+fi
+
+echo "✓ Generated docker-compose.yml"
+echo ""
+if [ "$PRESERVE_ENV" = true ]; then
+    echo "⚠️  .env file already exists - not overwriting"
+    echo ""
+else
     echo "✓ Generated .env file"
     echo ""
 fi
 
 # ============================================
-# Installation Complete
+# Configuration Generated (no container has been installed or started)
 # ============================================
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ Installation Complete!"
+echo "✓ Configuration generated; Pulse has not been started."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Start Pulse with:"
-echo "  docker compose up -d"
+echo "Review docker-compose.yml and .env, then validate and start Pulse:"
+echo "  docker compose --env-file ./.env -f ./docker-compose.yml config --quiet"
+echo "  docker compose --env-file ./.env -f ./docker-compose.yml up -d"
 echo ""
-echo "Or with docker run:"
-echo "  docker run -d \\"
-echo "    --name pulse \\"
-echo "    --user 1000:1000 \\"
-echo "    --security-opt apparmor=unconfined \\"
-echo "    --restart unless-stopped \\"
-echo "    -p ${PULSE_PORT}:7655 \\"
-echo "    -v pulse-data:/data \\"
-echo "    ${PULSE_IMAGE}"
+echo "These commands select the generated Compose file and its .env."
+echo "Shell variables can override .env; review exported PULSE_IMAGE and PULSE_PORT values."
 echo ""
-echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):${PULSE_PORT}"
+echo "After starting, check the published port with:"
+echo "  docker compose --env-file ./.env -f ./docker-compose.yml ps"
+echo "Open your Docker host address at that port."
 echo ""
 echo "Notes:"
 echo "  - For temperature monitoring, use the unified agent on Proxmox hosts."

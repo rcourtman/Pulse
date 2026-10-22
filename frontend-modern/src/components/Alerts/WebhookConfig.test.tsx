@@ -1118,6 +1118,8 @@ describe('WebhookConfig', () => {
     // Now the Test button should appear
     const formTestBtn = screen.getByText('Test');
     expect(formTestBtn).toBeInTheDocument();
+    expect(formTestBtn).toHaveClass('text-base-content', 'hover:bg-surface-hover');
+    expect(formTestBtn).not.toHaveClass('hover:bg-slate-100');
   });
 
   it('calls onTest with temp id and form data when form Test button is clicked', () => {

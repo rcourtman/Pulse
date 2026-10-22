@@ -13,6 +13,10 @@ DOCUMENTS = (
     ROOT / "docs/AI_TRANSPARENCY.md",
     ROOT / "frontend-modern/public/docs/AI_TRANSPARENCY.md",
 )
+RELEASE_DOCUMENTS = (
+    ROOT / "docs/RELEASE_PROCESS.md",
+    ROOT / "frontend-modern/public/docs/RELEASE_PROCESS.md",
+)
 
 
 class TransparencyDocsTest(unittest.TestCase):
@@ -20,16 +24,71 @@ class TransparencyDocsTest(unittest.TestCase):
         for path in DOCUMENTS:
             yield path, " ".join(path.read_text(encoding="utf-8").split())
 
+    def assert_release_cycle(self, text):
+        self.assertIn("seven days after the last stable release", text)
+        self.assertIn("candidate becomes eligible **one day earlier**", text)
+        self.assertIn("reserving the full 24-hour soak", text)
+        self.assertIn("Preparation and qualification can move publication later", text)
+        self.assertIn("everything on `main` at its cut, not a selected set of fixes", text)
+        self.assertIn("Repairs go on `main`, not onto an older release line", text)
+        self.assert_fixed_candidate_schedule(text)
+        self.assertIn("Patch releases are not scheduled", text)
+        self.assertNotIn("Every 14 days after the last stable release", text)
+        self.assertNotIn("takes only backports", text)
+
+    def assert_fixed_candidate_schedule(self, text):
+        self.assertIn(
+            "An important fix does not bring the weekly candidate or stable release forward", text
+        )
+        self.assertNotRegex(text, r"(?i)(?:early cut|important fix) can bring")
+        self.assertNotIn("can bring that cut forward", text)
+
+    def test_release_help_and_triage_disclosure_share_the_fixed_schedule(self):
+        for path in (*DOCUMENTS, *RELEASE_DOCUMENTS):
+            with self.subTest(document=path):
+                self.assert_fixed_candidate_schedule(" ".join(path.read_text().split()))
+        self.assertEqual(RELEASE_DOCUMENTS[0].read_bytes(), RELEASE_DOCUMENTS[1].read_bytes())
+
+    def test_schedule_oracle_rejects_an_urgent_cut_or_soak_replacement(self):
+        for path in (*DOCUMENTS, *RELEASE_DOCUMENTS):
+            text = " ".join(path.read_text().split())
+            for claim in (
+                "An early cut can bring the next minor release forward.",
+                "An important fix can bring the next candidate cut forward.",
+                "An important fix can bring that cut forward, or replace a soaking candidate.",
+            ):
+                with self.subTest(document=path, claim=claim):
+                    with self.assertRaises(AssertionError):
+                        self.assert_fixed_candidate_schedule(text + " " + claim)
+
+    def test_soak_changes_wait_unless_the_candidate_regresses(self):
+        for path in RELEASE_DOCUMENTS:
+            text = " ".join(path.read_text().split())
+            with self.subTest(document=path):
+                self.assertIn("use a published beta that contains the fix", text)
+                self.assertIn("Work merged during the soak reaches the next cycle's betas", text)
+                self.assertIn("Only a candidate regression replaces a soaking candidate", text)
+                self.assertIn("an unrelated fix does not restart its soak", text)
+                self.assertIn("required checks and its full 24-hour soak", text)
+                self.assertIn("regression from the previous stable release or a failed release attempt", text)
+
     def test_all_main_minor_cycle_not_selective_backports(self):
         for path, text in self.documents():
             with self.subTest(document=path):
-                self.assertIn("Every 14 days after the last stable release", text)
-                self.assertIn("next minor release candidate from the head of `main`", text)
-                self.assertIn("everything on `main` at that cut", text)
-                self.assertIn("Repairs go on `main`, not onto an older release line", text)
-                self.assertIn("An early cut can bring the next minor release forward", text)
-                self.assertIn("Patch releases are not scheduled", text)
-                self.assertNotIn("takes only backports", text)
+                self.assert_release_cycle(text)
+
+    def test_cycle_oracle_rejects_fortnight_or_missing_soak_margin(self):
+        for path, text in self.documents():
+            for before, after in (
+                ("seven days after the last stable release", "14 days after the last stable release"),
+                ("one day earlier", "at publication"),
+                ("reserving the full 24-hour soak", "with no reserved soak"),
+                ("everything on `main` at its cut, not a selected set of fixes", "only selected backports"),
+            ):
+                with self.subTest(document=path, missing=before):
+                    self.assertIn(before, text)
+                    with self.assertRaises(AssertionError):
+                        self.assert_release_cycle(text.replace(before, after))
 
     def test_blockers_need_a_fresh_candidate_not_a_changed_soak(self):
         for path, text in self.documents():
@@ -69,15 +128,35 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("duplicate, need their own explanation", text)
                 self.assertIn("demand-ledger entry is not an implemented feature", text)
 
+    def assert_timeout_clock(self, text):
+        self.assertIn("fix for every reported symptom ships in a stable release", text)
+        self.assertIn("closed after 14 days without a reply and can be reopened", text)
+        self.assertIn("start with that stable-release retest reply, not the fix commit", text)
+        self.assertIn("earlier retest request named a beta or release candidate carrying the same fix", text)
+        self.assertIn("later of that request and the stable release's publication", text)
+        self.assertIn("verifying that the stable release contains the fix for every reported symptom", text)
+        self.assertIn("A beta or release candidate alone never starts this period", text)
+        self.assertIn("another unanswered reminder is not required", text)
+        self.assertIn("at least 14 days without any reply from the reporter", text)
+        self.assertIn("no other person reporting the same problem since that retest request", text)
+
     def test_timeout_starts_with_containing_stable_release_contact(self):
         for path, text in self.documents():
             with self.subTest(document=path):
-                self.assertIn("fix for every reported symptom ships in a stable release", text)
-                self.assertIn("closed after 14 days without a reply and can be reopened", text)
-                self.assertIn("start with that stable-release retest reply", text)
-                self.assertIn("not the fix commit, a beta or a release candidate", text)
-                self.assertIn("at least 14 days without any reply from the reporter", text)
-                self.assertIn("no other person reporting the same problem since that retest request", text)
+                self.assert_timeout_clock(text)
+
+    def test_clock_oracle_rejects_early_preview_or_incomplete_fix_timeout(self):
+        for path, text in self.documents():
+            for before, after in (
+                ("later of that request and the stable release's publication", "preview request alone"),
+                ("verifying that the stable release contains the fix for every reported symptom", "checking one corrected component"),
+                ("A beta or release candidate alone never starts this period", "A preview alone starts this period"),
+                ("start with that stable-release retest reply, not the fix commit", "start from the fix commit"),
+            ):
+                with self.subTest(document=path, missing=before):
+                    self.assertIn(before, text)
+                    with self.assertRaises(AssertionError):
+                        self.assert_timeout_clock(text.replace(before, after))
 
     def test_timeout_is_not_confirmed_resolution_and_has_explicit_exclusions(self):
         for path, text in self.documents():

@@ -33,7 +33,8 @@ import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
   buildCustomSensorRows,
   buildTemperatureRows,
-  HOST_AGENT_STOPPED_REPORTING_REASON,
+  getResourceAgentReadingsLastKnownReason,
+  getResourceGuestPowerLastKnownReason,
   toAgentFromResource,
   toNodeFromProxmox,
   type AgentPlatformData,
@@ -179,17 +180,21 @@ export const useResourceDetailDrawerDerivedState = (
       [],
   );
   const agentInfo = createMemo(() => toAgentFromResource(resource(), agentMeta()));
-  // A silent agent's sensors and disk usage are its last report, even on a
-  // row another source keeps online.
+  // Qualify this producer's retained report, not the resource's carrier health.
   const agentReadingsLastKnownReason = createMemo(() =>
-    resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined,
+    getResourceAgentReadingsLastKnownReason(resource()),
   );
   const temperatureRows = createMemo(() =>
     buildTemperatureRows(agentInfo()?.sensors, {
       lastKnownReason: agentReadingsLastKnownReason(),
+      inGuestLastKnownReason: getResourceGuestPowerLastKnownReason(resource()),
     }),
   );
-  const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
+  const customSensorRows = createMemo(() =>
+    buildCustomSensorRows(agentInfo()?.sensors, {
+      lastKnownReason: agentReadingsLastKnownReason(),
+    }),
+  );
 
   const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
   const dockerHostSourceId = createMemo(

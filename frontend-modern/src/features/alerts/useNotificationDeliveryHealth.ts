@@ -3,6 +3,7 @@ import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
 import { NotificationsAPI, type NotificationHealth } from '@/api/notifications';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import { createNotificationEvidenceReader } from './notificationEvidenceRead';
 import {
   getAlertDestinationsDeliveryDismissConfirmation,
   getAlertDestinationsDeliveryRetryConfirmation,
@@ -21,11 +22,13 @@ export function useNotificationDeliveryHealth(options?: {
   const [deliveryHealthUnavailable, setDeliveryHealthUnavailable] = createSignal(false);
   const [refreshingDeliveryHealth, setRefreshingDeliveryHealth] = createSignal(false);
   const [loadedOnce, setLoadedOnce] = createSignal(false);
-  // A request already sent is not cancelled on navigation. Its retired view
+  const healthReader = createNotificationEvidenceReader();
+  // A mutation already sent is not cancelled on navigation. Its retired view
   // must not publish a toast or start follow-up reads in the replacement view.
   let disposed = false;
   onCleanup(() => {
     disposed = true;
+    healthReader.cancel();
   });
 
   // Mount, configuration retry and queue actions can overlap. Only the latest
@@ -37,7 +40,7 @@ export function useNotificationDeliveryHealth(options?: {
     const request = ++latestHealthRequest;
     setRefreshingDeliveryHealth(true);
     try {
-      const health = await NotificationsAPI.getHealth();
+      const health = await healthReader.read((signal) => NotificationsAPI.getHealth(signal));
       if (!ownsHealthRequest(request)) return;
       // Snapshot and availability change together. Set one at a time and
       // deliveryNeedsAttention reads a half-updated pair (no health, not yet
@@ -123,8 +126,12 @@ export function useNotificationDeliveryHealth(options?: {
       if (disposed) return;
       logger.error('Failed to retry retained notification deliveries', error);
       if (action === latestAction)
-        setQueueActionFeedback('Unable to retry retained notification deliveries.');
-      notificationStore.error('Unable to retry retained notification deliveries.');
+        setQueueActionFeedback(
+          'Retry could not be confirmed. Refresh notification activity before trying again.',
+        );
+      notificationStore.error(
+        'Retry could not be confirmed. Refresh notification activity before trying again.',
+      );
     } finally {
       if (!disposed) setRetryingTerminalFailures(false);
     }
@@ -150,8 +157,12 @@ export function useNotificationDeliveryHealth(options?: {
       if (disposed) return;
       logger.error('Failed to dismiss retained notification failures', error);
       if (action === latestAction)
-        setQueueActionFeedback('Unable to dismiss retained notification failures.');
-      notificationStore.error('Unable to dismiss retained notification failures.');
+        setQueueActionFeedback(
+          'Dismissal could not be confirmed. Refresh notification activity before trying again.',
+        );
+      notificationStore.error(
+        'Dismissal could not be confirmed. Refresh notification activity before trying again.',
+      );
     } finally {
       if (!disposed) setDismissingTerminalFailures(false);
     }

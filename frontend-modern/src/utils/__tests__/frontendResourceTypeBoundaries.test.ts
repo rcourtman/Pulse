@@ -2963,7 +2963,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertsPageSource).not.toContain('Failed to load webhook configuration.');
     expect(alertsPageSource).not.toContain(
-      'Saving now may overwrite your existing settings with defaults.',
+      'Saving is blocked until all notification settings have been reloaded.',
     );
     expect(alertsPageSource).not.toContain('Configure SMTP delivery for alert emails.');
     expect(alertsPageSource).not.toContain(

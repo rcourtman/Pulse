@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // A server that consumes a command and loses its reply models uncertain
@@ -46,7 +47,7 @@ func TestGuestAgentWireDoesNotReplayLostReply(t *testing.T) {
 					http.NotFound(w, r)
 				}))
 				defer server.Close()
-				client := backupTestClient(t, server.URL)
+				client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), client, 105); GuestAgentDeferredReason(err) != "agent-timeout" {
 					t.Errorf("lost command reply was not deferred: %v", err)
 				}
@@ -87,7 +88,7 @@ func TestGuestAgentWireDoesNotFollowRedirect(t *testing.T) {
 					http.Redirect(w, r, destination.URL+r.URL.Path, status)
 				}))
 				defer server.Close()
-				client := backupTestClient(t, server.URL)
+				client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), client, 105); GuestAgentDeferredReason(err) != "agent-redirect" {
 					t.Errorf("redirect response was not deferred: %v", err)
 				}
@@ -155,5 +156,50 @@ func TestGuestAgentTransportLeavesOrdinaryRedirectIntact(t *testing.T) {
 	}
 	if got := calls.Load(); got != 2 {
 		t.Errorf("ordinary redirect reads = %d, want two", got)
+	}
+}
+
+// A recycled listener is not a completed or admitted guest command. Exercise
+// the redirect fixture with another test guest's still-live uncertainty on the
+// same listener; preserve both fences and every no-follow assertion.
+func TestGuestAgentWireFixtureKeepsIndependentRedirectFence(t *testing.T) {
+	var commands, followed atomic.Int32
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { followed.Add(1) }))
+	defer destination.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		http.Redirect(w, r, destination.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+	endpoint := guestAgentFixtureEndpoint(t, server.URL)
+	older := backupTestClient(t, endpoint+"/earlier")
+	release, err := acquireGuestAgent(older.baseURL, 105)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release(true)
+	key := guestAgentGuardKey{endpoint: older.baseURL, vmid: 105}
+	guestAgentGuards.Lock()
+	original := guestAgentGuards.entries[key]
+	guestAgentGuards.Unlock()
+	current := backupTestClient(t, endpoint)
+	if _, err := current.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-redirect" {
+		t.Fatalf("independent redirect fixture never observed its command: %v", err)
+	}
+	if _, err := current.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+		t.Fatal("redirect uncertainty was not retained")
+	}
+	if _, err := older.GetVMAgentInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+		t.Fatal("older uncertainty was not retained")
+	}
+	guestAgentGuards.Lock()
+	unchanged := guestAgentGuards.entries[key] == original
+	guestAgentGuards.Unlock()
+	if !unchanged || original.until.Before(time.Now()) || commands.Load() != 1 || followed.Load() != 0 {
+		t.Fatal("fixture isolation altered a fence or followed/repeated a command")
 	}
 }

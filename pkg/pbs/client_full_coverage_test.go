@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -285,7 +286,7 @@ func TestClient_SetupMonitoringAccess_Errors(t *testing.T) {
 	}
 }
 
-func TestClient_SetupMonitoringAccess_RotatesExistingToken(t *testing.T) {
+func TestClient_SetupMonitoringAccess_PreservesExistingToken(t *testing.T) {
 	createTokenCalls := 0
 	deleteCalled := false
 
@@ -317,20 +318,14 @@ func TestClient_SetupMonitoringAccess_RotatesExistingToken(t *testing.T) {
 	defer server.Close()
 
 	id, value, err := client.SetupMonitoringAccess(context.Background(), "monitor1")
-	if err != nil {
-		t.Fatalf("SetupMonitoringAccess failed: %v", err)
+	if !errors.Is(err, ErrMonitoringTokenExists) || id != "" || value != "" {
+		t.Fatalf("setup must return a collision without replacement credentials: id=%q, error=%v", id, err)
 	}
-	if id != "pulse-monitor@pbs!monitor1" {
-		t.Fatalf("token ID = %q, want pulse-monitor@pbs!monitor1", id)
+	if createTokenCalls != 1 {
+		t.Fatalf("create token calls = %d, want 1", createTokenCalls)
 	}
-	if value != "rotated-secret" {
-		t.Fatalf("token value = %q, want rotated-secret", value)
-	}
-	if createTokenCalls != 2 {
-		t.Fatalf("create token calls = %d, want 2", createTokenCalls)
-	}
-	if !deleteCalled {
-		t.Fatal("expected existing token delete to be called")
+	if deleteCalled {
+		t.Fatal("setup revoked an existing monitoring token")
 	}
 }
 
@@ -489,7 +484,7 @@ func TestClient_GetDatastores_Full(t *testing.T) {
 			// Missing dedup in status
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"total": 2000.0,
+					"total": 2000.0, "used": 500.0, "avail": 1500.0,
 				},
 			})
 			return
@@ -546,16 +541,16 @@ func TestClient_ListNamespaces(t *testing.T) {
 		}
 		if r.FormValue("ns") == "parent" && r.FormValue("max-depth") == "2" {
 			json.NewEncoder(w).Encode(map[string]any{
-				"data": []Namespace{
-					{Name: "child"},
+				"data": []map[string]string{
+					{"name": "child"},
 				},
 			})
 			return
 		}
 		// Default
 		json.NewEncoder(w).Encode(map[string]any{
-			"data": []Namespace{
-				{Name: "ns1"},
+			"data": []map[string]string{
+				{"name": "ns1"},
 			},
 		})
 	})
@@ -593,7 +588,7 @@ func TestClient_ListBackupGroups(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{
 			"data": []BackupGroup{
-				{BackupID: "vm/100"},
+				{BackupType: "vm", BackupID: "100", BackupCount: 1, LastBackup: 12345},
 			},
 		})
 	})
@@ -603,7 +598,7 @@ func TestClient_ListBackupGroups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListBackupGroups failed: %v", err)
 	}
-	if len(groups) != 1 || groups[0].BackupID != "vm/100" {
+	if len(groups) != 1 || groups[0].BackupID != "100" {
 		t.Errorf("Unexpected groups: %v", groups)
 	}
 }
@@ -620,7 +615,7 @@ func TestClient_ListBackupSnapshots(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{
 			"data": []BackupSnapshot{
-				{BackupTime: 12345},
+				{BackupType: "vm", BackupID: "100", BackupTime: 12345},
 			},
 		})
 	})
@@ -650,7 +645,7 @@ func TestClient_ListAllBackups(t *testing.T) {
 		if strings.HasSuffix(r.URL.Path, "/snapshots") {
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": []BackupSnapshot{
-					{BackupTime: 12345},
+					{BackupType: "vm", BackupID: "100", BackupTime: 12345},
 				},
 			})
 			return
@@ -1077,7 +1072,7 @@ func TestClient_GetDatastores_AdvancedDedup(t *testing.T) {
 		if strings.HasSuffix(r.URL.Path, "status") {
 			json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"total": 100.0,
+					"total": 100.0, "used": 25.0, "avail": 75.0,
 				},
 			})
 			return
@@ -1305,10 +1300,15 @@ func (t *sequentialFailTransport) RoundTrip(req *http.Request) (*http.Response, 
 		}, nil
 	}
 
-	// Otherwise succeed (empty JSON valid enough for decode to not error drastically or just fail decode gracefully)
+	// Otherwise succeed with actual capacity so the GC read-error case still
+	// reaches GC, rather than failing earlier at status admission.
+	body := `{"data": {}}`
+	if strings.HasSuffix(req.URL.Path, "/status") {
+		body = `{"data":{"total":1000,"used":250,"avail":750}}`
+	}
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(bytes.NewBufferString(`{"data": {}}`)),
+		Body:       io.NopCloser(bytes.NewBufferString(body)),
 		Header:     make(http.Header),
 	}, nil
 }
@@ -1374,7 +1374,7 @@ func TestClient_GetDatastores_DedupFromStatus(t *testing.T) {
 				// Hyphenated key
 				json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"deduplication-factor": 5.5,
+						"deduplication-factor": 5.5, "total": 1000, "used": 250, "avail": 750,
 					},
 				})
 				return
@@ -1383,7 +1383,7 @@ func TestClient_GetDatastores_DedupFromStatus(t *testing.T) {
 				// Underscore key
 				json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"deduplication_factor": 6.6,
+						"deduplication_factor": 6.6, "total": 1000, "used": 250, "avail": 750,
 					},
 				})
 				return

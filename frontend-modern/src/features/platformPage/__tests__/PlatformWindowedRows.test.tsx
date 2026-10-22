@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
+import { findWindowedItemIndex, usePlatformWindowedItems } from '../usePlatformWindowedItems';
 import platformWindowedItemsSource from '../usePlatformWindowedItems.ts?raw';
 
 describe('PlatformWindowedRows', () => {
@@ -12,6 +13,113 @@ describe('PlatformWindowedRows', () => {
   it('keeps phone touch scrolling on the browser-native page path', () => {
     expect(platformWindowedItemsSource).toContain('bindWindowedPageScrollEvents');
     expect(platformWindowedItemsSource).not.toContain("addEventListener('touch");
+  });
+
+  it('uses opt-in logical-block measurement on native scroll and layout changes without widening the window', async () => {
+    const [height, setHeight] = createSignal(120);
+    const measure = vi.fn(() => height());
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 120,
+      width: 200,
+      height: 120,
+    } as DOMRect);
+    const prototype = Element.prototype as Element & { checkVisibility?: () => boolean };
+    const visibility = prototype.checkVisibility;
+    prototype.checkVisibility = () => true;
+    const Fixture = () => {
+      const state = usePlatformWindowedItems({
+        items: () => Array.from({ length: 50 }, (_, index) => index),
+        windowSize: 8,
+        estimatedItemHeight: 32,
+        measureItemHeight: measure,
+        measurementKey: height,
+      });
+      return (
+        <div ref={state.setAnchorRef}>
+          <span data-testid="mounted-items">{state.visibleItems().length}</span>
+          <span data-testid="bottom-runway">{state.bottomSpacerHeight()}</span>
+        </div>
+      );
+    };
+    try {
+      render(() => <Fixture />);
+      expect(screen.getByTestId('mounted-items')).toHaveTextContent('8');
+      expect(screen.getByTestId('bottom-runway')).toHaveTextContent('5040');
+      const initial = measure.mock.calls.length;
+      await fireEvent.scroll(window);
+      expect(measure.mock.calls.length).toBeGreaterThan(initial);
+      setHeight(180);
+      expect(screen.getByTestId('bottom-runway')).toHaveTextContent('7560');
+      expect(screen.getByTestId('mounted-items')).toHaveTextContent('8');
+      cleanup();
+      const disposed = measure.mock.calls.length;
+      await fireEvent.scroll(window);
+      expect(measure).toHaveBeenCalledTimes(disposed);
+    } finally {
+      cleanup();
+      rect.mockRestore();
+      if (visibility) prototype.checkVisibility = visibility;
+      else Reflect.deleteProperty(prototype, 'checkVisibility');
+    }
+  });
+
+  it('defers geometry-changing observer delivery, coalesces frames and cancels on disposal', () => {
+    let notify = () => {};
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    const measure = vi.fn();
+    const Fixture = () => {
+      const state = usePlatformWindowedItems({
+        items: () => Array.from({ length: 50 }, (_, index) => index),
+        windowSize: 8,
+        itemGeometry: {
+          offsets: () => Array.from({ length: 51 }, (_, index) => index * 40),
+          measure,
+        },
+      });
+      return <div ref={state.setAnchorRef}>{state.visibleItems().length}</div>;
+    };
+    try {
+      const { unmount } = render(() => <Fixture />);
+      const initial = measure.mock.calls.length;
+      notify();
+      notify();
+      expect(measure).toHaveBeenCalledTimes(initial);
+      expect(requestFrame).toHaveBeenCalledTimes(1);
+      frames[0](0);
+      expect(measure).toHaveBeenCalledTimes(initial + 1);
+      notify();
+      expect(requestFrame).toHaveBeenCalledTimes(2);
+      unmount();
+      expect(cancelFrame).toHaveBeenCalledWith(2);
+      expect(disconnect).toHaveBeenCalledOnce();
+    } finally {
+      cleanup();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('mounts small tables in full without virtual spacer rows', () => {
@@ -289,6 +397,85 @@ describe('PlatformWindowedRows', () => {
       } else {
         Reflect.deleteProperty(Element.prototype, 'checkVisibility');
       }
+    }
+  });
+});
+
+describe('opt-in nonuniform platform windowing', () => {
+  it('maps exact edges and positions inside a tall logical item, never the terminal offset', () => {
+    const offsets = [0, 2000, 2040, 2080];
+    expect(
+      [-1, 0, 1000, 1999, 2000, 2039, 2040, 2080, 9000].map((position) =>
+        findWindowedItemIndex(offsets, position),
+      ),
+    ).toEqual([0, 0, 0, 0, 1, 1, 2, 2, 2]);
+    expect(findWindowedItemIndex([0], 100)).toBe(0);
+  });
+
+  it('keeps a tall detail mounted while read, uses cumulative spacers and retains bounds through collapse', async () => {
+    const [detailHeight, setDetailHeight] = createSignal(2400);
+    let scrollTop = 1000;
+    const measure = vi.fn();
+    const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () =>
+        ({
+          x: 0,
+          y: -scrollTop,
+          top: -scrollTop,
+          bottom: 4000 - scrollTop,
+          left: 0,
+          right: 320,
+          width: 320,
+          height: 4000,
+        }) as DOMRect,
+    );
+    const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 240 });
+    const Fixture = () => {
+      const offsets = createMemo(() => [
+        0,
+        ...Array.from({ length: 50 }, (_, index) => detailHeight() + (index + 1) * 40),
+      ]);
+      const state = usePlatformWindowedItems({
+        items: () => Array.from({ length: 50 }, (_, index) => index),
+        windowSize: 8,
+        itemGeometry: { offsets, measure },
+        measurementKey: detailHeight,
+      });
+      return (
+        <div ref={state.setAnchorRef}>
+          <span data-testid="first">{state.visibleItems()[0]}</span>
+          <span data-testid="count">{state.visibleItems().length}</span>
+          <span data-testid="top">{state.topSpacerHeight()}</span>
+          <span data-testid="bottom">{state.bottomSpacerHeight()}</span>
+        </div>
+      );
+    };
+    try {
+      render(() => <Fixture />);
+      expect(screen.getByTestId('first')).toHaveTextContent('0');
+      expect(screen.getByTestId('top')).toHaveTextContent('0');
+      expect(screen.getByTestId('bottom')).toHaveTextContent('1680');
+      scrollTop = 3200;
+      await fireEvent.scroll(window);
+      const first = Number(screen.getByTestId('first').textContent);
+      expect(first).toBeGreaterThan(0);
+      expect(Number(screen.getByTestId('top').textContent)).toBe(2400 + first * 40);
+      expect(screen.getByTestId('count')).toHaveTextContent('8');
+      // Collapsing the first row changes real geometry, not the item count.
+      scrollTop = 0;
+      setDetailHeight(0);
+      expect(screen.getByTestId('first')).toHaveTextContent('0');
+      expect(screen.getByTestId('top')).toHaveTextContent('0');
+      expect(screen.getByTestId('bottom')).toHaveTextContent('1680');
+      cleanup();
+      const calls = measure.mock.calls.length;
+      await fireEvent.scroll(window);
+      expect(measure).toHaveBeenCalledTimes(calls);
+    } finally {
+      cleanup();
+      rect.mockRestore();
+      if (height) Object.defineProperty(window, 'innerHeight', height);
     }
   });
 });

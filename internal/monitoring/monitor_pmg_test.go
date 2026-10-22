@@ -506,8 +506,8 @@ func TestPMGCollectionFailureEvidence(t *testing.T) {
 				}
 				return
 			}
-			if v.Status != "online" || v.ConnectionHealth != "healthy" || !m.state.GetSnapshot().ConnectionHealth["pmg-gateway"] {
-				t.Fatal("downstream failure mislabeled as version connection failure")
+			if v.Status != "degraded" || v.ConnectionHealth != "degraded" || m.state.GetSnapshot().ConnectionHealth["pmg-gateway"] {
+				t.Fatal("successful version read masked incomplete collection")
 			}
 			if (op == "quarantine/spam" || op == "quarantine/virus") && v.Quarantine != nil {
 				t.Fatal("partial quarantine reported as zero/complete")
@@ -520,7 +520,8 @@ func TestPMGCollectionFailureEvidence(t *testing.T) {
 			}
 			f.fail = ""
 			m.pollPMGInstance(context.Background(), "gateway", f)
-			if status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" {
+			recovered := m.state.GetSnapshot()
+			if status.ConsecutiveFailures != 0 || status.LastErrorMessage != "" || recovered.PMGInstances[0].Status != "online" || recovered.PMGInstances[0].ConnectionHealth != "healthy" || !recovered.ConnectionHealth["pmg-gateway"] {
 				t.Fatal("next complete poll did not recover")
 			}
 		})
@@ -624,15 +625,15 @@ func TestPollPMGInstanceDoesNotGuessNodeAfterFailedClusterRead(t *testing.T) {
 	}
 }
 
-// A PMG that answers with no cluster entries keeps the connection-name
-// fallback some standalone installs rely on.
-func TestPollPMGInstanceKeepsNameFallbackForEmptyCluster(t *testing.T) {
+// Empty enumeration supplies no node identity; preserve the containing
+// monitoring boundary rather than guessing from a display name.
+func TestPollPMGInstanceDoesNotGuessNodeForEmptyCluster(t *testing.T) {
 	_, backupPaths := pollPMGIssue2960(t, func(w http.ResponseWriter) {
 		fmt.Fprint(w, `{"data":[]}`)
 	})
 
-	if !reflect.DeepEqual(backupPaths, []string{"/api2/json/nodes/PMG-01/backup"}) {
-		t.Fatalf("expected the connection-name fallback for an empty cluster, got %v", backupPaths)
+	if len(backupPaths) != 0 {
+		t.Fatalf("expected no backup request for an empty cluster, got %v", backupPaths)
 	}
 }
 
@@ -749,18 +750,26 @@ func TestPMGBackupsSurviveEveryNodeBackupReadFailing(t *testing.T) {
 // A failed read on one node keeps that node's last-known backups while the
 // nodes that answered publish what they returned.
 func TestPMGBackupsKeepFailedNodeOnPartialRead(t *testing.T) {
-	m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
-	f := newPMGBackupRetentionFixture()
-	pollPMGBackupRetention(t, m, f)
+	for _, successfulEmpty := range []bool{false, true} {
+		t.Run(fmt.Sprintf("successfulEmpty=%t", successfulEmpty), func(t *testing.T) {
+			m := pmgScopeMonitor(config.PMGInstance{MonitoringConfigured: true})
+			f := newPMGBackupRetentionFixture()
+			pollPMGBackupRetention(t, m, f)
 
-	f.backupErr["one"] = errors.New("backup list timed out")
-	f.backups["two"] = []pmg.BackupEntry{{Filename: "two-new.tgz", Timestamp: 1700000200, Size: 30}}
-	pollPMGBackupRetention(t, m, f)
-	want := map[string][]string{"one": {"one.tgz"}, "two": {"two-new.tgz"}}
-	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
-		t.Fatalf("partial read backups=%v want=%v", got, want)
+			f.backupErr["one"] = errors.New("backup list timed out")
+			f.backups["two"] = []pmg.BackupEntry{{Filename: "two-new.tgz", Timestamp: 1700000200, Size: 30}}
+			want := map[string][]string{"one": {"one.tgz"}, "two": {"two-new.tgz"}}
+			if successfulEmpty {
+				f.backups["two"] = nil
+				delete(want, "two")
+			}
+			pollPMGBackupRetention(t, m, f)
+			if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
+				t.Fatalf("partial read backups=%v want=%v", got, want)
+			}
+			assertPMGPollFailed(t, m)
+		})
 	}
-	assertPMGPollFailed(t, m)
 }
 
 // A complete enumeration is authoritative: nodes that answered with no

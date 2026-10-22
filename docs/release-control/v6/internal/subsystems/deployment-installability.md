@@ -15,6 +15,722 @@
 ```
 
 ## Purpose
+
+### Hosted tarball retention requires both configured sources
+
+The existing `scripts/cloud-backup.sh` job requires both tenant and control-plane
+directories, including local-only operation. It validates positive whole-day
+retention, the explicit true/false encryption setting and all selected archive,
+encryption and remote-client prerequisites before creating archives. A source
+that disappears after admission still fails the job. Missing data is not an
+optional source and must not become an empty success that prunes previous copies.
+
+Remote jobs also require `RCLONE_DRY_RUN` and `RCLONE_INTERACTIVE` to be unset,
+empty or an explicit false boolean (`false`/`False`/`FALSE`, `0`, `f` or `F`).
+A dry-run or declined interactive upload can return success without copying
+data, while local retention still deletes old backups. The helper refuses true
+or unrecognised settings before archive creation, staging permission changes,
+uploads or retention. It names the setting, never its value, and does not unset
+it or force an actual upload/deletion contrary to the operator's intent. This
+is not a new dry-run mode; local-only jobs remain independent of rclone settings.
+Entrypoint cases cover both encryption modes, all boolean spellings, invalid
+private values, unchanged old local/remote copies and normal false/unset jobs.
+When supplied, real rclone's empty-config local backend additionally establishes
+that an inherited dry run returns zero without copying and false performs the
+same copy. That case is mandatory in the existing required native CI suite.
+These are failure-admission and local-backend checks, not cloud upload integrity,
+provider acceptance, application consistency or native guest recovery proof.
+
+Helper-owned upload progress messages identify the generated backup basename,
+not the configured remote destination. Opaque destination configuration can
+contain private storage names or connection settings; it must not be echoed
+merely to identify the file being uploaded or confirmed. Both encryption modes
+cover successful copies and failures at each of the three upload positions,
+using a synthetic destination canary through the real helper. The closed adapter
+asserts the destination argument is forwarded unchanged, and failure controls
+preserve previous recovery copies and stop retention. These checks establish
+helper log formatting, not native rclone parsing. The remote-operation privacy
+contract below additionally suppresses client stdout/stderr; separately configured
+provider logs remain outside the helper's guarantee.
+
+Every configured remote `copyto` also uses `--error-on-no-transfer`. A zero-exit
+skip of an existing destination is not evidence of
+a replacement recovery copy. Each of the two archives and metadata must actually
+transfer before either retention pass. The helper retains the operator's selection
+rules and existing remote objects rather than disabling filters or forcing an
+overwrite. A failed, skipped or unsupported transfer stops later uploads and all
+retention, leaves the completed local files private and reports the failure;
+it never reports that skipped file as uploaded. This requires a compatible
+rclone; an older client that refuses the flag fails closed. Local-only behaviour,
+archive layout, encryption and retention age/ownership bounds are unchanged.
+
+Entrypoint controls inject a skipped first, second or metadata upload in both
+encryption modes and assert unchanged prior local/remote bytes, retained current
+local files, no later upload/expiry and no false completion. Native empty-config
+local-backend cases first establish bare-copy exit-zero/no-copy results for
+ignore-existing and update-only settings at each of the three output positions
+in both modes. The same settings must fail the complete helper
+without deleting anything, even with `RCLONE_ERROR_ON_NO_TRANSFER=false` inherited;
+ordinary plain/encrypted transfers still work. The native case is mandatory
+in `--require-native`; optional skips cannot establish their result. A client's
+transfer verdict is not independent remote content verification, atomic set
+publication, provider acceptance, application consistency or restored workloads.
+
+The helper's remote-operation log contains only the generated backup filename,
+phase and numeric rclone failure exit. It never echoes the configured remote or
+copies client stdout/stderr into that log: connection-string credentials and
+provider diagnostics are private even on successful or verbose invocations.
+It passes the configured destination, transfer requirement and retention filters
+unchanged. Upload failure still stops later copies and both retention passes;
+retention failure preserves the new completed archives and remains a failed job.
+Closed-client entrypoint cases cover successful jobs, each upload failure and
+remote-retention failure in both encryption modes, asserting private canaries
+are absent from logs while checking destination argv, archive bytes and recovery
+copy preservation. This is helper-log privacy, not provider-log redaction,
+real-client admission, cloud delivery or restored-workload acceptance.
+
+The configured source root itself must be a physical directory, not a symbolic
+link: tar otherwise exits successfully after archiving only the link. Admission
+rejects either linked root, including trailing-slash spellings, before creating
+any archives, and rechecks immediately before each archive. The error tells the
+operator to configure the physical directory; existing backups remain untouched.
+Symlinked parent paths still work, and nested symlinks remain links. The helper
+does not enable recursive link dereferencing or claim to prevent concurrent
+source mutation between its checks and tar.
+
+Configured source directory names are literal archive members, not tar options.
+Both plain and encrypted jobs end tar option parsing before the member name:
+`--files-from=...` and `-T...` cannot replace required data with an unrelated file
+list and then permit upload/retention. GNU coreutils `dirname`/`basename` use
+NUL-delimited output so trailing newlines in either the source or its parent
+are preserved rather than removed by shell command substitution. Resolution
+failure stops before tar, uploads or retention. Relative paths, whitespace,
+embedded newlines and existing ordinary archive layouts remain supported.
+`test_cloud_backup.py` runs those names through real GNU tar/gzip in both modes
+for each source and checks actual member names and fixture bytes, not just exit
+status. It also checks failure-preserving resolver errors. These are disposable
+file proofs, not application consistency or native restore acceptance.
+
+Both tar invocations clear inherited `TAR_OPTIONS` for that command only. The
+helper's fixed archive policy, not an interactive shell or scheduler default,
+determines coverage, member paths, nested-link handling and failure reporting.
+In particular, an inherited `--exclude=*` must not create empty successful
+archives and permit expiry of earlier copies; transformations and dereferencing
+must not rename recovery paths or copy unrelated link targets into backups.
+Malformed inherited options also cannot break an otherwise valid job. The
+environment is not logged or changed in the caller. Real tar/gzip fixture cases
+inspect both sources in plain and encrypted mode, including member bytes and
+symlink targets, before accepting the ordinary upload/retention path. This does
+not protect against an arbitrary replacement executable or other hostile job
+configuration, and it is not application-consistent or installed recovery proof.
+
+The staging directory must be outside both source trees. Before staging
+creation, permission changes or any archive, GNU coreutils `realpath` resolves
+physical source paths and the staging path (including missing descendants).
+Equality or containment fails with a separate-staging-directory message, without
+creating archives, uploading or expiring existing copies. Relative paths, dot/
+parent components and symlinked parents cannot conceal overlap; similarly named
+siblings and safe aliases remain valid. This prevents recursively copying older
+backups and including an encrypted output while age is still writing it. It
+does not defend against arbitrary concurrent replacement of configured paths.
+
+Before opening any output, helpers sharing a staging directory exclusively
+reserve the timestamp's whole name set with an atomic private directory creation.
+An existing archive (plain or encrypted), metadata file, directory or symbolic
+link, including a dangling link, stops the job without opening outputs, uploading
+or applying retention. A simultaneous same-timestamp job also stops; it must not
+remove the first job's reservation. Reservations are released on normal completion,
+ordinary failures and handled HUP/INT/TERM; a forced kill may leave one for that
+timestamp, which does not prevent later timestamps. Collision messages direct an
+operator to preserve existing files and retry later, rather than delete backups.
+The reservation also rejects either mode's `.partial` files, directories and
+links, preserving failed-run evidence across same-second retries. Completed
+archive filenames stay second-resolution and unchanged. This protects cooperating helpers
+in the same staging directory, not arbitrary concurrent filesystem mutation or
+independent staging directories uploading into the same remote namespace.
+
+Metadata must not collect Docker's default `COMMAND` column: inline command
+arguments can contain credentials. The optional inventory selects only container
+ID, image, name and status. In encrypted mode, metadata is private backup data
+and uses the same configured age recipient as both archives; its completed
+sidecar is `pulse-backup-meta-<timestamp>.txt.age`, not a plaintext `.txt` upload.
+The name reservation includes both metadata forms. Local-only encrypted jobs
+follow the same rule. Unencrypted mode deliberately keeps its existing `.txt`
+sidecar; omitting commands does not make a plaintext backup secret-free.
+
+Both archives, all three selected encryption steps and every configured upload
+must succeed before either retention pass. Metadata encryption failure permits
+no upload or retention, retains the previous backups and leaves private local
+failure evidence without claiming completion. Unavailable Docker inventory is
+still explicitly marked unavailable and does not skip metadata encryption.
+Encrypted jobs stream tar/gzip and metadata output directly to age on stdin;
+they never create new plaintext staging archives or inventories, even when age
+rejects the recipient or fails after reading input. A failed tar pipeline must
+fail the job even if age successfully encrypts the incomplete stream. All three
+selected producers initially write to their final path plus `.partial`, never
+an ordinary backup filename. Failed producer output remains under private modes
+for diagnosis, explicitly separated from completed files. Encrypted partials
+remain encrypted; this does not introduce plaintext staging in encrypted mode.
+Only after both archives and metadata finish successfully does the helper
+publish ordinary filenames by same-directory GNU `mv` renames, with metadata
+last and every publication before the first upload or retention pass. `mv -T -n`
+preserves a late file/directory/link collision; a remaining partial also fails
+publication because GNU `mv -n` can exit zero after skipping. Publication failure
+stops uploads and retention without deleting existing files or partial evidence.
+Each published file has complete producer output, but the three renames are not
+an atomic set transaction, an upload receipt or a power-loss durability promise.
+An interrupted or failed publication can leave a subset of complete files and
+remaining partials; only the successful job's finished message establishes
+completion of its configured operations. Failed-run `.partial` evidence stays
+local, private and subject to the same local age limit after a successful job.
+Earlier ordinary-named partial files are not retrospectively validated or renamed.
+Plaintext-mode completed output, encrypted filenames and decrypted
+archive layout are unchanged. Existing artifacts are not rewritten or
+retrospectively protected; prior plaintext may remain in local or remote
+history until eligible for the configured retention. This is no claim about
+OS swap, core dumps or the source data's own storage encryption.
+
+Local or remote cleanup errors return failure rather than a finished message;
+retention itself can partially progress before an error. Existing data paths,
+archive names/contents, encryption opt-in, remote prefix and retention ages stay
+unchanged. This is orchestration safety, not real-age encryption qualification,
+application-consistent snapshots, restore verification or native guest recovery.
+
+Remote retention is limited to the helper's six generated filename
+shapes: `pulse-backup-{tenants,cp}-YYYYMMDD-HHMMSS.tar.gz` and
+`pulse-backup-meta-YYYYMMDD-HHMMSS.txt`, each optionally suffixed `.age`.
+Every timestamp position must be a digit; this is filename ownership, not
+calendar validation. Local retention also admits those exact six shapes with
+`.partial` appended, so repeated failed jobs do not accumulate forever. It still
+runs only after all new files and configured uploads succeed. Local cleanup only
+considers top-level regular files, not directories, symlinks or nested copies.
+Partial evidence is never uploaded and is excluded from remote deletion.
+Remote cleanup anchors the original six includes at the prefix root, limits
+traversal to one level and excludes all
+other objects. Unrelated prefix/suffix lookalikes and material outside those
+flat filename shapes remain untouched. Names are not authenticated provenance:
+manually placed files using the exact generated namespace remain eligible.
+Metadata expires alongside archives in either encryption mode,
+so older plaintext inventories no longer accumulate indefinitely. Existing
+local `find -mtime` and remote `rclone --min-age` age boundaries are unchanged;
+neither pass promises atomic deletion or keeps an expired file just because
+it belongs to an earlier encryption mode. Successful new output/upload admission
+is still required before any expiry.
+
+Encryption does not retrofit or repair earlier plaintext metadata; ordinary
+retention now expires it when eligible, after a new job has succeeded.
+
+`scripts/tests/test_cloud_backup.py` executes the full shell entrypoint with
+real tar/gzip and local retention on synthetic non-database files. It checks
+missing/disappearing/linked sources (also a link substituted after admission),
+unchanged parent/nested-link semantics, invalid configuration, missing selected tools,
+archive/encryption/upload failures, retention errors, actual archive bytes and
+private modes, plus successful local/remote ordering. Completion controls
+also check that failed archive/encryption producers expose no ordinary backup
+names, every producer finishes before the first publication and successful jobs
+leave no new partials. Real GNU `mv` runs behind a closed observer; injected
+publication failures and late files/directories/live or dangling symlinks preserve
+all existing data and stop uploads/retention, including its exit-zero skip case.
+Native tar failures after an admitted source disappears, also through real age,
+leave no ordinary filename even when gzip/age finish readable empty output.
+Any already published archives retain actual fixture bytes. Both modes reserve
+partial names before work; old local partials expire only after success, while
+young partials, directories, links, nested/lookalike and remote partials remain.
+Layout admission checks equal/nested staging under both sources and encryption
+modes before any
+source/staging permission or content change, physical aliases and relative/dot/
+parent/newline paths, resolver failure and valid similarly prefixed siblings.
+The native path resolver runs on disposable directories, not a lexical model.
+A deterministic fixture clock and bounded two-process archive barrier verify existing-output preservation,
+same-second failure/concurrency, dangling links and reservation ownership/cleanup.
+Synthetic command canaries check inventory minimisation, encrypted metadata
+selection/private modes, all three encryption/upload failures and all six output
+reservations (also directories and dangling links). The metadata controls use a
+closed age recorder; when real age/age-keygen are installed or explicitly supplied,
+a separate full-entrypoint case generates an isolated fixture key and decrypts
+both real tarballs and selected metadata. The fixture identity is never printed
+or retained. Encryption controls observe staging before and after every age
+input, reject new plaintext on encryption and producer failures, and distinguish
+a successfully encrypted partial tar stream from a successful job. A separate
+real-age invalid-recipient case checks failure without plaintext fallback.
+Retention cases exercise actual local deletion across old/young plain and
+encrypted archives and inventories, unrelated/lookalike/nested files, links and
+directories. The closed rclone adapter models synthetic uploads and expiry,
+and independently checks the exact rooted filter set and traversal bound. An
+optional real-rclone local-backend case exercises that filter engine with an
+empty configuration and only disposable local paths; absence is an explicit
+skip, not native filter proof. Docker and host identity remain closed fakes.
+The required `Script smoke tests & backend build` CI check installs the signed
+Ubuntu archive's age and rclone packages once, then runs the complete backup
+suite with `--require-native`. That mode requires all three executables, records
+their versions and SHA256 identities plus helper/test source hashes, and fails
+on a missing native case, failed client identity check, test failure, incomplete
+test execution or any skip. The workflow verifies its checkout against the event
+SHA. Ordinary developer runs remain explicitly optional when clients are absent;
+a green smoke shard with skips is not this native proof. The clients use only
+the existing disposable fixtures and rclone's empty configuration, not a cloud
+account. Containing hosted execution still has to return a terminal result.
+Neither the orchestration controls nor real local-client cases establish cloud
+delivery, application consistency or installed recovery.
+
+### Retired mock-alert cleanup preserves history and monitoring
+
+`scripts/clean-mock-alerts.sh` is a compatibility refusal, not a recovery tool.
+Resource IDs containing `mock`, including apparent mock-prefixed names, are not
+authenticated provenance for deleting an incident. The old substring filter
+could delete genuine history and stop unrelated runtimes or services.
+
+Normal invocations now exit 2 with a fixed retirement explanation; `--help`
+and `-h` alone exit 0. No argument or legacy environment override enables
+cleanup. The helper reads no history, creates no backup or temporary file,
+invokes no external command or privilege tool, and never stops or restarts
+monitoring. It does not echo caller-supplied paths or arguments. Operators
+retain existing history for diagnosis and keep mock/test instances on separate
+disposable data, rather than attempting name-based production cleanup.
+
+`test_clean_mock_alerts.py` exercises actual shell invocations with mixed real
+and synthetic-looking IDs, malformed/missing histories, symlink/FIFO targets,
+legacy overrides, rejected force/apply options, empty PATH and concurrent
+callers. It checks byte/metadata preservation, no temporary/backup files and
+no command or runtime-control calls. The managed-runtime smoke suite consumes
+the same focused proof instead of requiring destructive legacy behaviour.
+
+### Contract-invalid commits stop before runtime CI fan-out
+
+The dependency-free Build and Test changes job, E2E scope job and Canonical
+Governance precheck use the same exact per-commit contract admission. They bind
+the checked-out head and complete related Git range; unavailable/invalid source
+is a failure, never an empty diff or a tip-only substitute. Each ordinary commit
+is checked against its own parent and committed Contract-Neutral trailer. A
+registered split completion must pass its existing exact-pair validator; an
+ambient override or failed history read cannot bypass it. Receipt-only changes
+also run the existing final-content browser guard before dependency work.
+
+Commits containing frontend runtime source explicitly defer their early check:
+the established formatting-only exception needs locked Prettier. Unrelated
+commits in the same range still undergo exact contract and history validation;
+a frontend tip or ancestor cannot hide their missing contracts, failed history
+or required proof. A single commit mixing frontend and backend changes remains
+deferred as a whole, never partly accepted. Intermediate/reverted frontend edits
+and merge-only frontend resolutions still require full final browser evidence.
+Full required Canonical Governance installs the locked graph and checks every
+contract and final browser receipt. Early deferral is not a source, browser or
+runtime pass. An invalid non-rendering commit stops application installs, builds
+and test-shard fan-out even beside deferred frontend commits; the independent
+delivered-history secret scan remains unconditional.
+All existing required audits and runtime checks remain. No release or installed
+acceptance follows from admission. `scripts/tests/test_ci_source_admission.py`
+executes the actual workflow steps and real guard consumers, including failure,
+source identity, trailer/history, formatting deferral and dependency-stop controls.
+Mixed-range controls execute all three actual workflow shells and the real
+completion guard, retaining both rejected backend debt and valid neutral or
+registered-history cases. They prove admission behaviour, not hosted time saved.
+
+### Portal build drift is rejected before ordinary CI fan-out
+
+Build and Test checks the portal's existing ordered input/byte hash in its
+dependency-free changes job, before classifying the diff or starting application
+dependency installation and compilation. Missing or malformed manifests, missing
+inputs and source drift fail with the existing portal rebuild command; the check
+does not regenerate assets, execute frontend source or fetch dependencies.
+`scripts/check_portal_frontend_sync.py` mirrors the existing Go sync assertion;
+it is not bundle correctness or browser proof and replaces none of the Go tests,
+real builds, security checks or required runtime checks.
+
+`scripts/tests/test_portal_frontend_sync.py` exercises exact bytes/order, source
+and package-manifest drift, failure/read-only controls and early workflow
+placement. It also checks the current shipped input binding. Installed behaviour,
+frontend source and the dependency graph are unchanged.
+
+### Agent CA paths are data in generated service configuration
+
+A custom CA path must reach `SSL_CERT_FILE` byte-for-byte in the generated
+systemd environment, even when it contains quotes, backslashes, percent
+specifiers, whitespace or line breaks. Each assignment occupies one physical
+unit-file line; an embedded value cannot replace ExecStart. A successful
+`systemd-analyze verify` exit is insufficient: it may silently accept a changed
+path or ignore an assignment. Verification reads back the exact effective
+value and unchanged command and hardening from the native parser.
+
+`scripts/installtests/agent_systemd_environment.py`, registered by
+`TestInstallSHServiceEnvironmentPreservesLiteralValues`, also checks literal
+plist environment/argument data and the existing shell-export, Upstart-text
+and sed-text outputs. It does not start/reload/install units, exercise Upstart
+or launchd, or qualify installed certificate/registration recovery. No TLS
+bypass, new dependency graph or credential/identity replacement is introduced.
+
+### Convergence discovery can recover an exact cancelled API read
+
+Only the existing JSON API/page read helpers admit an exit-1 HTTP/2 `CANCEL`
+diagnostic with no other text. They repeat the identical command and identity
+within the existing three-attempt, one/two-second backoff budget; failed output
+never contributes to the accepted catalogue. Mixed stream/access diagnostics,
+signals, timeouts and malformed successful JSON cannot use this retry. The
+existing HTTP 502/503/504 read policy cannot mask a refusal or second status.
+Mutations, downloads, log reads, exact-source/attestation checks, containment and
+the global promotion lease are unchanged. Focused `CancelledReadTests` cover
+the real closed CLI boundary, discovery consumer and fail-closed alternatives.
+These fixtures are not a successful hosted reconciliation or installed delivery.
+
+### Missing activation history cannot be inferred from a failed read
+
+The existing attested convergence recovery accepts missing owner history only
+from an exit-1 API read with a complete recognised not-found diagnostic. A 404
+substring in a refusal, mixed/unknown diagnostic, interrupted command or timeout
+is unavailable evidence, not `history-missing`. Non-API commands cannot grant
+that classification. No such failure is retried or submitted for recovery.
+
+`NotFoundReadTests` exercises the real read adapter through the reconciliation
+consumer, asserting no submission or retry for the adverse matrix. The actual
+owner-observation CLI also rejects compound refusals and timeout-shaped exits.
+Exact immutable attestation, marker identity, containment, retry budgets and
+the unchanged global lease remain required. These closed fixtures establish
+classification and safety, not hosted convergence or release acceptance.
+
+### Unknown agent-installer arguments stop without a prompt
+
+The Unix agent parser rejects an unsupported option or stray value with exit
+16 and a fixed help-directed diagnostic, in text and JSON modes. It does not
+wait for terminal input, including when `--non-interactive` occurs later in the
+argument list. Rejection precedes credential ingress, installed-state recovery
+and platform work; supported values and `--help` retain their existing meaning.
+`TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive` runs the shipped
+script through `agent_argument_errors.py`, including real stdin PTYs and inert
+host-operation sentinels. This is parser proof, not native installation recovery.
+
+### Legacy agent token-file admission cannot use a truncated prefix
+
+Before installation, update or removal work, the Unix collector/action-token
+ingress uses the complete bounded legacy value, not just its first line or a
+NUL-stripped prefix. The compatibility shell read is bounded independently of
+the file-size observation and counts bytes rather than locale characters.
+A bare value or one final newline remains supported through 4096 total bytes;
+invalid input returns the existing missing-argument exit 16 without changing
+the caller's file. Saved legacy recovery returns failure rather than a prefix.
+No credential rotation, retry, service action or permission relaxation is added.
+
+The actual parser/ingress, private-file/parent checks and saved recovery are
+exercised by `scripts/installtests/agent_uninstall_state.py` and its existing Go
+hook. These fixture checks do not establish native appliance/systemd recovery
+or protected/released availability.
+
+### Agent installer authentication guidance preserves existing recovery state
+
+Unix agent installation retains its non-success exit 18 and unchanged
+`complete/auth_rejected` JSON record when local readiness succeeds but Pulse
+denies registration. Its warning and final error direct the operator to the
+existing credential's issuing instance, API Access record, reporting scope and
+endpoint policy, not automatic credential replacement or another installation.
+Neither warning may presume a server restore/upgrade caused the denial or
+request command execution/administrator access for host reporting.
+
+`TestInstallSHWarnAgentTokenRejectedIsActionable` executes the closed Bash
+completion matrix in `scripts/tests/test_agent_auth_completion.py`, preserving
+state bytes/modes, refusal exits and machine output across both readiness paths,
+install/update and text/JSON modes. Registered, unconfirmed and missing-process
+controls remain distinct. The fixtures do not contact a server, replace a
+credential or establish installed recovery.
+
+### Development cleanup preserves local state and recovery evidence
+
+`make clean`, `make distclean` and the direct `scripts/cleanup.sh` entrypoint
+share one guarded generated-output allowlist. Clean selects only the server
+binary and frontend build copies; distclean also selects known generated build
+and dependency-cache paths. Neither scans arbitrary filenames/extensions nor
+targets data, environment files, assistant settings, logs, downloads, temporary
+evidence or backups outside those generated outputs. This is not a state reset,
+process stop, secure erasure or restoration of files deleted by an older helper.
+
+Before the first deletion, Git must confirm this exact checkout root and every
+candidate's tracked-file query must succeed. Tracked files and directories with
+tracked descendants are preserved as a whole, as are symbolic links and targets
+below linked parent directories. Failed deletion reports an incomplete result;
+the helper never retries with sudo. These checks do not defend against arbitrary
+concurrent filesystem/index replacement or data deliberately put in an untracked
+build directory.
+
+`scripts/tests/test_cleanup.py` exercises both real Make targets and the direct
+helper in fresh synthetic checkouts, with native Git, Bash, Make and rm. It
+checks preserved bytes/modes and empty recovery directories, actual generated
+output removal, tracked outputs, external/dangling links, complete pre-deletion
+index checks, refusal without a repository or Git, idempotence and failure
+without privilege escalation. Only failure observations use closed adapters;
+no installed/runtime data, process, database or external service is involved.
+The ordinary script-smoke inventory discovers this verifier.
+
+### Development import never chooses a recovery key or repairs installed data
+
+The existing explicit lab-copy helper, `scripts/sync-production-config.sh`,
+reads installed files only. It must never restore the first backup key found,
+generate a replacement key or discard ciphertext. Nonempty encrypted current
+files or backups without a current key, an empty/linked/special key, or a
+conflicting development key refuse before import changes. Installed and
+development paths must resolve to non-overlapping trees (GNU `realpath` is
+required). Selected file links, dangling links and special files also refuse;
+a destination hard link is replaced rather than written through. Plaintext
+source nodes cannot be silently hidden by retained encrypted development nodes.
+These are accidental-use and recovery guards, not hostile concurrent-path
+containment, key-format validation or proof that a key decrypts the ciphertext.
+
+The allowed file set remains the current key, nodes, system settings, guest
+metadata, email, webhooks, API tokens and AI configuration. Installed `.env`,
+OIDC, session/CSRF state, history and alerts are not imported; their development
+counterparts are never reset or cleared. Missing installation and identical
+selected contents are no-ops. Legacy plaintext nodes can be copied without
+inventing a key. Fresh-key generation remains the launcher's responsibility,
+subject to its orphaned-ciphertext guard. The launcher also no longer selects
+a backup key by filename, in direct installed-data or separate-development mode.
+Existing explicit installed-data selectors and their warnings stay unchanged.
+
+All selected source reads and private copies of overwritten development files
+are staged before publication. A failed read, snapshot copy or observed source
+change leaves existing destination file contents/modes intact. Complete files
+are published by per-file rename; the private `.config-import.*/previous`
+snapshot preserves overwritten development files alongside their existing
+matching key. Successful unchanged imports create no snapshot. A publication
+failure can leave a partial set of complete files: retain the previous snapshot
+and unpublished staged files, report failure, and start no service from the
+helper. These renames are not an atomic multi-file transaction, lock on live
+configuration, authenticated key/ciphertext pairing, application consistency,
+SIGKILL cleanup or power-loss guarantee. This is not a full-state backup,
+installed recovery or native guest-thaw proof.
+
+`scripts/tests/test_dev_config_import.py` uses the actual helper with only the
+fixed installed pathname mapped to disposable, synthetic files. Native copy,
+comparison and rename controls check preservation, private modes, idempotence,
+legacy import, exclusions, aliases/overlap, key conflicts, orphaned backups,
+links/special files and hard links. Closed peers inject copy, source-change and
+publication failures; the actual toggle caller refuses before mode changes or
+runtime stop/restart. `test_hot_dev_config.py` also exercises the actual launcher
+in both explicit modes and with orphaned development ciphertext: unproven key
+backups remain untouched and no backend is launched. Build/process/backend
+peers are inert, not an application or browser proof.
+
+### Development does not implicitly import installed credentials or targets
+
+The hot-dev launcher defaults both installed-data selectors to `false`.
+`HOT_DEV_USE_PROD_DATA=true` explicitly admits the installed `.env` and direct
+installed data; `HOT_DEV_IMPORT_PROD_CONFIG=true` separately admits the existing
+copy helper for the default non-mock development directory, not the installed
+`.env`. The modes are mutually exclusive, accept only `true`/`false`, and cannot
+be changed by later runtime configuration. LAN/lab-agent selection does not
+imply either opt-in. Warnings identify the development authentication bypass
+and that an imported copy is not isolated reproduction.
+
+Explicit installed data paths (including existing symlink aliases) require the
+direct-data selector. Validate the selected path before managed-auth writes
+and again after runtime `.env` loading, before the backend receives it. Fresh
+default development creates its own encryption key; nonempty encrypted files
+or backups still stop key generation without changing those files. There is
+no implicit sync, installed-data purge, or host-isolation guarantee: local
+shell configuration, caller-selected data, previous development copies and
+inherited environment remain the developer's responsibility.
+
+`scripts/tests/test_hot_dev_config.py` executes the actual launcher's
+configuration path and the existing copy helper against synthetic installed
+sentinels, mapping only the fixed installed pathname. Inert build/process peers
+and a backend environment-capture peer prove default, custom-data, mock and
+lab isolation; explicit direct/copy admission; invalid-selection and alias
+refusal; post-load redirection refusal; encryption guards; and source-file
+preservation. It stops before watchers, Vite or a real application run. This
+does not establish installed recovery or live monitoring acceptance.
+
+### Stable-publication inventories recover only an observed transport cancellation
+
+The Security Scan's read-only GitHub refs/releases inventory admits only a
+successful, complete slurped array of JSON pages. An exit-1 HTTP/2 `CANCEL`
+diagnostic, with no other stderr, permits at most three identical reads with
+two/four-second backoff. Each command has a 180-second timeout and five-second
+kill backstop. Refusals, unknown errors, signals, timeouts and malformed
+successful output stop without retry. Failed bytes/diagnostics remain separate
+attempt evidence, never a partial or stale accepted inventory. Registry reads,
+frontier decisions, release ownership and publication remain unchanged.
+
+`scripts/tests/test_github_release_inventory.py` executes the actual workflow
+step with controlled GitHub/registry peers, including a truncated cancellation,
+complete recovery, exhausted/denied/mixed failures and the real frontier
+validator. These fixtures establish the collection boundary, not a successful
+live continuity run or any release/installed-health acceptance.
+
+### Ordinary Unix agent copies finish before the collector is stopped
+
+The agent installer must not move a generic temporary download directly onto
+an installed collector/helper: a cross-filesystem `mv` can become a partial copy
+that destroys the previous executable. Stage each admitted ordinary executable
+privately beside its final destination, set its mode before stopping the
+collector, then publish its basename with a same-filesystem rename. Preparation
+failure preserves the previous files and does not stop the collector; refused
+publication is an error, not a successful install or an automatic restart.
+Destination directories, including symlinks to directories and directories
+created at the rename boundary, must not silently absorb the prepared file.
+
+The registered `install_sh_test.go` caller-order proof and Linux
+`TestInstallSHBinaryPublicationPreservesPreviousExecutable` exercise the actual
+signed download/publication slice with real TLS, signatures, copying, rename
+and cross-filesystem failure. Cleanup retains neither partial preparation nor
+unneeded downloads after handled failures. Service/ownership doubles do not
+establish native recovery. Separate safe-profile/action-runner transactions
+and the installer’s later service configuration are not replaced by this
+per-executable publication rule; a helper rename failure can follow a completed
+collector rename and is reported without claiming pair-wide rollback.
+
+### Server installer ignores ambient HTTP-client configuration
+
+Every curl call in the server `install.sh`, including generated/manual commands,
+puts `--disable` first (ahead of any private config); every wget call puts
+`--no-config` first. Saved curl/wget defaults must not silently trust an
+untrusted TLS peer, change a read-only method, add another transfer/header or
+trace requests. Explicit trust/proxy environment, local HTTP readiness, existing
+timeouts, redirect/retry policy, pinned signatures and release/channel selection
+are unchanged. No additional source or native recovery is inferred.
+
+`TestRootInstallHTTPClientsIgnoreAmbientConfiguration` runs the real readiness,
+release discovery, signed container-installer, auto-update-helper and release
+archive functions with real curl/wget against inert loopback HTTP/TLS fixtures.
+It checks trusted and untrusted peers, hostile saved configs, both timeout-tool
+branches, exact GET inventories, no ambient traces/headers, unchanged signature
+refusal and local HTTP readiness; payloads are never executed or extracted. A
+whole-file inventory includes the Go source-build wget and generated commands.
+The existing macOS fixture-only tool supply includes GNU wget; it does not
+replace native agent runtime tools or relax any containing check.
+
+
+### Unix agent lifecycle temporary-token cleanup
+
+`scripts/install.sh` owns a fallback temporary lifecycle token within each
+registration, removal or authority-reduction call, including command-substitution
+callers. Cleanup is armed before secret bytes are written and runs on normal
+return and handled INT/TERM without replacing the installer's outer traps or
+removing its other staged files. Retained runtime/configured/bootstrap tokens
+are never cleanup targets. Command output and nonzero results are preserved;
+failed cleanup after command success returns failure.
+
+The registered `TestInstallSHLifecycleTemporaryTokenCleanup` and its five Python
+methods exercise the real extracted shell functions with inert peers, private
+fixture files and self-directed signals. Native binary/service termination,
+unhandled kill/power loss and installed recovery remain separate, unproved jobs.
+
+### Unix agent installer ignores ambient curl configuration
+
+Every direct curl invocation in `scripts/install.sh` puts `--disable` first,
+including preflight, downloads, local readiness/runtime checks and the separate
+private-token config. A user's `.curlrc` must not silently disable TLS checks,
+replace a read-only method, add another URL or enable tracing. Explicit installer
+CA/insecure flags, environment proxy settings, redirect behaviour, time limits,
+checksum/signature admission and private-file credential transport are unchanged.
+This does not extend the leaf-certificate pin or claim installed TLS recovery.
+
+`TestInstallSHPreflightIgnoresAmbientCurlConfiguration` runs the full read-only
+installer with real curl against disposable HTTP/HTTPS peers. Default-untrusted
+TLS remains refused despite ambient `insecure`; explicit CA and explicit
+insecure still work; successful requests are exactly health GET and download
+HEAD, with no extra URL, trace file or agent-state write. The registered
+`install_sh_test.go` verification also inventories all direct curl invocations
+and keeps `--disable` ahead of the private credential config. These are local
+transport controls, not native appliance or reporter recovery.
+
+### NAS boot registration does not erase unrelated startup work
+
+Installation/update on Unraid and QNAP removes only exactly recognised owned
+entries before emitting one canonical boot entry. The bounded complete-source,
+regular-file/owner and exact-bootstrap checks used by removal also govern
+registration. Unknown custom launchers, truncated/invalid scripts, symlinks and
+shell-expanding bootstrap paths are refused without evaluating boot text.
+Spaces are quoted. Repeating an already-converged registration is a no-op.
+
+Stage the filtered replacement beside the boot file and preserve its permission
+bits, retaining QNAP's existing execute-bit enablement; verify the resulting
+mode as well as its bytes.
+Recheck the original before retiring it into an owned recovery directory, then
+create the destination exclusively and verify the complete bytes and owned-entry
+readback. FAT needs no hard-link support. An incomplete publication keeps its
+available original/retired/replacement files under `.pulse-install.*`; a later
+invocation must not replay it or overwrite a concurrent destination. This is a
+recoverable checked publication, not an atomic filesystem exchange or proof of
+reboot persistence. QNAP may claim confirmed flash configuration only after a
+successful unmount; failure still attempts unmount and stops before starting a
+new watchdog or reporting completion. It does not automatically restart a
+previously stopped collector.
+
+`TestInstallSHNASBootRegistrationPreservesUnrelatedCommands` runs
+`scripts/installtests/nas_boot_registration.py`: original-producer adverse
+controls, exact legacy/fresh/idempotent publication, preserved unrelated bytes,
+unknown-input refusal, concurrent/partial-write recovery and both consuming
+installer branches. `TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure`
+continues to test removal using these same production-generated boot entries.
+These are private local fixtures, not native QNAP/Unraid installation, reboot,
+upgrade or reporter recovery.
+
+### TrueNAS agent completion requires confirmed boot persistence
+
+A running agent does not establish a persistent TrueNAS installation. The Unix
+installer reads the complete bounded middleware task inventory with the existing
+ownership parser before registration. Failed/malformed/diagnostic inventories,
+foreign/indirect activation and duplicate matching tasks stop registration;
+they are never treated as absence or permission to create a duplicate. JSON
+encoding preserves bootstrap paths with spaces, quotes or backslashes.
+Exactly one enabled, owned SCRIPT/POSTINIT task with the existing 30-second
+bootstrap timeout is required. An already-correct task is not rewritten; a
+disabled owned task is updated by its observed numeric ID. One bounded create
+or update is followed by independent inventory readback. A failed/uncertain
+mutation is not replayed, and an update must preserve the original ID.
+
+Unknown persistence does not prevent the existing runtime-start path or discard
+connection/recovery files. After the existing runtime verification succeeds,
+completion instead exits **1** with JSON code `persistence_unconfirmed` and
+instructions to reconcile the existing task before retrying. Startup failure
+**13** and authentication failure **18** remain distinct and authoritative.
+No success or upgrade-survival claim may follow unconfirmed registration.
+This confirms configured middleware state, not actual reboot/upgrade execution.
+
+`TestInstallSHTrueNASBootRegistrationRequiresReadback` executes the production
+registration/completion functions and the full TrueNAS completion caller with
+closed middleware/platform/readiness operations and real private state files.
+Create/update/no-op, both platform branches, repetition, invalid ownership and
+inventories, uncertain/ignored/refused mutations, changed readback, tool absence,
+actual timeout child cleanup and text/JSON outcomes must all pass. These controls
+are not native appliance or installed monitoring recovery acceptance.
+
+### Automatic-update settings are privately and atomically published
+
+The Linux server installer's explicit `setup_auto_updates` opt-in must never
+copy saved settings through a predictable shared temporary path. It stages a
+mode-0600 file beside `system.json`, retains unrelated JSON values, assigns
+the Pulse service owner, and atomically replaces the destination before
+enabling or starting the timer. Existing settings require jq and exactly one
+complete JSON object; text substitution is not a parser fallback. A fresh
+configuration keeps the existing polling default and selected stable/RC
+channel without needing jq. Linked/nonregular destinations, failed staging,
+parsing, permissions, ownership or rename leave activation unchanged and
+report that settings setup did not complete. The scoped EXIT trap removes
+the owned stage, including on interruption; a raced destination directory
+must not receive the staged file as a child.
+
+`TestRootInstallAutoUpdateSettingsPublication` executes the production function
+against real private files, jq and rename, with only manager/ownership doubles.
+It checks preserved settings, private modes, refusal and cleanup, including
+conditional callers. This proves settings publication, not native timer
+activation, installed upgrade/recovery, or any release outcome. Successful
+settings retain the existing consumed values; no API or frontend rendering
+contract changes.
+
+Settings publication alone must not produce the installer's "Automatic updates
+enabled" message. After explicit opt-in, enable/start must each return success,
+and separate bounded readbacks must report persistent `enabled` and `active`
+for that exact instance timer. Failed, timed-out, malformed, runtime-only or
+non-active observations stop the sequence with an unconfirmed-activation warning.
+No later operation, retry, disable or stop is used to conceal or reverse an
+uncertain result. The ordinary installation can continue; the saved preference
+and unrelated settings remain intact, rather than misreporting the live timer
+or changing application-consumed values. Native activation remains distinct.
+
+The same 13-method fixture executes the actual `safe_systemctl` and setup
+functions with a closed manager. It requires ordered positive readback and
+checks command refusals, misleading/nonzero readbacks, runtime-only/unknown
+states, suppressed-errexit callers, all four real five-second timeout paths,
+private diagnostic suppression and absence of retry/rollback. The exact parent
+must fail the command/refused-readback controls; no installed manager is contacted.
+
 ### Telemetry schema release disclosures follow receiver compatibility
 
 `docs/releases/TELEMETRY_SCHEMA_V19.md` carries the extended-history telemetry notice for
@@ -31,6 +747,242 @@ telemetry release-disclosure proof route, rather than changing release promotion
 artifact dispatch, opt-out, pricing or customer entitlements.
 
 
+
+### Unix agent completion reports unconfirmed startup as failure
+
+`scripts/install.sh` must not finish successfully after its bounded startup
+verification reports an absent process or a process that never becomes ready.
+The shared completion helper terminates with the existing service-start failure
+code **13**, before any platform caller's final `exit 0`. Its existing
+`installed_unhealthy` / `updated_unhealthy` JSON completion names remain stable,
+but their `exitCode` must also be 13. Text output distinguishes files installed
+or updated from an incomplete operation and supplies the platform's existing
+log command for either path. Connection state and installed recovery files stay
+available; this adds no restart, retry, removal or credential change.
+
+`TestInstallSHCompletionRequiresObservedStartup` executes the actual waiter,
+completion helper and JSON emitter for install/update and already-persisted/new
+connection state. Closed process/readiness/registration controls cover missing
+processes, readiness timeout, delayed readiness, disabled health, pending
+registration and definitive credential rejection; an OR-list and unconditional
+caller success cannot mask failure. Existing bounded timing, health-disabled
+process fallback, pending-registration handling and authentication exit 18 are
+unchanged. These source controls do not establish native or installed recovery.
+
+### Docker setup preserves existing deployment configuration
+
+`scripts/install-docker.sh` is a fresh-configuration generator, not an upgrade
+operation. Before writing either output it refuses any existing default Compose
+base or override filename, including links, dangling links and directories.
+It does not replace the deployment or overwrite its previous recovery copy.
+An existing regular `.env` is preserved byte-for-byte; a linked, dangling or
+special `.env` path stops before Compose creation. Both outputs are rendered in
+a private same-filesystem staging directory before publication, with mode 0600
+regardless of the caller's umask. POSIX `link` publishes each complete regular
+file exclusively: a raced destination file, link, directory or FIFO is neither
+followed nor replaced. Missing/refused link support stops without a copy fallback.
+Failed rendering exposes neither output; the EXIT cleanup removes owned staging
+inputs. Environment publication precedes Compose publication. If the latter
+fails, the complete generated `.env` remains, with an explicit incomplete-result
+diagnostic and no success claim; no published file is removed as rollback.
+This is not a multi-file atomic transaction or a guarantee for an adversarially
+shared directory. The completion message describes configuration generation,
+not a running or installed container. Image/version/port defaults are unchanged.
+Start guidance selects this exact Compose file and `.env` explicitly for quiet
+validation, startup and published-port readback. It does not print an alternative
+`docker run` deployment with a different volume identity, guess an image or access
+port from shell defaults when a retained `.env` can disagree, or evaluate that
+file as shell code. Shell environment precedence remains explicit; effective
+settings and a running container are not claimed by generation alone.
+
+`TestInstallDockerGeneratorPreservesExistingConfiguration` runs the complete
+`scripts/tests/test_install_docker_generator.py` controls against the real
+generator with only root/container eligibility guards disabled in a private
+copy. Closed Docker/timezone/hostname fixtures cover repeated refusal and
+recovery-copy preservation, all default base/override names, linked outputs,
+special environment paths, fresh defaults and explicit images, and an unchanged
+regular environment file. Exact-parent controls must reproduce the destructive
+overwrite and successful exit. Complete-output controls also retain both failed
+render exits, refuse publication without fallback, exercise raced special paths,
+and verify private final files and staging cleanup. The direct-write parent must
+leave partial configuration on both injected rendering failures. This is
+source-bound generator proof, not Docker
+startup, native installation, upgrade or installed recovery.
+`TestInstallDockerGuidanceKeepsTheGeneratedDeployment` and the complete generator
+matrix also check fresh and retained-environment guidance, explicit file selection
+despite `COMPOSE_FILE`, no bypass command or guessed address, and an inert retained
+shell-expression sentinel. The parent must reproduce the misleading commands.
+
+### Container-agent compatibility bootstrap authenticates before execution
+
+The legacy `scripts/install-container-agent.sh` wrapper continues to prefer its
+neighbouring canonical agent installer, preserving explicit local transport
+options, the downstream exit and host-plus-Docker defaults (no module flags on
+uninstall). Without that local file, it admits only HTTPS without embedded URL
+credentials, query/fragment data or controls. Remote `--insecure` stops before a
+download; an independently verified `--cacert` bundle can authenticate a private
+CA and is forwarded to the canonical installer. This adds no trust bypass or
+new installation profile.
+
+Remote curl ignores ambient configuration and proxies, follows no redirect,
+permits only HTTPS and has five-second connection and sixty-second total limits.
+Only a successful, non-empty HTTP 200 download in this invocation's private
+directory can reach Bash. Partial executable bytes, transfer errors, redirects,
+other statuses and empty bodies execute nothing; ordinary success/failure removes
+only the owned temporary file/directory. Provider output and invalid option/URL
+values are not printed. The recommended `--token-file` passes only the exact
+caller-owned path to the canonical installer, never the file's token bytes in
+process arguments or download inputs. Paths may be relative and contain shell
+metacharacters without expansion. The wrapper neither reads nor removes the
+credential file; private-file validation remains with the canonical installer.
+Legacy inline `--token` forwarding remains available but is labelled as visible
+in process arguments. Combining the two sources is refused before download or
+local execution, without printing either value. Missing option values fail
+before either path. This is authenticated transport and private-file forwarding,
+not new installer-signature or credential-admission policy.
+
+`TestContainerAgentCompatibilityWrapperAuthenticatesBeforeExecuting` runs all
+25 methods in `scripts/tests/test_container_agent_wrapper.py`. They execute the
+complete wrapper with a closed curl fixture and inert canonical installer,
+checking transfer-before-execution, refusal/cleanup, private modes, exact curl
+policy, CA/argument forwarding, defaults, uninstall and downstream exits. The
+private-file controls check exact local/remote path forwarding, downstream
+readability without token-bearing arguments, preserved caller bytes/modes after
+success or failure, missing values and mixed-source refusal. They use synthetic
+credentials, not a real collector or server.
+The exact-parent controls must detect the streaming/unauthenticated bootstrap.
+They do not establish a real TLS handshake, installed agent recovery or native
+Proxmox renewal. Existing canonical installer, signing and lifecycle checks are
+unchanged and still required in containing CI.
+
+### Automatic PVE registration preserves an existing monitoring credential
+
+If token creation reports that the deterministic monitoring token already exists,
+optional install-time registration stops without removing it, creating another
+value, applying token ACLs, or sending an auto-registration POST. This includes a
+second explicit installer invocation after an earlier unconfirmed registration.
+The installer cannot recover a one-time secret and must not invalidate a working
+node to obtain it again. The warning states that the token was preserved, asks
+the operator to check the node in Pulse, and distinguishes a separate installation
+needing its own token. It does not assert whether an earlier POST succeeded.
+Existing user/role provisioning, fresh-token ACLs, trust and API shapes remain;
+manual full-setup choices are not changed by this automatic-path restriction.
+
+`RegistrationResponse.test_existing_token_survives_repeated_registration_without_rotation_or_post`
+executes the complete caller for four duplicate-error forms, modern/legacy setup
+replies and two explicit invocations per fixture. The closed PVE model checks
+preserved credential state, no remove/recreate or token-ACL work, no registration
+POST and no leaked secret/provider text. The exact-parent control must detect
+credential replacement. Fresh registration, refusal, lost-response and bounded
+transport controls remain gating, with both ninety-second wrapper limits intact.
+`TestRootInstallAutoRegisterPreservesExistingDeterministicToken` also excludes
+token removal/recreation in the automatic producer. The TLS preflight ordering
+control checks the surviving setup/create/ACL operations and separately rejects
+token removal; it must not assume the removed rotation command still exists.
+These are synthetic source
+controls, not installed PVE recovery or a report's resolution.
+
+### Bounded, single-attempt install-time Pulse bootstrap
+
+The PVE root installer sends setup-token and auto-registration POSTs directly
+to the new local Pulse container over the existing HTTP transport. Both calls
+ignore ambient curl configuration and proxies, follow no redirects, carry JSON
+on stdin, and have five-second connection and fifteen-second total budgets.
+Only a complete HTTP 200 response reaches the existing response validators.
+No HTTP error, partial read, disconnected peer or timeout authorises a retry.
+A failed setup call changes no PVE credentials; an unconfirmed registration
+retains the created token and tells the operator to check the node in Pulse
+before trying again. It neither asserts absence nor rotates/reposts on failure.
+Request/response shapes, token ownership and ACLs are unchanged. This does not
+add TLS to the local container hop or change Proxmox HTTPS trust.
+
+The complete caller in `pve_auto_register_response.py` uses real curl and private
+HTTP peers for both successful methods, ambient config/proxy exclusion, redirect
+and exact-status refusal, server-error non-replay, dropped/partial responses and
+both actual total deadlines. Two gating Go wrappers require all eighteen methods
+(ten confirmation, eight transport), each keeping the existing ninety-second
+process budget so the intentional network waits cannot starve confirmation;
+`root_install_sh_test.go` also checks the shared helper and producer ordering.
+The connection limit is checked in observed curl arguments, not claimed as a
+separately induced TCP-connect timeout. These are source controls, not installed
+PVE recovery, protected publication, release inclusion or reporter acceptance.
+
+### Credential-free diagnostics for install-time registration confirmation
+
+The optional PVE installer treats the Pulse registration reply and expected
+request as credential-bearing objects. Python receives both over private file
+descriptors, never process arguments. It validates the whole success/action,
+type/source, host and exact token pair before returning only the canonical node
+name. A stored disambiguated name remains valid; absent or mismatched identity,
+non-string fields, control characters, secret-echo names and malformed/non-object
+replies fail without a traceback or raw response in the installer diagnostic.
+An unconfirmed POST is not reported as absent or safe to replay: the operator
+is directed to check the node in Pulse before trying again.
+
+The token-creation helper returns both data and the real exit status to its
+actual caller variables; helper-local names must not shadow those outputs.
+JSON success, explicit legacy fallback, failure and existing-token preservation
+remain executable controls, not merely source-shape assertions. The automatic
+path no longer rotates an existing token; request shapes, token ownership, ACL
+provisioning, TLS and API response contracts are otherwise unchanged.
+This is not installed cluster recovery or a correction for #2980.
+
+`scripts/installtests/pve_auto_register_response.py` runs the complete actual
+installer caller with real curl to private HTTP fixtures and a closed synthetic
+PVE boundary. It checks success/rejection, canonical names, exact token binding,
+malformed replies and every child Python/curl argv for fixture secrets. Its Go
+wrapper keeps those controls in normal installer CI, and
+`root_install_sh_test.go` pins the descriptor-only/diagnostic contract. The
+existing real-HTTPS transport controls remain independently required. Neither
+suite establishes native PVE installation, protected landing or released use.
+
+### Install-time Proxmox API trust before credential changes
+
+The root installer's optional PVE auto-registration accepts an HTTPS API origin,
+not URL credentials, a path, query, fragment or invalid port. DNS names and
+bracketed IPv6 retain their explicit/default API port. Before requesting a Pulse
+setup token or creating a PVE token, a credential-free, bounded request
+must authenticate the API's certificate and observe HTTP 200, 401 or 403.
+Failure skips optional registration without changing monitoring credentials.
+
+Both that request and the later token smoke check use curl with configuration
+disabled, HTTPS-only protocol, no proxy or redirects, five-second connection and
+fifteen-second total budgets. Existing local PVE cluster CA trust augments the
+system CA directory, preserving ACME-issued certificates. There is no insecure
+fallback. The authenticated probe requires HTTP 200, sends its header on stdin,
+and discards response bodies and stderr rather than printing provider text.
+Successful registration and existing token ownership/ACL policy are otherwise
+unchanged; the separate Pulse bootstrap transport follows the single-attempt
+contract above.
+
+`scripts/installtests/pve_auto_register_transport.py` executes the real extracted
+functions with curl and private HTTPS peers: cluster/system trust, unknown CA,
+hostname mismatch, plain HTTP, redirects/statuses, ambient config/proxy, secret
+non-disclosure, preflight-before-mutation and both timeout ceilings. The Go
+installer suite runs it through `pve_auto_register_transport_test.go`;
+`root_install_sh_test.go` pins preflight/smoke/registration ordering. These are
+synthetic transport and refusal controls, not native PVE installation, saved-pin
+renewal, installed recovery or a public release result.
+
+### Manual update downloads remain bounded and authenticated (15 October 2026)
+
+The installed server `update` command, generated by `setup_update_command`,
+downloads both its installer and detached signature with a five-second
+connection limit and a sixty-second total limit per read. Curl ignores ambient
+configuration and admits only HTTPS, including redirects. A failed, incomplete
+or downgraded read cannot execute the installer or report update completion.
+Both temporary paths are covered by cleanup before allocation, including failure
+to allocate the second file. No automatic retry, channel/edition change, timer
+enablement or service mutation is added. The existing pinned SSH verification,
+explicit selectors, saved manual channel and selected instance remain required.
+
+`TestManualUpdateTransportRemainsBoundedAndAuthenticated` executes the generated
+command with real curl, local CA-authenticated HTTPS and an inert SSH-signed
+installer. It requires both download phases' HTTP/partial/downgrade/stalled-TLS
+controls, ignored ambient curl configuration, signature refusal, allocation
+cleanup and preserved instance/settings. Existing manual-channel controls run
+separately. This proves source behaviour, not installed upgrade, rollback or
+the cause or recovery of an interrupted LXC update.
 
 ### Issue metadata checks before publication (14 October 2026)
 
@@ -94,8 +1046,16 @@ Unraid directories. Successful/absent/repeated removal still requires complete
 fresh observations. No automatic restart, credential churn or transport-policy
 change follows a partial operation.
 
-`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all eighteen
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all 23
 actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
+fixture's discovered inventory must exactly match the required controls before
+execution. Each control runs once, serially, in its own two-minute invocation;
+the native runner retains its ten-minute package alarm and the production,
+transport and cleanup deadlines do not change. This prevents completed controls
+from consuming the observation budget of later controls. Missing, substituted,
+repeated or malformed inventories fail closed, covered by
+`TestNASControlInventoryRequiresEveryControlExactlyOnce`; a partial suite is not
+a pass. Native macOS completion still requires the containing CI result. The
 boot filesystem transformations are real private user operations; flash/kernel
 faults are closed models. Two generated watchdog/child controls use real private
 ordinary-user processes, not appliance mounts or root services. Native signed
@@ -270,6 +1230,29 @@ default-based service operation, fresh-install fallback, live executable
 replacement or destructive removal follows that refusal. Admitted executable
 staging and existing stop/readback/recovery safeguards remain unchanged.
 
+The initial existing-install check also requires one successful, settled
+`ActiveState` observation of the selected service before executing the installed
+binary or entering main's backup, download or configuration steps. An inactive
+or failed unit is not a failed read; unavailable, partial, transitional or
+unknown results return the distinct refusal status 2, never fresh-install
+absence or an assertion that Pulse is stopped. This read has the existing
+five-second deadline and one-second kill backstop; no second sample or service
+mutation follows uncertainty.
+
+The installed executable's `--version` probe uses the same command bound and a
+quoted pathname, including custom install paths containing spaces. Only a
+successful complete probe contributes version bytes. Failure, timeout or an
+unrecognised version leaves one explicit `unknown` value and a warning, not a
+plausible version combined with failed output. An existing binary still counts
+as an installation, preserving the existing damaged/unversioned-binary repair
+route; an inactive host without a binary remains a fresh install. This is not
+an installed version, process-identity, native recovery or downgrade-safety
+guarantee for unknown versions.
+Failed service state and unavailable non-systemd state are named as such,
+not described as a confirmed stopped service. The existing config/unit repair
+fixture also exercises pinned and ordinary repair with failed version output
+and both timer-consent choices; it observes the missing unit as inactive.
+
 `TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads` executes the
 actual shell functions and callers with confined command doubles, a
 deterministic pipe-buffer control, fake versioned archive/build inputs and an
@@ -277,10 +1260,68 @@ optional real `systemctl --root` inventory. Only the unit-writer test relocates
 its fixed output path. It proves selection and refusal propagation, not release
 signature trust, real compilation, native systemd restart, an LXC stop cause or
 installed update/recovery. Those remain separate operational evidence.
+Its initial-check controls include settled/custom-path success, unavailable
+and transitional main-flow refusal before mutation, TERM-resistant manager
+and version probes with plausible early output, and preserved damaged-binary
+and fresh-host detection. The Go hook requires those controls by name.
 `TestAutoUpdateServiceDiscoveryAndInstallerHandoff` uses the same fixture to
 execute the actual unattended helper's selection and
 `perform_update` entry/handoff with a fake installer, including timeout and
 failed/partial inventory before any service observation or installer call.
+
+### Installer manager waits include termination of an unresponsive command
+
+Every root installer `systemctl` command with a five-second timeout also has
+a one-second kill backstop. A manager that ignores TERM must not hold the
+installer indefinitely, including during the initial replacement observation,
+stop, post-stop readback, timer activation/readback and startup checks. These
+are per-command bounds, not a new whole-install or readiness-poll deadline.
+Existing legacy reload tolerance is unchanged; the strict automatic-update
+reload still requires its confirmed result.
+
+A timed-out replacement observation or stop remains uncertain. It refuses
+the archive/source replacement without a second attempt or restart, preserves
+the installed executable and removes the caller's private staging. Partial
+plausible output cannot admit replacement. This does not establish why a
+particular installed service stopped or provide native recovery evidence.
+
+`TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads` requires the
+connected archive/source controls in `test_server_service_discovery.py` for
+TERM-resistant initial observations, stops and readbacks. They execute the
+production transaction against private files and a finite confined manager,
+checking the real deadline, unchanged executable, cleared staging and exact
+non-replayed call sequence. A separate inventory control keeps every installer
+manager timeout on the same backstop. Startup and update-resilience fixtures
+retain successful/failed activation and prior-active semantics with the exact
+timeout argument frame; no host service or trusted release is exercised.
+
+### Server startup polls share a wall-clock budget
+
+The root installer and unattended helper count manager execution as well as
+polling sleeps against each existing startup wait (normally twenty seconds).
+Each read gets at most five seconds and never more than the remaining wait,
+with the unchanged one-second kill backstop. No new read starts after the
+budget expires, and a late successful response cannot establish timely startup.
+This bounds a wait, not the complete install/update transaction. The installer
+keeps its one existing prior-active start retry and confirmed-start completion.
+
+Unattended reads retain their complete property-tuple admission. A failed,
+truncated, timed-out or late read keeps the uncertainty result (2), rather than
+becoming settled-inactive rollback consent (1). Prior activity, executable
+verification, signature checks, retained backup and recovery rules are unchanged.
+
+`TestServerStartupWaitSharesOneWallClockBudget` requires the real-clock
+`ServiceStartDeadline` controls in `test_server_installer_start.py` for both
+producers: slow inactive reads, finite TERM-resistant reads, exact custom-unit
+immediate/delayed activation, plausible failed active output and a zero budget.
+Each private manager's process state is read back after termination. The
+connected `UpdateServiceState` deadline control also requires the completed
+new install and original backup to survive uncertainty with no restart,
+rollback, running-executable assertion or success message. Existing
+startup and updater transaction controls use a virtual polling clock instead
+of real sleeps; they do not substitute for these real deadline controls. None
+of these fixtures establishes native/systemd or published-binary recovery,
+explains #2785's original stop, or clears the stopped guest investigations.
 
 ### Unattended restoration requires observed service state
 
@@ -312,6 +1353,24 @@ prior-state restoration and late unknown state. The existing signed transaction
 matrix and smoke controls retain their cryptographic, metadata and return-trap
 coverage. These are source/fixture controls, not native systemd/LXC recovery,
 published installer trust, #2785's stop cause or installed acceptance.
+
+### Verified unattended update completion stays local
+
+After `perform_update` succeeds, the helper records success and completes its
+check without an HTTP notification request. The current server exposes no
+`/api/internal/notification` route. Legacy webhook-file presence cannot prove
+notification delivery or justify an unbounded, unauthenticated POST to a fixed
+local port, where it could wait on an unrelated or unresponsive service.
+This removes only that obsolete request; consent, edition/channel admission,
+signatures, transaction verification and recovery remain unchanged. It adds no
+replacement notification surface or destination-delivery claim.
+
+`TestAutoUpdateCompletionStaysLocal` runs the actual shell `main` with confined
+prerequisite/update callbacks and a private, deliberately stalled loopback
+listener. It requires prompt successful completion without any HTTP request,
+preserves both legacy configuration files, and retains failed-update and no-work
+outcomes. These are entry-flow/termination controls, not signed installation,
+native systemd/LXC recovery, #2785's stop cause or customer delivery acceptance.
 
 The helper records the installer and log collector's separate observed exit
 statuses immediately after their pipeline, before logging or recovery can
@@ -580,6 +1639,68 @@ copy failures, interruption and caller-owned-file preservation. These are
 ordinary-user source controls, not root, native PVE/LXC or installed acceptance;
 complete exact-source CI and the existing safe native routes remain separate.
 
+### Server staging has a protected parent on the install filesystem
+
+Server archive downloads, extraction and the executable's pre-stop version
+probe use private directories on the install filesystem instead of implicitly
+using tmpfs-prone `/tmp`. Container-host prefetch and its small signed installer
+remain on their existing private temporary-input route. Headroom is measured on
+the selected staging filesystem; unreadable or different executable-destination
+device identities refuse before stopping Pulse rather than relying on a
+cross-filesystem copy as an atomic rename.
+
+A private child alone is not a privilege boundary beneath a service-owned
+parent. Before allocating server staging, the installer verifies each absolute,
+normalised, non-symlink ancestor: root owns it and other accounts cannot replace
+root-owned entries (no group/other write, or root-owned sticky semantics). It
+refuses unsafe custom ancestors without changing them. The install directory
+itself becomes root-owned and sticky with group `pulse` write/search access,
+preserving Pulse's HOME for CLI/cache creation while preventing it renaming
+root's staging entries. Existing other-account read/search restrictions are
+preserved (`1775` for the usual `0755` directory, `1770` for private `0700`);
+world access is never added. Ownership/mode failure, symlink substitution or
+failed readback refuses staging. A failed adoption attempts to restore the
+previous HOME mode/owner without following a substituted link; restoration
+failures are reported, not called success. Recursion into ordinary installed children never gives the
+root-consumed archive, extraction or executable-stage directory to Pulse.
+
+Each invocation cleans only its own reserved temporary paths. Age does not
+prove that a different installer's staging is abandoned, so there is no
+age-based recursive sweep. Interrupted leftovers remain visible to the disk
+headroom check, not guessed safe to erase. The installer remains executable.
+
+`TestRootInstallScriptProtectedStagingControls` executes
+`scripts/tests/test_server_installer_staging.py`: real private directories,
+permissions, symlinks and live payloads with explicit UID/chown doubles. It
+covers unsafe ancestry, ownership/mode/readback failure and final symlink
+substitution. The replacement and temporary-input suites separately exercise
+actual download/local/source paths, device-read/cross-device refusal,
+pre-stop admission and owned cleanup. These are source/ordinary-user controls,
+not a second-account kernel test, native systemd/LXC acceptance or a diagnosis
+of issue #2785's original attachment. Existing installed recovery remains
+separate.
+
+### Documented signing proof follows the canonical installation recipe
+
+README intentionally links to `docs/INSTALL.md` rather than copying its complete
+signed-install recipe. Asset validation requires that fixed link and guide,
+extracts exactly one distinct documented `pulse-installer` key, and runs real
+`ssh-keygen -Y verify` against the installer and its sidecar with the unchanged
+identity/namespace. Missing/unlinked documentation, absent or conflicting keys,
+wrong keys, changed installer bytes and absent signatures refuse. No signing
+identity, key custody or release publication policy changes.
+
+`TestReleaseDocumentedInstallerKeyFollowsCanonicalGuide` executes the actual
+validator section with newly generated local fixture keys and inert signed
+bytes; no private project key or provider access is involved. The original
+README-only section fails its valid linked-guide control. Staging account/UID
+doubles remain explicit in the service-discovery and connected updater fixtures,
+while the native root lab keeps the real staging-parent checks. The instance
+selector's shape check follows the existing bounded timer state/exit reader,
+not the retired `is-enabled --quiet` shortcut; its behavioural refusal tests
+remain intact. NAS diagnostic assertions retain private fixture events and
+stderr on failure without changing any assertion, deadline or source behaviour.
+
 ### Existing-installation menu actions require exact target and intent
 
 The root server installer's existing-installation menu admits stable/preview
@@ -761,6 +1882,24 @@ community controls. `TestAutoUpdateVersionProbeHasHardDeadline` exercises a real
 TERM-resistant executable. These are source fixtures, not native systemd or
 installed customer recovery. Consent, signatures and rollback gates are unchanged.
 
+### Unattended discovery cannot report an unknown check as current
+
+The unattended updater's release selector reserves stdout for a selected tag.
+Missing-parser diagnostics go to stderr, not into the command-substitution
+value. Before comparing versions or reporting completion, `main` requires a
+successful selector exit and a nonempty stable-shaped tag. Missing `jq`, failed
+selection, empty/invalid metadata or diagnostic/preview output cannot become
+"Already running latest version" or reach the installer callback. Existing
+release-object maturity, consent, signature, service and rollback gates remain
+unchanged; the helper's existing empty-result convention remains supported.
+
+The standalone `pulse_auto_update_consent_test.go` executes the actual logger,
+selector and main with confined transport/installer callbacks. It separates
+missing-parser diagnostics from version bytes, rejects partial failed reads,
+malformed/unconfirmed metadata and failed/invalid selector output, and retains
+verified-current/newer stable controls. These source fixtures establish no
+installed timer, systemd, native replacement or reporter recovery.
+
 ### Unattended update consent comes from complete configuration
 
 When `system.json` exists, the unattended updater requires one complete JSON
@@ -772,8 +1911,21 @@ unattended update; RC and unknown channels do not. Invalid field types,
 unreadable/nonregular configuration and a missing `jq` fail before any release
 download or installer action, without printing configuration contents. `jq` is
 already an installer dependency; manual updates remain available if its optional
-installation failed. The legacy no-configuration, enabled-timer opt-in and the
-independent disabled-timer gate remain unchanged.
+installation failed. The legacy no-configuration, enabled-timer opt-in remains
+available.
+
+The independent timer gate reads one complete `systemctl is-enabled` state/exit
+tuple, with a five-second deadline and one-second kill backstop. It preserves
+systemd's successful enabled/runtime-enabled, alias, static, indirect, generated
+and transient states. Confirmed disabled, masked/runtime-masked and
+linked/runtime-linked states still skip without release discovery or mutation.
+Unavailable/missing units, failed or timed-out reads, empty/unknown states,
+diagnostic-bearing output, duplicate/blank records and an unterminated final
+record fail before discovery. They are not reported as a disabled timer or a
+successful update check. Both streams and trailing blank records belong to the
+same observation; raw manager diagnostics are not printed. No second sample or
+automatic timer enablement is permitted by a failed read. Explicit configuration
+opt-outs still stop before this manager read.
 
 The standalone `scripts/installtests/pulse_auto_update_consent_test.go` remains
 part of the ordinary installer suite and can also run with
@@ -782,8 +1934,14 @@ without the installer package's application imports or local listeners.
 `TestAutoUpdateRequiresCompleteTopLevelConsent` executes the actual shell gate
 against valid and adverse configuration bytes, including padded RC and nested
 opt-in. `TestAutoUpdateConsentKeepsTimerAndParserBoundaries` checks legacy timer
-consent, missing parser and nonregular configuration. These are source-level
-ordinary-user fixtures, not installed timer/systemd or update acceptance.
+consent, missing parser and nonregular configuration.
+`TestAutoUpdateTimerObservationFailsClosed` exercises the real main/gate with
+confined manager, release and installer boundaries, including a configured timer
+name, exact command count, failed partial output and all retained state classes.
+`TestAutoUpdateTimerReadHasHardDeadline` uses the actual timeout with a private
+TERM-resistant, self-bounded process; a plausible early enabled record cannot
+admit unfinished work. These are source-level ordinary-user fixtures, not
+installed timer/systemd or update acceptance.
 The registry binds the standalone verifier only to the unattended updater's
 runtime policy. It cannot satisfy the archive, PowerShell, Docker or other
 installer policies; their existing exact verification obligations remain.
@@ -1257,11 +2415,20 @@ Readable chart metadata alone is not a successful convergence receipt. The OCI
 manifest digest hashes a different object and must not be compared directly with
 the archive. A byte mismatch fails immediately; unavailable downloads retain the
 bounded retry, with previous downloaded files removed before each attempt.
+Pages publication is asynchronous: RC.2's index commit reached `gh-pages` at
+16:03:21 UTC on 16 October 2026, while its successful Pages build completed at
+16:04:21 UTC. The former 30 two-second polls exhausted verification before the
+new index could propagate. Verification now allows 60 five-second polls (five
+minutes of retry delays, plus bounded job/transport time). Index absence still
+fails when that window expires, and a different archive still fails immediately.
 Activation bindings, publication authority and containment remain prerequisites.
 The executed-shell fixtures in `scripts/release_control/helm_pages_retry_test.py`
-cover matching, mismatched, missing and unavailable public packages without
-network or publication writes. They are not installed Helm qualification or proof
-that any historical published chart was wrong or has been repaired.
+cover matching, mismatched, missing and unavailable public packages, a delayed
+index after 75 simulated seconds, delayed wrong bytes and permanent index absence,
+without network or publication writes. The release-policy test
+`test_helm_pages_waits_for_pages_build_without_weakening_receipt` exercises the
+delayed success and mismatch paths too. They are not installed Helm qualification,
+live convergence recovery or proof that any historical published chart was wrong.
 
 
 The shell-owned multi-tenant integration suite uses a dedicated desktop-only
@@ -1800,6 +2967,9 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 
 ## Canonical Files
 
+Toolchain acquisition: `scripts/install-go-toolchain.sh`, with executable
+transport and private-file controls in `scripts/tests/test_install_go_toolchain.py`.
+
 1. `internal/updates/`
 2. `internal/api/updates.go`
 3. `frontend-modern/src/api/updates.ts`
@@ -1885,6 +3055,8 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 37d. `.github/PULL_REQUEST_TEMPLATE.md`
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
+38a. `scripts/cloud-backup.sh`
+38b. `scripts/cleanup.sh`
 39. `scripts/com.pulse.hot-dev.plist.template`
 40. `scripts/dev-check.sh`
 41. `scripts/dev-deploy-agent.sh`
@@ -3268,6 +4440,17 @@ artifact-selection behaviour.
    `prerelease_only` with the pinned version and is offered neither the
    in-place switch nor the Docker command block, so a stable install is never
    moved onto a preview Pro build; rc-channel installs are still offered it.
+   Settings → Updates is the user-facing entry to that switch, and
+   `docs/UPGRADE_v6.md` and `docs/DOCKER.md` (with their shipped mirrors)
+   point paid community installs there before the download portal.
+   The card distinguishes an accepted request from installed completion and
+   retains an unconfirmed request without offering a duplicate write. Its
+   controls are lazy-loaded only for a known community release build; normal
+   bundle budgets remain unchanged. The offline panel/browser fixture and API
+   controls qualify this presentation, not native switching or rollback.
+   The card-only copy follows its dynamic component into a separate presentation
+   leaf, so the shared Updates helper cannot keep that copy in the eager panel
+   chunk. The existing per-chunk and total budgets still apply to the real build.
    A Docker deployment of the compiled Pro binary is part of that same
    boundary: the container cannot self-replace its binary and a Pro compose
    file pins the previous image digest, so `internal/updates/pro_update.go`
@@ -3762,7 +4945,103 @@ artifact-selection behaviour.
    the manifest range, the locked `@types/node`/`undici-types` versions and the
    `ES2022` lib declaration stay in step.
 
+### Hosted chart verdict writer has no proposed executable
+
+Build and Test's optional workload-chart evidence job retains a read-only
+repository token while running the PR-built executable. Its proof maps only
+exit 0 to success and 78 to neutral; any other exit fails. The separate check
+writer has only `checks: write`, no checkout or proposed executable, uses the
+exact PR head and defaults missing proof output to failure. The raw timing and
+capacity artifact and evidence summary remain necessary: a neutral check
+establishes neither the 90 ms budget nor release or installed acceptance.
+Dependabot/fork token limitations remain explicit, not alternate credentials.
+`TestChartSLOWorkflowPreservesInconclusiveAndFailure` executes the actual YAML
+shells with a synthetic proof exit and a credential-free capturing provider,
+covering success, neutral, budget failure and a broken proof. It checks the
+read-only evidence/separate-writer admission and missing-output failure path.
+No real check is created, workflow dispatched or latency workload executed.
+
 ## Current State
+
+### Staged server version checks have a kill backstop
+
+Both archive and source-build staged `--version` commands escalate to KILL one
+second after the five-second TERM deadline. A TERM-resistant executable must
+not turn that admission check into an unbounded wait, even when it prints a
+plausible version first. Its failed probe still refuses before any service
+observation, stop or binary replacement, preserves the existing executable,
+metadata and configuration, and cleans allocated extraction/build/staging
+paths. This per-command backstop is not a whole-install deadline or proof of
+native recovery. The real-time, single-process TERM-resistant control in
+`test_server_installer_stop.py` covers downloaded archives, local archives and
+source builds, including process state, refusal and file/mode preservation.
+`TestRootInstallScriptStagesUpdateBeforeStoppingService` keeps the explicit
+kill backstop before the existing confirmed-stop and atomic-rename steps.
+
+### Private authenticated Go toolchain inputs
+
+The developer toolchain installer reads a single stable `goX.Y.Z` pin (or its
+governed default when the pin file is absent) without writing source via sudo.
+It downloads the archive and its official SHA-256 into a fresh private directory
+for each invocation, never reusing the former shared `go-install` cache.
+Curl ignores saved configuration and proxies, permits only HTTPS including
+redirects, and uses five-second connection and 300/60-second archive/digest
+budgets without automatic retry. Both downloads and one complete 64-hex digest
+must succeed and match before any privileged install command. Failure and
+handled HUP/INT/TERM remove the private downloads, preserving a failed exit.
+The selected compiler, archive origin and existing privileged install sequence
+are unchanged; this is not an atomic installation/recovery transaction.
+
+`scripts/tests/test_install_go_toolchain.py` executes the complete script with
+real curl and a disposable HTTPS origin; only sudo is an inert recorded
+boundary. It covers private fresh files, saved insecure configuration, proxy
+exclusion, concurrent downloads, certificate/downgrade/status/partial-response
+refusal, pin and digest validation, missing-pin fallback, allocator/privileged
+failures and TERM cleanup. The unchanged helper also meets a short fixture
+total deadline, while full-script controls pin the real production budgets.
+Normal smoke discovery includes this suite. These are source/transport proofs,
+not a real Go installation, host activation, compiled-product qualification or
+resolution of a missing current-compiler dependency.
+
+### Unix installer certificate probing has a total deadline
+
+The leaf-certificate pin check in `scripts/install.sh` must finish its TCP/TLS
+probe within ten one-second waits, before the ordinary install/update path
+stops or replaces a collector. A silent peer fails preflight with exit 14;
+a failed probe or unreadable certificate fails with the same normal diagnostic
+path, not an implicit shell exit. The installer owns and reaps its direct
+OpenSSL child and removes its private output on success, failure and handled
+INT/TERM. A signal during fork/PID capture is retained until the child is
+owned, then exits through the same cleanup. It needs neither GNU timeout nor
+a new runtime dependency.
+
+Exact leaf SHA-256 comparison, pin normalization, pin refusal even alongside
+explicit insecure mode, saved pin persistence, unpinned certificate verification,
+signed executable admission and subsequent curl deadlines are unchanged.
+`server_pin_deadline_test.go` exercises the complete installer with real
+OpenSSL/curl and disposable TLS/silent peers, exact/mismatched pins, ordinary
+preflight consumption, handled interruptions and byte/mode-preserved recovery
+material. Platform/service mutation sentinels remain closed; these Linux-hosted
+controls are not native macOS/BSD/NAS installation or Windows removal proof.
+
+
+### Paid Docker broker image identity
+
+The public updater accepts both supported Docker response shapes: the current
+broker's already digest-pinned `image`, and the legacy bare image plus
+`image_digest`. A pinned image must agree exactly with the validated digest;
+empty, conflicting or double pins withhold the commands. Both Compose commands
+must still reference that same pin. The reader preserves the broker's image,
+login and Compose strings rather than appending a second digest or rebuilding
+the operator's project/file/service selection. Authentication, channel rules
+and archive verification are unchanged.
+
+`TestProDockerUpdateCommandsImageShapes` covers both identities and fail-closed
+alternatives; `TestCheckProUpdatesDockerBrokerImageShapes` exercises the real
+authenticated HTTP reader into update-check JSON. The shared reader also serves
+the Docker runtime-switch guide. Synthetic HTTP and consuming desktop/phone
+proof establish source compatibility, not an installed registry login, the
+separate credential-guidance repair, or published availability.
 
 ### Registered Windows native-exit completion proof (8 October 2026)
 
@@ -5189,15 +6468,25 @@ beta). That read is retried up to five times with backoff and accepts only a
 complete listing of valid pages, so a failed or truncated read can never be
 mistaken for "no existing release" and stage a duplicate draft. Exhausting the
 attempts fails the job with an explicit error.
-The release container image verification reads registry digests with `docker buildx
-imagetools inspect` and checks provenance with `gh attestation verify`, both
-against Docker Hub and GHCR. Those reads are idempotent and routinely meet a 5xx
-from the public registries (a Docker Hub 502 during a blob copy failed the first
-beta's release), so each is retried up to four times with doubling backoff from
-10 seconds. Only the successful attempt's output reaches the step output, so a
-half-printed failed attempt cannot corrupt the verified digests. A moved tag or an
-invalid attestation fails identically on every attempt and is delayed by the
-backoff, never masked.
+The release container image verification reads registry digests with `docker
+buildx imagetools inspect` and checks provenance with `gh attestation verify`,
+both against Docker Hub and GHCR. A Docker Hub 502 during a blob copy failed the
+first beta, but idempotence alone does not permit repeating a refusal. Only an
+exit-1 blob-transfer diagnostic ending in HTTP 502/503/504 can retry, up to four
+times with doubling backoff from 10 seconds. Every diagnostic line must match
+the recognised transfer form, not arbitrary error text before/after a 5xx.
+Access/authentication refusals, mixed or unknown
+errors, trust/policy failures and nonordinary exits stop immediately, preserving
+the command exit and diagnostic, without another registry/reference. Only a
+successful attempt's stdout is admitted; private diagnostic staging is removed
+on ordinary exit. Digest equality, exact source and signer policy are unchanged.
+
+`scripts/release_control/verify_release_container_images_test.py` executes the
+actual verifier with inert Docker/attestation peers: single-call refusal,
+partial failed output, exact same-read bounded 5xx recovery, exhaustion,
+preserved nonordinary numeric exits and unchanged digest/provenance policy.
+These controls neither resolve registry access nor establish live continuity,
+publication or installed health.
 The release backend test runner warms the `pulse-agent` build cache once, after
 compiling the race-enabled API test binary and before any shard starts, with
 the full CPU count. `TestHostAgentCredentialFileHandoff` compiles the agent
@@ -5250,13 +6539,24 @@ the checked-in toolchain files and release-script guards must reject an older
 compiler so local, exact-candidate, provider control-plane, and container builds
 cannot silently reintroduce the vulnerable runtime.
 The frontend development-tool dependency boundary must retain patched Vitest
-and mocker versions at or above `4.1.11`, with the V8 coverage provider matched
+and mocker versions at or above `4.1.12`, with the V8 coverage provider matched
 to the runner, and a `js-yaml` override at or above `4.3.2`. These floors prevent
-reintroducing redirect-mock file reads (GHSA-82fw-gwwq-j7x9) and empty-merge CPU
+reintroducing unauthenticated manual-mock registration (GHSA-qxg6-89mg-rqv8),
+Windows traversal bypass of the redirect-mock file-read fix (GHSA-xp26-3454-mjgp,
+superseding the `4.1.11` GHSA-82fw-gwwq-j7x9 floor), and empty-merge CPU
 exhaustion (GHSA-2883-xcg3-v3hh) through the locked development graph. The
 `frontend-modern/src/security/__tests__/dependencySecurity.test.ts` proof must
 check manifest floors and all installed lockfile copies, including nested
 copies; a successful production build alone does not establish this property.
+The dependency-free `scripts/check-frontend-vitest.mjs` check also runs before
+ordinary frontend dependency installation. Stable caret floors on reviewed
+Vitest 4.x may advance beyond `4.1.12` without a historical text-pin failure;
+the lock must satisfy both declarations, retain their root-lock copies and
+exactly align every runner/mocker/coverage copy. Broad or malformed ranges,
+prereleases, unreviewed majors, missing packages and mismatched nested copies
+remain failures. `scripts/tests/check-frontend-vitest.test.mjs` exercises those
+admissions and refusals; graph admission is not dependency acquisition, an
+audit pass or consuming application qualification.
 Vitest migration must preserve test assertions while using constructable
 constructor mocks and explicit standalone mock-history cleanup. Dependency
 updates must retain the required full-graph audit rather than suppressing it.
@@ -5861,7 +7161,31 @@ verify SHA256 against the same `checksums.txt` the rest of the
 release uses, first verifying `checksums.txt.sshsig` against the pinned
 Pulse release key and failing closed if either integrity artifact is missing,
 invalid, or ambiguous, and place the binary at `~/.local/bin/pulse-mcp`
-(Unix) or `$LOCALAPPDATA\pulse-mcp\pulse-mcp.exe` (Windows). The
+(Unix) or `$LOCALAPPDATA\pulse-mcp\pulse-mcp.exe` (Windows). Each Unix
+binary, checksum-manifest and signature download starts `curl --disable` before
+any other option. Saved curl settings must not weaken TLS verification, change
+request methods/headers, add transfers or enable traces. Explicit CA trust and
+proxy environment remain supported; retries, signed-manifest verification and
+binary-digest admission are unchanged. The real-client controls in
+`TestInstallMCPHTTPClientsIgnoreAmbientConfiguration` exercise the complete Unix
+installer with a loopback TLS peer and fixture signer, including preservation
+of a previous binary and cleanup on refused TLS, missing integrity inputs and
+changed bytes. They do not execute the downloaded binary or establish native
+platform or installed customer recovery. After signed admission, the Unix
+installer must copy into an owner-only staging directory on the destination
+filesystem before atomically renaming the complete executable to `pulse-mcp`.
+A failed copy, refused rename or handled interruption before publication must
+not destroy the previous executable or report installation success. Passing
+the containing directory to `mv` selects the basename exactly once: an existing
+directory cannot absorb the candidate, and symlink destinations are replaced
+without modifying their targets. Cleanup covers every allocated download and
+staging path, including partial temporary-file allocation failures. The
+release-asset acceptance control `TestBuildReleaseMCPInstallerPublication`
+exercises these complete signed flows using real TLS/curl/SSH/install/mv,
+a real file-size-limit copy failure, controlled termination/rename failure,
+existing open readers and file/directory/symlink destinations. It proves Linux
+fixture publication, not power-loss durability, native macOS/FreeBSD acceptance,
+Windows replacement, or customer recovery. The
 binary takes no version ldflags because it reads the manifest
 from the Pulse instance it points at. `scripts/build-release.sh`
 builds `pulse-mcp` for the same multi-OS matrix as the unified
@@ -6027,10 +7351,27 @@ whole body, so an unchecked `cp` fell through and
 `configure_auto_update_script_repo`'s awk turned the empty file into a
 plausible one-line shebang-less "helper" that silently disabled updates), and
 both unit renders, which are staged to `${path}.tmp` and committed by rename
-rather than written with a truncating `cat >` — the function's last statement
-is `safe_systemctl daemon-reload`, which returns 0 by design, so an unchecked
-write reported success over a truncated unit. The staged helper must also be
+rather than written with a truncating `cat >` — the former final permissive
+`safe_systemctl daemon-reload` masked errors, so an unchecked write reported
+success over a truncated unit. The staged helper must also be
 rejected before the swap unless it is non-empty and begins with `#!`.
+
+After publishing the three complete files, asset installation requires one
+confirmed `systemctl daemon-reload`, bounded to five seconds with a one-second
+kill grace. Failure, interruption or timeout returns failure to setup/refresh
+without a retry, file rollback or timer mutation. Setup does not publish consent
+or enable/start the timer after that failure; refresh leaves settings and timer
+state alone. The diagnostic distinguishes installed files from unconfirmed
+manager activation and asks for state reconciliation, never claiming the old
+files survived. The legacy main-service wrapper's container tolerance is
+unchanged. `TestRootInstallAutoUpdateReloadCompletion` runs all six connected
+`auto_update_reload.py` methods through the actual asset/setup/refresh producers,
+real file staging and GNU timeout, with closed manager/ownership doubles. They
+cover all three callers, suppressed errexit, enabled/disabled intent, failure,
+signal, TERM-resistant timeout, successful ordering and legacy compatibility;
+the exact parent must fail the predeclared failure/interruption controls.
+Isolated asset-rendering tests explicitly double reload admission, not this
+completion proof. These controls do not establish native or installed recovery.
 
 Every update-shaped flow over an existing box (the `--version` path and the
 interactive update action, like the reinstall action before them) must repair
@@ -6051,6 +7392,29 @@ pulse.service could not be found" behind the unprivileged-container note
 not exist at all: the installer always writes the unit file itself, even
 where systemctl cannot run, so a missing unit is a broken installation
 rather than an unprivileged-container quirk and must fail the run loudly.
+
+An existing unit is not sufficient either. Every server startup must observe
+`is-active` success through the existing bounded waiter, including fresh
+installs and a failed start command that might nevertheless have started the
+service. An unconfirmed start returns failure with status/journal commands,
+without claiming a future container boot will recover it or automatically
+printing service logs. Files, configuration and data are retained; no new
+stop, delete or rollback is attempted. A previously active update retains its
+existing single start retry; other starts do not gain a retry. Enable failure
+is explicitly reported, not treated as proof of future automatic startup.
+All five main completion paths explicitly propagate startup failure before
+creating a completion marker or printing installation completion, even when
+Bash's implicit errexit is suppressed by the caller's conditional context.
+
+`TestRootInstallStartRequiresObservedActivityAndCallerPropagation` executes
+`scripts/tests/test_server_installer_start.py` against the actual sourced
+startup/wait/retry functions and all five main callers, with only their fixed
+unit lookup relocated and unrelated installer operations confined. Controls
+cover refused starts, inactive/unreadable status, delayed/actual activation,
+the existing update retry, missing units, explicit caller failure and real
+startup-to-completion propagation. These are closed-manager source controls,
+not native systemd, installed recovery or HTTP readiness proof. The existing
+native workflow retains this fixture in its trigger and discovered inventory.
 
 The generated `pulse.service` unit also owns the local subscription-agent
 execution identity. It pins `HOME` to the Pulse install directory and prepends
@@ -6107,6 +7471,21 @@ an explicit non-empty `--ssh-known-hosts` file isolated from global trust; it
 must set `UpdateHostKeys=no` rather than mutate trust during uninstall, never
 enroll an unknown key, and missing, unreadable, empty, or mismatched
 trust must make the remote portion fail after local cleanup completes.
+Cluster-wide key cleanup must admit one complete, successful `pvesh get /nodes`
+JSON inventory and resolve every validated node before attempting any SSH.
+The parser reads the command's stdout, not a heredoc used as Python source.
+Failed, partial, empty, malformed or ambiguous inventories, missing discovery
+dependencies and unresolved/invalid addresses leave the remote portion
+unconfirmed and return nonzero; none may silently select local-only success or
+fall back to a human-readable membership table. Inventory and resolver reads
+are time-bounded. The local portion runs once even when discovery fails or the
+inventory omits this host; duplicate targets do not repeat remote cleanup.
+`--local-only` remains the explicit dependency-free-of-discovery route to run
+separately on each node. It does not make guest/container recovery a proven
+outcome. `scripts/tests/test_sensor_proxy_cluster_cleanup.py` exercises the
+actual shell discovery, trust selection and main completion path with closed
+cluster/DNS/SSH fakes, synthetic local keys and real timeout controls; ordinary
+smoke CI discovers it alongside the existing native installer tests.
 `scripts/installtests/root_install_sh_test.go` is the owned proof surface for
 the root installer's local sensor-proxy cleanup;
 `scripts/installtests/uninstall_sensor_proxy_test.go` and
@@ -6966,6 +8345,18 @@ before installation if the server cannot provide that binary. Both checks must
 follow redirects to the operator's final Pulse origin before deciding
 reachability or inspecting checksum metadata; an HTTP redirect accepted as a
 successful transport response is not the agent artifact contract.
+The health request has a ten-second total deadline, including redirects,
+headers and response body, as well as its five-second connection deadline.
+A timeout is `pulse_unreachable` and a failed preflight (exit 14 when the
+artifact checks succeed), never permission to install or restart the agent.
+The existing thirty-second artifact HEAD deadlines, checksum checks, ambient
+curl-configuration isolation and explicitly selected TLS policy are unchanged.
+`scripts/tests/test_agent_preflight_deadline.py` exercises the whole installer
+with closed command doubles; `TestInstallSHPreflightHealthDeadline` in
+`scripts/installtests/install_sh_test.go` uses real curl against silent-header
+and stalled-body HTTP fixtures, checking terminal failure, continued artifact
+inspection and preserved state. These are preflight controls, not installed
+upgrade or reporter-recovery acceptance.
 A server may only hand out an agent binary that carries its own agent version.
 Local agent artifacts are build outputs that nothing refreshes on their own, so
 they go stale silently, and staleness is not cosmetic: the installer renders its
@@ -7406,6 +8797,27 @@ fallback and unchanged-surface guidance. The production Docs/router browser
 fixture checks both API and MSP report sections on desktop and touch phone
 without API requests, mutations or provider calls.
 
+### Recovering immutable convergence after Actions history expires (18 October 2026)
+
+The immutable activation marker may outlive its original convergence run in
+Actions history. A definite run-specific HTTP 404 is recorded as
+`history-missing`, **not completed**. The reconciler may submit the existing
+bounded recovery workflow for that exact committed release. The workflow uses
+the same read-only owner observer only after verifying immutable release
+attestation, the exact consumed marker bytes and every expected marker field.
+Present owners must match the repository, workflow, event, run ID and display
+identity; active owners still wait. Refused, unavailable, malformed or unknown
+responses stop adoption, rather than becoming a missing or completed owner.
+
+All mutable surfaces still require the unchanged global repository-ref lease
+and committed-release monotonicity. Missing history does not permit stealing
+an unknown lease, rewriting the immutable marker, changing source/digests,
+skipping private credential containment, or resetting unchanged-control retry
+budgets. This repairs scheduled run 39112622024's missing-owner dead end; it is
+not a release decision or proof of operational convergence. Executable owner
+CLI and actual marker-waiter fixtures, failed-read controls, retry/containment
+regressions and the existing integrity/lease tests cover the boundary.
+
 ### Convergence log-reader compatibility (5 September 2026)
 
 Scheduled reconciliation run 33939926237 failed when `gh api` refused terminal
@@ -7774,6 +9186,41 @@ published-installer or installed-host recovery.
 
 ### Governed dependency floors for the go-minor-patch group
 
+#### Non-storage split of proposal 2939 (16 October 2026)
+
+The next candidate advances the Moby API/client pair to v1.56.1/v0.6.2,
+Prometheus client/common to v1.25.0/v0.72.0, gopsutil to v4.26.9, and
+`golang.org/x/crypto`, `x/sync`, `x/sys` and `x/term` to
+v0.58.0/v0.24.0/v0.49.0/v0.47.0. Their selected transitive updates are
+docker/go-connections v0.8.2, purego v0.11.1, perfstat
+v0.0.0-20260805114148-88456608a4f6, procfs v0.22.0, go-sysconf v0.4.0,
+numcpus v0.12.0 and x/text v0.43.0. Compiler, Kubernetes and all storage
+module versions remain unchanged. Existing checksum records are retained;
+new records come from the exact proposal and still require official acquisition
+verification. No new exporter format, API, collection policy or platform is
+enabled.
+
+`test_managed_go_patch_graph_has_reviewed_floors_and_checksums` checks the nine
+new direct-version floors and both checksum records, alongside the existing
+compress/Kubernetes controls. These are admission checks, not runtime or
+compatibility proof. This candidate needs its own exact-graph snapshot,
+affected Docker/exporter/host-metric/security/concurrency tests, real builds and
+native-platform CI before integration. A graph-only pass does not satisfy those
+obligations or establish an installed result.
+
+The SQLite v1.60.1/libc v1.77.1 part of proposal 2939 is not included. The
+existing v1.59.0/v1.75.7 pair and memory v1.12.1 remain selected. The prior
+combined proposal's advisory HistoryReadFilter/empty/legacy +11.71% (p=.001)
+is an adverse observation, not an attribution to SQLite or any other module.
+It is neither cleared by this split nor a reason to delay unrelated monitoring
+repairs. Reconsider the storage update with current containing-source runtime
+evidence and an explicit advisory disposition, without reproducing or analysing
+the excluded 6 September SQLite SIGSEGV investigation. An ordinary version
+proposal does not grant access to that investigation.
+
+The earlier qualified graph and its source-bound observations follow; they are
+not proof of the new split candidate.
+
 The managed `go-minor-patch` group advances three direct modules together with
 their required transitives: `golang.org/x/crypto` 0.56.0 -> 0.57.0,
 `golang.org/x/term` 0.45.0 -> 0.46.0 and `modernc.org/sqlite` 1.53.0 -> 1.59.0
@@ -7897,18 +9344,45 @@ container mode above remains unchanged in purpose. A real native install is
 required for browser updates: Docker detection stays truthful, with no marker
 removal, mock updater, TLS bypass or `PULSE_ALLOW_DOCKER_UPDATES` override.
 
+The workflow also runs `--hosted-native` in an independent first-level VM in
+the fixed `[native, browser]` matrix, with fail-fast disabled. This leg needs no
+Tailscale registration, browser origin or Node preparation. An unavailable
+dedicated browser credential therefore cannot prevent or cancel the native
+result; the overall workflow may still fail, and its two results are separate.
+No new dispatch inputs, host capability or production target are introduced.
+
+Native mode installs the baseline using its own published installer, then
+executes the **selected RC's published `install.sh`** with `--version RC` and
+`--version baseline` for forward and reverse changes. It does not substitute
+the installed `/bin/update` bootstrap, which currently selects stable installer
+code even when given a preview archive version. Browser mode retains its one
+UI apply and documented `/bin/update` recovery; the shadow helper route stays
+unchanged. Neither route proves the cause of #2785's original LXC stop, and no
+old stopped target is touched.
+
 Control is reviewed `main`, bound to `expected_workflow_sha`, its checkout and
 `GITHUB_WORKFLOW_SHA`. Product inputs are only the latest published immutable
 stable and the requested published immutable RC. Peeled commit, release/asset
 IDs, sizes and SHA-256 digests are checked by `release_browser_packet.py`; SSH
-signatures verify before execution. Archives are bounded to512MiB (current
+signatures verify before execution. Both releases' installer and signature
+asset IDs, lengths and hashes are admitted alongside their archives. Hosted
+commands consume tag-separated staged copies, verify the pinned signature and
+server-installer shape for **both** tags before the first host mutation, and
+recheck the chosen installer digest immediately before execution. There is no
+second installer download or latest-installer fallback in the hosted harness.
+Installers are bounded to2MiB. Archives are bounded to512MiB (current
 stable/RC archives are about265MiB), signatures to16KiB, the fixed regular
 server binary to1GiB and expanded inventory to2GiB/4096 entries. Streaming
 hashes avoid allocating an entire archive; anonymous downloads have the same
 archive-size ceiling. Setup-action caches are explicitly disabled in this
 CI-credential-bearing job, and derived command-file outputs use the reviewed
 collision-safe writer. Each installed binary hash must match its
-signed archive, rather than just a reported version. No rebuilt main binary,
+signed archive, rather than just a reported version. Disk and running
+`/proc/MainPID/exe` identities must both match; install/upgrade/rollback receipts
+have distinct phase names so reverse recovery cannot overwrite the baseline.
+Each executed installer receipt binds its installer tag/hash, archive target
+and observed command exit, including a failed forward command. A reverse pass
+cannot erase that failure. No rebuilt main binary,
 frozen-product insertion, candidate re-cut or stable promotion is performed.
 
 A pinned Tailscale action registers an ephemeral project CI node using only
@@ -7956,6 +9430,13 @@ throwaway service/timer, records its result and fails the process on failure;
 the workflow resets the new Serve route after any successful join, including
 partial route setup failure, and its hosted VM is disposed of.
 
+Both hosted modes check the same API-authenticated synthetic settings,
+unchanged encryption key/secret stores, retained data files and original
+auto-update choice plus timer enablement/activity. Both stop their owned
+service/timer in the exit trap and fail on an unconfirmed cleanup; only VM
+disposal is delegated to GitHub. Native receipt names identify that leg and
+cannot establish a browser login, apply, SSE/modal result or browser readback.
+
 Bounded control, signed packet, installer/binary, phase, browser, cleanup and
 redacted settings receipts are retained for seven days. Successful screenshots
 contain only synthetic state. Auth files, bootstrap/API/node tokens, encrypted
@@ -7969,6 +9450,15 @@ previous target's undiagnosed HTTP401 is not diagnosed or cleared by this mode.
 Verification: `scripts/tests/test_release_browser_packet.py` executes immutable
 release/asset/binary identity rejection, worker-mode exclusion, scrubbed command
 environment and cleanup exit controls. `test_release_lifecycle_rehearsal.py`
+executes both native controller directions with distinct synthetic installer
+identities, retains a failing forward exit through successful reverse recovery,
+and checks every state/timer assertion remains connected. Real temporary SSH
+signatures test tag-separated staging and stopping before the mutation boundary
+for size/hash drift, malformed signatures, missing identity, symlinks and a
+signed agent-script substitution, without any network fallback. These ordinary
+offline controls are not systemd installation or published native acceptance.
+That still needs the protected-published workflow's terminal native receipts.
+`test_release_lifecycle_rehearsal.py` also
 executes the recovery-access stop before another browser process can start.
 `scripts/tests/test_release_browser_tailnet.py` executes the actual prerequisite
 and Serve shell with fixed offline node observations: absent dedicated
@@ -8316,3 +9806,19 @@ browser proof at desktop and phone must inspect the rendered safety boundaries,
 keyboard/touch linked recovery navigation and direct/reload fragments. These
 are help qualification, not installed upgrade, native recovery, paid deployment
 or release acceptance.
+
+### Unified agent installer syntax errors stop before host work
+
+The agent install/update/removal entrypoint validates the presence of each
+option's value before reading credentials or recovering/changing installed
+state. A following long option or `-h` cannot silently become that value.
+Syntax errors name the option without echoing values, return the existing
+missing-argument exit 16 without waiting for input, and preserve a previously
+selected JSON error format. Explicit empty values and downstream validation
+remain unchanged; no root/service/transport authority is added.
+
+The complete-parser text/JSON and valid-value controls are
+`TestInstallSHValueArgumentsRejectMissingValues` and
+`TestInstallSHValueArgumentsPreserveExplicitValues` in
+`scripts/installtests/install_sh_test.go`. They do not qualify an installed
+upgrade, rollback or removal, and do not replace native platform checks.

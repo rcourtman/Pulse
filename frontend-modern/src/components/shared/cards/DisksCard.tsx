@@ -17,8 +17,6 @@ interface DisksCardProps {
 }
 
 export const DisksCard: Component<DisksCardProps> = (props) => {
-  if (!props.disks || props.disks.length === 0) return null;
-
   const lastKnownTitle = () => {
     const reason = props.lastKnownReason?.trim();
     return reason ? `Last known reading, not current: ${reason}` : undefined;
@@ -41,89 +39,99 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
   };
 
   return (
-    <InfoCardFrame>
-      <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
-        Disks
-      </div>
-      <Show when={aggregateDisk()}>
-        {(aggregate) => (
-          <div class="mb-3 space-y-1.5 border-b border-border pb-3" data-testid="disks-card-total">
-            <Show
-              when={!lastKnownTitle()}
-              fallback={
+    <Show when={props.disks?.length}>
+      <InfoCardFrame>
+        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
+          Disks
+        </div>
+        <Show when={lastKnownTitle()}>
+          <p class="mb-2 whitespace-normal wrap-break-word text-xs text-muted" role="status">
+            Filesystem usage is last known, not current. {props.lastKnownReason}.
+          </p>
+        </Show>
+        <Show when={aggregateDisk()}>
+          {(aggregate) => (
+            <div
+              class="mb-3 space-y-1.5 border-b border-border pb-3"
+              data-testid="disks-card-total"
+            >
+              <Show
+                when={!lastKnownTitle()}
+                fallback={
+                  <InfoCardKeyValueRow
+                    class="text-[10px]"
+                    label="Total Usage"
+                    value={`Last known ${aggregateUsagePercent().toFixed(0)}% · ${formatBytes(
+                      aggregate().used,
+                    )} / ${formatBytes(aggregate().total)}`}
+                    valueClass="text-muted"
+                    valueTitle={lastKnownTitle()}
+                  />
+                }
+              >
                 <InfoCardKeyValueRow
                   class="text-[10px]"
                   label="Total Usage"
-                  value={`Last known ${aggregateUsagePercent().toFixed(0)}% · ${formatBytes(
-                    aggregate().used,
-                  )} / ${formatBytes(aggregate().total)}`}
-                  valueClass="text-muted"
-                  valueTitle={lastKnownTitle()}
+                  value={`${formatBytes(aggregate().used)} / ${formatBytes(aggregate().total)}`}
+                  valueClass={getMetricTextColorClass(aggregateUsagePercent(), 'disk')}
                 />
-              }
-            >
-              <InfoCardKeyValueRow
-                class="text-[10px]"
-                label="Total Usage"
-                value={`${formatBytes(aggregate().used)} / ${formatBytes(aggregate().total)}`}
-                valueClass={getMetricTextColorClass(aggregateUsagePercent(), 'disk')}
-              />
-              <StackedDiskBar disks={props.disks} aggregateDisk={aggregate()} mode="aggregate" />
-            </Show>
-          </div>
-        )}
-      </Show>
-      {/* Keep mounts in the parent scroll flow: overlay scrollbars can hide a nested list. */}
-      <div class="space-y-2" data-testid="disks-card-mounts">
-        <For each={props.disks}>
-          {(disk) => {
-            const total = disk.total ?? 0;
-            const used = disk.used ?? 0;
-            const usagePercent = total > 0 ? (used / total) * 100 : 0;
-            const barColor = getMetricColorRgba(usagePercent, 'disk');
-            const textColor = getMetricTextColorClass(usagePercent, 'disk');
-            return (
-              <div class="text-[10px]">
-                {/* A long mountpoint takes its own line on a phone rather
+                <StackedDiskBar disks={props.disks} aggregateDisk={aggregate()} mode="aggregate" />
+              </Show>
+            </div>
+          )}
+        </Show>
+        {/* Keep mounts in the parent scroll flow: overlay scrollbars can hide a nested list. */}
+        <div class="space-y-2" data-testid="disks-card-mounts">
+          <For each={props.disks}>
+            {(disk) => {
+              const total = disk.total ?? 0;
+              const used = disk.used ?? 0;
+              const usagePercent = total > 0 ? (used / total) * 100 : 0;
+              const barColor = getMetricColorRgba(usagePercent, 'disk');
+              const textColor = getMetricTextColorClass(usagePercent, 'disk');
+              return (
+                <div class="text-[10px]">
+                  {/* A long mountpoint takes its own line on a phone rather
                     than squeezing the usage figures out of the card. */}
-                <InfoCardKeyValueRow
-                  class="mb-0.5 flex-wrap gap-y-0.5 text-[10px]"
-                  label={disk.mountpoint}
-                  labelClass="max-w-full truncate"
-                  labelTitle={disk.mountpoint}
-                  valueTitle={lastKnownTitle()}
-                  value={
-                    <span class="flex items-center gap-1.5">
-                      <span class={`font-medium ${lastKnownTitle() ? 'text-muted' : textColor}`}>
-                        {lastKnownTitle() ? 'Last known ' : ''}
-                        {usagePercent.toFixed(0)}%
+                  <InfoCardKeyValueRow
+                    class="mb-0.5 flex-wrap gap-y-0.5 text-[10px]"
+                    label={disk.mountpoint}
+                    labelClass="max-w-full truncate"
+                    labelTitle={disk.mountpoint}
+                    valueTitle={lastKnownTitle()}
+                    value={
+                      <span class="flex items-center gap-1.5">
+                        <span class={`font-medium ${lastKnownTitle() ? 'text-muted' : textColor}`}>
+                          {lastKnownTitle() ? 'Last known ' : ''}
+                          {usagePercent.toFixed(0)}%
+                        </span>
+                        <span class="text-muted">·</span>
+                        <span class="text-muted">
+                          {formatBytes(used)} / {formatBytes(total)}
+                        </span>
                       </span>
-                      <span class="text-muted">·</span>
-                      <span class="text-muted">
-                        {formatBytes(used)} / {formatBytes(total)}
-                      </span>
-                    </span>
-                  }
-                />
-                <Show when={!lastKnownTitle()}>
-                  <div
-                    class="h-1.5 w-full rounded-full bg-surface-hover overflow-hidden"
-                    data-testid="disks-card-mount-bar"
-                  >
+                    }
+                  />
+                  <Show when={!lastKnownTitle()}>
                     <div
-                      class="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, usagePercent))}%`,
-                        'background-color': barColor,
-                      }}
-                    />
-                  </div>
-                </Show>
-              </div>
-            );
-          }}
-        </For>
-      </div>
-    </InfoCardFrame>
+                      class="h-1.5 w-full rounded-full bg-surface-hover overflow-hidden"
+                      data-testid="disks-card-mount-bar"
+                    >
+                      <div
+                        class="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, usagePercent))}%`,
+                          'background-color': barColor,
+                        }}
+                      />
+                    </div>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
+        </div>
+      </InfoCardFrame>
+    </Show>
   );
 };

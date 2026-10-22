@@ -353,6 +353,48 @@ func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	if !strings.Contains(envText, "PULSE_IMAGE=example/pulse-enterprise:"+version) {
 		t.Fatalf(".env missing configured image default:\n%s", envText)
 	}
+	for _, path := range []string{composePath, envPath} {
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+			t.Fatalf("generated configuration must be a private regular file: %s (%v, %v)", path, info, err)
+		}
+	}
+	if staging, err := filepath.Glob(filepath.Join(workDir, ".pulse-docker.*")); err != nil || len(staging) != 0 {
+		t.Fatalf("completed generation retained private staging inputs: %v, %v", staging, err)
+	}
+}
+
+func TestInstallDockerGeneratorPreservesExistingConfiguration(t *testing.T) {
+	// The complete generator runs against closed tools in a private directory;
+	// its eligibility guards alone are disabled, not its output admission.
+	cmd := exec.Command("python3", repoFile("scripts", "tests", "test_install_docker_generator.py"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Docker generator safety controls: %v\n%s", err, output)
+	}
+}
+
+func TestInstallDockerGuidanceKeepsTheGeneratedDeployment(t *testing.T) {
+	workDir := t.TempDir()
+	content := "PULSE_IMAGE=private/pulse:retained\nPULSE_PORT=9876\nCOMPOSE_FILE=other-deployment.yml\n"
+	envPath := filepath.Join(workDir, ".env")
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := runInstallDockerScript(t, workDir)
+	prefix := "  docker compose --env-file ./.env -f ./docker-compose.yml "
+	for _, command := range []string{"config --quiet", "up -d", "ps"} {
+		if !strings.Contains(output, prefix+command+"\n") {
+			t.Fatalf("missing generated-deployment command %q:\n%s", command, output)
+		}
+	}
+	for _, guess := range []string{"docker run", "Access Pulse at:", "private/pulse:retained", "9876"} {
+		if strings.Contains(output, guess) {
+			t.Fatalf("guidance bypasses Compose or guesses its effective settings (%q):\n%s", guess, output)
+		}
+	}
+	if saved, err := os.ReadFile(envPath); err != nil || string(saved) != content {
+		t.Fatalf("guidance changed retained environment: %v", err)
+	}
 }
 
 func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
@@ -466,7 +508,7 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 	)
 }
 
-func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
+func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) string {
 	t.Helper()
 
 	scriptPath := repoFile("scripts", "install-docker.sh")
@@ -501,6 +543,7 @@ func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	if err != nil {
 		t.Fatalf("run install-docker.sh: %v\n%s", err, out)
 	}
+	return string(out)
 }
 
 func writeTestStub(t *testing.T, path, content string) {

@@ -515,7 +515,7 @@ func testGuestWindowsBootstrapSafety(t *testing.T) {
 					for _, identity := range []struct {
 						instance, node, os string
 						id                 int
-					}{{"other", "node", "Linux", 105}, {"bootstrap", "other", "", 105}, {"bootstrap", "node", "Linux", 106}} {
+					}{{"other", "node", "Linux", 105}, {"bootstrap", "other", "", 107}, {"bootstrap", "node", "Linux", 106}} {
 						f.mu.Lock()
 						f.osName = identity.os
 						f.mu.Unlock()
@@ -527,6 +527,21 @@ func testGuestWindowsBootstrapSafety(t *testing.T) {
 					}
 					if !reflect.DeepEqual(m.guestMetadataCache[guestMetadataCacheKey("bootstrap", "node", 105)], original) {
 						t.Error("replacement identity renewed the original Windows evidence")
+					}
+					// VMIDs are cluster-wide: a node move is the same Windows
+					// guest, not another identity that should send a Linux read.
+					// Its metadata/safety age stays unchanged; node-bound memory
+					// observations are still read independently at the new node.
+					f.mu.Lock()
+					f.osName = bootstrapWindowsOS
+					f.mu.Unlock()
+					f.resetTrace()
+					moved := windowsBootstrapPoll(t, m, client, collector, "bootstrap", "migrated", 105, 1)
+					if moved.OSName != bootstrapWindowsOS || !reflect.DeepEqual(f.trace(), []string{"get-fsinfo"}) || moved.Memory.Used != int64(3*bootstrapMiB) || moved.Memory.Observation.Source != "status-mem" || !reflect.DeepEqual(m.guestMetadataCache[guestMetadataCacheKey("bootstrap", "node", 105)], original) {
+						t.Errorf("Windows migration reset metadata or sent Linux work: trace=%v OS=%q memory=%+v", f.trace(), moved.OSName, moved.Memory)
+					}
+					if _, exists := m.vmAgentMemCache[guestMemoryCacheKey("bootstrap", "migrated", 105)]; exists {
+						t.Error("Windows migration copied a node-bound memory cache")
 					}
 					// A reinstalled guest at the same tuple must be reclassified
 					// from its new OS receipt, including measured-zero availability.

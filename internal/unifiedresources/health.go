@@ -163,6 +163,12 @@ func matchingResourceHealthAlerts(resource Resource, alerts []ResourceHealthAler
 	if resource.Proxmox != nil {
 		add(resource.Proxmox.SourceID)
 	}
+	// PMG collection and its connection alert use different runtime IDs. Only
+	// the configured scoped reference may associate that alert; arbitrary
+	// canonical/name/hostname aliases can collide across connections.
+	if CanonicalResourceType(resource.Type) == ResourceTypePMG && resource.PMG != nil {
+		add(resource.PMG.ConnectionID)
+	}
 
 	matching := make([]ResourceHealthAlert, 0, 1)
 	for _, alert := range alerts {

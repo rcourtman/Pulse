@@ -179,9 +179,13 @@ export function getGuestPowerIndicator(
   if (!parentNodeOnline) {
     return { variant: 'danger', label: 'Node offline' };
   }
-  return isGuestRunning(guest, parentNodeOnline)
-    ? { variant: 'success', label: 'Running' }
-    : { variant: 'danger', label: 'Stopped' };
+  // Not running is not proof of a shutdown: the provider may report a
+  // paused/suspended guest, a transition, or no usable state at all.
+  const status = normalize(guest.status);
+  if (status === 'paused' || status === 'suspended') {
+    return { variant: 'warning', label: formatStatusLabel(status) };
+  }
+  return getSimpleStatusIndicator(guest.status);
 }
 
 /**

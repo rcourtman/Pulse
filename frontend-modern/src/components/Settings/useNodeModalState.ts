@@ -11,6 +11,7 @@ import {
   buildNodeModalMonitoringPayload,
   getNodeModalDefaultFormData,
   getNodeModalTestResultPresentation,
+  type NodeModalConnectionTestScope,
   type NodeModalFormData,
 } from '@/utils/nodeModalPresentation';
 
@@ -20,22 +21,37 @@ import {
   deriveNameFromHost,
   type NodeModalProps,
 } from './nodeModalModel';
+import { getNodeFingerprintError } from './nodeFingerprintValidation';
 
 type NodeModalTestResult = {
   status: string;
   message: string;
+  scope: NodeModalConnectionTestScope;
   isCluster?: boolean;
   warnings?: string[];
 };
 
 const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
+const CONNECTION_TEST_DEADLINE_MS = 30_000;
+const CONNECTION_TEST_TIMEOUT_MESSAGE =
+  'No connection result after 30 seconds. The server may still be testing. Nothing was saved. Check the endpoint before testing again.';
 
 export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
+  let connectionTestGeneration = 0;
+  let connectionTestController: AbortController | undefined;
+  const invalidateConnectionTest = () => {
+    connectionTestGeneration++;
+    setTestResult(null);
+    // Invalidating UI evidence does not cancel a live request. Keep the test
+    // button disabled until it settles or reaches its deadline; edits must not
+    // start overlapping probes.
+  };
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
   );
+  const fingerprintError = createMemo(() => getNodeFingerprintError(formData().fingerprint));
   const [quickSetupBootstrap, setQuickSetupBootstrap] = createSignal<{
     cacheKey: string;
     response: ProxmoxSetupCommandResponse;
@@ -44,6 +60,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
+  const [isPreparingSetup, setIsPreparingSetup] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
   const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
 
@@ -52,6 +69,11 @@ export const useNodeModalState = (props: NodeModalProps) => {
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
   const isEditingExistingNode = () => Boolean(props.editingNode?.id);
+  const connectionTestScope = (): NodeModalConnectionTestScope => {
+    const data = formData();
+    const hasNewSecret = data.authType === 'password' ? data.password : data.tokenValue;
+    return isEditingExistingNode() && !hasNewSecret ? 'saved' : 'form';
+  };
   const quickSetupCommandReady = () => quickSetupBootstrap() !== null;
 
   const quickSetupExpiryLabel = () => {
@@ -73,10 +95,24 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   let bootstrapGeneration = 0;
+  let disposed = false;
   const bootstrapActive = (generation: number) =>
-    generation === bootstrapGeneration && props.isOpen !== false;
+    !disposed &&
+    generation === bootstrapGeneration &&
+    props.isOpen !== false &&
+    !props.setupHandoffDisabled?.();
+  // One issuance/download/clipboard action at a time, even across mode or
+  // target changes. Retiring output does not cancel a dispatched request.
+  const beginSetup = () => {
+    if (isPreparingSetup() || !bootstrapActive(bootstrapGeneration)) return null;
+    setIsPreparingSetup(true);
+    return bootstrapGeneration;
+  };
   onCleanup(() => {
+    disposed = true;
     bootstrapGeneration++;
+    connectionTestGeneration++;
+    connectionTestController?.abort();
     clearQuickSetupState();
   });
 
@@ -87,7 +123,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const copyProxmoxAgentInstallCommand = async (type: 'pve' | 'pbs', successMessage: string) => {
-    const generation = bootstrapGeneration;
+    const generation = beginSetup();
+    if (generation === null) return;
     try {
       setLoadingAgentCommand(true);
       setAgentCommandError(null);
@@ -98,16 +135,19 @@ export const useNodeModalState = (props: NodeModalProps) => {
         insecure: agentInstallInsecure(),
       });
       if (!bootstrapActive(generation)) return;
-      setAgentInstallCommand(data.command);
-      if (data.token) {
-        showTokenReveal({
-          token: data.token,
-          source: type,
-          note: 'Run the copied install command first. Then copy this token and paste it only at the silent “Pulse agent token” prompt. It is not part of the command.',
-        });
-      }
       const copied = await copyToClipboard(data.command);
+      // A clipboard write already sent to the browser cannot be retracted.
+      // Do not reveal its token or revive output after its consumer changes.
+      if (!bootstrapActive(generation)) return;
       if (copied) {
+        setAgentInstallCommand(data.command);
+        if (data.token) {
+          showTokenReveal({
+            token: data.token,
+            source: type,
+            note: 'Run the copied install command first. Then copy this token and paste it only at the silent “Pulse agent token” prompt. It is not part of the command.',
+          });
+        }
         notificationStore.success(successMessage);
         return;
       }
@@ -122,7 +162,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       setAgentCommandError(message);
       notificationStore.error(message);
     } finally {
-      if (bootstrapActive(generation)) setLoadingAgentCommand(false);
+      setLoadingAgentCommand(false);
+      setIsPreparingSetup(false);
     }
   };
 
@@ -132,8 +173,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const loadQuickSetupBootstrap = async (
     type: 'pve' | 'pbs',
     backupPerms: boolean,
+    generation: number,
   ): Promise<ProxmoxSetupCommandResponse | null> => {
-    const generation = bootstrapGeneration;
     const host = formData().host?.trim() ?? '';
     if (!host) {
       notificationStore.error('Please enter the Endpoint URL first');
@@ -168,16 +209,19 @@ export const useNodeModalState = (props: NodeModalProps) => {
     backupPerms: boolean,
     successMessage: string,
   ) => {
-    const generation = bootstrapGeneration;
+    const generation = beginSetup();
+    if (generation === null) return;
     logger.debug('[Quick Setup] Copy button clicked');
     try {
       logger.debug('[Quick Setup] Generating setup URL for host', {
         host: formData().host,
       });
-      const data = await loadQuickSetupBootstrap(type, backupPerms);
+      const data = await loadQuickSetupBootstrap(type, backupPerms, generation);
       if (!data || !bootstrapActive(generation)) return;
-      showSetupToken(data);
-      if (await copyToClipboard(data.command)) {
+      const copied = await copyToClipboard(data.command);
+      if (!bootstrapActive(generation)) return;
+      if (copied) {
+        showSetupToken(data);
         notificationStore.success(successMessage);
         return;
       }
@@ -189,6 +233,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (!(error instanceof Error && error.message === PROXMOX_SETUP_HOST_REQUIRED_MESSAGE)) {
         notificationStore.error('Failed to copy command');
       }
+    } finally {
+      setIsPreparingSetup(false);
     }
   };
 
@@ -203,14 +249,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const setupScriptRunHint = (fileName: string) => `bash ${fileName}`;
 
   const downloadProxmoxSetupScript = async (type: 'pve' | 'pbs', backupPerms = false) => {
-    const generation = bootstrapGeneration;
+    const generation = beginSetup();
+    if (generation === null) return;
     try {
-      const bootstrap = await loadQuickSetupBootstrap(type, backupPerms);
+      const bootstrap = await loadQuickSetupBootstrap(type, backupPerms, generation);
       if (!bootstrap || !bootstrapActive(generation)) return;
       const data = await NodesAPI.downloadProxmoxSetupScript(bootstrap);
       if (!bootstrapActive(generation)) return;
-      showSetupToken(bootstrap);
-
       const blob = new Blob([data.content], {
         type: data.contentType,
       });
@@ -218,10 +263,14 @@ export const useNodeModalState = (props: NodeModalProps) => {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = data.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
+      try {
+        document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showSetupToken(bootstrap);
 
       notificationStore.success(
         `Script downloaded! Upload it to your server and run: ${setupScriptRunHint(data.fileName)}`,
@@ -230,6 +279,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (!bootstrapActive(generation)) return;
       logger.error('Failed to download script:', error);
       notificationStore.error('Failed to download script. Please check your connection.');
+    } finally {
+      setIsPreparingSetup(false);
     }
   };
 
@@ -253,12 +304,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     const isOpen = props.isOpen;
     const editingNode = props.editingNode;
     const prefillNode = props.prefillNode;
-
-    if (isOpen === false || key !== previousResetKey || nodeType !== previousNodeType) {
-      bootstrapGeneration++;
-      clearQuickSetupState();
-      setLoadingAgentCommand(false);
-    }
 
     if (key !== undefined && key !== previousResetKey) {
       previousResetKey = key;
@@ -417,6 +462,75 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setFormData(formSource);
   });
 
+  let previousSetupContext: unknown[] | undefined;
+  createEffect(() => {
+    const data = formData();
+    const target = props.editingNode ?? props.prefillNode;
+    // Keep only input values in memory. A → B → A must retire earlier output,
+    // while a health-only poll of the same target must preserve a live cache.
+    const context = [
+      props.isOpen,
+      props.resetKey,
+      props.nodeType,
+      target?.type,
+      target && 'id' in target ? target.id : undefined,
+      target?.host,
+      target?.name,
+      data.host,
+      data.name,
+      data.setupMode,
+      data.authType,
+      agentInstallInsecure(),
+      Boolean(props.setupHandoffDisabled?.()),
+    ];
+    if (previousSetupContext && context.some((value, i) => value !== previousSetupContext![i])) {
+      bootstrapGeneration++;
+      clearQuickSetupState();
+      setAgentInstallCommand('');
+      setAgentCommandError(null);
+    }
+    previousSetupContext = context;
+  });
+
+  let previousTestContext: unknown[] | undefined;
+  createEffect(() => {
+    const data = formData();
+    const saved = props.editingNode;
+    // Ignore health-only polls and presentation/coverage edits. Bind evidence
+    // to connection inputs, the editing target and its available saved config,
+    // not object identity. A → B → A still retires the original request.
+    // These values stay in memory; never log or serialize credential inputs.
+    const context = [
+      props.isOpen,
+      props.resetKey,
+      props.nodeType,
+      data.host,
+      data.authType,
+      data.user,
+      data.password,
+      data.tokenName,
+      data.tokenValue,
+      data.verifySSL,
+      data.fingerprint,
+      saved?.id,
+      saved?.type,
+      saved?.host,
+      saved?.user,
+      saved?.tokenName,
+      saved?.hasPassword,
+      saved?.hasToken,
+      saved?.verifySSL,
+      saved && 'fingerprint' in saved ? saved.fingerprint : undefined,
+    ];
+    if (
+      previousTestContext &&
+      context.some((value, index) => value !== previousTestContext![index])
+    ) {
+      invalidateConnectionTest();
+    }
+    previousTestContext = context;
+  });
+
   const handleSubmit = (event: Event) => {
     event.preventDefault();
     const data = formData();
@@ -432,6 +546,12 @@ export const useNodeModalState = (props: NodeModalProps) => {
       notificationStore.info(
         `Run the ${setupPath} on the host. Pulse will add the node automatically.`,
       );
+      return;
+    }
+
+    const pinError = fingerprintError();
+    if (pinError) {
+      notificationStore.error(pinError);
       return;
     }
 
@@ -537,59 +657,38 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const handleTestConnection = async () => {
+    if (disposed || isTesting() || props.isOpen === false) return;
     const data = formData();
+    const scope = connectionTestScope();
+    // A saved-record test does not consume this draft. Do not block it or
+    // send draft inputs alongside saved credentials. An entered-settings
+    // test must not send credentials with an impossible pin.
+    const pinError = scope === 'form' ? fingerprintError() : null;
+    if (pinError) {
+      notificationStore.error(pinError);
+      return;
+    }
+    const generation = ++connectionTestGeneration;
+    const isCurrent = () =>
+      !disposed && generation === connectionTestGeneration && props.isOpen !== false;
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
 
     if (!data.name.trim() && normalizedName) {
       setFormData((prev) => ({ ...prev, name: normalizedName }));
     }
 
-    if (isEditingExistingNode()) {
-      const hasNewPassword = data.authType === 'password' && data.password;
-      const hasNewToken = data.authType === 'token' && data.tokenValue;
-
-      if (!hasNewPassword && !hasNewToken) {
-        setIsTesting(true);
-        setTestResult(null);
-
-        try {
-          const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
-            verifySSL: data.verifySSL,
-            fingerprint: data.fingerprint,
-          });
-          setTestResult({
-            status: 'success',
-            message: result.message || 'Connection successful',
-          });
-        } catch (error) {
-          logger.error('Test existing node error:', error);
-          let errorMessage = 'Connection failed';
-          if (error instanceof Error) {
-            errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
-          }
-          setTestResult({
-            status: 'error',
-            message: errorMessage,
-          });
-        } finally {
-          setIsTesting(false);
-        }
-        return;
-      }
-    }
-
-    if (!data.host) {
-      setTestResult({ status: 'error', message: 'Endpoint URL is required' });
+    if (scope === 'form' && !data.host) {
+      setTestResult({ status: 'error', message: 'Endpoint URL is required', scope });
       return;
     }
 
-    if (data.authType === 'password' && (!data.user || !data.password)) {
-      setTestResult({ status: 'error', message: 'Username and password are required' });
+    if (scope === 'form' && data.authType === 'password' && (!data.user || !data.password)) {
+      setTestResult({ status: 'error', message: 'Username and password are required', scope });
       return;
     }
 
-    if (data.authType === 'token' && (!data.tokenName || !data.tokenValue)) {
-      setTestResult({ status: 'error', message: 'Token ID and token value are required' });
+    if (scope === 'form' && data.authType === 'token' && (!data.tokenName || !data.tokenValue)) {
+      setTestResult({ status: 'error', message: 'Token ID and token value are required', scope });
       return;
     }
 
@@ -612,36 +711,80 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setIsTesting(true);
     setTestResult(null);
 
+    const controller = new AbortController();
+    connectionTestController = controller;
+    let timedOut = false;
+    let rejectAborted!: () => void;
+    // Race the entire operation, not only fetch headers. CSRF preparation or
+    // response-body consumption can also stall, and a retired transport may
+    // still resolve. Aborting the browser is not proof the server stopped.
+    const aborted = new Promise<never>((_, reject) => {
+      rejectAborted = () => reject(new Error('Connection test cancelled'));
+      controller.signal.addEventListener('abort', rejectAborted, { once: true });
+    });
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, CONNECTION_TEST_DEADLINE_MS);
+
     try {
-      const result = await NodesAPI.testConnection(testData as NodeConfig);
+      // Saved credentials stay on the saved record. Never combine them with
+      // an unsaved endpoint, account or trust policy in the browser.
+      const result: {
+        status: string;
+        message?: string;
+        isCluster?: boolean;
+        warnings?: string[];
+      } = await Promise.race([
+        scope === 'saved'
+          ? NodesAPI.testExistingNode(props.editingNode!.id, undefined, controller.signal)
+          : NodesAPI.testConnection(testData as NodeConfig, controller.signal),
+        aborted,
+      ]);
+      if (!isCurrent()) return;
       setTestResult({
-        status: result.warnings && result.warnings.length > 0 ? 'warning' : 'success',
-        message: result.message || 'Connection successful',
+        status:
+          result.status !== 'success'
+            ? 'error'
+            : result.warnings && result.warnings.length > 0
+              ? 'warning'
+              : 'success',
+        message:
+          result.message ||
+          (result.status === 'success' ? 'Connection successful' : 'Connection failed'),
+        scope,
         isCluster: result.isCluster,
         warnings: result.warnings,
       });
     } catch (error) {
-      logger.error('Test connection error:', error);
+      if (!isCurrent()) return;
+      if (!timedOut) logger.error('Test connection error:', error);
       let errorMessage = 'Connection failed';
       if (error instanceof Error) {
         errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
       }
       setTestResult({
         status: 'error',
-        message: errorMessage,
+        message: timedOut ? CONNECTION_TEST_TIMEOUT_MESSAGE : errorMessage,
+        scope,
       });
     } finally {
+      clearTimeout(deadline);
+      controller.signal.removeEventListener('abort', rejectAborted);
+      connectionTestController = undefined;
       setIsTesting(false);
     }
   };
 
   return {
+    fingerprintError,
     agentCommandError,
     agentInstallCommand,
     agentInstallInsecure,
     copyCommand,
     copyProxmoxAgentInstallCommand,
     copyQuickSetupCommand,
+    connectionTestScope,
     downloadProxmoxSetupScript,
     formData,
     handleSubmit,
@@ -649,6 +792,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     isAdvancedSetupMode,
     isEditingExistingNode,
     isTesting,
+    isPreparingSetup,
     loadingAgentCommand,
     quickSetupExpiry,
     quickSetupExpiryLabel,

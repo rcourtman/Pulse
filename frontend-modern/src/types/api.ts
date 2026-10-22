@@ -737,6 +737,8 @@ export interface BackupTask {
   status: string;
   startTime: string;
   endTime?: string;
+  /** Last provider history observation, not the job start/end or page read. */
+  observedAt?: string;
   size?: number;
   error?: string;
 }
@@ -744,6 +746,8 @@ export interface BackupTask {
 export interface StorageBackup {
   id: string;
   storage: string;
+  /** Local archive host, independently of the guest's current node. Absent for shared/legacy rows. */
+  storageNode?: string;
   node: string;
   instance: string;
   type: string;

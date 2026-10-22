@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -78,6 +79,87 @@ import (
 	"github.com/rs/zerolog"
 	tmock "github.com/stretchr/testify/mock"
 )
+
+// Exercise the proof's real CLI, child execution and on-disk receipts without
+// running a latency workload. Only capacity telemetry and sampling delays are
+// synthetic; a malformed/failed child must never become a neutral budget result.
+func TestContractChartSLOProofCLIClassifiesExecution(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "python3", "-c", `
+import hashlib, json, os, shlex, sys, tempfile
+from pathlib import Path
+sys.path.insert(0, str(Path('testdata').resolve()))
+import chart_latency_proof as proof
+
+sleep = proof.time.sleep
+proof.time.sleep = lambda seconds: sleep(0.005)
+proof.wait_idle = lambda prefix: None
+proof.snapshot = lambda: {}
+proof.process_counters = lambda: {}
+proof.ticks = lambda pid: 0
+proof.process_io = lambda pid: {}
+os.environ['GITHUB_TOKEN'] = 'synthetic-must-not-reach-child'
+report = '    slo_bench_test.go:637: charts/workloads p50=75ms p95=107ms p99=112ms SLO=90ms\n'
+violation = '    slo_bench_test.go:637: SLO VIOLATION: p95=107ms exceeds target 90ms\n'
+passed = report.replace('p95=107ms p99=112ms', 'p95=82ms p99=86ms') + '--- PASS: TestSLO_WorkloadCharts (0.03s)\nPASS\n'
+failed = report + violation + '--- FAIL: TestSLO_WorkloadCharts (0.03s)\nFAIL\n'
+cases = [
+    ('idle-pass', False, passed, 0, 0),
+    ('idle-budget-failure', False, failed, 1, 1),
+    ('contended-pass', True, passed, 0, 78),
+    ('contended-budget-failure', True, failed, 1, 78),
+    ('contended-cleanup-error', True, failed.replace(violation, violation +
+        '    testing.go:1369: TempDir RemoveAll cleanup: directory not empty\n'), 1, 1),
+    ('contended-skip', True, report + '--- SKIP: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
+    ('contended-process-error', True, failed, 2, 1),
+    ('contended-no-report', True, '--- PASS: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
+    ('contended-wrong-budget', True, passed.replace('90ms', '550ms'), 0, 1),
+    ('contended-duplicate', True, passed + passed, 0, 1),
+]
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    for name, contended, text, child_exit, expected in cases:
+        proof.interval = lambda before, after: dict(total_ticks=100,
+            busy_pct=25 if contended else 0, guest_pct=0, steal_pct=0, swap_pages=0)
+        binary = root / (name + '.sh')
+        binary.write_text('#!/bin/sh\n'
+            'test -z "${GITHUB_TOKEN:-}" || exit 7\n'
+            'test "$1" = "-test.run=^TestSLO_WorkloadCharts$" || exit 8\n'
+            'sleep 0.03\nprintf %s ' + shlex.quote(text) + '\nexit ' + str(child_exit) + '\n')
+        binary.chmod(0o700)
+        output = root / name
+        summary = root / (name + '.summary')
+        os.environ['GITHUB_STEP_SUMMARY'] = str(summary)
+        sys.argv = ['chart_latency_proof.py', '--candidate', str(binary), '--output', str(output)]
+        observed = 0
+        try:
+            proof.main()
+        except SystemExit as error:
+            observed = error.code
+        except RuntimeError:
+            observed = 1
+        assert observed == expected, (name, observed, expected)
+        receipt = json.loads((output / 'candidate.result.json').read_text())
+        assert receipt['returncode'] == child_exit, name
+        assert receipt['binary_sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest(), name
+        assert receipt['environment']['PULSE_STRICT_LOCAL_API_SLOS'] == 'true', name
+        assert 'GITHUB_TOKEN' not in receipt['environment'], name
+        assert (output / 'candidate.log').read_text() == text, name
+        assert bool(receipt['capacity_errors']) == contended, name
+        assert receipt['command'][1:] == ['-test.run=^TestSLO_WorkloadCharts$', '-test.v',
+            '-test.count=1', '-test.cpu=2', '-test.timeout=5m'], name
+        assert summary.exists() == (expected == 78), name
+        if summary.exists():
+            assert 'inconclusive' in summary.read_text() and '(not a verdict)' in summary.read_text(), name
+        print('CLASSIFIED', name, observed)
+`)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("chart proof CLI fixture failed: %v\n%s", err, output)
+	} else {
+		t.Logf("synthetic CLI classification, not measured latency:\n%s", output)
+	}
+}
 
 func TestAgentConfigFetchAuditCapacityContract(t *testing.T) {
 	capture := &auditCaptureLogger{}
@@ -9992,7 +10074,7 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 		t.Fatalf("parse redirect location: %v", err)
 	}
 	if redirectURL.Scheme != "https" || redirectURL.Host != "license.pulserelay.pro" || redirectURL.Path != "/buy" {
-		t.Fatalf("redirect location=%q, want licence server purchase page", location)
+		t.Fatalf("redirect location=%q, want licence-server purchase page", location)
 	}
 	if got := redirectURL.Query().Get("feature"); got != "" {
 		t.Fatalf("feature=%q, want omitted portal query", got)
@@ -27306,6 +27388,81 @@ func TestContract_DiagnosticsTLSGuidanceSurvivesSerialization(t *testing.T) {
 	}
 }
 
+func TestContract_PortablePrivateBootstrapPayloads(t *testing.T) {
+	const token = "synthetic-portable-install-token"
+	artifact := configapi.BuildSetupScriptInstallArtifact("https://pulse.example", "pbs", "https://pbs.example:8007", "https://pulse.example", false, token, 1900000000)
+	payload := map[string]any{
+		"setup":     artifact,
+		"proxmox":   AgentInstallCommandResponse{Command: configapi.BuildProxmoxAgentInstallCommand(configapi.AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pbs", IncludeInstallType: true}), Token: token},
+		"container": map[string]string{"command": buildContainerRuntimeAgentInstallCommand("https://pulse.example", token, false), "token": token},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]map[string]any
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for kind, fields := range wire {
+		command, ok := fields["command"].(string)
+		if !ok || strings.Contains(command, token) || strings.ContainsAny(command, "\r\n") || strings.Count(command, "bash -c ") != 1 {
+			t.Fatalf("%s wire command lost its single private body", kind)
+		}
+		for _, required := range []string{`"$@" bash -c`, "tty_control=(stty)", "tty_control=(busybox stty)", "Cannot restore terminal settings.", ` -o "$install_script"`} {
+			if !strings.Contains(command, required) {
+				t.Fatalf("%s wire command lost %s", kind, required)
+			}
+		}
+		credentialKey := "token"
+		if kind == "setup" {
+			credentialKey = "setupToken"
+			if fields["commandWithEnv"] != command || fields["commandWithoutEnv"] != command || fields["downloadURL"] != fields["url"] {
+				t.Fatal("setup artifact aliases or credential-free download changed")
+			}
+		}
+		if fields[credentialKey] != token {
+			t.Fatalf("%s lost its separate credential field", kind)
+		}
+	}
+}
+
+// The full detail handler must not discard the configured reference while
+// projecting a canonical view, nor invent it for pre-reference snapshots.
+func TestContract_PMGConfiguredReferenceInFullDetail(t *testing.T) {
+	for _, connectionID := range []string{"", "pmg:configured-not-the-label"} {
+		registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+		registry.IngestSnapshot(models.StateSnapshot{PMGInstances: []models.PMGInstance{{
+			ID: "pmg-generated", Name: "display", ConnectionID: connectionID,
+			Status: "degraded", ConnectionHealth: "degraded", LastSeen: time.Now(),
+		}}})
+		monitor := &monitoring.Monitor{}
+		setUnexportedField(t, monitor, "resourceStore", unifiedresources.NewMonitorAdapter(registry))
+		router := &Router{monitor: monitor}
+		recorder := httptest.NewRecorder()
+		router.handleListPMGInstances(recorder, httptest.NewRequest(http.MethodGet, "/api/pmg/instances?id=pmg-generated", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("HTTP %d: %s", recorder.Code, recorder.Body.String())
+		}
+		var payload struct {
+			Data []map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if len(payload.Data) != 1 {
+			t.Fatalf("filtered identity changed: %s", recorder.Body.String())
+		}
+		got, present := payload.Data[0]["connectionId"]
+		if present != (connectionID != "") || present && got != connectionID {
+			t.Fatalf("configured reference lost/inferred: %s", recorder.Body.String())
+		}
+		if payload.Data[0]["connectionHealth"] != "degraded" || payload.Data[0]["status"] != "warning" {
+			t.Fatalf("detail hid partial collection: %s", recorder.Body.String())
+		}
+	}
+}
+
 func TestChartServiceInitializationIsConcurrentAndRouterScoped(t *testing.T) {
 	const requests = 64
 	router := &Router{}
@@ -27454,41 +27611,207 @@ func TestSSOConfigConcurrentReadsAndAdminWrites(t *testing.T) {
 	}
 }
 
-func TestContract_PortablePrivateBootstrapPayloads(t *testing.T) {
-	const token = "synthetic-portable-install-token"
-	artifact := configapi.BuildSetupScriptInstallArtifact("https://pulse.example", "pbs", "https://pbs.example:8007", "https://pulse.example", false, token, 1900000000)
-	payload := map[string]any{
-		"setup":     artifact,
-		"proxmox":   AgentInstallCommandResponse{Command: configapi.BuildProxmoxAgentInstallCommand(configapi.AgentInstallCommandOptions{BaseURL: "https://pulse.example", Token: token, InstallType: "pbs", IncludeInstallType: true}), Token: token},
-		"container": map[string]string{"command": buildContainerRuntimeAgentInstallCommand("https://pulse.example", token, false), "token": token},
+// Gate one read of the real in-memory registry adapter from BuildFrontendState.
+// Its owner is deliberately known; this does not reproduce #3105's unknown
+// lock cycle. No monitor loops, provider, guest or database are started.
+type stateDeliveryReadGate struct {
+	*unifiedresources.MonitorAdapter
+	block   atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *stateDeliveryReadGate) LastRebuiltAt() time.Time {
+	if s.block.CompareAndSwap(true, false) {
+		close(s.entered)
+		<-s.release
 	}
-	encoded, err := json.Marshal(payload)
-	if err != nil {
+	return s.MonitorAdapter.LastRebuiltAt()
+}
+
+// Keep this fixture's one seeded registry generation, rather than refreshing
+// it from the bare monitor's intentionally absent collectors after 30 seconds.
+func (s *stateDeliveryReadGate) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+// Uses BuildFrontendState, the real registry projection, hub/socket and public
+// health handler. The controlled read gate is not a customer-cause diagnosis.
+func TestContractStateDeliveryStallReadiness(t *testing.T) {
+	t.Setenv("PULSE_DEV_ALLOW_CONTAINER_SSH", "false")
+	previousMock := mock.IsMockEnabled()
+	if err := mock.SetEnabled(false); err != nil {
 		t.Fatal(err)
 	}
-	var wire map[string]map[string]any
-	if err := json.Unmarshal(encoded, &wire); err != nil {
+	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
+	entered, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
+	var builds atomic.Int64
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSupplementalRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{{
+		SourceID: "fixture-node",
+		Resource: unifiedresources.Resource{
+			ID: "fixture-node", Type: unifiedresources.ResourceTypeAgent, Name: "recovered-node",
+			Status: unifiedresources.StatusOnline, LastSeen: time.Now().UTC(),
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox: &unifiedresources.ProxmoxData{NodeName: "recovered-node", Instance: "fixture-pve"},
+			Metrics: &unifiedresources.ResourceMetrics{CPU: &unifiedresources.MetricValue{Value: 12.5, Unit: "percent", Source: unifiedresources.SourceProxmox}},
+		},
+	}})
+	store := &stateDeliveryReadGate{MonitorAdapter: adapter, entered: entered, release: release}
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(store)
+	store.block.Store(true)
+	hub := pulsews.NewHub(func(orgID string) interface{} {
+		first := builds.Add(1) == 1
+		if orgID != "default" {
+			t.Errorf("unexpected state scope %q", orgID)
+		}
+		state := monitor.BuildFrontendState()
+		if first {
+			close(returned)
+		}
+		return state
+	})
+	go hub.Run()
+	defer func() { unblock(); hub.Stop() }()
+	router := &Router{monitor: monitor, wsHub: hub}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", hub.HandleWebSocket)
+	mux.HandleFunc("/api/health", router.handleHealth)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	proof := map[string]interface{}{"kind": "BuildFrontendState-real-registry-hub-and-health-controlled-read-gate", "timeoutSeconds": 30}
+	health := func(phase string, expected int) {
+		t.Helper()
+		start := time.Now()
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		rec := httptest.NewRecorder()
+		router.handleHealth(rec, req)
+		if time.Since(start) > time.Second {
+			t.Errorf("%s health blocked", phase)
+		}
+		if rec.Code != expected {
+			t.Errorf("%s health = %d, want %d; %s", phase, rec.Code, expected, rec.Body.String())
+		}
+		var body map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		proof[phase] = map[string]interface{}{"status": rec.Code, "body": body}
+		if len(body) != 5 {
+			t.Errorf("health shape changed or leaked details: %v", body)
+		}
+		for _, key := range []string{"status", "timestamp", "uptime", "proxyInstallScriptAvailable", "dependencies"} {
+			if _, ok := body[key]; !ok {
+				t.Errorf("missing health field %q: %v", key, body)
+			}
+		}
+	}
+	dial := func() *websocket.Conn {
+		t.Helper()
+		header := http.Header{"Origin": []string{server.URL}}
+		c, response, err := websocket.DefaultDialer.Dial("ws"+server.URL[len("http"):]+"/ws?org_id=default", header)
+		if err != nil {
+			t.Fatalf("dial real hub: %v (%v)", err, response)
+		}
+		t.Cleanup(func() { c.Close() })
+		return c
+	}
+	read := func(c *websocket.Conn, kind string) json.RawMessage {
+		t.Helper()
+		c.SetReadDeadline(time.Now().Add(5 * time.Second))
+		for {
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", kind, err)
+			}
+			var message struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(raw, &message); err != nil {
+				t.Fatal(err)
+			}
+			if message.Type == kind {
+				return raw
+			}
+		}
+	}
+	health("idle", http.StatusOK)
+	c := dial()
+	proof["welcome"] = read(c, "welcome")
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("getter never entered")
+	}
+	health("slow", http.StatusOK)
+	// Exercise the production 30-second budget, not a shortened test-only clock.
+	time.Sleep(31 * time.Second)
+	health("stalled", http.StatusServiceUnavailable)
+	for i := 0; i < 32; i++ {
+		rec := httptest.NewRecorder()
+		router.handleHealth(rec, httptest.NewRequest(http.MethodHead, "/api/health", nil))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("stalled HEAD %d: %d", i, rec.Code)
+			break
+		}
+	}
+	if builds.Load() != 1 {
+		t.Errorf("public health probes created state builds: %d", builds.Load())
+	}
+	c.SetReadDeadline(time.Now().Add(time.Second))
+	// A periodic application ping may precede the close on the wire. Drain
+	// normal frames through the read deadline; a frame is not a close error.
+	var err error
+	for err == nil {
+		_, _, err = c.ReadMessage()
+	}
+	closeError, isClose := err.(*websocket.CloseError)
+	if !isClose || closeError.Code != websocket.CloseTryAgainLater {
+		t.Errorf("stalled initial state did not end in retryable close: %v", err)
+	} else {
+		proof["stalledClose"] = map[string]interface{}{"code": closeError.Code, "reason": closeError.Text}
+	}
+	c.Close()
+	unblock()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("fixture getter did not return")
+	}
+	recovered := dial()
+	proof["recoveredInitial"] = read(recovered, "initialState")
+	var recoveredFrame struct {
+		Data models.StateFrontend `json:"data"`
+	}
+	if err := json.Unmarshal(proof["recoveredInitial"].(json.RawMessage), &recoveredFrame); err != nil {
 		t.Fatal(err)
 	}
-	for kind, fields := range wire {
-		command, ok := fields["command"].(string)
-		if !ok || strings.Contains(command, token) || strings.ContainsAny(command, "\r\n") || strings.Count(command, "bash -c ") != 1 {
-			t.Fatalf("%s wire command lost its single private body", kind)
+	if len(recoveredFrame.Data.Resources) != 1 || recoveredFrame.Data.Resources[0].Name != "recovered-node" || recoveredFrame.Data.Resources[0].PlatformType != "proxmox-pve" {
+		t.Fatalf("real monitor projection lost canonical recovered state: %+v", recoveredFrame.Data.Resources)
+	}
+	health("recovered", http.StatusOK)
+	recovered.Close()
+	stopped := make(chan struct{})
+	go func() { hub.Stop(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("hub shutdown blocked")
+	}
+	proof["builds"] = builds.Load()
+	proof["hubStopped"] = true
+	if path := os.Getenv("PULSE_STATE_STALL_PROOF_OUTPUT"); path != "" {
+		data, err := json.Marshal(proof)
+		if err != nil {
+			t.Fatal(err)
 		}
-		for _, required := range []string{`"$@" bash -c`, "tty_control=(stty)", "tty_control=(busybox stty)", "Cannot restore terminal settings.", ` -o "$install_script"`} {
-			if !strings.Contains(command, required) {
-				t.Fatalf("%s wire command lost %s", kind, required)
-			}
-		}
-		credentialKey := "token"
-		if kind == "setup" {
-			credentialKey = "setupToken"
-			if fields["commandWithEnv"] != command || fields["commandWithoutEnv"] != command || fields["downloadURL"] != fields["url"] {
-				t.Fatal("setup artifact aliases or credential-free download changed")
-			}
-		}
-		if fields[credentialKey] != token {
-			t.Fatalf("%s lost its separate credential field", kind)
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
 		}
 	}
+	t.Logf("real hub healthy/slow/stalled/recovered and 32 HEAD controls, %d builds", builds.Load())
 }

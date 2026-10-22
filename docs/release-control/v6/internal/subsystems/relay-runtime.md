@@ -17,6 +17,12 @@
 
 ## Purpose
 
+### Bounded alert settings recovery
+
+For existing subscribers only, the notification editor passes read cancellation to the existing Relay configuration GET. A stalled response releases the editor into its normal unavailable-settings/save-locked state after 150 seconds. Instances without the existing capability still perform no Relay read or write. Pairing, entitlements, mobile protocol and server delivery remain unchanged.
+
+Verification: `alertConfigurationDeadline.test.tsx` covers both capability states and retirement; `alert-configuration-deadline.cjs` consumes a synthetic existing-subscriber configuration through the full editor and preserves its critical-only severity in an explicit save.
+
 Own the desktop and mobile relay runtimes, their persisted relay state
 boundaries, the server-owned mobile relay capability boundary, and the
 canonical reconnect, encryption, protocol, proxy, and relay-trust behavior

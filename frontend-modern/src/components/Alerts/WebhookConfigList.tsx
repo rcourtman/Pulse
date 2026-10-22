@@ -102,7 +102,7 @@ export function WebhookConfigList(props: WebhookConfigListProps) {
             <div class="mt-3 flex flex-wrap gap-2 border-t border-border-subtle pt-2 sm:justify-end w-full">
               <button
                 onClick={() => props.onTestWebhook(webhook)}
-                disabled={props.saving || props.testing === webhook.id || !webhook.enabled}
+                disabled={props.saving || props.testing != null || !webhook.enabled}
                 class="min-h-11 rounded-sm border px-3 py-1 text-xs text-base-content transition-colors hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
               >
                 {getAlertWebhookTestLabel(props.testing === webhook.id)}

@@ -21,6 +21,440 @@
 
 ## Purpose
 
+### Backup node filters preserve exact Proxmox scope
+
+Coverage, By date and its activity chart share a versioned node filter keyed by
+configured connection and native node identity, not friendly display name. Two
+connections may repeat both labels; two native nodes in one connection may share
+an alias. Neither case pools their targets or evidence. Complete node identities
+remain selected through display renames and response reordering, including guests
+with no restore points. Incomplete node/source identity stays local to its
+workload rather than borrowing another source.
+
+Unique old display-name bookmarks remain usable. Ambiguous or vanished selections
+retain the URL, show a clear notice/chip and select no rows; they do not silently
+become All. Clearing just Node preserves unrelated URL state. The existing node
+menu labels the connection and, when needed, native node name. Provider identity,
+artifact ownership, server-owned protection, collection and guest operations are
+unchanged. `backup-node-scope.test.tsx`, `proxmoxBackupNodeScope.test.ts` and the
+source-bound `browser-tests/backup-node-scope.cjs` consumer cover these rules.
+This is source/presentation proof, not installed recovery or issue #2681 closure.
+
+The interactive By date activity chart is loaded only when its existing view
+needs it. Its local loading and failure boundary keeps backup inventory, scope
+filters and evidence controls usable while that client chunk is pending or
+unavailable. Chart calculations, day filters, observations and collection do not
+change. Browser proof holds and fails the actual chunk request; bundle proof
+retains the existing per-chunk, total, preload and SRI budgets unchanged.
+
+### Backup artifact identity must be unambiguous before row reconciliation
+
+The existing collected-inventory reader rejects repeated opaque artifact IDs
+within each PBS snapshot, PVE backup-file or guest-snapshot collection. Identical
+duplicates overcount evidence; conflicting duplicates cannot select a first or
+last winner for retained rows and their evidence dialogs. The whole affected
+source uses its existing fixed format-error and isolated retry path, withdrawing
+its previous artifacts and open evidence when the read fails. Independently
+readable source evidence remains usable; missing points do not mean no backups
+exist. No raw record, source name or response body enters the error message.
+
+IDs remain opaque and case-sensitive. The separately prefixed artifact kinds
+may reuse an ID without collision, and task observations retain their existing
+chronology/conflict handling. Distinct points of one workload are not duplicates.
+No collection, protection policy, guest operation or native recovery changes.
+
+`proxmoxBackupInventory.identity.test.ts` covers identical/conflicting duplicates
+in either order and identity compatibility. `ProxmoxBackupsTable.test.tsx` covers
+in-flight replacement with open evidence, source-local withdrawal and recovery.
+`browser-tests/backup-inventory-identity.cjs` exercises synthetic HTTP through
+the production readers, mapper, router and both tables at desktop and 320px
+touch widths. These are presentation/reader proofs, not thaw, filesystem-write,
+restore, installed or release acceptance.
+
+### Infrastructure agent cards honour native guest power
+
+The existing canonical detail drawer qualifies its selected in-guest agent report
+when Proxmox reports a VM paused, suspended or stopped, or an LXC stopped. A
+healthy carrier, recent Last seen or unexpired agent lease cannot make retained
+filesystem usage, RAID/rebuild, network, thermals, custom values or in-guest SMART
+current. Wrapping visible explanations reach touch and keyboard users; values,
+reported failures and identities remain intact without live health colour or
+rebuild speed. The shared filesystem and interface cards accept a first report
+and removal without requiring the drawer to reopen.
+
+Only positively identified Proxmox guests and the native runtime field confer
+this power qualification. Unknown power, other platforms, host configuration,
+independent physical disk collection and API readings keep their own evidence.
+Normal running reports and expired-host-agent qualification remain separate.
+No collector, alert policy, resource status, observation timestamp, stored History,
+guest operation, thaw or liveness verdict changes.
+
+`resourceAgentObservation.test.ts`, `ResourceDetailDrawer.agent-observation.test.tsx`,
+shared-card tests and `browser-tests/resource-agent-observation.cjs` cover native
+power-only canonical deltas, still-leased/online carriers, VM/LXC, provenance
+controls, recovery and open-drawer lifecycle at desktop and 320px touch widths.
+These are synthetic presentation proofs, not installed guest recovery.
+
+
+### Unraid assessment alerts keep their exact producer identity
+
+The storage adapter carries a separate `refs.alertResourceId` for an agent-backed
+Unraid array with a concrete storage metrics target. CheckHost's `agent:` alert
+namespace must not replace the registry or metrics identity: chart/history
+routing is unchanged. Row severity, count, acknowledgement and headline all
+match this explicit key through the existing exact matcher. Array/host display
+names, node labels, parent IDs and API-only lookalikes cannot borrow an agent
+assessment. Legacy resource IDs and absorbed Ceph alert IDs still work.
+The existing expanded detail exposes the full current unacknowledged alert reason
+without a hover-only tooltip; compact row text may truncate. That explanation
+withdraws when acknowledgement, detection-off or ordinary replacement removes
+the headline, without changing provider posture. `StoragePoolDetail.test.tsx`
+checks reactive replacement and withdrawal.
+
+`storageAgentAlerts.test.ts` consumes unmodified synthetic producer frames and
+checks genuine critical/warning failures, healthy/recovered states, detection-off,
+acknowledgement, deduplication and same-name/host/component isolation.
+`browser-tests/unraid-storage-alerts.cjs` exercises the production adapter, alert
+hook, table and expandable detail with those frames at desktop and narrow touch
+widths. This is consumer correctness, not installed Unraid recovery or release
+availability; no provider data, alerts or protection verdicts are rewritten.
+
+### Backup workload attribution preserves configured connection identity
+
+PVE files, guest snapshots and typed/untyped jobs match configured connection
+names exactly, including case, before considering native nodes. A historical
+node from before migration cannot select a guest in a case-distinct connection.
+A known conflicting connection cannot borrow a singleton guest; its collected
+evidence stays inspectable as an unrated unmatched target. Untyped orphan jobs
+can join only the exact PVE source's artifact row. PBS namespace hints compare
+connection names exactly as well. Native hostname/alias matching remains
+case-insensitive, and absent-instance, unique-VMID PBS and other legacy fallback
+rules remain unchanged. No source data or server-owned posture is rewritten.
+Coverage sort ties use full row identity rather than source response order, so
+ordinary replacement of equal-name/posture/time rows does not move a focused
+disclosure or lose its keyboard focus. Primary sort direction remains intact.
+
+`proxmoxBackupRecoveryModel.identity.test.ts` and
+`proxmoxBackupRecoveryModel.test.ts` cover case-distinct/migrated sources,
+removed-source singletons, orphan jobs and hostname compatibility.
+`ProxmoxBackupsTable.test.tsx` checks tied-order, focus, open evidence and read
+counts through resource replacement.
+`browser-tests/backup-connection-identity.cjs` consumes safe HTTP snapshots
+through the production reader, mapper, Coverage and By date, including point
+details, live resource replacement and keyboard/narrow-touch interactions.
+This is backup-evidence attribution, not collection, native recovery,
+guest thaw or filesystem-liveness proof.
+
+### PBS datastore capacity must agree before it reads as measured usage
+
+The existing Backups server table derives both displayed usage and warning
+thresholds from the same finite used/total byte ratio. An optional reported
+percentage must be finite, non-negative and agree within half a percentage
+point (allowing whole-number rounding). A larger disagreement is Unknown,
+not a green empty datastore or a selected worst/best reading. An overflowing
+byte ratio remains Unknown even beside a finite percentage. Existing explicit
+read failures and offline status still take precedence.
+
+The existing named datastore disclosure explains a percentage/byte conflict
+without exposing provider errors or presenting either reading as measured
+capacity. Same-identity replacement retains its open context; corrected byte
+counts restore normal usage, including measured zero and overfull readings.
+No provider data, collection, thresholds, backup inventory, guest health or
+restore verdict is rewritten.
+
+`ProxmoxBackupServersTable.capacityConsistency.test.tsx` covers direct/canonical
+resources, disagreement in either direction, rounding, overflow, ordinary
+recovery and mounted disclosure/focus. `browser-tests/pbs-capacity-consistency.cjs`
+exercises the production Backups page/row producer/table, canonical projection,
+keyboard and 320px touch WebKit with source-bound synthetic observations. This
+is truthful presentation, not a native PBS poll or installed recovery.
+
+### PBS offline state cannot be overridden by retained connection health
+
+The Backups server table honours an explicit canonical `offline` status even
+when its PBS facet still says `healthy` or `ok`. It shows Offline and qualifies
+retained datastore capacity and host CPU/memory/uptime/deduplication as
+unavailable rather than current healthy readings. Recorded resource fields,
+backup inventory, identity and server-owned status are not rewritten.
+A reachable server with storage warning/degraded status keeps its measured
+capacity risk; a failed connection still vetoes an online carrier.
+
+`ProxmoxBackupServersTable.connection.test.tsx` covers direct and canonical
+resource projections, mounted offline/recovery transitions, preserved row,
+open datastore and focus, and the reachable-storage-warning control.
+`browser-tests/pbs-capacity-details.cjs` uses the existing capacity fixture and
+production Backups reader/row producer/table/router/CSS at desktop and 320px
+touch widths. These are synthetic consuming proofs, not a native PBS poll,
+installed recovery, guest thaw, filesystem liveness or successful restore.
+
+### PBS server counts retain one source owner
+
+The Backups server/datastore table selects the whole PBS inventory source before
+looking up a datastore count. An exact configured connection name takes
+precedence over a legacy instance-ID alias. The alias is usable only when no
+configured connection owns it and it has one server owner; an empty datastore
+must not inherit another connection's entries (for example `backup` versus
+`pbs-backup`). Missing or ambiguous server identity reads Unknown, not zero.
+Unique legacy sources remain supported without summing current and legacy
+inventories. Counts include collected entries, not a restore or guest-health
+claim. The existing datastore disclosure exposes the same count at phone widths,
+including Loading/Unavailable and a measured empty result.
+
+`ProxmoxBackupServersTable.capacity.test.tsx` checks alias collisions, whole-source
+selection, duplicate/missing identities, legacy compatibility and mounted retry
+states. `browser-tests/pbs-count-sources.cjs` consumes synthetic HTTP inventory
+through the production reader/page/table in desktop and narrow touch layouts.
+This does not change collection, protection posture, thaw or native recovery.
+
+
+### Keyboard access to collected backup activity
+
+The existing backup activity chart has one day in the Tab sequence, initially
+its selected day if visible, otherwise the newest day. Left/Right move focus
+without filtering; Home/End jump to the window edges. Native Enter/Space still
+toggle the existing day filter, and Tab leaves the chart. Pointer selection
+sets the re-entry day without changing the filter contract. Range replacement
+falls back to one valid day if the previous focus key is no longer present.
+Calendar-day keys preserve the focused button through metric replacement and
+live window rollover while that day remains visible. Accessible totals and
+hover evidence follow current observations, and Escape dismisses the tooltip.
+No inventory reads, guest operations or protection decisions are added.
+
+`BackupActivityChart.keyboard.test.tsx` checks yearly Tab-stop bounds, focus,
+key navigation, replacement and empty states. `ProxmoxBackupsTable.test.tsx`
+checks the production consumer's selected day, node/source scope and two-read
+inventory bound. `backup-activity-keyboard.cjs` exercises actual GET readers,
+keyboard and narrow touch with shipped CSS. This is access to collected backup
+evidence, not native backup recovery or filesystem liveness.
+
+### Mounted backup chronology follows the wall clock, not the inventory-load time
+
+By date's local calendar window, timestamp admission and Coverage's latest-point/
+job selection share the existing 30-second relative-time clock with row ages.
+An unchanged inventory is reconciled when the day or clock changes, including
+clock reversal; a newly replaced inventory reads the current wall time between
+ticks. Future/invalid times remain unknown until actually orderable. Provider
+timestamps and observation times are not renewed, and server-owned protection
+verdicts are not evaluated locally. Existing source withdrawal, selected day,
+range, metric, scope filters and expanded evidence remain intact. No new timer,
+inventory polling, retry, collection, backup or guest operation is introduced.
+
+`ProxmoxBackupsTable.clock.test.tsx` covers local-midnight Count/Volume windows,
+future-time and reversed-clock artifact/job selection, unchanged observations,
+server posture, source denial, between-tick replacement and clock cleanup.
+`backup-clock.cjs` exercises the actual HTTP readers, router, model, chart/table
+and CSS by desktop keyboard and 320px touch. This proves collected-evidence
+chronology, not native backup/restore, guest thaw or filesystem liveness.
+
+### An unanswered backup inventory read releases the manual retry path
+
+PVE and PBS snapshot reads each have one 150-second browser deadline, including
+API-client preparation, the existing bounded Retry-After delay, response headers
+and JSON body. An expired read becomes source-local Unavailable, not an empty
+inventory. Its late answer cannot replace the result of an explicit retry or
+another organisation. Existing failed-source withdrawal and independent inventory,
+server health, filters and protection-posture ownership remain unchanged. Abort
+releases the browser wait; it is not proof of server-side collection cancellation.
+No polling, retry after expiry, backup or guest operation is added. Retry only
+reads Pulse's already-collected snapshot; it does not establish guest recovery.
+
+`ProxmoxBackupsTable.deadline.test.tsx` covers headers/body under one budget,
+uncooperative late answers, isolated retry, source withdrawal, access denial,
+organisation replacement and disposal. `ProxmoxBackupsTable.test.tsx` covers both
+sources timing out without losing separately known PBS health. The source-bound
+`backup-inventory-deadline.cjs` protocol exercises the actual HTTP readers, router,
+table and CSS by desktop keyboard and 320px touch. These are synthetic read/retry
+proofs, not native collection, backup completion, thaw or filesystem liveness.
+
+### Backup activity belongs to the selected evidence scope
+
+By date applies the same workload search, node, type, backup-location and
+source/verification filters to the activity timeline and artifact list. The
+unknown-date notice also belongs to that scope, rather than unrelated targets.
+Count, reported Volume and missing-size totals continue to exclude incomplete,
+undated, future and out-of-window records. Selecting a day filters only the list:
+it must not collapse the timeline and strand navigation to another day. The
+scope is re-evaluated on ordinary inventory replacement without resetting
+filters, range or metric, or adding another read. Fleet-wide backup health and
+protection assessments are unchanged. This is collected-evidence attribution,
+not native backup, restore, thaw or filesystem-liveness proof.
+
+`ProxmoxBackupsTable.activityScope.test.tsx` and `backup-activity-scope.cjs`
+exercise two targets, multiple repositories, all existing scope facets,
+verification/completion boundaries, empty scopes, day navigation, live filtering,
+missing sizes, refresh and clear through the production chart/list consumers.
+
+### Missing backup sizes do not erase activity or its controls
+
+The existing By date chart retains Count, Volume and all range controls even
+when the selected metric/window has no positive values. Completed restore points
+without a positive reported size remain countable activity, not zero-byte backups
+or an empty activity window. Volume includes only reported positive sizes and
+qualifies missing-size observations in its window notice and daily accessible/
+tooltip totals. A day with no usable size is unavailable, not 0 B. Incomplete,
+undated, future and out-of-window entries cannot become missing-size activity.
+Ordinary inventory replacement updates the notice and totals without resetting
+the selected metric/range. This changes no source reads, completion predicate,
+backup/guest operations, protection posture or native recovery verdict.
+
+`ProxmoxBackupsTable.test.tsx` and `proxmoxBackupActivityPresentation.test.ts`
+cover absent/zero sizes, partial daily volume, replacement and empty-window
+navigation. `backup-activity-volume.cjs` consumes the actual HTTP readers/model/
+chart/CSS at desktop and 320px touch widths. These are synthetic presentation
+proofs, not native backup, restore, thaw or installed-recovery acceptance.
+
+### PBS datastore capacity explanations are not hover-only
+
+Unavailable and Unknown capacity cells open the existing full-width resource
+row disclosure using a named native button with expanded/controls semantics.
+Its accessible name includes the visible Unavailable/Unknown state. The control
+contains its click so the summary row cannot toggle the disclosure again.
+The disclosure names the backup server and datastore, explains that a failed or
+unknown capacity read is not an empty datastore, and does not confuse server
+reachability with a successful datastore read. Fixed copy does not expose raw
+provider errors; reported names remain escaped, wrapping text. Ordinary same-row
+updates replace the explanation with measured capacity, including a genuine
+zero, without closing the disclosure. Other datastores remain independently
+attributed. No probe, backup, guest action or new route is added.
+
+`ProxmoxBackupServersTable.capacity.test.tsx` and `pbs-capacity-details.cjs`
+exercise the production table, canonical adapter and row-specific context at
+desktop and 320px touch widths. Synthetic observations are not native datastore
+recovery or guest-safety acceptance.
+
+### Restore-point details remain readable without hover
+
+By date and expanded Coverage show the full reported PVE archive identifier
+alongside its short format/context, not solely in a title. Snapshot descriptions
+and PBS file-count context also wrap. When Details is not a visible column, the
+same values move into the existing full-width provenance continuation; its
+colspan follows the actual evidence columns. A value is rendered once per point.
+No missing identifier is constructed, and provider text remains plain text.
+Responsive changes, ordinary HTTP replacement and variable-height windowing
+must retain access to these details. This changes no inventory, identity key,
+verification, protection, backup/guest operation or native recovery verdict.
+
+### TrueNAS Protection distinguishes unreadable activity from empty inventory
+
+The recovery-points HTTP decoder accepts an explicit array, including a genuine
+empty array. A missing/non-array envelope, malformed core row, unreadable display
+or reference container, or duplicate point identity rejects the whole page. It
+cannot silently replace earlier restore evidence with an empty or partly usable
+inventory. Canonical/legacy item aliases and open-string outcomes remain supported;
+pagination metadata stays outside the sole TrueNAS consumer.
+
+A failed refresh keeps previously loaded records with a visible last-loaded
+qualification and a retry control. Counts and outcomes belong to those historical
+records, not current protection. The notice persists during retries and cached
+remounts until a readable response replaces the page. Without retained records,
+failure remains unavailable rather than empty, including during a pending retry.
+The existing access-error boundary still withdraws denied records. Neither raw
+error text nor a new backup/replication/guest operation is exposed.
+
+`recoveryPointAdmission.test.ts`, `recoveryTransport.test.ts` and
+`TrueNASProtectionRead.test.tsx` cover envelope/row admission, compatibility,
+malformed/failed refreshes, cached remounts, readable emptiness, pending retry,
+ordinary recovery and access denial. `truenas-protection-read.cjs` exercises the
+real HTTP reader, decoder, query cache, Protection table and CSS at desktop and
+narrow widths. These proofs establish UI read integrity, not appliance collection,
+backup/restore success, independent thaw, filesystem liveness or installed recovery.
+
+### Root PBS datastore discovery owns backup replacement authority
+
+The foreground datastore-list result travels into the same connection/runtime-owned
+background scan as its namespace inputs. Admission checks the runtime epoch captured
+before discovery, even when replacement reuses an uncancelled parent context. A transient or malformed root discovery
+publishes unavailable protection evidence while retaining exact raw backups, cache
+read times and stored recovery points; it probes no cached datastore path. An
+access-rejected discovery withdraws only that connection's raw rows and reusable
+cache, retaining historical points with denied/unavailable evidence. Failed discovery
+does not re-observe those points or acquire reconciliation authority.
+
+A complete empty datastore array is an authoritative inventory and can clear that
+connection's raw/cache/recovery scope. Datastore/backups/global scope-off and cancelled
+foreground polls are not successful emptiness. The existing cadence, actual-return
+occupancy, publication fence, state limits, exclusions and guest/backup operation
+policy remain effective. Before filtering or detail requests, root list admission
+requires a complete bounded HTTP 200 array with unique nonblank datastore identities;
+missing/null, conflicting, truncated or unreadable replies are not empty evidence.
+
+`TestPBSDatastoreInventoryAdmission` covers client admission and closure;
+`TestPBSRootDatastoreDiscoveryRegression` joins ordinary HTTP polling, raw/cache,
+durable points and protection through unavailable/denied/empty/malformed discovery,
+removed-store and independent-connection controls, scope-off, cancellation and
+ordinary recovery. The existing Backups consumer is checked at desktop/narrow widths.
+These are source/consumer proofs, not installed backup/restore, independent guest
+thaw, filesystem writes/liveness or prior-active restoration.
+
+### PBS backup scans belong to their registered connection and runtime
+
+Background PBS inventory admits the registered client and current runtime
+atomically with cadence. Runtime replacement, client replacement and failed-node
+retirement cancel the old reader and fence its state, cache, recovery/alert and
+broadcast admission. A cancelled scan retains occupancy until actual return;
+settings resets cannot admit overlapping scans, and late return cannot postpone
+the next ordinary scan. Network reads stay outside the publication lock.
+
+Previously accepted rows can remain last known. A new connection cannot reuse
+the previous connection's snapshot-cache freshness even if group counts/times
+match. The same connection and independent siblings keep ordinary cache reuse.
+PBS namespace/time/size/verification admission, existing request budgets and
+partial-read preservation are unchanged; no backup or guest command is added.
+
+`TestPBSBackupLifecycleHTTP` exercises the ordinary foreground/background path
+with real synthetic group, snapshot and writer HTTP through runtime/client
+withdrawal, failed-node removal and ordinary resumption. The
+`TestPBSBackupLifecycle*` ownership controls pin actual-return occupancy,
+concurrent admission, publication ordering, ended-runtime rejection and scoped
+cache replacement. The existing By date/Coverage surface consumes emitted rows
+at desktop/narrow widths. These proofs do not establish native backup/restore,
+independent guest thaw, filesystem liveness or installed recovery.
+
+### Restore-point summaries require completed inventory
+
+Running and failed incomplete PBS snapshots and running PVE files remain visible
+as diagnostic entries, with their original state, identity and size. They do not
+contribute to restore-point totals, completed bytes, the count/volume activity
+chart or the number of targets with a PBS point. Day groups and visible-row
+counters describe inventory entries, not successful backups. A separate incomplete
+entry count and notice explain the distinction in both existing backup views.
+
+Completion uses the same predicate as latest-point selection. Unknown dates and
+missing verification are independent facts, not evidence of an incomplete write;
+completed guest-local snapshots remain distinct from independent backups. Ordinary
+inventory replacement can add or withdraw completion without navigation. Model,
+consuming-table and desktop/narrow browser regressions cover those transitions.
+This is presentation of collected observations, not proof of a restore, guest
+thaw, filesystem writes, backup execution or installed recovery.
+
+
+### Coverage must not guess the latest backup-job outcome
+
+A matched task with an unavailable, invalid or future start time prevents the
+existing Coverage summary from selecting a dated task as latest. This applies
+in either input order and only to the matched workload. Valid job chronology
+returns after ordinary inventory replacement; no tasks remains distinct from
+unknown chronology. Jobs at the newest valid start instant with conflicting
+normalized outcomes also leave that summary Unknown, in any response order;
+the disclosure explains the conflict rather than claiming a bad date. An older
+tie cannot displace a strictly newer result. Agreeing outcome aliases and duplicate
+observations remain usable with a stable ID-based representative, not a claim
+that its end time makes it newer. Invalid/future dates retain their distinct
+explanation and cannot be cleared by a dated task. Provider posture, restore-point
+evidence, collection and all guest/backup commands are unchanged.
+
+An Unknown summary must not discard its matched collected job observations.
+The existing disclosure and text search preserve their exact statuses/errors,
+IDs, job origins and timestamps, including conflicting observations of one ID.
+These are collected jobs, not a selected latest result or timeline. Missing,
+invalid and future starts remain qualified Unknown without inventing dates.
+Only unresolved chronology exposes this collection: an ordinary unambiguous or
+empty replacement withdraws it and its stale search matches. Recovery-model and
+consuming Coverage tests plus `backup-job-uncertainty.cjs` cover isolation,
+response order, same-open replacement and desktop/narrow literal wrapping.
+These fixtures establish presentation, not native backup completion, thaw,
+filesystem writes or installed recovery.
+
 ### Patrol timer checkpoints preserve run and recovery history
 
 The existing Patrol history envelope retains the next scheduled deadline and
@@ -31,29 +465,171 @@ unreadable evidence. The configuration and Patrol history tests cover concurrent
 writes, file reconstruction and failed-write retry. This cursor schedules a
 check only; it grants no additional recovery execution authority.
 
-### Recurring findings preserve the ownership of recovery evidence
+### Disabled PVE backup stores retain known evidence
 
-Storage and recovery findings use the same occurrence-bound investigation
-projection as other Patrol findings. A previous verified action remains
-historical evidence when the finding is re-detected; it cannot resolve the new
-occurrence or replace its investigation record. Finding-scoped investigation
-and transcript reads select the current session, including an explicit absent
-state before a new session starts. Explicit session and action history retain
-the earlier result. The shared three-occurrence and persisted-restart controls
-live in `internal/api/ai_handlers_patrol_actions_additional_test.go`.
+A listed backup-capable store which is disabled (or not confirmed enabled)
+is not queried and cannot clear its known archives or PBS attribution. The
+same local/shared preservation scopes apply as for a failed content read;
+a complete readable shared view remains authoritative regardless of node
+order. Held rows keep their original archive identity, timestamps and size.
+Skipped content makes provider history partial/unavailable, not complete
+empty history and not a permission refusal. Ordinary re-enable refreshes the
+known copy; successful empty content or removal from a complete storage
+configuration can still withdraw it. No disabled store is probed.
 
-### Recovery APIs and investigations share the org-scoped point reader
+`TestPVEDisabledBackupStorageRetainsKnownEvidence` joins real synthetic HTTP,
+raw state, persisted recovery points and provider protection projection for
+local/shared/sole stores, both enable-field forms and node orders. Consuming
+proof uses these actual observations in the existing date/Coverage views.
+`TestPVEDisabledPBSStorageRetainsAttribution` protects saved PBS associations.
+This does not establish archive availability, backup/restore execution or
+native guest thaw, filesystem liveness or installed recovery.
 
-`Manager.ListPointsForOrg` selects the composed recovery evidence source for
-both the HTTP points API and investigation tools. Real installations retain
-tenant-scoped SQLite reads, including errors; demo composition projects the
-current canonical fixture graph through shared recovery filters and pagination.
-It does not seed a second store or grant recovery execution. Source selection is
-bound before consumers share the manager and follows runtime demo-mode changes
-without exposing persisted rows through demo reads. Manager boundary tests preserve tenant
-validation, cancellation and read failures; the API/tool parity regression in
-`internal/api/investigation_evidence_parity_test.go` reads actual graph-owned
-failure text without a PVE command connection.
+### Backup Coverage evidence stays reachable in large inventories
+
+The existing Coverage disclosure is a variable-height logical workload block.
+Measured provider/restore evidence stays attached to that workload while it is
+read, including wrapped narrow-screen paths. Scrolling away and back retains
+its expansion identity without changing provider, protection or guest state.
+The 200-workload synthetic consuming regression checks complete labels entering
+the actual viewport, ordinary refresh and both scroll directions under the
+existing mounted-workload bounds. This is presentation proof, not independent
+thaw, filesystem writes, workload liveness, installation or release acceptance.
+
+
+### PVE archive removal requires complete storage inventories
+
+Node/all-storage lists and storage-content lists become authoritative only
+when the whole bounded HTTP 200 body has completed and closed successfully.
+Missing/null inventories, conflicting envelopes or field spellings, duplicate
+identities, malformed rows and invalid UTF-8 are unavailable observations, not
+empty inventories or credential refusals. Content filtering follows validation
+of every row. Genuine empty arrays, measured zeroes, sparse optional fields and
+unique additive provider metadata remain supported; existing request timeouts,
+authentication, TLS, failover and guest-command admission are unchanged.
+
+The backup poll's existing per-node/per-storage failure paths keep an unreadable
+local archive's identity and original backup time while readable siblings can
+refresh or empty. An ordinary complete read replaces the held copy, and a
+complete empty read can remove it. `TestPVEStorageInventoryAdmissionPreservesUnreadableCopies`
+joins real read-only HTTP, polling, state and recovery mapping in both node
+orders with an independent-connection control. Consuming proof uses those
+emitted observations in the existing By date and Coverage tables. No backup,
+guest probe, thaw, restore or installed recovery is established by this proof.
+
+### Protection evidence names its observed scope and source
+
+Expanded Coverage keeps each provider's exact scope and observation source
+beside that provider's result, history and access facts, including when no current
+artifact is available. The generic Result label does not mistake a successful
+inventory read for a successful backup job. Equal provider kinds or scopes do not collapse distinct
+observations. Identifiers wrap without hover on phones; missing identity stays
+Unknown and is not inferred from guest placement. Existing Coverage search
+includes these displayed identities and facts without changing backup-location
+facets, resource matching, collection or the server-owned protection verdict.
+
+`coverageProviderEvidence.test.tsx` and `ProxmoxCoverageTable.test.tsx` cover
+mixed provider access, missing identity, text-only rendering and same-open
+refresh. `backup-provider-evidence.cjs` consumes synthetic HTTP responses through
+the production posture reader, model, search and expanded table on desktop and
+narrow screens. Shipped PBS help uses the same labels, distinguishes inventory
+results from backup jobs and keeps older missing identities unknown. The
+`pbsProtectionHelp.test.ts` contract checks that guidance without binding it to
+JSX whitespace. This improves attribution, not native restore or guest recovery.
+
+### PBS group cache follows the actual latest snapshot
+
+A successful group listing may move `last-backup` backwards as well as forwards
+without changing `backup-count` (for example, a prune plus an older import).
+Only an equal latest time permits snapshot-cache reuse before the existing TTL.
+Either direction of change causes an ordinary snapshot read, so a removed
+newest snapshot cannot keep its timestamp or verification in raw inventory,
+stored recovery points or protection posture. Unchanged sibling groups retain
+their own cache age and bounded read count. Verification-only changes with an
+unchanged group still use the existing TTL; no extra probe or backup is added.
+
+`TestPBSGroupLatestChangeRefreshesBeforeCacheTTL` joins real PBS HTTP,
+publication/cache, persisted recovery points and protection posture for VM/CT,
+root/nested namespaces and both time directions, plus unchanged reuse, actual
+removal and ordinary recovery. `TestPBSGroupLatestChangePreservesFailedRefreshBoundaries`
+retains transient history without renewing its cache, withdraws access-rejected
+raw rows, and never treats a failed refresh as current protection. Consuming
+proof exercises the emitted observations through existing Backups date and
+Coverage views. This does not establish native backup, restore or guest recovery.
+
+### Restore-point provenance is readable without hover
+
+Both existing backup views show the observed repository connection alongside
+its full datastore/namespace or physical archive-node path. Compact layouts use
+a full-width provenance row; wider cells wrap. Source connection is distinct
+from the guest's hosting connection, and missing source identity is not inferred
+from the matched guest. Search and location sorting include the displayed
+connection; matching, saved filter keys, completion and protection judgments
+are unchanged. The windowed date feed measures complete logical blocks rather
+than assuming each point is one 32px DOM row. Consuming proof must check actual
+viewport reachability, not merely that every point mounted at some time.
+`backupLocationAccess.test.tsx`, `ProxmoxBackupsTable.test.tsx` and the production
+HTTP fixture in `backup-location-access.cjs` cover both views, root/nested PBS
+namespaces, two connections, copied archive nodes and ordinary refresh. None
+establishes guest thaw, filesystem writes, a restore or installed recovery.
+
+
+### PBS inventory failures retain only the unreadable namespace
+
+A transient or invalid group-list response preserves the exact datastore and
+normalised namespace's known raw backup rows, even when a sibling succeeds.
+Parent and child namespaces are independent scopes. Held rows keep their
+original identity, backup time and snapshot-read cache age; they do not establish
+complete provider history or current protection. Readable scopes still refresh
+or authoritatively empty, and access-rejected scopes still withdraw their raw
+rows. A different transient failure cannot reintroduce rejected raw rows through
+a datastore/global fallback. Historical recovery points remain governed by the
+existing incomplete-provider reconciliation rule, not by raw row presence.
+
+`TestPBSNamespaceFailuresRespectReadScope` joins real PBS HTTP collection,
+matching cache publication, stored recovery points and protection projections
+through sibling success, malformed/503 reads, rejection, ordinary recovery,
+mixed whole-provider failure and scoped empty reads, in both namespace orders.
+Root normalisation, a same-ID parent/child, another datastore and another
+connection stay distinct. Desktop/narrow consuming proof uses the emitted
+projections through the existing Backups table, filters and Coverage view.
+This does not start a backup, change access checks, verify restore readiness,
+or establish native guest thaw, writes/liveness or installed recovery.
+
+### Independent copies on node-local PVE storage
+
+Equal volume IDs on different non-shared storage nodes remain distinct
+archives and recovery points. Optional `storageNode` identifies the physical
+local archive location; `node` and subject references continue to follow guest
+placement. Recovery repository references use the explicit storage node when
+present and retain the old fallback for shared/legacy evidence. Shared archive
+IDs are unchanged. `TestPVEArchiveRepositoryKeepsStorageHostSeparateFromGuest`
+and `TestPVEBackupStorageScopeFailureAndRecovery` protect identity, partial
+failure, ordinary recovery, scoped empty inventories and other connections.
+No backup/restore execution or native recovery authority is added.
+
+The existing Backups table includes local storage-node provenance in its
+location text and saved location-filter identity. Two copied archives remain
+independently selectable even when their guest, store name and volume ID
+match. Guest attribution is unchanged; shared/legacy location labels and keys
+stay compatible. Existing saved store-wide filters keep matching all local
+copies in that store without silently selecting one host. A node label equal to another dimension cannot collapse its
+identity. `ProxmoxBackupsTable.test.tsx` and the recovery-model identity tests
+cover distinct locations and refresh while preserving the selected scope.
+
+### Backup activity follows local calendar dates
+
+The existing Backups activity chart and its date filter share local date keys.
+Each 7/30/90/365-day window starts at local midnight and contains one bucket
+per local calendar date, including 23/25-hour and half-hour clock changes.
+Count and volume retain the first instant of the first date and observations
+through exactly now, not future timestamps. Repeated local hours are distinct
+backup records in the same date, not duplicated days or discarded evidence.
+Provider protection judgments, completion/age rules and native recovery
+authority are unchanged. `proxmoxBackupActivityPresentation.calendar.test.ts`
+covers UTC, London, New York and Lord Howe; consuming browser proof covers
+the production table/chart/filter in desktop and narrow touch layouts.
+
 
 ### Known PBS health survives unreadable backup inventories (13 October 2026)
 
@@ -78,6 +654,30 @@ Reported QNAP installed boot/watchdog/removal/reinstall recovery remains a
 separate native outcome; source PTYs and publishing an incoming updater do
 not establish it. `portable_bootstrap_test.go` and the serialized API contract
 cover these producer boundaries without touching stored monitoring data.
+
+### Recurring findings preserve the ownership of recovery evidence
+
+Storage and recovery findings use the same occurrence-bound investigation
+projection as other Patrol findings. A previous verified action remains
+historical evidence when the finding is re-detected; it cannot resolve the new
+occurrence or replace its investigation record. Finding-scoped investigation
+and transcript reads select the current session, including an explicit absent
+state before a new session starts. Explicit session and action history retain
+the earlier result. The shared three-occurrence and persisted-restart controls
+live in `internal/api/ai_handlers_patrol_actions_additional_test.go`.
+
+### Recovery APIs and investigations share the org-scoped point reader
+
+`Manager.ListPointsForOrg` selects the composed recovery evidence source for
+both the HTTP points API and investigation tools. Real installations retain
+tenant-scoped SQLite reads, including errors; demo composition projects the
+current canonical fixture graph through shared recovery filters and pagination.
+It does not seed a second store or grant recovery execution. Source selection is
+bound before consumers share the manager and follows runtime demo-mode changes
+without exposing persisted rows through demo reads. Manager boundary tests preserve tenant
+validation, cancellation and read failures; the API/tool parity regression in
+`internal/api/investigation_evidence_parity_test.go` reads actual graph-owned
+failure text without a PVE command connection.
 
 ### Patrol maintenance coverage adds no recovery execution
 
@@ -810,7 +1410,7 @@ persistence operations and history semantics; this repair does not delete or
 rewrite recovery stores, change database internals, or establish crash-recovery
 qualification.
 
-### Shared Docker-update verification boundary
+### Shared Docker lifecycle and update verification boundary
 
 The shared API result converter classifies independent Docker update readback
 using replacement identity, state/running agreement and running health, rather
@@ -824,6 +1424,18 @@ retention or recovery authority is added. The focused
 `internal/api/docker_container_action_result_test.go` asserts that independent
 verification changes never rewrite successful execution history, including
 stopped replacements and missing readback.
+
+Start/restart readback in the same converter treats a running container with
+`starting` health as inconclusive for both agent and independent observations,
+not a contradicted final postcondition. A later healthy readback can confirm
+verification without changing an uncertain mutation acknowledgement into
+successful execution. The action summary retains the agent's sanitized error.
+Neither readback nor a container restart establishes filesystem writes, backup
+completion, guest thaw or storage recovery. The existing
+`TestDockerContainerExecutionResultStartingHealthRemainsInconclusive` checks
+the independent observer through that shared classifier;
+`TestDockerContainerExecutionResultDerivesTruthOnlyFromFacts`
+preserves the distinct execution, verification and unavailable-compensation axes.
 
 
 Recovery consumers of security status must distinguish currentUsername (the validated caller identity) from privileged authUsername (administrator configuration). Presence of currentUsername in a scoped response does not authorise export, import, recovery or unprotected backup transfer; existing settings capabilities and backend enforcement still gate those operations.
@@ -3212,6 +3824,130 @@ vdev layout is reported` in
 
 ## Current State
 
+### Dashboard state-delivery liveness boundary
+
+A persistently blocked dashboard state getter cannot make process health stay
+green solely because the monitor and hub exist. After 30 seconds of in-flight
+state work the existing public health dependency is false and GET/HEAD return
+503, without probing monitored storage or entering the getter. Client waits and
+hub shutdown are bounded while the original getter retains the single slot
+until actual completion; no invented empty estate or late result is delivered.
+This is observation/containment, not disk, backup, thaw, restore or installed
+recovery acceptance. The controlled hub/health proof starts no storage workload.
+
+An unavailable broadcast audience shares one close-write deadline; retirement
+cannot multiply its delay by the number of slow browser sockets. A transport
+which cannot accept the generic close frame is closed anyway, without treating
+that as backup, filesystem or workload recovery. Socket controls and a real
+`BuildFrontendState`/in-memory-registry health fixture start no provider, guest
+or database operation.
+
+
+### Shared guest availability metadata keeps CPU separate from storage (21 October 2026)
+
+`ProxmoxData.cpuUsageUnavailable` belongs to a complete guest CPU observation.
+It withdraws only current CPU and cannot clear or replace filesystem capacity,
+usage, storage identity or independent backup evidence. Partial non-guest
+facets do not erase that source-owned state. Ordinary CPU recovery restores
+only its own metric; no storage, backup or guest action is added. Registry,
+clone and collector lifecycle controls retain this shared-type boundary.
+
+
+### Protection evaluation fan-out stays bounded
+
+The collected-backup consumer admits at most four concurrent 200-subject
+posture reads per evaluation. A completed batch frees one slot, without changing
+the total subjects, API batch size, request-order result join, policy agreement,
+30-second polling cadence or the single 150-second evaluation deadline. Queued
+batches share that original budget, not a fresh timeout per wave. No partial
+fleet verdict is published. Failure stops queued work and cancels active
+siblings; cancellation and late transport success cannot start retired work.
+The bound is per evaluation, not a global server or multi-tab rate limit.
+
+`useProtectionPostures.concurrency.test.ts` checks a 2,001-subject, eleven-batch
+read, out-of-order completions, slot refill, denial/format failures, cancellation,
+queued deadline and small/empty compatibility. Existing hook/query/consumer
+checks retain atomic withdrawal, scoped retry and independent artifact evidence.
+`browser-tests/protection-posture-concurrency.cjs` consumes held synthetic HTTP
+through the production hook, query owner, Coverage, evidence dialogs and CSS at
+desktop keyboard and 320px touch widths. It checks pending/complete verdicts,
+failure, retry and disposal without admitting queued old-source work. These
+are bounded read and presentation proofs, not installed load relief, guest
+operations, thaw, filesystem liveness, native recovery or release availability.
+
+### Protection evaluations settle or release their owner
+
+One 150-second read budget covers every 200-subject batch, including API-client
+preparation, the existing two-minute Retry-After allowance and the JSON bodies.
+Cancellation settles the local promise even when a transport ignores abort;
+manual refresh, organisation replacement and disposal cannot leave an abandoned
+evaluation pending. A rejected or unreadable batch cancels its siblings rather
+than retaining unfinished requests or publishing a partial fleet verdict. Late
+responses cannot restore a retired result. Timers and owner listeners are removed
+on every terminal path. Abort does not prove server-side cancellation.
+
+`useProtectionPostures.deadline.test.ts` checks the whole budget, delayed success,
+late responses, failed siblings and cancellation through the real query owner;
+`useProtectionPostures.test.ts` also checks disposal of a manual containing refresh.
+`protection-posture-deadline.cjs` consumes real partial HTTP bodies, the hook,
+query cache, Coverage and CSS by desktop keyboard and 320px touch. The existing
+30-second polling and generic stall fallback are unchanged. Failure still
+withdraws current verdicts and policy, retains independent restore evidence,
+and offers a posture-only retry. This is bounded read/retry behaviour, not guest
+thaw, filesystem liveness, native backup recovery or release acceptance.
+
+### Unreadable protection evaluations remain unavailable (16 October 2026)
+
+The Coverage posture reader validates successful HTTP payloads before publishing
+any verdict: the row list, consumed state/evidence fields and positive integral
+policy windows must be readable without coercion. A duplicate subject (including
+conflicting verdicts) or a subject outside its requested batch invalidates the
+whole evaluation. Every batch must use the same policy; the first batch's rule
+cannot describe another batch's differently evaluated verdicts. The browser does
+not recompute server-owned protection state from backup inventory.
+
+Unreadable evaluations follow the existing failed-read path: every current
+verdict and its rule are withdrawn, Coverage shows Unknown with its unavailable
+notice, and Retry stays posture-only. Pending retries and cache remounts cannot
+revive rejected verdicts. Independently readable restore evidence, expansion and
+route remain available. Canonical null evidence slices normalize to empty lists;
+valid empty results, missing subjects and additional transport fields retain
+their existing behaviour. No backup, guest-agent or native recovery operation is
+added. Hook and connected table regressions plus `protection-response.cjs` cover
+the boundary and desktop/phone HTTP-to-Coverage recovery, not guest thaw, writes,
+restore verification, installed recovery or publication.
+
+The backup inventory Refresh button remains focusable while it announces its
+pending read with `aria-disabled`; its existing single-flight handler refuses
+repeated activations until both inventories and posture settle. This avoids
+native disabled-button focus loss without enabling duplicate reads. Connected
+controlled-response tests and the browser fixture cover pending and completed
+focus plus a second keyboard activation. No pending read is cancelled or replayed.
+
+
+
+### Backup point pruning and verification are independent (15 October 2026)
+
+Coverage restore evidence and the By date feed show a backup point's completion
+or verification state separately from the provider's `protected` flag. The
+additional **Prune protected** badge means protection from pruning, not a
+verified point or a workload protection verdict. Verified and Unverified remain
+visible when that flag is set; absent PBS verification is **Unknown**, not a
+failed verification job. Running and incomplete points cannot acquire a Verified
+badge, and a guest snapshot remains distinct from a separate backup. Ordinary
+PVE files without a verification result retain their Backup file label.
+
+Both badges wrap within their State cell and update on the existing inventory
+refresh without losing Coverage expansion, focus or route. Sorting State uses
+completion/verification, not the pruning flag. Resource matching, API formats,
+server-owned workload posture, backup operations, retention and collection
+behaviour are unchanged. Shared component controls plus
+`ProxmoxBackupsTable.test.tsx` exercise the real parser/model consumers in both
+views; the offline `backup-point-state.cjs` browser fixture also consumes the
+shipped PBS help. These are source/consuming proofs, not native restore, guest
+thaw, every-filesystem writes, installed recovery or publication evidence.
+
+
 Webhook destination edits restore submitted masks per key while preserving
 explicit map edits/removals. They retain encrypted persistence, serialized
 save-before-publish and owned rollback on live publication failure; invalid
@@ -3396,11 +4132,15 @@ authority. Pinned by `proxmoxBackupRecoveryModel.test.ts` and
 ### Backup health counts filter Coverage to their workloads
 
 The Backups health strip's protected, attention, unprotected and unknown
-counts are toggles for the Coverage posture filter (`?posture=`), the same
-URL state the inline posture pills and the phone Filters sheet set. In
-Coverage a count toggles that filter; from By date it opens Coverage already
-filtered, through the same view path the tabs use, so date-only facets drop
-and scope facets stay. On the bare Backups route, where Coverage was chosen
+counts are global toggles for the Coverage posture filter (`?posture=`).
+Unlike the scoped inline posture pills and phone Filters sheet, selecting a
+count clears search, node, type, location and date/source/view facets in one
+URL transition: none may hide a workload included in the count. Unrelated URL
+state remains intact. The count reads pressed only while Coverage shows its
+whole posture set without a hiding scope; an already-selected posture behind
+another filter must be revealed, not toggled off. A pressed count toggles to
+all targets. From By date it opens complete Coverage. On the bare Backups
+route, where Coverage was chosen
 only because something needs attention, a count also navigates to the
 Coverage route so the view cannot fall back to By date when the counts
 change. The legend keeps each item's node across updates, so a focused count
@@ -3409,9 +4149,16 @@ unless it is the active filter, and checking and not-evaluated have no
 filter, so they stay text. On a 375px phone the coverage list starts below
 the fold and the posture filter sits behind Filters, so "which 11 are
 unprotected?" took three taps through a sheet; it is now one tap on the
-count. The rule footnote, the posture sort (attention before unprotected)
-and the servers table are unchanged, and no posture, freshness or protection
-evaluation changes.
+count. A persistent footnote explains that counts cover all targets and their
+actions clear other filters, followed by the existing protection rule. Ordinary
+scope controls and view tabs retain their existing behaviour. Count actions add
+no inventory/posture reads or guest operations; no posture, freshness, protection
+evaluation, sort or server table changes. `ProxmoxBackupsTable.test.tsx` covers
+all four postures with individual and combined hiding scopes, canonical/bare
+routes, unrelated URL state, focus and read counts. The production HTTP-reader,
+router and table fixture `browser-tests/backup-health-counts.cjs` reproduces
+the original empty-list failure and checks desktop keyboard and narrow touch
+selection, toggle-off and unchanged unmatched backup evidence.
 
 ### Backup table values truncate inside their own column
 
@@ -7004,6 +7751,18 @@ and its existing history-entry rollback. The data directory, metrics and
 configuration stores, backups, snapshots and recovery points are untouched,
 and no new backup, retention or restore path is added.
 
+### PMG attribution does not replace storage evidence (15 October 2026)
+
+PMG data's optional `connectionId` is an explicit configured alert reference,
+preserved by the unified adapter and canonical alias projection. It changes
+neither resource/metrics identities nor backup inventory completeness. A failed
+PMG read still retains previously accepted backups; a complete empty read can
+replace only that connection's inventory. `TestPMGNodeDiscoveryFailurePreservesAcceptedBackups`
+and `TestPMGConfiguredConnectionIdentity` cover those distinct boundaries;
+connection recovery is not backup restoration or native guest safety evidence.
+
+The full PMG detail projection retains the configured connection reference without turning its presence or version read into backup completeness. Detail mapping changes no backup list, retained source time or restoration decision.
+
 ### Extended history observation preserves existing read authority
 
 The shared chart/history response writer now observes successful extended
@@ -7013,6 +7772,51 @@ only a successful-read marker after serialization/write, and existing API
 entitlement checks remain before that boundary. Read semantics remain owned
 by api-contracts and telemetry retention/disclosure by security-privacy.
 
+### Coverage keeps workload identity when columns disappear
+
+Collapsed Coverage rows retain the workload type and target ID whenever the
+dedicated Target ID column is hidden. A hidden Node column is replaced by the
+observed native node (or the existing node label when native identity is absent).
+The workload connection remains visible at every width, independently of the
+backup repository connection; equal display names, IDs and node names across
+connections are not one target. These labels wrap without hover. The disclosure
+keeps that connection too, with missing identity explicitly Unknown rather than
+inferred from a backup repository. Matching, posture and guest operations do not
+change.
+
+`coverageWorkloadIdentity.test.tsx` covers all five layouts, repeated names/IDs,
+unknown connections and same-row focused refresh. `ProxmoxCoverageTable.test.tsx`
+checks the compact folded identity alongside posture, age and job. The synthetic
+HTTP consuming protocol `coverage-workload-identity.cjs` checks actual glyphs,
+keyboard/touch disclosure, refresh and windowed viewport reachability at desktop
+and 320px. This is attribution/presentation proof, not installed fleet recovery,
+backup completion, guest thaw or restore acceptance.
+
+Coverage windowing measures each wrapped summary by workload key as well as its
+detail, not by a fleet-wide first-row height. Width changes invalidate cached
+wrapping, including off-screen rows; unseen blocks use measured estimates until
+visited. The mounted-row limit and continuous table remain unchanged.
+
+### By date retains the target behind each restore point
+
+The By date Workload cell keeps type and target ID whenever the dedicated
+Target ID column is hidden, including the intermediate layout. It shows the
+matched workload's connection and observed native node separately from the
+backup repository's connection and path. An unmatched PBS namespace remains a
+repository path, never a claimed workload node; missing workload connection is
+Unknown. Identity facts wrap without hover and update on accepted inventory.
+Matching, source filters, completion, verification and protection rules are
+unchanged; these labels do not establish restore or guest-thaw recovery.
+
+By date windowing measures each logical keyed point, including its separate
+phone provenance row, and each day header. Wrapped identity must not borrow a
+neighbour's height. Width changes invalidate off-screen wrapping measurements;
+unseen items use estimates until mounted, preserving the existing row budgets.
+`recoverableWorkloadIdentity.test.tsx`, the block-measurement control in
+`ProxmoxBackupsTable.test.tsx`, and the synthetic HTTP consuming protocol
+`recoverable-workload-identity.cjs` verify target/repository separation,
+responsive identity, refresh and mixed-height fleet reachability. Native backup,
+restore, installed fleet and reporter recovery remain separate evidence.
 ### Saved-credential TLS probes leave storage and recovery unchanged (16 October 2026)
 
 `internal/api/configapi/config_node_handlers.go` accepts draft SSL verification
@@ -7092,6 +7896,63 @@ durable task collection while reporting continues reading the original store.
 `internal/api/recovery_monitor_reload_test.go` and a live connection-reload report
 exercise dependency retention and actual history persistence.
 
+### Backup job observation age stays with the source
+
+Coverage retains each job's optional `observedAt` independently of its start,
+end, current workload placement and page read. Summary rows show the source
+observation age; expanded job details show its exact local time and age. A
+page refresh cannot renew a retained observation. Missing, zero, invalid and
+future observation dates stay explicitly unknown rather than reading as
+just observed. The shared presentation clock advances displayed ages without
+polling Proxmox or starting a guest operation. Job ordering and server-owned
+protection posture remain unchanged; observation time is not completion or
+independent thaw/filesystem-liveness evidence.
+
+The inventory wire boundary rejects non-text observation values. Recovery-model
+and consuming Coverage tests cover selection, legacy unknowns and same-open
+replacement. `backup-job-observation.cjs` consumes real offline-node polling
+projections and synthetic clock/invalid-date controls through the existing HTTP
+reader, model, Coverage UI and styles at desktop and narrow widths.
+
+### Live backup inventory and report backfill have separate admission
+
+The unwindowed, bounded live task read remains separate from report backfill:
+every online node must return a complete valid response. Its
+`GetBackupTaskInventory` result explicitly identifies offline or unconfirmed-online
+nodes. Those nodes are not probed; their known task rows and job-log caches keep
+the original observation times, while readable peers can update or authoritatively
+return empty. Node-less legacy observations are retained during a partial read.
+Task rows must name their actual collection node (an omitted node is filled from
+the request; a conflicting one rejects the collection). A failed online read or
+no visible nodes preserves the entire instance. Complete live emptiness can clear
+only the scopes actually observed. The legacy `GetBackupTasks` helper retains
+its readable-online-node compatibility view; that subset is not instance-wide
+replacement authority. Concrete PVE monitoring uses the richer observation. Report backfill may still retain independently observed task
+executions while its collection quality is explicitly incomplete. An empty
+incremental report window, missing audit confirmation or failed history page
+cannot delete live tasks or certify complete report history.
+
+Both task-page and audit-authority admission consume the complete bounded
+HTTP body; a valid JSON prefix, null/duplicate envelope, provider error or
+ambiguous privilege cannot qualify observation coverage. The existing live
+200-task-per-node and shared 25-log-read budgets remain. Log finalisation still
+requires contiguous numbered, present-text lines and a terminal marker; a
+failed running-log reread retains its successful-read timestamp.
+
+`TestBackupHistoryCollectionCannotReplaceLiveInventory` joins the real HTTP
+readers, polling/cache, live snapshots and durable execution/coverage APIs
+through node/body/history/authority failures, incremental emptiness, recovery
+and authoritative live emptiness. `TestBackupHistoryRejectsIncompletePagesAndAuditEvidence`
+checks page and permission admission. Existing log fixtures now include the
+upstream terminal marker rather than weakening immutable-cache assertions.
+`TestPVEOfflineBackupTasksRetainAgeAndHealthyPeerProgress` joins direct and
+cluster HTTP collection, live replacement and cached guest details through
+partial/all-offline reads, healthy-peer advancement and emptiness, recovery,
+no-visible-node reads and an independent connection with repeated names/VMIDs.
+Model and transport controls bind unread scopes and reject conflicting provenance.
+Source and consuming desktop/narrow proof do not establish installed backup,
+restore, independent guest thaw, writes/liveness or prior-active restoration.
+
 Reporting telemetry counts generated backup-health documents by their existing
 complete, incomplete or unavailable source-data state. It never reinterprets
 those counts as backup success, protection, retention or restorability. The
@@ -7153,3 +8014,250 @@ wrap is set on each value's span, because the global `.table-fixed td` rule
 forces nowrap on table cells and outranks a utility class on the cell itself,
 which left a long snapshot description cut off at the drawer edge. Coverage,
 restore evidence and recovery rules are unchanged.
+### Incomplete PBS namespace discovery cannot delete history (18 October 2026)
+
+A failed namespace listing is not a complete root-only inventory. Its result
+travels with the exact datastore input into the admitted background scan, and
+qualifies the provider observation before recovery ingestion. Transient failure
+preserves that datastore's unread nested raw backups and their original cache
+read times; access rejection withdraws the unread raw scope. Historical recovery
+points remain, qualified by partial/unavailable provider evidence, until an
+ordinary complete discovery and inventory can reconcile absence. Successfully
+read root and sibling datastore raw inventories still replace their own scopes.
+No cached namespace is probed after failed discovery and no unknown scope gains
+fresh verification. The existing live-state bounds and connection/runtime
+publication fence remain effective.
+
+Namespace arrays use the same complete-body admission as backup groups and
+snapshots, including positive empty-array/explicit-root and actual HTTP-404
+legacy controls. `TestPBSNamespaceInventoryAdmission` covers the client;
+`TestPBSNamespaceDiscoveryFailureIsNotEmptyInventory` and
+`TestPBSNamespaceDiscoveryAdmissionAndRecovery` cover ordinary foreground ->
+background -> stored-protection -> deletion recovery. These are synthetic source
+and consuming-surface proofs, not installed guest safety or restore acceptance.
+
+### Coverage recognises explicit PVE failure statuses without losing the source
+
+The ordinary PVE poller can report `ERROR: <reason>` in `status`, with no
+separate `error`. Coverage treats that anchored, case-insensitive prefix as
+Failed (alongside the existing failed/error aliases). Its full, unchanged
+provider status remains plain text in the existing job disclosure and in
+search, so both Failed and the provider reason find the workload. Unknown
+lookalikes such as `ERROR-free` remain literal; a successful status plus a
+separate error remains Unknown. Job identity, chronology, observation time
+and server protection posture remain separate and unchanged. An ordinary OK
+replacement withdraws the old status/error without losing the open disclosure.
+
+`proxmoxBackupRecoveryModel.test.ts` covers verdict/raw-message search and tied
+OK/failure uncertainty. `ProxmoxCoverageTable.taskDetail.test.tsx` covers literal
+status/error separation, wrapping, markup-shaped text and same-open recovery.
+`backup-failure-status.cjs` exercises the actual HTTP reader, model, search and
+Coverage disclosure at desktop and 320px. This is failure visibility, not native
+backup completion, guest thaw, filesystem liveness or installed recovery.
+
+
+### Backup artifact state meanings are readable without hover
+
+By date and expanded Coverage evidence use one native button for each artifact's
+state and optional prune-protection badge. Its read-only dialog keeps the full
+record, repository location and workload beside the existing explanation.
+Verification is not a restore test or guest-thaw evidence; prune protection is
+not verification or workload protection. Running/failed artifacts remain
+incomplete and guest snapshots remain distinct from separate backups. No
+collection, guest operation, API request, posture or completion rule changes.
+
+The disclosure updates with its record and restores focus on dismissal.
+`proxmoxBackupsTableShared.test.tsx` covers all states, contradictory flags,
+withdrawal, adjacent records and literal provider text. The source-bound
+`backup-artifact-evidence.cjs` protocol exercises the actual inventory readers,
+model and both consuming tables with desktop keyboard and 320px touch. This is
+accessible collected-evidence proof, not native recovery or release availability.
+
+### Coverage keeps the native job identity and recorded interval inspectable
+
+Expanded latest and unorderable job evidence keeps the literal collected job ID and
+reported end beside its start and original observation time. Latest-job IDs and
+reported start/end strings are searchable locally. The ID is the unchanged API
+identifier, including any Pulse instance prefix or per-guest suffix around a
+parent UPID; it is not presented as an extracted raw Proxmox UPID. Recorded duration requires
+usable, non-future start/end times in order; an equal timestamp is a recorded
+zero-second interval, not an absent reading. Missing, invalid, reversed and
+future end values retain their raw text without a formatted end or invented live
+elapsed time. Source status, latest-job selection, protection and artifact
+completion remain independent. Reported end/duration never establish guest thaw,
+filesystem writes or native backup recovery. No collection or guest request is
+added.
+
+`proxmoxBackupRecoveryModel.test.ts` and
+`ProxmoxCoverageTable.taskDetail.test.tsx` cover exact selection/search, timing
+admission, literal provider text and same-open replacement. The source-bound
+`backup-job-interval.cjs` protocol consumes the ordinary HTTP inventory readers,
+model and Coverage table at desktop/320px with safe synthetic job history.
+
+
+### Failed guest physical-disk reads withdraw retained live-looking SMART views
+
+The guest Overview's scoped child-inventory reader can retain a fulfilled snapshot
+through a failed read. On a reported query error the consumer withdraws its disk
+rows, current-looking health/temperature and expanded SMART/history view until a
+read succeeds. The error notice keeps provider text private and offers a named,
+keyboard/touch-operable Retry. One in-flight retry is disabled and labelled; a
+failed retry leaves evidence withdrawn, and a successful empty response does not
+invent an empty health verdict. Recovered rows start collapsed, so their chart
+readers do not silently resume. This is an explicit read of Pulse's already-
+collected, guest-scoped inventory, not a probe, backup, guest operation, new poll
+or native recovery. Query/cache key ownership, organisation fences and collection
+freshness metadata remain intact; other Storage consumers keep their defaults.
+
+`GuestPhysicalDisks.test.tsx` exercises retained success -> failed read, withdrawn
+SMART consumers, single-flight retry, failed retry and populated/empty recovery.
+`guest-disk-read-recovery.cjs` consumes the real HTTP/resource hook/Overview/CSS
+at desktop and 320px, including stopped chart reads and an old-organisation
+response retired by the existing source fence. These are synthetic browser and
+source proofs, not guest thaw, filesystem liveness, installed or restore proof.
+
+The guest child reader opts into background-error reporting and keeps failed
+read state through its tenant/query cache remount. No previously failed snapshot
+becomes a successful read merely by closing/reopening the drawer. Retry's local
+busy owner resets on organisation change and ignores old-scope settlement, while
+the existing source owner fences the response. Other resource consumers retain
+their previous defaults; no shared polling or collection behaviour changes.
+
+The child reader's complete shared read now has a 20-second deadline, covering
+headers, success/error bodies, API-client Retry-After waits and all inventory
+pages together. Expiry aborts its transport, retires late settlement before any
+cache write, withdraws retained SMART consumers and releases the explicit Retry.
+Only another explicit retry or an existing resource refresh starts another read;
+no timeout retry loop or guest operation is added. The notice names the wait
+limit without rendering provider text. Successful empty and populated recovery
+keep their existing meanings. `useUnifiedResources.test.ts` covers abort-ignoring
+settlement, a common pagination allowance, surviving shared owners and remounts;
+`guest-disk-read-recovery.cjs` exercises these bounded reads through real HTTP,
+the API client, Overview and SMART at desktop and 320px. Guest thaw, filesystem
+liveness and ordinary native recovery remain separate and unproved by this UI.
+
+### Disk SMART freshness survives successful inventory reads
+
+Storage's disk list/detail and the guest Overview consume the backend's canonical
+staleness envelope, including `telemetry_stale` behind a stronger alert. An HTTP
+inventory success is not a new SMART observation. Expired reports say Last known
+(Old data in the compact table); retained failed health, risk and adverse counters
+remain explicitly qualified and discoverable through attention filters. A stale
+retained temperature cannot create a current heat verdict, endurance and SMART
+cards lose live threshold colouring, and Live I/O withdraws. Historical charts
+and stable identities remain available. Fresh canonical observations restore
+ordinary presentation without closing the selected detail. Field-only temperature
+unavailability retains its existing independent meaning. No expiry threshold,
+collection metadata, polling cadence, action or native guest recovery is changed.
+`diskSourceFreshness.test.ts`, `DiskList.test.tsx`, `GuestPhysicalDisks.test.tsx`
+and `disk-source-freshness.cjs` exercise the source/HTTP/consumer boundaries.
+
+SMART metric labels explicitly wrap even inside the Storage table's inherited
+nowrap context. The last-known qualifier must remain fully readable on a phone;
+`DiskDetail.test.tsx` protects that context and the HTTP browser protocol checks
+label bounds in both Storage and the guest Overview. Pixel inspection, not only
+page overflow or DOM visibility, is required for this reading qualification.
+
+
+### Abandoned polled reads retain their failure across remount
+
+A polled read abandoned by the existing stall fallback records its failed result
+in the same bounded cache as a settled read, before its replacement starts. This
+retention uses the abandoned read's original key and access generation; it cannot
+repopulate a generation invalidated by a denied read or organisation change.
+Late abort-ignoring responses remain fenced. Cadence, stall threshold, LRU/expiry,
+foreground replacement and successful-query retention are unchanged.
+
+`createNonSuspendingQuery.test.tsx` covers loaded and never-loaded remounts,
+late settlement and access-generation invalidation. `useProtectionPostures.test.ts`
+checks the actual protection consumer: an abandoned evaluation stays unavailable,
+with no current verdict or policy, through remount and pending retry. Only a
+successful current evaluation restores them. Independent restore evidence is not
+withdrawn. The read-only `protection-posture-remount.cjs` HTTP/browser protocol
+exercises the production Backups reader, Coverage and shipped CSS at desktop and
+320px, including keyboard/touch retry and organisation fencing. This is truthful
+monitoring presentation, not guest thaw, filesystem liveness or backup recovery.
+
+### Unmatched guest-scoped backup jobs remain evidence
+
+A positive-VMID PVE job whose `vzdump`/unrecognised type cannot resolve a unique
+live guest or PVE artifact stays in the existing unmatched-target disclosure.
+Its fallback identity includes the complete PVE connection/node scope and VMID,
+not a PBS repository, inferred VM/LXC type or another task's order-dependent row.
+It is Not evaluated, excluded from live health/target counts, and creates no
+restore artifact. VMID-zero aggregate parents still cannot invent guest targets.
+Raw job status, error, provenance, observation/ending times and uncertain
+chronology retain the existing escaped, wrapping, searchable presentation.
+Ordinary inventory changes may resolve or withdraw ownership without changing
+collected jobs, refetching inventories or treating a job as guest recovery.
+
+`proxmoxBackupRecoveryModel.unmatched-jobs.test.ts` covers absent/ambiguous
+owners, source framing, PBS isolation, task order, chronology and valid matches.
+`ProxmoxBackupsTable.test.tsx` checks the actual disclosure, counts, escaping and
+inventory reconciliation; `unmatched-backup-jobs.cjs` exercises real HTTP reads,
+production model/Coverage and CSS by desktop keyboard and 320px touch. Synthetic
+consumer proof does not establish backup/restore, thaw or filesystem liveness.
+
+
+### Exact backup-location filters and conservative saved scopes
+
+Backup-location keys preserve the source kind, case-sensitive connection and
+repository, and (for local archives) storage node as a framed tuple. Missing or
+repeated source fields cannot collapse identity. Operator labels are not keys.
+Legacy saved URLs resolve only when all observed aliases identify one exact
+location or one intentional store-wide local-node group. A case/delimiter/field
+collision remains explicitly ambiguous; a missing location remains unavailable.
+Neither silently selects All or unrelated restore points. The same resolved
+scope governs By date, activity and Coverage; new choices save exact keys.
+Normal refresh or organisation changes must withdraw a newly ambiguous/missing
+selection. Clearing filters restores the unscoped collected inventory.
+
+`proxmoxBackupRecoveryModel.locations.test.ts`, `proxmoxBackupLocation.test.ts`
+and `ProxmoxBackupsTable.locations.test.tsx` check identity framing, saved-scope
+compatibility, collisions, conservative empty states and actual consuming filters.
+The read-only `backup-location-scope.cjs` HTTP/browser protocol exercises desktop
+keyboard and 320px touch using the production decoders, model, tables and CSS.
+This changes inventory selection, not collection, protection verdicts, guest
+operations, thaw, filesystem liveness or native backup recovery.
+
+### Preserve existing PBS readers during monitoring setup
+
+An add-node monitoring-token collision is a configuration conflict, not consent
+to delete/recreate an existing PBS token. The route returns fixed HTTP 409
+guidance without saving the administrator password or changing stored provider
+connections. Existing saved-token reads remain usable, and deliberate manual
+setup with that secret requires no provisioning replay. Backup points, task
+outcomes, namespace scope and storage reconciliation are unchanged.
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` and
+`TestSetupMonitoringAccessCollisionKeepsExistingReader` cover this source
+boundary without native backup, restore or guest operations.
+
+### Parent-qualified guest hardware reports
+
+An open guest's SMART view accepts an explicit parent-owned last-known reason
+when native Proxmox VM power contradicts execution or its own Pulse agent stops
+reporting. Stopped/offline Proxmox LXC guests likewise qualify their own agent's
+retained RAID/SMART reports before its lease expires. Host configuration and
+explicit independent API disks remain independent; VM pause/suspend semantics
+are not inferred for containers. The collapsed disk summary and expanded SMART view share that reason:
+no current healthy/temperature verdict, current attribute tones or live I/O from
+the retained report. Reported disk risks remain qualified and readable. Stored
+History identity, range and samples are neither withdrawn nor manufactured.
+The raw resource, health, collection state and timestamps are never rewritten.
+A separately stale disk stays retained when a parent qualifier clears; an
+explicit API-only independent disk does not borrow the guest agent's state.
+Scoped inventory read failures and retry remain authoritative. GuestHardwareObservation,
+useDiskDetailModel and the read-only guest-hardware-observation.cjs protocol cover
+live qualification, source independence and same-open recovery. These synthetic
+consumer proofs do not establish native disk health, thaw or filesystem writes.
+
+### Capacity-invalid chart evidence is not storage recovery
+
+The hosted workload-chart proof may call a complete, contended measurement
+inconclusive without clearing its raw budget failure. It must not turn a
+cleanup/child error, absent report or skipped test into neutral evidence.
+Neither neutrality nor synthetic CLI classification establishes a valid
+History latency result, intact stored data, guest liveness or installed
+recovery. `TestContractChartSLOProofCLIClassifiesExecution` preserves child
+exit, output and executable identity across those distinctions; the 90 ms
+valid-capacity requirement and independent native recovery remain unchanged.

@@ -403,6 +403,46 @@ class VMDiskDiagnosticsTest(unittest.TestCase):
                 self.assertIn(f"Guest agent configured: {expected} (not a responsiveness test)", result.stdout)
                 self.assert_passive(calls)
 
+    def test_conflicting_or_incomplete_agent_options_remain_unknown(self):
+        for value in (
+            "enabled=1,enabled=2", "enabled=0,enabled=2",
+            "enabled=2,1", "enabled=2,0", "enabled=1,enabled=",
+            "1,unexpected", "0,unexpected", "1,,type=virtio",
+            "enabled=1,", "enabled=0,", "enabled=1,Enabled=0",
+        ):
+            with self.subTest(value=value):
+                result, calls = self.exercise(settings={
+                    "config_output": f"agent: {value}\nlock: backup\nname: {PRIVATE}\n",
+                })
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Guest agent configured: unknown (not a responsiveness test)", result.stdout)
+                # Uncertain agent configuration must not hide an independently
+                # reported lock or authorise any active guest operation.
+                self.assertIn("VM lock: backup", result.stdout)
+                self.assert_passive(calls)
+
+    def test_embedded_agent_option_whitespace_is_not_silently_repaired(self):
+        for value in ("enabled= 1", "enabled=\t0", "en abled=1", "enabled=1, enabled=bad",
+                      "1,type=", "1,type=vir tio", "1,freeze-fs-on-backup =0"):
+            with self.subTest(value=value):
+                result, calls = self.exercise(settings={"config_output": f"agent: {value}\nname: {PRIVATE}\n"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Guest agent configured: unknown (not a responsiveness test)", result.stdout)
+                self.assert_passive(calls)
+
+    def test_agent_field_padding_and_additive_properties_remain_compatible(self):
+        for value, expected in (
+            ("\t1 \t", "enabled"), (" enabled=0\t ", "disabled"),
+            ("enabled=1,type=virtio,freeze-fs-on-backup=0", "enabled"),
+            ("future-read_option=opaque,enabled=0", "disabled"),
+            ("future-read_option=opaque", "unknown"),
+        ):
+            with self.subTest(value=value):
+                result, calls = self.exercise(settings={"config_output": f"agent: {value}\nname: {PRIVATE}\n"})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Guest agent configured: {expected} (not a responsiveness test)", result.stdout)
+                self.assert_passive(calls)
+
     def test_failed_status_never_reads_configuration_or_reports_completion(self):
         for code in (1, 13, 124, 137, 143):
             with self.subTest(code=code):
@@ -746,6 +786,23 @@ class ServerLogSafetyDocsTest(unittest.TestCase):
                       "previous working level", "without repeating the stall",
                       "not proof that the underlying problem is fixed",
                       "TROUBLESHOOTING.md#inspect-notification-logs")
+    def test_unusable_ui_has_a_reachable_deployment_recovery_without_reset(self):
+        text = self.log_help()
+        self.contains(text, "##### If Debug makes the UI unusable", "LOG_LEVEL=info",
+                      "authorised deployment administrator", "existing **Pulse server** deployment",
+                      "service inside its container, not the Proxmox host",
+                      "daemon reload", "recreate/redeploy", "`docker restart` alone does not apply",
+                      "same image, data mounts, credentials, encryption keys, connections",
+                      "Monitoring and alerts are unavailable", "Verify ordinary use",
+                      "startup override does not rewrite the saved level",
+                      "saved Debug level can return", "do not remove it or toggle Debug",
+                      "Do not restart or recreate a stopped Pulse server",
+                      "Do not print or post the full environment")
+        index = (ROOT / "docs/TROUBLESHOOTING.md").read_text().split("## ⚡ Quick Fixes", 1)[0]
+        self.assertIn("CONFIGURATION.md#if-debug-makes-the-ui-unusable", index)
+        self.assertEqual((ROOT / "docs/CONFIGURATION.md").read_text().count(
+            "##### If Debug makes the UI unusable\n"), 1)
+
     def test_safety_help_is_shipped_without_new_diagnostic_commands(self):
         for name in ("VM_DISK_MONITORING.md", "CONFIGURATION.md", "TROUBLESHOOTING.md"):
             self.assertEqual((ROOT / "docs" / name).read_bytes(),

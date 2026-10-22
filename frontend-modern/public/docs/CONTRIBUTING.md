@@ -113,6 +113,15 @@ and installer tooling.
 
 ## Getting Started
 
+Use a disposable development VM or machine with no production configuration,
+data, host mounts, connected agents or access to monitored systems. A fresh clone
+alone is not isolation. The launcher does not load installed configuration or
+copy installed targets by default, but local environment files are still shell
+inputs and development enables an authentication bypass. That bypass must never
+face an untrusted network.
+Do not use the installed Pulse directory or a production host to reproduce a
+report. Existing evidence is enough when reproduction would be unsafe.
+
 ```bash
 git clone https://github.com/rcourtman/Pulse.git
 cd Pulse
@@ -126,26 +135,90 @@ npm --prefix frontend-modern ci
 
 ### Hot Reload Dev Loop
 
+In that disposable environment, use a fresh clone and a new shell without
+production environment variables. Do not copy installed `.env` files or reuse
+a development data directory containing real connections. The launcher sources
+repository-local `.env`, `.env.local` and `.env.dev` files before selecting its
+configuration mode; they can execute commands and override shell settings.
+Review any such local files before starting, rather than assuming the exports
+below make untrusted configuration safe.
+
+From the clone root:
+
 ```bash
-npm run dev                 # Frontend shell on :5173, backend on :7655
-npm run mock:on             # Optional: enable mock data
+export HOT_DEV_USE_PRO=false HOT_DEV_USE_PROD_DATA=false HOT_DEV_IMPORT_PROD_CONFIG=false
+export PULSE_DATA_DIR="$PWD/tmp/contribution-data"
+export PULSE_DEV_LAN=false PULSE_DEV_LAB_AGENTS=false
+export FRONTEND_DEV_HOST=127.0.0.1 PULSE_DEV_API_HOST=127.0.0.1 BIND_ADDRESS=127.0.0.1
+./scripts/hot-dev-bg.sh start
+./scripts/hot-dev-bg.sh status
 ```
+
+This uses the existing Community launcher **without takeover**. If another
+process occupies a development port, it refuses to replace it. Do not follow
+the refusal's `npm run dev` suggestion to reclaim the port; choose unused
+`FRONTEND_DEV_PORT` and `PULSE_DEV_API_PORT` values in the same shell instead.
+Use the browser entrypoint printed by `status` when choosing non-default ports.
 
 Use `http://127.0.0.1:5173` in the browser for local frontend development. The
 frontend dev shell proxies `/api` and `/ws` to the backend on `:7655`; do not
 switch your browser to `:7655` unless you are debugging the backend directly.
 The managed dev runtime login defaults to `admin` / `adminadminadmin` unless
-you override it with `HOT_DEV_AUTH_USER` and `HOT_DEV_AUTH_PASS`.
+you override it with `HOT_DEV_AUTH_USER` and `HOT_DEV_AUTH_PASS`. These are
+development-only credentials, not production defaults.
 
-Backend-only hot reload (requires `air`):
+Keep both installed-data selectors **false** for community reproduction:
+`HOT_DEV_USE_PROD_DATA=true` deliberately loads `/etc/pulse/.env` and selects
+installed data; `HOT_DEV_IMPORT_PROD_CONFIG=true` deliberately copies installed
+targets, credentials and keys into the default development directory. Neither
+is a workaround for a startup refusal. LAN or lab-agent mode alone does not
+select either import route. If startup refuses installed data, choose a separate
+empty development directory instead of opting in to make the error disappear.
+These selectors prevent accidental installed-data use; they do not sandbox local
+environment files or establish host isolation.
+
+The explicit copy helper requires GNU `realpath` and reads installed files only;
+it does not repair an installation or choose an encryption key from backups.
+Missing keys with retained encrypted files, or different installed/development
+keys, stop the import. Preserve both data sets and identify the matching key
+independently; do not delete ciphertext or pick the newest backup to bypass the
+refusal. Use a separate empty development copy when the existing copy has a
+different key. The helper leaves development sessions, CSRF state, OIDC, local
+`.env`, history and alerts alone. It stages reads before per-file replacement
+and keeps overwritten files privately in `.config-import.*/previous` within the
+development directory. Preserve that snapshot with the matching key; it is not
+a full-state backup or a consistent snapshot of a running installation. If
+publication fails, keep the snapshot and remaining staged files and inspect the
+partial import privately before starting anything. The helper starts no service.
 
 ```bash
-air -c .air.toml
+./scripts/hot-dev-bg.sh logs
+./scripts/hot-dev-bg.sh stop
 ```
 
-Set `HOT_DEV_USE_PRO=true` to build the Pro variant when available.
+Run lifecycle commands from the same clone and shell. The `npm run dev`,
+`dev:restart` and `dev:verify` shortcuts include `--takeover` and may stop other
+listeners; they are not the safe reproduction entrypoint. Mock-mode switching
+can also restart a development runtime. Do not use these commands against a
+running installation or connect the disposable instance to real infrastructure.
 
-Mock mode is supported for development, but the internal developer notes are not shipped in this repository.
+### Cleaning development build output
+
+Stop the disposable development runtime before cleaning its checkout. `make clean`
+removes the server binary and frontend build copies; `make distclean` also removes
+known generated build and dependency-cache directories. Reinstall dependencies
+with `npm ci` and `npm --prefix frontend-modern ci` when needed.
+
+Neither command resets Pulse: local data, environment files, assistant settings,
+logs and recovery files outside the known build outputs are preserved. Tracked
+outputs and symbolic links (including linked parent directories) are skipped.
+If Git cannot verify the checkout or inspect its tracked files, cleanup stops
+before removing anything. Removal failures are reported without using `sudo`.
+Cleanup does not stop processes or restore anything an earlier cleanup deleted.
+
+The checked-in `.air.toml` also has an installed `/opt/pulse-enterprise` build
+path; it is not a portable backend-only shortcut for an arbitrary clone.
+Private Pro source is not required for Community reproduction.
 
 ---
 
@@ -154,11 +227,11 @@ Mock mode is supported for development, but the internal developer notes are not
 - Build: `go build ./cmd/pulse`
 - Tests: `go test ./...`
 - Lint: `golangci-lint run ./...` (install via `go install` if missing)
-- Formatting: `gofmt -w ./cmd ./internal ./pkg`
+- Formatting: `gofmt -w path/to/changed.go` (pass the changed Go files, not directories)
 
 Key entry points:
 - HTTP router lives in `internal/api`.
-- Monitoring engines live under `internal/monitor`.
+- Monitoring engines live under `internal/monitoring`.
 - Configuration parsing resides in `internal/config`.
 
 When adding new API endpoints, document them in `docs/API.md` and provide
@@ -168,23 +241,16 @@ examples where possible.
 
 ## Frontend Workflow
 
-- Managed dev runtime: `npm run dev`
-- Runtime status: `npm run dev:status`
-- Runtime logs: `npm run dev:logs`
-- Managed restart: `npm run dev:restart`
-- Managed backend restart: `npm run dev:backend-restart`
-- Browser proof pack: `npm run dev:verify`
-- Foreground managed launcher: `npm run dev:foreground`
-- Frontend-only escape hatch: `cd frontend-modern && npm run dev:frontend-only`
+- Local runtime: use the isolated [Hot Reload Dev Loop](#hot-reload-dev-loop) above.
+- Runtime status: `./scripts/hot-dev-bg.sh status`
+- Runtime logs: `./scripts/hot-dev-bg.sh logs`
+- Stop the owned development runtime: `./scripts/hot-dev-bg.sh stop`
 - Tests: `npm --prefix frontend-modern test`
 - Type check: `npm --prefix frontend-modern run type-check`
 - Lint: `npm --prefix frontend-modern run lint`
 - Format check: `npm --prefix frontend-modern run format:check`
 
-The same managed runtime wrappers are available from `frontend-modern/` if you
-start there by habit, so `npm run dev`, `npm run dev:status`, and
-`npm run dev:verify` behave the same way from either workspace.
-- Production build: `npm run build` (syncs the Go embed copy in
+- Production build, from the repository root: `npm --prefix frontend-modern run build` (syncs the Go embed copy in
   `internal/api/frontend-modern/dist` automatically).
 
 Use SolidJS patterns (signals, memos, createEffect) and the shared design-system

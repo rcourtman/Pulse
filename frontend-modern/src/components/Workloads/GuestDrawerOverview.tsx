@@ -1,4 +1,6 @@
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { getGuestNetworkLastKnownReason } from '@/utils/guestNetworkObservation';
+import { getGuestHardwareLastKnownReason } from '@/utils/guestHardwareObservation';
 import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
 import {
@@ -24,6 +26,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import {
   getWorkloadGuestDiskRead,
   getWorkloadsGuestProtectionPresentation,
+  supportsWorkloadBackupEvidence,
 } from '@/utils/workloadGuestPresentation';
 
 import { buildWorkloadsDiskPresentation } from './diskListModel';
@@ -107,6 +110,7 @@ interface GuestDrawerOverviewProps {
 
 export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   const now = useRelativeTimeNow();
+  const supportsBackup = () => supportsWorkloadBackupEvidence(props.guest);
   const protectionPresentation = () =>
     getWorkloadsGuestProtectionPresentation({
       ageLabel: props.backupPresentation?.ageLabel,
@@ -142,8 +146,8 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
   // the guest, so its RAID, network and filesystem rows read as last known.
   const agentLastKnownReason = () =>
     props.guest.agentStale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
-  const networkLastKnownReason = () =>
-    props.guest.networkInterfacesFromAgent === false ? undefined : agentLastKnownReason();
+  const networkLastKnownReason = () => getGuestNetworkLastKnownReason(props.guest);
+  const hardwareLastKnownReason = () => getGuestHardwareLastKnownReason(props.guest);
   const coverageLabel = () => {
     if (props.hasWorkloadActionAgent) return WORKLOAD_ACTION_AGENT_LABEL;
     if (props.hasAgentInfo) return `${props.agentHeading} observed`;
@@ -176,29 +180,41 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           }),
           // Starting or ending an operation is not evidence of a completed
           // backup. Keep its activity separate from the last completed age.
-          makeDetailRow('Last completed backup', protectionPresentation().label, {
-            tone: protectionPresentation().tone,
-            layout: 'stacked',
-            wrap: true,
-            valueContent: (
-              <>
-                <span class="block whitespace-normal wrap-break-word text-left leading-snug">
-                  {protectionPresentation().label}
-                </span>
-                <Show when={props.backupPresentation?.completedAt}>
-                  <time
-                    class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted"
-                    dateTime={props.backupPresentation?.completedAt}
-                  >
-                    {props.backupPresentation?.dateLabel}
-                  </time>
-                </Show>
-              </>
-            ),
-          }),
+          supportsBackup()
+            ? makeDetailRow('Last completed backup', protectionPresentation().label, {
+                tone: protectionPresentation().tone,
+                layout: 'stacked',
+                wrap: true,
+                valueContent: (
+                  <>
+                    <span class="block whitespace-normal wrap-break-word text-left leading-snug">
+                      {protectionPresentation().label}
+                    </span>
+                    <Show when={props.backupPresentation?.absenceDetail}>
+                      {(detail) => (
+                        <span class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted">
+                          {detail()}
+                        </span>
+                      )}
+                    </Show>
+                    <Show when={props.backupPresentation?.completedAt}>
+                      <time
+                        class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted"
+                        dateTime={props.backupPresentation?.completedAt}
+                      >
+                        {props.backupPresentation?.dateLabel}
+                      </time>
+                    </Show>
+                  </>
+                ),
+              })
+            : makeDetailRow('Backup coverage', 'Not reported by this integration', {
+                tone: 'muted',
+                wrap: true,
+              }),
           makeDetailRow(
             'Backup activity',
-            props.guest.backupInProgress ? 'Running · not completed yet' : null,
+            supportsBackup() && props.guest.backupInProgress ? 'Running · not completed yet' : null,
             { tone: 'warning', wrap: true },
           ),
         ]),
@@ -331,15 +347,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         ? {
             label: 'Network',
             rows: compactDetailRows([
-              // Agent freshness applies only to the selected agent list,
-              // not interfaces supplied independently by Proxmox.
-              makeDetailRow(
-                'Status',
-                networkLastKnownReason()
-                  ? 'Using last known interface details. The Pulse Agent in this guest stopped reporting.'
-                  : null,
-                { layout: 'stacked', wrap: true },
-              ),
+              makeDetailRow('Status', networkLastKnownReason(), {
+                layout: 'stacked',
+                wrap: true,
+              }),
               ...props.networkInterfaces.slice(0, 4).map((iface, index) => {
                 const addresses = iface.addresses ?? [];
                 const hasTraffic = (iface.rxBytes ?? 0) > 0 || (iface.txBytes ?? 0) > 0;
@@ -435,9 +446,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       props.guest.cpus ? `${props.guest.cpus} vCPU` : '',
       memoryFact(),
       diskFact(),
-      props.ipAddresses[0] ?? '',
+      props.ipAddresses[0]
+        ? `${networkLastKnownReason() ? 'Last known IP ' : ''}${props.ipAddresses[0]}`
+        : '',
       // A late or missing backup is listed under Worth checking instead.
-      protectionPresentation().tone === 'success'
+      supportsBackup() && protectionPresentation().tone === 'success'
         ? `Last completed backup ${protectionPresentation().label}`
         : '',
     ].filter((fact) => fact.trim().length > 0);
@@ -513,7 +526,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         <RaidCard
           arrays={props.guest.agentRaid}
           title="Guest RAID"
-          lastKnownReason={agentLastKnownReason()}
+          lastKnownReason={hardwareLastKnownReason()}
         />
       </Show>
 

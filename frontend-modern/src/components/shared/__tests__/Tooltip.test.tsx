@@ -34,6 +34,19 @@ describe('Tooltip', () => {
     expect(screen.queryByText('touch detail')).toBeNull();
   });
 
+  it('allows deliberate help on touch without allowing synthesized hover', () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    const TooltipRoot = createTooltipSystem();
+    render(() => <TooltipRoot />);
+
+    showTooltip('deliberate detail', 120, 80, { trigger: 'intentional' });
+    expect(screen.getByText('deliberate detail')).toBeInTheDocument();
+
+    showTooltip('synthesized hover', 120, 80);
+    expect(screen.queryByText('synthesized hover')).toBeNull();
+    expect(screen.queryByText('deliberate detail')).toBeNull();
+  });
+
   it('keeps tooltip on shell, runtime, and model owners', () => {
     expect(tooltipSource).toContain('useTooltipState');
     expect(tooltipSource).toContain('createTooltipSystemState');

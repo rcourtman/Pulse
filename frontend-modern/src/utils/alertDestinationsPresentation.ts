@@ -3,7 +3,7 @@ export const ALERT_DESTINATIONS_CONFIG_LOAD_ERROR =
   'Unable to load notification settings. Your existing configuration could not be retrieved.';
 export const ALERT_DESTINATIONS_WEBHOOK_LOAD_ERROR = 'Unable to load webhook settings.';
 export const ALERT_DESTINATIONS_LOAD_ERROR_RISK_NOTICE =
-  'Saving now may overwrite your existing settings with defaults.';
+  'Saving is blocked until all notification settings have been reloaded.';
 export const ALERT_DESTINATIONS_RETRY_LABEL = 'Retry';
 export const ALERT_DESTINATIONS_RETRYING_LABEL = 'Retrying…';
 export const ALERT_DESTINATIONS_ENABLED_LABEL = 'Enabled';
@@ -63,9 +63,31 @@ export const ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_PLACEHOLDER = 'X-API-KEY'
 export const ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP =
   'Defaults to X-API-KEY for Apprise API deployments.';
 export const ALERT_DESTINATIONS_APPRISE_TLS_LABEL = 'TLS verification';
-export const ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL = 'Allow self-signed certificates';
+export const ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL =
+  'Skip TLS certificate verification (unsafe)';
 export const ALERT_DESTINATIONS_APPRISE_TLS_HELP =
-  'Enable only when the Apprise API uses a self-signed certificate.';
+  'Leave unchecked to verify the HTTPS API server. This setting affects only the connection from Pulse to the Apprise API, not the local CLI or delivery targets. It has no effect on HTTP.';
+
+// Describe the configured Pulse → API transport, never a successful connection
+// or the separate transports Apprise uses to deliver to its own destinations.
+export function getAlertDestinationsAppriseTransportWarning(
+  serverUrl: string,
+  skipTlsVerify: boolean,
+): string | null {
+  let protocol: string;
+  try {
+    protocol = new URL(serverUrl.trim()).protocol;
+  } catch {
+    return null; // An incomplete address is not evidence of a transport policy.
+  }
+  if (protocol === 'http:') {
+    return 'HTTP does not use TLS. Requests to this API would send API keys, destination URLs and alert content without encryption or server identity checks. Use HTTPS with a trusted certificate. The verification checkbox has no effect on HTTP.';
+  }
+  if (protocol === 'https:' && skipTlsVerify) {
+    return 'Certificate and hostname checks are disabled by these HTTPS form settings, not just for self-signed certificates. API keys, destination URLs and alert content could be sent to an impersonated server. Keep verification on and use a certificate trusted by the Pulse runtime.';
+  }
+  return null;
+}
 export const ALERT_DESTINATIONS_APPRISE_TIMEOUT_LABEL = 'Timeout (seconds)';
 export const ALERT_DESTINATIONS_APPRISE_TIMEOUT_HELP =
   'Maximum time to wait for Apprise to respond.';
@@ -307,11 +329,15 @@ export function getAlertDestinationsDeliveryLogDescription(
   completedRetentionDays: number,
   deadLetterRetentionDays: number,
 ) {
-  return `Delivery attempts and held notifications for real alerts. Completed attempts are retained for ${completedRetentionDays} days. Deliveries Pulse has stopped retrying remain available for ${deadLetterRetentionDays} days. Test sends skip the queue and are not listed here.`;
+  return `Delivery attempts and held notifications for real alerts. Entries marked "${getAlertDeliveryLogOutcomeLabel('dead_letter')}" remain available for ${deadLetterRetentionDays} days. Other completed attempts are retained for ${completedRetentionDays} days. Test sends skip the queue and are not listed here.`;
 }
 
 export function getAlertDestinationsDeliveryLogEmpty() {
   return ALERT_DESTINATIONS_DELIVERY_LOG_EMPTY;
+}
+
+export function getAlertDestinationsDeliveryLogIncomplete() {
+  return 'Some delivery attempts could not be read. This activity list is incomplete. Refresh to check again.';
 }
 
 export function getAlertDestinationsDeliveryLogUnavailable() {
@@ -321,7 +347,8 @@ export function getAlertDestinationsDeliveryLogUnavailable() {
 export type AlertDeliveryLogOutcome = 'sent' | 'retry' | 'failed' | 'dead_letter' | 'cancelled';
 
 // One plain-language label per outcome. "Dead letter" is queue jargon; what a
-// user needs to know is that Pulse stopped retrying.
+// user needs to know is that Pulse will not retry automatically. The outcome
+// does not say why: a failure can be terminal on its very first attempt.
 export function getAlertDeliveryLogOutcomeLabel(outcome: AlertDeliveryLogOutcome) {
   switch (outcome) {
     case 'sent':
@@ -329,7 +356,7 @@ export function getAlertDeliveryLogOutcomeLabel(outcome: AlertDeliveryLogOutcome
     case 'retry':
       return 'Retrying';
     case 'dead_letter':
-      return 'Failed, retries stopped';
+      return 'Failed, no further retries';
     case 'cancelled':
       return 'Cancelled';
     default:

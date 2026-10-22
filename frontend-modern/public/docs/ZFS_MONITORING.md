@@ -34,17 +34,86 @@ it appear in Pulse. For a pool you intentionally keep unregistered:
 * That capacity view and physical-disk SMART data do **not** provide
   `DEGRADED`/`FAULTED` pool-health alerts for an unregistered pool with no
   matching Proxmox storage row. Keep a separate ZFS health check for it.
-* On the Proxmox host, these read-only commands show pool capacity, health and
-  device errors. Replace `tank` with your pool name:
-
-  ```bash
-  zpool list -o name,size,alloc,free,health tank
-  zpool status tank
-  ```
+* For capacity, health and device errors on a responsive Proxmox host, use the
+  [bounded native status reader](#read-native-pool-status-safely) below. Prefer
+  observations you already have; do not run it against an unresponsive host.
 
 `zpool list` reports raw pool capacity; it can differ from the agent's usable
 capacity estimate on RAIDZ. These commands do not change the pool or register
 it as Proxmox storage.
+
+## Read native pool status safely
+
+Use this optional reader **on the affected Proxmox host**, not inside the Pulse
+server container, and only with an account already authorised to read that
+pool. It needs Bash, GNU `timeout`, `zpool` and the listed local utilities.
+Replace `tank` with the existing pool name in the quoted assignment below;
+do not add privileges or install tools just to complete a report. A read-only
+command can still wait on storage. During a backup freeze/thaw or an
+unresponsive-host incident, keep existing observations and follow
+[Backup safety](VM_DISK_MONITORING.md#backup-safety), not a new status command.
+
+```bash
+# Proxmox host: one bounded, read-only ZFS status attempt
+(
+umask 077
+for tool in timeout bash zpool head mktemp wc rm cat; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    printf 'Pool status unavailable: required tool %s is missing; no unbounded fallback.\n' "$tool" >&2
+    exit 1
+  }
+done
+if ! pulse_zfs_file=$(mktemp "${TMPDIR:-/tmp}/pulse-log.XXXXXX" 2>/dev/null); then
+  printf 'Pool status unavailable: private temporary file could not be created.\n' >&2
+  exit 1
+fi
+trap 'rm -- "$pulse_zfs_file"' EXIT
+if timeout --signal=KILL 8s bash -o pipefail > "$pulse_zfs_file" 2>/dev/null <<'PULSE_ZFS_READ'
+(
+  set -e
+  pool='tank'
+  printf 'Pool capacity and health:\n'
+  zpool list -o name,size,alloc,free,health "$pool"
+  printf '\nPool device status:\n'
+  zpool status "$pool"
+) 2>&1 | head -c 262145
+PULSE_ZFS_READ
+then
+  if ! pulse_zfs_bytes=$(wc -c < "$pulse_zfs_file" 2>/dev/null); then
+    printf 'Pool status unavailable: result size could not be checked.\n' >&2
+    exit 1
+  fi
+  if [ "$pulse_zfs_bytes" -gt 262144 ]; then
+    printf 'Pool status unavailable: result exceeds 256 KiB; no partial result shown.\n' >&2
+    exit 1
+  fi
+  cat -- "$pulse_zfs_file"
+else
+  pulse_zfs_status=$?
+  printf 'Pool status unavailable (exit %s); no complete result. Stop collecting.\n' "$pulse_zfs_status" >&2
+  exit "$pulse_zfs_status"
+fi
+)
+```
+
+The **eight-second deadline covers both commands and the byte limiter**, not
+eight seconds for each command. At the deadline, GNU `timeout` sends KILL to
+its collection group, including readers that ignore TERM; it does not stop
+Pulse or change the pool. A kernel-blocked I/O operation may not exit promptly
+even after that signal. If the attempt does not return, use the host's existing
+recovery procedure; do not start another reader or assume the storage recovered.
+
+Both commands must succeed and the combined result must fit within **256 KiB**
+before any output is shown. A failed, oversized or timed-out read is
+**unavailable**, not an empty pool or proof of health. The two reads are not an
+atomic snapshot, and a successful `zpool` read does not establish Pulse API
+collection, backup integrity or guest thaw. Keep separate ZFS health monitoring.
+
+Output is **not sanitised**: it can contain pool names, device paths and serial
+numbers. Review it locally; share only the relevant time, health/error counts
+and manually redacted error with consistent private aliases, not the full
+result. The owner-only temporary file is removed when the collection shell
+exits; that cleanup does not erase terminal recordings or copies you retained.
 
 ## ⚙ Requirements
 

@@ -27,6 +27,9 @@ func TestPBSObservationHistorySurvivesRebuildsAndStoreReopen(t *testing.T) {
 			_ = persistent.Close()
 		}
 	})
+	if err := persistent.WaitForMaintenance(0); err != nil {
+		t.Fatal(err)
+	}
 	monitor := &Monitor{metricsHistory: NewMetricsHistory(1024, 24*time.Hour), metricsStore: persistent}
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
@@ -76,8 +79,12 @@ func TestPBSObservationHistorySurvivesRebuildsAndStoreReopen(t *testing.T) {
 			}
 		}
 	}
-	// Query only after closing and reopening: buffered reads alone are not proof
-	// that the deduplicated observations survived SQLite persistence.
+	offsets := []time.Duration{0, 10 * time.Second, 20 * time.Second}
+	// The live monitor deliberately uses bounded writes. A returned poll is not
+	// a commit acknowledgement; establish visibility before testing reopen.
+	requirePBSHistoryObservations(t, persistent, targetID, start, offsets, want)
+	// Query again after closing and reopening: buffered reads alone are not
+	// proof that the acknowledged observations survived persistence.
 	if err := persistent.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -85,26 +92,14 @@ func TestPBSObservationHistorySurvivesRebuildsAndStoreReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for metric, expected := range want {
-		points, err := persistent.Query("storage", targetID, metric, start.Add(-time.Second), start.Add(time.Minute), 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(points) != len(expected) {
-			t.Fatalf("reopened %s: got %d points, want %d", metric, len(points), len(expected))
-		}
-		for i, point := range points {
-			timestamp := start.Add(time.Duration(i) * 10 * time.Second)
-			if point.Value != expected[i] || !point.Timestamp.Equal(timestamp) {
-				t.Fatalf("reopened %s[%d] = %+v, want %v at %s", metric, i, point, expected[i], timestamp)
-			}
-		}
-	}
+	requirePBSHistoryObservations(t, persistent, targetID, start, offsets, want)
 }
 
 // A fresh process has no in-memory deduplication state. Replaying the cached
 // observation while PBS is offline must not manufacture a new durable sample;
-// an equal-valued observation after recovery must still be retained.
+// an equal-valued observation after recovery must still be retained. Writers
+// explicitly acknowledge their observations before exit: this tests observation
+// identity across processes, not shutdown with unacknowledged live writes.
 func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
 	dir := os.Getenv("PULSE_PBS_HISTORY_TEST_DIR")
 	child := dir != ""
@@ -124,13 +119,16 @@ func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
 	for generation := 0; generation < 2; generation++ {
 		if !child {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestPBSObservationHistoryAcrossMonitorReplacement$", "-test.count=1")
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestPBSObservationHistoryAcrossMonitorReplacement$", "-test.count=1", "-test.v")
 			cmd.Env = append(os.Environ(),
 				"PULSE_PBS_HISTORY_TEST_DIR="+dir,
 				"PULSE_PBS_HISTORY_TEST_START="+start.Format(time.RFC3339),
 				"PULSE_PBS_HISTORY_TEST_GENERATION="+strconv.Itoa(generation))
 			output, err := cmd.CombinedOutput()
 			cancel()
+			// Keep successful generations too. A final reader failure must not
+			// hide writer backlog, close diagnostics or the missing timestamp.
+			t.Logf("generation %d writer output:\n%s", generation, output)
 			if err != nil {
 				t.Fatalf("generation %d: %v\n%s", generation, err, output)
 			}
@@ -155,8 +153,13 @@ func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
 			defer func() {
 				if err := persistent.Close(); err != nil {
 					t.Error(err)
+				} else {
+					t.Logf("generation %d store closed", generation)
 				}
 			}()
+			if err := persistent.WaitForMaintenance(0); err != nil {
+				t.Fatal(err)
+			}
 			monitor := &Monitor{metricsHistory: NewMetricsHistory(1024, 24*time.Hour), metricsStore: persistent}
 			adapter := unifiedresources.NewMonitorAdapter(nil)
 			snapshot := models.StateSnapshot{PBSInstances: []models.PBSInstance{{
@@ -186,11 +189,19 @@ func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
 				}
 				monitor.syncUnifiedStorageMetrics(adapter)
 			}
+			want := map[string][]float64{"usage": {40}, "used": {400}, "total": {1000}, "avail": {600}}
+			requirePBSHistoryObservations(t, persistent, targetID, start, []time.Duration{0}, want)
+			t.Logf("generation %d: six cached rebuilds acknowledged at %s", generation, start.Format(time.RFC3339))
 			if generation == 1 {
 				snapshot.PBSInstances[0].Status = "online"
 				snapshot.PBSInstances[0].LastSeen = start.Add(30 * time.Second)
 				adapter.PopulateFromSnapshot(snapshot)
 				monitor.syncUnifiedStorageMetrics(adapter)
+				for metric, values := range want {
+					want[metric] = append(values, values[0])
+				}
+				requirePBSHistoryObservations(t, persistent, targetID, start, []time.Duration{0, 30 * time.Second}, want)
+				t.Logf("generation %d: equal-valued recovery acknowledged at %s", generation, snapshot.PBSInstances[0].LastSeen.Format(time.RFC3339))
 			}
 		}()
 	}
@@ -207,19 +218,35 @@ func TestPBSObservationHistoryAcrossMonitorReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer persistent.Close()
-	for metric, value := range map[string]float64{"usage": 40, "used": 400, "total": 1000, "avail": 600} {
+	want := map[string][]float64{"usage": {40, 40}, "used": {400, 400}, "total": {1000, 1000}, "avail": {600, 600}}
+	requirePBSHistoryObservations(t, persistent, targetID, start, []time.Duration{0, 30 * time.Second}, want)
+}
+
+// Flush is the public ingestion acknowledgement barrier, unlike a bounded live
+// write or Close. Query every series before failing so a missing observation is
+// localised by its actual timestamp/values, not by random map iteration order.
+func requirePBSHistoryObservations(t *testing.T, persistent *metrics.Store, targetID string, start time.Time, offsets []time.Duration, want map[string][]float64) {
+	t.Helper()
+	persistent.Flush()
+	for _, metric := range []string{"usage", "used", "total", "avail"} {
 		points, err := persistent.Query("storage", targetID, metric, start.Add(-time.Second), start.Add(time.Minute), 0)
 		if err != nil {
-			t.Fatal(err)
+			t.Errorf("%s query: %v", metric, err)
+			continue
 		}
-		if len(points) != 2 {
-			t.Fatalf("%s: got %d durable points, want 2", metric, len(points))
+		expected := want[metric]
+		if len(points) != len(expected) {
+			t.Errorf("%s: got %d durable points %+v, want %v at offsets %v from %s", metric, len(points), points, expected, offsets, start.Format(time.RFC3339))
+			continue
 		}
 		for i, point := range points {
-			expectedTime := start.Add(time.Duration(i) * 30 * time.Second)
-			if point.Value != value || !point.Timestamp.Equal(expectedTime) {
-				t.Fatalf("%s[%d] = %+v, want %v at %s", metric, i, point, value, expectedTime)
+			expectedTime := start.Add(offsets[i])
+			if point.Value != expected[i] || !point.Timestamp.Equal(expectedTime) {
+				t.Errorf("%s[%d] = %+v, want %v at %s", metric, i, point, expected[i], expectedTime)
 			}
 		}
+	}
+	if t.Failed() {
+		t.FailNow()
 	}
 }

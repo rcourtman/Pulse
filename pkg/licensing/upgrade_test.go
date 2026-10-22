@@ -57,6 +57,21 @@ func TestResolvePulseAccountPortalURL_DefaultWhenUnset(t *testing.T) {
 	}
 }
 
+func TestDefaultPurchasePageDoesNotDependOnLegacyHostedBase(t *testing.T) {
+	// Check the literal destination, not only agreement with the constant: moving
+	// both back to the retired portal must not silently pass this regression.
+	const purchasePage = "https://license.pulserelay.pro/buy"
+	for _, override := range []string{"", "  ", "relative/path", "http://10.0.0.25/portal"} {
+		if got := ResolvePulseAccountPortalURL(override); got != purchasePage {
+			t.Errorf("ResolvePulseAccountPortalURL(%q) = %q, want %q", override, got, purchasePage)
+		}
+	}
+	// Hosted entitlement compatibility is not a purchase-page migration.
+	if got := ResolveProTrialSignupURL(""); got != "https://cloud.pulserelay.pro" {
+		t.Fatalf("legacy hosted base = %q", got)
+	}
+}
+
 // In-app Buy must land on a page that is served. Hosted Cloud was hibernated
 // on 2026-06-01, so the purchase page lives on the licence server.
 func TestDefaultPulseAccountPortalURL_IsLicenceServerPurchasePage(t *testing.T) {

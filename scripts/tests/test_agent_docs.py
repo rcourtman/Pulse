@@ -370,7 +370,11 @@ PY
                 # Compare the actual argv tokens, retaining the type's value.
                 self.assertIn(" ".join(expected), [" ".join(a) for a in actual_profiles])
         source = (ROOT / "scripts/install.sh").read_text()
-        self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', source)
+        # Value validation is part of the hardened parser, not a reason to
+        # restore its older unchecked spelling. Keep the private-file branch
+        # and quoted argument binding while tolerating whitespace changes.
+        self.assertRegex(source, r'(?m)^\s*--token-file\)\s+require_option_value "\$@";\s+'
+                                r'TOKEN_FILE_PATH="\$2";\s+shift 2\s+;;')
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', source)
 
     def test_skipped_or_failed_recipe_cannot_reuse_a_previous_receipt(self):

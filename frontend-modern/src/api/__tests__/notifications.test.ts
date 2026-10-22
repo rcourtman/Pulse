@@ -4,7 +4,7 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: vi.fn(),
 }));
 
-import { NotificationsAPI } from '@/api/notifications';
+import { NotificationsAPI, type NotificationTestRequest, type Webhook } from '@/api/notifications';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 describe('NotificationsAPI', () => {
@@ -32,7 +32,7 @@ describe('NotificationsAPI', () => {
 
     const config = await NotificationsAPI.getEmailConfig();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/email');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/email', undefined);
     expect(config).toEqual({
       enabled: false,
       provider: 'smtp',
@@ -134,7 +134,7 @@ describe('NotificationsAPI', () => {
 
     const result = await NotificationsAPI.getWebhooks();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks', undefined);
     expect(result).toEqual([]);
   });
 
@@ -173,7 +173,7 @@ describe('NotificationsAPI', () => {
 
     const health = await NotificationsAPI.getHealth();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/health', undefined);
     expect(health).toEqual({
       overallHealthy: false,
       queue: {
@@ -297,7 +297,7 @@ describe('NotificationsAPI', () => {
     ]);
   });
 
-  it('normalizes the delivery log payload and drops malformed entries', async () => {
+  it('keeps readable delivery evidence and explicitly marks dropped malformed entries', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       entries: [
         {
@@ -343,11 +343,15 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog(25);
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log?limit=25');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/notifications/delivery-log?limit=25',
+      undefined,
+    );
     expect(log.windowDays).toBe(30);
     expect(log.completedRetentionDays).toBe(7);
     expect(log.deadLetterRetentionDays).toBe(30);
     expect(log.entries).toHaveLength(2);
+    expect(log.incomplete).toBe(true);
     expect(log.entries[0]).toEqual(
       expect.objectContaining({
         notificationId: 'webhook-1',
@@ -365,50 +369,89 @@ describe('NotificationsAPI', () => {
 
     const log = await NotificationsAPI.getDeliveryLog();
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log');
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/delivery-log', undefined);
     expect(log.entries).toEqual([]);
+    expect(log.incomplete).toBe(false);
     // A missing or nonsensical window falls back to the seven-day default.
     expect(log.windowDays).toBe(7);
     expect(log.completedRetentionDays).toBe(7);
     expect(log.deadLetterRetentionDays).toBe(7);
   });
 
-  it('normalizes a malformed delivery-log collection through the shared API boundary', async () => {
+  it.each([null, {}, [], { entries: null }, { entries: {} }, { entries: 'unreadable' }])(
+    'rejects an unreadable activity envelope instead of inventing an empty log: %j',
+    async (payload) => {
+      apiFetchJSONMock.mockResolvedValueOnce(payload as never);
+      await expect(NotificationsAPI.getDeliveryLog()).rejects.toThrow(
+        'Notification delivery log could not be read.',
+      );
+    },
+  );
+
+  const readableAttempt = {
+    notificationId: 'email-1',
+    type: 'email',
+    outcome: 'sent',
+    alertIds: ['disk-1'],
+    alertCount: 1,
+    attempts: 1,
+    success: true,
+    timestamp: '2026-10-20T12:00:00Z',
+  };
+  it.each([
+    { notificationId: ' ' },
+    { type: null },
+    { timestamp: 'not-a-time' },
+    { outcome: 'unknown' },
+    { success: false },
+    { success: 'true' },
+    { attempts: -1 },
+    { attempts: 0.5 },
+    { alertCount: null },
+    { alertIds: [1] },
+    { alertIds: null },
+    { attempts: Number.MAX_SAFE_INTEGER + 1 },
+  ])('marks unreadable attempt evidence as incomplete: %j', async (patch) => {
     apiFetchJSONMock.mockResolvedValueOnce({
-      entries: { notificationId: 'not-a-collection' },
-      window_days: 7,
-    } as any);
-
-    const log = await NotificationsAPI.getDeliveryLog();
-
-    expect(log).toEqual({
+      entries: [{ ...readableAttempt, ...patch }],
+    } as never);
+    expect(await NotificationsAPI.getDeliveryLog()).toMatchObject({
       entries: [],
-      windowDays: 7,
-      completedRetentionDays: 7,
-      deadLetterRetentionDays: 7,
+      incomplete: true,
     });
   });
 
-  it('retries retained terminal deliveries through the operator recovery endpoint', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({ affected: 3, success: true } as any);
+  it.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)(
+    '%s requires an explicit acknowledgement and exact safe affected count',
+    async (action) => {
+      for (const affected of [0, 1, 3]) {
+        apiFetchJSONMock.mockResolvedValueOnce({ success: true, affected } as never);
+        expect(await NotificationsAPI[action]()).toEqual({ success: true, affected });
+      }
+      expect(apiFetchJSONMock).toHaveBeenCalledWith(
+        `/api/notifications/terminal-failures/${action === 'retryTerminalFailures' ? 'retry' : 'dismiss'}`,
+        { method: 'POST' },
+      );
+    },
+  );
 
-    const result = await NotificationsAPI.retryTerminalFailures();
-
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/terminal-failures/retry', {
-      method: 'POST',
+  describe.each(['retryTerminalFailures', 'dismissTerminalFailures'] as const)('%s', (action) => {
+    it.each([
+      null,
+      {},
+      { success: false, affected: 2 },
+      { success: 'yes', affected: 2 },
+      { success: true },
+      { success: true, affected: -1 },
+      { success: true, affected: 1.5 },
+      { success: true, affected: '3' },
+      { success: true, affected: Number.MAX_SAFE_INTEGER + 1 },
+    ])('never treats a rejected or malformed result as success: %j', async (payload) => {
+      apiFetchJSONMock.mockResolvedValueOnce(payload as never);
+      await expect(NotificationsAPI[action]()).rejects.toThrow(
+        'Notification recovery result could not be confirmed.',
+      );
     });
-    expect(result).toEqual({ affected: 3, success: true });
-  });
-
-  it('dismisses retained terminal failures and fails closed on malformed counts', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({ affected: -1, success: 'yes' } as any);
-
-    const result = await NotificationsAPI.dismissTerminalFailures();
-
-    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/terminal-failures/dismiss', {
-      method: 'POST',
-    });
-    expect(result).toEqual({ affected: 0, success: false });
   });
 
   it('passes the deliveryPaused flag through from test-send responses', async () => {
@@ -442,4 +485,138 @@ describe('email minimum severity save/reload (#2069)', () => {
       expect((await NotificationsAPI.getEmailConfig()).minimumSeverity).toBe(minimumSeverity);
     },
   );
+});
+
+const fetchJSON = vi.mocked(apiFetchJSON);
+const unconfirmed =
+  'Test result could not be confirmed. Check the destination before sending another test.';
+const draft: Omit<Webhook, 'id'> = {
+  name: 'Synthetic destination',
+  url: 'https://example.test/notifications',
+  method: 'POST',
+  headers: {},
+  enabled: true,
+};
+beforeEach(() => fetchJSON.mockReset());
+
+// The public producer emits status: "success" for all three methods. An HTTP
+// 200, a truthy string or a bare success boolean is not that acknowledgement.
+describe.each(['email', 'apprise', 'webhook'] as const)('%s test acknowledgement', (type) => {
+  it.each([
+    null,
+    undefined,
+    [],
+    ['success'],
+    {},
+    '',
+    true,
+    { success: true },
+    { success: false },
+    { status: 'failed' },
+    { status: true },
+    { status: 'SUCCESS' },
+    { status: 200 },
+    { status: 'success', success: false },
+    { status: 'success', success: 'true' },
+    { status: 'success', error: 'untrusted-destination-diagnostic' },
+    { status: 'success', error: null },
+    { status: 'success', deliveryPaused: 'false' },
+    { status: 'success', deliveryPaused: null },
+    { deliveryPaused: true },
+  ])('rejects a malformed or contradictory 2xx response: %j', async (payload) => {
+    fetchJSON.mockResolvedValueOnce(payload);
+    await expect(NotificationsAPI.testNotification({ type })).rejects.toThrow(unconfirmed);
+    expect(fetchJSON).toHaveBeenCalledTimes(1); // No automatic second send.
+  });
+
+  it.each([undefined, false, true])(
+    'preserves valid delivery pause evidence: %s',
+    async (deliveryPaused) => {
+      const payload = { status: 'success', deliveryPaused, message: 'Test notification sent' };
+      fetchJSON.mockResolvedValueOnce(payload);
+      await expect(NotificationsAPI.testNotification({ type })).resolves.toEqual(payload);
+      expect(fetchJSON).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('preserves the original transport failure and detail without a second send', async () => {
+    const failure = Object.assign(new Error('Synthetic provider failure'), {
+      detail: 'Safe fixture detail',
+    });
+    fetchJSON.mockRejectedValueOnce(failure);
+    await expect(NotificationsAPI.testNotification({ type })).rejects.toBe(failure);
+    expect(fetchJSON).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('unsaved webhook test acknowledgement', () => {
+  it.each([
+    null,
+    undefined,
+    [],
+    {},
+    '',
+    true,
+    { status: 'success' },
+    { success: false },
+    { success: 'true' },
+    { success: 1 },
+    { success: true, error: 'untrusted-destination-diagnostic' },
+    { success: true, error: null },
+    { success: true, status: 199 },
+    { success: true, status: 300 },
+    { success: true, status: 400 },
+    { success: true, status: 200.5 },
+    { success: true, status: '200' },
+    { success: true, status: 'success' },
+    { success: true, status: null },
+    { success: true, deliveryPaused: 'true' },
+    { success: true, deliveryPaused: null },
+    { success: false, deliveryPaused: true },
+  ])('rejects malformed or contradictory 2xx response: %j', async (payload) => {
+    fetchJSON.mockResolvedValueOnce(payload);
+    await expect(NotificationsAPI.testWebhook(draft)).rejects.toThrow(unconfirmed);
+    expect(fetchJSON).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, 200, 202, 204, 299])(
+    'accepts an affirmative send with compatible status %s',
+    async (status) => {
+      fetchJSON.mockResolvedValueOnce({ success: true, status, response: 'Not consumed' });
+      await expect(NotificationsAPI.testWebhook(draft)).resolves.toEqual({ success: true });
+    },
+  );
+
+  it.each([false, true])('keeps the pause caveat: %s', async (deliveryPaused) => {
+    fetchJSON.mockResolvedValueOnce({ success: true, status: 200, deliveryPaused });
+    await expect(NotificationsAPI.testWebhook(draft)).resolves.toEqual({
+      success: true,
+      deliveryPaused,
+    });
+  });
+});
+
+it('keeps the saved, draft and email/config request bodies distinct and unchanged', async () => {
+  const requests: NotificationTestRequest[] = [
+    { type: 'email', config: { server: 'smtp.example.test', port: 587 } },
+    {
+      type: 'apprise',
+      config: { enabled: true, mode: 'cli', targets: ['mailto://operator@example.test'] },
+    },
+    { type: 'webhook', webhookId: 'saved-hook' },
+  ];
+  for (const { type, ...request } of requests) {
+    fetchJSON.mockResolvedValueOnce({ status: 'success' });
+    await NotificationsAPI.testNotification({ type, ...request });
+    expect(fetchJSON).toHaveBeenLastCalledWith('/api/notifications/test', {
+      method: 'POST',
+      body: JSON.stringify({ method: type, ...request }),
+    });
+  }
+  fetchJSON.mockResolvedValueOnce({ success: true, status: 200 });
+  await NotificationsAPI.testWebhook(draft);
+  expect(fetchJSON).toHaveBeenLastCalledWith('/api/notifications/webhooks/test', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  });
 });

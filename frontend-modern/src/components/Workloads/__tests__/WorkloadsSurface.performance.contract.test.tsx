@@ -1666,7 +1666,14 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerHistorySource).toContain('currentMetrics');
       expect(guestDrawerHistorySource).not.toContain('buildFallbackHistoryPoints');
       expect(guestDrawerHistorySource).toContain('props.groups ?? GUEST_DRAWER_HISTORY_GROUPS');
-      expect(guestDrawerHistorySource).toContain('flex min-h-[154px] flex-col');
+      // Assert the chart's layout tokens, not their adjacency: containment
+      // classes must be free to join them without breaking this contract.
+      const chartClass = guestDrawerHistorySource.match(
+        /<section\s+class=\{`([^`]+)`\}\s+data-testid="guest-history-group-chart"/,
+      )?.[1];
+      expect(chartClass?.split(/\s+/)).toEqual(
+        expect.arrayContaining(['flex', 'min-w-0', 'min-h-[154px]', 'flex-col']),
+      );
       expect(guestDrawerHistorySource).toContain('relative min-h-24 flex-1');
       expect(guestDrawerHistorySource).not.toContain('relative h-24');
       expect(nodeDrawerSource).toContain('NodeDrawerOverview');

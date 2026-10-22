@@ -184,44 +184,77 @@ is_local_host() {
 }
 
 discover_cluster_node_addresses() {
+    local dependency=""
+    local nodes=""
     local node=""
     local node_ip=""
+    local resolution=""
+    local addresses=""
 
-    if command -v pvesh >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-        while IFS= read -r node; do
-            [[ -z "$node" ]] && continue
-            node_ip=$(getent ahostsv4 "$node" 2>/dev/null | awk 'NR==1 {print $1}') || true
-            if [[ -z "$node_ip" ]]; then
-                node_ip=$(getent hosts "$node" 2>/dev/null | awk 'NR==1 {print $1}') || true
-            fi
-            [[ -n "$node_ip" ]] && printf '%s\n' "$node_ip"
-        done < <(
-            pvesh get /nodes --output-format json 2>/dev/null | python3 - <<'PY'
+    # A failed/partial inventory is not evidence of a single-node cluster.
+    # Do not fall back to a human-readable membership table or publish partial
+    # addresses: the caller must know the whole target set before using SSH.
+    for dependency in pvesh python3 getent timeout sort; do
+        if ! command -v "$dependency" >/dev/null 2>&1; then
+            print_warn "${dependency} is required to confirm cluster membership"
+            return 1
+        fi
+    done
+    if ! nodes=$(timeout --kill-after=1s 15 pvesh get /nodes --output-format json 2>/dev/null | python3 -c '
 import json
+import re
+import sys
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate field")
+        result[key] = value
+    return result
+
+try:
+    data = json.load(sys.stdin, object_pairs_hook=unique_object)
+    if not isinstance(data, list) or not data:
+        raise ValueError("missing inventory")
+    nodes = set()
+    for item in data:
+        node = item.get("node") if isinstance(item, dict) else None
+        if not isinstance(node, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,252}", node):
+            raise ValueError("invalid node identity")
+        nodes.add(node)
+except (ValueError, UnicodeError):
+    sys.exit(1)
+print("\n".join(sorted(nodes)))
+'); then
+        print_warn "Cannot confirm the complete Proxmox cluster inventory"
+        return 1
+    fi
+    while IFS= read -r node; do
+        if ! resolution=$(timeout --kill-after=1s 5 getent ahostsv4 "$node" 2>/dev/null) || [[ -z "$resolution" ]]; then
+            if ! resolution=$(timeout --kill-after=1s 5 getent hosts "$node" 2>/dev/null) || [[ -z "$resolution" ]]; then
+                print_warn "Cannot resolve cluster node ${node}; cluster cleanup is incomplete"
+                return 1
+            fi
+        fi
+        if ! node_ip=$(printf '%s\n' "$resolution" | python3 -c '
+import ipaddress
 import sys
 try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if isinstance(data, list):
-    for item in data:
-        node = item.get("node")
-        if node:
-            print(node)
-PY
-        )
-        return 0
-    fi
-
-    if command -v pvecm >/dev/null 2>&1; then
-        pvecm status 2>/dev/null | awk '
-            /0x[0-9a-f]+/ {
-                for (i = 1; i <= NF; i++) {
-                    if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i
-                }
-            }
-        '
-    fi
+    rows = [line.split() for line in sys.stdin if line.strip()]
+    addresses = [ipaddress.ip_address(row[0]) for row in rows]
+    if not addresses or any("%" in str(address) for address in addresses):
+        raise ValueError("missing or scoped address")
+except (ValueError, IndexError):
+    sys.exit(1)
+print(addresses[0])
+'); then
+            print_warn "Invalid address for cluster node ${node}; cluster cleanup is incomplete"
+            return 1
+        fi
+        addresses+="${node_ip}"$'\n'
+    done <<<"$nodes"
+    printf '%s' "$addresses" | sort -u
 }
 
 cleanup_remote_authorized_keys() {
@@ -261,27 +294,26 @@ fi'
 
 cleanup_cluster_authorized_keys() {
     local host=""
-    local saw_nodes=false
+    local hosts=""
     local status=0
 
     if [[ "$LOCAL_ONLY" == "true" ]]; then
         cleanup_local_authorized_keys
-        return 0
+        return $?
+    fi
+
+    # Always complete the local portion, even if remote membership is unknown.
+    cleanup_local_authorized_keys || status=1
+    if ! hosts=$(discover_cluster_node_addresses); then
+        print_warn "Remote key cleanup was not attempted; use --local-only separately on every cluster node"
+        return 1
     fi
 
     while IFS= read -r host; do
         [[ -z "$host" ]] && continue
-        saw_nodes=true
-        if is_local_host "$host"; then
-            cleanup_local_authorized_keys
-        else
-            cleanup_remote_authorized_keys "$host" || status=1
-        fi
-    done < <(discover_cluster_node_addresses | sort -u)
-
-    if [[ "$saw_nodes" != "true" ]]; then
-        cleanup_local_authorized_keys
-    fi
+        is_local_host "$host" && continue
+        cleanup_remote_authorized_keys "$host" || status=1
+    done <<<"$hosts"
     return "$status"
 }
 

@@ -103,29 +103,69 @@ For a one-off check, open `/api/monitoring/scheduler/health` in your signed-in
 browser on that same Pulse instance. For curl, first prepare the private header
 file from [API authentication](../API.md#api-token-recommended), using a token
 with only the access needed for your monitoring task. These commands require
-curl 7.76 or later and jq. They make one read-only request and keep its response
-in a new private directory:
+curl 7.76 or later, Bash, jq and the listed local utilities. They make one
+read-only request and save **at most 1 MiB** in a new private directory. The
+extra byte detects overflow; an oversized response is unavailable, not a partial
+inventory. Do not raise the limit or poll repeatedly during an incident.
 
 ```bash
 (
-  set -eu
+  set -euo pipefail
   umask 077
+  for tool in curl jq mktemp head wc mv rm rmdir; do
+    command -v "$tool" >/dev/null 2>&1 || {
+      printf 'Scheduler snapshot unavailable: required utility is missing.\n' >&2
+      exit 1
+    }
+  done
   snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-scheduler.XXXXXX")"
   snapshot="$snapshot_dir/health.json"
-  status="$(curl --disable --fail-with-body --connect-timeout 5 --max-time 15 \
-    --header "@$HOME/.config/pulse/api-header" --output "$snapshot" \
-    --write-out '%{http_code}' http://127.0.0.1:7655/api/monitoring/scheduler/health)"
+  partial="$snapshot_dir/response.partial"
+  http_status="$snapshot_dir/http-status"
+  trap 'test ! -f "$partial" || rm -- "$partial";
+        test ! -f "$http_status" || rm -- "$http_status";
+        rmdir -- "$snapshot_dir" 2>/dev/null || :' EXIT
+  read_exit=0
+  # Only the body enters the byte limiter; curl writes its status separately.
+  curl --disable --silent --fail-with-body --connect-timeout 5 --max-time 15 \
+    --header "@$HOME/.config/pulse/api-header" \
+    --write-out '%{stderr}%{http_code}' \
+    http://127.0.0.1:7655/api/monitoring/scheduler/health \
+    2>"$http_status" | head -c 1048577 >"$partial" || read_exit=$?
+  bytes="$(wc -c < "$partial")"
+  if [ "$bytes" -gt 1048576 ]; then
+    printf 'Scheduler snapshot unavailable: response exceeds 1 MiB; no partial snapshot saved.\n' >&2
+    exit 1
+  fi
+  status="$(< "$http_status")"
+  case "$status" in [0-9][0-9][0-9]) ;; *) status=unavailable ;; esac
+  if [ "$read_exit" -ne 0 ]; then
+    printf 'Scheduler snapshot unavailable: request or bounded write failed (HTTP %s, exit %s).\n' "$status" "$read_exit" >&2
+    exit 1
+  fi
   if [ "$status" != 200 ]; then
     printf 'Scheduler snapshot unavailable (HTTP %s); no health conclusion.\n' "$status" >&2
     exit 1
   fi
-  jq -e 'type == "object" and (.updatedAt | type == "string") and
-    (.enabled | type == "boolean") and (.deadLetter.count | type == "number") and
-    (.queue.depth | type == "number") and (.instances | type == "array")' \
-    "$snapshot" >/dev/null
+  if ! jq -se 'length == 1 and (.[0] | type == "object" and
+    (.updatedAt | type == "string") and (.enabled | type == "boolean") and
+    (.deadLetter.count | type == "number") and (.queue.depth | type == "number") and
+    (.instances | type == "array"))' "$partial" >/dev/null 2>&1; then
+    printf 'Scheduler snapshot unavailable: expected one complete health object.\n' >&2
+    exit 1
+  fi
+  mv -- "$partial" "$snapshot"
   printf 'Saved scheduler snapshot: %s\n' "$snapshot"
 )
 ```
+
+`head` limits the response even when it has no `Content-Length` header. Both
+curl and the limiter must succeed; a valid-looking prefix from an interrupted
+transfer is not accepted. Only one complete JSON health object becomes
+`health.json`. Failure prints no response, token or raw reader error, and
+removes the private partial files. If collection is forcibly interrupted, an
+owner-only `pulse-scheduler.*` directory may remain: remove only that exact
+collection directory privately, not the header file or Pulse data.
 
 The loopback URL is only for curl running on the Pulse host. Elsewhere, use your
 Pulse HTTPS URL with certificate verification enabled, never `--insecure`.

@@ -24,8 +24,8 @@ func TestSendAppriseViaCLIExecError(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
-		return []byte("boom"), errors.New("exec failed")
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
+		return int64(len("boom")), errors.New("exec failed")
 	}
 
 	err := nm.sendAppriseViaCLI(AppriseConfig{
@@ -42,8 +42,8 @@ func TestSendAppriseViaCLISuccess(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
-		return []byte("ok"), nil
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
+		return int64(len("ok")), nil
 	}
 
 	err := nm.sendAppriseViaCLI(AppriseConfig{
@@ -60,8 +60,8 @@ func TestSendAppriseViaCLISuccessNoOutput(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
-		return nil, nil
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
+		return 0, nil
 	}
 
 	err := nm.sendAppriseViaCLI(AppriseConfig{
@@ -80,9 +80,9 @@ func TestSendAppriseViaCLIPreservesTelegramTopicTarget(t *testing.T) {
 
 	const topicTarget = "tgram://bot-token/-1001234567890:42"
 	var receivedArgs []string
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
 		receivedArgs = slices.Clone(args)
-		return nil, nil
+		return 0, nil
 	}
 
 	err := nm.sendAppriseViaCLI(AppriseConfig{

@@ -23,9 +23,17 @@ export function getServiceHealthPresentation(
   status?: string | null,
   health?: string | null,
 ): ServiceHealthPresentation {
-  const normalized = (health || status || '').trim().toLowerCase();
+  const observedStatus = (status || '').trim().toLowerCase();
+  // An explicit offline observation outranks a retained healthy service facet.
+  // Trim before falling back: whitespace is not an observed health result.
+  const normalized =
+    observedStatus === 'offline'
+      ? observedStatus
+      : (health || '').trim().toLowerCase() || observedStatus;
 
-  if (normalized.includes('healthy') || normalized === 'online') {
+  // Match complete provider states, never positive fragments such as the
+  // "healthy" in "unhealthy" (a real PBS/PMG initial failure state).
+  if (normalized === 'healthy' || normalized === 'online') {
     return {
       bg: 'bg-green-100 dark:bg-green-900/25',
       text: 'text-green-700 dark:text-green-400',
@@ -34,7 +42,7 @@ export function getServiceHealthPresentation(
     };
   }
 
-  if (normalized.includes('degraded') || normalized.includes('warning')) {
+  if (normalized === 'degraded' || normalized === 'warning') {
     return {
       bg: 'bg-yellow-100 dark:bg-yellow-900/25',
       text: 'text-yellow-700 dark:text-yellow-400',
@@ -43,12 +51,12 @@ export function getServiceHealthPresentation(
     };
   }
 
-  if (normalized.includes('error') || normalized === 'offline') {
+  if (normalized === 'error' || normalized === 'offline' || normalized === 'unhealthy') {
     return {
       bg: 'bg-red-100 dark:bg-red-900/25',
       text: 'text-red-700 dark:text-red-400',
       dot: 'bg-red-500',
-      label: 'Offline',
+      label: normalized === 'unhealthy' ? 'Unhealthy' : 'Offline',
     };
   }
 

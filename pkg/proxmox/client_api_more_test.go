@@ -54,8 +54,8 @@ func TestClientStorageAndTasks(t *testing.T) {
 		case "/api2/json/nodes/node1/tasks":
 			writeJSON(t, w, map[string]interface{}{
 				"data": []Task{
-					{UPID: "1", Type: "vzdump"},
-					{UPID: "2", Type: "other"},
+					{UPID: "1", Type: "vzdump", StartTime: 1700000000},
+					{UPID: "2", Type: "other", StartTime: 1700000000},
 				},
 			})
 		default:
@@ -110,8 +110,8 @@ func TestClientSnapshotsAndContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetStorageContent error: %v", err)
 	}
-	if len(content) != 2 {
-		t.Fatalf("expected 2 backup-related items, got %d", len(content))
+	if len(content) != 3 || content[0].Content != "backup" || content[1].Content != "iso" || content[2].Content != "vztmpl" {
+		t.Fatalf("expected all storage content kinds, got %+v", content)
 	}
 
 	snaps, err := client.GetVMSnapshots(ctx, "node1", 100)

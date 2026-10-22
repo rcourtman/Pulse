@@ -3,6 +3,8 @@ import { createSignal, onCleanup, createEffect, onMount, Show } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
 import type { Alert } from '@/types/api';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { getAlertOverviewDeliveryUnavailable } from '@/utils/alertOverviewPresentation';
 
 import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
 import { AlertDeliveryPausedCard } from './AlertDeliveryPausedCard';
@@ -113,6 +115,21 @@ export function OverviewTab(props: {
           />
         )}
       </Show>
+      {/* Keep the live region mounted before a failed refresh. One notice
+          explains missing per-alert reasons without claiming delivery failed. */}
+      <div
+        role="status"
+        aria-label={getAlertOverviewDeliveryUnavailable().label}
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <Show when={overviewState.deliveryDiagnosesUnavailable()}>
+          <InlineNotice tone="warning">
+            <p class="font-semibold">{getAlertOverviewDeliveryUnavailable().title}</p>
+            <p>{getAlertOverviewDeliveryUnavailable().description}</p>
+          </InlineNotice>
+        </Show>
+      </div>
       <AlertOverviewActiveAlertsSection
         state={overviewState}
         timelineState={timelineState}

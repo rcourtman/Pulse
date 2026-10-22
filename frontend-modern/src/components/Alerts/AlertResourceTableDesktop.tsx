@@ -503,7 +503,11 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
             </TableRow>
           </Show>
           <Show when={resourceRows().length > 0}>
-            <PlatformWindowedRows items={resourceRows} estimatedRowHeight={40}>
+            <PlatformWindowedRows
+              items={resourceRows}
+              keyExtractor={(item) => item.key}
+              estimatedRowHeight={40}
+            >
               {(item) =>
                 item.kind === 'group' ? (
                   <TableRow class={getGroupedTableRowClass()}>

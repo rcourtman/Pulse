@@ -161,18 +161,61 @@ export interface NotificationDeliveryLogEntry {
 
 export interface NotificationDeliveryLog {
   entries: NotificationDeliveryLogEntry[];
+  // Readable rows are useful evidence even when another row is malformed.
+  incomplete?: boolean;
   windowDays: number;
   completedRetentionDays: number;
   deadLetterRetentionDays: number;
 }
 
 export interface NotificationTestResult {
-  status?: string;
+  status: 'success';
   message?: string;
   // True when the test was delivered but real alert delivery is paused by the
   // activation gate, so a successful test must not be read as proof that live
   // alerts are getting through.
   deliveryPaused?: boolean;
+}
+
+export interface WebhookTestResult {
+  success: true;
+  message?: string;
+  deliveryPaused?: boolean;
+}
+
+// A completed HTTP request is not evidence that the test send succeeded.
+// These two existing producers use different affirmative markers; neither may
+// be inferred from an empty body or a contradictory response. Do not echo an
+// unconfirmed producer message, which can contain destination diagnostics.
+function confirmedTestResponse(value: unknown, kind: 'notification' | 'webhook') {
+  const record = apiRecord(value);
+  const confirmed = kind === 'notification' ? record.status === 'success' : record.success === true;
+  const conflictingMarker =
+    kind === 'notification'
+      ? record.success !== undefined && record.success !== true
+      : record.status !== undefined &&
+        !(
+          typeof record.status === 'number' &&
+          Number.isInteger(record.status) &&
+          record.status >= 200 &&
+          record.status < 300
+        );
+  if (
+    !confirmed ||
+    conflictingMarker ||
+    record.error !== undefined ||
+    (record.deliveryPaused !== undefined && typeof record.deliveryPaused !== 'boolean')
+  ) {
+    throw new Error(
+      'Test result could not be confirmed. Check the destination before sending another test.',
+    );
+  }
+  return {
+    ...(typeof record.message === 'string' ? { message: record.message } : {}),
+    ...(typeof record.deliveryPaused === 'boolean'
+      ? { deliveryPaused: record.deliveryPaused }
+      : {}),
+  };
 }
 
 function apiRecord(value: unknown): Record<string, unknown> {
@@ -214,21 +257,33 @@ function normalizeDeliveryLogEntry(value: unknown): NotificationDeliveryLogEntry
   const notificationId = strictString(record.notificationId);
   const outcome = record.outcome;
   const timestamp = strictString(record.timestamp);
+  const type = strictString(record.type);
+  const alertCount = nonNegativeCount(record.alertCount);
+  const attempts = nonNegativeCount(record.attempts);
   if (
-    !notificationId ||
-    !timestamp ||
-    !notificationDeliveryOutcomes.includes(outcome as NotificationDeliveryOutcome)
+    !notificationId.trim() ||
+    !type.trim() ||
+    !Number.isFinite(Date.parse(timestamp)) ||
+    !notificationDeliveryOutcomes.includes(outcome as NotificationDeliveryOutcome) ||
+    typeof record.success !== 'boolean' ||
+    record.success !== (outcome === 'sent') ||
+    !Array.isArray(record.alertIds) ||
+    !record.alertIds.every((id) => typeof id === 'string') ||
+    alertCount === undefined ||
+    !Number.isSafeInteger(alertCount) ||
+    attempts === undefined ||
+    !Number.isSafeInteger(attempts)
   ) {
     return undefined;
   }
   const failureClass = record.failureClass;
   const entry: NotificationDeliveryLogEntry = {
     notificationId,
-    type: strictString(record.type),
+    type,
     outcome: outcome as NotificationDeliveryOutcome,
     alertIds: stringArray(record.alertIds),
-    alertCount: nonNegativeCount(record.alertCount) ?? 0,
-    attempts: nonNegativeCount(record.attempts) ?? 0,
+    alertCount,
+    attempts,
     success: strictBoolean(record.success),
     timestamp,
   };
@@ -255,15 +310,29 @@ function normalizeFailureClassCounts(value: unknown): NotificationFailureClassCo
   return counts;
 }
 
+function confirmedTerminalFailureAction(value: unknown): NotificationTerminalFailureActionResult {
+  const payload = apiRecord(value);
+  const affected = nonNegativeCount(payload.affected);
+  // A 2xx response alone does not acknowledge the mutation. Never invent a
+  // zero count or a success toast from a rejected/partially written response.
+  if (payload.success !== true || affected === undefined || !Number.isSafeInteger(affected)) {
+    throw new Error('Notification recovery result could not be confirmed.');
+  }
+  return { success: true, affected };
+}
+
 export class NotificationsAPI {
   private static baseUrl = '/api/notifications';
 
-  static async getAppriseConfig(): Promise<AppriseConfig> {
-    return apiFetchJSON(`${this.baseUrl}/apprise`);
+  static async getAppriseConfig(signal?: AbortSignal): Promise<AppriseConfig> {
+    return apiFetchJSON(`${this.baseUrl}/apprise`, signal ? { signal } : undefined);
   }
 
-  static async getHealth(): Promise<NotificationHealth> {
-    const payload = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/health`);
+  static async getHealth(signal?: AbortSignal): Promise<NotificationHealth> {
+    const payload = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/health`,
+      signal ? { signal } : undefined,
+    );
     const queue = apiRecord(payload.queue);
     const pending = nonNegativeCount(queue.pending);
     const sending = nonNegativeCount(queue.sending);
@@ -351,12 +420,19 @@ export class NotificationsAPI {
     };
   }
 
-  static async getDeliveryLog(limit?: number): Promise<NotificationDeliveryLog> {
+  static async getDeliveryLog(
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<NotificationDeliveryLog> {
     const query = limit && limit > 0 ? `?limit=${limit}` : '';
     const payload = await apiFetchJSON<Record<string, unknown>>(
       `${this.baseUrl}/delivery-log${query}`,
+      signal ? { signal } : undefined,
     );
-    const rawEntries = arrayOrEmpty<unknown>(payload.entries);
+    if (!Array.isArray(payload?.entries)) {
+      throw new Error('Notification delivery log could not be read.');
+    }
+    const rawEntries: unknown[] = payload.entries;
     const entries: NotificationDeliveryLogEntry[] = [];
     for (const rawEntry of rawEntries) {
       const entry = normalizeDeliveryLogEntry(rawEntry);
@@ -368,6 +444,7 @@ export class NotificationsAPI {
     const deadLetterRetentionDays = nonNegativeCount(payload.dead_letter_retention_days);
     return {
       entries,
+      incomplete: entries.length !== rawEntries.length,
       windowDays: normalizedWindowDays,
       // Older servers exposed only window_days plus the dead-letter window.
       // Preserve an honest seven-day completed-row fallback while accepting
@@ -388,10 +465,7 @@ export class NotificationsAPI {
       `${this.baseUrl}/terminal-failures/retry`,
       { method: 'POST' },
     );
-    return {
-      success: strictBoolean(payload.success),
-      affected: nonNegativeCount(payload.affected) ?? 0,
-    };
+    return confirmedTerminalFailureAction(payload);
   }
 
   static async dismissTerminalFailures(): Promise<NotificationTerminalFailureActionResult> {
@@ -399,10 +473,7 @@ export class NotificationsAPI {
       `${this.baseUrl}/terminal-failures/dismiss`,
       { method: 'POST' },
     );
-    return {
-      success: strictBoolean(payload.success),
-      affected: nonNegativeCount(payload.affected) ?? 0,
-    };
+    return confirmedTerminalFailureAction(payload);
   }
 
   static async updateAppriseConfig(config: AppriseConfig): Promise<AppriseConfig> {
@@ -413,8 +484,11 @@ export class NotificationsAPI {
   }
 
   // Email configuration
-  static async getEmailConfig(): Promise<EmailConfig> {
-    const backendConfig = await apiFetchJSON<Record<string, unknown>>(`${this.baseUrl}/email`);
+  static async getEmailConfig(signal?: AbortSignal): Promise<EmailConfig> {
+    const backendConfig = await apiFetchJSON<Record<string, unknown>>(
+      `${this.baseUrl}/email`,
+      signal ? { signal } : undefined,
+    );
     const port = finiteNumberOrUndefined(backendConfig.port);
 
     // Backend already returns fields with correct names (server, port)
@@ -483,8 +557,11 @@ export class NotificationsAPI {
   }
 
   // Webhook management
-  static async getWebhooks(): Promise<Webhook[]> {
-    const data = await apiFetchJSON<Webhook[] | null>(`${this.baseUrl}/webhooks`);
+  static async getWebhooks(signal?: AbortSignal): Promise<Webhook[]> {
+    const data = await apiFetchJSON<Webhook[] | null>(
+      `${this.baseUrl}/webhooks`,
+      signal ? { signal } : undefined,
+    );
     return arrayOrEmpty<Webhook>(data);
   }
 
@@ -537,18 +614,18 @@ export class NotificationsAPI {
       body.webhookId = request.webhookId;
     }
 
-    return apiFetchJSON(`${this.baseUrl}/test`, {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/test`, {
       method: 'POST',
       body: JSON.stringify(body),
     });
+    return { status: 'success', ...confirmedTestResponse(result, 'notification') };
   }
 
-  static async testWebhook(
-    webhook: Omit<Webhook, 'id'>,
-  ): Promise<{ success?: boolean; message?: string; deliveryPaused?: boolean }> {
-    return apiFetchJSON(`${this.baseUrl}/webhooks/test`, {
+  static async testWebhook(webhook: Omit<Webhook, 'id'>): Promise<WebhookTestResult> {
+    const result = await apiFetchJSON<unknown>(`${this.baseUrl}/webhooks/test`, {
       method: 'POST',
       body: JSON.stringify(webhook),
     });
+    return { success: true, ...confirmedTestResponse(result, 'webhook') };
   }
 }

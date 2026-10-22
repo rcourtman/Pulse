@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -97,15 +98,15 @@ func TestParseClusterStatus(t *testing.T) {
 	}
 }
 
-func TestFindClusterSSHKey(t *testing.T) {
+func TestFindClusterSSHKeys(t *testing.T) {
 	logger := zerolog.New(zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
 		w.Out = os.Stderr
 	})).Level(zerolog.DebugLevel)
 
 	tests := []struct {
-		name     string
-		statFn   func(string) (os.FileInfo, error)
-		wantPath string
+		name      string
+		statFn    func(string) (os.FileInfo, error)
+		wantPaths []string
 	}{
 		{
 			name: "ed25519 key exists",
@@ -115,7 +116,7 @@ func TestFindClusterSSHKey(t *testing.T) {
 				}
 				return nil, os.ErrNotExist
 			},
-			wantPath: "/root/.ssh/id_ed25519",
+			wantPaths: []string{"/root/.ssh/id_ed25519"},
 		},
 		{
 			name: "only RSA key exists",
@@ -125,24 +126,24 @@ func TestFindClusterSSHKey(t *testing.T) {
 				}
 				return nil, os.ErrNotExist
 			},
-			wantPath: "/root/.ssh/id_rsa",
+			wantPaths: []string{"/root/.ssh/id_rsa"},
 		},
 		{
 			name: "no keys",
 			statFn: func(name string) (os.FileInfo, error) {
 				return nil, os.ErrNotExist
 			},
-			wantPath: "",
+			wantPaths: nil,
 		},
 		{
-			name: "prefers ed25519 over RSA",
+			name: "offers RSA then Ed25519",
 			statFn: func(name string) (os.FileInfo, error) {
 				if name == "/root/.ssh/id_ed25519" || name == "/root/.ssh/id_rsa" {
 					return nil, nil
 				}
 				return nil, os.ErrNotExist
 			},
-			wantPath: "/root/.ssh/id_ed25519",
+			wantPaths: []string{"/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"},
 		},
 	}
 
@@ -155,9 +156,9 @@ func TestFindClusterSSHKey(t *testing.T) {
 				},
 			}
 
-			got := a.findClusterSSHKey()
-			if got != tt.wantPath {
-				t.Errorf("findClusterSSHKey() = %q, want %q", got, tt.wantPath)
+			got := a.findClusterSSHKeys()
+			if !reflect.DeepEqual(got, tt.wantPaths) {
+				t.Errorf("findClusterSSHKeys() = %q, want %q", got, tt.wantPaths)
 			}
 		})
 	}
@@ -452,7 +453,7 @@ func TestCollectPeerSensors_EmptyOutput(t *testing.T) {
 	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
 		Name: "peer1",
 		IP:   "10.0.0.2",
-	}, "/root/.ssh/id_rsa")
+	}, []string{"/root/.ssh/id_rsa"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -479,7 +480,7 @@ func TestCollectPeerSensors_EmptyJSONObject(t *testing.T) {
 	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
 		Name: "peer1",
 		IP:   "10.0.0.2",
-	}, "/root/.ssh/id_rsa")
+	}, []string{"/root/.ssh/id_rsa"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -510,7 +511,7 @@ func TestCollectPeerSensors_NonJSONOutput(t *testing.T) {
 	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
 		Name: "peer1",
 		IP:   "10.0.0.2",
-	}, "/root/.ssh/id_rsa")
+	}, []string{"/root/.ssh/id_rsa"})
 
 	if err == nil {
 		t.Fatal("expected error for non-JSON output, got nil")
@@ -547,7 +548,7 @@ func TestCollectPeerSensors_SensorsInstalledNoData(t *testing.T) {
 	result, err := a.collectPeerSensors(context.Background(), clusterPeer{
 		Name: "peer1",
 		IP:   "10.0.0.2",
-	}, "/root/.ssh/id_rsa")
+	}, []string{"/root/.ssh/id_rsa"})
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

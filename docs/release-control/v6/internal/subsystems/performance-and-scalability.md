@@ -15,6 +15,124 @@
 
 ## Purpose
 
+### Workload backup absence explanations stay on the presentation path
+
+An absent Proxmox completion-time scalar establishes only that Pulse has no
+matched completed backup, not that none ever existed or that a running backup
+is the first. The existing row disclosures and full drawer share that scope
+explanation. It appears only for absent evidence and withdraws on completed,
+unusable-time or unsupported-integration replacement without closing the
+consumer. There are no extra requests, timers, scans or policy evaluations.
+
+`GuestDrawer.test.tsx`, the backup-time/access controls and
+`browser-tests/backup-completion-time.cjs` exercise VM/LXC, running/stopped
+activity, same-open replacement, keyboard/touch disclosure and focus return.
+Production build and unchanged bundle budgets remain size checks. Synthetic
+presentation proof establishes neither provider backup absence nor native
+restore, thaw or filesystem liveness.
+
+
+### Root aggregate availability uses the existing projection only
+
+The detail mapper and Root Disk card preserve unavailable byte readings through
+the existing reactive resource path. They add only constant-time validity checks,
+with no extra requests, pollers, timers or stored observations. Mapper/card
+regressions and `root-disk-observation.cjs` exercise live canonical replacements
+inside the same full drawer. Production build and unchanged bundle budgets remain
+the size checks; the browser fixture is not native storage or recovery proof.
+
+### Retained agent cards stay off the collection hot path
+
+Native-power qualification in the existing resource drawer reuses the small
+Workloads power classifier, with no new polling, timers, requests or observation
+rewrites. It changes only rendered agent-card evidence and leaves independently
+sourced disk collection, inventory and stored History intact. Mapper provenance
+and shared-card lifecycle tests accompany the drawer/browser consumer tests;
+production build and the unchanged bundle budgets remain the size checks.
+
+
+### Missing LXC disk measurements remain explainable without hover
+
+The existing workload Disk cell labels an unavailable Proxmox LXC aggregate
+**No data**, including omitted canonical metrics and the legacy unknown-usage
+sentinel. The existing keyboard/touch reading disclosure explains that capacity
+and configured mounts do not establish used/free space or an empty filesystem,
+and directs the operator to the individually reported filesystem details. It
+does not diagnose a guest-agent failure or offer a probe, restart or new read.
+The cue applies in bars and sparklines. An ordinary measured-zero replacement
+withdraws the cue/dialog and returns focus to the same row's disclosure without
+opening it. Existing retained-agent reasons take precedence. Templates and
+other platforms/kinds are unaffected; collection, health, alerts, History,
+backup evidence, access and recovery operations are unchanged.
+
+`GuestRow.test.tsx` covers missing/invalid aggregate evidence, canonical
+availability, legacy LXC shape, source/platform boundaries, dialog containment,
+keyboard focus and measured-zero replacement. The retained source-bound browser
+protocol exercises the real HTTP reader, canonical mapper, row, full drawer and
+production CSS at desktop and 320px touch widths. These synthetic observations
+are not native storage, filesystem liveness, guest recovery or release proof.
+
+### Custom sensor freshness remains a local projection
+
+Retained custom metrics use the selected agent's existing reporting-lease flag,
+not another query, probe or per-row timer. Formatting is bounded by the existing
+custom sensor list and preserves its values and producer status. The shared card
+reacts to first/removed reports inside the same drawer. Mapper, full drawer and
+shared primitive regressions plus `custom-sensor-observation.cjs` cover the
+same-open consumer, including independent platform updates. Normal production
+build and chunk budgets still apply; this is not fleet CPU or RSS recovery.
+
+
+### Coverage expansion keeps the existing mounted-workload budget
+
+Expandable Coverage uses cumulative summary/detail heights, with measurements
+cached by workload key and retired when an identity leaves the result set.
+The existing directional runway still bounds mounted workloads to 140 on
+desktop and 36 on phones; expanding a long evidence panel does not disable
+windowing or mount the whole fleet. Native scrolling through a tall panel
+retains that logical workload instead of interpreting detail pixels as dozens
+of subsequent workloads. Uniform consumers and the date-feed measurement path
+are unchanged. The shared window tests and source-bound 200-workload consuming
+browser regression protect bounds and viewport reachability, not just mounting.
+
+
+### Backup block measurement preserves bounded windowing
+
+The backup date feed opts into measuring its complete logical item blocks:
+wrapped locations and compact provenance rows contribute height; top/bottom
+runway spacers do not. Native scroll/wheel and layout/inventory changes refresh
+that estimate without increasing the existing 140-desktop/36-phone mounted-item
+budgets. Other platform consumers keep their existing estimates and sampling.
+`PlatformWindowedRows.test.tsx` protects opt-in measurement, remeasurement,
+unchanged bounds and listener disposal; `ProxmoxBackupsTable.test.tsx` checks
+logical point/day counts and spacer exclusion. The source-bound browser fixture
+must bring every complete location label into the actual viewport in its
+166-point feed, not count off-screen mounted labels as readable. This is a
+presentation-only correction, not a collection, provider or recovery operation.
+
+### Truthful backup coverage in the shared workload drawer (15 October 2026)
+
+The drawer uses the row's shared backup-evidence applicability rule. Where the
+integration does not report that evidence, Details says `Backup coverage` /
+`Not reported by this integration` in a neutral tone; it does not raise a red
+missing-backup exception or show a retained completion/activity claim. A same-open
+source change rejudges coverage. Proxmox's actual absent, dated, running and
+deferred-read states retain their existing warning, age policy and independent
+thaw/write precautions. `GuestDrawer.test.tsx` checks non-reporting integrations
+and source transitions; existing `GuestRow.test.tsx` checks row applicability.
+The `backup-coverage` browser fixture consumes producing canonical snapshots
+through `useWorkloads`, the real row and full drawer. Desktop/narrow pixels and
+interactions remain required, not native backup recovery or release evidence.
+
+The guest-read safety notice explicitly resets inherited table no-wrap styling.
+Its reason, independent-thaw/write precaution and guidance link must remain
+readable across Overview/Manage and same-open reason changes. Component proof
+keeps this containment class; browser proof measures the actual text line boxes
+inside the notice at desktop and phone widths. Text presence alone cannot prove
+that the safety advice is visible.
+
+
+
 ### Workloads aggregate disk readings keep their units and presence (14 October 2026)
 
 Workload aggregate metrics are percentage points, including values from zero
@@ -2106,6 +2224,17 @@ without contention or cross-delivery.
    the presentation proof alone.
 
 ## Current State
+
+### Guest CPU withdrawal across snapshot and delta merges (21 October 2026)
+
+A complete Proxmox guest observation can withdraw current CPU via
+`cpuUsageUnavailable`, without invalidating independent metrics. Full and
+slow-delta canonical merges and fast per-key/store writes must all remove the
+cached CPU on that marker. Thin omission alone retains existing compatibility;
+measured zero restores the metric. This adds no estate walk, query, timer or
+history rewrite. Adapter and websocket regressions exercise source-owned
+withdrawal, identity/independent-memory preservation and ordinary recovery.
+
 
 ### Retained component state in bounded platform windows
 
@@ -4426,3 +4555,98 @@ windowing budget, runway and mounted-row counts are unchanged. The Docker host
 drawer loads its history charts lazily inside `Suspense` like the node and
 guest drawers, keeping them out of the table chunk, and its action history is
 fetched only when Manage opens.
+
+### Guest state presentation remains snapshot-local (15 October 2026)
+
+Workload rows and their open drawer use the same guest status presentation.
+Paused, suspended, transitional and unknown runtime states do not imply
+`Stopped`. The existing attached availability failure degrades a running
+guest in both places; an offline parent still takes precedence. Live
+replacement updates the mounted status indicators without another query,
+timer, guest-agent request or recovery operation. The runtime state and
+independent memory/disk provenance are unchanged.
+
+`status.test.ts`, `GuestRow.test.tsx`, `GuestDrawer.test.tsx` and
+`useWorkloads.test.ts` cover state preservation, both resource adapters,
+mounted replacement and recovery. Browser proof uses safe resource responses
+through the real hook, row and full drawer, not native pause/thaw acceptance.
+
+Measured variable-height platform windows defer observer-driven geometry writes
+to one animation frame and cancel pending work on disposal. Native scrolling,
+mounted-row budgets and public hook inputs remain unchanged. The observer
+lifecycle control in `PlatformWindowedRows.test.tsx` and the 200-workload Coverage
+identity browser protocol cover this feedback-loop repair, not installed fleet
+or guest recovery.
+
+
+### Shared threshold slider labels (20 October 2026)
+
+The threshold slider's text palette is distinct from its fill palette. Small
+thumb values must remain legible in light and dark themes; theme-aware text
+colours do not change fill colours, value domains, drag/wheel behaviour or
+windowed rendering. Changes to this shared presentation helper retain the
+slider model/state and all resource-table virtualization boundaries.
+
+`thresholdSliderPresentation.test.ts` and `ThresholdSlider.test.tsx` cover the
+text/fill mapping and unchanged interactions. The actual alert settings browser
+fixture covers CPU, memory, disk and temperature thumb text in desktop and
+narrow consumers, including both themes. This is contrast and consumer evidence,
+not a new performance measurement, scaling claim or installed-policy result.
+
+Threshold resource snapshots are temporary objects, not editor identities.
+Desktop rows use the existing bounded renderer's logical key extractor; narrow
+cards reconcile their existing keyed items before windowing. Resampling a
+resource or changing another default must preserve the mounted numeric editor,
+its rejected native draft and its labelled error. This does not pin removed
+resources or change the existing window size, runway or source identity.
+
+The ResourceTable resampling regression covers both layouts and the browser
+changes another real global limit while a row is invalid, checks whole-policy
+Save sends nothing, and verifies that the invalid value and visible reason
+survive the capture and accessibility scan.
+
+Retaining a row must not freeze its accepted policy display. Numeric value text,
+Off styling and backup/snapshot badges read reactive props rather than taking a
+construction-time snapshot. ResourceTable controls cover accepted override,
+Off, inheritance, protection badges and connectivity after resampling in both
+layouts. The browser also compares the visible rate text and accessible name
+with the actual saved override and its removal; an HTTP-only inheritance pass
+is insufficient when the consumer still displays the previous override.
+
+### Guest hardware power qualification stays in the open drawer
+
+Native VM power qualification of retained in-guest RAID/SMART reports is an
+open-Overview presentation calculation. It does not hydrate physical disks in
+the workload table, replace their scoped reader, introduce a probe, or remount
+the existing lazy disk owner on a power-only update. SMART History keeps its
+stable disk identity, chart catalogue and selected range; current live I/O is
+withheld while the report is qualified. GuestDrawer's parent-owned hardware
+regression protects the same lazy owner across power/lease changes, and
+useDiskDetailModel protects stable History through qualification. Browser proof
+uses the real scoped HTTP reader and confirms native power changes require no
+extra disk read. No fleet CPU/RSS, installed or native recovery gain is claimed.
+
+### Hosted workload-chart observations keep three distinct outcomes
+
+The optional hosted job reports an invalidated measurement as inconclusive:
+exit 78 is neutral, not a passed 90 ms budget. Valid capacity still requires a
+single executed passing test at that budget. A contended FAIL can be neutral
+only when its sole test diagnostic is the budget violation; skips, missing or
+duplicate reports, wrong budgets, cleanup and child errors remain failures.
+The private disposable-worker route continues to reject every nonzero exit,
+including 78. Raw return codes, logs, digests and competing-capacity evidence
+remain intact; invalid timings do not demonstrate absence of regression.
+The registered API CLI and installtest workflow controls execute synthetic
+children/telemetry and the actual evidence/writer shells, not a latency
+workload. See `workload-chart-reporting-completion-2026-10-21.md` in `../records/`
+for the source proposal, adverse governance result and available hosted sample.
+
+### Connection-owned monitoring delivery presentation
+
+Socket open alone cannot turn the shell green. The existing runtime consumes a
+constant-size resource-snapshot receipt flag, reset for each connection, without
+new requests, timers, estate copies or cadence assumptions. A valid full resource
+array, including empty or oversized-state REST recovery, establishes delivery;
+status/alert ticks and baseline-less deltas do not. The flag is not freshness or
+collector-liveness proof. `websocket-unified.test.ts`, `useAppRuntimeState.test.ts`
+and the shell/browser consumer cover pending, received and retained reconnect.

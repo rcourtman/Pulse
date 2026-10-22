@@ -38,18 +38,37 @@ activation key `ppk_live_` y no funcionará en esa página de descarga.
 Si usas Proxmox VE, el instalador LXC oficial es el camino más nativo de Pulse.
 Instala el servidor Pulse. Sustituye `vX.Y.Z` por la etiqueta exacta del
 release que quieres instalar, verifica el instalador firmado y ejecútalo en tu
-host Proxmox:
+host Proxmox con **Bash**. El bloque usa un directorio temporal privado,
+ignora la configuración local de curl, solo permite redirecciones HTTPS y
+exige HTTP 200 en un máximo de 60 segundos para cada archivo antes de
+verificar la firma. Para un host Linux estándar, usa la
+[receta systemd](../../INSTALL.md#2-bare-metal--systemd):
 
 ```bash
+(
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
+pulse_installer_dir="$(mktemp -d)"
+trap 'rm -rf "$pulse_installer_dir"' EXIT
+cd "$pulse_installer_dir"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
   -n pulse-install \
-  -s install.sh.sshsig < install.sh &&
+  -s install.sh.sshsig < install.sh
 bash install.sh --version "${PULSE_VERSION}"
+)
 ```
 
 Pega el bloque completo: si falla una descarga o la verificación de firma, el
@@ -68,13 +87,18 @@ Docker:
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-Después abre Pulse en `http://<your-ip>:7655`.
+Este ejemplo para instalaciones nuevas publica el puerto solo en el loopback
+IPv4 del host. Antes de introducir un token o una contraseña, usa una
+[conexión de configuración protegida](../../INSTALL.md#open-a-protected-setup-connection):
+HTTPS con un certificado de confianza, un navegador en el host de Docker o un
+túnel SSH desde tu equipo. No envíes credenciales a un host remoto por HTTP
+sin cifrar.
 
 Con Docker Compose, el mismo archivo puede servir para imágenes Community y
 Pro privadas si usa la variable `PULSE_IMAGE`:
@@ -86,13 +110,20 @@ services:
     container_name: pulse
     restart: unless-stopped
     ports:
-      - "7655:7655"
+      - "127.0.0.1:7655:7655"
     volumes:
       - pulse_data:/data
 
 volumes:
   pulse_data:
 ```
+
+Compose también publica aquí solo en el loopback del host. No sustituyas una
+instalación existente por este ejemplo; conserva su volumen de datos, edición
+de imagen y configuración de red. Un proxy en otro contenedor necesita una red
+privada compartida y el nombre del servicio Pulse, no su propio loopback.
+Los agentes remotos y los callbacks de SSO necesitan una dirección HTTPS
+accesible con certificado verificado, no la dirección local del túnel de configuración.
 
 Deja `PULSE_AUTH_USER` y `PULSE_AUTH_PASS` sin configurar en una instalación
 nueva y completa el primer acceso con el token de arranque. No uses una
@@ -118,7 +149,7 @@ Pega la cadena de token que imprime el comando. No pegues directamente el
 contenido del archivo `.bootstrap_token`. En v6 ese archivo puede contener un
 snapshot JSON cifrado en vez del token utilizable para la configuración.
 
-1. Abre `http://<your-ip>:7655`.
+1. Abre la [conexión de configuración protegida](../../INSTALL.md#open-a-protected-setup-connection).
 2. Pega el **Bootstrap Token**.
 3. Completa el asistente **Quick Security Setup**.
 4. Abre **Settings → Infrastructure → Install on a host** si quieres instalar

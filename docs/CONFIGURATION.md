@@ -13,8 +13,8 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `email.enc` | SMTP settings | 🔒 **Encrypted** |
 | `webhooks.enc` | Webhook URLs + headers | 🔒 **Encrypted** |
 | `apprise.enc` | Apprise notification config | 🔒 **Encrypted** |
-| `oidc.enc` | OIDC provider config | 🔒 **Encrypted** |
-| `sso.enc` | SAML/SSO provider config | 🔒 **Encrypted** |
+| `oidc.enc` | Legacy single-provider OIDC config | 🔒 **Encrypted** |
+| `sso.enc` | UI/API-managed OIDC and SAML providers, mappings and secrets | 🔒 **Encrypted** |
 | `api_tokens.json` | API token records (hashed) | 🔒 **Sensitive** |
 | `ai.enc` | AI settings and credentials | 🔒 **Encrypted** |
 | `ai_findings.json` | AI Patrol findings | 📝 Standard |
@@ -50,6 +50,8 @@ default. The audit database and default signing key are in the `audit/`
 subdirectory. Runtime-specific audit storage and non-default organisation
 paths can differ; see [Audit storage and safe recovery](AUDIT_LOGGING.md#storage).
 Do not reset signing or encryption keys as a troubleshooting step.
+For recoverability, follow the [recovery-state checklist](#back-up-recoverable-state);
+this table is not a complete backup inventory.
 
 Path overrides:
 - `PULSE_DATA_DIR` sets the base directory for `system.json`, encrypted files, and the bootstrap token.
@@ -92,14 +94,32 @@ not a `docker run -e PULSE_AUTH_PASS=...` command, shell history or a shared
 Compose file. On the Docker host, prepare the file below. These commands do not
 erase an existing file; edit it locally, without printing its contents:
 
+Run both blocks as the credential's owner, not with `sudo`. They refuse
+symlinked paths (including `.config`), non-directory or foreign-owned parent
+paths, and non-regular or foreign-owned credential files before opening the
+editor or calling Docker. Stop on a refusal; do not remove or change an
+unrelated path to make the example continue. The launch block checks again
+because the file can have changed since preparation. These checks do not lock
+the path against concurrent changes; use a private account and directory.
+
 ```bash
 (
-  set -e
+  set -eu
   umask 077
   auth_dir="$HOME/.config/pulse"
   auth_file="$auth_dir/docker-auth.env"
-  if [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
     printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  for directory in "$HOME/.config" "$auth_dir"; do
+    if [ -e "$directory" ] && { [ ! -d "$directory" ] || [ ! -O "$directory" ]; }; then
+      printf 'Credential directories must belong to the current user.\n' >&2
+      exit 1
+    fi
+  done
+  if [ -e "$auth_file" ] && { [ ! -f "$auth_file" ] || [ ! -O "$auth_file" ]; }; then
+    printf 'Authentication file must be regular and owned by the current user.\n' >&2
     exit 1
   fi
   mkdir -p "$auth_dir"
@@ -126,19 +146,33 @@ tag you intend to install, then run:
 
 ```bash
 (
-  set -e
-  if [ ! -s "$HOME/.config/pulse/docker-auth.env" ]; then
+  set -eu
+  auth_dir="$HOME/.config/pulse"
+  auth_file="$auth_dir/docker-auth.env"
+  if [ -L "$HOME/.config" ] || [ -L "$auth_dir" ] || [ -L "$auth_file" ]; then
+    printf 'Refusing a symlinked credential path.\n' >&2
+    exit 1
+  fi
+  for directory in "$HOME/.config" "$auth_dir"; do
+    if [ ! -d "$directory" ] || [ ! -O "$directory" ]; then
+      printf 'Prepare the private authentication file first.\n' >&2
+      exit 1
+    fi
+  done
+  if [ ! -f "$auth_file" ] || [ ! -O "$auth_file" ] || [ ! -r "$auth_file" ] || [ ! -s "$auth_file" ]; then
     printf 'Prepare the private authentication file first.\n' >&2
     exit 1
   fi
-docker run -d \
-  --name pulse \
-  -p 7655:7655 \
-  -v pulse_data:/data \
-  --env-file "$HOME/.config/pulse/docker-auth.env" \
-  -e PULSE_DEPLOYMENT_METHOD=docker_run \
-  --restart unless-stopped \
-  rcourtman/pulse:vX.Y.Z
+  chmod 700 "$auth_dir"
+  chmod 600 "$auth_file"
+  docker run -d \
+    --name pulse \
+    -p 7655:7655 \
+    -v pulse_data:/data \
+    --env-file "$auth_file" \
+    -e PULSE_DEPLOYMENT_METHOD=docker_run \
+    --restart unless-stopped \
+    rcourtman/pulse:vX.Y.Z
 )
 ```
 
@@ -297,9 +331,10 @@ Start with the current level and the [bounded log readers](TROUBLESHOOTING.md#in
 Debug can produce much more output, including raw guest-filesystem responses
 and private names or paths; do not enable it just to obtain a report. If the
 interface stalls after enabling Debug, return to the previous working level
-through your deployment's existing log-level control, without repeating the
-stall. A responsive interface afterwards is not proof that the underlying
-problem is fixed; retain the original time, affected view and redacted error.
+using the [deployment recovery below](#if-debug-makes-the-ui-unusable), without
+repeating the stall. A responsive interface afterwards is not proof that the
+underlying problem is fixed; retain the original time, affected view and
+redacted error.
 
 **Pause Stream** and **Clear Log Output** only affect the browser display. They
 do not stop monitoring, reduce server logging or erase the server's logs. A
@@ -312,6 +347,44 @@ the display does not remove those records from the download. Some secrets are
 masked, but that is not a guarantee that all content is safe to publish. Keep
 the archive private and share only relevant, manually reviewed, redacted excerpts,
 not the whole bundle.
+
+##### If Debug makes the UI unusable
+
+This is recovery from a log-level change already made, not a reason to enable
+Debug or reproduce a stall. **If a guest is frozen or unresponsive, a backup is
+in freeze/thaw, or an earlier guest request is uncertain, follow
+[Backup safety](VM_DISK_MONITORING.md#backup-safety) first.** Do not restart or
+recreate a stopped Pulse server to change logging during that incident.
+
+1. **If the UI still responds**, use **Settings → Support → System Logs →
+   Server Log Level** to restore the previous working level, normally **Info**.
+   Pause Stream and Clear Log Output do not change the server's level.
+2. **If the UI is unusable**, an authorised deployment administrator can set
+   `LOG_LEVEL=info` in the existing **Pulse server** deployment. For systemd,
+   use its managed environment file or service drop-in; for Compose or another
+   container manager, use that service's environment settings. In a Proxmox
+   LXC, change the Pulse service inside its container, not the Proxmox host or
+   a monitored agent. Do not print or post the full environment or configuration.
+3. **Apply only that environment change during a suitable maintenance window.**
+   Systemd needs a daemon reload after changing a unit or drop-in, then a
+   restart of the active Pulse service. A container needs its existing
+   recreate/redeploy operation; `docker restart` alone does not apply a changed
+   deployment environment. Keep the same image, data mounts, credentials,
+   encryption keys, connections and monitoring policy. Do not reinstall,
+   delete a volume or reset configuration. Monitoring and alerts are unavailable
+   while the server is stopped; arrange independent coverage.
+4. **Verify ordinary use**, not another Debug run: check the displayed server
+   level and the previously affected view, using existing readings. A usable
+   page does not establish that collection or the original reported fault has
+   recovered. Keep the original time, view and redacted error; do not run Test,
+   Diagnostics, a backup or guest-agent probes to validate the logging change.
+
+**The startup override does not rewrite the saved level.** A saved Debug level
+can return at the next start if `LOG_LEVEL=info` is removed. Keep the override
+as an explicit deployment setting until the administrator has reconciled the
+saved level through the supported controls; do not remove it or toggle Debug
+just to test persistence. There is no need to edit encrypted files, discard
+logs or delete `system.json` to recover the interface.
 
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
@@ -333,7 +406,7 @@ not the whole bundle.
 | `DISCOVERY_SCAN_GATEWAYS` | Include gateway IPs in discovery (`true`/`false`) | `true` |
 | `DISCOVERY_DIAL_TIMEOUT_MS` | TCP dial timeout (ms) | `1000` |
 | `DISCOVERY_HTTP_TIMEOUT_MS` | HTTP probe timeout (ms) | `2000` |
-| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide username/password form | `false` |
+| `PULSE_AUTH_HIDE_LOCAL_LOGIN` | Hide the username/password form only; does not disable password authentication. See [OIDC login visibility](OIDC.md#hiding-the-local-login-form). | `false` |
 | `DEMO_MODE` | Enable read-only demo mode | `false` |
 | `PULSE_TRUSTED_PROXY_CIDRS` | Comma-separated immediate proxy IPs/CIDRs trusted for forwarded client IP, scheme, host and port. Use the peer seen by Pulse; wildcard ranges are rejected. See [Reverse Proxy](REVERSE_PROXY.md#before-configuring-the-proxy). | *(unset)* |
 | `PULSE_TRUSTED_NETWORKS` | Comma-separated CIDRs treated as trusted local networks (does not bypass auth) | *(unset)* |
@@ -664,9 +737,15 @@ manual CPU example below, `trigger: 90` and `clear: 80` mean:
 - An already active alert stays active **above 80%**, even at 85%.
 - A fresh evaluated value of **80% or lower** is eligible to clear it.
 
-Configured evaluation windows and activation/recovery delays still apply;
-these are not promises of immediate notifications. The excerpt illustrates a
-saved rule, not the clear value produced by every UI edit.
+Timing is metric-specific: CPU can use an averaging window, and memory can
+have a recovery stability delay. **Guest filesystem capacity uses the current
+matching reading, not a rolling average.** Its disk grace period delays
+activation only; recovery has no extra configured delay. Disk I/O-rate rules
+are different from capacity. These rules do not promise immediate notification
+delivery. The excerpt illustrates a saved rule, not the clear value produced
+by every UI edit. If an alert remains active, use the
+[reading, clear-level and timing checks](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops)
+without changing its policy to demonstrate recovery.
 
 Disabling a metric can close its existing alert even while usage remains high.
 That disappearance is a policy change, **not measured recovery**. Missing or
@@ -1121,9 +1200,37 @@ To redirect plain-HTTP requests to HTTPS, set `HTTP_REDIRECT_PORT` to a port oth
 
 ## 🛡️ Security Best Practices
 
-1. **Permissions**: Ensure `.env` and `nodes.enc` are `600` (read/write by owner only).
-2. **Backup hygiene**: Back up `.env` separately from `system.json`.
+1. **Permissions**: Keep `.env`, `.encryption.key` and encrypted credential
+   files owner-only (`600`); protect recovery copies too.
+2. **Backup hygiene**: Preserve a matched recovery set using the checklist below,
+   not just selected settings files.
 3. **Tokens**: Use scoped API tokens for agents instead of the admin password.
+
+### Back up recoverable state
+
+`.env` and `system.json` alone are **not a full backup**. Preserve the encrypted
+files with their matching `.encryption.key`, audit history and audit signing key,
+all active data paths, organisation directories and external stores, plus
+deployment-supplied credentials and service/container configuration. Keep the
+whole recovery set private; encryption does not make it safe to attach to an
+issue. Defaults in the file table do not identify every path used by your install.
+
+Use [full-state recovery](MIGRATION.md#full-state-recovery) for a server move or
+disaster-recovery copy. Follow a stopped, consistent backup procedure or supported
+backup tooling; monitoring and alerts pause while Pulse is stopped. Validate on
+an isolated destination before retiring the source. The
+[configuration export](MIGRATION.md#configuration-transfer) and
+[updater snapshot](AUTO_UPDATE.md#what-an-update-snapshot-contains) have different,
+limited scopes; neither is a substitute for the complete recovery set.
+
+Do not restore over a running instance, mix encrypted files with another
+installation's key, regenerate keys or edit encrypted files to clear an error.
+Deleting state or forcing startup import is not a recovery shortcut. If Pulse
+is stopped for [backup safety](VM_DISK_MONITORING.md#backup-safety), keep it stopped
+until that procedure's independent recovery checks pass. For sign-in failure
+after a provider edit, preserve the working administrator session and use
+[provider-save recovery](OIDC.md#sign-in-fails-after-editing-a-provider);
+restoring unrelated files is not a repair for that sign-in defect.
 
 ---
 
@@ -1276,6 +1383,23 @@ On your TrueNAS system:
 | TrueNAS alerts | Alerts page |
 
 TrueNAS connections are stored encrypted in `truenas.enc`.
+
+---
+
+## VMware refresh timeout
+
+`PULSE_VMWARE_POLL_TIMEOUT` bounds the whole inventory refresh for each vCenter
+connection. It defaults to `20s`. If a large inventory needs more time, set a
+positive Go duration such as `120s` on the Pulse server process. Empty values
+use the default; invalid, zero, negative or overflowing values warn and use
+`20s` rather than removing the deadline.
+
+This does not change the individual HTTP request timeout, permissions or TLS
+verification. A shorter parent deadline or shutdown still cancels the refresh.
+Connections are polled sequentially: allowing one connection more time can
+also delay the next connection. Failed refreshes keep the last complete
+inventory; increasing the budget is not proof that a network or API error has
+been repaired.
 
 ---
 

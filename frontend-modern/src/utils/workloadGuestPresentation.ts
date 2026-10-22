@@ -1,4 +1,19 @@
 import { resolveBackupThresholds, type BackupStatus, type BackupThresholds } from '@/utils/format';
+import type { WorkloadGuest } from '@/types/workloads';
+import { getWorkloadPlatformScopes, resolveWorkloadType } from '@/utils/workloads';
+
+// The shared backup scalar comes only from Proxmox vzdump/PBS inventory.
+// Other integrations not reporting it is not evidence of a missing backup.
+// Legacy VM/LXC callers without platform metadata retain their Proxmox shape.
+// Keep the row and full drawer on the same applicability rule.
+export function supportsWorkloadBackupEvidence(
+  guest: Pick<WorkloadGuest, 'type' | 'workloadType' | 'platformType' | 'platformScopes'>,
+): boolean {
+  const type = resolveWorkloadType(guest);
+  if (type !== 'vm' && type !== 'system-container') return false;
+  const scopes = getWorkloadPlatformScopes(guest);
+  return scopes.length === 0 || scopes.includes('proxmox-pve');
+}
 
 // The age-derived BackupStatus plus the overlay state for a backup that is
 // running right now. 'running' never comes from getBackupInfo (which only
@@ -88,6 +103,10 @@ export function getWorkloadsGuestBackupAgeRule(
   }
 }
 
+// No matched completion time is not proof of an empty provider inventory.
+export const WORKLOAD_BACKUP_NOT_FOUND_DETAIL =
+  'Pulse has no completed-backup time matched to this guest. Backups may still exist outside the collected or matched inventory.';
+
 export function getWorkloadsGuestBackupTooltip(
   status: BackupStatus,
   ageFormatted?: string | null,
@@ -101,9 +120,6 @@ export function getWorkloadsGuestBackupTooltip(
         : `Last backup: ${ageFormatted || 'Unknown'}`;
   if (backupRunning) {
     return `Backup running now · ${base.toLowerCase()}`;
-  }
-  if (status === 'never') {
-    return 'No backup found';
   }
   return base;
 }
@@ -226,6 +242,19 @@ export function getWorkloadGuestDiskRead(
       needsAction: false,
     };
   }
+  // A paused/suspended VM cannot supply a live in-guest filesystem reading.
+  // Its last report can outlive the power-state change, even while the linked
+  // agent's reporting lease is still valid. Downgrade only otherwise-current
+  // readings: an explicit failed read or stale-agent reason stays authoritative.
+  // LXC's host-reported storage is independent of guest execution.
+  const current: WorkloadGuestDiskRead =
+    isVM && (guest.status === 'paused' || guest.status === 'suspended')
+      ? {
+          state: 'last-known',
+          message: `Guest filesystem readings are not current while the VM is ${guest.status}. Any displayed values are last known.`,
+          needsAction: false,
+        }
+      : { state: 'current', message: null, needsAction: false };
   if (guest.disksFromAgent) {
     if (guest.status === 'stopped') {
       return {
@@ -242,9 +271,28 @@ export function getWorkloadGuestDiskRead(
           message: 'Using last known disk stats. The Pulse Agent in this guest stopped reporting.',
           needsAction: false,
         }
-      : { state: 'current', message: null, needsAction: false };
+      : current;
   }
-  if (!reason) return { state: 'current', message: null, needsAction: false };
+  if (!reason) {
+    // No failure reason is not proof of a current platform read. Unknown and
+    // transitional VM states can still carry numbers from an earlier poll.
+    // A live linked agent above is independent; LXC storage comes from its host.
+    // Legacy canonical consumers use online/healthy for a running guest.
+    const status = guest.status?.trim().toLowerCase();
+    if (
+      isVM &&
+      current.state === 'current' &&
+      !['running', 'online', 'healthy'].includes(status ?? '')
+    ) {
+      return {
+        state: 'last-known',
+        message:
+          'Guest filesystem readings are not current because the VM running state is unconfirmed. Any displayed values are last known.',
+        needsAction: false,
+      };
+    }
+    return current;
+  }
   return {
     state: reason.startsWith('prev-') ? 'last-known' : 'unavailable',
     message: getWorkloadGuestDiskStatusMessage(reason),

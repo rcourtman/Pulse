@@ -248,7 +248,7 @@ describe('ResourceDetailDrawer change history section', () => {
     }
   });
 
-  it('reactively withdraws stopped VM disk carriers without discarding the Overview charts or independent readings', async () => {
+  it('reactively withdraws stopped VM disk and in-guest memory carriers without discarding the Overview charts or independent readings', async () => {
     resetCreateNonSuspendingQueryCacheForTest();
     const source = baseResource({
       id: 'native-power-vm',
@@ -282,6 +282,9 @@ describe('ResourceDetailDrawer change history section', () => {
       expect(chart.querySelector('[data-history-current="disk"]')).toHaveTextContent(
         '90.0%current',
       );
+      expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
+        '0.0%current',
+      );
       for (const diskStatusReason of ['', 'prev-agent-busy']) {
         setResource({
           ...source,
@@ -293,8 +296,13 @@ describe('ResourceDetailDrawer change history section', () => {
         expect(chart.querySelector('[data-history-deferred="disk"]')).toHaveTextContent(
           'Guest filesystem stats unavailable while the VM is stopped.',
         );
-        expect(chart.querySelector('[data-history-current="memory"]')).toHaveTextContent(
-          '0.0%current',
+        expect(chart.querySelector('[data-history-current="memory"]')).toBeNull();
+        expect(chart.querySelector('[data-history-last-known="memory"]')).toBeNull();
+        expect(chart.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+          'Unavailable while Proxmox reports this guest stopped.',
+        );
+        expect(chart.querySelector('[data-history-deferred="memory"]')).toHaveTextContent(
+          'Earlier in-guest memory readings are not current measurements.',
         );
         expect(chart.querySelector('[data-history-current="cpu"]')).toHaveTextContent(
           '10.0%current',

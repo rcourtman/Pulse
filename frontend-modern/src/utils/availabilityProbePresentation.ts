@@ -167,7 +167,11 @@ const getAvailabilityProbeToneClassName = (
     return AVAILABILITY_PROBE_WARNING_CLASS;
   }
   if (availability.available === true || normalizedStatus === 'online') {
-    return AVAILABILITY_PROBE_SUCCESS_CLASS;
+    // A successful last result is not a current-health claim without a
+    // usable evidence lease. Keep its result, but do not colour it healthy.
+    return freshnessLabel === 'fresh'
+      ? AVAILABILITY_PROBE_SUCCESS_CLASS
+      : AVAILABILITY_PROBE_UNKNOWN_CLASS;
   }
   return AVAILABILITY_PROBE_UNKNOWN_CLASS;
 };

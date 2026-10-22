@@ -616,7 +616,18 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 
-			guestThresholds := m.resolveGuestAlertThresholdsNoLock(alert, resourceID)
+			if metricType == "backup-age" && backupIgnoreVMID(fmt.Sprint(alert.Metadata["guestVmid"]), m.config.BackupDefaults.IgnoreVMIDs) {
+				alertsToResolve = append(alertsToResolve, alertID)
+				continue
+			}
+			guestPolicy := m.resolveGuestAlertThresholdPolicyNoLock(alert, resourceID)
+			if !m.guestSignalPolicyKnownNoLock(guestPolicy, metricType) {
+				// Persisted alert identity/value is not a current rule-input
+				// snapshot. A save must not make unknown mean default policy.
+				m.interruptMetricRunNoLock(resourceID, alert.CanonicalSpecID, canonicalTrackingKeyForAlert(alert))
+				continue
+			}
+			guestThresholds := guestPolicy.Thresholds
 			if guestThresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue

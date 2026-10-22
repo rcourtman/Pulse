@@ -98,6 +98,11 @@ badge or one populated panel does not prove that every dataset was read. Compare
 the affected value and observation window with PMG's own existing view before
 acting on an apparent empty queue or quarantine.
 
+If the service's **State** contradicts a failed read, use the shared
+[connection-state guidance](TROUBLESHOOTING.md#pbs-or-mail-gateway-state-disagrees-with-a-failed-read).
+A green State or a working agent is not proof that the failed mail dataset
+recovered; keep the original error and do not generate mail to test the label.
+
 Current development source records downstream read failures as incomplete
 collection while retaining the successful version connection. Missing readings
 do not become observed zero totals or resolve their metric alerts. Partial
@@ -132,6 +137,24 @@ or permissions:
 | 401/403 | The configured account and its read permissions for the specific failed request, privately. Do not grant administrator access as a diagnostic shortcut. |
 | Gateway is present but statistics are missing | Clear view filters, check whether the connection is paused, and compare the particular dataset and time window with PMG. A successful test or version read does not establish dataset access. |
 | Cluster nodes or node queues are missing | Compare the gateway's existing cluster inventory and each affected node's native queue view. One reachable node does not prove every node was collected. |
+
+### Cluster response or backup lookup errors
+
+An existing error mentioning `cannot unmarshal string` and `ClusterStatusEntry.data.cid`
+means Pulse rejected a cluster ID returned as text. It is not a PMG cluster
+setting to change, nor evidence that the gateway is unreachable. In affected
+builds, that failed cluster read can also make a configuration-backup request
+use the **Pulse connection's display name** instead of a **native PMG node
+name**, producing a misleading `hostname lookup failed` error.
+
+A successful **Test** or some populated statistics can coexist with these
+failures. Do not rename the connection or gateway, change DNS, replace the
+password or disable certificate verification to correct these reader faults.
+Use PMG's own web interface for the affected queues and configuration-backup
+status; an empty Pulse panel is not proof of an empty queue or no backups.
+The [collection limits](#read-the-mail-gateway-view) also apply to readings
+that are still present. Keep the original error and time; no new Test, backup,
+mail traffic or diagnostic run is needed to identify this error pair.
 
 For a new connection, allow its configured polling interval rather than a fixed
 one- or two-cycle promise. If a previously working reading stops advancing,

@@ -5,6 +5,9 @@ const NEEDS_DECOMPOSITION_LABEL = "needs-decomposition";
 const BUG_LABEL = "bug";
 const DOCS_LABEL = "documentation";
 const ENHANCEMENT_LABEL = "enhancement";
+const EMPTY_TOPIC_VALUES = new Set([
+  "_no response_", "n/a", "na", "no", "none", "none known", "not applicable",
+]);
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -107,7 +110,7 @@ function extractSectionValue(body, heading, followingHeadings = []) {
   return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
-function classifyAdditionalActionableTopics(body) {
+function normalizedTopicField(body) {
   const value = extractSectionValue(body, "Additional actionable topics", [
     "Pulse version",
     "Additional context",
@@ -116,21 +119,46 @@ function classifyAdditionalActionableTopics(body) {
   ]);
   if (value === null) return null;
 
-  const normalized = value
+  const normalize = (text) => text
     .trim()
     .toLowerCase()
+    .replace(/\s+/g, " ")
     .replace(/[.!]+$/g, "");
+  const normalized = normalize(value);
+  if (EMPTY_TOPIC_VALUES.has(normalized)) return normalized;
+
+  // An emphasized or code-styled "None" is still an empty answer, not a new
+  // investigation. Only unwrap one projected paragraph's inline decoration.
+  // Links, deletions, HTML and additional paragraphs retain their full evidence;
+  // do not erase evidence to manufacture an empty answer.
+  const plain = (tokens) => {
+    let text = "";
+    for (const token of tokens || []) {
+      if (token.type === "strong" || token.type === "em") {
+        const nested = plain(token.tokens);
+        if (nested === null) return null;
+        text += nested;
+      } else if (["text", "escape", "codespan"].includes(token.type)) {
+        text += token.text;
+      } else {
+        return null;
+      }
+    }
+    return text;
+  };
+  const blocks = lexer(value, { gfm: true });
+  const unwrapped = blocks.length === 1 && blocks[0].type === "paragraph"
+    ? plain(blocks[0].tokens) : null;
+  const candidate = unwrapped === null ? null : normalize(unwrapped);
+  return EMPTY_TOPIC_VALUES.has(candidate) ? candidate : normalized;
+}
+
+function classifyAdditionalActionableTopics(body) {
+  const normalized = normalizedTopicField(body);
+  if (normalized === null) return null;
   if (!normalized || !/[\p{L}\p{N}]/u.test(normalized)) return false;
 
-  return !new Set([
-    "_no response_",
-    "n/a",
-    "na",
-    "no",
-    "none",
-    "none known",
-    "not applicable",
-  ]).has(normalized);
+  return !EMPTY_TOPIC_VALUES.has(normalized);
 }
 
 function normalizeVersion(value) {
@@ -139,8 +167,19 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
+function versionBeforeContext(version, remainder) {
+  // A range or transition gives neither the failing executable nor a single
+  // affected release. Do not select its first endpoint. Only inspect the
+  // immediate continuation: a named current version may also include separate
+  // upgrade history or an explicitly named agent's version.
+  const flow = /^[`*_]*[ \t]*(?:->|=>|→|↔|\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing)|updat(?:e|ed|ing))[ \t]+to\b)/i;
+  const alternatives = /^[`*_]*[ \t]*(?:\/|–|—|-[ \t]+|\b(?:to|or|and|through)\b)[ \t]*[`*_]*(?:(?:pulse(?:[ \t]+pro)?(?:[ \t]+server)?|server)[ \t]+|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:|pulse-)?(?:v?\d+\.\d+(?:\.\d+)?\b|unknown\b|latest\b|main\b|nightly\b)/i;
+  return flow.test(remainder) || alternatives.test(remainder) ? null : normalizeVersion(version);
+}
+
 function normalizeLegacyVersionValue(value) {
-  const visible = String(value).trim().replace(/^[`*_]+/, "");
+  const rawValue = String(value).trim();
+  const visible = rawValue.replace(/^[`*_]+/, "");
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the
   // server archive names; companion binaries and signatures cannot establish
@@ -150,17 +189,67 @@ function normalizeLegacyVersionValue(value) {
     const archive = filename.match(
       /^pulse-v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(?:tar\.gz|tgz)$/i
     );
-    return archive ? normalizeVersion(archive[1].replace(
+    return archive ? versionBeforeContext(archive[1].replace(
       /-linux-(?:386|amd64|arm64|armv6|armv7)$/i, ""
-    )) : null;
+    ), visible.slice(filename.length)) : null;
+  }
+  // Both community and private Pro images carry the server. Read the tag of
+  // that image only: "latest" plus a later agent version is not server-version
+  // evidence, and companion images/binaries must not supply it either.
+  const image = visible.match(/^(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:([^\s`*]+)/i);
+  if (image) {
+    // Unlike backticks/asterisks, underscores can occur in a Docker tag. Strip
+    // them only when they close the field value's matching Markdown wrapper.
+    const wrapper = rawValue.match(/^_+/)?.[0];
+    const imageTag = wrapper && image[1].endsWith(wrapper)
+      ? image[1].slice(0, -wrapper.length) : image[1];
+    const tag = imageTag.match(/^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:@sha256:[a-f0-9]{64})?$/i);
+    return tag ? versionBeforeContext(tag[1], visible.slice(image[0].length)) : null;
   }
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
-    ? normalizeVersion(visible) : null;
+  const legacy = visible.match(/^(?:(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+|pulse[-_])?v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b/i);
+  return legacy ? versionBeforeContext(legacy[0], visible.slice(legacy[0].length)) : null;
 }
 
-function extractPulseVersion(title, body) {
+function titlePulseVersion(title) {
+  const text = String(title || "");
+  // A title's upgrade versions describe an attempt, not necessarily the
+  // executable that failed. An explicit body field still takes precedence.
+  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing|ion))\b/i.test(text)) return null;
+
+  const version = "v?(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)";
+  const end = "(?![\\w.-])";
+  // Free-form reports can name several products. Only explicitly named Pulse
+  // server versions may be selected from that context; Pulse Agent is not the
+  // server, and a platform's first semantic version is not Pulse evidence.
+  const named = [...text.matchAll(new RegExp(
+    `\\bPulse(?:[ \\t]+Pro)?(?:[ \\t]+server)?(?:[ \\t]+version)?[ \\t]*[:=]?[ \\t]+${version}${end}`,
+    "gi"
+  )), ...text.matchAll(new RegExp(`(?:^|[ \\t/])pulse(?:-pro)?:${version}${end}`, "gi"))];
+  if (named.length) {
+    if (named.length !== 1) return null;
+    const match = named[0];
+    // Naming Pulse disambiguates it from a platform/agent version, not from
+    // the other endpoint of an upgrade or range. Apply the same continuation
+    // check as body fields before the title can create version metadata.
+    return versionBeforeContext(match[1], text.slice(match.index + match[0].length));
+  }
+
+  // Preserve concise legacy release titles, not arbitrary numbers embedded in
+  // platform names, companion artifacts or prose. Multiple release numbers
+  // remain ambiguous even when the title begins with one of them.
+  const versions = [...text.matchAll(new RegExp(`(?<![\\w.-])${version}${end}`, "gi"))];
+  if (versions.length !== 1) return null;
+  const concise = new RegExp(
+    `^(?:\\[[^\\]\\r\\n]+\\][ \\t]*:?[ \\t]*)?(?:bug[ \\t]+on[ \\t]+)?${version}${end}`,
+    "i"
+  );
+  const match = text.trim().match(concise);
+  return match ? versionBeforeContext(match[1], text.trim().slice(match[0].length)) : null;
+}
+
+function pulseVersionEvidence(title, body) {
   if (body) {
     const lines = declarationLines(body);
     const versionHeading = lines.findIndex((line) =>
@@ -170,7 +259,10 @@ function extractPulseVersion(title, body) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)));
+      return {
+        version: normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1))),
+        declared: true,
+      };
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
@@ -190,17 +282,23 @@ function extractPulseVersion(title, body) {
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
       const inlineValue = visibleField ? visibleField[1].trim() : "";
-      if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
+      if (inlineValue) {
+        return { version: normalizeLegacyVersionValue(inlineValue), declared: true };
+      }
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)));
+      return {
+        version: normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1))),
+        declared: true,
+      };
     }
   }
 
-  // A starting version named in an upgrade title is not a running-version
-  // declaration. Copied examples may leave no usable body field at all.
-  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""))) return null;
-  return normalizeVersion(title);
+  return { version: titlePulseVersion(title), declared: false };
+}
+
+function extractPulseVersion(title, body) {
+  return pulseVersionEvidence(title, body).version;
 }
 
 function classifyV6FeedbackType(body) {
@@ -255,28 +353,54 @@ async function ensureLabel(github, context, name, color, description) {
     });
   } catch (error) {
     if (error.status !== 404) throw error;
-    await github.rest.issues.createLabel({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      name,
-      color,
-      description,
-    });
+    try {
+      await github.rest.issues.createLabel({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        name,
+        color,
+        description,
+      });
+    } catch (creationError) {
+      // Independent issue jobs can both observe a missing repository label.
+      // Only GitHub's explicit duplicate-name conflict can be reconciled; an
+      // access, validation or uncertain transport failure must remain a failure.
+      const errors = creationError.response?.data?.errors;
+      if (creationError.status !== 422 || !Array.isArray(errors) || !errors.length ||
+          !errors.every((detail) => detail?.resource === "Label" &&
+            detail.field === "name" && detail.code === "already_exists")) {
+        throw creationError;
+      }
+      const { data: existing } = await github.rest.issues.getLabel({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        name,
+      });
+      if (!existing || existing.name !== name) throw creationError;
+    }
   }
 }
 
-function buildTriageState(issue, core, latestVersion) {
+function buildTriageState(issue, core, latestVersion, feedbackTypeChanged = false) {
   const labelNames = new Set((issue.labels || []).map((label) => label.name));
   const nextLabels = new Set(labelNames);
   const v6FeedbackClass = classifyV6FeedbackType(issue.body);
-  if (v6FeedbackClass) {
+  // The form's original choice is not a whole-thread disposition. Community
+  // may have reclassified the report since intake. An unrelated edit, reopen
+  // or delayed event must not restore a conflicting form label. A current
+  // change of feedback type can add its new class, but never removes existing
+  // classes: the report may contain several independently actionable topics.
+  const hasClassification = [BUG_LABEL, DOCS_LABEL, ENHANCEMENT_LABEL]
+    .some((name) => labelNames.has(name));
+  if (v6FeedbackClass && (!hasClassification || feedbackTypeChanged)) {
     core.info(`Detected v6 feedback issue class: ${v6FeedbackClass}`);
     nextLabels.add(v6FeedbackClass);
   }
 
   const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body);
 
-  const reportedVersion = extractPulseVersion(issue.title, issue.body);
+  const { version: reportedVersion, declared: hasDeclaredPulseVersion } =
+    pulseVersionEvidence(issue.title, issue.body);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
   if (latestVersion) core.info(`Latest stable release: ${latestVersion}`);
 
@@ -284,6 +408,7 @@ function buildTriageState(issue, core, latestVersion) {
     labelNames,
     nextLabels,
     reportedVersion,
+    hasDeclaredPulseVersion,
     v6FeedbackClass,
     hasAdditionalActionableTopics,
     isBugLike: nextLabels.has(BUG_LABEL),
@@ -292,16 +417,8 @@ function buildTriageState(issue, core, latestVersion) {
   };
 }
 
-function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
-  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}` : null;
-  for (const label of [...nextLabels]) {
-    if (
-      /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label) &&
-      label !== keep
-    ) {
-      nextLabels.delete(label);
-    }
-  }
+function isExactVersionLabel(label) {
+  return /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label);
 }
 
 // Apply only this event's classification delta. Replacing the complete label
@@ -316,33 +433,91 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
   const removals = [...before].filter((name) => !after.has(name)).sort();
   if (!additions.length && !removals.length) return;
 
-  // Label lookup/creation can take time after the initial report read. Do not
-  // apply that prepared decision to a report since edited, closed or reviewed.
-  // This narrows the race; GitHub's separate label APIs are not a transaction.
-  const { data: current } = await github.rest.issues.get(target);
-  if (!current || current.number !== issue.number) {
-    throw new Error("Current issue identity did not match the triage event");
-  }
-  const currentLabels = new Set((current.labels || []).map((label) => label.name));
-  if (current.state !== "open" || current.pull_request ||
-      ["title", "body", "updated_at"].some((field) => current[field] !== issue[field]) ||
-      currentLabels.size !== before.size ||
-      [...before].some((name) => !currentLabels.has(name))) {
-    core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
-    return;
-  }
+  // Label lookup/creation can take time after the initial report read. Check
+  // before the first mutation and between writes, not just before an addition
+  // that may be followed by several destructive removals. These reads narrow
+  // the race; GitHub's separate label APIs are not a transaction.
+  const expectedLabels = new Set(before);
+  const stillCurrent = async (firstWrite) => {
+    const { data: current } = await github.rest.issues.get(target);
+    if (!current || current.number !== issue.number) {
+      throw new Error("Current issue identity did not match the triage event");
+    }
+    const currentLabels = new Set((current.labels || []).map((label) => label.name));
+    // Our own label mutations can change updated_at. Afterwards compare the
+    // report and exact expected labels, without treating our write as an edit.
+    const fields = firstWrite ? ["title", "body", "updated_at"] : ["title", "body"];
+    if (current.state !== "open" || current.pull_request ||
+        fields.some((field) => current[field] !== issue[field]) ||
+        currentLabels.size !== expectedLabels.size ||
+        [...expectedLabels].some((name) => !currentLabels.has(name))) {
+      core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
+      return false;
+    }
+    return true;
+  };
+  if (!await stillCurrent(true)) return;
 
+  let wrote = false;
   if (additions.length) {
     await github.rest.issues.addLabels({ ...target, labels: additions });
+    additions.forEach((name) => expectedLabels.add(name));
+    wrote = true;
   }
   for (const name of removals) {
+    if (wrote && !await stillCurrent(false)) return;
     try {
       await github.rest.issues.removeLabel({ ...target, name });
     } catch (error) {
       // Another synchronizer may already have removed this label.
       if (error.status !== 404) throw error;
     }
+    expectedLabels.delete(name);
+    wrote = true;
   }
+}
+
+async function newlyDeclaredTopics({ github, context, issue, eventIsCurrent, core }) {
+  const eventIssue = context.payload.issue;
+  const previousBody = context.payload.changes?.body?.from;
+  const eventTopics = normalizedTopicField(eventIssue.body);
+  const declared = classifyAdditionalActionableTopics(eventIssue.body) === true && (
+    context.payload.action === "opened" ||
+    (context.payload.action === "edited" && typeof previousBody === "string" &&
+      normalizedTopicField(previousBody) !== eventTopics)
+  );
+  if (!declared || eventTopics !== normalizedTopicField(issue.body)) return false;
+  if (eventIsCurrent) return true;
+
+  // A comment or unrelated edit can overtake a queued declaration. That does
+  // not dispose of its topics, but an explicit label removal may have done so.
+  // Read every page of this issue's events rather than guessing from its age
+  // or checking only the latest page. Missing/failed history must not authorise
+  // a mutation. Keep the normal fresh pre-write issue check as well.
+  const timestamp = (value) => typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) ? Date.parse(value) : NaN;
+  const declaredAt = timestamp(eventIssue.updated_at);
+  const currentAt = timestamp(issue.updated_at);
+  if (!Number.isFinite(declaredAt) || !Number.isFinite(currentAt) || currentAt < declaredAt ||
+      (issue.labels || []).some((label) => label.name === NEEDS_DECOMPOSITION_LABEL)) return false;
+
+  const events = await github.paginate(github.rest.issues.listEvents, {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: issue.number,
+    per_page: 100,
+  });
+  if (!Array.isArray(events)) throw new Error("Issue event history was unavailable");
+  const reviewed = events.some((event) => {
+    if (event.event !== "unlabeled" || event.label?.name !== NEEDS_DECOMPOSITION_LABEL) return false;
+    const removedAt = timestamp(event.created_at);
+    return !Number.isFinite(removedAt) || removedAt >= declaredAt;
+  });
+  if (reviewed) {
+    core.info("Community removed the decomposition label after this declaration; preserving its disposition.");
+    return false;
+  }
+  return true;
 }
 
 async function syncLabels({ github, context, core }) {
@@ -362,26 +537,31 @@ async function syncLabels({ github, context, core }) {
     core.info("Report is no longer an open issue. Skipping label sync.");
     return;
   }
-  const {
-    labelNames,
-    nextLabels,
-    reportedVersion,
-    hasAdditionalActionableTopics,
-    isBugLike,
-  } = buildTriageState(issue, core, null);
-
-  // A form declaration creates a review task only when it is new. A later
-  // empty field cannot prove that comment topics were dispositioned, and an
-  // unrelated or superseded event must not restore a label Community cleared.
   const previousBody = context.payload.changes?.body?.from;
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
     issue.updated_at === eventIssue.updated_at;
-  const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
-    context.payload.action === "opened" ||
-    (context.payload.action === "edited" && previousBody !== undefined &&
-      classifyAdditionalActionableTopics(previousBody) !== true)
-  );
+  const feedbackTypeChanged = eventIsCurrent && context.payload.action === "edited" &&
+    typeof previousBody === "string" &&
+    classifyV6FeedbackType(previousBody) !== classifyV6FeedbackType(issue.body);
+  const {
+    labelNames,
+    nextLabels,
+    reportedVersion,
+    hasDeclaredPulseVersion,
+    hasAdditionalActionableTopics,
+    isBugLike,
+  } = buildTriageState(issue, core, null, feedbackTypeChanged);
+
+  // A new or materially edited nonempty field needs review even if the old
+  // declaration already had topics. Comparing only its boolean classification
+  // loses an added symptom after Community disposed of the earlier topics.
+  // Ignore case/whitespace and hidden comments. A delayed declaration can still
+  // need review; use explicit label history to distinguish that from a task
+  // Community has cleared. This flags review, not a new issue or a disposition.
+  const newlyDeclared = hasAdditionalActionableTopics === true && await newlyDeclaredTopics({
+    github, context, issue, eventIsCurrent, core,
+  });
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");
     nextLabels.add(NEEDS_DECOMPOSITION_LABEL);
@@ -400,6 +580,25 @@ async function syncLabels({ github, context, core }) {
     return;
   }
 
+  // The original field is not the whole thread: Community may have established
+  // later affected versions from retests. Only a current edit that changes the
+  // declaration can correct its previous version; an unrelated edit, reopen or
+  // superseded event must not replay the original field over that evidence.
+  const previousVersion = typeof previousBody === "string"
+    ? pulseVersionEvidence("", previousBody) : null;
+  const versionCorrected = eventIsCurrent && context.payload.action === "edited" &&
+    hasDeclaredPulseVersion && previousVersion !== null &&
+    (previousVersion.declared !== hasDeclaredPulseVersion ||
+      previousVersion.version !== reportedVersion);
+  if (!versionCorrected && [...labelNames].some(isExactVersionLabel)) {
+    core.info("No current version-field correction; preserving established whole-thread version metadata.");
+    await applyLabelDelta(github, context, issue, labelNames, nextLabels, core);
+    return;
+  }
+
+  if (versionCorrected && previousVersion.declared && previousVersion.version) {
+    nextLabels.delete(`${VERSION_LABEL_PREFIX}${previousVersion.version}`);
+  }
   if (reportedVersion) {
     await ensureLabel(
       github,
@@ -409,6 +608,10 @@ async function syncLabels({ github, context, core }) {
       `Bug reported against Pulse ${reportedVersion}`
     );
     nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
+    nextLabels.delete(NEEDS_VERSION_LABEL);
+  } else if ([...nextLabels].some(isExactVersionLabel)) {
+    // Correcting this field to unknown does not invalidate an independently
+    // established version from another part of the report.
     nextLabels.delete(NEEDS_VERSION_LABEL);
   } else {
     await ensureLabel(
@@ -420,11 +623,6 @@ async function syncLabels({ github, context, core }) {
     );
     nextLabels.add(NEEDS_VERSION_LABEL);
   }
-
-  // A correction to unknown, incomplete or absent version evidence retires
-  // this synchronizer's old exact-version assertions too. It must not leave
-  // a known affected version beside its missing-version classification.
-  keepOnlyReportedVersionLabel(nextLabels, reportedVersion);
 
   // Retest labels are community-owned: version metadata cannot establish
   // relevant-fix availability or reconcile the live reporter conversation.

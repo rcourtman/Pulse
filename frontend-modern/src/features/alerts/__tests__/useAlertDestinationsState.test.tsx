@@ -6,6 +6,7 @@ import { NotificationsAPI } from '@/api/notifications';
 import { AlertsAPI } from '@/api/alerts';
 import { RelayAPI } from '@/api/relay';
 import { hasFeature } from '@/stores/license';
+import { getAlertDestinationsAppriseTransportWarning } from '@/utils/alertDestinationsPresentation';
 
 import { useAlertDestinationsState } from '../useAlertDestinationsState';
 
@@ -57,6 +58,48 @@ describe('useAlertDestinationsState', () => {
     vi.mocked(hasFeature).mockReset();
     vi.mocked(hasFeature).mockReturnValue(true);
   });
+
+  it.each([false, true])(
+    'preserves loaded HTTP settings while exposing their actual transport risk (bypass=%s)',
+    async (skipTlsVerify) => {
+      vi.mocked(hasFeature).mockReturnValue(false);
+      vi.mocked(NotificationsAPI.getEmailConfig).mockResolvedValue({ enabled: false } as any);
+      vi.mocked(NotificationsAPI.getWebhooks).mockResolvedValue([]);
+      vi.mocked(AlertsAPI.getDeadManConfig).mockResolvedValue({ pingUrl: '', configured: false });
+      vi.mocked(NotificationsAPI.getAppriseConfig).mockResolvedValue({
+        enabled: true,
+        mode: 'http',
+        serverUrl: 'http://apprise.example.invalid',
+        skipTlsVerify,
+        hasApiKey: true,
+        apiKey: '',
+        targets: ['fixture://target'],
+      });
+      const { result } = renderHook(() =>
+        useAlertDestinationsState({ activeTab: () => 'destinations' }),
+      );
+      await result.loadDestinations();
+      const config = result.appriseConfig();
+      expect(
+        getAlertDestinationsAppriseTransportWarning(config.serverUrl, config.skipTlsVerify),
+      ).toContain('HTTP does not use TLS');
+      expect(config).toMatchObject({
+        skipTlsVerify,
+        hasApiKey: true,
+        apiKey: '',
+        targetsText: 'fixture://target',
+      });
+      const payload = result.captureDestinations().apprise;
+      expect(payload).toMatchObject({
+        skipTlsVerify,
+        apiKey: '',
+        serverUrl: 'http://apprise.example.invalid',
+        targets: ['fixture://target'],
+      });
+      expect(NotificationsAPI.updateAppriseConfig).not.toHaveBeenCalled();
+      expect(NotificationsAPI.updateEmailConfig).not.toHaveBeenCalled();
+    },
+  );
 
   it('owns alert destinations reload and save behavior separately from alert policy config', async () => {
     const [activeTab, setActiveTab] = createSignal<'overview' | 'destinations'>('overview');
@@ -147,6 +190,9 @@ describe('useAlertDestinationsState', () => {
     expect(NotificationsAPI.getWebhooks).toHaveBeenCalledTimes(2);
     expect(AlertsAPI.getDeadManConfig).toHaveBeenCalledTimes(2);
     expect(RelayAPI.getConfig).toHaveBeenCalledTimes(2);
+    // The real tab keeps its destination editors hidden until this reload
+    // finishes. Wait for that admission instead of a fixed microtask count.
+    await waitFor(() => expect(result.isLoadingDestinations()).toBe(false));
 
     setActiveTab('overview');
     await Promise.resolve();

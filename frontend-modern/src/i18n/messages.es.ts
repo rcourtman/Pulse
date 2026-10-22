@@ -105,19 +105,28 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.overview.hydration.unavailable.title':
     'El estado de las alertas activas no esta disponible temporalmente',
   'alerts.overview.nodePrefix': 'en {node}',
+  'alerts.overview.deliveryUnavailable.region': 'Estado de las notificaciones de alerta',
+  'alerts.overview.deliveryUnavailable.title':
+    'El estado de las notificaciones de alerta no está disponible.',
+  'alerts.overview.deliveryUnavailable.description':
+    'Pulse no pudo actualizar el motivo del envío o de la pausa de estas alertas. Volverá a comprobarlo automáticamente.',
   'alerts.overview.notification.acknowledged': 'Alerta reconocida',
-  'alerts.overview.notification.acknowledgeFailed': 'No se pudo reconocer la alerta',
+  'alerts.overview.notification.acknowledgeFailed':
+    'No se pudo confirmar el reconocimiento. Actualice las alertas antes de volver a intentarlo.',
   'alerts.overview.notification.bulkFailure.singular': 'No se pudo reconocer {count} alerta.',
   'alerts.overview.notification.bulkFailure.plural': 'No se pudieron reconocer {count} alertas.',
   'alerts.overview.notification.bulkFailureGeneric': 'No se pudieron reconocer las alertas',
   'alerts.overview.notification.bulkSuccess.singular': '{count} alerta reconocida.',
   'alerts.overview.notification.bulkSuccess.plural': '{count} alertas reconocidas.',
   'alerts.overview.notification.restored': 'Alerta restaurada',
-  'alerts.overview.notification.restoreFailed': 'No se pudo restaurar la alerta',
+  'alerts.overview.notification.restoreFailed':
+    'No se pudo confirmar la restauración. Actualice las alertas antes de volver a intentarlo.',
   'alerts.overview.notification.resumed': 'Notificaciones de alerta reanudadas',
-  'alerts.overview.notification.resumeFailed': 'No se pudieron reanudar las notificaciones',
+  'alerts.overview.notification.resumeFailed':
+    'No se pudo confirmar la reanudación de las notificaciones. Actualice las alertas antes de volver a intentarlo.',
   'alerts.overview.notification.snoozed': 'Alerta pospuesta hasta {until}',
-  'alerts.overview.notification.snoozeFailed': 'No se pudo posponer la alerta',
+  'alerts.overview.notification.snoozeFailed':
+    'No se pudo confirmar la pausa. Actualice las alertas antes de volver a intentarlo.',
   'alerts.overview.paused.description':
     'Activa las alertas para reanudar la monitorizacion y desbloquear las pestañas de configuracion',
   'alerts.overview.paused.title': 'Las alertas estan pausadas',

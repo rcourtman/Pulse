@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -77,5 +78,53 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 	}
 	if strings.Contains(handoff.Context, "tool_choice") || strings.Contains(handoff.Context, "No endpoints found") {
 		t.Fatalf("context leaked raw provider routing detail: %s", handoff.Context)
+	}
+}
+
+func TestPatrolRunAssistantHandoffDoesNotCountScopeAliasesAsWorkloads(t *testing.T) {
+	// Frozen source-ux8yc7zc producer semantics: one Docker host record, four
+	// effective identities for container aliases and their transport context.
+	ids := []string{"abc123def456", "agent-13d445d46d78a341", "app-container-c81d6ea4500a6178", "fixture-nas"}
+	run := PatrolRunRecord{
+		ID: "docker-scoped-error", Type: "scoped", Status: "error",
+		ScopeResourceIDs:          []string{"docker:fixture-nas/abc123def456"},
+		EffectiveScopeResourceIDs: ids, ResourcesChecked: 1, DockerChecked: 1,
+		ErrorCount: 1, ErrorSummary: "Provider not ready", ErrorDetail: "chat service not available",
+	}
+	handoff := BuildPatrolRunAssistantHandoff(run)
+	for _, required := range []string{"Checked 1 scoped resource", "Provider not ready", "chat service not available"} {
+		if !strings.Contains(handoff.Context, required) {
+			t.Fatalf("handoff missing %q: %s", required, handoff.Context)
+		}
+	}
+	for _, invented := range []string{"of 4 scoped", "Scoped to 4 resources", "1 container"} {
+		if strings.Contains(handoff.Context, invented) {
+			t.Fatalf("handoff invents %q: %s", invented, handoff.Context)
+		}
+	}
+	if len(handoff.Resources) != len(ids) {
+		t.Fatalf("scope identities lost: %+v", handoff.Resources)
+	}
+	for i, id := range ids {
+		if handoff.Resources[i].ID != id {
+			t.Fatalf("scope identity changed: %+v", handoff.Resources)
+		}
+	}
+	for _, n := range []int{0, 2} {
+		run.ResourcesChecked = n
+		want := fmt.Sprintf("Checked %d scoped resources", n)
+		if got := patrolRunCoverageSummary(run); got != want {
+			t.Fatalf("coverage = %q, want %q", got, want)
+		}
+	}
+	for _, n := range []int{1, 2} {
+		legacy := PatrolRunRecord{DockerChecked: n}
+		want := fmt.Sprintf("%d Docker host", n)
+		if n != 1 {
+			want += "s"
+		}
+		if got := patrolRunCoverageSummary(legacy); got != want {
+			t.Fatalf("legacy breakdown = %q, want %q", got, want)
+		}
 	}
 }

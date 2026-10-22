@@ -43,7 +43,77 @@ def assert_group_claim_advice(case, guide):
         case.assertIn(marker, " ".join(guide.split()))
 
 
+def assert_provider_edit_entry(case, guide):
+    chooser = guide.split("## ⚡ Quick Fixes", 1)[0]
+    entry = chooser.split("- **SSO stopped working after editing a provider:**", 1)
+    case.assertEqual(len(entry), 2, "the symptom chooser must name provider-save failures")
+    entry = " ".join(entry[1].split("\n- ", 1)[0].split())
+    case.assertIn("OIDC.md#sign-in-fails-after-editing-a-provider", entry)
+    for boundary in ("saved without changing anything", "Keep the working administrator session",
+                     "a local password reset does not restore", "Test does not prove sign-in"):
+        case.assertIn(boundary, entry)
+
+
+def assert_unauthorised_sso_routes(case, guide):
+    section = guide.split("#### Cannot login / 401 Unauthorized", 1)[1].split("\n#### ", 1)[0]
+    entry = " ".join(section.split("- **SSO or proxy login:**", 1)[1].split("\n- ", 1)[0].split())
+    for target in ("OIDC.md#sign-in-fails-after-editing-a-provider",
+                   "OIDC.md#safe-diagnosis", "PROXY_AUTH.md"):
+        case.assertIn(target, entry)
+    case.assertIn("unchanged save", entry)
+    case.assertIn("without closing the working administrator session", entry)
+    case.assertIn("A local lockout reset does not repair", entry)
+
+
 class OIDCSessionDocsTest(unittest.TestCase):
+    def test_hiding_the_form_does_not_promise_password_rejection(self):
+        text = guide_section("### Hiding the local login form", "## ⚙️ Configuration")
+        for expected in (
+            "Hiding is not password rejection", "change the login page only",
+            "Local password authentication remains enabled", "POST /api/login",
+            "?show_local=true", "rate limits and lockouts still apply",
+            "MFA requirement does not apply to a local password sign-in",
+            "does **not** enforce it", "every reachable Pulse listener",
+            "direct backend access", "HTTP Basic authentication is a separate path",
+            "scoped API-token and agent access", "do not block all API routes",
+            "policy-compliant administrator recovery path", "separate browser session",
+            "Do not disable Pulse authentication, remove credentials or delete configuration",
+        ):
+            with self.subTest(boundary=expected):
+                self.assertIn(expected, text)
+        self.assertNotIn("```", text, "no credential-bearing probe or unqualified proxy recipe")
+
+    def test_configuration_reference_links_the_visibility_boundary(self):
+        guide = (ROOT / "docs/CONFIGURATION.md").read_text()
+        row = next(line for line in guide.splitlines()
+                   if line.startswith("| `PULSE_AUTH_HIDE_LOCAL_LOGIN` |"))
+        self.assertIn("does not disable password authentication", row)
+        self.assertIn("OIDC.md#hiding-the-local-login-form", row)
+        self.assertEqual(guide.encode(),
+                         (ROOT / "frontend-modern/public/docs/CONFIGURATION.md").read_bytes())
+
+    def test_visibility_advice_matches_password_entry_points(self):
+        login = (ROOT / "frontend-modern/src/components/Login.tsx").read_text()
+        visibility = login.split("const shouldShowLocalLogin =", 1)[1].split("return (", 1)[0]
+        self.assertIn("params.get('show_local') === 'true'", visibility)
+        self.assertIn("!authStatus()?.hideLocalLogin", visibility)
+        handler = (ROOT / "internal/api/router.go").read_text().split(
+            "func (r *Router) handleLogin(", 1)[1].split("\nfunc ", 1)[0]
+        self.assertNotIn("HideLocalLogin", handler)
+        for marker in ("GetLockoutInfo(loginReq.Username)", "GetLockoutInfo(clientIP)",
+                       "authLimiter.Allow(clientIP)", "auth.CheckPasswordHash"):
+            self.assertIn(marker, handler)
+        auth = (ROOT / "internal/api/auth.go").read_text()
+        self.assertIn('const prefix = "Basic "', auth)
+
+    def test_login_symptom_chooser_reaches_provider_save_recovery(self):
+        assert_provider_edit_entry(self, (ROOT / "docs/TROUBLESHOOTING.md").read_text())
+
+    def test_unauthorised_help_separates_sso_recovery_from_proxy_auth(self):
+        assert_unauthorised_sso_routes(self, (ROOT / "docs/TROUBLESHOOTING.md").read_text())
+        for heading in ("### Sign-in fails after editing a provider", "### Safe diagnosis"):
+            self.assertIn(heading, GUIDE.read_text())
+
     def test_setup_orders_callback_and_access_before_cutover(self):
         assert_callback_setup(self, GUIDE.read_text())
 

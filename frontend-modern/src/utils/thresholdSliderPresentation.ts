@@ -1,10 +1,10 @@
 export type ThresholdSliderMetricType = 'cpu' | 'memory' | 'disk' | 'temperature';
 
 const THRESHOLD_SLIDER_TEXT_CLASSES: Record<ThresholdSliderMetricType, string> = {
-  cpu: 'text-blue-500',
-  memory: 'text-green-500',
-  disk: 'text-amber-500',
-  temperature: 'text-rose-500',
+  cpu: 'text-blue-700 dark:text-blue-300',
+  memory: 'text-green-700 dark:text-green-300',
+  disk: 'text-amber-700 dark:text-amber-300',
+  temperature: 'text-rose-700 dark:text-rose-300',
 };
 
 const THRESHOLD_SLIDER_FILL_CLASSES: Record<ThresholdSliderMetricType, string> = {

@@ -1,6 +1,7 @@
 package alerts
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -171,18 +172,23 @@ func BuildGuestKey(instance, node string, vmID int) string {
 }
 
 type backupRecord struct {
-	key          string
-	vmID         string
-	lookup       GuestLookup
-	fallbackName string
-	instance     string
-	node         string
-	subjectType  string
-	source       string
-	rollupID     string
-	providers    []recovery.Provider
-	lastTime     time.Time
+	key           string
+	vmID          string
+	lookup        GuestLookup
+	fallbackName  string
+	instance      string
+	node          string
+	subjectType   string
+	source        string
+	rollupID      string
+	providers     []recovery.Provider
+	lastTime      time.Time
+	futureSuccess bool
 }
+
+// ErrBackupSuccessTimeInFuture marks unusable age evidence, not a failed backup.
+// Other subjects and any usable success for this subject are still evaluated.
+var ErrBackupSuccessTimeInFuture = errors.New("backup success time is in the future")
 
 // BackupInventoryScope carries monitoring-owned inventory readiness into backup
 // alert evaluation. It keeps orphan detection from racing ahead of Proxmox
@@ -362,22 +368,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		if instanceName != "" && snapshot.Instance != "" && snapshot.Instance != instanceName {
 			continue
 		}
-		if snapshot.Time.IsZero() {
-			continue
-		}
-
-		ageHours := now.Sub(snapshot.Time).Hours()
-		if ageHours < 0 {
-			continue
-		}
-		ageDays := ageHours / 24
-
-		const gib = 1024.0 * 1024 * 1024
-		sizeGiB := 0.0
-		if snapshot.SizeBytes > 0 {
-			sizeGiB = float64(snapshot.SizeBytes) / gib
-		}
-
 		// Determine thresholds for this snapshot
 		resourceID := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
 		lookup := guestsByKey[resourceID]
@@ -406,8 +396,20 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			continue
 		}
 		m.mu.RLock()
-		gh := m.getGuestThresholds(guestContext, resourceID)
+		thresholdPolicy := m.guestThresholdPolicyNoLock(guestContext, resourceID)
+		knownPolicy := m.guestSignalPolicyKnownNoLock(thresholdPolicy, "snapshot-age")
 		m.mu.RUnlock()
+		if !knownPolicy {
+			// Lookup metadata cannot supply current metric-filter evidence.
+			// Retain the occurrence, not a freshly evaluated or removed alert.
+			specID := resourceID + "/snapshot:" + snapshot.ID
+			stateID := buildCanonicalStateID(resourceID, specID)
+			validAlerts[stateID] = struct{}{}
+			validAlerts["snapshot-age-"+snapshot.ID] = struct{}{}
+			m.interruptMetricRunIDs(resourceID, specID, stateID)
+			continue
+		}
+		gh := thresholdPolicy.Thresholds
 
 		if gh.Disabled {
 			continue
@@ -422,23 +424,43 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			continue
 		}
 
+		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
+		specID := resourceID + "/snapshot:" + snapshot.ID
+		// The resolver may repair a restored alert's alias cache.
+		m.mu.Lock()
+		previous, _ := m.getActiveAlertNoLock(buildCanonicalStateID(resourceID, specID))
+		if previous == nil {
+			previous, _ = m.getActiveAlertNoLock(alertID)
+		}
+		if previous != nil && (previous.Type != "snapshot-age" || previous.ResourceID != resourceID || previous.Instance != snapshot.Instance || previous.Node != snapshot.Node) {
+			// A legacy alias alone is not authority to transfer evidence
+			// across resources or configured connections.
+			previous = nil
+		}
+		previous = previous.Clone()
+		m.mu.Unlock()
+		evidence := resolveSnapshotAlertEvidence(snapshot, previous, now)
+		ageDays := evidence.ageDays
+		const gib = 1024.0 * 1024 * 1024
+		sizeGiB := float64(evidence.sizeBytes) / gib
+
 		var ageLevel AlertLevel
 		var ageThreshold int
 		var sizeLevel AlertLevel
 		var sizeThreshold float64
 		var triggeredStats []string
 
-		if currentSnapshotCfg.CriticalDays > 0 && ageDays >= float64(currentSnapshotCfg.CriticalDays) {
+		if !evidence.ageObservedAt.IsZero() && currentSnapshotCfg.CriticalDays > 0 && ageDays >= float64(currentSnapshotCfg.CriticalDays) {
 			ageLevel = AlertLevelCritical
 			ageThreshold = currentSnapshotCfg.CriticalDays
 			triggeredStats = append(triggeredStats, "age")
-		} else if currentSnapshotCfg.WarningDays > 0 && ageDays >= float64(currentSnapshotCfg.WarningDays) {
+		} else if !evidence.ageObservedAt.IsZero() && currentSnapshotCfg.WarningDays > 0 && ageDays >= float64(currentSnapshotCfg.WarningDays) {
 			ageLevel = AlertLevelWarning
 			ageThreshold = currentSnapshotCfg.WarningDays
 			triggeredStats = append(triggeredStats, "age")
 		}
 
-		if snapshot.SizeBytes > 0 {
+		if evidence.sizeBytes > 0 {
 			if currentSnapshotCfg.CriticalSizeGiB > 0 && sizeGiB >= currentSnapshotCfg.CriticalSizeGiB {
 				sizeLevel = AlertLevelCritical
 				sizeThreshold = currentSnapshotCfg.CriticalSizeGiB
@@ -460,8 +482,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		} else if sizeLevel != "" && ageLevel == "" {
 			useSizePrimary = true
 		}
-
-		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
 
 		guestKey := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
 
@@ -488,10 +508,18 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		sizeGiBRounded := math.Round(sizeGiB*10) / 10
 		reasons := make([]string, 0, 2)
 		if ageLevel != "" {
-			reasons = append(reasons, fmt.Sprintf("%.1f days old (threshold %d days)", ageDaysRounded, ageThreshold))
+			reason := fmt.Sprintf("%.1f days old (threshold %d days)", ageDaysRounded, ageThreshold)
+			if evidence.ageHeld {
+				reason = "last known " + reason
+			}
+			reasons = append(reasons, reason)
 		}
 		if sizeLevel != "" {
-			reasons = append(reasons, fmt.Sprintf("%.1f GiB (threshold %.1f GiB)", sizeGiBRounded, sizeThreshold))
+			reason := fmt.Sprintf("%.1f GiB (threshold %.1f GiB)", sizeGiBRounded, sizeThreshold)
+			if evidence.sizeHeld {
+				reason = "last known " + reason
+			}
+			reasons = append(reasons, reason)
 		}
 		reasonText := strings.Join(reasons, " and ")
 		message := fmt.Sprintf(
@@ -502,34 +530,52 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			reasonText,
 			snapshot.Node,
 		)
+		if snapshot.Time.After(now) {
+			message += ". Creation time is in the future; snapshot age was not re-evaluated. Check the clocks on Pulse and Proxmox."
+		} else if snapshot.Time.IsZero() || !snapshot.Time.After(time.Unix(0, 0)) {
+			message += ". Creation time is unavailable; snapshot age was not re-evaluated."
+		}
+		if evidence.sizeHeld {
+			message = strings.TrimSuffix(message, ".") + ". Current snapshot size is unavailable; the last known size has been kept."
+		}
 
 		alertValue := ageDays
 		alertThreshold := float64(ageThreshold)
 		thresholdTime := now
+		observedAt := evidence.ageObservedAt
 		if useSizePrimary {
 			alertValue = sizeGiB
 			alertThreshold = sizeThreshold
+			observedAt = evidence.sizeObservedAt
 		} else if ageThreshold > 0 {
-			thresholdTime = snapshot.Time.Add(time.Duration(ageThreshold) * 24 * time.Hour)
+			thresholdTime = evidence.createdAt.Add(time.Duration(ageThreshold) * 24 * time.Hour)
 			if thresholdTime.After(now) {
 				thresholdTime = now
 			}
 		}
 
 		metadata := map[string]interface{}{
-			"snapshotName":      snapshot.Name,
-			"snapshotCreatedAt": snapshot.Time,
-			"snapshotAgeDays":   ageDays,
-			"snapshotAgeHours":  ageHours,
-			"snapshotSizeBytes": snapshot.SizeBytes,
-			"snapshotSizeGiB":   sizeGiB,
-			"guestName":         guestName,
-			"guestType":         guestType,
-			"guestInstance":     snapshot.Instance,
-			"guestNode":         snapshot.Node,
-			"guestVmid":         snapshot.VMID,
-			"triggeredMetrics":  triggeredStats,
-			"primaryMetric":     "age",
+			"snapshotName":     snapshot.Name,
+			"guestName":        guestName,
+			"guestType":        guestType,
+			"guestInstance":    snapshot.Instance,
+			"guestNode":        snapshot.Node,
+			"guestVmid":        snapshot.VMID,
+			"triggeredMetrics": triggeredStats,
+			"primaryMetric":    "age",
+		}
+		if !evidence.ageObservedAt.IsZero() {
+			metadata["snapshotCreatedAt"] = evidence.createdAt
+			metadata["snapshotAgeDays"] = ageDays
+			metadata["snapshotAgeHours"] = ageDays * 24
+			metadata["snapshotAgeObservedAt"] = evidence.ageObservedAt
+			metadata["snapshotAgeHeld"] = evidence.ageHeld
+		}
+		if !evidence.sizeObservedAt.IsZero() {
+			metadata["snapshotSizeBytes"] = evidence.sizeBytes
+			metadata["snapshotSizeGiB"] = sizeGiB
+			metadata["snapshotSizeObservedAt"] = evidence.sizeObservedAt
+			metadata["snapshotSizeHeld"] = evidence.sizeHeld
 		}
 		if useSizePrimary {
 			metadata["primaryMetric"] = "size"
@@ -546,13 +592,21 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		guestResourceID := guestKey
 		sizeMetric := ""
 		var sizeValue *float64
-		if currentSnapshotCfg.WarningSizeGiB > 0 || currentSnapshotCfg.CriticalSizeGiB > 0 {
+		if !evidence.sizeObservedAt.IsZero() && (currentSnapshotCfg.WarningSizeGiB > 0 || currentSnapshotCfg.CriticalSizeGiB > 0) {
 			sizeMetric = "snapshot-size-gib"
 			sizeValue = &sizeGiB
 		}
 		ageMetric := ""
-		if currentSnapshotCfg.WarningDays > 0 || currentSnapshotCfg.CriticalDays > 0 {
+		if !evidence.ageObservedAt.IsZero() && (currentSnapshotCfg.WarningDays > 0 || currentSnapshotCfg.CriticalDays > 0) {
 			ageMetric = "snapshot-age-days"
+		}
+		warningAge, criticalAge := float64(currentSnapshotCfg.WarningDays), float64(currentSnapshotCfg.CriticalDays)
+		warningSize, criticalSize := currentSnapshotCfg.WarningSizeGiB, currentSnapshotCfg.CriticalSizeGiB
+		if ageMetric == "" {
+			warningAge, criticalAge = 0, 0
+		}
+		if sizeMetric == "" {
+			warningSize, criticalSize = 0, 0
 		}
 
 		spec, err := buildCanonicalPostureThresholdSpec(
@@ -561,11 +615,11 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			resourceName,
 			guestResourceType,
 			ageMetric,
-			float64(currentSnapshotCfg.WarningDays),
-			float64(currentSnapshotCfg.CriticalDays),
+			warningAge,
+			criticalAge,
 			sizeMetric,
-			currentSnapshotCfg.WarningSizeGiB,
-			currentSnapshotCfg.CriticalSizeGiB,
+			warningSize,
+			criticalSize,
 			false,
 		)
 		if err != nil {
@@ -581,7 +635,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		result, _ := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 			Spec: spec,
 			Evidence: alertspecs.AlertEvidence{
-				ObservedAt: now,
+				ObservedAt: observedAt,
 				PostureThreshold: &alertspecs.PostureThresholdEvidence{
 					AgeMetric:  ageMetric,
 					AgeValue:   ageDays,
@@ -633,8 +687,8 @@ func (m *Manager) CheckBackups(
 	rollups []recovery.ProtectionRollup,
 	guestsByKey map[string]GuestLookup,
 	guestsByVMID map[string][]GuestLookup,
-) {
-	m.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, nil)
+) error {
+	return m.CheckBackupsWithInventory(rollups, guestsByKey, guestsByVMID, nil)
 }
 
 // CheckBackupsWithInventory evaluates backup rollups with optional monitoring
@@ -644,7 +698,7 @@ func (m *Manager) CheckBackupsWithInventory(
 	guestsByKey map[string]GuestLookup,
 	guestsByVMID map[string][]GuestLookup,
 	inventoryScope *BackupInventoryScope,
-) {
+) error {
 	m.mu.RLock()
 	enabled := m.config.Enabled
 	backupCfg := m.config.BackupDefaults
@@ -657,31 +711,37 @@ func (m *Manager) CheckBackupsWithInventory(
 
 	if !enabled || !backupCfg.Enabled {
 		m.clearBackupAlerts()
-		return
+		return nil
 	}
 
 	if backupCfg.WarningDays <= 0 && backupCfg.CriticalDays <= 0 {
 		m.clearBackupAlerts()
-		return
+		return nil
 	}
 
+	now := time.Now()
 	records := make(map[string]*backupRecord)
 
 	updateRecord := func(key string, candidate backupRecord) {
 		if key == "" {
 			return
 		}
+		candidate.futureSuccess = candidate.lastTime.After(now)
 		if existing, ok := records[key]; ok {
-			if candidate.lastTime.After(existing.lastTime) {
+			futureSuccess := existing.futureSuccess || candidate.futureSuccess
+			// A timestamp ahead of this evaluator's clock cannot establish
+			// recovery or displace a usable backup from another provider.
+			existingFuture := existing.lastTime.After(now)
+			if (existingFuture && !candidate.futureSuccess) ||
+				(existingFuture == candidate.futureSuccess && candidate.lastTime.After(existing.lastTime)) {
 				*existing = candidate
 			}
+			existing.futureSuccess = futureSuccess
 			return
 		}
 		record := candidate
 		records[key] = &record
 	}
-
-	now := time.Now()
 
 	for _, rollup := range rollups {
 		if rollup.LastSuccessAt == nil || rollup.LastSuccessAt.IsZero() {
@@ -842,23 +902,13 @@ func (m *Manager) CheckBackupsWithInventory(
 
 	if len(records) == 0 {
 		m.clearBackupAlerts()
-		return
+		return nil
 	}
 
 	validAlerts := make(map[string]struct{})
+	futureSuccess := false
 
 	for key, record := range records {
-		age := now.Sub(record.lastTime)
-		if age < 0 {
-			continue
-		}
-
-		ageDays := age.Hours() / 24
-		if ageDays < 0 {
-			continue
-		}
-		ageDaysRounded := math.Round(ageDays*10) / 10
-
 		// A PBS subject without a guest VMID is a host/config backup
 		// (PBS backup-type "host", keyed by the node name), not a guest
 		// workload. The Backups overview already keeps these out of guest
@@ -872,10 +922,28 @@ func (m *Manager) CheckBackupsWithInventory(
 		// Determine thresholds for this backup
 		currentBackupCfg := backupCfg
 		guestContext := guestSnapshotFromLookup(record.lookup, record.fallbackName)
+		// Remembered metadata can supply a policy identity and a last-known
+		// location, but only an inventory ResourceID proves the guest is live.
+		orphaned := record.vmID != "" && strings.TrimSpace(record.lookup.ResourceID) == ""
 		guestResourceID := strings.TrimSpace(record.lookup.ResourceID)
 		if guestResourceID == "" {
 			guestResourceID = guestContext.ID
 		}
+		if backupIgnoreVMID(record.vmID, backupCfg.IgnoreVMIDs) {
+			continue
+		}
+		if orphaned {
+			if backupMatchesKnownPVETemplate(inventoryScope, *record) {
+				continue
+			}
+			if !backupOrphanInventoryReady(inventoryScope, *record) {
+				continue
+			}
+			if backupCfg.AlertOrphaned != nil && !*backupCfg.AlertOrphaned {
+				continue
+			}
+		}
+
 		if guestResourceID != "" {
 			policy := m.resolveGuestAlertPolicy(guestContext)
 			if policy.SuppressionReason != "" {
@@ -885,8 +953,20 @@ func (m *Manager) CheckBackupsWithInventory(
 				continue
 			}
 			m.mu.RLock()
-			gh := m.getGuestThresholds(guestContext, guestResourceID)
+			thresholdPolicy := m.guestThresholdPolicyNoLock(guestContext, guestResourceID)
+			knownPolicy := m.guestSignalPolicyKnownNoLock(thresholdPolicy, "backup-age")
 			m.mu.RUnlock()
+			if !knownPolicy {
+				alertKey := sanitizeAlertKey(key)
+				resourceID := canonicalBackupSubjectResourceID(alertKey, *record)
+				specID := resourceID + "-backup-age"
+				stateID := buildCanonicalStateID(resourceID, specID)
+				validAlerts[stateID] = struct{}{}
+				validAlerts["backup-age-"+alertKey] = struct{}{}
+				m.interruptMetricRunIDs(resourceID, specID, stateID)
+				continue
+			}
+			gh := thresholdPolicy.Thresholds
 			if gh.Disabled {
 				continue
 			}
@@ -898,24 +978,23 @@ func (m *Manager) CheckBackupsWithInventory(
 		currentBackupCfg.AlertOrphaned = backupCfg.AlertOrphaned
 		currentBackupCfg.IgnoreVMIDs = backupCfg.IgnoreVMIDs
 
-		if backupIgnoreVMID(record.vmID, currentBackupCfg.IgnoreVMIDs) {
-			continue
-		}
-		if record.vmID != "" && record.lookup.ResourceID == "" {
-			if backupMatchesKnownPVETemplate(inventoryScope, *record) {
-				continue
-			}
-			if !backupOrphanInventoryReady(inventoryScope, *record) {
-				continue
-			}
-			if currentBackupCfg.AlertOrphaned != nil && !*currentBackupCfg.AlertOrphaned {
-				continue
-			}
-		}
-
 		if !currentBackupCfg.Enabled {
 			continue
 		}
+
+		futureSuccess = futureSuccess || record.futureSuccess
+		if record.lastTime.After(now) {
+			// Retain this subject's existing condition without refreshing its
+			// evidence, severity or age. Explicit disablement/ignore/suppression
+			// above still applies, and other subjects continue to evaluate.
+			alertKey := sanitizeAlertKey(key)
+			resourceID := canonicalBackupSubjectResourceID(alertKey, *record)
+			validAlerts[buildCanonicalStateID(resourceID, resourceID+"-backup-age")] = struct{}{}
+			validAlerts["backup-age-"+alertKey] = struct{}{}
+			continue
+		}
+		ageDays := now.Sub(record.lastTime).Hours() / 24
+		ageDaysRounded := math.Round(ageDays*10) / 10
 
 		var threshold int
 		switch {
@@ -986,7 +1065,7 @@ func (m *Manager) CheckBackupsWithInventory(
 			"guestInstance":  instance,
 			"guestNode":      node,
 			"guestVmid":      metadataIntValue(record.vmID),
-			"orphaned":       record.vmID != "" && guestResourceID == "",
+			"orphaned":       orphaned,
 		}
 		specResourceID := canonicalBackupSubjectResourceID(alertKey, *record)
 		specResourceType := canonicalBackupSubjectResourceType(*record)
@@ -1056,6 +1135,10 @@ func (m *Manager) CheckBackupsWithInventory(
 		m.clearAlertNoLock(storageKey)
 	}
 	m.mu.Unlock()
+	if futureSuccess {
+		return ErrBackupSuccessTimeInFuture
+	}
+	return nil
 }
 
 func slicesContainsProvider(providers []recovery.Provider, target recovery.Provider) bool {

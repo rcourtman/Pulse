@@ -171,12 +171,16 @@ func guestKindFromType(guestType string) guestKind {
 
 func guestSnapshotFromIdentity(resourceID, name, node, instance, guestType, status string) guestSnapshot {
 	snapshot := guestSnapshot{
-		Kind:     guestKindFromType(guestType),
-		ID:       strings.TrimSpace(resourceID),
-		Name:     strings.TrimSpace(name),
-		Node:     strings.TrimSpace(node),
-		Instance: strings.TrimSpace(instance),
-		Status:   strings.TrimSpace(status),
+		Kind:              guestKindFromType(guestType),
+		ID:                strings.TrimSpace(resourceID),
+		Name:              strings.TrimSpace(name),
+		Node:              strings.TrimSpace(node),
+		Instance:          strings.TrimSpace(instance),
+		Status:            strings.TrimSpace(status),
+		CPUPercent:        -1,
+		MemoryUnavailable: true,
+		DiskUnavailable:   true,
+		IORateValidity:    models.IORateValidity{Explicit: true},
 	}
 
 	if ident, ok := guestOverrideIdentityFromGuestOrID(nil, resourceID); ok {

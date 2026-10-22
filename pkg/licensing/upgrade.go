@@ -13,9 +13,8 @@ const DefaultUpgradeURL = "https://pulserelay.pro/pricing?utm_source=pulse&utm_m
 // compatibility paths that derive hosted entitlement refresh endpoints.
 const DefaultProTrialSignupURL = "https://cloud.pulserelay.pro"
 
-// DefaultPulseAccountPortalURL is where in-app Buy sends the operator to choose
-// a plan and pay. The licence server hosts it; the earlier page on the Cloud
-// host stopped answering when hosted Cloud was hibernated on 2026-06-01.
+// DefaultPulseAccountPortalURL is the licence-server purchase page used by
+// in-app Buy, Upgrade and Renew. The legacy hosted base remains separate.
 const DefaultPulseAccountPortalURL = "https://license.pulserelay.pro/buy"
 
 // ProTrialSignupURLEnvVar overrides the legacy hosted commercial base URL.

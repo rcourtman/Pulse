@@ -274,7 +274,10 @@ jobs:
           trap 'rm -rf "${public_work}"' EXIT
           qualified_chart="dist/pulse-${VERSION}.tgz"
           test -f "${qualified_chart}"
-          for attempt in $(seq 1 30); do
+          # RC.2's Pages build alone took 60s, exhausting the old one-minute
+          # window before its index could propagate. Allow five minutes of
+          # bounded polling, still requiring the exact consumer package.
+          for attempt in $(seq 1 60); do
             public_index="$(mktemp)"
             if curl -fsSL --retry 2 --retry-delay 1 --retry-all-errors \
                  -o "${public_index}" "${public_repo}/index.yaml" && \
@@ -299,8 +302,8 @@ jobs:
               fi
             fi
             rm -f "${public_index}"
-            echo "Public Helm repository has not exposed ${VERSION} yet (${attempt}/30)."
-            sleep 2
+            echo "Public Helm repository has not exposed ${VERSION} yet (${attempt}/60)."
+            sleep 5
           done
           if [[ "${public_ready}" != "true" ]]; then
             echo "::error::Public Helm repository did not expose chart ${VERSION}."

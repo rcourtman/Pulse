@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""An owned offline source application and webhook; not installed acceptance.
+"""Owned offline generic/Telegram receivers; not installed/provider acceptance.
 
 All data, credentials and network endpoints are generated in this guest.
 Never prints credentials, response bodies or application logs. Mutations are
@@ -28,6 +28,10 @@ PUBLIC_URL = 'https://notification-runtime.example.test'
 LIMIT = 2 * 1024 * 1024
 # prepareWebhookData's ordinary event; resolution is a different path.
 ORDINARY_EVENT = 'alert'
+TELEGRAM_PATH = '/owned-telegram/sendMessage'
+TELEGRAM_CHAT = '-1001234'
+TELEGRAM_CONFIG_PATH = TELEGRAM_PATH + '?chat_id=' + TELEGRAM_CHAT
+FIXTURE_HEADER = 'owned-synthetic'
 
 
 class Failure(RuntimeError):
@@ -64,13 +68,22 @@ class Sink:
                     require(len(raw) == size, 'sink short read')
                     obj = json.loads(raw)
                     require(isinstance(obj, dict), 'sink non-object')
+                    row = {'body': obj, 'sha256': hashlib.sha256(raw).hexdigest(),
+                           'bytes': size, 'path': self.path,
+                           'content_types': self.headers.get_all('Content-Type', []),
+                           'fixture_headers': self.headers.get_all('X-Pulse-Fixture', [])}
+                    require(self.path in ('/owned-alert', TELEGRAM_PATH), 'unexpected sink path')
+                    # Like Telegram, refuse an untyped/empty message instead of
+                    # accepting arbitrary JSON as proof of an ordinary alert.
+                    accepted = self.path != TELEGRAM_PATH or all(telegram_wire_checks(row).values())
                     with owner.lock:
-                        owner.rows.append({'body': obj, 'sha256': hashlib.sha256(raw).hexdigest(),
-                                           'bytes': size, 'path': self.path})
-                    self.send_response(200)
-                    self.send_header('Content-Length', '2')
+                        owner.rows.append(row)
+                    response = b'{"ok":true}' if accepted else b'{"ok":false}'
+                    self.send_response(200 if accepted else 400)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Content-Length', str(len(response)))
                     self.end_headers()
-                    self.wfile.write(b'OK')
+                    self.wfile.write(response)
                 except Exception as exc:
                     owner.error = type(exc).__name__
                     self.send_response(400)
@@ -107,6 +120,39 @@ def delivery_checks(row, expected_name):
             'cpu_metric': body.get('type') == 'cpu'}
 
 
+def telegram_wire_checks(row):
+    body = row['body']
+    text = body.get('text')
+    return {'owned_path': row['path'] == TELEGRAM_PATH,
+            'json_content_type': row.get('content_types') == ['application/json'],
+            'nonempty_text': isinstance(text, str) and bool(text.strip()),
+            'chat_identity': body.get('chat_id') == TELEGRAM_CHAT}
+
+
+def telegram_delivery_checks(row, expected_name):
+    text = row['body'].get('text')
+    text = text if isinstance(text, str) else ''
+    return dict(telegram_wire_checks(row),
+                resource_identity=('• Resource: ' + expected_name) in text.splitlines(),
+                ordinary_event=text.startswith('*Pulse Alert:'),
+                cpu_metric='Type: Cpu' in text,
+                saved_public_url=PUBLIC_URL + '/alerts/history?alert=' in text,
+                markdown=row['body'].get('parse_mode') == 'Markdown',
+                unrelated_header=row.get('fixture_headers') == [FIXTURE_HEADER])
+
+
+def bounded_receiver_observations(rows):
+    """Preserve failed/multiple sends as closed checks, never body/header text."""
+    observations = []
+    for row in rows:
+        service = 'generic' if row['path'] == '/owned-alert' else 'telegram'
+        verify = delivery_checks if service == 'generic' else telegram_delivery_checks
+        observations.append({'service': service, 'bytes': row['bytes'], 'sha256': row['sha256'],
+                             'checks_by_resource': {identity: verify(row, f'notification-{identity}.example.test')
+                                                    for identity in ('a', 'b')}})
+    return observations
+
+
 def source_binding(binary, expected):
     require(bool(re.fullmatch(r'[0-9a-f]{40}', expected)), 'invalid expected source identity')
     actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -139,6 +185,7 @@ class Journey:
         self.process = None
         self.phases, self.exits, self.requests, self.deliveries = [], [], [], []
         self.delivery_observations = []
+        self.destination_readbacks = []
         self.active_request = None
 
     def phase(self, name):
@@ -245,6 +292,21 @@ class Journey:
                 cfg.get('agentDefaults', {}).get('cpu', {}).get('trigger') == 80,
                 'saved threshold/activation policy changed')
 
+    def assert_telegram_destination(self):
+        destinations = self.request('/api/notifications/webhooks')
+        require(isinstance(destinations, list), 'saved destination inventory is not a list')
+        matches = [row for row in destinations if row.get('name') == 'owned-builtin-telegram']
+        require(len(matches) == 1, 'built-in Telegram destination identity changed')
+        row = matches[0]
+        checks = {'builtin_service': row.get('service') == 'telegram',
+                  'no_custom_template': not row.get('template'),
+                  'owned_url': row.get('url') == f'http://127.0.0.1:{self.sink.port}' + TELEGRAM_CONFIG_PATH,
+                  'enabled_post': row.get('enabled') is True and row.get('method') == 'POST',
+                  'masked_headers': row.get('headers') ==
+                      {'content-type': '***REDACTED***', 'X-Pulse-Fixture': '***REDACTED***'}}
+        self.destination_readbacks.append(checks)
+        require(all(checks.values()), 'saved built-in Telegram destination changed')
+
     def report(self, identity):
         payload = {'agent': {'id': 'agent-' + identity, 'version': '0.0.0-dev', 'type': 'unified',
                              'commandsEnabled': False, 'intervalSeconds': 60},
@@ -255,24 +317,33 @@ class Journey:
                    'sequenceId': 'v1:notification-' + identity + ':1',
                    'metrics': {'cpuUsagePercent': 95, 'memory': {'totalBytes': 1073741824,
                                     'usedBytes': 429496729, 'freeBytes': 644245095, 'usage': 40}}}
+        start = len(self.sink.snapshot())
         self.request('/api/agents/agent/report', payload, auth='agent')
         deadline = time.monotonic() + 30
         expected_name = payload['host']['hostname']
         while time.monotonic() < deadline:
             require(self.process.poll() is None, 'owned server exited during ordinary delivery')
-            rows = self.sink.snapshot()
-            matches = [row for row in rows if row['body'].get('resourceName') == expected_name]
-            if matches:
-                require(len(matches) == 1, 'same first alert delivered more than once')
+            rows = self.sink.snapshot()[start:]
+            observed = []
+            for service, path, verify in [('generic', '/owned-alert', delivery_checks),
+                                          ('telegram', TELEGRAM_PATH, telegram_delivery_checks)]:
+                matches = [row for row in rows if row['path'] == path]
+                require(len(matches) <= 1, 'same first alert delivered more than once')
+                if not matches:
+                    continue
                 row = matches[0]
-                checks = delivery_checks(row, expected_name)
-                self.delivery_observations.append({'resource': identity, 'checks': checks,
-                                                   'bytes': row['bytes'], 'sha256': row['sha256']})
+                checks = verify(row, expected_name)
                 require(all(checks.values()), 'ordinary delivery checks failed: ' +
                         ','.join(sorted(key for key, passed in checks.items() if not passed)))
-                self.deliveries.append({'resource': identity, 'event': ORDINARY_EVENT, 'metric': 'cpu',
-                                        'saved_public_url': True, 'count': len(matches),
-                                        'bytes': row['bytes'], 'sha256': row['sha256']})
+                observed.append((service, row, checks))
+            if len(observed) == 2:
+                for service, row, checks in observed:
+                    self.delivery_observations.append({'resource': identity, 'service': service, 'checks': checks,
+                                                       'bytes': row['bytes'], 'sha256': row['sha256']})
+                    self.deliveries.append({'resource': identity, 'service': service,
+                                            'event': ORDINARY_EVENT, 'metric': 'cpu',
+                                            'saved_public_url': True, 'count': 1,
+                                            'bytes': row['bytes'], 'sha256': row['sha256']})
                 self.phase('ordinary-first-alert-' + identity)
                 return
             require(self.sink.error is None, 'owned destination rejected payload')
@@ -294,6 +365,16 @@ class Journey:
                          'url': f'http://127.0.0.1:{self.sink.port}/owned-alert', 'enabled': True,
                          'method': 'POST', 'service': 'generic',
                          'template': '{"instance":"{{.Instance | jsonString}}","resourceName":"{{.ResourceName | jsonString}}","event":"{{.Event | jsonString}}","type":"{{.Type | jsonString}}"}'})
+            # #2540: a custom generic payload cannot establish built-in
+            # Telegram delivery. Submit the wrong saved Content-Type, not a
+            # Test call, custom body or real provider token. The ordinary
+            # sender must apply its built-in JSON headers on both processes.
+            self.request('/api/notifications/webhooks', {'name': 'owned-builtin-telegram',
+                         # The real sender extracts chat_id into its JSON and
+                         # strips it from the wire URL; assert both identities.
+                         'url': f'http://127.0.0.1:{self.sink.port}' + TELEGRAM_CONFIG_PATH,
+                         'enabled': True, 'method': 'POST', 'service': 'telegram',
+                         'headers': {'content-type': 'text/plain', 'X-Pulse-Fixture': FIXTURE_HEADER}})
             cfg = self.request('/api/alerts/config')
             cfg.update(enabled=True, activationState='active', flappingEnabled=False,
                        timeThresholds={'agent': 0}, metricTimeThresholds={'agent': {'cpu': 0}},
@@ -309,6 +390,7 @@ class Journey:
             require(response['record']['scopes'] == ['agent:report'], 'monitoring-only scope widened')
             self.request('/api/system/settings', expected=403, auth='agent')
             self.assert_settings()
+            self.assert_telegram_destination()
             require(self.sink.snapshot() == [], 'destination called before ordinary synthetic alert')
             self.phase('saved-policy-and-unlisted-destination-refusal')
             self.report('a')
@@ -317,6 +399,7 @@ class Journey:
             self.start()
             # Original authenticated cookies and issued token: no relogin or token replacement.
             self.assert_settings()
+            self.assert_telegram_destination()
             tokens = self.request('/api/security/tokens')
             records = tokens.get('tokens', []) if isinstance(tokens, dict) else tokens
             matches = [r for r in records if r.get('id') == self.token_id]
@@ -327,6 +410,8 @@ class Journey:
             self.report('b')
             self.stop()
             self.phase('second-child-exit-and-listener-closure')
+            require(self.sink.error is None and len(self.sink.snapshot()) == 4,
+                    'ordinary generic/Telegram delivery inventory differs after shutdown')
         finally:
             self.stop()
 
@@ -363,7 +448,9 @@ def main():
             if journey:
                 report.update(phases=journey.phases, child_exits=journey.exits,
                               requests=journey.requests, incomplete_request=journey.active_request,
-                              deliveries=journey.deliveries, delivery_observations=journey.delivery_observations)
+                              deliveries=journey.deliveries, delivery_observations=journey.delivery_observations,
+                              destination_readbacks=journey.destination_readbacks,
+                              receiver_observations=bounded_receiver_observations(sink.snapshot()))
     report['owned_temporary_data_removed'] = not data.exists()
     report['source_clean_after'] = subprocess.run(['git', 'diff', '--quiet', 'HEAD'], check=False).returncode == 0
     if not report['source_clean_after']:

@@ -30,6 +30,85 @@ const guest = (patch: Partial<Resource> = {}): Resource => ({
 });
 
 describe('canonical History filesystem source ownership', () => {
+  it.each(['agent', 'guest-agent-meminfo', 'guest-agent-meminfo-derived'])(
+    'qualifies in-guest %s memory using native power, not canonical online status',
+    (source) => {
+      const value = guest();
+      value.memory!.observation!.source = source;
+      for (const runtimeStatus of ['paused', 'suspended', ' PAUSED ']) {
+        value.proxmox!.runtimeStatus = runtimeStatus;
+        expect(current(value).memory).toBeUndefined();
+        expect(deferred(value).memory.lastKnownValue).toBe(0);
+        expect(deferred(value).memory.message).toContain('Proxmox reports this guest');
+        expect(deferred(value).memory.message).toContain('2026-10-12 00:00:00 UTC');
+        expect(current(value).cpu).toBe(10);
+        expect(value.memory!.observation!.state).toBe('current');
+      }
+      for (const runtimeStatus of ['stopped', 'offline', ' STOPPED ']) {
+        value.proxmox!.runtimeStatus = runtimeStatus;
+        expect(current(value).memory).toBeUndefined();
+        expect(deferred(value).memory.lastKnownValue).toBeUndefined();
+        expect(deferred(value).memory.message).toContain('guest stopped');
+      }
+      value.proxmox!.runtimeStatus = 'running';
+      expect(current(value).memory).toBe(0);
+      expect(deferred(value).memory).toBeUndefined();
+    },
+  );
+
+  it('keeps host readings, other platforms and independently live unknown-state agents current', () => {
+    const value = guest({ proxmox: { runtimeStatus: 'paused' } });
+    value.memory!.observation!.source = 'status-mem';
+    expect(current(value).memory).toBe(0);
+    value.memory!.observation!.source = 'agent';
+    value.proxmox!.runtimeStatus = 'unknown';
+    expect(current(value).memory).toBe(0);
+    value.proxmox!.runtimeStatus = 'paused';
+    value.platformType = 'vmware-vsphere';
+    expect(current(value).memory).toBe(0);
+    value.platformScopes = ['vmware-vsphere', 'proxmox-pve'];
+    expect(current(value).memory).toBeUndefined();
+    value.type = 'system-container';
+    value.proxmox!.runtimeStatus = 'stopped';
+    expect(deferred(value).memory.lastKnownValue).toBeUndefined();
+  });
+
+  it.each(['paused', 'suspended'])(
+    'qualifies a native %s filesystem even when canonical health and its agent stay online',
+    (runtimeStatus) => {
+      for (const disks of [undefined, [agentDisk]]) {
+        const value = guest({ proxmox: { runtimeStatus, disks } });
+        expect(current(value).disk).toBeUndefined();
+        expect(current(value).usage).toBeUndefined();
+        expect(deferred(value).disk.lastKnownValue).toBe(62);
+        expect(deferred(value).disk.message).toContain(`while the VM is ${runtimeStatus}`);
+        expect(current(value).cpu).toBe(10);
+        value.disk = { current: 0, used: 0, total: 100 };
+        expect(deferred(value).disk.lastKnownValue).toBe(0);
+        value.disk = undefined;
+        expect(deferred(value).disk.lastKnownValue).toBeUndefined();
+      }
+    },
+  );
+
+  it.each(['unknown', 'starting', 'stopping', 'unrecognised-private-state'])(
+    'keeps unconfirmed native %s platform values distinct from the live linked agent',
+    (runtimeStatus) => {
+      const value = guest({ proxmox: { runtimeStatus, disks: [agentDisk] } });
+      expect(current(value).disk).toBeUndefined();
+      expect(current(value).usage).toBeUndefined();
+      expect(deferred(value).disk.lastKnownValue).toBe(62);
+      expect(deferred(value).disk.message).toContain('VM running state is unconfirmed');
+      expect(deferred(value).disk.message).not.toContain(runtimeStatus);
+      expect(current(value).cpu).toBe(10);
+      value.proxmox!.disks = undefined;
+      expect(current(value).disk).toBe(62);
+      value.agent!.stale = true;
+      expect(current(value).disk).toBeUndefined();
+      expect(deferred(value).disk.message).toContain('stopped reporting');
+    },
+  );
+
   it.each([
     'agent-not-running',
     'agent-error',

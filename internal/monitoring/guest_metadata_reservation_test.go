@@ -119,6 +119,12 @@ func TestGuestMetadataReservationOwnsWholeHTTPFetch(t *testing.T) {
 				if !unchanged || commands.Load() != 1 || len(m.guestMetadataSlots) != 1 {
 					t.Error("duplicate fetch changed retry timing, sent a command or consumed another slot")
 				}
+				// A new node coordinate cannot bypass the whole-fetch owner,
+				// even after its time-based scheduling hold has expired.
+				_, _, _, _, _, movedDeferred := m.fetchGuestAgentMetadata(context.Background(), client, "reservation", "migrated", "guest", 105, status, false)
+				if movedDeferred || commands.Load() != 1 || len(m.guestMetadataSlots) != 1 {
+					t.Error("migration bypassed the outstanding metadata owner")
+				}
 				// A different VM is not blocked by this metadata reservation.
 				_, _, _, _, otherAgent, otherDeferred := m.fetchGuestAgentMetadata(context.Background(), client, "reservation", "node", "other", 106, status, false)
 				if otherDeferred || otherAgent != "2.0" {

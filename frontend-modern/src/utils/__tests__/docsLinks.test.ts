@@ -31,6 +31,17 @@ const frontendRoot = path.resolve(__dirname, '..', '..', '..');
 const repoRoot = path.resolve(frontendRoot, '..');
 const runtimeDocsLinkScanTimeoutMs = 15_000;
 
+function withoutIndexGalleryLink(target: string, markdown: string): string {
+  // A current, explicitly external gallery is not installed-version setup help.
+  // Match the whole Markdown link so suffixes cannot inherit this exception.
+  return target === 'README.md'
+    ? markdown.replaceAll(
+        '[Product screenshots on GitHub](https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md)',
+        '',
+      )
+    : markdown;
+}
+
 function getRuntimeSourceFiles(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true });
   const files: string[] = [];
@@ -467,8 +478,41 @@ describe('docsLinks', () => {
       const rootDoc = readFileSync(source, 'utf8');
       const publicDoc = readFileSync(path.join(frontendRoot, 'public', 'docs', target), 'utf8');
       expect(publicDoc).toBe(rootDoc);
-      expect(publicDoc).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
+      expect(withoutIndexGalleryLink(target, publicDoc)).not.toContain(
+        'https://github.com/rcourtman/Pulse/blob/main/',
+      );
+      // Screenshots are deliberately not shipped. The reviewed Help index
+      // links to their source on GitHub instead of an unavailable local page.
+      // No other source-tree blob link is an allowed shipped-guide escape.
+      const sourceLinks = [
+        ...publicDoc.matchAll(/https:\/\/github\.com\/rcourtman\/Pulse\/blob\/main\/[^\s)]+/g),
+      ].map(([url]) => url);
+      expect(sourceLinks).toEqual(
+        target === 'README.md'
+          ? ['https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md']
+          : [],
+      );
     }
+  });
+
+  it('keeps the unshipped gallery exception exact and limited to the Help index', () => {
+    const gallery =
+      '[Product screenshots on GitHub](https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md)';
+    expect(withoutIndexGalleryLink('README.md', gallery)).toBe('');
+    for (const target of ['GUIDE.md', 'nested/README.md']) {
+      expect(withoutIndexGalleryLink(target, gallery)).toBe(gallery);
+    }
+    for (const changed of [
+      gallery.replace('SCREENSHOTS.md)', 'SCREENSHOTS.md?view=1)'),
+      gallery.replace('SCREENSHOTS.md)', 'SCREENSHOTS.md#other)'),
+      gallery.replace('SCREENSHOTS.md)', 'SCREENSHOTS.md.extra)'),
+      gallery.replace('SCREENSHOTS.md', 'CONFIGURATION.md'),
+      gallery.replace('/main/', '/master/'),
+    ]) {
+      expect(withoutIndexGalleryLink('README.md', changed)).toBe(changed);
+    }
+    const setup = '[Setup](https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md)';
+    expect(withoutIndexGalleryLink('README.md', `${gallery}\n${setup}`)).toBe(`\n${setup}`);
   });
 
   it('keeps reverse-proxy help explicit about forwarded HTTPS and peer trust', () => {
@@ -515,7 +559,8 @@ describe('docsLinks', () => {
     expect(migration).toContain('not a full backup of the installation');
     expect(migration).toContain('Stop Pulse before taking that');
     expect(migration).toContain('matching `.encryption.key`');
-    expect(migration).toContain('reload/apply failure');
+    expect(migration).toContain('reload/apply fails');
+    expect(migration).toContain('[unconfirmed-import checks](#import-was-not-confirmed)');
     expect(migration).toContain('it does not merge');
     expect(migration).toContain('UNIFIED_AGENT.md#moving-pulse-to-a-new-address');
     expect(migration).not.toContain('Update the `--token` flag');

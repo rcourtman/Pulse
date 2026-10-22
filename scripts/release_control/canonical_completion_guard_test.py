@@ -777,6 +777,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/hostagent/agent_metrics_test.go",
                         "internal/hostagent/agent_new_test.go",
                         "internal/hostagent/availability_test.go",
+                        "internal/hostagent/cluster_sensors_regression_test.go",
+                        "internal/hostagent/cluster_sensors_ssh_test.go",
+                        "internal/hostagent/cluster_sensors_test.go",
                         "internal/hostagent/command_client_test.go",
                         "internal/hostagent/commands_deploy_test.go",
                         "internal/hostagent/commands_host_update_test.go",
@@ -1411,6 +1414,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/availability_handlers_test.go",
                         "internal/api/chartapi/history_activity_test.go",
                         "internal/api/configapi/config_handlers_connection_test.go",
+                        "internal/api/configapi/node_endpoint_diagnostics_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/docker_agents_report_size_test.go",
                         "internal/api/docker_container_action_executor_test.go",
@@ -4299,7 +4303,8 @@ class ReleaseCycleArtifactGuardTest(unittest.TestCase):
 class DevPrepushScriptTest(unittest.TestCase):
     def test_checks_every_commit_with_its_contract_neutral_trailer(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            repo = Path(temp_dir)
+            repo = Path(temp_dir) / "repo"
+            repo.mkdir()
             (repo / "scripts" / "release_control").mkdir(parents=True)
             (repo / "scripts" / "dev-prepush.sh").write_text(
                 (REPO_ROOT / "scripts" / "dev-prepush.sh").read_text(encoding="utf-8"),
@@ -4352,7 +4357,10 @@ with open(os.environ["PULSE_TEST_GUARD_LOG"], "a", encoding="utf-8") as log:
             git("add", "second.txt")
             git("commit", "-q", "-m", "second change")
 
-            guard_log = repo / "guard.log"
+            # Evidence belongs outside the checked source, just like compiler
+            # traces in the local preflight fixture. Do not dirty the source
+            # while testing the per-commit contract invocation.
+            guard_log = Path(temp_dir) / "guard.log"
             env = strip_local_git_env(os.environ.copy())
             env["PULSE_TEST_GUARD_LOG"] = str(guard_log)
             result = subprocess.run(

@@ -268,6 +268,33 @@ describe('GuestRow', () => {
       expect(dot).toBeTruthy();
     });
 
+    it('keeps the reported runtime state in the same row through pause, uncertainty and recovery', () => {
+      const [guest, setGuest] = createSignal(makeGuest());
+      const { container } = renderGuestRow({
+        get guest() {
+          return guest();
+        },
+        visibleColumnIds: ['name'],
+      });
+      const row = container.querySelector('tr');
+      const dot = screen.getByTestId('status-dot');
+      for (const [status, label, variant] of [
+        ['running', 'Running', 'success'],
+        ['paused', 'Paused', 'warning'],
+        ['suspended', 'Suspended', 'warning'],
+        ['unknown', 'Unknown', 'warning'],
+        ['', 'Unknown', 'muted'],
+        ['stopped', 'Stopped', 'danger'],
+        ['running', 'Running', 'success'],
+      ]) {
+        setGuest({ ...guest(), status });
+        expect(container.querySelector('tr')).toBe(row);
+        expect(screen.getByTestId('status-dot')).toBe(dot);
+        expect(dot).toHaveAttribute('title', label);
+        expect(dot).toHaveAttribute('data-variant', variant);
+      }
+    });
+
     it('renders CPU bar with correct usage percentage', () => {
       renderGuestRow({ guest: makeGuest({ cpu: 0.75 }) });
       const cpuBar = screen.getByTestId('cpu-bar');
@@ -795,6 +822,47 @@ describe('GuestRow', () => {
       },
     );
 
+    it.each(['bars', 'sparklines'] as const)(
+      'keeps paused and unconfirmed VM disk readings last known in %s',
+      (mode) => {
+        const [guest, setGuest] = createSignal(makeGuest());
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'disk']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        const row = container.querySelector('tr');
+        for (const status of ['paused', 'suspended', 'unknown', 'starting']) {
+          setGuest(makeGuest({ status, diskStatusReason: undefined }));
+          const cell = container.querySelector('[data-workload-col="disk"]')!;
+          expect(cell).toHaveTextContent('Last known');
+          expect(cell.getAttribute('title')).toContain(
+            status === 'paused' || status === 'suspended'
+              ? `while the VM is ${status}`
+              : 'VM running state is unconfirmed',
+          );
+          if (mode === 'bars')
+            expect(screen.getByTestId('disk-bar')).toHaveAttribute(
+              'data-reading-state',
+              'last-known',
+            );
+          else
+            expect(cell.querySelector('[role="img"]')?.getAttribute('aria-label')).not.toMatch(
+              /current 50%/,
+            );
+          expect(container.querySelector('tr')).toBe(row);
+        }
+        setGuest(makeGuest());
+        expect(container.querySelector('[data-workload-disk-read-status]')).toBeNull();
+      },
+    );
+
     it('shows dash when disk data is unavailable', () => {
       renderGuestRow({
         guest: makeGuest({ disk: { total: 0, used: 0, free: 0 } }),
@@ -1272,6 +1340,49 @@ describe('GuestRow', () => {
     const observation = (state: string, date = observedAt, source = 'guest-agent-meminfo') =>
       makeMemory({ observation: { state, source, observedAt: date } });
     const noticeSelector = '[data-workload-memory-read-status]';
+    it.each(['bars', 'sparklines'] as const)(
+      'qualifies only in-guest memory on a native power update in %s mode',
+      (mode) => {
+        const [guest, setGuest] = createSignal(
+          makeGuest({ status: 'running', memory: observation('current', observedAt, 'agent') }),
+        );
+        const view = render(() => (
+          <table>
+            <tbody>
+              <GuestRow
+                guest={guest()}
+                visibleColumnIds={['name', 'memory']}
+                metricDisplayMode={mode}
+              />
+            </tbody>
+          </table>
+        ));
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+        setGuest({ ...guest(), status: 'paused' });
+        expect(view.container.querySelector(noticeSelector)).toHaveTextContent('Last known');
+        expect(view.container.querySelector(noticeSelector)).toHaveTextContent(
+          'Proxmox reports this guest paused',
+        );
+        if (mode === 'bars')
+          expect(screen.getByTestId('memory-bar')).toHaveAttribute(
+            'data-reading-state',
+            'last-known',
+          );
+        else
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, last known 50%' }),
+          ).toBeInTheDocument();
+        setGuest({ ...guest(), status: 'stopped' });
+        expect(view.container.querySelector(noticeSelector)).toHaveTextContent('Unavailable');
+        expect(view.container.querySelector('[data-testid="memory-bar"]')).toBeNull();
+        if (mode === 'sparklines')
+          expect(
+            screen.getByRole('img', { name: 'test-vm memory history, unavailable N/A' }),
+          ).toBeInTheDocument();
+        setGuest({ ...guest(), status: 'running' });
+        expect(view.container.querySelector(noticeSelector)).toBeNull();
+      },
+    );
     it.each(['bars', 'sparklines'] as const)(
       'invalidates only a stale agent-owned carrier in the mounted %s row',
       (mode) => {
@@ -3209,13 +3320,15 @@ describe('backup column', () => {
     expect(badge?.className).not.toContain('text-red');
   });
 
-  it('reserves red for supported guests without a backup', () => {
+  it('retains the missing-evidence caution for supported guests without a matched completion', () => {
     const { container } = renderGuestRow({
       guest: makeGuest({ type: 'qemu', workloadType: 'vm', lastBackup: 0 }),
       visibleColumnIds: ['name', 'backup'],
     });
-    expect(screen.getByText('None')).toBeTruthy();
-    const badge = container.querySelector('[aria-label="Backup status: no backup found"]');
+    expect(screen.getByText('Not found')).toBeTruthy();
+    const badge = container.querySelector(
+      '[aria-label="Backup status: no completed backup found"]',
+    );
     expect(badge).toBeTruthy();
     expect(badge?.classList.contains('text-red-700')).toBe(true);
   });
@@ -3268,7 +3381,7 @@ describe('backup column', () => {
       visibleColumnIds: ['name'],
     });
 
-    expect(container.querySelector('[title="No backup found"]')).toBeNull();
+    expect(container.querySelector('[title="No completed backup found"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Backup status:"]')).toBeNull();
   });
 
@@ -3451,6 +3564,144 @@ describe('GuestRow backup evidence disclosure', () => {
 });
 
 describe('GuestRow accessible reading explanations', () => {
+  it.each(['bars', 'sparklines'] as const)(
+    'exposes missing LXC aggregate evidence in %s without a hover or a guest action',
+    async (metricDisplayMode) => {
+      const onClick = vi.fn();
+      const [guest, setGuest] = createSignal(
+        makeGuest({
+          type: 'lxc',
+          platformScopes: ['proxmox-pve'],
+          disk: { total: 10 * 1024 ** 3, used: 0, usage: -1 },
+        }),
+      );
+      const { container } = renderGuestRow({
+        get guest() {
+          return guest();
+        },
+        visibleColumnIds: ['name', 'disk'],
+        workloadTableLayoutMode: 'narrow',
+        metricDisplayMode,
+        onClick,
+      });
+      const row = container.querySelector('tr');
+      const trigger = screen.getByRole('button', { name: 'Disk reading for test-vm: No data' });
+      expect(trigger).toHaveTextContent('No data');
+      expect(screen.queryByTestId('disk-bar')).toBeNull();
+      trigger.focus();
+      fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'Disk reading for test-vm' });
+      expect(dialog).toHaveTextContent('no current aggregate disk-usage measurement');
+      expect(dialog).toHaveTextContent('A missing reading does not mean an empty filesystem');
+      expect(dialog).toHaveTextContent('individually reported filesystems');
+      expect(dialog.querySelectorAll('button')).toHaveLength(1);
+      expect(onClick).not.toHaveBeenCalled();
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await Promise.resolve();
+      expect(screen.getByRole('button', { name: 'Close reading details' })).toHaveFocus();
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(trigger).toHaveFocus();
+      fireEvent.click(trigger);
+      // A later explicit zero is a measurement, not the old unknown sentinel.
+      setGuest({ ...guest(), disk: { total: 10 * 1024 ** 3, used: 0, usage: 0 } });
+      await Promise.resolve();
+      expect(container.querySelector('tr')).toBe(row);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Disk reading for/ })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Expand test-vm' })).toHaveFocus();
+      expect(onClick).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { disk: { total: 100 }, platformScopes: ['proxmox-pve'] },
+    { disk: { total: 0, used: 0, usage: -1 }, platformScopes: ['proxmox-pve'] },
+    { disk: { total: 100, used: NaN }, platformScopes: ['proxmox-pve'] },
+    {
+      disk: { total: 100, used: 50, usage: 50 },
+      telemetryAvailability: {
+        cpu: true,
+        memory: true,
+        disk: false,
+        networkIO: true,
+        diskIO: true,
+        uptime: true,
+      },
+      platformScopes: ['proxmox-pve'],
+    },
+    { disk: { total: 100, used: 0, usage: -1 }, platformScopes: undefined },
+  ] satisfies Array<Partial<WorkloadGuest>>)(
+    'explains omitted canonical usage and invalid legacy LXC aggregates without inventing a cause (%j)',
+    (evidence) => {
+      renderGuestRow({
+        guest: makeGuest({ type: 'lxc', ...evidence }),
+        visibleColumnIds: ['name', 'disk'],
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Disk reading for test-vm: No data' }));
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).not.toHaveTextContent(/permission|restart|probe|backup succeeded/i);
+      expect(dialog).toHaveTextContent('Capacity and configured mounts alone');
+    },
+  );
+
+  it.each([
+    { type: 'lxc', template: true },
+    { type: 'lxc', platformScopes: ['incus'] },
+    { type: 'system-container', platformScopes: ['truenas'] },
+    { type: 'qemu', platformScopes: ['proxmox-pve'] },
+    { type: 'app-container', platformScopes: ['proxmox-pve', 'docker'] },
+    { type: 'pod', platformScopes: ['kubernetes'] },
+  ] satisfies Array<Partial<WorkloadGuest>>)(
+    'does not call unsupported, template or other-platform storage a missing LXC measurement (%j)',
+    (scope) => {
+      renderGuestRow({
+        guest: makeGuest({ disk: { total: 100, used: 0, usage: -1 }, ...scope }),
+        visibleColumnIds: ['name', 'disk'],
+      });
+      expect(screen.queryByRole('button', { name: /Disk reading for .*: No data/ })).toBeNull();
+    },
+  );
+
+  it('keeps an independently stale agent reading ahead of the missing aggregate explanation', () => {
+    renderGuestRow({
+      guest: makeGuest({
+        type: 'lxc',
+        disk: { usage: -1 },
+        disksFromAgent: true,
+        agentStale: true,
+      }),
+      visibleColumnIds: ['name', 'disk'],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Disk reading for test-vm: Last known' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'The Pulse Agent in this guest stopped reporting',
+    );
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('no current aggregate');
+  });
+
+  it('does not borrow an individual filesystem measurement to fill the missing aggregate', () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        type: 'lxc',
+        platformScopes: ['proxmox-pve'],
+        disk: { usage: -1 },
+        disks: [{ mountpoint: '/data', total: 100, used: 50, usage: 50 }],
+      }),
+    );
+    renderGuestRow({
+      get guest() {
+        return guest();
+      },
+      visibleColumnIds: ['name', 'disk'],
+    });
+    expect(screen.getByRole('button', { name: 'Disk reading for test-vm: No data' })).toBeVisible();
+    expect(screen.queryByTestId('disk-bar')).toBeNull();
+    setGuest({ ...guest(), disk: { total: 100, used: 97, usage: 97 } });
+    expect(screen.queryByRole('button', { name: /Disk reading for/ })).toBeNull();
+    expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-state', 'current');
+  });
+
   it.each(['bars', 'sparklines'] as const)(
     'regression: %s exposes safe disk evidence without opening the enclosing row',
     async (metricDisplayMode) => {
@@ -3751,4 +4002,43 @@ describe('backup disclosures keep completion separate from guest safety', () => 
       expect(dialog).toHaveTextContent(GUEST_DRAWER_BACKUP_PRECAUTION);
     },
   );
+});
+
+describe('guest network read disclosure', () => {
+  it('qualifies a same-row power change and keeps touch/keyboard disclosure separate from row action', () => {
+    const onClick = vi.fn();
+    const [guest, setGuest] = createSignal(
+      makeGuest({
+        ipAddresses: ['192.0.2.80'],
+        networkInterfaces: [{ name: 'eth0', addresses: ['192.0.2.80'], rxBytes: 1024 }],
+        networkInterfacesFromAgent: false,
+      }),
+    );
+    const { container } = render(() => (
+      <table>
+        <tbody>
+          <GuestRow guest={guest()} visibleColumnIds={['name', 'ip']} onClick={onClick} />
+        </tbody>
+      </table>
+    ));
+    const row = container.querySelector('tr');
+    expect(container.querySelector('[data-workload-network-read-status]')).toBeNull();
+    setGuest({ ...guest(), status: 'paused' });
+    const trigger = screen.getByRole('button', { name: 'Network reading for test-vm: Last known' });
+    fireEvent.click(trigger);
+    expect(onClick).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog', { name: 'Network reading for test-vm' });
+    expect(dialog).toHaveTextContent('Proxmox reports this VM paused');
+    setGuest({ ...guest(), status: 'stopped' });
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(dialog).toHaveTextContent('Proxmox reports this VM stopped');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close reading details' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Removing the cue while open withdraws the read-only dialog too.
+    fireEvent.click(trigger);
+    setGuest({ ...guest(), status: 'running' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(container.querySelector('[data-workload-network-read-status]')).toBeNull();
+    expect(container.querySelector('tr')).toBe(row);
+  });
 });

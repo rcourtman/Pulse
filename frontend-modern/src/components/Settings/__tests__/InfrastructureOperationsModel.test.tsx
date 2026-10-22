@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
+import { SecurityAPI } from '@/api/security';
+import { MonitoringAPI } from '@/api/monitoring';
+import { InfrastructureOperationsStateProvider } from '../useInfrastructureOperationsState';
+import { InfrastructureInstallerSection } from '../InfrastructureInstallerSection';
+
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
@@ -569,5 +576,83 @@ describe('infrastructure operations model', () => {
     expect(discoveryStateSource).toMatch(
       /if \(!canReadInfrastructure\(\)\) \{\s*return;\s*\}\s*discoveryInterval = setInterval\(/,
     );
+  });
+});
+
+// Exercise the production command owner and consuming panel together: no
+// mocked operations state or reimplementation of the transport decision.
+describe('installer transport policy with real command generation', () => {
+  it('keeps HTTP, custom-CA and bypass explanations aligned with Unix and Windows commands', async () => {
+    const security = vi.spyOn(SecurityAPI, 'getStatus').mockResolvedValue({
+      requiresAuth: false,
+      apiTokenConfigured: false,
+      agentUrl: 'http://pulse.example.invalid:7655',
+    } as Awaited<ReturnType<typeof SecurityAPI.getStatus>>);
+    const monitoring = vi.spyOn(MonitoringAPI, 'getState').mockResolvedValue({
+      connectedInfrastructure: [],
+    } as unknown as Awaited<ReturnType<typeof MonitoringAPI.getState>>);
+    const view = render(() => (
+      <Router>
+        <Route
+          path="/*"
+          component={() => (
+            <InfrastructureOperationsStateProvider embedded>
+              <InfrastructureInstallerSection />
+            </InfrastructureOperationsStateProvider>
+          )}
+        />
+      </Router>
+    ));
+    try {
+      await fireEvent.click(await screen.findByRole('button', { name: 'Confirm without token' }));
+      const policy = screen.getByRole('status', { name: 'Installation transport policy' });
+      const command = (name: string) =>
+        screen.getByRole('button', { name }).parentElement!.querySelector('code')!.textContent!;
+      const unix = () => command('Copy Install command');
+      const windows = () => command('Copy Install as Windows Service (PowerShell) command');
+      expect(policy).toHaveTextContent('HTTP does not protect this installation');
+      expect(unix()).toContain(' --insecure');
+      expect(windows()).toContain('PULSE_INSECURE_SKIP_VERIFY="true"');
+      await fireEvent.click(
+        screen.getByRole('button', { name: 'Show advanced connection and install options' }),
+      );
+      const skip = screen.getByRole('checkbox', {
+        name: 'Skip TLS certificate verification (unsafe)',
+      });
+      expect(skip).not.toBeChecked();
+      await fireEvent.input(screen.getByLabelText('Connection URL (Agent → Pulse)'), {
+        target: { value: 'https://pulse.example.invalid' },
+      });
+      expect(policy).toHaveTextContent('HTTPS certificate verification requested');
+      expect(unix()).not.toContain(' --insecure');
+      expect(windows()).not.toContain('PULSE_INSECURE_SKIP_VERIFY="true"');
+      await fireEvent.input(screen.getByLabelText('Custom CA certificate path (optional)'), {
+        target: { value: ' /etc/pulse/custom-ca.pem ' },
+      });
+      expect(policy).toHaveTextContent('HTTPS with a custom CA requested');
+      expect(unix()).toContain("--cacert '/etc/pulse/custom-ca.pem'");
+      expect(windows()).toContain('PULSE_CACERT="/etc/pulse/custom-ca.pem"');
+      expect(windows()).toContain('ValidateCustomCaCallback;');
+      await fireEvent.click(skip);
+      expect(policy).toHaveTextContent('override takes precedence');
+      expect(unix()).toContain('curl -kfsSL');
+      expect(windows()).toContain(
+        'ServerCertificateValidationCallback=[PulseInstallerCertificateValidator]::AcceptAnyCallback;',
+      );
+      await fireEvent.click(
+        screen.getByRole('button', { name: 'Hide advanced connection and install options' }),
+      );
+      expect(policy).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Copy Install command' })).toHaveAttribute(
+        'aria-describedby',
+        policy.id,
+      );
+      await waitFor(() => expect(monitoring).toHaveBeenCalled());
+      expect(security).toHaveBeenCalledOnce();
+    } finally {
+      view.unmount();
+      security.mockRestore();
+      monitoring.mockRestore();
+    }
   });
 });

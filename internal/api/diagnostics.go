@@ -941,10 +941,10 @@ func missingStoredSecretDiagnosticsFailure() diagnosticsConnectionFailure {
 }
 
 // The scheduler's retained LastError is text, unlike a live probe's typed
-// error. Recognise the existing producer's explicit status markers there,
+// error. Recognise both legacy and body-free PBS producer status markers,
 // not arbitrary numbers in a host, token ID or quoted response body. The
 // first marker wins; a gateway's body cannot replace its outer status.
-var diagnosticsAPIStatusPattern = regexp.MustCompile(`(?i)(?:^|:\s+)(?:API error\s+|authentication failed \(status\s+)([1-5][0-9]{2})\b`)
+var diagnosticsAPIStatusPattern = regexp.MustCompile(`(?i)(?:^|:\s+)(?:API error\s+|authentication failed \((?:status|HTTP)\s+|API request failed \(HTTP\s+)([1-5][0-9]{2})\b`)
 
 func diagnosticsAPIStatus(err error) (int, bool) {
 	if status, ok := proxmox.APIErrorStatus(err); ok {

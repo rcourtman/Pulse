@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -2765,8 +2766,8 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 				if !g.lastBackup.IsZero() {
 					backup = seedFormatTimeAgo(now, g.lastBackup)
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %.0f%% | %s | %.0f%% | %s | %s | %s |\n",
-					g.name, g.gType, g.node, g.cpu, g.memory.display(), g.disk, g.status, g.reachable, backup))
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %.0f%% | %s | %s | %s |\n",
+					g.name, g.gType, g.node, patrolGuestCPUDisplay(g.cpu), g.memory.display(), g.disk, g.status, g.reachable, backup))
 			}
 			sb.WriteString("\n")
 
@@ -3768,6 +3769,15 @@ func (p *PatrolService) seedFindingsAndContextState(scope *PatrolScope, snap pat
 	}
 
 	return sb.String(), seededFindingIDs
+}
+
+// Numeric guest compatibility views use -1 for no CPU observation. Never
+// describe that marker as an idle guest or as negative measured utilisation.
+func patrolGuestCPUDisplay(cpu float64) string {
+	if cpu < 0 || math.IsNaN(cpu) || math.IsInf(cpu, 0) {
+		return "unavailable"
+	}
+	return fmt.Sprintf("%.0f%%", cpu)
 }
 
 func seedOutlierLabel(name string, cpu, mem, disk float64) (string, bool) {

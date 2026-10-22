@@ -6,10 +6,10 @@ import {
 
 describe('thresholdSliderPresentation', () => {
   it('returns canonical text classes for threshold slider types', () => {
-    expect(getThresholdSliderTextClass('cpu')).toBe('text-blue-500');
-    expect(getThresholdSliderTextClass('memory')).toBe('text-green-500');
-    expect(getThresholdSliderTextClass('disk')).toBe('text-amber-500');
-    expect(getThresholdSliderTextClass('temperature')).toBe('text-rose-500');
+    expect(getThresholdSliderTextClass('cpu')).toBe('text-blue-700 dark:text-blue-300');
+    expect(getThresholdSliderTextClass('memory')).toBe('text-green-700 dark:text-green-300');
+    expect(getThresholdSliderTextClass('disk')).toBe('text-amber-700 dark:text-amber-300');
+    expect(getThresholdSliderTextClass('temperature')).toBe('text-rose-700 dark:text-rose-300');
   });
 
   it('returns canonical fill classes for threshold slider types', () => {

@@ -200,6 +200,10 @@ describe('settings architecture guardrails', () => {
     expect(settingsPageShellSource).not.toContain('animate-slideInRight');
     expect(settingsPageShellSource).not.toContain('min-h-[600px]">');
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');
+    expect(settingsSource).toContain('transferStatus={backupTransferFlow.transferStatus}');
+    expect(settingsSource).toContain('transferError={backupTransferFlow.transferError}');
+    expect(settingsDialogsSource).toContain('transferStatus={props.transferStatus}');
+    expect(settingsDialogsSource).toContain('transferError={props.transferError}');
   });
 
   it('keeps preview release maturity explicit in the shared update settings surface', () => {
@@ -1368,8 +1372,22 @@ describe('settings architecture guardrails', () => {
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('trim workload noise');
     expect(normalize(nodeModalMonitoringSectionSource)).toContain('Existing monitoring readings');
     expect(normalize(nodeModalMonitoringSectionSource)).not.toContain('dashboard readings');
-    expect(normalize(recoverySettingsPanelSource)).toContain('Required for workload backup status');
+    expect(normalize(recoverySettingsPanelSource)).toContain(
+      'Controls scheduled backup-record collection',
+    );
     expect(normalize(recoverySettingsPanelSource)).not.toContain('dashboard backup status');
+  });
+
+  it('keeps backup-polling safety help at the control rather than in a hidden interval section', () => {
+    const scopeIndex = recoverySettingsPanelSource.indexOf('aria-label="Backup polling scope"');
+    const intervalIndex = recoverySettingsPanelSource.indexOf('{/* Polling interval options */}');
+    expect(scopeIndex).toBeGreaterThan(0);
+    expect(scopeIndex).toBeLessThan(intervalIndex);
+    expect(recoverySettingsPanelSource).toContain('aria-label="Backup polling selection"');
+    expect(recoverySettingsPanelSource).toContain('aria-describedby={');
+    expect(recoverySettingsPanelSource).toContain("getShippedDocUrl('VM_DISK_MONITORING.md')");
+    expect(recoverySettingsPanelSource).toContain('peer-focus-visible:outline-2');
+    expect(recoverySettingsPanelSource).not.toContain('peer-focus:outline-hidden');
   });
 
   it('keeps cluster member address edits on the durable IPOverride boundary', () => {
@@ -1853,7 +1871,11 @@ describe('settings architecture guardrails', () => {
       'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',
     );
     expect(nodeModalSetupGuideSectionSource).toContain('setupCommandButtonTitle');
-    expect(nodeModalSetupGuideSectionSource).toContain('disabled={setupHandoffDisabled()}');
+    expect(nodeModalSetupGuideSectionSource).toContain(
+      'disabled={state.isPreparingSetup() || setupHandoffDisabled()}',
+    );
+    expect(nodeModalSetupGuideSectionSource).toContain('Preparing setup output');
+    expect(nodeModalStateSource).toContain('!props.setupHandoffDisabled?.()');
     expect(nodeModalSetupGuideSectionSource).toContain('Credential-free command ready');
     expect(nodeModalSetupGuideSectionSource).toContain('one-time setup token is shown separately');
     expect(nodeModalStateSource).toContain('copyToClipboard(data.command)');
@@ -1873,11 +1895,12 @@ describe('settings architecture guardrails', () => {
       'Install a trusted certificate for vCenter before using this in production.',
     );
 
-    expect(trueNASCredentialSlotSource).toContain('TlsVerificationWarningBanner');
-    expect(trueNASCredentialSlotSource).toContain('subject="this TrueNAS connection"');
+    expect(trueNASCredentialSlotSource).toContain('getTrueNASTlsPolicy');
+    expect(trueNASCredentialSlotSource).toContain('aria-label="TrueNAS form TLS policy"');
     expect(trueNASCredentialSlotSource).toContain(
-      'Install a trusted certificate or configure the TLS fingerprint before using this in production.',
+      'Form settings only, not a connection-test result',
     );
+    expect(trueNASCredentialSlotSource).not.toContain('TlsVerificationWarningBanner');
   });
 
   it('exposes external-agent setup from Pulse Intelligence while API Access stays token-only', () => {

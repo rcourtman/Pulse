@@ -43,6 +43,7 @@ import {
   getAlertDestinationsHeldEventsUnavailable,
   getAlertDestinationsTestPausedWarning,
   getAlertDestinationsAppriseTargetsHelp,
+  getAlertDestinationsAppriseTransportWarning,
   getAlertDestinationsAppriseTestLabel,
   getAlertDestinationsAppriseTestError,
   getAlertDestinationsAppriseTestFailure,
@@ -80,10 +81,10 @@ describe('alertDestinationsPresentation', () => {
 
   it('returns canonical destinations retry and warning copy', () => {
     expect(ALERT_DESTINATIONS_LOAD_ERROR_RISK_NOTICE).toBe(
-      'Saving now may overwrite your existing settings with defaults.',
+      'Saving is blocked until all notification settings have been reloaded.',
     );
     expect(getAlertDestinationsLoadErrorBanner('Unable to load webhook settings.')).toBe(
-      'Unable to load webhook settings. Saving now may overwrite your existing settings with defaults.',
+      'Unable to load webhook settings. Saving is blocked until all notification settings have been reloaded.',
     );
     expect(ALERT_DESTINATIONS_RETRY_LABEL).toBe('Retry');
     expect(ALERT_DESTINATIONS_RETRYING_LABEL).toBe('Retrying…');
@@ -236,8 +237,8 @@ describe('alert destinations delivery log copy', () => {
     expect(getAlertDeliveryLogOutcomeLabel('sent')).toBe('Delivered');
     expect(getAlertDeliveryLogOutcomeLabel('retry')).toBe('Retrying');
     expect(getAlertDeliveryLogOutcomeLabel('failed')).toBe('Failed');
-    // "Dead letter" is queue vocabulary; a user needs to know retries stopped.
-    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, retries stopped');
+    // The outcome does not distinguish an early stop from an exhausted budget.
+    expect(getAlertDeliveryLogOutcomeLabel('dead_letter')).toBe('Failed, no further retries');
     expect(getAlertDeliveryLogOutcomeLabel('cancelled')).toBe('Cancelled');
   });
 
@@ -271,6 +272,11 @@ describe('alert destinations delivery log copy', () => {
     const description = getAlertDestinationsDeliveryLogDescription(7, 30);
     expect(description).toContain('retained for 7 days');
     expect(description).toContain('remain available for 30 days');
+    expect(description).toContain(
+      'Entries marked "Failed, no further retries" remain available for 30 days',
+    );
+    expect(description).toContain('Other completed attempts are retained for 7 days');
+    expect(description).not.toMatch(/exhaust/i);
     expect(description).toContain('held notifications');
     expect(description).toContain('Test sends skip the queue');
     expect(getAlertDestinationsDeliveryLogEmpty()).toContain('No alert deliveries were attempted');
@@ -349,5 +355,48 @@ describe('alert destinations delivery paused copy', () => {
       );
     }
     setActiveLocale(DEFAULT_LOCALE);
+  });
+});
+
+describe('Apprise API transport policy, not connection evidence', () => {
+  it.each([false, true])('warns for HTTP independently of bypass=%s', (skip) => {
+    expect(
+      getAlertDestinationsAppriseTransportWarning('  HTTP://apprise.example.invalid:8000  ', skip),
+    ).toContain('HTTP does not use TLS');
+  });
+  it('warns for the full HTTPS bypass without echoing endpoint data', () => {
+    const warning = getAlertDestinationsAppriseTransportWarning(
+      'HTTPS://apprise.example.invalid/path?token=fixture',
+      true,
+    );
+    expect(warning).toContain('not just for self-signed certificates');
+    expect(warning).toContain('form settings');
+    expect(warning).not.toContain('fixture');
+    expect(warning).not.toContain('apprise.example.invalid');
+  });
+  it.each([
+    '',
+    'unfinished',
+    'https://',
+    'ftp://apprise.example.invalid',
+    'https://apprise.example.invalid',
+  ])('does not infer insecure transport from %s with verification on', (url) => {
+    expect(getAlertDestinationsAppriseTransportWarning(url, false)).toBeNull();
+  });
+  it.each(['', 'unfinished', 'https://', 'ftp://apprise.example.invalid'])(
+    'does not invent a transport for %s with bypass selected',
+    (url) => {
+      expect(getAlertDestinationsAppriseTransportWarning(url, true)).toBeNull();
+    },
+  );
+});
+
+describe('incomplete notification activity', () => {
+  it('names missing evidence and a safe refresh rather than a healthy or empty verdict', async () => {
+    const { getAlertDestinationsDeliveryLogIncomplete } =
+      await import('../alertDestinationsPresentation');
+    expect(getAlertDestinationsDeliveryLogIncomplete()).toBe(
+      'Some delivery attempts could not be read. This activity list is incomplete. Refresh to check again.',
+    );
   });
 });

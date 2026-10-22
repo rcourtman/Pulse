@@ -87,16 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           evidence=release-continuity-evidence
-          gh api --paginate --slurp \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100" \
-            > "${evidence}/stable-refs.json"
-          gh api --paginate --slurp \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/${REPOSITORY}/releases?per_page=100" \
-            > "${evidence}/releases.json"
+          bash scripts/read-github-release-inventory.sh "$REPOSITORY" "$evidence"
 
           fetch_registry_tags() {
             local registry_name="$1" auth_url="$2" registry_url="$3" image="$4" output="$5"

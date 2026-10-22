@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 import subprocess
+import sys
 
 import reconcile_release_convergence as subject
 
@@ -101,6 +103,233 @@ class TransientReadTests(unittest.TestCase):
                 with patch.object(subject.subprocess, "run", return_value=self.result(1, stderr="HTTP 504")) as command, patch("time.sleep") as sleep:
                     with self.assertRaises(subject.ReconciliationError):
                         github.post("repos/example/actions/dispatches", payload)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+
+class NotFoundReadTests(unittest.TestCase):
+    def test_only_complete_api_not_found_responses_become_missing_history(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for detail in ("HTTP 404", "HTTP 404\n", "gh: Not Found (HTTP 404)",
+                       "gh: Not Found (HTTP 404)\n"):
+            with self.subTest(detail=detail):
+                result = subprocess.CompletedProcess([], 1, stdout="failed-response", stderr=detail)
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    self.assertEqual("history-missing", subject.activation_owner_state(
+                        github, 90, workflow_id=42,
+                        display_title="Release convergence v6.5.0-rc.1 source 200",
+                    ))
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_ambiguous_owner_failures_never_reach_recovery_submission(self):
+        cases = [(code, "gh: Not Found (HTTP 404)")
+                 for code in (-9, -15, 2, 124, 130, 143)]
+        cases.extend((1, detail) for detail in (
+            "permission denied (HTTP 404)", "transport refused (HTTP 404)",
+            "gh: Not Found (HTTP 404)\ntransport refused",
+            "gh: Not Found (HTTP 404)\npermission denied",
+            "gh: Forbidden (HTTP 404)", "gh: unauthorised (HTTP 404)",
+            "gh: Not Found (HTTP 404)\nstream error: stream ID 1; CANCEL; received from peer",
+            "HTTP 404\nHTTP 403", "HTTP 404\nHTTP 504", "HTTP 404\nHTTP 404",
+            "gh: unexpected HTTP 4040", "HTTP 404\n\n", "unknown failure HTTP 404",
+        ))
+        for code, detail in cases:
+            with self.subTest(code=code, detail=detail):
+                github = FakeGitHub()
+                original = github.api
+                reader = subject.GitHub(github.repository, "gh")
+
+                def api(endpoint):
+                    if endpoint == f"repos/{github.repository}/actions/runs/{github.owner_run_id}":
+                        return reader.api(endpoint)
+                    return original(endpoint)
+
+                github.api = api
+                result = subprocess.CompletedProcess([], code, stdout="failed-response", stderr=detail)
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError) as failure:
+                        subject.reconcile(github, github.run_id, 5)
+                self.assertIs(type(failure.exception), subject.ReconciliationError)
+                self.assertEqual([], github.posts)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_non_api_commands_cannot_report_missing_history(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        operations = [lambda: github.post("repos/rcourtman/Pulse/actions/dispatches"),
+                      lambda: github.download_marker("v6.5.0", Path("unused-fixture-output")),
+                      lambda: github.job_log("rcourtman/Pulse", 1)]
+        for index, operation in enumerate(operations):
+            with self.subTest(operation=index):
+                result = subprocess.CompletedProcess([], 1, stdout="", stderr="gh: Not Found (HTTP 404)")
+                with patch.object(subject.subprocess, "run", return_value=result) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError) as failure:
+                        operation()
+                self.assertIs(type(failure.exception), subject.ReconciliationError)
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+
+class CancelledReadTests(unittest.TestCase):
+    diagnostic = "stream error: stream ID 1; CANCEL; received from peer\n"
+
+    def result(self, code=0, stdout="{}", stderr=""):
+        return subprocess.CompletedProcess([], code, stdout=stdout, stderr=stderr)
+
+    def test_real_cli_boundary_discards_cancelled_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            calls = root / "calls.json"
+            calls.write_text("[]")
+            peer = root / "closed-gh"
+            peer.write_text(f"#!{sys.executable}\n" + """
+import json
+from pathlib import Path
+import sys
+calls = Path(""" + repr(str(calls)) + """)
+history = json.loads(calls.read_text())
+history.append(sys.argv[1:])
+calls.write_text(json.dumps(history))
+if len(history) == 1:
+    print('[{"id":999}]')
+    print('stream error: stream ID 1; CANCEL; received from peer', file=sys.stderr)
+    sys.exit(1)
+print('[{"id":2}]\\n[{"id":3}]')
+""")
+            peer.chmod(0o700)
+            github = subject.GitHub("rcourtman/Pulse", str(peer))
+            with patch("time.sleep") as sleep, contextlib.redirect_stderr(io.StringIO()) as diagnostic:
+                self.assertEqual([[{"id": 2}], [{"id": 3}]], github.pages("repos/rcourtman/Pulse/releases?per_page=100"))
+            history = json.loads(calls.read_text())
+            self.assertEqual(2, len(history))
+            self.assertEqual(history[0], history[1])
+            self.assertEqual(["api", "--paginate", "repos/rcourtman/Pulse/releases?per_page=100"], history[0])
+            self.assertIn("HTTP/2 CANCEL", diagnostic.getvalue())
+            self.assertNotIn("999", diagnostic.getvalue())
+            sleep.assert_called_once_with(1)
+
+    def test_pages_restart_the_identical_read_without_partial_output(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        results = [self.result(1, '[{"id": 999}]', self.diagnostic),
+                   self.result(1, '[{"id":', self.diagnostic.replace("ID 1", "ID 93")),
+                   self.result(0, '[{"id": 2}]\n[{"id": 3}]')]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
+            self.assertEqual([[{"id": 2}], [{"id": 3}]], github.pages("repos/rcourtman/Pulse/releases?per_page=100"))
+        self.assertEqual(3, command.call_count)
+        self.assertTrue(all(call == command.call_args_list[0] for call in command.call_args_list))
+        self.assertEqual([1, 2], [call.args[0] for call in sleep.call_args_list])
+
+    def test_api_retry_preserves_the_selected_identity_without_logging_values(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        output = io.StringIO()
+        with patch.dict(os.environ, {"GH_TOKEN": "synthetic-ambient"}, clear=True), contextlib.redirect_stderr(output):
+            with patch.object(subject.subprocess, "run", side_effect=[self.result(1, "private-partial", self.diagnostic), self.result()]) as command, patch("time.sleep") as sleep:
+                self.assertEqual({}, github.api("repos/rcourtman/Pulse", token="synthetic-selected"))
+        self.assertEqual(2, command.call_count)
+        self.assertEqual(command.call_args_list[0], command.call_args_list[1])
+        self.assertEqual("synthetic-selected", command.call_args.kwargs["env"]["GH_TOKEN"])
+        self.assertNotIn("synthetic", output.getvalue())
+        self.assertNotIn("private-partial", output.getvalue())
+        sleep.assert_called_once_with(1)
+
+    def test_exhausted_cancellation_stops_after_three_reads(self):
+        for method in ("api", "pages"):
+            with self.subTest(method=method):
+                github = subject.GitHub("rcourtman/Pulse", "gh")
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, "partial", self.diagnostic)) as command, patch("time.sleep") as sleep:
+                    with self.assertRaisesRegex(subject.ReconciliationError, "GET repos/rcourtman/Pulse/releases"):
+                        getattr(github, method)("repos/rcourtman/Pulse/releases")
+                self.assertEqual(3, command.call_count)
+                self.assertEqual([1, 2], [call.args[0] for call in sleep.call_args_list])
+
+    def test_other_stream_errors_mixed_diagnostics_and_refusals_are_not_retried(self):
+        details = [self.diagnostic.replace("CANCEL", "REFUSED_STREAM"),
+                   self.diagnostic.replace("CANCEL", "INTERNAL_ERROR"),
+                   self.diagnostic.replace("ID 1", "ID unknown"),
+                   "gh: " + self.diagnostic, self.diagnostic + "\n",
+                   self.diagnostic + "HTTP 403\n", self.diagnostic + "HTTP 504\n",
+                   self.diagnostic + "terminal escape sequences refused\n",
+                   self.diagnostic + "permission denied\n",
+                   "HTTP 403\nHTTP 504", "permission denied (HTTP 504)"]
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for detail in details:
+            with self.subTest(detail=details.index(detail)):
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, "partial", detail)) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        github.pages("repos/rcourtman/Pulse/releases")
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_signals_and_timeout_exit_codes_are_not_transient_reads(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for code in (-15, 124, 130, 143):
+            for detail in (self.diagnostic, "HTTP 504"):
+                with self.subTest(code=code, detail=detail):
+                    with patch.object(subject.subprocess, "run", return_value=self.result(code, "partial", detail)) as command, patch("time.sleep") as sleep:
+                        with self.assertRaises(subject.ReconciliationError):
+                            github.api("repos/rcourtman/Pulse")
+                    self.assertEqual(1, command.call_count)
+                    sleep.assert_not_called()
+
+    def test_mutations_downloads_and_log_reads_never_retry_cancellation(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        operations = [lambda: github.post("repos/rcourtman/Pulse/actions/dispatches"),
+                      lambda: github.post("repos/rcourtman/Pulse/actions/dispatches", {"ref": "main"}),
+                      lambda: github.download_marker("v6.5.0", Path("unused-fixture-output")),
+                      lambda: github.job_log("rcourtman/Pulse", 1)]
+        for index, operation in enumerate(operations):
+            with self.subTest(operation=index):
+                with patch.object(subject.subprocess, "run", return_value=self.result(1, "partial", self.diagnostic)) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        operation()
+                self.assertEqual(1, command.call_count)
+                sleep.assert_not_called()
+
+    def test_discovery_consumes_only_the_recovered_complete_catalogue(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        published = release("v6.5.0", "2026-10-06T00:54:36Z", prerelease=False)
+        results = [self.result(stdout='{"default_branch":"main"}'),
+                   self.result(stdout=json.dumps({"id": WORKFLOW_ID})),
+                   self.result(1, '[{"tag_name":"v99.0.0"}]', self.diagnostic),
+                   self.result(stdout=json.dumps([published])),
+                   self.result(stdout=json.dumps({"workflow_runs": [run(10, "v6.5.0", "2026-10-06T00:55:00Z")]}))]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
+            self.assertEqual([10], subject.discover(github))
+        self.assertEqual(5, command.call_count)
+        self.assertEqual(command.call_args_list[2], command.call_args_list[3])
+        self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
+        sleep.assert_called_once_with(1)
+
+    def test_discovery_exhaustion_does_not_progress_to_runs_or_mutation(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        results = [self.result(stdout='{"default_branch":"main"}'),
+                   self.result(stdout=json.dumps({"id": WORKFLOW_ID})),
+                   *[self.result(1, "partial", self.diagnostic)] * 3]
+        with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep"):
+            with self.assertRaises(subject.ReconciliationError):
+                subject.discover(github)
+        self.assertEqual(5, command.call_count)
+        self.assertTrue(all(call == command.call_args_list[2] for call in command.call_args_list[2:]))
+        self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
+
+    def test_malformed_success_after_cancellation_is_not_retried_again(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for method in ("api", "pages"):
+            with self.subTest(method=method):
+                with patch.object(subject.subprocess, "run", side_effect=[self.result(1, "partial", self.diagnostic), self.result(stdout='[{"id":')]) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(subject.ReconciliationError):
+                        getattr(github, method)("repos/rcourtman/Pulse/releases")
+                self.assertEqual(2, command.call_count)
+                sleep.assert_called_once_with(1)
+
+    def test_subprocess_exceptions_are_not_replayed(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for failure in (subprocess.TimeoutExpired("gh", 1), PermissionError("synthetic refusal")):
+            with self.subTest(failure=type(failure).__name__):
+                with patch.object(subject.subprocess, "run", side_effect=failure) as command, patch("time.sleep") as sleep:
+                    with self.assertRaises(type(failure)):
+                        github.api("repos/rcourtman/Pulse")
                 self.assertEqual(1, command.call_count)
                 sleep.assert_not_called()
 
@@ -798,22 +1027,63 @@ class ReconciliationTests(unittest.TestCase):
         subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
-    def test_deleted_activation_owner_is_named_without_retry(self):
-        github = FakeGitHub()
-        fake_api = github.api
-
+    def missing_owner(self, github):
+        original = github.api
         def api(endpoint):
-            if endpoint.endswith(f"/actions/runs/{github.owner_run_id}"):
-                raise subject.GitHubNotFound("GitHub object was not found")
-            return fake_api(endpoint)
-
+            if endpoint == f"repos/{github.repository}/actions/runs/{github.owner_run_id}":
+                raise subject.GitHubNotFound("gh: Not Found (HTTP 404)")
+            return original(endpoint)
         github.api = api
-        with self.assertRaises(subject.ReconciliationError) as raised:
+        return github
+
+    def test_deleted_activation_owner_can_reach_attested_workflow_not_fake_completion(self):
+        github = self.missing_owner(FakeGitHub())
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
             subject.reconcile(github, github.run_id, 5)
-        self.assertNotIsInstance(raised.exception, subject.GitHubNotFound)
-        self.assertIn("owner run 90 for committed v6.5.0-rc.1", str(raised.exception))
-        self.assertIn("no longer exists", str(raised.exception))
+        self.assertEqual(1, len(github.posts))
+        self.assertEqual(
+            (f"repos/{github.repository}/actions/workflows/release-convergence.yml/dispatches", {
+                "ref": "main", "inputs": {
+                    "tag": "v6.5.0-rc.1", "version": "6.5.0-rc.1", "prerelease": "true",
+                    "target_commitish": "c" * 40, "release_id": "300", "r2_prefix": "packet",
+                    "source_release_run_id": "200",
+                },
+            }), github.posts[0],
+        )
+        self.assertIn("unavailable Actions history (404), not confirmed completion", output.getvalue())
+        self.assertIn("exact immutable attestation and the existing global lease", output.getvalue())
+
+    def test_missing_owner_preserves_current_control_retry_budget(self):
+        github = self.missing_owner(FakeGitHub(current_controls=True))
+        github.runs[0]["run_attempt"] = 5
+        subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
+
+    def test_missing_owner_does_not_override_credential_containment_or_marker_identity(self):
+        held = self.missing_owner(FakeGitHub())
+        held.unchanged_credential_containment_block = lambda run_id: True
+        subject.reconcile(held, held.run_id, 5)
+        self.assertEqual([], held.posts)
+        corrupt = self.missing_owner(FakeGitHub())
+        corrupt.marker["target_commitish"] = "f" * 40
+        with self.assertRaisesRegex(subject.ReconciliationError, "source commit"):
+            subject.reconcile(corrupt, corrupt.run_id, 5)
+        self.assertEqual([], corrupt.posts)
+
+    def test_unavailable_or_refused_owner_read_does_not_dispatch(self):
+        for detail in ("HTTP 401", "HTTP 403", "HTTP 429", "HTTP 504", "transport refused"):
+            with self.subTest(detail=detail):
+                github = FakeGitHub()
+                original = github.api
+                def api(endpoint):
+                    if endpoint == f"repos/{github.repository}/actions/runs/{github.owner_run_id}":
+                        raise subject.ReconciliationError(detail)
+                    return original(endpoint)
+                github.api = api
+                with self.assertRaisesRegex(subject.ReconciliationError, detail):
+                    subject.reconcile(github, github.run_id, 5)
+                self.assertEqual([], github.posts)
 
     def test_one_channel_failure_does_not_starve_the_other(self):
         args = argparse.Namespace(repository="rcourtman/Pulse", run_id=None,
@@ -842,6 +1112,121 @@ class ReconciliationTests(unittest.TestCase):
             [(f"repos/{github.repository}/actions/runs/{github.run_id}/rerun", None)],
             github.posts,
         )
+
+
+class ActivationOwnerObservationTests(unittest.TestCase):
+    def state(self, github):
+        return subject.activation_owner_state(
+            github, github.owner_run_id, workflow_id=42, display_title=github.title
+        )
+
+    def test_present_owner_identity_and_status_are_required(self):
+        for status in ("completed", "queued", "in_progress", "waiting", "pending", "requested", None, "unknown", ["completed"]):
+            with self.subTest(status=status):
+                github = FakeGitHub()
+                original = github.api
+                def api(endpoint):
+                    value = original(endpoint)
+                    value["status"] = status
+                    return value
+                github.api = api
+                if not isinstance(status, str) or status == "unknown":
+                    with self.assertRaisesRegex(subject.ReconciliationError, "unknown"):
+                        self.state(github)
+                else:
+                    self.assertEqual("completed" if status == "completed" else "active", self.state(github))
+                self.assertEqual([], github.posts)
+
+    def test_mismatched_present_identity_never_becomes_missing_history(self):
+        for key, value in (
+            ("id", 91), ("repository", {"full_name": "other/repo"}),
+            ("workflow_id", 43), ("path", subject.CREATE_RELEASE_PATH),
+            ("event", "push"), ("display_title", "Release convergence v6.5.0 source 201"),
+        ):
+            with self.subTest(key=key):
+                github = FakeGitHub()
+                original = github.api
+                def api(endpoint):
+                    result = original(endpoint)
+                    result[key] = value
+                    return result
+                github.api = api
+                with self.assertRaises(subject.ReconciliationError):
+                    self.state(github)
+                self.assertEqual([], github.posts)
+
+    def test_missing_status_observation_is_read_only_at_real_cli(self):
+        # Execute the same CLI consumed after attestation by the real workflow.
+        # The closed gh fixture allows exactly two GETs, never a provider call.
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            gh = root / "gh"
+            record = root / "calls.jsonl"
+            reply = root / "reply.json"
+            gh.write_text("""#!/usr/bin/env python3
+import json, os, pathlib, sys
+p = pathlib.Path(os.environ["OWNER_FIXTURE"])
+x = json.loads(p.read_text())
+with pathlib.Path(os.environ["OWNER_CALLS"]).open("a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+assert sys.argv[1] == "api" and "--method" not in sys.argv
+endpoint = sys.argv[-1]
+if endpoint == "repos/rcourtman/Pulse/actions/workflows/release-convergence.yml":
+    if x.get("workflow_missing"):
+        print("gh: Not Found (HTTP 404)", file=sys.stderr); sys.exit(1)
+    print('{"id":42}')
+elif endpoint == "repos/rcourtman/Pulse/actions/runs/90":
+    if "error" in x:
+        print(x["error"], file=sys.stderr); sys.exit(x.get("error_exit", 1))
+    print(x["raw"] if "raw" in x else json.dumps(x["run"]))
+else:
+    raise AssertionError(endpoint)
+""")
+            gh.chmod(0o700)
+            github = FakeGitHub()
+            owner = github.api(f"repos/{github.repository}/actions/runs/{github.owner_run_id}")
+            command = [sys.executable, str(Path(subject.__file__)), "--repository", github.repository,
+                       "--activation-owner", "90", "--tag", "v6.5.0-rc.1", "--source-run-id", "200"]
+            cases = [
+                ({"run": owner}, 0, "completed\n"),
+                ({"run": {**owner, "status": "in_progress"}}, 0, "active\n"),
+                ({"error": "gh: Not Found (HTTP 404)"}, 0, "history-missing\n"),
+                ({"error": "permission denied (HTTP 404)"}, 1, ""),
+                ({"error": "gh: Not Found (HTTP 404)\ntransport refused"}, 1, ""),
+                ({"error": "gh: Not Found (HTTP 404)", "error_exit": 124}, 1, ""),
+                ({"error": "gh: Not Found (HTTP 404)", "error_exit": 143}, 1, ""),
+                ({"error": "gh: Forbidden (HTTP 403)"}, 1, ""),
+                ({"error": "gh: unauthorised (HTTP 401)"}, 1, ""),
+                ({"error": "gh: limit (HTTP 429)"}, 1, ""),
+                ({"error": "transport refused"}, 1, ""),
+                ({"error": "gh: unexpected HTTP 4040"}, 1, ""),
+                ({"error": "gh: HTTP 404 then refused (HTTP 403)"}, 1, ""),
+                ({"raw": "truncated{"}, 1, ""),
+                ({"raw": "[]"}, 1, ""),
+                ({"run": {**owner, "status": "unknown"}}, 1, ""),
+                ({"run": {**owner, "id": 91}}, 1, ""),
+                ({"run": {**owner, "workflow_id": 43}}, 1, ""),
+                ({"workflow_missing": True}, 1, ""),
+            ]
+            env = {**os.environ, "GH_BIN": str(gh), "OWNER_FIXTURE": str(reply), "OWNER_CALLS": str(record)}
+            for case, code, output in cases:
+                with self.subTest(case=case):
+                    reply.write_text(json.dumps(case))
+                    record.write_text("")
+                    result = subprocess.run(command, env=env, text=True, capture_output=True, timeout=10)
+                    self.assertEqual(code, result.returncode, result.stderr)
+                    self.assertEqual(output, result.stdout)
+                    calls = [json.loads(line) for line in record.read_text().splitlines()]
+                    self.assertEqual(1 if case.get("workflow_missing") else 2, len(calls))
+                    self.assertTrue(all(c[0] == "api" and "--method" not in c for c in calls))
+                    if code:
+                        self.assertIn("observation failed", result.stderr)
+            for extra in (["--activation-owner", "0"], ["--tag", "v6.5.0-rc.1;unsafe"], ["--source-run-id", "0"]):
+                with self.subTest(extra=extra):
+                    record.write_text("")
+                    result = subprocess.run(command + extra, env=env, text=True, capture_output=True, timeout=10)
+                    self.assertEqual(2, result.returncode)
+                    self.assertEqual("", record.read_text())
 
 
 if __name__ == "__main__":

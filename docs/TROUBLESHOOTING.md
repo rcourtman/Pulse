@@ -11,6 +11,24 @@ first.** Do not run Diagnostics, force guest-agent probes or repeat a backup to
 fill a report. A successful backup task or responsive console alone does not
 establish safe recovery.
 
+- **Private information was posted:** follow
+  [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
+  Deleting the public copy does not revoke a credential.
+
+Jump to a group:
+
+- [Sign-in, access and updates](#sign-in-access-and-updates)
+- [Missing or incorrect readings](#missing-or-incorrect-readings)
+- [Backups and storage](#backups-and-storage)
+- [Notifications and performance](#notifications-and-performance)
+
+### Sign-in, access and updates
+
+- **Dashboard stays on "Connecting to Pulse" or stops updating:** distinguish
+  [connection from delivered monitoring state](REVERSE_PROXY.md#dashboard-stays-on-connecting-to-pulse-or-stops-updating).
+  Accepted login, a socket welcome and a green healthcheck do not establish a
+  usable dashboard. Keep working sessions and existing evidence; no repeat
+  outage, restart or raw network dump is needed to report it.
 - **Not sure which version is affected:** distinguish the
   [running server, reported agent and update target](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions).
   A helper's selected release or an agent's target is not its running version.
@@ -18,15 +36,20 @@ establish safe recovery.
   or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
   according to the existing authentication method. Do not delete configuration
   or repeat first-time setup.
+- **SSO stopped working after editing a provider:** use
+  [provider-save sign-in recovery](OIDC.md#sign-in-fails-after-editing-a-provider),
+  including when you saved without changing anything. Keep the working
+  administrator session; a local password reset does not restore the provider's
+  client secret, and a successful provider Test does not prove sign-in.
+- **Already paid but Pro features are unavailable:** distinguish
+  [payment, local activation and the installed runtime](PULSE_PRO.md#already-paid-but-pro-features-are-unavailable).
+  An active licence does not install Pro-only runtime hooks; do not buy again
+  or clear the key to diagnose missing features.
 - **Update failed or its result is uncertain:** start with
   [Pulse server update checks](AUTO_UPDATE.md#update-failed). An update of a
   monitored container is a different job; use
   [Docker workload update checks](DOCKER.md#check-a-failed-or-pending-workload-update).
   Preserve the current state and rollback evidence; do not repeat the attempt.
-- **Agent host is missing or reporting is rejected:** check the existing
-  [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
-  before replacing a token or reinstalling. Installer success is not an accepted
-  report.
 - **Proxmox or PBS reports a certificate error:** distinguish
   [certificate trust, renewal and saved-pin conflicts](TROUBLESHOOTING.md#proxmox-or-pbs-certificate-validation-failed).
   Keep verification enabled; a new certificate or a working browser is not
@@ -35,6 +58,15 @@ establish safe recovery.
   [preparation, private prompt and lifecycle action](UNIFIED_AGENT.md#copied-agent-command-fails-before-installation).
   A stopped new command does not diagnose the existing agent. Keep state and
   credentials; do not repeat removal or installation to obtain an error.
+
+### Missing or incorrect readings
+
+- **Agent host is missing or reporting is rejected:** check the existing
+  [agent authentication and reporting evidence](UNIFIED_AGENT.md#agent-lookup-returns-http-401-or-403)
+  before replacing a token or reinstalling. Installer success is not an accepted
+  report. If the agent is locally healthy but readings stop, distinguish
+  [local health from stale host reports](UNIFIED_AGENT.md#agent-is-healthy-locally-but-host-reports-are-stale);
+  an unavailable hard NFS mount is not an authentication failure.
 - **Guest readings are missing or disagree:** distinguish
   [current, retained and unavailable disks](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings)
   from [guest memory pressure](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
@@ -46,10 +78,28 @@ establish safe recovery.
 - **TrueNAS readings are stale or absent:** use
   [TrueNAS data checks](TRUENAS.md#stale-truenas-data), keeping the platform API
   and Pulse Agent paths separate.
+- **PBS or Mail Gateway State disagrees with a failed read:** distinguish
+  [connection state from complete collection](TROUBLESHOOTING.md#pbs-or-mail-gateway-state-disagrees-with-a-failed-read).
+  A green State does not clear a collection error or prove that retained readings
+  are current. Keep the existing credentials and certificate verification.
 - **PBS is Active but missing from monitoring:** distinguish the
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
-  an agent does not prove API recovery.
+  an agent does not prove API recovery. If only one datastore or namespace is
+  affected, use the [scoped inventory checks](PBS.md#one-pbs-namespace-is-missing-or-stops-changing);
+  a fresh sibling does not prove that the missing scope was read.
+- **Mail Gateway Test succeeds but collection fails:** use
+  [PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway).
+  For `ClusterStatusEntry.data.cid` or `hostname lookup failed`, read the
+  [cluster-response guidance](MAIL_GATEWAY.md#cluster-response-or-backup-lookup-errors)
+  before changing credentials, DNS or TLS. Missing queue data is not an empty queue.
+
+### Backups and storage
+
+- **Backup rows look duplicated or copies are missing:** compare
+  [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
+  Matching filenames or VMIDs do not prove one stored copy; do not delete
+  backups or change retention to make the display agree.
 - **RAID is reported degraded despite a spare:** compare
   [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
   A spare-inclusive total is not the required member count; do not change the
@@ -58,6 +108,9 @@ establish safe recovery.
   [unassigned slots, missing members and parity counts](TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots).
   Unraid parity is not Linux MD RAID; do not rebuild or change disk assignments
   just to make Pulse's count agree.
+
+### Notifications and performance
+
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
@@ -65,9 +118,17 @@ establish safe recovery.
 - **Notification Test works but alerts do not arrive:** follow
   [ordinary delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
   Do not trigger an alert or replay the queue just to complete a report.
-- **Private information was posted:** follow
-  [disclosure containment](TROUBLESHOOTING.md#if-you-already-posted-private-information).
-  Deleting the public copy does not revoke a credential.
+- **Apprise reports a TLS or connection error:** distinguish
+  [the API connection, local CLI and onward delivery](TROUBLESHOOTING.md#apprise-api-reports-a-tls-or-connection-error).
+  Keep certificate verification enabled; a working browser or accepted API
+  request does not prove delivery to the recipient.
+- **A usage alert stays open after usage drops:** compare
+  [the affected reading, clear level and metric-specific timing](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
+  Acknowledgement is not recovery; an old notification is not a current reading.
+- **The UI stalled after enabling Debug:** restore the previous working level
+  with [server log-level recovery](CONFIGURATION.md#if-debug-makes-the-ui-unusable).
+  Pause Stream is display-only; a startup override does not change the saved
+  level. Do not repeat the stall or restart a server held for backup safety.
 
 If none fits, use [Getting Help](TROUBLESHOOTING.md#-getting-help).
 Review evidence locally before sharing it; unknown or unavailable details are
@@ -395,7 +456,10 @@ Identify which request failed before clearing cookies or changing credentials:
   expired session, not a wrong password. Open the same public Pulse URL in a
   fresh browser session and sign in through the configured method. Preserve any
   working administrator session; do not clear unrelated sites' cookies.
-- **SSO or proxy login:** use the identity-provider or Pulse administrator's
+- **SSO or proxy login:** if OIDC worked before a provider edit or unchanged
+  save, follow [provider-save sign-in recovery](OIDC.md#sign-in-fails-after-editing-a-provider)
+  without closing the working administrator session. For other SSO failures,
+  use [safe SSO diagnosis](OIDC.md#safe-diagnosis) or the instance administrator's
   recovery path. Check the [proxy authentication guide](PROXY_AUTH.md) when the
   proxy signs you in but Pulse rejects the request. A local lockout reset does
   not repair an identity-provider account or missing trusted proxy headers.
@@ -461,6 +525,40 @@ restore, not by overwriting today's history. Follow
 [safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
+
+#### PBS or Mail Gateway State disagrees with a failed read
+
+The **State** in a PBS or PMG service's details describes Pulse's connection
+observation. It is not a backup result, a guest-liveness check or a mail-delivery
+receipt. Compare the same service and connection; an agent on that machine or
+a similarly named server is a different observation.
+
+| State in service details | What it establishes — and what it does not |
+| --- | --- |
+| **Healthy** | A positive connection observation, not successful collection of every datastore, job, queue or quarantine dataset. Read each affected value and its observation time separately. |
+| **Degraded** | A warning or degraded connection observation. It does not identify the failing dataset or establish that other readings are current. |
+| **Unhealthy** or **Offline** | An adverse connection observation, not proof that the server is powered off, a backup failed or mail delivery stopped. Use the original error to distinguish transport, trust, authentication and collection failures. |
+| **Unknown**, a blank State or an unfamiliar label | Missing or unrecognised connection evidence, not a healthy or zero-valued result. Do not infer recovery from a neutral colour. |
+
+**A retained green State does not overrule a failed read.** Labels vary by
+version, and a State row that has not updated can contradict newer errors.
+Keep the original error, time, affected dataset and running Pulse version;
+do not restart Pulse or repeat Test to make the display agree. One successful
+version request or a fresh sibling dataset does not clear the failed read.
+
+Use the existing [PBS connection checks](PBS.md#connection-failed-error) or
+[PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway)
+for that error. Keep saved credentials, least-privilege access and certificate
+verification intact; do not rotate secrets, re-add the connection or install
+an agent just to change State. Use the provider's existing view for the affected
+backup or mail dataset while its Pulse reading is uncertain. Recovery means the
+same failed dataset resumes ordinary collection, not merely a green badge.
+
+Share only the relevant redacted error and comparison, not credentials, full
+API responses, private hostnames or mail contents. Do not run a backup, release
+quarantine or generate mail to test a State label. If a guest is frozen or an
+earlier guest request is uncertain, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+instead; a healthy connection does not establish thaw or filesystem liveness.
 
 #### Unraid reports missing disks in empty slots
 
@@ -690,6 +788,14 @@ planned maintenance window, preserving the deployment's settings and data.
   pre-pause states are not permission to start them. **Pulse monitoring and
   alerts are unavailable while stopped**; arrange independent outage coverage.
 
+#### Backup-age alerts name a deleted or renamed guest
+
+Follow the [retained-backup alert checks](PBS.md#backup-age-alerts-name-a-deleted-or-renamed-guest)
+to distinguish stored backups from live inventory and new notifications from
+History. Orphaned-backup and VMID filters have wider scope than one named guest;
+keep the intended protection unchanged while diagnosing, and do not delete
+stored state to clear the symptom.
+
 #### Backup-age alerts were not evaluated
 
 The **Pulse** warning “Backup-age alerts were not evaluated because recovery
@@ -852,6 +958,22 @@ evidence.
 See [container CPU readings](DOCKER.md#container-cpu-readings) for worked
 examples, rounding and alert limits, and a passive comparison. Do not restart
 workloads, create CPU load or lower alert thresholds to test this.
+
+#### Container image update disagrees with the runtime
+
+Different **Current digest** and **Target digest** values do not alone prove
+that a container needs an update: one local image can carry several RepoDigests,
+and its local ImageID is not a registry manifest digest. Use the
+[image-update comparison guide](DOCKER.md#image-update-disagrees-with-the-runtime)
+to compare the same host, running image and observation time without pulling or
+recreating the workload. If an update action was already sent or its result is
+unknown, follow its existing receipt and state checks instead of retrying it.
+
+If an image-update alert **resolves and returns without an image change**, use
+the [alert-lifecycle checks](DOCKER.md#update-alert-resolves-and-returns-without-an-image-change).
+An advancing **Last seen** is not a fresh registry check, and a resolved alert
+is not proof that the workload was updated. Keep the original transition times;
+do not force another cycle or change the alert delay to reproduce it.
 
 #### Docker hosts appearing/disappearing
 
@@ -1215,6 +1337,57 @@ measurements, workload, versions and a relevant manually redacted error; follow
 
 ### Notifications
 
+#### A usage alert stays open after usage drops
+
+Disk, CPU and memory alerts can remain open below their trigger. Distinguish
+an expected recovery hold from a stale reading or an alert that failed to clear:
+
+1. **Find the same incident.** In **Alerts → Overview**, check the resource and
+   metric; for a disk, match the filesystem or mountpoint too. Space freed on
+   `/data` does not establish recovery for `/`. **Alerts → History** and an old
+   email or webhook describe recorded events, not necessarily an active alert.
+   [Acknowledge](CONFIGURATION.md#acknowledge-and-snooze-existing-alerts) marks an
+   incident as seen and can hide it from the default list; it does not repair
+   or clear the condition. Use **Show acknowledged** to inspect it.
+2. **Check the reading's age and meaning.** Compare the same connection,
+   resource and metric using its existing monitoring view. An alert's recorded
+   breach value can differ from the latest reading. If your version shows a
+   live evaluation or average, use that value and its timestamp, not just the
+   original message or a single lower sample. **Last known**, **unavailable**
+   or an old reading is not measured recovery. For guest disks, follow the
+   [current and retained reading guidance](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings);
+   do not force a guest-agent probe or repeat a backup.
+3. **Read the saved clear level and timing.** The trigger opens the alert; the
+   lower clear level prevents repeated open/close notifications near it. For
+   example, with a **90% trigger and 85% clear**, 88% can leave an alert open;
+   an evaluated 85% or lower is eligible to clear it. These are example values,
+   not every rule's settings. Timing depends on the metric, not just the
+   resource. Read the [threshold and timing explanation](CONFIGURATION.md#metric-thresholds-off-and-inheritance)
+   without changing the rule to make the alert disappear.
+
+**Guest filesystem capacity uses the current matching reading, not a rolling
+average.** Its disk grace period delays activation only; recovery has no extra
+configured delay. A fresh capacity reading at or below the saved clear level
+should clear the incident on an ordinary evaluation, without acknowledgement.
+This is different from disk I/O-rate rules. CPU can use an averaging window;
+memory can have a recovery stability delay. Do not apply those waits to guest
+filesystem capacity.
+
+If the same incident stays active through ordinary evaluations despite fresh
+matching readings at or below the saved clear level, keep that as an unresolved
+symptom. For other metrics, account for their supported averaging or recovery
+timing first. In the [existing report](#-getting-help),
+include only details not already supplied: the affected versions, metric and
+filesystem, trigger/clear levels, reading times and how long the lower value
+persisted. A locally reviewed, redacted capture can show the conflicting view;
+do not post full configuration or diagnostics. Unknown settings or times can
+remain unknown.
+
+Do not acknowledge, disable monitoring, alter thresholds, restart Pulse or
+delete history just to demonstrate recovery. If the incident cleared but no
+all-clear arrived, check [recovery notification eligibility](CONFIGURATION.md#alert-reminders-and-recovery-notifications)
+separately; absence of a message does not prove the condition is still active.
+
 #### No alert when Pulse, power or internet goes down
 
 Pulse cannot send a notification while its host is stopped or its outbound
@@ -1304,7 +1477,7 @@ Start with the failure class and timestamp:
 | Authentication | Destination credentials and account permissions, locally; never post them. |
 | Rate limited | Provider limits and delivery volume; repeated tests or retries can make this worse. |
 | Connectivity | DNS, firewall, proxy and reachability from the Pulse server, not just your browser. |
-| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. |
+| TLS | Certificate trust, expiry and hostname matching; do not disable verification to diagnose it. For Apprise, distinguish [API transport from onward delivery](#apprise-api-reports-a-tls-or-connection-error). |
 | Configuration / rejected | Enabled destination, required fields and the provider's endpoint or payload requirements. |
 | Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
 
@@ -1331,6 +1504,42 @@ Use **Dismiss retained failures** only when those deliveries should not be sent.
 Dismissal clears the warning without retrying them; delivery history remains.
 Neither action deletes the audit trail. Do not delete `notification_queue.db`
 or audit data to clear the warning.
+
+#### Apprise API reports a TLS or connection error
+
+In **Alerts → Notifications → Apprise**, check the saved mode before interpreting
+an existing error. **Remote Apprise API** connects Pulse to an Apprise server using
+the configured HTTP or HTTPS address. **Local Apprise CLI** runs the installed Apprise
+executable instead. The API certificate-verification setting affects neither
+the local CLI nor the separate connections Apprise makes to its delivery targets.
+Do not switch modes or replace a saved key just to diagnose a failure.
+
+| Existing observation | Meaning and safe next step |
+| --- | --- |
+| HTTPS certificate validation failed | Check the configured hostname, certificate expiry and complete chain. Trust must be available to the Pulse server process or container, not just your browser. Obtain any approved private CA through an independently verified administrator route, not from the failing connection. Keep verification enabled. |
+| HTTPS with **Skip TLS certificate verification (unsafe)** enabled | This disables certificate and hostname checks, not just rejection of self-signed certificates. Older versions call the same bypass **Allow self-signed certificates**. API keys, destination URLs and alert content could reach an impersonated server. Leave this option unchecked and use a certificate trusted by the Pulse runtime. |
+| An HTTP API address | HTTP provides no TLS encryption or server identity checks; the verification checkbox has no effect. API keys, destination URLs and alert content can travel in plaintext. Use HTTPS with a trusted certificate; changing the checkbox cannot secure HTTP. |
+| DNS, timeout or connection refusal | Check the existing error and reachability from the Pulse runtime. Access from your own browser is a different path. A refusal alone does not establish bad credentials or a certificate fault. |
+
+An HTTP 2xx response means the Apprise API accepted that request, not that its
+provider delivered it or that the recipient received it. A successful **Test**
+also skips Pulse's persistent queue; use the separate
+[ordinary delivery checks](#test-succeeds-but-real-alerts-are-missing) when real
+alerts are missing. Do not send another Test, induce an alert, weaken verification
+or enable Debug just to collect evidence.
+
+Retained deliveries can still contain older settings; editing the current
+address or key does not update them. Review
+[retained-failure recovery](#recover-retained-delivery-failures) before any retry,
+not a batch replay to test the new settings. Unknown recipient receipt stays
+unknown; a current form warning is not a record of an earlier attempt.
+
+Keep the API address, configuration key, API key and header values, target URLs,
+full settings and raw provider replies private. For a public report, use only
+the mode, HTTP or HTTPS scheme, original time, failure class and HTTP status
+where already available, plus a manually reviewed and redacted error. Do not
+post a full configuration or use a credential-bearing command or URL. See
+[notification log precautions](#inspect-notification-logs).
 
 #### Pause and cancellation limits
 

@@ -34,6 +34,52 @@ import { I18N_MESSAGES } from '@/i18n/catalogs';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 describe('i18n foundation', () => {
+  it.each(SUPPORTED_LOCALES)(
+    'explains uncertain single-alert actions and refresh before another attempt in %s',
+    (locale) => {
+      for (const action of [
+        'acknowledgeFailed',
+        'restoreFailed',
+        'snoozeFailed',
+        'resumeFailed',
+      ] as const) {
+        const message = t(`alerts.overview.notification.${action}`, {}, locale);
+        expect(message).toBe(I18N_MESSAGES[locale][`alerts.overview.notification.${action}`]);
+        expect(message).toContain(
+          locale === 'en'
+            ? 'could not be confirmed'
+            : locale === 'de'
+              ? 'konnte nicht'
+              : 'No se pudo confirmar',
+        );
+        expect(message).toContain(
+          locale === 'en'
+            ? 'Refresh alerts before trying again.'
+            : locale === 'de'
+              ? 'Aktualisieren Sie die Warnmeldungen vor einem weiteren Versuch.'
+              : 'Actualice las alertas antes de volver a intentarlo.',
+        );
+      }
+    },
+  );
+
+  it.each(SUPPORTED_LOCALES)('localizes unavailable alert notification status in %s', (locale) => {
+    setActiveLocale(locale);
+    const title = t('alerts.overview.deliveryUnavailable.title');
+    const description = t('alerts.overview.deliveryUnavailable.description');
+    expect(title).toBe(I18N_MESSAGES[locale]['alerts.overview.deliveryUnavailable.title']);
+    expect(description).toBe(
+      I18N_MESSAGES[locale]['alerts.overview.deliveryUnavailable.description'],
+    );
+    expect(title).not.toMatch(/alerts\.overview/);
+    expect(description).not.toMatch(/alerts\.overview/);
+    if (locale !== 'en') {
+      expect(title).not.toBe(I18N_MESSAGES.en['alerts.overview.deliveryUnavailable.title']);
+      expect(description).not.toBe(
+        I18N_MESSAGES.en['alerts.overview.deliveryUnavailable.description'],
+      );
+    }
+  });
   afterEach(() => {
     localStorage.removeItem(STORAGE_KEYS.LOCALE_PREFERENCE);
     setActiveLocale(DEFAULT_LOCALE);

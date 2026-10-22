@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, within } from '@solidjs/testing-library';
+import { fireEvent, render, waitFor, within } from '@solidjs/testing-library';
+import { createStore, produce, reconcile } from 'solid-js/store';
 
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
+import { canonicalizeRealtimeResource } from '@/utils/resourceStateAdapters';
+import {
+  PBS_JOB_EVIDENCE_FIXTURE as evidenceFixture,
+  pbsJobEvidenceFixture,
+} from '../__fixtures__/pbsJobEvidence';
 
 const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
   // Platform context sits inside the Overview's one Details disclosure.
@@ -97,6 +103,81 @@ afterEach(() => {
 });
 
 describe('ResourceDetailDrawer service cards', () => {
+  describe.each(['pbs', 'pmg'] as const)('%s connection observations', (kind) => {
+    it.each(['direct', 'canonical'] as const)(
+      'updates the open service state without trusting healthy substrings (%s)',
+      async (transport) => {
+        const observation = (status: Resource['status'], connectionHealth: string): Resource => {
+          const facet = { hostname: `${kind}.example.invalid`, connectionHealth };
+          return canonicalizeRealtimeResource(
+            baseResource({
+              id: `${kind}-state`,
+              name: `${kind}-state`,
+              displayName: `${kind.toUpperCase()} state`,
+              type: kind,
+              platformType: kind === 'pbs' ? 'proxmox-pbs' : 'proxmox-pmg',
+              status,
+              platformData:
+                transport === 'canonical' ? { sources: [kind], [kind]: facet } : undefined,
+              ...(transport === 'direct' ? { [kind]: facet } : {}),
+            }),
+          );
+        };
+        const [resource, setResource] = createStore(observation('offline', 'unhealthy'));
+        const { getByTestId, getByRole } = render(() => (
+          <ResourceDetailDrawer resource={resource} />
+        ));
+        expandPlatformDetails(getByTestId);
+        fireEvent.click(getByRole('button', { name: 'Show service' }));
+        const service = getByTestId('resource-service-details-section');
+        const state = within(service).getByText('State').parentElement!;
+        const toggle = within(service).getByRole('button', { name: 'Hide service' });
+        toggle.focus();
+        const expectState = async (label: string, tone: string) => {
+          await waitFor(() =>
+            expect(within(state).getByText(label, { exact: true })).toHaveClass(tone),
+          );
+          expect(getByTestId('resource-service-details-section')).toBe(service);
+          expect(within(service).getByText('State').parentElement).toBe(state);
+          expect(toggle).toHaveFocus();
+          expect(within(service).getByRole('button', { name: 'Hide service' })).toBe(toggle);
+        };
+        await expectState('Offline', 'text-red-700');
+        // Reconcile an ordinary same-identity snapshot, then change just the
+        // carrier status. The retained healthy facet must not freeze the state.
+        setResource(reconcile(observation('online', 'healthy')));
+        await expectState('Healthy', 'text-green-700');
+        setResource('status', 'offline');
+        await expectState('Offline', 'text-red-700');
+        setResource('status', 'online');
+        await expectState('Healthy', 'text-green-700');
+        const setHealth = (health: string) =>
+          setResource(
+            produce((draft) => {
+              (draft.platformData![kind] as { connectionHealth: string }).connectionHealth = health;
+            }),
+          );
+        setHealth('unhealthy');
+        await expectState('Unhealthy', 'text-red-700');
+        setHealth('not healthy');
+        await expectState('not healthy', 'text-muted');
+        setHealth('<healthy>');
+        await expectState('<healthy>', 'text-muted');
+        expect(state.querySelector('healthy')).toBeNull();
+        setHealth('  ');
+        await expectState('Healthy', 'text-green-700');
+        setHealth('degraded');
+        await expectState('Degraded', 'text-yellow-700');
+        setResource(reconcile(observation('warning', 'healthy')));
+        await expectState('Healthy', 'text-green-700');
+        setResource(reconcile(observation('online', 'error')));
+        await expectState('Offline', 'text-red-700');
+        setResource(reconcile(observation('online', 'healthy')));
+        await expectState('Healthy', 'text-green-700');
+      },
+    );
+  });
+
   it('renders PBS card with compact summary and job breakdown section', () => {
     const resource = baseResource({
       id: 'pbs-1',
@@ -235,6 +316,67 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(activeTasks.getByText('fast · Remote offsite')).toBeInTheDocument();
     expect(activeTasks.getByText('Queued')).toBeInTheDocument();
   });
+
+  it.each(['direct', 'canonical'] as const)(
+    'keeps complete PBS job evidence readable without hover across open updates (%s)',
+    async (transport) => {
+      const observation = (error: string = evidenceFixture.error): Resource => {
+        const pbs = pbsJobEvidenceFixture();
+        pbs.backupJobs![0].error = error;
+        pbs.jobHealthEvidence![0].error = error;
+        return canonicalizeRealtimeResource(
+          baseResource({
+            type: 'pbs',
+            platformType: 'proxmox-pbs',
+            ...(transport === 'direct' ? { pbs } : { platformData: { pbs, sources: ['pbs'] } }),
+          }),
+        );
+      };
+      const [resource, setResource] = createStore(observation());
+      const { getByTestId, getByRole } = render(() => <ResourceDetailDrawer resource={resource} />);
+      expandPlatformDetails(getByTestId);
+      fireEvent.click(getByRole('button', { name: 'Show service' }));
+      fireEvent.click(getByRole('button', { name: 'Show jobs' }));
+      const active = getByTestId('pbs-active-tasks');
+      const evidence = getByTestId('pbs-job-health-evidence');
+      for (const section of [active, evidence]) {
+        const error = within(section).getByText(evidenceFixture.error, {
+          normalizer: (value) => value,
+        });
+        expect(error).toHaveClass('whitespace-pre-wrap', 'wrap-anywhere');
+        expect(section.querySelector('.truncate')).toBeNull();
+        expect(section.querySelector('.rounded-full')).toBeNull();
+        expect(section.querySelector('em')).toBeNull();
+      }
+      expect(within(active).getByText(`Backup ${evidenceFixture.taskId}`)).toHaveClass(
+        'wrap-anywhere',
+      );
+      for (const value of [
+        evidenceFixture.reason,
+        evidenceFixture.state,
+        `Observed ${evidenceFixture.observedAt}`,
+      ]) {
+        expect(within(evidence).getByText(value)).toBeInTheDocument();
+      }
+      const toggle = getByRole('button', { name: 'Hide jobs' });
+      toggle.focus();
+      const updatedError =
+        'A subsequent synthetic read still has no result.\nIts complete final line is retained.';
+      setResource(reconcile(observation(updatedError)));
+      for (const section of [active, evidence]) {
+        await waitFor(() =>
+          expect(
+            within(section).getByText(updatedError, { normalizer: (value) => value }),
+          ).toBeInTheDocument(),
+        );
+        expect(section.querySelector('.truncate')).toBeNull();
+        expect(section.querySelector('.rounded-full')).toBeNull();
+      }
+      expect(getByRole('button', { name: 'Hide jobs' })).toBe(toggle);
+      expect(toggle).toHaveFocus();
+      expect(getByTestId('pbs-job-health-evidence')).toBe(evidence);
+    },
+  );
 
   it('renders merged agent hardware for a standalone PBS host', () => {
     const resource = baseResource({

@@ -46,10 +46,14 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                     self.assertNotIn("continue-on-error", step)
                     self.assertNotIn("if:", step)
                     self.assertNotIn("||", step)
-                # WebKit's complete OS graph was still downloading when the
-                # former ten-minute cap killed a job before any test ran.
-                # Only that larger setup gets more aggregate acquisition time.
-                budget = 30 if job == "e2e" else 10
+                # Both WebKit's larger graph and the offline job's Chromium
+                # mirror fallback have outlasted ten minutes before tests.
+                # Keep acquisition and whole-job budgets separate and bounded.
+                budget = {
+                    "offline-org-provisioning": 20,
+                    "e2e": 30,
+                    "agent-registration": 10,
+                }[job]
                 self.assertIn(f"timeout-minutes: {budget}\n", install)
                 self.assertIn("working-directory: tests/integration", install)
                 browsers = "chromium webkit" if job == "e2e" else "chromium"
@@ -64,6 +68,8 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                 if job == "e2e":
                     self.assertRegex(block, r"(?m)^    timeout-minutes: 60$")
                     self.assertNotRegex(install, r"(?m)^        timeout-minutes: 10$")
+                elif job == "offline-org-provisioning":
+                    self.assertRegex(block, r"(?m)^    timeout-minutes: 25$")
 
     def test_all_browser_jobs_bound_setup_without_weakening_gates(self):
         self.assert_workflow_policy(WORKFLOW.read_text())
@@ -97,6 +103,27 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                 class Mutant(PlaywrightAcquisitionTest):
                     def runTest(inner):
                         inner.assert_workflow_policy(workflow.replace(original, replacement))
+
+                result = unittest.TestResult()
+                Mutant().run(result)
+                self.assertFalse(result.wasSuccessful())
+                self.assertTrue(result.failures)
+                self.assertFalse(result.errors)
+
+    def test_offline_setup_cannot_regain_short_cap_or_extend_the_job(self):
+        workflow = WORKFLOW.read_text()
+        block = job_block(workflow, "offline-org-provisioning")
+        for original, replacement in (
+            ("        timeout-minutes: 20\n", "        timeout-minutes: 10\n"),
+            ("    timeout-minutes: 25\n", "    timeout-minutes: 35\n"),
+        ):
+            with self.subTest(mutation=replacement):
+                self.assertIn(original, block)
+                mutant = workflow.replace(block, block.replace(original, replacement), 1)
+
+                class Mutant(PlaywrightAcquisitionTest):
+                    def runTest(inner):
+                        inner.assert_workflow_policy(mutant)
 
                 result = unittest.TestResult()
                 Mutant().run(result)

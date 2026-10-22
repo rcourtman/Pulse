@@ -1,8 +1,12 @@
 import { createSignal } from 'solid-js';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { NotificationDeliveryLog, Webhook } from '@/api/notifications';
+import type {
+  NotificationDeliveryLog,
+  NotificationDeliveryLogEntry,
+  Webhook,
+} from '@/api/notifications';
 import type { AlertEvent } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 
@@ -67,12 +71,85 @@ describe('AlertDeliveryLogCard', () => {
 
     expect(screen.getByText('Ops Discord')).toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Failed, retries stopped')).toBeInTheDocument();
+    expect(screen.getByText('Failed, no further retries')).toBeInTheDocument();
     expect(screen.getByText('Delivered')).toBeInTheDocument();
     expect(screen.getByText('vm-offline-101 +1 more')).toBeInTheDocument();
     expect(screen.getByText(/Authentication failure/)).toBeInTheDocument();
     expect(screen.getByText(/HTTP 401 Unauthorized/)).toBeInTheDocument();
   });
+
+  // These outcomes are produced by the queue with a three-attempt budget.
+  // Authentication/configuration/rejection stop on attempt one; connectivity
+  // and server errors can retry, and connectivity can also exhaust the budget.
+  // The audit API exposes attempts but not the budget or the stop decision.
+  it.each([
+    ['authentication', 1, 'dead_letter', 'Failed, no further retries', 'Authentication failure'],
+    ['configuration', 1, 'dead_letter', 'Failed, no further retries', 'Configuration problem'],
+    ['rejected', 1, 'dead_letter', 'Failed, no further retries', 'Rejected by destination'],
+    ['connectivity', 3, 'dead_letter', 'Failed, no further retries', 'Connectivity failure'],
+    ['connectivity', 1, 'retry', 'Retrying', 'Connectivity failure'],
+    ['server_error', 1, 'retry', 'Retrying', 'Destination server error'],
+  ] as const)(
+    'describes %s after %i attempt(s) as %s without inventing a stop reason',
+    (failureClass, attempts, outcome, label, classification) => {
+      const entry: NotificationDeliveryLogEntry = {
+        ...log.entries[0],
+        notificationId: `${failureClass}-${attempts}`,
+        attempts,
+        outcome,
+        failureClass,
+        success: false,
+        errorMessage: 'Synthetic destination failure',
+      };
+      render(() => (
+        <AlertDeliveryLogCard
+          log={{ ...log, entries: [entry] }}
+          unavailable={false}
+          refreshing={false}
+          onRefresh={vi.fn()}
+          webhooks={webhooks}
+        />
+      ));
+
+      const row = screen.getByRole('listitem');
+      expect(within(row).getByText(label, { exact: true })).toBeVisible();
+      expect(within(row).getByText(new RegExp(classification))).toBeVisible();
+      expect(within(row).getByText(/Synthetic destination failure/)).toBeVisible();
+      expect(row).not.toHaveTextContent(/exhaust/i);
+      expect(row).not.toHaveTextContent('Delivered');
+      expect(screen.getByText(/Entries marked "Failed, no further retries"/)).toHaveTextContent(
+        'remain available for 30 days',
+      );
+    },
+  );
+
+  it.each([{ entries: [] }, { entries: log.entries }])(
+    'names incomplete evidence without hiding readable rows: %j',
+    ({ entries }) => {
+      const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>({
+        ...log,
+        entries,
+        incomplete: true,
+      });
+      render(() => (
+        <AlertDeliveryLogCard
+          log={currentLog()}
+          unavailable={false}
+          refreshing={false}
+          onRefresh={vi.fn()}
+          webhooks={webhooks}
+        />
+      ));
+      expect(screen.getByRole('status')).toHaveTextContent('This activity list is incomplete.');
+      expect(
+        screen.queryByText('No alert deliveries were attempted in this window.'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryAllByRole('listitem')).toHaveLength(entries.length);
+      setCurrentLog({ ...log, entries: [], incomplete: false });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.getByText('No alert deliveries were attempted in this window.')).toBeVisible();
+    },
+  );
 
   it('says test sends are not listed so their absence is not read as failure', () => {
     render(() => (
@@ -88,10 +165,75 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.getByText(/Test sends skip the queue/)).toBeInTheDocument();
   });
 
+  it('names the activity list and makes older evidence keyboard-scrollable', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    const list = screen.getByRole('list', { name: 'Notification activity' });
+    expect(list).toHaveAttribute('tabindex', '0');
+    list.focus();
+    expect(list).toHaveFocus();
+  });
+
+  it('makes every grouped alert ID available without hover', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    const summary = screen.getByText('vm-offline-101 +1 more');
+    expect(summary.tagName).toBe('SUMMARY');
+    const details = summary.closest('details')!;
+    expect(details).not.toHaveAttribute('open');
+    fireEvent.click(summary);
+    expect(details).toHaveAttribute('open');
+    expect(within(details).getByText(/vm-offline-101\s+vm-offline-102/)).toBeVisible();
+  });
+
+  it('shows the held explanation as readable content rather than a hover-only title', () => {
+    const message = 'Delivery held by quiet hours until 08:00 UTC; monitoring continues.';
+    render(() => (
+      <AlertDeliveryLogCard
+        log={{ ...log, entries: [] }}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={[]}
+        heldEvents={[
+          {
+            id: 99,
+            occurredAt: new Date().toISOString(),
+            type: 'notification_deferred',
+            alertId: 'held-only',
+            resourceName: 'nas-1',
+            alertType: 'usage',
+            reason: 'quiet_hours:performance',
+            message,
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByText(message)).toBeVisible();
+    expect(screen.getByRole('listitem')).not.toHaveAttribute('title', message);
+  });
+
   it.each([
     ['retry', 'Retrying'],
     ['failed', 'Failed'],
-    ['dead_letter', 'Failed, retries stopped'],
+    ['dead_letter', 'Failed, no further retries'],
     ['cancelled', 'Cancelled'],
   ] as const)(
     'replaces a previous successful row with %s evidence on refresh',
@@ -154,9 +296,11 @@ describe('AlertDeliveryLogCard', () => {
       />
     ));
 
-    expect(screen.getByText(/Completed attempts are retained for 7 days/)).toBeInTheDocument();
     expect(
-      screen.getByText(/Deliveries Pulse has stopped retrying remain available for 30 days/),
+      screen.getByText(/Other completed attempts are retained for 7 days/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Entries marked "Failed, no further retries" remain available for 30 days/),
     ).toBeInTheDocument();
     const timestamps = Array.from(container.querySelectorAll('time'));
     expect(timestamps[0]).toHaveAttribute('datetime', log.entries[0].timestamp);

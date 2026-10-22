@@ -41,38 +41,206 @@ alongside `digest-pinned image`, rather than as a checked image with a
 registry error. No agent authority or transport changes.
 `TestSummarizeManualUpdateCheckSkipsUncheckableImages` covers the summary.
 
+### Malformed Unix installer invocations preserve local state
 
-### Lost container mutation acknowledgements reconcile through reads
+An unrecognised argument exits 16 before credential reads or lifecycle work,
+without waiting for a terminal confirmation. The fixed error directs callers
+to `--help`; it does not interpolate the unsupported argument. The executable
+parser/PTY controls in `agent_argument_errors.py` (registered by
+`TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive`) preserve caller
+credential bytes, permissions and identity and detect accidental platform work.
+They do not establish service removal, an update or installed acceptance.
 
-Typed container lifecycle execution attempts its mutation once. A transport
-error preserves uncertain execution and, while the original operation context
-remains live, reads the same container and waits for its existing health check.
-Readback never manufactures a mutation acknowledgement or extends a canceled
-operation. Fixed, non-sensitive timeout/cancellation/unknown messages survive
-receipt sanitization. `docker_lifecycle_test.go` covers lost acknowledgement,
-health recovery, cancellation, exactly-once mutation and receipt redaction.
+### Cluster peer sensor identity and failure visibility (#3064)
+
+The optional Linux Proxmox peer collector offers the existing supported root
+RSA and Ed25519 identities in that order in a single bounded, noninteractive
+SSH command with `IdentitiesOnly=yes`. It stats paths without reading key
+contents; it does not provision a key, mutate authorisation, change the existing
+host-key policy or touch the server's restricted sensor fallback. The opt-out
+precedes discovery. Local/offline peers are not contacted. A failed peer does
+not discard other peer readings. The remote `sensors -j` exit is no longer
+masked by a successful shell fallback; stderr stays separate from JSON. Valid
+partial readings accompanying lm-sensors exit 1 are retained with a warning,
+not recovery. Authentication/transport/other command exits cannot admit output.
+Unusable data is omitted, never zero.
+
+Agent warnings are limited to once per peer per five minutes; usable recovery
+clears the limiter and logs once, and removed/offline peers are pruned. Caller
+cancellation is not a peer incident. Raw command output is not logged. Wire
+shapes, server freshness/scoping and local-agent precedence are unchanged.
+
+`cluster_sensors_regression_test.go` binds mixed-key recovery and warning/
+recovery transitions to the real collector. `cluster_sensors_ssh_test.go` uses
+the real OpenSSH client with invented keys and a loopback SSH fixture for RSA,
+Ed25519, rejected authentication and restored trust; it also checks the exact
+command, deadlines, empty/invalid data, warning interval and pruning. Existing
+peer tests retain opt-out/offline/partial-failure behaviour. Actual producer
+reports are separately consumed through monitoring's scoped temperature path
+and the node drawer in desktop/narrow browser proof; this is not native PVE
+installation, reporter acceptance or verified host-key trust.
+
+### Ordinary Unix installer executable publication
+
+After checksum and pinned-signature admission, `scripts/install.sh` prepares
+ordinary collector and optional typed-helper executables in private directories
+on their respective installation filesystems, with executable modes, before
+stopping the collector. A copy, allocation, mode or handled termination failure
+must leave the existing executable and collector stop state untouched. Download
+`TMPDIR` may be on another filesystem or mounted noexec; the version probe uses
+the prepared collector, not that temporary download.
+
+Publication renames the complete prepared basename into its containing
+directory. A directory at the executable path must not absorb the file or
+produce an install-success result. A refused final rename retains complete
+files, cleans owned preparation and reports failure without an automatic service
+restart. Collector/helper publication is not an all-or-nothing pair transaction;
+if the helper rename fails after the collector rename, the collector is new and
+the helper remains old. Existing safe-profile migration/snapshot and action-runner
+transactions retain their separate behaviour.
+
+`TestInstallSHOrdinaryBinaryPreparationPrecedesServiceStop` keeps both consuming
+callers ordered. Linux `TestInstallSHBinaryPublicationPreservesPreviousExecutable`
+runs `agent_binary_publication.py` against the actual signed-download/publication
+slice: real TLS/curl, SSH signatures, two filesystems, copy-size-limit failures,
+rename refusals, handled termination, directory races and old open readers.
+Service stop/kill and root ownership are explicit doubles. This is local source
+proof, not native systemd/appliance installation or reporter recovery.
+
+### Temporary Unix lifecycle credentials have their own cleanup scope
+
+Installer registration, uninstall and authority reduction retain the existing
+runtime/configured/bootstrap credential precedence and private `--token-file`
+transport. When only the in-memory bootstrap token is available, the lifecycle
+call owns its temporary file before writing credential bytes. Its isolated
+EXIT/INT/TERM cleanup removes only that file, including inside the registration
+and uninstall command substitutions; caller traps and staged files are separate.
+Stored credentials, agent identity, trust checks, TLS arguments and lifecycle
+output/status remain unchanged. Cleanup failure cannot turn a successful command
+into reported success, or replace an already nonzero command/signal result.
+
+`TestInstallSHLifecycleTemporaryTokenCleanup` runs the extracted production
+selection, command scope and outer cleanup through
+`scripts/tests/test_agent_lifecycle_token_cleanup.py`. Closed-peer controls cover
+all three operations, direct/substitution callers, stored-file precedence,
+returns, handled signals, preparation failures and refused cleanup. They do not
+establish cleanup after SIGKILL/power loss, real binary termination, native
+registration/removal recovery or installed acceptance.
+
+### Legacy Unix token recovery accounts for the complete file
+
+The root/private-file compatibility reader admits a nonempty value of at most
+4096 bytes, with no newline or exactly one final newline. It compares the
+bounded shell read with the observed file size in a byte locale: a second line,
+extra newline or discarded NUL cannot silently select a credential prefix.
+Collector and separate action-token ingress stop before host work on invalid
+files; saved legacy-token recovery returns no value. Valid bytes are not shell
+syntax: quotes and assignment prefixes remain literal credential contents.
+Caller files, saved identity, credential precedence and the descriptor-safe Go
+reader are unchanged. This is not a new race-safe descriptor implementation.
+
+`agent_uninstall_state.py`, registered by
+`TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing`, executes both
+ingress paths and saved-token recovery using the production private-file/parent
+checks. It retains file bytes/modes/inodes and proves no service/transport/state
+operations for invalid ingress. Service and transport peers remain inert;
+native installation, TLS and installed recovery require separate proof.
+
+### The descriptor-safe credential reader rejects NUL before output
+
+The shared Go private-value reader rejects a NUL anywhere in the bounded file,
+before returning a value to `collector-read-token` or constructing a lifecycle
+client. Failure returns no credential and a fixed, non-disclosing error. Bash
+command substitution must never turn a successful reader's NUL-containing
+output into a different credential. Existing whitespace normalization, valid
+literal/UTF-8 values, size limits, descriptor privacy and owner checks remain
+unchanged; installer credential precedence and TLS policy do not change.
+
+`TestPrivateValueFileRejectsNULWithoutReturningCredential` covers the shared
+reader and client construction; the valid-value control preserves existing
+normalization. `TestCollectorLifecycleCommandRejectsNULWithoutOutput` covers the
+CLI writer. `TestCollectorTokenReaderInstallerIngress` invokes production
+`main`/CLI dispatch in the compiled test executable, then consumes its real
+output through the production Unix reader and both collector/action ingress
+gates. Only executable discovery is fixture-wired; file/parent checks, Bash
+substitution and the Go implementation are not output peers. Caller bytes,
+mode and inode are retained. This is focused source proof, not a standalone
+agent build, installation, native recovery or protected delivery.
+
+### Explicit Unix installer transport policy wins over curl defaults
+
+All direct installer curl requests ignore `.curlrc` before processing their
+explicit arguments, including readiness and the private credential config.
+Ambient TLS bypass, method, extra-URL or tracing settings cannot change the
+requested lifecycle operation. The [transport contract](deployment-installability.md#unix-agent-installer-ignores-ambient-curl-configuration)
+and the full-installer HTTP/HTTPS controls in `install_sh_test.go` retain explicit
+CA/insecure choices, read-only preflight, private-file credentials and unchanged
+download verification. This is not installed renewal or appliance acceptance.
+
+### Read-only preflight health reads have a total deadline
+
+`scripts/install.sh --preflight-only` bounds the entire health GET to ten
+seconds, including redirects and stalled headers/body, rather than bounding
+only connection establishment. A health timeout remains `pulse_unreachable`
+and failed preflight, even when the subsequent checksum-bearing artifact HEAD
+succeeds. It does not activate, replace or restart the collector. Explicit CA
+and insecure choices, ambient curl isolation and the existing artifact deadline
+remain unchanged. The closed whole-installer controls in
+`scripts/tests/test_agent_preflight_deadline.py` and real-curl
+`TestInstallSHPreflightHealthDeadline` retain success/failure propagation and
+operator-state preservation. Native installation and upgrade recovery remain
+separate obligations.
+
+### NAS installation preserves shared boot-file ownership
+
+Unraid and QNAP registration uses the same exact-entry parser as removal, not
+substring deletion. QNAP retains execute enablement without discarding other
+permission bits. Unrelated commands and sibling launchers stay byte-for-byte
+intact; unknown/edited Pulse activation, malformed or unsafe files stop the
+operation. See the [boot publication contract](deployment-installability.md#nas-boot-registration-does-not-erase-unrelated-startup-work).
+Neither registration failure nor QNAP flash-unmount refusal may start a new
+watchdog or report completion. Existing runtime stops may already have occurred;
+this is not an automatic runtime rollback. `TestInstallSHNASBootRegistrationPreservesUnrelatedCommands`
+executes both production callers with private file/finite-watchdog fixtures and
+explicit filesystem race/refusal controls, not native appliance recovery.
+
+### TrueNAS boot-task registration is separate from running-agent health
+
+Unix agent completion applies the [TrueNAS persistence contract](deployment-installability.md#truenas-agent-completion-requires-confirmed-boot-persistence):
+complete owned inventory, one bounded registration without uncertain replay and
+an enabled exact-ID readback precede any persistence/success claim. Unknown boot
+state leaves runtime start and saved recovery available but produces incomplete
+installation exit **1** / `persistence_unconfirmed`; startup **13** and rejected
+credentials **18** keep their existing meanings. The actual-function/caller
+controls in `TestInstallSHTrueNASBootRegistrationRequiresReadback` cover these
+outcomes on Linux/FreeBSD branches without claiming native reboot/upgrade proof.
 
 
-### Verified agent actions remain attached to their originating occurrence
+### Unix installation completion requires observed local startup
 
-An agent action's execution and verification evidence belongs to its original
-action and investigation. Replaying that result after a finding reopens must
-preserve the new occurrence's investigation eligibility and current record.
-The shared findings store validates session identity and the persisted
-regression boundary atomically; current finding reads select current work
-while explicit action history retains earlier receipts. The three-occurrence
-Patrol action regression in
-`internal/api/ai_handlers_patrol_actions_additional_test.go` also reconstructs
-persisted findings and action audit state before the third occurrence.
+Every Unix agent platform uses the shared `complete_installation_flow` helper.
+If its existing startup verification fails, neither fresh installation nor
+update may return success: process exit and the existing unhealthy JSON event's
+`exitCode` are **13**, with an incomplete-operation explanation and the supplied
+platform log command. The helper exits before the callers can overwrite that
+result, leaving the saved connection state and installed recovery files intact.
+It adds no lifecycle operation, retry, broader privilege or trust fallback.
 
-### Collected backup evidence does not require command-agent access
+`TestInstallSHCompletionRequiresObservedStartup` runs the production waiter,
+completion and JSON functions with closed external operations. The 40 cases
+preserve ready/delayed starts, disabled-health process checks, pending server
+registration and definitive authentication failure **18**, across install/update
+and persisted/new connection state. Native platform activation and installed
+recovery remain separate proof obligations; no health or registration check is
+weakened by this completion correction.
 
-Guest investigation manifests include the existing read-only storage tool for
-collected backup attempts. The org-scoped recovery reader preserves task error
-text independently of PVE command clients and connected agents. Missing command
-access remains an execution boundary; reading a failure or a successful task
-does not grant a lifecycle action or prove a restorable artifact. Manifest,
-persisted-task and API/tool parity regressions cover this separation.
+### Archive storage identity is not agent or guest placement
+
+The shared server model's optional `StorageBackup.storageNode` retains the
+local archive host while guest `node` is normalized to current placement.
+It changes no agent report, identity, enrolment, removal or command contract.
+`TestStorageBackupLocationSurvivesGuestPlacementAndJSON` checks distinct local
+rows, placement normalization, JSON round trip and legacy/shared omission.
 
 ### Native CI tooling refresh (14 October 2026)
 
@@ -85,6 +253,30 @@ Linux removal receipt are unchanged. `TestNativeAgentWorkflowBuildsRealFrontendB
 `TestNativeWindowsExecutesGeneratedInstallCommand` bind those actual consumers
 to the refreshed pin without relaxing ordering or platform controls. Local
 source proof is not native Windows, appliance or installed lifecycle acceptance.
+
+### Installation transport disclosure follows the generated commands
+
+The host installer shows its effective transport policy beside unlocked install
+commands, even while advanced options are collapsed. Plain HTTP is disclosed
+independently of the skip-verification checkbox; a CA file cannot add TLS to
+HTTP. Explicit HTTPS bypass disables certificate and hostname checks, not just
+self-signed-chain rejection, and takes precedence over a supplied custom CA.
+Verification-enabled HTTPS and custom-CA settings are described as requests, never as a
+successful connection test or installed trust. Incomplete/unsupported URLs
+receive no HTTPS assurance. The advanced URL help does not suggest downgrading
+to HTTP to evade hostname verification. Each installation copy control and the
+bypass checkbox references the current policy through its accessible description.
+
+`InfrastructureOperationsModel.test.tsx` mounts the production operations owner
+and installer panel against synthetic status reads. It compares HTTP, HTTPS,
+custom-CA and bypass text with the actual Unix and Windows generated commands,
+including override precedence and collapsed-options persistence. Component
+regressions cover the default HTTP warning and current-policy accessibility.
+Desktop and narrow browser proof must inspect these states and copied bytes.
+No token generation, command flags, trust defaults, installer execution, saved
+removal credentials or installed lifecycle behaviour changes; browser fixtures
+must not execute the displayed commands. This is safe disclosure, not PVE/PBS
+certificate renewal or installed recovery acceptance.
 
 ### Optional configuration-signing guidance fits narrow installers (13 October 2026)
 
@@ -110,6 +302,16 @@ preflight, private-file, scope, profile, identity and TLS boundaries remain.
 `portable_bootstrap_test.go` exercises all three producers with real PTYs and
 BusyBox, full terminal restoration and closed privilege/download fixtures;
 it is not native appliance installation or recovery evidence.
+
+The terminal read runs in the privileged shell's sole background job. Its
+supervisor owns signal/EXIT cleanup, terminates and reaps that job before
+restoring the complete terminal state, and never accepts an inherited PID as
+a cleanup target. This avoids Bash's prompt-time read/trap race without
+delaying signals, imposing a token-entry timeout or weakening privacy. Both
+Go and frontend command producers preserve the same boundary. Prompt-time
+HUP/INT/TERM controls keep the terminal owner alive, require the original
+failure exit, and on Linux verify the observed input child has gone; no
+installation may begin after interrupted or invalid input.
 
 ### Unraid/QNAP removal retires exact boot entries and confirms watchdog quiescence
 
@@ -151,14 +353,54 @@ Unraid directories. Successful/absent/repeated removal still requires complete
 fresh observations. No automatic restart, credential churn or transport-policy
 change follows a partial operation.
 
-`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all eighteen
+`TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` requires all 23
 actual-function/full-uninstall caller controls in `agent_nas_teardown.py`. The
+fixture's discovered inventory must exactly match the required controls before
+execution. Each control runs once, serially, in its own two-minute invocation;
+the native runner retains its ten-minute package alarm and the production,
+transport and cleanup deadlines do not change. This prevents completed controls
+from consuming the observation budget of later controls. Missing, substituted,
+repeated or malformed inventories fail closed, covered by
+`TestNASControlInventoryRequiresEveryControlExactlyOnce`; a partial suite is not
+a pass. Native macOS completion still requires the containing CI result. The
 boot filesystem transformations are real private user operations; flash/kernel
 faults are closed models. Two generated watchdog/child controls use real private
 ordinary-user processes, not appliance mounts or root services. Native signed
 Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
 publication remain separate obligations; this source proof does not resolve
 #1099 or claim installed restoration.
+
+### Lost container mutation acknowledgements reconcile through reads
+
+Typed container lifecycle execution attempts its mutation once. A transport
+error preserves uncertain execution and, while the original operation context
+remains live, reads the same container and waits for its existing health check.
+Readback never manufactures a mutation acknowledgement or extends a canceled
+operation. Fixed, non-sensitive timeout/cancellation/unknown messages survive
+receipt sanitization. `docker_lifecycle_test.go` covers lost acknowledgement,
+health recovery, cancellation, exactly-once mutation and receipt redaction.
+
+
+### Verified agent actions remain attached to their originating occurrence
+
+An agent action's execution and verification evidence belongs to its original
+action and investigation. Replaying that result after a finding reopens must
+preserve the new occurrence's investigation eligibility and current record.
+The shared findings store validates session identity and the persisted
+regression boundary atomically; current finding reads select current work
+while explicit action history retains earlier receipts. The three-occurrence
+Patrol action regression in
+`internal/api/ai_handlers_patrol_actions_additional_test.go` also reconstructs
+persisted findings and action audit state before the third occurrence.
+
+### Collected backup evidence does not require command-agent access
+
+Guest investigation manifests include the existing read-only storage tool for
+collected backup attempts. The org-scoped recovery reader preserves task error
+text independently of PVE command clients and connected agents. Missing command
+access remains an execution boundary; reading a failure or a successful task
+does not grant a lifecycle action or prove a restorable artifact. Manifest,
+persisted-task and API/tool parity regressions cover this separation.
 
 ### Patrol maintenance coverage adds no agent authority
 
@@ -1539,6 +1781,14 @@ credential/connection parameters, so ambient install variables cannot shadow
 saved state. Its download uses only selected trust, restores the TLS callback
 and does not assign shell environment variables. Identity and paths are quoted
 as literals. Installation's private-input/preflight path remains separate.
+Both Windows download families pass `-TimeoutSec 60 -ErrorAction Stop` to
+their single installer request, under system trust and explicit custom trust.
+A failed request must not execute an installer or trigger a retry, even when
+the caller's error preference is Continue or Ignore. The custom-trust callback
+is restored on refusal as well as success. The existing native Windows TLS
+suite exercises copied removal with a recorder, literal identity and empty
+installation credentials, HTTPS refusal and untrusted-certificate controls;
+that recorder is not saved-state recovery or actual service removal.
 `agentInstallCommand.test.ts` executes a terminal-free Unix recorder and retains
 its success/failure exit and inherited-state boundaries; the real composed hook
 and Doctor model prove all token/platform/identity branches. The parent/final
@@ -4401,6 +4651,60 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Dashboard state-delivery liveness boundary
+
+State-build health is independent of agent enrollment and endpoint reachability.
+A monitor with one unavailable agent or a scheduler dead letter remains healthy
+unless the hub's own in-flight state build stalls for 30 seconds. Health probes
+observe existing work only; they never start a getter or collect an agent report.
+No agent credential, removal, update or restart authority changes. The controlled
+hub/health contract test exercises the process dependency, not installed agents.
+
+Broadcast audience retirement shares one control-write deadline instead of
+extending shutdown for each slow browser. Socket expiry/closure does not stop,
+restart or diagnose any monitored agent. Real socket cleanup tests cover the
+bound while the production monitor-projection fixture starts no agent loops.
+
+
+### Unix installer certificate probing has a total deadline
+
+The leaf-certificate pin check in `scripts/install.sh` must finish its TCP/TLS
+probe within ten one-second waits, before the ordinary install/update path
+stops or replaces a collector. A silent peer fails preflight with exit 14;
+a failed probe or unreadable certificate fails with the same normal diagnostic
+path, not an implicit shell exit. The installer owns and reaps its direct
+OpenSSL child and removes its private output on success, failure and handled
+INT/TERM. A signal during fork/PID capture is retained until the child is
+owned, then exits through the same cleanup. It needs neither GNU timeout nor
+a new runtime dependency.
+
+Exact leaf SHA-256 comparison, pin normalization, pin refusal even alongside
+explicit insecure mode, saved pin persistence, unpinned certificate verification,
+signed executable admission and subsequent curl deadlines are unchanged.
+`server_pin_deadline_test.go` exercises the complete installer with real
+OpenSSL/curl and disposable TLS/silent peers, exact/mismatched pins, ordinary
+preflight consumption, handled interruptions and byte/mode-preserved recovery
+material. Platform/service mutation sentinels remain closed; these Linux-hosted
+controls are not native macOS/BSD/NAS installation or Windows removal proof.
+
+
+### Connection-test evidence follows its tested settings (2026-10-14)
+
+The existing Proxmox/PBS/PMG editor names its live test scope before dispatch:
+without a newly entered secret an existing record uses **Test saved connection**,
+not the unsaved endpoint or TLS policy. A newly entered secret (or a new record)
+uses **Test entered settings**. Results repeat that scope; warnings remain
+warnings. Neither test saves settings or establishes ongoing collection, guest
+thaw or filesystem writes. No test runs automatically after an edit.
+Connection input changes, available saved connection-config changes, target
+changes, reset, close and disposal retire completed/in-flight UI evidence,
+including A-to-B-to-A edits. Retirement does not cancel a live request or permit
+an overlapping probe: the action remains busy until that request settles.
+Health-only polls and unrelated name/coverage/member-display edits preserve
+valid evidence and unsaved input. Actual guest and installed trust recovery
+remain separate from this frontend correction.
+
+
 ### AI Discovery removed (2026-10-11)
 
 Agent resource context retains the backend-authored `discoveryTarget` coordinates.
@@ -6489,6 +6793,14 @@ lifecycle path for members without an agent. The configured-nodes cache in
 `useInfrastructureConfiguredNodesState.ts` must mirror saved overrides onto
 its cached `clusterEndpoints` rather than spreading the write-only payload
 field onto node config state.
+Failed-member diagnostics also expose that member's complete saved certificate
+fingerprint as read-only, wrapping text (or explicitly report no recorded member
+pin). This is saved configuration, never a fresh peer-certificate verification.
+It remains distinct from the connection's form TLS policy and address override;
+reading it must not fetch a certificate, change trust or submit member pins.
+Refreshed configuration replaces the displayed pin without discarding dirty
+display names or connection addresses. The cluster-member section tests cover
+missing, distinct, malformed and refreshed pins and unchanged save boundaries.
 That same node setup owner also includes
 `frontend-modern/src/utils/nodeModalPresentation.ts`, which now owns the
 canonical node-type defaults, endpoint/auth placeholders, monitoring coverage
@@ -10007,6 +10319,21 @@ resolution still goes through the live registry.
 
 ### Reporting authentication errors do not prescribe credential replacement
 
+The Unix installer's post-start registration warning and final error follow
+the same rule. A denied lookup does not diagnose restore/upgrade loss or prove
+that a new token or another installation is needed. Keep the existing
+credential and identity, check its issuing instance/API Access record and
+`agent:report` or endpoint policy, and keep secrets private. Local readiness
+still cannot override denial: completion retains exit 18 and the unchanged
+`complete/auth_rejected` JSON record, without a success message.
+`TestInstallSHWarnAgentTokenRejectedIsActionable` runs
+`scripts/tests/test_agent_auth_completion.py` through the real warning, waiter
+and completion functions with closed readiness/registration/persistence peers.
+It covers both readiness paths, install/update, interactive/non-interactive,
+text/JSON, saved-state preservation and registered/pending/missing-process
+controls. This is synthetic completion proof, not installed authentication
+recovery or a diagnosis of a reported failure.
+
 Host reporting's 401 diagnostic identifies the configured endpoint and directs
 an operator to the existing API Access record and issuing instance, not a
 presumed restore/upgrade loss or another installation. A 403 directs the operator
@@ -10085,6 +10412,46 @@ existing update pipeline. They add no agent enrollment, command, install or
 reporting path, and agent continuity stays judged by the same update readiness
 verdict the apply route already computes for its target version.
 
+### Proxmox assisted setup completion ownership
+
+The PVE/PBS setup-command, downloaded-script and optional host-agent handoffs
+share one pending-action boundary in the consuming frontend state. Relevant
+editor input or lifetime changes invalidate late results and cached output
+without releasing that action's busy state before it settles. Agent installer
+TLS preference changes also retire output, including an A → B → A reversal.
+Successful current actions retain monitoring-only command scope and separate
+token entry; the frontend never cancels, replays or revokes a dispatched action
+and makes no installed enrolment/recovery claim from these checks.
+
+### PMG-only configured reference boundary (15 October 2026)
+
+The shared model adds an optional PMG `connectionId`; cloned state and JSON
+preserve its explicit value or legacy absence (`TestPMGConfiguredConnectionSnapshotWire`).
+It does not enter host-agent reports, stable host identity, deletion,
+re-enrolment or continuity decisions. PMG runtime IDs remain independent of
+the scoped connection-alert reference; no agent identity is re-created from it.
+
+The full PMG detail projection preserves that optional reference too; it remains outside host-agent report, removal and re-enrolment contracts. `TestContract_PMGConfiguredReferenceInFullDetail` checks absence as well as presence through the real handler.
+
+### Kubernetes report transport and ambient proxies (16 October 2026)
+
+The Kubernetes agent follows the host agent's existing direct-HTTP rule for
+Pulse control-plane traffic: an explicitly selected plaintext endpoint receives
+its report directly, never through an ambient `HTTP_PROXY`. Otherwise the
+proxy would receive both bearer headers and the complete cluster inventory.
+This applies to the primary target and each admitted report-only observer.
+It does not admit another HTTP URL, relax observer plaintext consent or change
+enrolment, update, command, identity, retry or buffering behaviour.
+
+HTTPS retains environment-selected proxies and the existing CA, certificate
+pin and explicit insecure-option settings. Proxy selection does not disable
+TLS verification or redirect refusal. `TestKubernetesControlPlaneProxy` in
+`internal/kubernetesagent/multi_target_test.go` runs the isolated, listener-free
+wire controls in `control_plane_proxy_test.go`: four plaintext report paths,
+HTTPS CONNECT with a verified custom CA or pin, and rejection before report
+transmission for an untrusted certificate or wrong pin. These controls exercise
+the production client and report sender, not installed cluster recovery.
+
 ### Extended history observation preserves existing read authority
 
 The shared chart/history response writer now observes successful extended
@@ -10094,18 +10461,45 @@ only a successful-read marker after serialization/write, and existing API
 entitlement checks remain before that boundary. Read semantics remain owned
 by api-contracts and telemetry retention/disclosure by security-privacy.
 
-### Connection edit tests retain credentials and use draft TLS (16 October 2026)
+### Connection edit tests separate saved credentials from draft trust
 
-The shared node modal sends its current SSL verification flag and fingerprint
-when testing with retained PVE, PBS or PMG credentials. It uses the saved-node
-probe endpoint so stored secrets do not need to be returned to the browser.
-Testing does not save the edits. Replacing credentials continues to use the
-provided-configuration probe with the edited TLS settings.
+Without a newly entered secret, the shared PVE/PBS/PMG editor tests only the
+saved record. It sends no draft address, account or TLS settings alongside
+retained credentials. A newly entered secret uses the provided-configuration
+test with the draft settings. Testing never saves edits; a saved-record result
+cannot establish that an unsaved pin works.
+
+The editor bounds each explicit connection test to 30 seconds, including CSRF
+preparation and response-body consumption. On expiry it aborts the browser wait,
+retires late results and restores the test control without saving, automatically
+retrying or claiming that the endpoint is untrusted or the server stopped. The
+message states that the server may still be testing. An explicit new test is
+required; an edit alone does not dispatch one. Disposing the editor releases the
+wait and timer without publishing a result. Signal-bound test calls disable
+automatic CSRF/organisation retries; other API callers retain their defaults.
+`useNodeModalState.connectionTest.test.ts` covers exact deadline, late success/error,
+new-test isolation and disposal. `node-connection-deadline.cjs` exercises the
+production editor/client against held HTTP headers, held bodies and held CSRF
+preparation, with desktop keyboard and 320px touch interaction. This is browser
+wait recovery, not installed certificate renewal or guest recovery.
 
 `useNodeModalState.connectionTest.test.ts` covers retained and replaced credentials,
-edited pins and clearing a pin. `frontend-modern/src/api/__tests__/nodes.test.ts`
+retirement of obsolete evidence and local validation. `frontend-modern/src/api/__tests__/nodes.test.ts`
 is the direct shared transport proof. The existing node setup Settings proof
 routes remain required for the modal surface.
+
+Before save or an entered-settings test, a nonempty certificate pin must contain
+exactly 64 hexadecimal characters after removing colons, matching the existing
+Proxmox TLS client. Case and colon placement are preserved. Spaces, labels,
+truncated/non-hex values and separator-only input remain visible and invalid;
+the editor never trims, clears, replaces a pin or changes verification to make
+it pass. A local field error and native form validation focus the invalid input.
+Empty optional pins retain the existing policy; valid format is not trust.
+Saved-record tests remain usable with a malformed unsaved draft because they
+do not consume it. No new probe, saved-secret transport, setup command, backend
+validation or installed renewal guarantee is introduced. The fingerprint and
+monitoring-section tests and `node-fingerprint-validation.cjs` cover correction,
+preserved settings and desktop/320px keyboard/touch save and test journeys.
 
 The shared footer stacks its action groups on narrow screens and wraps controls
 within each group. Delete, Test, Pause, Cancel and Save must remain visible and
@@ -10165,3 +10559,59 @@ the credential reveal render as shared `InlineNotice`s; agent and security
 facts as a `DetailSectionTable`; the connection id and identity evidence sit
 in a closed Details disclosure. No diagnosis, repair or credential flow
 changes: this is presentation only.
+
+### Agent installer option-value admission (17 October 2026)
+
+Every value-taking Unix agent installer option rejects a missing value or a
+following long option/`-h` before credential reads, installed-state recovery,
+transport or service operations. The error names only the option, never the
+supplied credential/value; it exits 16 without a prompt and uses the existing
+JSON error event when `--output json` was already selected. Explicit empty
+values remain supported (notably `--health-addr ""`); their existing semantic
+validation is unchanged.
+
+`TestInstallSHValueArgumentsRejectMissingValues` exercises the complete shipped
+parser for every value-taking option in text/JSON modes, with transport and
+platform-action sentinels. `TestInstallSHValueArgumentsPreserveExplicitValues`
+retains empty, spaced and single-hyphen values through the real help path.
+These are CLI admission controls, not installed lifecycle recovery proof.
+
+
+### PBS add-source token collision boundary
+
+The config add-node route stops with HTTP 409 when PBS reports an existing
+monitoring token. It leaves that token intact and does not substitute saved
+administrator credentials or reload the monitor. Existing agents and their
+credentials are unchanged; no enrolment, removal or lifecycle operation is
+issued. The existing manual-token path can use a known saved secret.
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` covers configuration,
+persistence, reload exclusion and subsequent manual-token setup.
+
+### Literal installer values survive service serialization
+
+The Unix agent service environment retains each complete caller value across
+serialization. systemd `Environment=` uses its own C-style quoting, including
+literal percent signs rather than specifier expansion; quotes, backslashes and
+control bytes cannot change the assignment or introduce another directive.
+The existing first-key-wins accumulator and profile/credential precedence stay
+unchanged. Launchd environment and ProgramArguments XML escape metacharacters
+literally with either Bash replacement behaviour, including Bash 5.2.
+
+`TestInstallSHServiceEnvironmentPreservesLiteralValues` runs the actual
+accumulator/unit renderer through `systemd-analyze verify` and checks its
+effective environment and command, not its exit alone. It also consumes the
+actual XML producers with a plist parser and checks shell-export round trips.
+These are disposable parser proofs, not a running systemd/launchd agent,
+installed TLS recovery or a change to the saved-state/transport contract.
+
+### Hosted chart evidence cannot qualify an agent lifecycle
+
+The optional hosted workload-chart capacity proof reports an executed but
+contended measurement as inconclusive, never as a healthy reading or a passed
+90 ms budget. This CI-only classification does not satisfy agent installation,
+restart, confinement, credential persistence or signed recovery acceptance.
+Skips, missing reports and non-budget child failures still fail the proof.
+The actual CLI/receipt control is
+`TestContractChartSLOProofCLIClassifiesExecution`; the separate read-only
+evidence and check-writer boundary is
+`TestChartSLOWorkflowPreservesInconclusiveAndFailure`.

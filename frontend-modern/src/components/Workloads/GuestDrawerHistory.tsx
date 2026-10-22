@@ -494,7 +494,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
 
   return (
     <section
-      class={`flex min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5 ${props.hiddenOnPhone ? 'max-sm:hidden' : ''}`}
+      class={`flex min-w-0 min-h-[154px] flex-col rounded-xs border border-border bg-surface p-2.5 ${props.hiddenOnPhone ? 'max-sm:hidden' : ''}`}
       data-testid="guest-history-group-chart"
       data-phone-collapsed={props.hiddenOnPhone ? 'true' : undefined}
       data-history-group={props.group.id}
@@ -569,7 +569,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         {(item) => (
           <p
             id={item.descriptionId}
-            class="mb-2 text-xs leading-relaxed text-muted"
+            class="mb-2 whitespace-normal wrap-anywhere text-xs leading-relaxed text-muted"
             data-history-deferred={item.metric}
           >
             {item.label} reading: {item.deferred?.message}

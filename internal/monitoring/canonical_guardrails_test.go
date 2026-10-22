@@ -1,8 +1,13 @@
 package monitoring
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"math"
 	"os"
 	"path/filepath"
@@ -438,26 +443,6 @@ func TestPBSBackupsSnapshotPreservesSourceArtifactFields(t *testing.T) {
 	}
 	if got[0].Owner != "backup@pbs" || len(got[0].Files) != 2 {
 		t.Fatalf("PBS artifact owner/files were not preserved: %+v", got[0])
-	}
-}
-
-func TestGuestSnapshotPollingStaysBoundedConcurrent(t *testing.T) {
-	data, err := os.ReadFile("monitor_backups.go")
-	if err != nil {
-		t.Fatalf("failed to read monitor_backups.go: %v", err)
-	}
-	source := string(data)
-
-	for _, snippet := range []string{
-		"maxConcurrentGuestSnapshotPolls = 8",
-		"targets := make([]guestSnapshotPollTarget, 0, activeGuests)",
-		"results := make(chan guestSnapshotPollResult, len(targets))",
-		"sem := make(chan struct{}, maxConcurrentGuestSnapshotPolls)",
-		"polledGuestKeys[result.target.key] = struct{}{}",
-	} {
-		if !strings.Contains(source, snippet) {
-			t.Fatalf("monitor_backups.go must contain %q", snippet)
-		}
 	}
 }
 
@@ -1342,6 +1327,8 @@ func TestBackupOrphanDetectionUsesCanonicalInventoryReadinessScope(t *testing.T)
 			"func (m *Monitor) updatePVEBackupTemplateSubjectsFromClusterResources(instanceName string, resources []proxmox.ClusterResource) {",
 			"func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {",
 			"m.checkBackupAlerts(ctx)",
+		},
+		"monitor_alerts.go": {
 			"m.checkBackupAlerts(context.Background())",
 		},
 		"recovery_rollups.go": {
@@ -1947,23 +1934,53 @@ func TestProxmoxNodeDiskFallbackPrefersCanonicalSystemStorage(t *testing.T) {
 }
 
 func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
-	requiredSnippets := map[string][]string{
-		"monitor_pve_guest_builders.go":  {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_pve_guest_lxc.go":       {"Pool:     strings.TrimSpace(res.Pool)"},
-		"monitor_pve_node_vm_builder.go": {"Pool:       vm.Pool"},
-		"monitor_polling_containers.go":  {"Pool:     strings.TrimSpace(container.Pool)"},
+	required := map[string]struct{ model, value string }{
+		"monitor_pve_guest_builders.go":  {"models.VM", "strings.TrimSpace(res.Pool)"},
+		"monitor_pve_guest_lxc.go":       {"models.Container", "strings.TrimSpace(res.Pool)"},
+		"monitor_pve_node_vm_builder.go": {"proxmox.ClusterResource", "vm.Pool"},
+		"monitor_polling_containers.go":  {"models.Container", "strings.TrimSpace(container.Pool)"},
 	}
 
-	for file, snippets := range requiredSnippets {
-		data, err := os.ReadFile(file)
+	for file, want := range required {
+		fset := token.NewFileSet()
+		source, err := parser.ParseFile(fset, file, nil, 0)
 		if err != nil {
-			t.Fatalf("failed to read %s: %v", file, err)
+			t.Fatal(err)
 		}
-		source := string(data)
-		for _, snippet := range snippets {
-			if !strings.Contains(source, snippet) {
-				t.Fatalf("%s must contain %q", file, snippet)
+		render := func(node ast.Node) string {
+			var text bytes.Buffer
+			if err := format.Node(&text, fset, node); err != nil {
+				t.Fatal(err)
 			}
+			return text.String()
+		}
+		modelsChecked := 0
+		ast.Inspect(source, func(node ast.Node) bool {
+			literal, ok := node.(*ast.CompositeLit)
+			if !ok || len(literal.Elts) == 0 || render(literal.Type) != want.model {
+				return true
+			}
+			modelsChecked++
+			// Inspect actual model fields, not an alignment-sensitive string
+			// that can pass in a comment or fail after ordinary gofmt changes.
+			found := false
+			for _, element := range literal.Elts {
+				field, ok := element.(*ast.KeyValueExpr)
+				if !ok || render(field.Key) != "Pool" {
+					continue
+				}
+				found = true
+				if got := render(field.Value); got != want.value {
+					t.Errorf("%s %s.Pool = %s, want %s", file, want.model, got, want.value)
+				}
+			}
+			if !found {
+				t.Errorf("%s populated %s lacks its source-owned Pool field", file, want.model)
+			}
+			return true
+		})
+		if modelsChecked == 0 {
+			t.Errorf("%s has no populated %s to verify", file, want.model)
 		}
 	}
 }
@@ -2159,6 +2176,7 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 				"if !shouldSkipNativeMockStateMetricWrites() {",
 				"guestHistoryRates(",
 				"m.recordGuestMetric(",
+				"historyVMDiskUsage(vm)",
 			},
 		},
 		{
@@ -2566,7 +2584,22 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"m.setRuntimeContext(ctx, wsHub)",
 		},
 		"monitor_backups.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"owner, reason := m.beginPVEBackupPoll(instanceName, now, client)",
+			"parentCtx := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)",
+		},
+		// Backup scans capture the runtime while admitting their connection
+		// owner under m.mu, rather than looking up a possibly replaced runtime
+		// later in the background goroutine. Guard that stronger boundary.
+		"pve_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
+			"m.pveBackupPolls[instance] = owner",
+		},
+		"pbs_backup_poll.go": {
+			"parent := m.runtimeCtx",
+			"ctx, cancel := context.WithCancel(parent)",
+			"m.pbsBackupPollers[instance] = owner",
+			"parent := context.WithValue(owner.ctx, pbsBackupPollContextKey{}, owner)",
 		},
 		"monitor_pve.go": {
 			"parentCtx := m.getRuntimeContext()",
@@ -2575,7 +2608,8 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 			"parentCtx := m.getRuntimeContext()",
 		},
 		"monitor_pbs_pmg.go": {
-			"parentCtx := m.getRuntimeContext()",
+			"backupInventory := pbsBackupInventory{runtimeEpoch: m.pbsBackupRuntimeEpoch}",
+			"m.pollPBSBackupsAsync(instanceName, client, backupInventory)",
 		},
 		"../config/config.go": {
 			"func LoadWithoutLoggingInit() (*Config, error) {",
@@ -3432,4 +3466,42 @@ func TestBackupAlertEvaluationCallersShareFailureVisibility(t *testing.T) {
 
 func TestGuestMemorySampleCapacityCanonicalProjection(t *testing.T) {
 	testGuestMemorySampleCapacityPolling(t)
+}
+
+// The configurable vCenter refresh budget must retain the default, caller
+// cancellation, last complete inventory and serial multi-connection dispatch.
+func TestVMwareInventoryRefreshBudgetContract(t *testing.T) {
+	t.Run("configuration", testVMwarePollTimeoutConfiguration)
+	t.Run("refresh-and-projection", testVMwarePollRefreshBudgetAndProjection)
+}
+
+// The REST seed must preserve the same resolved coordinates as the broadcast
+// generation, without consulting a later registry or editing a shared view.
+func TestUnifiedSnapshotPreservesCapturedHistoryTargets(t *testing.T) {
+	oldTarget := &unifiedresources.MetricsTarget{ResourceType: "agent", ResourceID: "old-connection"}
+	rows := []unifiedresources.Resource{
+		{ID: "canonical-row", Type: unifiedresources.ResourceTypeAgent, MetricsTarget: oldTarget},
+		{ID: "unknown-row", Type: unifiedresources.ResourceTypeAgent, MetricsTarget: oldTarget},
+	}
+	targets := projectionMetricsTargets{"canonical-row": {ResourceType: "agent", ResourceID: "native-connection"}}
+	view := monitorUnifiedStateView{resources: rows, metricsTargets: targets}
+	got := unifiedSnapshotResources(view)
+	if got[0].MetricsTarget == nil || got[0].MetricsTarget.ResourceID != "native-connection" || got[1].MetricsTarget != nil {
+		t.Fatalf("captured known/unknown targets lost: %+v", got)
+	}
+	if rows[0].MetricsTarget != oldTarget || rows[1].MetricsTarget != oldTarget || oldTarget.ResourceID != "old-connection" {
+		t.Fatal("snapshot decorated the shared read-state rows")
+	}
+	got[0].MetricsTarget.ResourceID = "caller-change"
+	got[0].Name = "caller-change"
+	again := unifiedSnapshotResources(view)
+	if again[0].Name != "" || again[0].MetricsTarget.ResourceID != "native-connection" || targets["canonical-row"].ResourceID != "native-connection" {
+		t.Fatal("returned snapshot changed the captured generation")
+	}
+	// A store without a captured target projection retains its existing
+	// source row; the snapshot does not invent a coordinate from its name.
+	fallback := unifiedSnapshotResources(monitorUnifiedStateView{resources: rows})
+	if fallback[0].MetricsTarget != oldTarget {
+		t.Fatal("projection-less fallback lost its supplied coordinate")
+	}
 }

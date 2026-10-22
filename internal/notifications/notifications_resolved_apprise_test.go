@@ -76,8 +76,8 @@ func TestSendResolvedApprise_CLI(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
-		return nil, nil
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
+		return 0, nil
 	}
 
 	alertList := []*alerts.Alert{{

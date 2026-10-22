@@ -19,7 +19,11 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { recordWorkloadHistoryActivity } from '@/api/workloadHistoryActivity';
 import { TagBadges } from '@/components/shared/TagBadges';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getWorkloadCPUPercent,
+  getWorkloadPlatformScopes,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import {
   MetricMiniSparkline,
@@ -35,6 +39,7 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 import { createRowTextSelectionGuard, nativeRowClickTarget } from '@/components/shared/Table';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
 import { getMetricSeverity } from '@/utils/metricThresholds';
+import { getGuestNetworkLastKnownReason } from '@/utils/guestNetworkObservation';
 import {
   getWorkloadMemoryGuestKind,
   getWorkloadMemoryObservationPresentation,
@@ -62,6 +67,7 @@ import { getGuestColumnStyle } from './guestRowModel';
 export function GuestRow(props: GuestRowProps) {
   const [rowActionProps] = splitProps(props, ['onClick']);
   const selectionGuard = createRowTextSelectionGuard();
+  const networkLastKnownReason = createMemo(() => getGuestNetworkLastKnownReason(props.guest));
   const runRowAction = (event: MouseEvent) => {
     if (!selectionGuard.isSelectionClick(event)) rowActionProps.onClick?.();
   };
@@ -382,7 +388,27 @@ export function GuestRow(props: GuestRowProps) {
   // so their reason stays in the title, assistive text and drawer.
   const diskReadStatus = createMemo(() => {
     const read = diskUsageRead();
-    if (read.state === 'current') return undefined;
+    if (read.state === 'current') {
+      // A successful host poll can still omit the LXC usage counters. The
+      // missing aggregate is not an empty filesystem, nor a guest-agent fault.
+      // Other platforms and templates need not supply this measurement.
+      const scopes = getWorkloadPlatformScopes(props.guest);
+      if (
+        workloadType() === 'system-container' &&
+        !props.guest.template &&
+        (scopes.includes('proxmox-pve') || (scopes.length === 0 && props.guest.type === 'lxc')) &&
+        !hasDiskUsage()
+      ) {
+        return {
+          label: 'No data',
+          message:
+            "Pulse has no current aggregate disk-usage measurement for this container. Capacity and configured mounts alone do not show used or free space. A missing reading does not mean an empty filesystem. Open the container's details for individually reported filesystems.",
+          valueLabelContext: 'unavailable' as const,
+          needsAction: false,
+        };
+      }
+      return undefined;
+    }
     const retained = read.state === 'last-known';
     const reason = isVM(props.guest)
       ? (props.guest.diskStatusReason ?? '').replace(/^prev-/, '')
@@ -815,8 +841,8 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* IP Address with Network Tooltip */}
         <Show when={isColVisible('ip')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
+          <td data-workload-col="ip" class="px-1.5 sm:px-2 py-0.5 align-middle">
+            <div class="flex flex-col items-center">
               <Show
                 when={ipAddresses().length > 0 || hasNetworkInterfaces()}
                 fallback={
@@ -828,7 +854,19 @@ export function GuestRow(props: GuestRowProps) {
                 <NetworkInfoCell
                   ipAddresses={ipAddresses()}
                   networkInterfaces={networkInterfaces()}
+                  lastKnownReason={networkLastKnownReason()}
                 />
+                <Show when={networkLastKnownReason()}>
+                  {(reason) => (
+                    <WorkloadReadingStatus
+                      metric="Network"
+                      guestId={guestId()}
+                      guestName={props.guest.name}
+                      label="Last known"
+                      message={reason()}
+                    />
+                  )}
+                </Show>
               </Show>
             </div>
           </td>

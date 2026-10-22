@@ -28,6 +28,28 @@ export interface PlatformWindowedItemsOptions<Item> {
   estimatedItemHeight?: number;
   enableThreshold?: number;
   windowSize?: number;
+  /** Logical items may span several DOM rows; measure the consumer's block. */
+  measureItemHeight?: (anchor: HTMLElement) => number;
+  /** Re-measure after a container layout or accepted inventory changes. */
+  measurementKey?: Accessor<unknown>;
+  /** Opt-in cumulative logical-item geometry for expandable, nonuniform rows. */
+  itemGeometry?: {
+    offsets: Accessor<readonly number[]>;
+    measure: (anchor: HTMLElement) => void;
+  };
+}
+
+// The last offset is the end of the list, not another item. Keep a scroll
+// position inside a tall detail attached to its own summary until its end.
+export function findWindowedItemIndex(offsets: readonly number[], position: number): number {
+  let low = 0;
+  let high = Math.max(0, offsets.length - 2);
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (offsets[middle]! <= position) low = middle;
+    else high = middle - 1;
+  }
+  return low;
 }
 
 /**
@@ -58,14 +80,19 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     if (!windowing.isWindowed()) return items;
     return items.slice(windowing.startIndex(), windowing.endIndex());
   });
-  const topSpacerHeight = createMemo(() =>
-    windowing.isWindowed() ? windowing.startIndex() * estimatedItemHeight() : 0,
-  );
-  const bottomSpacerHeight = createMemo(() =>
-    windowing.isWindowed()
-      ? Math.max(0, options.items().length - windowing.endIndex()) * estimatedItemHeight()
-      : 0,
-  );
+  const topSpacerHeight = createMemo(() => {
+    if (!windowing.isWindowed()) return 0;
+    return options.itemGeometry
+      ? options.itemGeometry.offsets()[windowing.startIndex()]!
+      : windowing.startIndex() * estimatedItemHeight();
+  });
+  const bottomSpacerHeight = createMemo(() => {
+    if (!windowing.isWindowed()) return 0;
+    const offsets = options.itemGeometry?.offsets();
+    return offsets
+      ? offsets[offsets.length - 1]! - offsets[windowing.endIndex()]!
+      : Math.max(0, options.items().length - windowing.endIndex()) * estimatedItemHeight();
+  });
 
   const syncWindowToViewport = (projectedScrollDelta = 0, measureItems = false) => {
     if (typeof window === 'undefined' || !windowing.isWindowed()) return;
@@ -73,37 +100,49 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     if (!anchor || isWindowedSurfaceHidden(anchor)) return;
 
     if (measureItems) {
-      let measuredHeight = 0;
-      let sibling = anchor.nextElementSibling;
-      for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
-        const height = sibling.getBoundingClientRect().height;
-        if (height > measuredHeight) measuredHeight = height;
-        sibling = sibling.nextElementSibling;
+      options.itemGeometry?.measure(anchor);
+      let measuredHeight = options.measureItemHeight?.(anchor) ?? 0;
+      if (!options.measureItemHeight) {
+        let sibling = anchor.nextElementSibling;
+        for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
+          const height = sibling.getBoundingClientRect().height;
+          if (height > measuredHeight) measuredHeight = height;
+          sibling = sibling.nextElementSibling;
+        }
       }
-      if (measuredHeight > 0) setEstimatedItemHeight(measuredHeight);
+      if (Number.isFinite(measuredHeight) && measuredHeight > 0)
+        setEstimatedItemHeight(measuredHeight);
     }
 
     const segmentRect = anchor.getBoundingClientRect();
     const scrollContainer = findWindowedPageScrollContainer(anchor);
+    const sync = (scrollTop: number, height: number) => {
+      const offsets = options.itemGeometry?.offsets();
+      if (offsets) {
+        const first = findWindowedItemIndex(offsets, scrollTop);
+        const last = findWindowedItemIndex(offsets, scrollTop + height);
+        // Reuse the bounded directional runway in logical row units, not a
+        // fleet-wide average that would evict a tall row while it is read.
+        windowing.onScroll(first, Math.max(1, last - first + 1), 1);
+      } else {
+        windowing.onScroll(scrollTop, height, estimatedItemHeight());
+      }
+    };
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();
-      windowing.onScroll(
+      sync(
         Math.max(0, containerRect.top - segmentRect.top + projectedScrollDelta),
         scrollContainer.clientHeight || window.innerHeight,
-        estimatedItemHeight(),
       );
       return;
     }
-    windowing.onScroll(
-      Math.max(0, -segmentRect.top + projectedScrollDelta),
-      window.innerHeight,
-      estimatedItemHeight(),
-    );
+    sync(Math.max(0, -segmentRect.top + projectedScrollDelta), window.innerHeight);
   };
 
   createEffect(() => {
     if (typeof window === 'undefined') return;
     options.items().length;
+    options.measurementKey?.();
     const anchor = anchorRef();
     if (!anchor || !windowing.isWindowed()) return;
 
@@ -111,11 +150,12 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     const scrollTarget: HTMLElement | Window = scrollContainer ?? window;
     const viewportHeight = () =>
       scrollContainer?.clientHeight || window.innerHeight || estimatedItemHeight();
-    const handleScroll = () => syncWindowToViewport();
+    const measureOnScroll = Boolean(options.measureItemHeight || options.itemGeometry);
+    const handleScroll = () => syncWindowToViewport(0, measureOnScroll);
     const handleWheel = (event: Event) => {
       const wheelEvent = event as WheelEvent;
       if (wheelEvent.deltaY === 0) return;
-      syncWindowToViewport(wheelDeltaInPixels(wheelEvent, viewportHeight()));
+      syncWindowToViewport(wheelDeltaInPixels(wheelEvent, viewportHeight()), measureOnScroll);
     };
     const handleResize = () => syncWindowToViewport(0, true);
 
@@ -123,6 +163,27 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     // Keep those reads outside this setup effect's dependency graph so runway
     // top-ups during scrolling cannot re-run measurement and listener binding.
     untrack(handleResize);
+    // An expansion, refreshed detail or container-width change can resize
+    // the logical block without a page scroll or a window resize. Measuring
+    // that block can change its runway: defer those writes beyond observer
+    // delivery so they cannot synchronously resize the observed surface.
+    let resizeFrame: number | undefined;
+    const scheduleResize = () => {
+      if (resizeFrame !== undefined) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = undefined;
+        handleResize();
+      });
+    };
+    const observer =
+      options.itemGeometry && typeof ResizeObserver === 'function'
+        ? new ResizeObserver(scheduleResize)
+        : undefined;
+    observer?.observe(anchor);
+    onCleanup(() => {
+      observer?.disconnect();
+      if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
+    });
     onCleanup(
       bindWindowedPageScrollEvents({
         scrollTarget,

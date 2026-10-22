@@ -145,8 +145,19 @@ function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabs
 
     rail.addEventListener('scroll', updateScrollControls, { passive: true });
     window.addEventListener('resize', updateScrollControls, { passive: true });
+    let resizeFrame: number | undefined;
+    const scheduleScrollControls = () => {
+      if (resizeFrame !== undefined) return;
+      // Showing the phone arrows changes the rail's padding and content box.
+      // Do not resize that box inside its own ResizeObserver delivery: WebKit
+      // reports undelivered notifications when inventory changes the tab set.
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = undefined;
+        updateScrollControls();
+      });
+    };
     const resizeObserver =
-      typeof ResizeObserver === 'function' ? new ResizeObserver(updateScrollControls) : undefined;
+      typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleScrollControls) : undefined;
     resizeObserver?.observe(rail);
     updateScrollControls();
 
@@ -154,6 +165,7 @@ function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabs
       rail.removeEventListener('scroll', updateScrollControls);
       window.removeEventListener('resize', updateScrollControls);
       resizeObserver?.disconnect();
+      if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
     });
   });
 
@@ -654,12 +666,27 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
       } ${props.class ?? ''}`
         .replace(/\s+/g, ' ')
         .trim()}
+      scope="col"
       aria-sort={props.sortKey !== undefined ? props.sort.getAriaSort(props.sortKey) : undefined}
       style={platformTableBandWidthStyle(props.bandWidth)}
       onClick={handleClick}
     >
-      {props.children}
-      {isSorted() ? ` ${getTableSortIndicator(true, props.sort.sortDirection())}` : null}
+      <Show when={props.sortKey !== undefined} fallback={props.children}>
+        {/* Keep the cell's pointer target; native activation bubbles through
+            the same handler once, without a parallel keyboard sort path. */}
+        <button
+          type="button"
+          class="block min-h-6 w-full min-w-0 rounded-sm [text-align:inherit] [text-transform:inherit] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        >
+          {props.children}
+          <Show when={isSorted()}>
+            <span aria-hidden="true">
+              {' '}
+              {getTableSortIndicator(true, props.sort.sortDirection())}
+            </span>
+          </Show>
+        </button>
+      </Show>
     </TableHead>
   );
 }
@@ -1096,6 +1123,7 @@ export function PlatformErrorState(props: {
   title: string;
   description: string;
   onRefresh: () => void;
+  refreshDisabled?: boolean;
 }) {
   return (
     <TableCard>
@@ -1108,7 +1136,8 @@ export function PlatformErrorState(props: {
             <button
               type="button"
               onClick={props.onRefresh}
-              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
+              disabled={props.refreshDisabled}
+              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover disabled:cursor-wait disabled:opacity-60"
             >
               Refresh
             </button>

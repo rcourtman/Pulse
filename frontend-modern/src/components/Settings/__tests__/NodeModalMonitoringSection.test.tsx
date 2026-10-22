@@ -251,7 +251,7 @@ describe('NodeModalMonitoringSection collection safety', () => {
     },
   );
 
-  it('keeps a supplied pin authoritative when the checkbox changes, including an invalid pin', () => {
+  it('keeps an invalid pin visible and blocks save rather than bypassing it with the checkbox', () => {
     const { fetch, onSave } = renderMonitoring('pve', { fingerprint: 'not-a-valid-pin' });
     const verification = screen.getByRole('checkbox', { name: 'Verify SSL certificate' });
     fireEvent.click(verification);
@@ -260,12 +260,41 @@ describe('NodeModalMonitoringSection collection safety', () => {
       'Certificate fingerprint required',
     );
     fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
-    expect(onSave.mock.calls[0][0]).toMatchObject({
-      verifySSL: false,
-      fingerprint: 'not-a-valid-pin',
-    });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'SSL Fingerprint (optional)' })).toHaveValue(
+      'not-a-valid-pin',
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it.each(['pve', 'pbs', 'pmg'] as const)(
+    'associates the %s pin error with its input and clears native invalidity after correction',
+    (nodeType) => {
+      const { fetch, onSave } = renderMonitoring(nodeType);
+      const fingerprint = screen.getByRole('textbox', { name: 'SSL Fingerprint (optional)' });
+      fireEvent.input(fingerprint, { target: { value: 'SHA256:' + 'ab'.repeat(32) } });
+      expect(fingerprint).toHaveAttribute('aria-invalid', 'true');
+      expect(fingerprint).toHaveAccessibleDescription(/exactly 64 hexadecimal characters/);
+      expect(fingerprint).toHaveAccessibleDescription(/Valid format does not prove trust/);
+      expect(fingerprint).toBeInvalid();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Do not include spaces or a SHA256: label',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+      expect(onSave).not.toHaveBeenCalled();
+
+      const corrected = 'CD:'.repeat(31) + 'CD';
+      fireEvent.input(fingerprint, { target: { value: corrected } });
+      expect(fingerprint).not.toHaveAttribute('aria-invalid');
+      expect(fingerprint).toBeValid();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ type: nodeType, fingerprint: corrected, verifySSL: true }),
+      );
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['pve', 'pbs', 'pmg'] as const)(
     'does not present a checked box or a pin as TLS protection for an HTTP %s endpoint',

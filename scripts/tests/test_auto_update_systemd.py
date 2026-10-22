@@ -636,6 +636,17 @@ else: sys.exit(97)
                     self.assertEqual(data.count(append), 2)
                     data = data.replace(before, 'cat > "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
                     data = data.replace(append, 'cat >> "$PULSE_NATIVE_ROOT/pulse-source-updater.service" << EOF')
+                    # This connected lab models UID/chown, unlike NativeLab's
+                    # real root execution. Keep that account boundary explicit;
+                    # the separate staging-policy controls test its enforcement.
+                    protection = "protect_server_install_parent() {"
+                    self.assertEqual(data.count(protection), 1)
+                    start = data.index(protection)
+                    end = data.index("\n}\n", start) + 3
+                    # Replace only the modelled account boundary in place:
+                    # appending after install.sh's source guard is unreachable.
+                    # Keep that guard and NativeLab's real definitions intact.
+                    data = data[:start] + protection + " :; }\n" + data[end:]
                 return original_write(path, data, *args, **kwargs)
             try:
                 with patch.object(Path, "write_text", new=relocate), patch.object(native.time, "sleep"):

@@ -230,6 +230,8 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         showApiTokenModal={backupTransferFlow.showApiTokenModal}
         apiTokenInput={backupTransferFlow.apiTokenInput}
         setApiTokenInput={backupTransferFlow.setApiTokenInput}
+        transferStatus={backupTransferFlow.transferStatus}
+        transferError={backupTransferFlow.transferError}
         handleExport={backupTransferFlow.handleExport}
         handleImport={backupTransferFlow.handleImport}
         closeExportDialog={backupTransferFlow.closeExportDialog}

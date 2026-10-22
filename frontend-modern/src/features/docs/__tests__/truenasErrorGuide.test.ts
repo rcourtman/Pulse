@@ -142,4 +142,56 @@ describe('shipped TrueNAS error diagnosis', () => {
       expect(text).toContain(boundary);
     }
   });
+
+  it('connects session churn to scoped containment without prescribing more live diagnostics', () => {
+    const guide = renderGuide('TRUENAS');
+    const polling = sectionAt(guide, '#stale-truenas-data');
+    const link = polling.querySelector<HTMLAnchorElement>(
+      'a[href="#repeated-sign-ins-or-unexpectedly-high-traffic"]',
+    );
+    expect(link?.textContent).toBe('repeated sign-ins');
+    const churn = sectionAt(guide, new URL(link!.href).hash);
+    const text = prose(churn);
+    expect(text).toContain('session lifetime, traffic volume and successful readings');
+    expect(text).toContain('direct connection too');
+    expect(text).toContain('not an authentication verdict');
+    expect(text).toContain('not another capture or subscription probe');
+    expect(text).toContain('not a measured daily total');
+    expect(text).toContain('separate connection and can add a login itself');
+    expect(text).toContain('full captures private');
+    expect(churn.querySelector('pre')).toBeNull();
+  });
+
+  it('offers a per-appliance pause with coverage, uncertainty and agent boundaries', () => {
+    const text = prose(sectionAt(renderGuide('TRUENAS'), '#disabling-truenas-integration'));
+    expect(text).toContain('pause its saved connection rather than restarting Pulse');
+    expect(text).toContain('Settings → Infrastructure → Connected systems');
+    expect(text).toContain('Pause connection');
+    expect(text).toContain('preserves the saved connection and credentials');
+    expect(text).toContain('not an immediate cancellation receipt');
+    expect(text).toContain('does not stop a separate Pulse Agent');
+    expect(text).toContain('removes this API monitoring coverage');
+    expect(text).toContain('Disabling alerts alone does not stop collection');
+    expect(text).toContain('Do not click the toggle again blindly');
+    expect(text).toContain('Resume connection');
+    expect(text).toContain('only for the connection you deliberately paused');
+    expect(text).toContain('requires a Pulse restart, unlike the scoped pause');
+    expect(text).toContain('not a reason to restart during a backup freeze/thaw');
+  });
+
+  it('keeps pause readback and whole-server safety links inside the shipped help', () => {
+    const guide = renderGuide('TRUENAS');
+    const section = sectionAt(guide, '#disabling-truenas-integration');
+    expect(section.querySelector('a[href="#stale-truenas-data"]')).not.toBeNull();
+    const backup = section.querySelector<HTMLAnchorElement>(
+      'a[href="/docs/VM_DISK_MONITORING#backup-safety"]',
+    );
+    expect(backup?.textContent).toBe('backup safety');
+    expect(
+      renderGuide('VM_DISK_MONITORING').querySelector(new URL(backup!.href).hash),
+    ).not.toBeNull();
+    expect(readFileSync(path.join(repoRoot, 'docs/TRUENAS.md'), 'utf8')).toBe(
+      readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/TRUENAS.md'), 'utf8'),
+    );
+  });
 });

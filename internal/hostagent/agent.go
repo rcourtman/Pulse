@@ -230,6 +230,11 @@ type Agent struct {
 	// rejected token does not spam the log every report interval. Only touched
 	// from the single-threaded report loop (process/flushBuffer).
 	lastAuthFailureLog time.Time
+
+	// Peer failures are warned once per five minutes and cleared on usable
+	// recovery. The map is pruned against each successfully discovered peer set.
+	clusterSensorLogMu    sync.Mutex
+	clusterSensorFailures map[clusterPeer]time.Time
 }
 
 const defaultInterval = 30 * time.Second

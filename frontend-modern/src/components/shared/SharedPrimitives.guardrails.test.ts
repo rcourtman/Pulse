@@ -1,9 +1,19 @@
+import { createComponent, createSignal } from 'solid-js';
+import {
+  cleanup,
+  render as renderPrimitive,
+  screen as primitiveScreen,
+} from '@solidjs/testing-library';
+import { DisksCard } from './cards/DisksCard';
+import { RootDiskCard } from './cards/RootDiskCard';
+import { NetworkInterfacesCard } from './cards/NetworkInterfacesCard';
+import type { Disk, HostNetworkInterface, Node } from '@/types/api';
 import { traverse, transformSync, types as t } from '@babel/core';
 // @ts-expect-error babel-preset-solid ships no type declarations.
 import solidPreset from 'babel-preset-solid';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { settingsDocumentationLinkViolations } from './__tests__/settingsDocumentationLinkContract';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
@@ -340,6 +350,44 @@ const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css')
 const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
+  it('replaces the real root usage bar with visible unavailable evidence in the same card', () => {
+    const [disk, setDisk] = createSignal<Disk>({ total: 100, used: 0 });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    try {
+      renderPrimitive(() =>
+        createComponent(RootDiskCard, {
+          get node() {
+            return { disk: disk() } as Node;
+          },
+        }),
+      );
+      const card = primitiveScreen.getByTestId('root-disk-card');
+      expect(card.querySelector('[data-stacked-disk-trigger]')).not.toBeNull();
+      for (const percent of [0.5, 25, 93, 100]) {
+        setDisk({ total: 100, used: percent });
+        expect(card.querySelector('[data-stacked-disk-fill="single"]')).toHaveAttribute(
+          'width',
+          String(percent),
+        );
+      }
+      setDisk({ total: 100 });
+      expect(primitiveScreen.getByRole('status')).toHaveTextContent(
+        'Usage unavailable · 100 B total',
+      );
+      expect(card.querySelector('[data-stacked-disk-trigger]')).toBeNull();
+      expect(primitiveScreen.getByTestId('root-disk-card')).toBe(card);
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+    }
+  });
   it('keeps disk mounts in the parent scrolling flow rather than a hidden nested list', () => {
     const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
     expect(source).toContain('data-testid="disks-card-mounts"');
@@ -363,6 +411,11 @@ describe('shared primitive guardrails', () => {
 
   it("keeps a silent agent's retained RAID state out of live colour and rebuild progress", () => {
     const source = readFrontendSource('src/components/shared/cards/RaidCard.tsx');
+    // The qualification must be available to touch/keyboard readers too,
+    // not only the per-array hover titles.
+    expect(source).toMatch(/<Show when=\{lastKnownTitle\(\)\}>\s*<p[^>]*role="status"/);
+    expect(source).toContain('RAID states are last known, not current. {props.lastKnownReason}');
+
     expect(source).toContain('lastKnownReason?: string;');
     expect(source).toContain('`Last known reading, not current: ${reason}`');
     expect(source).toMatch(/<Show\s+when=\{!lastKnownTitle\(\)\}[\s\S]*?getRaidStateTextClass/);
@@ -8936,4 +8989,58 @@ describe('production CSP inline style guardrails', () => {
 
     expect(offenders).toEqual([]);
   }, 120_000);
+});
+
+describe('shared sensor card live-report boundary', () => {
+  it('keeps sensor presence reactive and a retained reason visible without truncating custom evidence', () => {
+    const source = readFrontendSource('src/components/shared/cards/TemperaturesCard.tsx');
+    expect(source).toContain('<Show when={props.rows?.length}>');
+    expect(source).not.toMatch(/if\s*\([^)]*!props\.rows/);
+    expect(source).toContain('<Show when={props.lastKnownReason}>');
+    expect(source).toContain('Last known readings, not current:');
+    expect(source).toContain('role="status"');
+    expect(source).toContain("props.wrapValues ? 'whitespace-normal wrap-anywhere' : 'truncate'");
+  });
+});
+
+describe('retained detail-card lifecycle', () => {
+  it('accepts first filesystem and interface reports without reopening, then removes them', () => {
+    const [disks, setDisks] = createSignal<Disk[]>();
+    const [interfaces, setInterfaces] = createSignal<HostNetworkInterface[]>();
+    try {
+      renderPrimitive(() =>
+        createComponent(DisksCard, {
+          get disks() {
+            return disks();
+          },
+          lastKnownReason: 'Proxmox reports this VM stopped',
+        }),
+      );
+      renderPrimitive(() =>
+        createComponent(NetworkInterfacesCard, {
+          get interfaces() {
+            return interfaces();
+          },
+          lastKnownReason: 'Proxmox reports this VM stopped',
+        }),
+      );
+      expect(primitiveScreen.queryByTestId('disks-card-total')).toBeNull();
+      expect(primitiveScreen.queryByText('Network')).toBeNull();
+      setDisks([{ mountpoint: '/data', total: 100, used: 90 }]);
+      setInterfaces([{ name: 'eth0', addresses: ['192.0.2.11/24'] }]);
+      expect(primitiveScreen.getByTestId('disks-card-total')).toHaveTextContent('Last known 90%');
+      expect(primitiveScreen.queryByTestId('disks-card-mount-bar')).toBeNull();
+      const explanations = primitiveScreen.getAllByRole('status');
+      expect(explanations).toHaveLength(2);
+      for (const explanation of explanations)
+        expect(explanation).toHaveTextContent('Proxmox reports this VM stopped');
+      expect(primitiveScreen.getByText('192.0.2.11/24')).toHaveClass('text-muted');
+      setDisks([]);
+      setInterfaces([]);
+      expect(primitiveScreen.queryByTestId('disks-card-total')).toBeNull();
+      expect(primitiveScreen.queryByText('Network')).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
 });

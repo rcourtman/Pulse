@@ -177,6 +177,8 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
         port: 443,
         available: true,
         latencyMillis: 12,
+        lastChecked: new Date(Date.now()).toISOString(),
+        pollIntervalSeconds: 30,
       },
     });
     const [resource, setResource] = createSignal(initial);
@@ -190,6 +192,16 @@ describe('ResourceDetailDrawer snapshot ownership', () => {
     });
     expect(screen.getByTestId('availability-probe-status')).toHaveTextContent('Down');
     expect(container).not.toHaveTextContent('12ms');
+    setResource({
+      ...initial,
+      availability: {
+        ...initial.availability!,
+        lastChecked: undefined,
+        pollIntervalSeconds: undefined,
+      },
+    });
+    expect(screen.getByTestId('availability-probe-status')).toHaveTextContent('Freshness unknown');
+    expect(screen.queryByText('Responding normally')).not.toBeInTheDocument();
   });
 
   it('disposes per-resource disclosure state and late facet results when a different ID is selected', async () => {

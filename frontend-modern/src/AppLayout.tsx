@@ -14,6 +14,7 @@ import {
   type MobileNavBarPrimaryTab as PrimaryTab,
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
+import { getMobileNavTabCountSuffix as getUtilityTabCountSuffix } from '@/components/shared/mobileNavBarModel';
 import {
   createStableTabList,
   primaryNavTabEquals,
@@ -140,17 +141,6 @@ const AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS =
 const AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS =
   'fixed right-0 top-1/2 z-40 flex min-h-9 min-w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-border bg-surface px-2.5 py-2.5 text-blue-600 transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
 
-function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
-  const count = tab.count ?? 0;
-  if (count > 0) {
-    if (tab.id === 'alerts') {
-      return `${count} ${tab.label}`;
-    }
-    return `${tab.label}: ${tab.countLabel ?? `${count} items`}`;
-  }
-  return tab.label;
-}
-
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
   lastUpdateText: () => string;
@@ -183,7 +173,7 @@ export function ConnectionStatusBadge(props: {
       return 'connected bg-green-200 dark:bg-green-700 text-green-700 dark:text-green-300 min-w-6 h-6 group-hover:px-3';
     }
     if (status().tone === 'warning') {
-      return 'degraded bg-amber-200 dark:bg-amber-700 text-amber-800 dark:text-amber-200 py-1 px-2';
+      return 'degraded bg-amber-200 dark:bg-amber-950 text-amber-800 dark:text-amber-100 py-1 px-2';
     }
     if (status().kind === 'reconnecting') {
       return 'reconnecting bg-yellow-200 dark:bg-yellow-700 text-yellow-700 dark:text-yellow-300 py-1 px-2';
@@ -910,7 +900,6 @@ export function AppLayout(props: AppLayoutProps) {
                     <A
                       href={tab.route}
                       class={className()}
-                      aria-label={getDesktopUtilityTabAriaLabel(tab)}
                       aria-current={isActive() ? 'page' : undefined}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onFocus={() => warmNavigationTarget(tab.route)}
@@ -920,8 +909,7 @@ export function AppLayout(props: AppLayoutProps) {
                         <Icon class={NAV_TAB_ICON_CLASS} />
                       </span>
                       <span class="flex items-center gap-1">
-                        <span class="hidden xs:inline">{tab.label}</span>
-                        <span class="xs:hidden">{tab.label.charAt(0)}</span>
+                        <span>{tab.label}</span>
                         {(() => {
                           const total = tab.count ?? 0;
                           if (total <= 0) {
@@ -929,7 +917,7 @@ export function AppLayout(props: AppLayoutProps) {
                           }
                           if (tab.id === 'alerts') {
                             return (
-                              <span class="inline-flex items-center gap-1">
+                              <span aria-hidden="true" class="inline-flex items-center gap-1">
                                 {tab.breakdown && tab.breakdown.critical > 0 && (
                                   <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
                                     {tab.breakdown.critical}
@@ -944,7 +932,10 @@ export function AppLayout(props: AppLayoutProps) {
                             );
                           }
                           return (
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-800 dark:text-slate-900 bg-amber-200 dark:bg-amber-400 rounded-full">
+                            <span
+                              aria-hidden="true"
+                              class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-800 dark:text-slate-900 bg-amber-200 dark:bg-amber-400 rounded-full"
+                            >
                               {total}
                             </span>
                           );
@@ -964,6 +955,7 @@ export function AppLayout(props: AppLayoutProps) {
                           Pro
                         </span>
                       </Show>
+                      <span class="sr-only">{getUtilityTabCountSuffix(tab)}</span>
                     </A>
                   );
                 }}
@@ -979,6 +971,18 @@ export function AppLayout(props: AppLayoutProps) {
         class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow-sm sm:mb-2"
       >
         <div class="pulse-panel">
+          <Show when={props.connectionStatus().kind === 'awaiting-data'}>
+            <aside
+              class="m-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 sm:m-4"
+              role="status"
+              aria-labelledby="monitoring-data-status-title"
+            >
+              <h2 id="monitoring-data-status-title" class="font-semibold">
+                Waiting for monitoring data
+              </h2>
+              <p class="mt-1 leading-6">{props.connectionStatus().detail}</p>
+            </aside>
+          </Show>
           <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
             {props.children}
           </Suspense>

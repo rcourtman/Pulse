@@ -61,6 +61,13 @@ describe('AvailabilityProbeCell', () => {
     expect(text).toBe('7ms · stale');
   });
 
+  it('qualifies and neutralises an undated success rather than drawing a green healthy reading', () => {
+    const { text, className } = renderCell({ available: true, latencyMillis: 7 });
+    expect(text).toBe('7ms · unknown');
+    expect(className).toContain('text-muted');
+    expect(className).not.toContain('emerald');
+  });
+
   it('replaces the response time with the failure reason when the probe times out', () => {
     const { text, className } = renderCell({
       ...freshBase(),

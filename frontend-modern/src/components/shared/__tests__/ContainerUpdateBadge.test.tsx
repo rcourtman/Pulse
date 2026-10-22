@@ -6,6 +6,7 @@ import containerUpdateButtonStateSource from '@/components/shared/useContainerUp
 import { ContainerUpdateBadge, UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getUpdatePlanErrorMessage } from '@/components/shared/containerUpdateBadgeModel';
 import { ResourceActionsAPI } from '@/api/resourceActions';
+import { createTooltipSystem } from '@/components/shared/Tooltip';
 import {
   getContainerUpdateState,
   markContainerUpdateError,
@@ -45,6 +46,7 @@ vi.mock('@/stores/systemSettings', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
   vi.mocked(getContainerUpdateState).mockReturnValue(undefined);
 });
 
@@ -194,6 +196,43 @@ describe('ContainerUpdateBadge', () => {
     );
     expect(status.getAttribute('aria-label')).toContain('container manager on the host');
     fireEvent.click(status);
+    expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
+  });
+
+  it('shows the read-only refusal on deliberate touch or focus without planning an update', () => {
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    const TooltipRoot = createTooltipSystem();
+    render(() => (
+      <>
+        <TooltipRoot />
+        <UpdateButton
+          agentId="agent-1"
+          containerId="container-1"
+          containerName="web"
+          resourceId="resource-1"
+          actionReadiness={[{ name: 'update', available: false, reason: 'Agent disconnected.' }]}
+          updateStatus={{ updateAvailable: true, lastChecked: 0 }}
+        />
+      </>
+    ));
+    const status = screen.getByLabelText(/Pulse cannot apply it/);
+    fireEvent.mouseEnter(status);
+    expect(screen.queryByText(/Apply this update using your container manager/)).toBeNull();
+
+    fireEvent.click(status);
+    expect(screen.getByText(/Apply this update using your container manager/)).toBeVisible();
+    fireEvent.keyDown(status, { key: 'Escape' });
+    expect(screen.queryByText(/Apply this update using your container manager/)).toBeNull();
+    fireEvent.focus(status);
+    expect(screen.getByText(/Apply this update using your container manager/)).toBeVisible();
+    fireEvent.blur(status);
+    expect(screen.queryByText(/Apply this update using your container manager/)).toBeNull();
+    for (const key of ['Enter', ' ']) {
+      fireEvent.keyDown(status, { key });
+      expect(screen.getByText(/Apply this update using your container manager/)).toBeVisible();
+      fireEvent.keyDown(status, { key: 'Escape' });
+    }
+    expect(screen.queryByRole('button')).toBeNull();
     expect(ResourceActionsAPI.planAction).not.toHaveBeenCalled();
   });
 

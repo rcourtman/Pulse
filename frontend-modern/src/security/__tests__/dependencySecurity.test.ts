@@ -80,6 +80,32 @@ const prettierPinIsReviewed = (version: string): boolean =>
   /^3\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) && atLeast(version, [3, 9, 9]);
 
 describe('frontend dependency security floors', () => {
+  it('rejects known-invalid source before dependency work without relaxing graph audits', () => {
+    const workflow = readFileSync(
+      new URL('../../../../.github/workflows/build-and-test.yml', import.meta.url),
+      'utf8',
+    );
+    const changes = workflow.split('\n  changes:\n')[1].split('\n  triage-helper:\n')[0];
+    const admission = changes
+      .split('      - name: Check canonical source before dependency work\n')[1]
+      .split('\n      - name: ')[0];
+    expect(admission).toContain('set -euo pipefail');
+    expect(admission).toContain('check_source_contracts.py --early');
+    expect(admission).not.toContain('continue-on-error');
+    expect(admission).not.toContain('|| true');
+    expect(admission).not.toContain('frontend_deps=false');
+    // Early admission must not replace the strict changed-graph classifier or
+    // make a live advisory failure look like inherited base findings.
+    expect(changes).toContain('frontend_deps=true');
+    expect(changes).toContain('scripts/(npm-audit-retry\\.sh|npm_audit_process\\.py)');
+    expect(workflow).toContain(
+      'NPM_AUDIT_REQUIRE_RESULT: ${{ needs.changes.outputs.frontend_deps }}',
+    );
+    const secretScan = workflow.split('\n  secret-scan:\n')[1].split('\n  changes:\n')[0];
+    expect(secretScan).not.toContain('needs:');
+    expect(secretScan).toContain('bash scripts/scan-ci-secrets.sh');
+  });
+
   it('checks the actual locked Solid serialization edges before accepting security overrides', () => {
     const check = fileURLToPath(
       new URL('../../../../scripts/check-frontend-serialization.mjs', import.meta.url),
@@ -89,16 +115,19 @@ describe('frontend dependency security floors', () => {
     );
   });
 
-  it.each<[string, [number, number, number]]>([
+  it.each<[string, [number, number, number], string]>([
     // GHSA-p6vx-979v-rg4c and GHSA-jp82-f5mq-hwhp: both Seroval fixes
     // are required, including the TypedArray fix after the first 1.6.x patch.
-    ['seroval', [1, 6, 3]],
+    // Preserve the newer coupled serializer floor rather than requiring the
+    // historical override's spelling or allowing a rollback to its old patch.
+    ['seroval', [1, 6, 8], '~1.6.8'],
+    ['seroval-plugins', [1, 6, 8], '~1.6.8'],
     // GHSA-rj75-hqrm-r3gf: typography's exact 6.0.10 needs a 7.x override.
-    ['postcss-selector-parser', [7, 1, 6]],
+    ['postcss-selector-parser', [7, 1, 6], '^7.1.6'],
     // GHSA-68fv-2mgg-jv7q: all PostCSS/source-map consumers need the fix.
-    ['source-map-js', [1, 2, 2]],
-  ])('keeps every %s copy above the October deserialization and parsing floors', (name, floor) => {
-    expect(manifest.overrides[name]).toBe(`^${floor.join('.')}`);
+    ['source-map-js', [1, 2, 2], '^1.2.2'],
+  ])('keeps every %s copy at the reviewed security floor', (name, floor, override) => {
+    expect(manifest.overrides[name]).toBe(override);
     const versions = lockedVersions(name);
     expect(versions, `${name} must be locked`).not.toHaveLength(0);
     for (const version of versions) {
@@ -108,21 +137,15 @@ describe('frontend dependency security floors', () => {
     }
   });
 
-  it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
-    // GHSA-82fw-gwwq-j7x9: the maintained 4.x fix starts at 4.1.11.
-    expect(manifest.devDependencies.vitest).toBe('^4.1.11');
-    expect(manifest.devDependencies['@vitest/coverage-v8']).toBe('^4.1.11');
-    const runner = lockedVersions('vitest');
-    expect(runner).toHaveLength(1);
-    for (const name of ['vitest', '@vitest/mocker', '@vitest/coverage-v8']) {
-      const versions = lockedVersions(name);
-      expect(versions).not.toHaveLength(0);
-      for (const version of versions) {
-        expect(version).not.toContain('-');
-        expect(atLeast(version, [4, 1, 11]), `${name} ${version} is vulnerable`).toBe(true);
-        expect(version, `${name} must match the runner`).toBe(runner[0]);
-      }
-    }
+  it('keeps Vitest and every mocker copy above the registration and traversal floors', () => {
+    // GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp require 4.1.12.
+    // The dependency-free guard checks declarations, nested copies and alignment.
+    const check = fileURLToPath(
+      new URL('../../../../scripts/check-frontend-vitest.mjs', import.meta.url),
+    );
+    expect(execFileSync(process.execPath, [check], { encoding: 'utf8' })).toContain(
+      'reviewed 4.x floors and exact runner/mocker/coverage alignment retained',
+    );
   });
 
   it('keeps Vite above the bundled launch-editor and dev-server fs floors', () => {

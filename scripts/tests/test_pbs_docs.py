@@ -109,6 +109,32 @@ def private_server(cert, key, status=200, installer=None, installer_path="/insta
     return server(cert, key, status, installer, installer_path, response=PRIVATE_RESPONSE)
 
 
+class PBSExistingCredentialGuideTest(unittest.TestCase):
+    """Read-only documentation checks; no listener, provisioning or secrets."""
+
+    def test_existing_credentials_are_decided_before_provisioning(self):
+        text = DOC.read_text()
+        before, provision = text.split("### Method 1: API-Only Connection (Recommended)", 1)
+        guidance = " ".join(before.split("### Before changing an existing connection\n", 1)[1].split())
+        for phrase in (
+            "Settings → Infrastructure", "listing an existing token does not recover that secret",
+            "Edit that connection rather than removing and re-adding it",
+            "**Token ID** unchanged", "blank does not clear it",
+            "**API Token → Manual Token Setup**", "Token creation is not needed",
+            "Do not delete or recreate that token", "another reader may still depend on it",
+            "separate, distinctly named, least-privilege `Audit` token",
+            "blank cannot move a saved secret to another ID or a new connection",
+            "Do not switch to **Username & Password** or rerun assisted setup",
+            "replacing a token is not a diagnosis",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guidance)
+        self.assertNotIn("```", guidance, "Existing-token recovery must not execute provisioning")
+        self.assertIn("on a new\nsetup", provision.lower())
+        self.assertIn("[connection checks](#connection-failed-error)", guidance)
+        self.assertIn("[below](#method-1-api-only-connection-recommended)", guidance)
+        self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
+
 class PBSDocsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -137,6 +163,35 @@ class PBSDocsTest(unittest.TestCase):
                        "Do not delete backups", "Do not clear History"):
             self.assertIn(phrase, text)
 
+    def test_namespace_inventory_help_keeps_unknowns_and_empty_results_scoped(self):
+        text = DOC.read_text()
+        heading = "### One PBS namespace is missing or stops changing\n"
+        self.assertEqual(text.count(heading), 1)
+        guidance = " ".join(text.split(heading, 1)[1].split("\n### ", 1)[0].split())
+        for distinction in (
+            "fresh sibling namespace does not prove that this namespace was read",
+            "Source", "Location", "full namespace path (including root)",
+            "guest ID in a sibling namespace is not the same stored backup",
+            "last read failed or timed out", "current inventory is unknown",
+            "Retained rows can describe an earlier read",
+            "Access to that scope was rejected", "intended access boundary",
+            "successful read returned no points", "exact scope and filters read",
+            "not its parent, children, siblings or the whole datastore",
+            "not the time Pulse last read its namespace",
+            "keep it unknown rather than running a request",
+            "aliases that preserve the namespace hierarchy",
+            "do not run Diagnostics, retry the poll, restart, recreate the connection",
+        ):
+            with self.subTest(distinction=distinction):
+                self.assertIn(distinction, guidance)
+        self.assertNotIn("```", guidance, "use supplied observations, not another provider probe")
+        anchor = "#one-pbs-namespace-is-missing-or-stops-changing"
+        self.assertIn(f"[affected datastore and namespace]({anchor})", text)
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn(f"[scoped inventory checks](PBS.md{anchor})", trouble)
+        self.assertEqual((ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "docs/TROUBLESHOOTING.md").read_bytes())
+
     def test_history_checks_cover_batched_and_single_metric_requests(self):
         history = DOC.read_text().split("### PBS is connected but History stays empty\n")[1].split("\n### ")[0]
         for phrase in ("without\n   `metric`", "do not wait for a separate `metric=cpu` request",
@@ -147,6 +202,38 @@ class PBSDocsTest(unittest.TestCase):
                 self.assertIn(phrase, history)
         self.assertNotIn("completed request with `metric=cpu`", history)
         self.assertIn("does\n   not prove there is no data under another target", history)
+
+    def test_deleted_guest_help_preserves_live_protection_and_stored_evidence(self):
+        heading = "### Backup-age alerts name a deleted or renamed guest\n"
+        text = DOC.read_text()
+        self.assertEqual(text.count(heading), 1)
+        section = " ".join(text.split(heading, 1)[1].split("\n### ", 1)[0].split())
+        for phrase in (
+            "retained backup is not evidence that the guest is still running",
+            "last-known name or location does not prove live ownership",
+            "**Alerts → Thresholds → Proxmox → Recovery**",
+            "**Orphaned backups**", "**Ignore VMIDs**",
+            "all orphaned guests", "live guests with the same VMID",
+            "across connected installations", "trailing `*` matches a VMID prefix",
+            "suppression, not a repaired identity or successful backup",
+            "Keep the intended policy unchanged while diagnosing",
+            "Do not edit Pulse's state files or databases",
+            "do not delete backups, clear History, rename/re-add sources or restart",
+            "already-received message's time", "not a full payload or queue export",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+        self.assertNotIn("```", section, "existing observations, not another live probe")
+        labels = (ROOT / "frontend-modern/src/utils/alertThresholdsPresentation.ts").read_text()
+        for label in ("Orphaned backups", "Ignore VMIDs"):
+            self.assertIn(f"= '{label}'", labels)
+        anchor = "PBS.md#backup-age-alerts-name-a-deleted-or-renamed-guest"
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn(f"[retained-backup alert checks]({anchor})", trouble)
+        self.assertEqual(DOC.read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
+        self.assertEqual((ROOT / "docs/TROUBLESHOOTING.md").read_bytes(),
+                         (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_bytes())
 
     def slow_loading_guidance(self):
         return " ".join(DOC.read_text().split("### Slow Backup Loading\n")[1]
@@ -205,6 +292,31 @@ class PBSDocsTest(unittest.TestCase):
         self.assertIn("counts are incomplete even if the other inventory loaded", slow)
         self.assertIn("Missing rows do not mean no backups exist", slow)
         self.assertIn("do not repeatedly press Retry", slow)
+
+    def test_duplicate_help_uses_real_location_and_source_columns(self):
+        section = DOC.read_text().split("### Duplicate Backups\n", 1)[1].split("\n---", 1)[0]
+        presentation = (ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts").read_text()
+        for label in ("Source", "Location"):
+            self.assertIn(f"**{label}**", section)
+            self.assertIn(f"label: '{label}'", presentation)
+        for distinction in ("node-local storage", "storage node", "guest can migrate",
+                            "genuinely shared PVE storage", "Direct PBS", "namespace",
+                            "independent recovery options", "not a deletion receipt"):
+            self.assertIn(distinction, " ".join(section.split()))
+        self.assertNotIn("```", section, "compare existing evidence, no new storage command")
+
+    def test_duplicate_help_keeps_missing_identity_and_backup_safety_explicit(self):
+        section = " ".join(DOC.read_text().split("### Duplicate Backups\n", 1)[1].split("\n---", 1)[0].split())
+        for distinction in ("unknown", "existing report", "consistent aliases",
+                            "another node's local archive", "do not rerun a backup",
+                            "rename storage, migrate a guest, delete backups",
+                            "Row counts do not establish restore readiness or guest thaw"):
+            self.assertIn(distinction, section)
+        self.assertIn("VM_DISK_MONITORING.md#backup-safety", section)
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        entry = trouble.split("- **Backup rows look duplicated or copies are missing:**", 1)[1].split("\n- **", 1)[0]
+        self.assertIn("PBS.md#duplicate-backups", entry)
+        self.assertIn("do not delete", entry)
 
     def test_every_documented_shell_recipe_parses(self):
         for command in blocks():
@@ -402,7 +514,13 @@ PY
             ])
             self.assertNotIn(AGENT_TOKEN.encode(), result.stdout + result.stderr)
         actual = (ROOT / "scripts/install.sh").read_text()
-        self.assertIn('--token-file) TOKEN_FILE_PATH="$2"; shift 2 ;;', actual)
+        # The installer now validates option values before assigning them.
+        # Check that admission and file handoff together, not an obsolete
+        # unguarded one-line spelling; keep failures from dumping the installer.
+        branches = re.findall(r"(?m)^\s*--token-file\)([^\n]+)", actual)
+        self.assertEqual(len(branches), 1, "expected one token-file parser branch")
+        self.assertRegex(branches[0],
+                         r'require_option_value "\$@";\s+TOKEN_FILE_PATH="\$2";\s+shift 2\s*;;')
         self.assertIn('read_collector_token_file_safely "$TOKEN_FILE_PATH" true', actual)
 
     def test_failed_installer_download_is_nonzero(self):

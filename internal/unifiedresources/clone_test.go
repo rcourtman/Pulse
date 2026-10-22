@@ -1,7 +1,9 @@
 package unifiedresources
 
 import (
+	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -1069,5 +1071,21 @@ func TestCloneResourceKeepsContinuityMarker(t *testing.T) {
 	rr.IngestResources([]Resource{saved})
 	if seeded, ok := rr.Get(saved.ID); !ok || !seeded.continuityOnly {
 		t.Fatalf("seeded row = %+v (listed=%v), want the continuity marker kept", seeded, ok)
+	}
+}
+
+func TestCloneProxmoxGuestCPUAbsenceIsDetachedAndPublic(t *testing.T) {
+	original := &Resource{Type: ResourceTypeVM, Proxmox: &ProxmoxData{VMID: 106, CPUUsageUnavailable: true}}
+	copied := cloneResource(original)
+	wire, err := json.Marshal(original)
+	if err != nil || !strings.Contains(string(wire), `"cpuUsageUnavailable":true`) {
+		t.Fatal("public snapshot cannot distinguish withdrawal from a partial row")
+	}
+	if copied.Proxmox == original.Proxmox || !copied.Proxmox.CPUUsageUnavailable {
+		t.Fatal("source CPU absence was lost or aliased")
+	}
+	copied.Proxmox.CPUUsageUnavailable = false
+	if !original.Proxmox.CPUUsageUnavailable {
+		t.Fatal("cloned CPU recovery mutated original source evidence")
 	}
 }

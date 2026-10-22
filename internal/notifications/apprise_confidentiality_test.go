@@ -82,7 +82,7 @@ func TestAppriseCLIConfidentiality(t *testing.T) {
 				targets := []string{"tgram://" + appriseSecret + "/-1001234567890:42", "future-provider://user:" + appriseSecret + "@fixture/path"}
 				cause := errors.New("provider-private-content " + appriseSecret)
 				calls := 0
-				n := &NotificationManager{appriseExec: func(_ context.Context, args []string) ([]byte, error) {
+				n := &NotificationManager{appriseExec: func(_ context.Context, args []string) (int64, error) {
 					calls++
 					if len(args) != 4+len(targets) || args[0] != "-t" || args[2] != "-b" || !slices.Equal(args[4:], targets) {
 						t.Error("CLI payload or exact target arguments changed")
@@ -91,9 +91,9 @@ func TestAppriseCLIConfidentiality(t *testing.T) {
 						t.Error("alert content was removed from delivery, not just diagnostics")
 					}
 					if failing {
-						return []byte("provider-private-content " + strings.Join(args, " ")), cause
+						return int64(len("provider-private-content " + strings.Join(args, " "))), cause
 					}
-					return []byte("provider-private-content " + strings.Join(args, " ")), nil
+					return int64(len("provider-private-content " + strings.Join(args, " "))), nil
 				}}
 				err := sendAppriseForConfidentiality(n, AppriseConfig{Enabled: true, Targets: targets}, kind)
 				if calls != 1 || (err != nil) != failing {

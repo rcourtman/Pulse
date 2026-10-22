@@ -58,4 +58,35 @@ describe('OIDC setup without losing access', () => {
       expect(article(name).querySelector(`[id="${fragment}"]`)).not.toBeNull();
     }
   });
+
+  it('makes save-related failures recoverable without abandoning administrator access', () => {
+    const guide = article('OIDC');
+    const link = guide.querySelector('a[href="#sign-in-fails-after-editing-a-provider"]');
+    expect(link?.closest('tr')?.textContent).toContain('invalid_client');
+    const heading = guide.querySelector('#sign-in-fails-after-editing-a-provider')!;
+    expect(heading?.tagName).toBe('H3');
+    const section = document.createElement('section');
+    for (
+      let node = heading.nextElementSibling;
+      node && node.tagName !== 'H3';
+      node = node.nextElementSibling
+    ) {
+      section.append(node.cloneNode(true));
+    }
+    const steps = section.querySelector('ol')!;
+    expect([...steps.children].map((step) => text(step.querySelector('strong')!))).toEqual([
+      'Keep independent administrator access.',
+      'Recover without replacing the provider.',
+      'Check sign-in separately.',
+    ]);
+    expect(text(section)).toContain('leave blank to keep is intended to preserve');
+    expect(text(section)).toContain('does not restore credentials, bypass a proxy');
+    expect(text(section)).toContain('do not repeat the save or login sequence');
+    expect(text(section)).toContain('not proof of a repaired save operation');
+    expect(text(section)).toContain('Do not put it in a command, URL or report');
+    expect(section.querySelector('pre')).toBeNull();
+    for (const anchor of section.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) {
+      expect(guide.querySelector(anchor.getAttribute('href')!)).not.toBeNull();
+    }
+  });
 });

@@ -1,16 +1,30 @@
 # Pulse Cloud (Hosted)
 
-Pulse Cloud is the hosted version of Pulse. It is a fully managed monitoring instance that runs in the cloud so you don't have to self-host.
+**Pulse Cloud is not generally available.** This guide is for an existing
+hosted instance arranged with its operator, not a public sign-up or checkout
+procedure. A Cloud capability in the plan reference does not establish that a
+hosted instance can be purchased or provisioned.
+
+For a new self-hosted installation, use the [Install Guide](INSTALL.md).
+Self-hosted Pro is a separate plan for that installation; buying Pro does not
+create a hosted server. See [Plans & Entitlements](PULSE_PRO.md).
 
 Pulse Cloud is for a hosted Pulse instance. Pulse MSP is a separate provider path: the MSP normally runs a Stripe-free provider-hosted control plane with one isolated Pulse runtime per client. Pulse-hosted MSP is available only as a request-assisted option where Pulse operates that provider stack for the MSP.
 
 ## How It Works
 
-1. **Sign up** at the Pulse Cloud portal.
-2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — access your dashboard from any browser or supported Pulse Mobile client.
+For an existing hosted service:
 
-Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
+1. Use the instance address and access method supplied by its hosting operator.
+   Do not invent a Cloud hostname from your account name or activation key.
+2. **Connect your agents** only after you can access that instance, following
+   the [existing-instance setup](#getting-started) below.
+3. **Monitor** through the instance's usual HTTPS address in a desktop or phone
+   browser. Keep certificate verification enabled.
+
+The sections below describe the hosted model and existing-instance workflows,
+not an offer of new hosted access. Confirm the installed service and applicable
+terms with its operator before relying on a capability.
 
 ## Features
 
@@ -20,10 +34,10 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 |---|---|
 | **Fully managed hosting** | No server to manage, no updates to apply |
 | **Automatic updates** | Your instance is always on the latest version |
-| **Automatic backups** | Daily encrypted backups with 7-day retention |
+| **Automatic backups** | Confirm your instance's schedule and recovery coverage with its hosting operator; see [backup assurances](#data--privacy) |
 | **Dedicated instance** | Your data runs in an isolated container — not shared with other tenants |
 | **Wildcard TLS** | HTTPS with auto-renewing certificates |
-| **Mobile ready** | Relay is pre-configured for secure Pulse Mobile remote access |
+| **Phone access** | Use the Pulse web UI in your phone's browser; see [phone setup](#4-set-up-mobile-access) |
 
 ### Cloud Enterprise (Add-On)
 
@@ -41,9 +55,14 @@ Cloud Enterprise shared-process organizations are for one owner separating inter
 
 ## Getting Started
 
-### 1. Create Your Account
+### <span id="1-create-your-account">1. Confirm Existing Hosted Access</span>
 
-Sign up via the Pulse Cloud portal. Your instance is provisioned automatically after checkout.
+Continue only if your hosting operator has supplied an instance and an access
+method. There is no public Cloud sign-up flow described here, and a self-hosted
+Pro activation key is not a Cloud account or instance address. If access is
+unavailable, contact that operator through your existing support route rather
+than purchasing again, creating a replacement account or moving monitoring.
+Keep any working source installation intact.
 
 ### 2. Connect Agents
 
@@ -68,21 +87,48 @@ Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastruct
 
 ### 4. Set Up Mobile Access
 
-Relay is enabled by default on Cloud instances. Open **Settings → Pulse Mobile** to pair a phone. Pulse Mobile is being retired on 31 March 2027.
+Open your Cloud instance's usual HTTPS address in your phone's browser. This is
+the same Pulse web UI; Relay is not needed and does not provide web access.
+
+For alerts on your phone, add an [ntfy, Gotify or Pushover destination](WEBHOOKS.md#-quick-setup)
+under **Alerts → Notifications**. A successful Test is not proof of ordinary
+alert delivery; see [notification delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+
+**Pulse Mobile is being retired on 31 March 2027. Existing paired phones keep
+working until then.** Keep existing pairings; do not remove or re-pair them just
+to follow this guide. Use [existing phone connection help](RELAY.md#troubleshooting)
+if a paired phone cannot connect.
+
+Relay is no longer sold. Existing Relay subscribers receive Pro features at
+their current price for as long as their subscription continues, including
+after the app retires. These instructions do not change your subscription or
+require a new purchase; see [Plans & Entitlements](PULSE_PRO.md).
 
 ## Data & Privacy
 
 - Your monitoring data runs in an **isolated container** — no shared databases.
-- Data is stored encrypted at rest.
-- Backups are automated and encrypted.
+- Encrypted credential files do not establish encryption of all monitoring data,
+  hosted storage or backup metadata. Check the installed storage policy and
+  existing archives separately; a source update does not re-encrypt older copies.
+- Confirm the schedule, retention, encryption coverage and recovery procedure
+  with your hosting operator. A downloaded configuration export does not establish
+  these properties for hosted backups. Ask for the covered state and most recent
+  restore result, not raw archives, credentials or command inventories.
 - **Create Backup** in **Settings → System → Recovery** downloads an encrypted
   configuration export, not a complete copy of the hosted installation. Check
   the [migration scope](#migrating-tofrom-cloud) before relying on it for a move.
 - See [Privacy](PRIVACY.md) for full details.
 
+Use existing records; do not run a new backup or restore, delete older copies or
+change retention just to check this guide. Browser administrator access does not
+grant hosted filesystem or service access. Before relying on a backup for a move,
+establish [consistent full-state recovery](MIGRATION.md#full-state-recovery) for
+the state you need. These checks do not change your service or entitlement.
+
 ## Billing
 
-Pulse Cloud billing is handled by Stripe. You can manage your subscription from the Cloud portal:
+For an existing hosted subscription, use the billing route supplied by its
+operator. Where the Cloud portal provides subscription management, it can show:
 
 - View current plan and usage
 - Update payment method
@@ -198,5 +244,5 @@ state need separate handling. Verify the destination before retiring the source.
 
 - [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Relay, Pro, legacy Pro+, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
-- [Relay / Mobile Access](RELAY.md) — relay setup and mobile rollout status (pre-configured on Cloud)
+- [Existing Pulse Mobile pairings](RELAY.md) — retirement date and help for existing app connections, not web access
 - [Multi-Tenant](MULTI_TENANT.md), Enterprise/internal multi-organization mode

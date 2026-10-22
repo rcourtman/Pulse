@@ -260,6 +260,11 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 
 		instanceName := strings.TrimSpace(b.Instance)
 		nodeName := strings.TrimSpace(b.Node)
+		storageNode := strings.TrimSpace(b.StorageNode)
+		repositoryNode := storageNode
+		if repositoryNode == "" {
+			repositoryNode = nodeName
+		}
 		vmid := b.VMID
 
 		var subjectRID string
@@ -325,10 +330,11 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 				Type:      "proxmox-storage",
 				Namespace: instanceName,
 				Name:      strings.TrimSpace(b.Storage),
-				Class:     nodeName,
+				Class:     repositoryNode,
 			},
 			Details: map[string]any{
 				"storage":      strings.TrimSpace(b.Storage),
+				"storageNode":  storageNode,
 				"format":       strings.TrimSpace(b.Format),
 				"notes":        strings.TrimSpace(b.Notes),
 				"volid":        strings.TrimSpace(b.Volid),

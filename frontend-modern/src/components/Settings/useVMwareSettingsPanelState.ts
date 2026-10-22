@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createConnectionEvidenceScope } from './createConnectionEvidenceScope';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 import {
   VMwareAPI,
@@ -186,6 +187,17 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
     () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
   );
 
+  const evidenceScope = createConnectionEvidenceScope();
+  const retireFormEvidence = () => {
+    evidenceScope.invalidate();
+    setConnectionFailure(null);
+    setConnectionTestWarning(null);
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableState(null);
+    setMonitoredSystemPreviewGenericError(null);
+  };
+  const readPending = () => testing() || previewing() || saving();
+
   const loadConnections = async () => {
     setLoading(true);
     setLoadingError(null);
@@ -225,36 +237,24 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
   });
 
   const openCreateDialog = () => {
+    retireFormEvidence();
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (connection: VMwareConnection) => {
+    retireFormEvidence();
     setEditingConnectionId(connection.id);
     setForm(buildFormStateFromConnection(connection));
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
     setDialogOpen(true);
   };
 
   const resetDialogState = () => {
+    retireFormEvidence();
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
   };
 
   const closeDialog = () => {
@@ -278,15 +278,13 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
   };
 
   const updateForm = (patch: Partial<VMwareConnectionFormState>) => {
-    setConnectionFailure(null);
-    setConnectionTestWarning(null);
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
+    retireFormEvidence();
     setForm((current) => ({ ...current, ...patch }));
   };
 
   const testCurrentForm = async () => {
+    if (readPending()) return false;
+    const isCurrent = evidenceScope.capture();
     setTesting(true);
     setConnectionFailure(null);
     setConnectionTestWarning(null);
@@ -295,6 +293,7 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
       const result = editingConnectionId()
         ? await VMwareAPI.testSavedConnection(editingConnectionId()!, payload)
         : await VMwareAPI.testConnection(payload);
+      if (!isCurrent()) return false;
       const warning = buildConnectionTestWarning(result);
       setConnectionTestWarning(warning);
       if (warning) {
@@ -304,6 +303,7 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
       }
       return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -320,9 +320,12 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
   };
 
   const testSavedConnection = async (connection: VMwareConnection) => {
+    if (readPending()) return;
+    const isCurrent = evidenceScope.capture();
     setTesting(true);
     try {
       const result = await VMwareAPI.testSavedConnection(connection.id);
+      if (!isCurrent()) return;
       const warning = buildConnectionTestWarning(result);
       if (warning) {
         notificationStore.warning(
@@ -334,6 +337,7 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
         );
       }
     } catch (error) {
+      if (!isCurrent()) return;
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -347,12 +351,15 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
       logger.error('[VMware Settings] Saved connection test failed', error);
     } finally {
       setTesting(false);
-      await loadConnections();
+      if (isCurrent()) await loadConnections();
     }
   };
 
   const previewCurrentForm = async () => {
+    if (readPending()) return null;
+    const isCurrent = evidenceScope.capture();
     setPreviewing(true);
+    setMonitoredSystemPreview(null);
     setConnectionFailure(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
@@ -361,11 +368,13 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
       const preview = editingConnectionId()
         ? await VMwareAPI.previewSavedConnection(editingConnectionId()!, payload)
         : await VMwareAPI.previewConnection(payload);
+      if (!isCurrent()) return null;
       setMonitoredSystemPreview(preview);
       setMonitoredSystemPreviewUnavailableState(null);
       setMonitoredSystemPreviewGenericError(null);
       return preview;
     } catch (error) {
+      if (!isCurrent()) return null;
       const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
       if (unavailableState) {
         setMonitoredSystemPreview(null);
@@ -397,22 +406,35 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
   };
 
   const saveCurrentForm = async () => {
+    if (readPending()) return;
+    const isCurrent = evidenceScope.capture();
+    const submittedHost = form().host.trim();
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
         await VMwareAPI.updateConnection(editingConnectionId()!, payload);
-        notificationStore.success('VMware connection updated');
+        if (isCurrent()) notificationStore.success('VMware connection updated');
       } else {
         await VMwareAPI.createConnection(payload);
-        notificationStore.success('VMware connection added');
+        if (isCurrent()) notificationStore.success('VMware connection added');
       }
-      resetDialogState();
+      if (!isCurrent()) {
+        notificationStore.success(`Saved earlier VMware settings for ${submittedHost}.`);
+      }
+      // A save still completes once after departure or editing, but must not
+      // close a different target or discard a newer draft. Refresh the saved
+      // list independently; no old result is evidence for the current form.
+      if (isCurrent()) resetDialogState();
       await loadConnections();
     } catch (error) {
-      setMonitoredSystemPreviewUnavailableState(null);
       const message = getErrorMessage(error, 'Failed to save VMware connection');
-      notificationStore.error(message);
+      if (isCurrent()) {
+        setMonitoredSystemPreviewUnavailableState(null);
+        notificationStore.error(message);
+      } else {
+        notificationStore.error(`Earlier VMware save failed for ${submittedHost}: ${message}`);
+      }
       logger.error('[VMware Settings] Save failed', error);
     } finally {
       setSaving(false);
@@ -463,6 +485,7 @@ export function useVMwareSettingsPanelState({ canLoad }: { canLoad?: () => boole
     monitoredSystemPreviewError,
     monitoredSystemPreviewErrorTitle,
     previewing,
+    retireFormEvidence,
     saveCurrentForm,
     saving,
     testCurrentForm,

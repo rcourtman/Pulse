@@ -1306,7 +1306,7 @@ type Monitor struct {
 	mockUnifiedViewFixtureAt   time.Time // fixture freshness the published view was built from
 	mockUnifiedViewValid       bool
 	pveClients                 map[string]PVEClientInterface
-	pveGuestPublicationMu      sync.RWMutex             // Orders guest publication with connection/runtime replacement and retirement.
+	pveGuestPublicationMu      sync.RWMutex             // Orders guest and backup publication with connection/runtime replacement and retirement.
 	pveGuestPolls              map[string]*pveGuestPoll // Guarded by m.mu; canceled cycles retain ownership until completion unless the binding ends.
 	pbsClients                 map[string]*pbs.Client
 	pmgClients                 map[string]*pmg.Client
@@ -1370,6 +1370,7 @@ type Monitor struct {
 	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
 	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
 	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
+	pveBackupPolls             map[string]*pveBackupPoll                  // Hold scan ownership until it returns, independently of cadence resets
 	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
 	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
 	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
@@ -1377,7 +1378,9 @@ type Monitor struct {
 	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
 	backupAlertEvalMu          sync.Mutex                                 // Coalesce global rollup reads and order failure/recovery publication.
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
-	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
+	pbsBackupPollers           map[string]*pbsBackupPoll                  // Hold runtime/client ownership until the backup reader actually returns
+	pbsBackupRuntimeEpoch      uint64                                     // Includes foreground discovery in runtime ownership, even with reused parent contexts
+	pbsBackupPublicationMu     sync.RWMutex                               // Orders backup publication against runtime/client withdrawal
 	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
 	runtimePollingMu           sync.RWMutex                               // Guards runtimePollingOverride; polling goroutines read it every cycle
 	runtimePollingOverride     runtimePollingOverrides                    // Runtime polling-cadence overrides pushed by the settings API (#1619)
@@ -1508,11 +1511,20 @@ type Monitor struct {
 func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
 	m.pveGuestPublicationMu.Lock()
 	defer m.pveGuestPublicationMu.Unlock()
+	m.pbsBackupPublicationMu.Lock()
+	defer m.pbsBackupPublicationMu.Unlock()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for name := range m.pveGuestPolls {
 		m.cancelPVEGuestPollLocked(name)
 	}
+	for name := range m.pveBackupPolls {
+		m.cancelPVEBackupPollLocked(name)
+	}
+	for name := range m.pbsBackupPollers {
+		m.cancelPBSBackupPollLocked(name)
+	}
+	m.pbsBackupRuntimeEpoch++
 	// A new runtime invalidates detached replication reads even when the old
 	// caller has not yet canceled its parent context.
 	for name, poll := range m.pveReplicationPolls {
@@ -2002,13 +2014,14 @@ func New(cfg *config.Config) (*Monitor, error) {
 		lastClusterCheck:           make(map[string]time.Time),
 		lastPhysicalDiskPoll:       make(map[string]time.Time),
 		lastPVEBackupPoll:          make(map[string]time.Time),
+		pveBackupPolls:             make(map[string]*pveBackupPoll),
 		vzdumpJobTaskCache:         make(map[string]vzdumpJobTaskCacheEntry),
 		lastPBSBackupPoll:          make(map[string]time.Time),
 		pveBackupInventoryReady:    make(map[string]map[string]bool),
 		pveBackupTemplateSubjects:  make(map[string]map[string]struct{}),
 		backupPermissionWarnings:   make(map[string]string),
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
-		pbsBackupPollers:           make(map[string]bool),
+		pbsBackupPollers:           make(map[string]*pbsBackupPoll),
 		pbsBackupCacheTime:         make(map[string]map[pbsBackupGroupKey]time.Time),
 		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),

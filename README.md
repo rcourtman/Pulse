@@ -67,42 +67,43 @@ and use it in place of `vX.Y.Z` below.
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-The Pulse container does not need the Docker socket. Docker hosts are
-monitored by the agent described below.
+This new-install example binds the published port to the Docker host's IPv4
+loopback, not every host interface. Before entering any bootstrap token or
+password, use [protected first-time setup](docs/INSTALL.md#open-a-protected-setup-connection):
+verified HTTPS, a browser on that host, or an SSH tunnel from your workstation.
+Do not send setup credentials to a remote plain-HTTP address. Docker host
+monitoring is provided by the unified agent; the Pulse server container does
+not need the Docker socket.
 
 ### Proxmox LXC or Linux
 
-The installer is signed. This block downloads it, verifies it against the
-pinned `pulse-installer` key, and only then runs it:
+- [Signed Proxmox LXC and Linux installation](docs/INSTALL.md#quick-start-recommended)
+- [Docker Compose](docs/INSTALL.md#docker-compose)
+- [Kubernetes and Helm](docs/KUBERNETES.md)
 
-```bash
-export PULSE_VERSION=vX.Y.Z
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
-ssh-keygen -Y verify \
-  -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
-  -I pulse-installer \
-  -n pulse-install \
-  -s install.sh.sshsig < install.sh &&
-bash install.sh --version "${PULSE_VERSION}"
-```
-
-Paste the whole block. If a download or the signature check fails, it stops;
-don't run the last line on its own to get past a failure.
+Use the complete [signed LXC recipe](docs/INSTALL.md#proxmox-ve-lxc-installer)
+on the Proxmox host, or the [systemd recipe](docs/INSTALL.md#2-bare-metal--systemd)
+on a standard Linux host. These Bash recipes use private temporary files,
+ignore local curl settings, allow only HTTPS redirects and require HTTP 200
+within 60 seconds for each file before verifying the pinned `pulse-installer`
+signature. Keep the whole recipe intact; do not run its final command separately
+to bypass a failed download or signature check.
 
 Also available: [Docker Compose](docs/INSTALL.md#docker-compose),
 [Kubernetes with Helm](docs/KUBERNETES.md) and the [full install guide](docs/INSTALL.md).
 
 ### First run
 
-Open `http://<your-ip>:7655` and paste the one-time setup token. Get it with
+Open Pulse through the [protected setup connection](docs/INSTALL.md#open-a-protected-setup-connection)
+(verified HTTPS, a browser on the Docker host, or an SSH tunnel), then paste
+the one-time setup token. Get it with
 `docker exec pulse /app/pulse bootstrap-token` on Docker, or
 `sudo pulse bootstrap-token` on Linux (the LXC installer prints the exact
 command). Create your admin account, then add your first system with
@@ -187,15 +188,18 @@ review them locally and keep credentials and private details out.
 
 ## Development
 
-Pulse is Go 1.26 with a SolidJS and TypeScript frontend. The managed dev
-runtime serves the frontend at `http://127.0.0.1:5173` and proxies API and
-WebSocket traffic to the backend on port 7655.
+Pulse uses Go 1.26 and a SolidJS/TypeScript frontend. For local reproduction,
+follow the [isolated development workflow](CONTRIBUTING.md#hot-reload-dev-loop)
+for dependency setup, separate data, loopback-only access and starting without
+listener takeover. Use a disposable VM or machine with no production configuration,
+data or access to monitored systems; do not start development in an installed
+Pulse directory. A fresh clone alone is not isolation.
 
-```bash
-npm ci
-npm --prefix frontend-modern ci
-npm run dev
-```
+The `npm run dev` shortcut includes `--takeover` and can stop existing listeners.
+The linked workflow instead refuses occupied ports and explains how to choose
+unused ones. It also covers local environment files and the development
+authentication bypass; keep that bypass off untrusted networks. Use the browser
+entrypoint reported by the owned development runtime, not a production Pulse URL.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting on a change: Pulse
 works issue-first and does not normally accept unsolicited pull requests.

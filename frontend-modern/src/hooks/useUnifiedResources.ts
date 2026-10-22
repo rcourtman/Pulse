@@ -588,6 +588,8 @@ type UnifiedResourcesSnapshot = {
 };
 
 type UnifiedResourcesCacheEntry = {
+  /** Failed opted-in revalidation stays failed through a cache remount. */
+  readError?: unknown;
   resources: Resource[];
   policyPosture: ResourcePolicyPostureSummary | null;
   aggregations: UnifiedResourceAggregations | null;
@@ -1158,7 +1160,9 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
 };
 
 const hasFreshUnifiedResourcesCache = (entry: UnifiedResourcesCacheEntry) =>
-  entry.hasSnapshot && Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+  entry.readError === undefined &&
+  entry.hasSnapshot &&
+  Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
 
 const hasFreshCanonicalSnapshot = (entry: UnifiedResourcesCacheEntry) =>
   entry.canonicalAt > 0 && Date.now() - entry.canonicalAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
@@ -1172,6 +1176,7 @@ const setUnifiedResourcesCache = (
   facets: UnifiedResourceFacets | null = entry.facets,
 ) => {
   entry.resources = resources;
+  entry.readError = undefined;
   entry.policyPosture = policyPosture;
   entry.aggregations = aggregations;
   entry.facets = facets;
@@ -1376,13 +1381,19 @@ const seedUnifiedResourcesCacheFromAllResources = (
   return entry;
 };
 
+type UnifiedResourcesReadOptions = { signal: AbortSignal; expectedOrgID: string };
+
 const fetchUnifiedResourcesPage = async (
   normalizedQuery: string,
   page: number,
+  read?: UnifiedResourcesReadOptions,
 ): Promise<ReturnType<typeof resolveResourcesPayload>> => {
+  read?.signal.throwIfAborted();
   const response = await apiFetch(buildUnifiedResourcesUrl(normalizedQuery, page), {
     cache: 'no-store',
+    ...read,
   });
+  read?.signal.throwIfAborted();
   if (!response.ok) {
     const message = await readAPIErrorMessage(
       response,
@@ -1392,10 +1403,14 @@ const fetchUnifiedResourcesPage = async (
   }
 
   const payload = (await response.json()) as APIListResponse | APIResource[];
+  read?.signal.throwIfAborted();
   return resolveResourcesPayload(payload);
 };
 
-async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSnapshot> {
+async function fetchUnifiedResources(
+  query: string,
+  read?: UnifiedResourcesReadOptions,
+): Promise<UnifiedResourcesSnapshot> {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
 
   // Only the first page has to be fetched before we know how many there are.
@@ -1405,14 +1420,14 @@ async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSna
   // larger than one page. The outer loop repeats only when the estate grew a
   // page while the fan-out was in flight, preserving the previous
   // keep-walking-while-totalPages-grows behaviour.
-  const pages = [await fetchUnifiedResourcesPage(normalizedQuery, 1)];
+  const pages = [await fetchUnifiedResourcesPage(normalizedQuery, 1, read)];
   let totalPages = pages[0].totalPages;
 
   while (pages.length < totalPages) {
     const firstMissingPage = pages.length + 1;
     const fetched = await Promise.all(
       Array.from({ length: totalPages - pages.length }, (_, index) =>
-        fetchUnifiedResourcesPage(normalizedQuery, firstMissingPage + index),
+        fetchUnifiedResourcesPage(normalizedQuery, firstMissingPage + index, read),
       ),
     );
     pages.push(...fetched);
@@ -1438,10 +1453,40 @@ async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSna
   };
 }
 
+// A shared query owns the complete read, including API-client delays, response
+// bodies and every page. Race before writing the cache: abort alone cannot
+// retire an uncooperative transport/body or release the shared single flight.
+const fetchUnifiedResourcesWithinDeadline = async (
+  query: string,
+  readTimeoutMs?: number,
+): Promise<UnifiedResourcesSnapshot> => {
+  if (readTimeoutMs === undefined) return fetchUnifiedResources(query);
+  const controller = new AbortController();
+  let timer!: ReturnType<typeof setTimeout>;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('Collected inventory read timed out.'));
+      controller.abort();
+    }, readTimeoutMs);
+  });
+  try {
+    return await Promise.race([
+      expired,
+      fetchUnifiedResources(query, {
+        signal: controller.signal,
+        expectedOrgID: normalizeOrgScope(getOrgID()),
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const fetchUnifiedResourcesShared = async (
   entry: UnifiedResourcesCacheEntry,
   query: string,
   force = false,
+  readTimeoutMs?: number,
 ): Promise<Resource[]> => {
   if (!force && hasFreshUnifiedResourcesCache(entry)) {
     return entry.resources;
@@ -1452,7 +1497,7 @@ const fetchUnifiedResourcesShared = async (
   }
 
   const request = (async () => {
-    const fetched = await fetchUnifiedResources(query);
+    const fetched = await fetchUnifiedResourcesWithinDeadline(query, readTimeoutMs);
     const now = Date.now();
     setUnifiedResourcesCache(
       entry,
@@ -1506,6 +1551,10 @@ type UseUnifiedResourcesOptions = {
   enabled?: Accessor<boolean>;
   /** Keep cached/background data inert while another retained route is visible. */
   realtimeEnabled?: Accessor<boolean>;
+  /** Surface failed revalidation when a consumer must withdraw live-looking evidence. */
+  reportBackgroundErrors?: boolean;
+  /** Complete shared-read deadline; callers sharing a cache key use the same policy. */
+  readTimeoutMs?: number;
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
@@ -1514,6 +1563,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const initialHydration = options?.initialHydration ?? 'immediate';
   const enabled = options?.enabled ?? (() => true);
   const realtimeEnabled = options?.realtimeEnabled ?? enabled;
+  const reportBackgroundErrors = options?.reportBackgroundErrors === true;
+  const readTimeoutMs = options?.readTimeoutMs;
   const localFilter = parseUnifiedResourcesLocalFilter(query);
   const supportsCanonicalWsHydration = query === '' || localFilter !== null;
   const prefersWsInitialHydration =
@@ -1549,7 +1600,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   );
   const [facets, setFacets] = createSignal<UnifiedResourceFacets | null>(initialFacets);
   const [loading, setLoading] = createSignal(!hasCachedResources);
-  const [error, setError] = createSignal<unknown>(undefined);
+  const [error, setError] = createSignal<unknown>(
+    reportBackgroundErrors ? cacheEntry.readError : undefined,
+  );
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
   let initialHydrationHandle: ReturnType<typeof setTimeout> | undefined;
@@ -1613,6 +1666,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
           entryForRequest,
           query,
           shouldForceNetwork,
+          readTimeoutMs,
         );
         if (!isCurrentRequest()) {
           return resources as unknown as Resource[];
@@ -1630,7 +1684,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
         });
         return fetched;
       } catch (err) {
-        if (!background && isCurrentRequest()) {
+        if ((!background || reportBackgroundErrors) && isCurrentRequest()) {
+          if (reportBackgroundErrors) entryForRequest.readError = err;
           setError(err);
         }
         throw err;
@@ -2140,7 +2195,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const scopedAggregations = cacheEntry.aggregations;
     const scopedFacets = cacheEntry.facets;
     batch(() => {
-      setError(undefined);
+      setError(reportBackgroundErrors ? cacheEntry.readError : undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
       setResourceSnapshotChange({ version: ++resourceSnapshotVersion, changedIds: null });
       setPolicyPosture(scopedPolicyPosture);

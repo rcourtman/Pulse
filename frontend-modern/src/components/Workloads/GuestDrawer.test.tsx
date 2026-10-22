@@ -63,10 +63,11 @@ vi.mock('@/stores/license', () => ({
 // Records whether the guest's physical disks may read, without their own
 // resource query; GuestPhysicalDisks.test covers what they render.
 vi.mock('./GuestPhysicalDisks', () => ({
-  GuestPhysicalDisks: (props: { historyEnabled?: boolean }) => (
+  GuestPhysicalDisks: (props: { historyEnabled?: boolean; lastKnownReason?: string }) => (
     <div
       data-testid="guest-physical-disks-stub"
       data-history-enabled={String(props.historyEnabled)}
+      data-last-known-reason={props.lastKnownReason}
     />
   ),
 }));
@@ -86,6 +87,7 @@ vi.mock('@/components/shared/WebInterfaceUrlField', () => ({
 
 // After mocks, import the component under test
 import { GuestDrawer } from './GuestDrawer';
+import { createGuestDrawerViewState } from './useGuestDrawerState';
 // Overview loads its charts lazily; warm the module so a cold transform does
 // not outlast the tests' waits.
 import './GuestDrawerHistory';
@@ -189,6 +191,58 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('keeps drawer health consistent with the row through runtime, probe and parent changes', () => {
+    const [guest, setGuest] = createSignal(makeGuest());
+    const [parentOnline, setParentOnline] = createSignal(true);
+    const viewState = createGuestDrawerViewState();
+    viewState.setActiveTab('manage');
+    solidRender(() => (
+      <GuestDrawer
+        guest={guest()}
+        parentNodeOnline={parentOnline()}
+        viewState={viewState}
+        onClose={vi.fn()}
+      />
+    ));
+    const heading = screen.getByRole('heading', { name: 'test-vm' });
+    const status = () => heading.parentElement!.querySelector('[role="img"]')!;
+    const dot = status();
+    for (const [state, label, color] of [
+      ['running', 'Running', 'bg-emerald-500'],
+      ['paused', 'Paused', 'bg-amber-500'],
+      ['suspended', 'Suspended', 'bg-amber-500'],
+      ['unknown', 'Unknown', 'bg-amber-500'],
+      ['', 'Unknown', 'bg-slate-400'],
+      ['stopped', 'Stopped', 'bg-red-500'],
+    ]) {
+      setGuest({ ...guest(), status: state });
+      expect(status()).toBe(dot);
+      expect(dot).toHaveAttribute('aria-label', label);
+      expect(dot).toHaveClass(color);
+    }
+    setGuest({
+      ...guest(),
+      status: 'running',
+      availability: {
+        enabled: true,
+        available: false,
+        correlationState: 'attached',
+        consecutiveFailures: 3,
+        failureThreshold: 2,
+      },
+    });
+    expect(dot).toHaveAttribute('aria-label', 'Running, not responding to probe');
+    expect(dot).toHaveClass('bg-amber-500');
+    setParentOnline(false);
+    expect(dot).toHaveAttribute('aria-label', 'Node offline');
+    expect(dot).toHaveClass('bg-red-500');
+    setParentOnline(true);
+    setGuest({ ...guest(), availability: undefined });
+    expect(dot).toHaveAttribute('aria-label', 'Running');
+    expect(dot).toHaveClass('bg-emerald-500');
+    expect(chartsApiMocks.getMetricsHistory).not.toHaveBeenCalled();
+  });
+
   it('keeps the shared memory provenance policy in the full guest drawer after live replacement', async () => {
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
       resourceType: 'vm',
@@ -214,7 +268,9 @@ describe('GuestDrawer', () => {
         },
       }),
     );
-    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    // This test consumes Overview directly; the legacy helper opens Manage
+    // and would abort the initial History read before reopening it.
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(chartsApiMocks.getMetricsHistory).toHaveBeenCalledTimes(1));
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
@@ -256,7 +312,9 @@ describe('GuestDrawer', () => {
     const [guest, setGuest] = createSignal(
       makeGuest({ lock: 'backup', diskStatusReason: 'prev-vm-locked' }),
     );
-    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    // This test consumes Overview directly; the legacy helper opens Manage
+    // and would abort the initial History read before reopening it.
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await screen.findByRole('slider', { name: 'Inspect Utilization history' });
     const chart = screen.getAllByTestId('guest-history-group-chart')[0];
@@ -342,6 +400,9 @@ describe('GuestDrawer', () => {
     render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     const precaution = () => screen.getByTestId('guest-read-precaution');
     expect(precaution()).toBeVisible();
+    // The expanded drawer lives in a first table cell, whose nowrap style
+    // otherwise clips both the reason and the independent-thaw precaution.
+    expect(precaution()).toHaveClass('whitespace-normal', 'wrap-break-word');
     expect(precaution()).toHaveTextContent(
       'Do not run live diagnostics or restart the guest agent during a backup, freeze/thaw or an unresponsive-guest incident.',
     );
@@ -382,6 +443,76 @@ describe('GuestDrawer', () => {
     expect(details.getByText('No completed backup found')).toBeVisible();
   });
 
+  it.each(['qemu', 'lxc'])(
+    'keeps missing %s backup evidence scoped through activity and replacement in the full drawer',
+    (type) => {
+      const [guest, setGuest] = createSignal(makeGuest({ type, lastBackup: 0 }));
+      render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      const details = technicalDetails();
+      const scope = 'Backups may still exist outside the collected or matched inventory.';
+      const lastBackupRow = () => details.getByText('Last completed backup').closest('tr')!;
+      expect(details.getByText('No completed backup found')).toBeVisible();
+      expect(lastBackupRow()).toHaveTextContent(scope);
+      expect(lastBackupRow().querySelector('time')).toBeNull();
+      setGuest({ ...guest(), backupInProgress: true });
+      expect(details.getByText('Running · not completed yet')).toBeVisible();
+      expect(lastBackupRow()).toHaveTextContent(scope);
+      expect(lastBackupRow()).not.toHaveTextContent(/first|never/i);
+      setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
+      expect(lastBackupRow().querySelector('time')).not.toBeNull();
+      expect(lastBackupRow()).not.toHaveTextContent(scope);
+      setGuest({ ...guest(), lastBackup: NaN });
+      expect(lastBackupRow()).toHaveTextContent('invalid timestamp');
+      expect(lastBackupRow()).not.toHaveTextContent(scope);
+      setGuest({ ...guest(), lastBackup: 0 });
+      expect(lastBackupRow()).toHaveTextContent(scope);
+      setGuest({ ...guest(), platformScopes: ['vmware-vsphere'] });
+      expect(details.queryByText(scope, { exact: false })).not.toBeInTheDocument();
+      expect(details.queryByText('Last completed backup')).not.toBeInTheDocument();
+      expect(details.getByText('Not reported by this integration')).toBeVisible();
+    },
+  );
+
+  it.each([
+    { type: 'qemu', platformScopes: ['vmware-vsphere'] },
+    { type: 'lxc', platformScopes: ['incus'] },
+    { type: 'system-container', platformScopes: ['truenas'] },
+    { type: 'docker', platformScopes: ['proxmox-pve', 'docker'] },
+    { type: 'pod', platformScopes: ['kubernetes'] },
+  ])('keeps unsupported backup coverage neutral in the full drawer (%j)', (source) => {
+    render(() => <GuestDrawer guest={makeGuest(source)} onClose={vi.fn()} />);
+    const overview = technicalDetails();
+    expect(overview.getByText('Not reported by this integration').closest('td')).toHaveClass(
+      'text-muted',
+    );
+    expect(overview.queryByText('No completed backup found')).not.toBeInTheDocument();
+    expect(overview.queryByText('Last completed backup')).not.toBeInTheDocument();
+    expect(overview.queryByText('Backup activity')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('guest-drawer-exceptions')).not.toBeInTheDocument();
+  });
+
+  it('withdraws previous completion and activity when the integration no longer reports coverage', () => {
+    const [guest, setGuest] = createSignal(
+      makeGuest({ lastBackup: Date.now() - 3600_000, backupInProgress: true }),
+    );
+    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    const drawer = screen.getByTestId('guest-drawer-overview');
+    expect(technicalDetails().getByText('Running · not completed yet')).toBeVisible();
+    setGuest({ ...guest(), platformScopes: ['vmware-vsphere'] });
+    expect(screen.getByTestId('guest-drawer-overview')).toBe(drawer);
+    expect(technicalDetails().getByText('Not reported by this integration')).toBeVisible();
+    expect(technicalDetails().queryByText('Running · not completed yet')).not.toBeInTheDocument();
+    expect(technicalDetails().queryByText('Last completed backup')).not.toBeInTheDocument();
+    expect(within(drawer).queryByText(/Last completed backup 1 hour ago/)).not.toBeInTheDocument();
+    expect(drawer.querySelector('time')).toBeNull();
+    setGuest({ ...guest(), platformScopes: ['proxmox-pve'], lastBackup: 0 });
+    expect(technicalDetails().getByText('No completed backup found')).toBeVisible();
+    expect(technicalDetails().getByText('Running · not completed yet')).toBeVisible();
+    expect(
+      technicalDetails().queryByText('Not reported by this integration'),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps deferred filesystem fallback last-known through History and fresh resumption', async () => {
     chartsApiMocks.getMetricsHistory.mockResolvedValue({
       resourceType: 'vm',
@@ -399,7 +530,9 @@ describe('GuestDrawer', () => {
         lock: 'backup',
       }),
     );
-    render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+    // This test consumes Overview directly; the legacy helper opens Manage
+    // and would abort the initial History read before reopening it.
+    solidRender(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     await waitFor(() =>
       expect(screen.getAllByText('No stored history in this range')).toHaveLength(3),
@@ -1066,7 +1199,9 @@ describe('GuestDrawer', () => {
         balloon: 2147483648,
       };
       render(() => <GuestDrawer guest={makeGuest({ memory })} onClose={vi.fn()} />);
-      expect(screen.getByText('Memory')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-technical-details')).getByText('Memory', { exact: true }),
+      ).toBeInTheDocument();
       expect(screen.getByText(/Balloon/)).toBeInTheDocument();
     });
 
@@ -1093,7 +1228,9 @@ describe('GuestDrawer', () => {
       render(() => <GuestDrawer guest={makeGuest({ memory })} onClose={vi.fn()} />);
       // Row-level usage is not repeated; capacity and optional balloon/swap
       // facts remain visible in the compact drawer section.
-      expect(screen.getByText('Memory')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('guest-technical-details')).getByText('Memory', { exact: true }),
+      ).toBeInTheDocument();
       expect(screen.queryByText(/Balloon/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Swap/)).not.toBeInTheDocument();
     });
@@ -1500,7 +1637,7 @@ describe('GuestDrawer', () => {
       expect(array).toHaveAttribute('data-raid-reading', 'last-known');
       expect(within(array).getByTestId('raid-card-state')).toHaveAttribute(
         'title',
-        'Last known reading, not current: host agent stopped reporting',
+        'Last known reading, not current: The Pulse Agent in this guest stopped reporting.',
       );
       expect(within(array).getByTestId('raid-card-rebuild')).toHaveTextContent(
         'Rebuild was at 42%',

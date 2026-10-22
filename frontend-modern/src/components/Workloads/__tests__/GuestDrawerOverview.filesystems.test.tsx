@@ -127,6 +127,34 @@ describe('GuestDrawerOverview filesystem labels', () => {
     ).toHaveAttribute('aria-valuenow', '75');
   });
 
+  it.each(['paused', 'suspended', 'unknown', 'starting'])(
+    'labels a %s VM filesystem as last known without relying on a read failure',
+    (status) => {
+      const [guest, setGuest] = createSignal({ ...props.guest, type: 'qemu' as const });
+      render(() => <GuestDrawerOverview {...props} guest={guest()} />);
+      expect(screen.getByRole('progressbar')).toBeInTheDocument();
+      setGuest({ ...guest(), status });
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.getByText('Last known 50% · 5.00 GB/10.0 GB · MP0')).toBeVisible();
+      expect(
+        screen.getByText(
+          status === 'paused' || status === 'suspended'
+            ? `Guest filesystem readings are not current while the VM is ${status}. Any displayed values are last known.`
+            : 'Guest filesystem readings are not current because the VM running state is unconfirmed. Any displayed values are last known.',
+        ),
+      ).toBeVisible();
+      for (const path of paths) expect(screen.getByText(path)).toBeInTheDocument();
+      // A new running report with a measured zero can still be current.
+      setGuest({
+        ...guest(),
+        status: 'running',
+        disks: [{ ...guest().disks![0], used: 0, usage: 0 }],
+      });
+      expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+      expect(screen.queryByText(/Any displayed values are last known/)).not.toBeInTheDocument();
+    },
+  );
+
   it('shows linked-agent RAID arrays beside the guest storage evidence', () => {
     render(() => (
       <GuestDrawerOverview

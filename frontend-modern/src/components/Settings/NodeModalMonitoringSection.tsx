@@ -1,4 +1,4 @@
-import { Component, createMemo, createUniqueId, Show } from 'solid-js';
+import { Component, createEffect, createMemo, createUniqueId, Show } from 'solid-js';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -25,6 +25,8 @@ interface NodeModalMonitoringSectionProps {
 export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionProps> = (props) => {
   const { modalProps, state } = props;
   const descriptionId = createUniqueId();
+  let fingerprintInput: HTMLInputElement | undefined;
+  createEffect(() => fingerprintInput?.setCustomValidity(state.fingerprintError() ?? ''));
   const tlsPolicy = createMemo(() => {
     // Match the TLS client's precedence, not the checkbox alone. This is a
     // description of form inputs, never evidence that a peer was verified.
@@ -81,11 +83,13 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               SSL Fingerprint (optional)
             </label>
             <input
+              ref={fingerprintInput}
               id={`${descriptionId}-ssl-fingerprint`}
               type="text"
               value={state.formData().fingerprint}
               onInput={(event) => state.updateField('fingerprint', event.currentTarget.value)}
-              aria-describedby={`${descriptionId}-fingerprint-help ${descriptionId}-tls-policy`}
+              aria-invalid={state.fingerprintError() ? 'true' : undefined}
+              aria-describedby={`${descriptionId}-fingerprint-help ${descriptionId}-tls-policy${state.fingerprintError() ? ` ${descriptionId}-fingerprint-error` : ''}`}
               placeholder="AA:BB:CC:DD:EE:FF:..."
               class={controlClass('font-mono')}
             />
@@ -96,6 +100,17 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               administration channel before updating a pin. Do not disable verification or clear a
               pin to bypass an error.
             </p>
+            <Show when={state.fingerprintError()}>
+              {(message) => (
+                <p
+                  id={`${descriptionId}-fingerprint-error`}
+                  class="text-sm text-rose-700 dark:text-rose-300"
+                  role="alert"
+                >
+                  {message()}
+                </p>
+              )}
+            </Show>
           </div>
           <InlineNotice
             tone={tlsPolicy().tone}

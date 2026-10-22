@@ -5,6 +5,7 @@ import {
   getNodeEndpointPlaceholder,
   getNodeGuestUrlPlaceholder,
   getNodeModalDefaultFormData,
+  getNodeModalConnectionTestCopy,
   getNodeModalTestResultPresentation,
   getNodeMonitoringCoverageCopy,
   getNodeProductName,
@@ -14,6 +15,18 @@ import {
 } from '@/utils/nodeModalPresentation';
 
 describe('nodeModalPresentation', () => {
+  it('names the exact connection-test scope before and after the check', () => {
+    const saved = getNodeModalConnectionTestCopy('saved');
+    expect(saved.button).toBe('Test saved connection');
+    expect(saved.result).toBe('Saved connection test');
+    expect(saved.description).toContain('saved endpoint, credentials and TLS settings');
+    expect(saved.description).toContain('Unsaved changes are not tested');
+    const form = getNodeModalConnectionTestCopy('form');
+    expect(form.button).toBe('Test entered settings');
+    expect(form.result).toBe('Entered settings test');
+    expect(form.description).toContain('entered in this form');
+    expect(form.description).toContain('No settings are saved');
+  });
   it('returns canonical default form data per proxmox node type', () => {
     expect(getNodeModalDefaultFormData('pve')).toMatchObject({
       authType: 'token',
@@ -58,11 +71,11 @@ describe('nodeModalPresentation', () => {
 
     expect(getNodeUsernamePlaceholder('pve')).toBe('root@pam');
     expect(getNodeUsernamePlaceholder('pbs')).toBe('admin@pbs');
-    expect(getNodeUsernamePlaceholder('pmg')).toBe('root@pam');
+    expect(getNodeUsernamePlaceholder('pmg')).toBe('pulse-monitor@pmg');
 
     expect(getNodeUsernameHelp('pve')).toBeNull();
     expect(getNodeUsernameHelp('pbs')).toContain('admin@pbs');
-    expect(getNodeUsernameHelp('pmg')).toContain('api@pmg');
+    expect(getNodeUsernameHelp('pmg')).toContain('pulse-monitor@pmg');
 
     expect(getNodeTokenIdPlaceholder('pve')).toBe('pulse-monitor@pve!pulse-token');
     expect(getNodeTokenIdPlaceholder('pbs')).toBe('pulse-monitor@pbs!pulse-token');

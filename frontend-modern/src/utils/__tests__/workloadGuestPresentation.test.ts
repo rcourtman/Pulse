@@ -8,9 +8,31 @@ import {
   getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestNetworkEmptyState,
+  supportsWorkloadBackupEvidence,
 } from '@/utils/workloadGuestPresentation';
 
 describe('workloadGuestPresentation', () => {
+  it.each([
+    { type: 'qemu' },
+    { type: 'lxc' },
+    { type: 'vm', platformType: 'proxmox-pve' },
+    { type: 'system-container', platformScopes: ['proxmox-pve', 'docker'] },
+  ])('preserves reported and legacy Proxmox backup coverage (%j)', (guest) => {
+    expect(supportsWorkloadBackupEvidence(guest)).toBe(true);
+  });
+
+  it.each([
+    { type: 'vm', platformType: 'vmware-vsphere' },
+    { type: 'qemu', platformScopes: ['vmware-vsphere'] },
+    { type: 'system-container', platformScopes: ['incus'] },
+    { type: 'system-container', platformScopes: ['truenas'] },
+    { type: 'app-container', platformScopes: ['proxmox-pve', 'docker'] },
+    { type: 'docker' },
+    { type: 'pod' },
+  ])('does not infer backup absence for integrations without that evidence (%j)', (guest) => {
+    expect(supportsWorkloadBackupEvidence(guest)).toBe(false);
+  });
+
   it.each([undefined, '', 'prev-agent-busy'])(
     'does not promote a stopped VM’s retained numbers without a current read (%s)',
     (diskStatusReason) => {
@@ -29,6 +51,66 @@ describe('workloadGuestPresentation', () => {
   it('keeps stopped LXC platform storage separate from in-guest VM readings', () => {
     expect(getWorkloadGuestDiskRead({ status: 'stopped' }, false).state).toBe('current');
   });
+
+  it.each(['paused', 'suspended'])(
+    'does not call a %s VM filesystem report current, including a still-leased agent',
+    (status) => {
+      for (const disksFromAgent of [undefined, true]) {
+        expect(getWorkloadGuestDiskRead({ status, disksFromAgent }, true)).toEqual({
+          state: 'last-known',
+          message: `Guest filesystem readings are not current while the VM is ${status}. Any displayed values are last known.`,
+          needsAction: false,
+        });
+      }
+      // Host-reported LXC storage need not stop being current with execution.
+      expect(getWorkloadGuestDiskRead({ status }, false).state).toBe('current');
+      // Do not replace an explicit absence/failure or its existing advice.
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'permission-denied' }, true),
+      ).toEqual({
+        state: 'unavailable',
+        message: getWorkloadGuestDiskStatusMessage('permission-denied'),
+        needsAction: true,
+      });
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'prev-agent-busy' }, true).message,
+      ).toBe(getWorkloadGuestDiskStatusMessage('prev-agent-busy'));
+      expect(
+        getWorkloadGuestDiskRead({ status, disksFromAgent: true, agentStale: true }, true).message,
+      ).toContain('Pulse Agent in this guest stopped reporting');
+    },
+  );
+
+  it.each(['unknown', 'starting', 'stopping', 'private-unrecognised-state', '', undefined])(
+    'does not promote unconfirmed VM runtime %s into a current platform filesystem reading',
+    (status) => {
+      expect(getWorkloadGuestDiskRead({ status }, true)).toEqual({
+        state: 'last-known',
+        message:
+          'Guest filesystem readings are not current because the VM running state is unconfirmed. Any displayed values are last known.',
+        needsAction: false,
+      });
+      // A live independent producer can still supply its own reading. Unknown
+      // power is not a shutdown; native paused/stopped states remain stronger.
+      expect(getWorkloadGuestDiskRead({ status, disksFromAgent: true }, true).state).toBe(
+        'current',
+      );
+      expect(getWorkloadGuestDiskRead({ status }, false).state).toBe('current');
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'permission-denied' }, true),
+      ).toMatchObject({ state: 'unavailable', needsAction: true });
+      expect(
+        getWorkloadGuestDiskRead({ status, diskStatusReason: 'prev-agent-busy' }, true).message,
+      ).toContain('earlier guest request');
+    },
+  );
+
+  it.each(['running', 'online', 'healthy', ' RUNNING ', ' Online '])(
+    'preserves confirmed running and legacy %s aliases',
+    (status) => {
+      expect(getWorkloadGuestDiskRead({ status }, true).state).toBe('current');
+    },
+  );
 
   it.each(['permission-denied', 'prev-permission-denied'])(
     'keeps %s separate from permission expansion and guest health',
@@ -115,7 +197,7 @@ describe('workloadGuestPresentation', () => {
   });
 
   it('returns canonical guest backup tooltip copy', () => {
-    expect(getWorkloadsGuestBackupTooltip('never')).toBe('No backup found');
+    expect(getWorkloadsGuestBackupTooltip('never')).toBe('No completed backup found');
     expect(getWorkloadsGuestBackupTooltip('stale', '3d')).toBe('Last backup: 3d');
   });
 
@@ -236,7 +318,9 @@ describe('workloadGuestPresentation', () => {
       'current',
     );
     // An agent's staleness says nothing about Proxmox's own filesystems.
-    expect(getWorkloadGuestDiskRead({ agentStale: true }, true).state).toBe('current');
+    expect(getWorkloadGuestDiskRead({ status: 'running', agentStale: true }, true).state).toBe(
+      'current',
+    );
   });
   it('names the age limit that coloured a completed backup, in days when whole', () => {
     const defaults = { freshHours: 24, staleHours: 72 };

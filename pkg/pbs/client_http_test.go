@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -20,6 +21,149 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
+}
+
+// A repeated setup must not invalidate another installation's saved secret.
+// Exercise the real request and version readers against a stateful transport;
+// no listener, live PBS, credential rotation or guest command is used.
+func TestSetupMonitoringAccessCollisionKeepsExistingReader(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusConflict, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			const oldAuth = "PBSAPIToken=pulse-monitor@pbs!monitor1:fixture-existing-secret"
+			live := true
+			creates, deletes, tokenACLs, reads := 0, 0, 0, 0
+			transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				code, body := http.StatusOK, `{"data":null}`
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/api2/json/version":
+					reads++
+					if !live || r.Header.Get("Authorization") != oldAuth {
+						code, body = http.StatusUnauthorized, "fixture token no longer valid"
+					} else {
+						body = `{"data":{"version":"3.4","release":"1","repoid":"fixture"}}`
+					}
+				case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/users":
+				case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/acl":
+					if err := r.ParseForm(); err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(r.Form.Get("auth-id"), "!") {
+						tokenACLs++
+					}
+				case r.URL.Path == "/api2/json/access/users/pulse-monitor@pbs/token/monitor1":
+					if r.Method == http.MethodDelete {
+						deletes++
+						live = false
+					} else if r.Method == http.MethodPost {
+						creates++
+						if live {
+							code, body = status, "API token already exists"
+						} else {
+							body = `{"data":{"tokenid":"pulse-monitor@pbs!monitor1","value":"fixture-replacement-secret"}}`
+						}
+					} else {
+						t.Fatalf("unexpected token method: %s", r.Method)
+					}
+				default:
+					t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+				return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: r}, nil
+			})
+			admin, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "root@pam!fixture-admin", TokenValue: "fixture-admin-secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			reader, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "pulse-monitor@pbs!monitor1", TokenValue: "fixture-existing-secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			admin.httpClient.Transport, reader.httpClient.Transport = transport, transport
+			for phase := 0; phase < 2; phase++ {
+				version, err := reader.GetVersion(context.Background())
+				if err != nil || version == nil || version.Version != "3.4" {
+					t.Errorf("saved-token reader failed at phase %d: %v", phase, err)
+				}
+				if phase == 0 {
+					id, secret, err := admin.SetupMonitoringAccess(context.Background(), "monitor1")
+					if !errors.Is(err, ErrMonitoringTokenExists) || id != "" || secret != "" {
+						t.Errorf("collision must not return replacement credentials: error=%v", err)
+					}
+					if got, ok := HTTPStatus(err); !ok || got != status {
+						t.Errorf("lost provider status: %d, %v", got, ok)
+					}
+				}
+			}
+			if !live || creates != 1 || deletes != 0 || tokenACLs != 0 || reads != 2 {
+				t.Errorf("collision changed credentials or dispatched more setup: live=%v creates=%d deletes=%d tokenACLs=%d reads=%d", live, creates, deletes, tokenACLs, reads)
+			}
+		})
+	}
+}
+
+func TestSetupMonitoringAccessInProcess(t *testing.T) {
+	for _, tc := range []struct {
+		name, refusedStep string
+		userExists        bool
+	}{
+		{name: "fresh-token"},
+		{name: "existing-user-new-token", userExists: true},
+		{name: "user-acl-refused", refusedStep: "user-acl"},
+		{name: "token-create-refused", refusedStep: "token"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var steps []string
+			client, err := NewClient(ClientConfig{Host: "https://pbs.invalid", TokenName: "root@pam!fixture-admin", TokenValue: "fixture-admin-secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Authorization"), "PBSAPIToken=root@pam!fixture-admin:") {
+					t.Fatalf("unexpected setup request: %s %s", r.Method, r.URL.Path)
+				}
+				if err := r.ParseForm(); err != nil {
+					t.Fatal(err)
+				}
+				step, body, status := "", `{"data":null}`, http.StatusOK
+				switch r.URL.Path {
+				case "/api2/json/access/users":
+					step = "user"
+					if tc.userExists {
+						status, body = http.StatusBadRequest, "user already exists"
+					}
+				case "/api2/json/access/acl":
+					step = "user-acl"
+					if r.Form.Get("auth-id") == "pulse-monitor@pbs!reader" {
+						step = "token-acl"
+					}
+					if r.Form.Get("role") != "Audit" || r.Form.Get("path") != "/" {
+						t.Fatal("setup changed the existing Audit role/scope")
+					}
+				case "/api2/json/access/users/pulse-monitor@pbs/token/reader":
+					step, body = "token", `{"data":{"tokenid":"pulse-monitor@pbs!reader","value":"fixture-new-secret"}}`
+				default:
+					t.Fatalf("unexpected setup endpoint: %s", r.URL.Path)
+				}
+				steps = append(steps, step)
+				if step == tc.refusedStep {
+					status, body = http.StatusForbidden, "fixture permission refused"
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+			})
+			id, value, err := client.SetupMonitoringAccess(context.Background(), "reader")
+			wantSteps := []string{"user", "user-acl", "token", "token-acl"}
+			if tc.refusedStep != "" {
+				if err == nil || errors.Is(err, ErrMonitoringTokenExists) || id != "" || value != "" {
+					t.Fatalf("non-collision refusal became successful setup/collision: %v", err)
+				}
+				wantSteps = wantSteps[:slices.Index(wantSteps, tc.refusedStep)+1]
+			} else if err != nil || id != "pulse-monitor@pbs!reader" || value != "fixture-new-secret" {
+				t.Fatalf("new token setup did not succeed: id=%q err=%v", id, err)
+			}
+			if !slices.Equal(steps, wantSteps) {
+				t.Errorf("setup steps = %v, want %v", steps, wantSteps)
+			}
+		})
+	}
 }
 
 func newRootNodeNameClient(t *testing.T, host string) *Client {
@@ -921,6 +1065,299 @@ func TestClient_GetNodeStatus_MetricCompleteness(t *testing.T) {
 				}
 			} else if err == nil || status != nil {
 				t.Fatalf("incomplete/invalid measurements = (%+v, %v), want nil status and error", status, err)
+			}
+		})
+	}
+}
+
+type backupInventoryTestBody struct {
+	io.Reader
+	tailErr, closeErr error
+	closed            bool
+}
+
+func (b *backupInventoryTestBody) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if err == io.EOF && b.tailErr != nil {
+		return n, b.tailErr
+	}
+	return n, err
+}
+
+func (b *backupInventoryTestBody) Close() error { b.closed = true; return b.closeErr }
+
+// Exercise both real HTTP readers, including errors delivered after a complete
+// JSON prefix. A JSON decoder alone can return success without seeing EOF.
+func TestPBSBackupInventoryAdmission(t *testing.T) {
+	type inventoryCase struct {
+		name, body        string
+		status            int
+		tailErr, closeErr error
+		want              int
+		valid             bool
+	}
+	const group = `{"backup-type":"vm","backup-id":"100","backup-count":1,"last-backup":1792028400}`
+	const snapshot = `{"backup-type":"vm","backup-id":"100","backup-time":1792028400,"size":1024,"files":["index.json.blob"],"verification":{"state":"ok"}}`
+	for _, endpoint := range []string{"groups", "snapshots"} {
+		t.Run(endpoint, func(t *testing.T) {
+			row := group
+			if endpoint == "snapshots" {
+				row = snapshot
+			}
+			good := `{"data":[` + row + `]}`
+			cases := []inventoryCase{
+				{name: "complete", body: good, valid: true, want: 1},
+				{name: "empty", body: `{"data":[]}`, valid: true},
+				{name: "extended", body: `{"extra":{"count":3},"errors":null,"data":[` + strings.TrimSuffix(row, "}") + `,"extra":"supported"}]}`, valid: true, want: 1},
+				{name: "whitespace", body: good + " \r\n\t", valid: true, want: 1},
+				{name: "exact-size-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes)-len(good)), valid: true, want: 1},
+				{name: "missing-data", body: `{}`},
+				{name: "null-data", body: `{"data":null}`},
+				{name: "null-envelope", body: `null`},
+				{name: "case-data", body: strings.Replace(good, `"data"`, `"Data"`, 1)},
+				{name: "duplicate-data", body: `{"data":[],"data":[` + row + `]}`},
+				{name: "conflicting-errors", body: strings.TrimSuffix(good, "}") + `,"errors":{"fixture":"private-provider-marker"}}`},
+				{name: "trailing-value", body: good + ` {"data":[]}`},
+				{name: "trailing-garbage", body: good + ` private-provider-marker`},
+				{name: "incomplete", body: strings.TrimSuffix(good, "}")},
+				{name: "read-failure-after-json", body: good, tailErr: io.ErrUnexpectedEOF},
+				{name: "close-failure", body: good, closeErr: errors.New("fixture close failed")},
+				{name: "over-limit-after-json", body: good + strings.Repeat(" ", int(maxResponseBodyBytes))},
+				{name: "partial-http-status", body: good, status: http.StatusPartialContent},
+				{name: "null-row", body: `{"data":[` + row + `,null]}`},
+				{name: "empty-row", body: `{"data":[` + row + `,{}]}`},
+				{name: "duplicate-row", body: `{"data":[` + row + `,` + row + `]}`},
+				{name: "invalid-utf8", body: strings.TrimSuffix(good, "}") + `,"comment":"` + string([]byte{0xff}) + `"}`},
+				{name: "duplicate-id", body: `{"data":[` + strings.TrimSuffix(row, "}") + `,"backup-id":"101"}]}`},
+				{name: "case-id", body: strings.Replace(good, `"backup-id"`, `"Backup-Id"`, 1)},
+				{name: "blank-id", body: strings.Replace(good, `"100"`, `" "`, 1)},
+				{name: "null-id", body: strings.Replace(good, `"100"`, `null`, 1)},
+			}
+			if endpoint == "groups" {
+				cases = append(cases,
+					inventoryCase{name: "missing-count", body: `{"data":[{"backup-type":"vm","backup-id":"100","last-backup":1792028400}]}`},
+					inventoryCase{name: "negative-count", body: strings.Replace(good, `"backup-count":1`, `"backup-count":-1`, 1)},
+					inventoryCase{name: "missing-last-backup", body: strings.Replace(good, `,"last-backup":1792028400`, "", 1)},
+					inventoryCase{name: "empty-group", body: `{"data":[{"backup-type":"host","backup-id":"server","backup-count":0}]}`, valid: true, want: 1},
+				)
+			} else {
+				cases = append(cases,
+					inventoryCase{name: "wrong-group", body: strings.Replace(good, `"100"`, `"101"`, 1)},
+					inventoryCase{name: "missing-time", body: strings.Replace(good, `,"backup-time":1792028400`, "", 1)},
+					inventoryCase{name: "duplicate-verification-state", body: strings.Replace(good, `"state":"ok"`, `"state":"failed","state":"ok"`, 1)},
+					inventoryCase{name: "string-verification", body: strings.Replace(good, `{"state":"ok"}`, `"ok"`, 1), valid: true, want: 1},
+					inventoryCase{name: "object-files", body: strings.Replace(good, `["index.json.blob"]`, `[{"filename":"index.json.blob","size":100}]`, 1), valid: true, want: 1},
+					inventoryCase{name: "in-progress", body: `{"data":[{"backup-type":"vm","backup-id":"100","backup-time":1792028400}]}`, valid: true, want: 1},
+				)
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					body := &backupInventoryTestBody{Reader: strings.NewReader(tc.body), tailErr: tc.tailErr, closeErr: tc.closeErr}
+					status := tc.status
+					if status == 0 {
+						status = http.StatusOK
+					}
+					calls := 0
+					c, err := NewClient(ClientConfig{Host: "https://pbs-inventory.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					c.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+						calls++
+						if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/"+endpoint) || r.URL.Query().Get("ns") != "department" {
+							t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+						}
+						return &http.Response{StatusCode: status, Header: make(http.Header), Body: body}, nil
+					})
+					var count int
+					if endpoint == "groups" {
+						v, e := c.ListBackupGroups(context.Background(), "main", "department")
+						count, err = len(v), e
+					} else {
+						v, e := c.ListBackupSnapshots(context.Background(), "main", "department", "vm", "100")
+						count, err = len(v), e
+					}
+					if tc.valid {
+						if err != nil || count != tc.want {
+							t.Fatalf("complete inventory count=%d err=%v, want %d", count, err, tc.want)
+						}
+					} else if err == nil || count != 0 {
+						t.Errorf("unsafe inventory admitted: count=%d err=%v", count, err)
+					}
+					if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
+						t.Error("provider body escaped into error")
+					}
+					if calls != 1 || !body.closed {
+						t.Errorf("requests=%d closed=%t", calls, body.closed)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestPBSNamespaceInventoryAdmission(t *testing.T) {
+	const good = `{"data":[{"ns":"team/production","parent":"team"}]}`
+	for _, tc := range []struct {
+		name, body        string
+		status            int
+		tailErr, closeErr error
+		valid             bool
+		want              int
+	}{
+		{name: "complete", body: good, valid: true, want: 1},
+		{name: "root", body: `{"data":[{"ns":""}]}`, valid: true, want: 1},
+		{name: "path-alias", body: `{"data":[{"path":"team/production"}]}`, valid: true, want: 1},
+		{name: "name-alias", body: `{"data":[{"name":"team"}]}`, valid: true, want: 1},
+		{name: "equivalent-aliases", body: `{"data":[{"ns":"team/production","path":"team/production","name":"team/production","parent":"team"}]}`, valid: true, want: 1},
+		{name: "equivalent-root-aliases", body: `{"data":[{"ns":"","path":"/","name":""}]}`, valid: true, want: 1},
+		{name: "distinct-case-scopes", body: `{"data":[{"ns":"team"},{"path":"Team"}]}`, valid: true, want: 2},
+		{name: "empty", body: `{"data":[]}`, valid: true},
+		{name: "legacy-not-found", body: "fixture absent", status: http.StatusNotFound, valid: true},
+		{name: "extended", body: `{"extra":true,"errors":null,"data":[{"ns":"team","extra":7}]}`, valid: true, want: 1},
+		{name: "exact-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes)-len(good)), valid: true, want: 1},
+		{name: "unavailable-mentions-404", body: "fixture refers to 404", status: http.StatusServiceUnavailable},
+		{name: "access-denied", body: "fixture denied", status: http.StatusForbidden},
+		{name: "missing-data", body: `{}`},
+		{name: "null-data", body: `{"data":null}`},
+		{name: "wrong-data-type", body: `{"data":{}}`},
+		{name: "duplicate-data", body: `{"data":[],"data":[{"ns":"team"}]}`},
+		{name: "case-data", body: `{"Data":[]}`},
+		{name: "provider-error", body: `{"data":[],"errors":{"private-provider-marker":"unavailable"}}`},
+		{name: "trailing-json", body: good + ` {"data":[]}`},
+		{name: "trailing-garbage", body: good + ` private-provider-marker`},
+		{name: "truncated", body: strings.TrimSuffix(good, "}")},
+		{name: "null-row", body: `{"data":[null]}`},
+		{name: "missing-identity", body: `{"data":[{}]}`},
+		{name: "null-identity", body: `{"data":[{"ns":null}]}`},
+		{name: "nontext-identity", body: `{"data":[{"ns":1}]}`},
+		{name: "duplicate-identity", body: `{"data":[{"ns":"team","ns":"other"}]}`},
+		{name: "case-identity", body: `{"data":[{"NS":"team"}]}`},
+		{name: "conflicting-path", body: `{"data":[{"ns":"team/other","path":"team/production"}]}`},
+		{name: "conflicting-name", body: `{"data":[{"ns":"team/other","name":"team/production"}]}`},
+		{name: "conflicting-legacy-aliases", body: `{"data":[{"path":"team/other","name":"team/production"}]}`},
+		{name: "empty-canonical-shadow", body: `{"data":[{"ns":"","path":"team/production"}]}`},
+		{name: "empty-legacy-shadow", body: `{"data":[{"path":"","name":"team/production"}]}`},
+		{name: "root-canonical-shadow", body: `{"data":[{"ns":"/","name":"team/production"}]}`},
+		{name: "root-alias-shadow", body: `{"data":[{"ns":"team/production","path":"/"}]}`},
+		{name: "case-distinct-aliases", body: `{"data":[{"ns":"team/production","path":"team/Production"}]}`},
+		{name: "space-distinct-aliases", body: `{"data":[{"ns":"team/production","path":"team/production "}]}`},
+		{name: "duplicate-namespace", body: `{"data":[{"ns":"team"},{"name":"team"}]}`},
+		{name: "duplicate-root", body: `{"data":[{"ns":""},{"path":"/"}]}`},
+		{name: "invalid-utf8", body: `{"data":[{"ns":"` + string([]byte{0xff}) + `"}]}`},
+		{name: "partial-http-status", body: good, status: http.StatusPartialContent},
+		{name: "read-error-after-json", body: good, tailErr: errors.New("private-provider-marker")},
+		{name: "close-error", body: good, closeErr: errors.New("private-provider-marker")},
+		{name: "over-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes))},
+		{name: "read-truncation", body: good, tailErr: io.ErrUnexpectedEOF},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := &backupInventoryTestBody{Reader: strings.NewReader(tc.body), tailErr: tc.tailErr, closeErr: tc.closeErr}
+			status := tc.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			calls := 0
+			c, err := NewClient(ClientConfig{Host: "https://pbs-namespaces.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.Method != http.MethodGet || r.URL.Path != "/api2/json/admin/datastore/main/namespace" || r.URL.Query().Get("ns") != "team" || r.URL.Query().Get("max-depth") != "7" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+				}
+				return &http.Response{StatusCode: status, Header: make(http.Header), Body: body}, nil
+			})
+			values, err := c.ListNamespaces(context.Background(), "main", "team", 7)
+			if tc.valid {
+				if err != nil || len(values) != tc.want {
+					t.Fatalf("complete namespace count=%d err=%v, want %d", len(values), err, tc.want)
+				}
+			} else if err == nil || len(values) != 0 {
+				t.Errorf("unsafe namespace inventory admitted: count=%d err=%v", len(values), err)
+			}
+			if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
+				t.Error("private provider details escaped through namespace diagnostic")
+			}
+			if calls != 1 || !body.closed {
+				t.Errorf("requests=%d closed=%t", calls, body.closed)
+			}
+		})
+	}
+}
+
+// Root discovery decides whether a complete empty backup inventory is real.
+// Validate the entire name list before filtering or making any detail request.
+func TestPBSDatastoreInventoryAdmission(t *testing.T) {
+	const good = `{"data":[{"store":"archive"},{"store":"mirror","comment":"fixture"}]}`
+	for _, tc := range []struct {
+		name, body        string
+		status            int
+		tailErr, closeErr error
+		valid             bool
+		names             []string
+	}{
+		{name: "complete", body: good, valid: true, names: []string{"archive", "mirror"}},
+		{name: "empty", body: `{"data":[]}`, valid: true},
+		{name: "extended", body: `{"errors":null,"extra":7,"data":[{"store":"archive","extra":true}]}`, valid: true, names: []string{"archive"}},
+		{name: "missing", body: `{}`}, {name: "null", body: `{"data":null}`},
+		{name: "wrong-type", body: `{"data":{}}`}, {name: "null-row", body: `{"data":[null]}`},
+		{name: "missing-store", body: `{"data":[{}]}`}, {name: "blank-store", body: `{"data":[{"store":""}]}`},
+		{name: "null-store", body: `{"data":[{"store":null}]}`}, {name: "space-store", body: `{"data":[{"store":" archive "}]}`},
+		{name: "nontext-store", body: `{"data":[{"store":7}]}`},
+		{name: "duplicate-store", body: `{"data":[{"store":"archive","store":"mirror"}]}`},
+		{name: "case-store", body: `{"data":[{"Store":"archive"}]}`},
+		{name: "duplicate-row", body: `{"data":[{"store":"archive"},{"store":"archive"}]}`},
+		{name: "duplicate-data", body: `{"data":[],"data":[{"store":"archive"}]}`},
+		{name: "case-data", body: `{"Data":[]}`},
+		{name: "provider-error", body: `{"data":[],"errors":{"private-provider-marker":"unavailable"}}`},
+		{name: "trailing-json", body: good + ` {"data":[]}`},
+		{name: "trailing-garbage", body: good + ` private-provider-marker`},
+		{name: "truncated", body: strings.TrimSuffix(good, "}")},
+		{name: "invalid-utf8", body: `{"data":[{"store":"` + string([]byte{0xff}) + `"}]}`},
+		{name: "read-error", body: good, tailErr: errors.New("private-provider-marker")},
+		{name: "close-error", body: good, closeErr: errors.New("private-provider-marker")},
+		{name: "truncated-body", body: good, tailErr: io.ErrUnexpectedEOF},
+		{name: "partial-http", body: good, status: http.StatusPartialContent},
+		{name: "exact-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes)-len(good)), valid: true, names: []string{"archive", "mirror"}},
+		{name: "over-limit", body: good + strings.Repeat(" ", int(maxResponseBodyBytes))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := &backupInventoryTestBody{Reader: strings.NewReader(tc.body), tailErr: tc.tailErr, closeErr: tc.closeErr}
+			status := tc.status
+			if status == 0 {
+				status = http.StatusOK
+			}
+			client, err := NewClient(ClientConfig{Host: "https://pbs-datastores.invalid", TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			client.httpClient.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.Method != http.MethodGet || r.URL.Path != "/api2/json/admin/datastore" {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+				}
+				return &http.Response{StatusCode: status, Header: make(http.Header), Body: body}, nil
+			})
+			var included []string
+			values, err := client.GetDatastoresFiltered(context.Background(), func(name string) bool { included = append(included, name); return false })
+			if tc.valid {
+				if err != nil || !reflect.DeepEqual(included, tc.names) {
+					t.Errorf("complete list names=%v err=%v, want %v", included, err, tc.names)
+				}
+			} else if err == nil || len(included) != 0 {
+				t.Errorf("unsafe datastore inventory was filtered/admitted: names=%v err=%v", included, err)
+			}
+			if len(values) != 0 {
+				t.Error("excluded stores received detail responses")
+			}
+			if err != nil && strings.Contains(err.Error(), "private-provider-marker") {
+				t.Error("private provider details escaped the discovery diagnostic")
+			}
+			if calls != 1 || !body.closed {
+				t.Errorf("requests=%d closed=%t", calls, body.closed)
 			}
 		})
 	}

@@ -1,12 +1,23 @@
 package monitoring
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -143,6 +154,173 @@ func TestBuildPVEProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 	}
 }
 
+// Ordinary HTTP preserves generic storage content for archive/snapshot consumers
+// without letting allocation bytes replace live container filesystem readings.
+// The provider fixture is read-only: no guest command, backup or recovery runs.
+func TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate(t *testing.T) {
+	const gib = uint64(1 << 30)
+	m, recoveryManager := recoveryIngestTestMonitor(t)
+	m.state, m.rateTracker = models.NewState(), NewRateTracker()
+	m.alertManager = alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(m.alertManager.Stop)
+	cfg := m.alertManager.GetConfig()
+	cfg.Enabled = true
+	cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningSizeGiB: 50, CriticalSizeGiB: 80}
+	m.alertManager.UpdateConfig(cfg)
+	m.state.UpdateVMsForInstance("site", []models.VM{{ID: "site:member:100", VMID: 100, Instance: "site", Node: "member", Name: "database", Status: "running"}})
+	created := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+	var phase, unexpected atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			unexpected.Add(1)
+			http.Error(w, "read-only fixture", http.StatusMethodNotAllowed)
+			return
+		}
+		switch r.URL.Path {
+		case "/api2/json/nodes/member/storage":
+			fmt.Fprint(w, `{"data":[{"storage":"fast","content":"images","active":1,"enabled":1},{"storage":"remote","content":"images","active":1,"enabled":1},{"storage":"mixed","content":"backup,rootdir","active":1,"enabled":1}]}`)
+		case "/api2/json/nodes/member/storage/fast/content":
+			size := 15 * gib
+			if phase.Load() >= 3 {
+				size = 10 * gib
+			}
+			fmt.Fprintf(w, `{"data":[{"volid":"fast:vm-100-disk-0@weekly","content":"images","vmid":100,"size":%d}]}`, size)
+		case "/api2/json/nodes/member/storage/remote/content":
+			if phase.Load() == 1 {
+				http.Error(w, "fixture storage is unread", http.StatusForbidden)
+				return
+			}
+			size := 45 * gib
+			if phase.Load() == 2 {
+				size = 0
+			} else if phase.Load() >= 3 {
+				size = 10 * gib
+			}
+			fmt.Fprintf(w, `{"data":[{"volid":"remote:vm-100-disk-1@weekly","content":"images","vmid":100,"size":%d}]}`, size)
+		case "/api2/json/nodes/member/storage/mixed/content":
+			// Neither live allocation nor snapshot bytes are filesystem
+			// usage. Neither may become a completed backup, either.
+			fmt.Fprintf(w, `{"data":[{"volid":"mixed:subvol-200-disk-0","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:subvol-200-disk-0@weekly","content":"rootdir","vmid":200,"size":%d,"used":%d},{"volid":"mixed:backup/vzdump-lxc-200.tar","content":"backup","vmid":200,"ctime":%d,"size":%d},{"volid":"mixed:iso/disc.iso","content":"iso"},{"volid":"mixed:vztmpl/template.tar","content":"vztmpl"},{"volid":"mixed:future","content":"future-kind"}]}`, 10*gib, gib, 10*gib, 9*gib, created.Unix(), gib)
+		case "/api2/json/nodes/member/qemu/100/snapshot":
+			if phase.Load() == 4 {
+				fmt.Fprint(w, `{"data":[]}`)
+			} else {
+				fmt.Fprintf(w, `{"data":[{"name":"weekly","snaptime":%d}]}`, created.Unix())
+			}
+		case "/api2/json/nodes/member/lxc/200/snapshot":
+			fmt.Fprint(w, `{"data":[]}`)
+		case "/api2/json/nodes/member/lxc":
+			// Filesystem usage is independent of storage allocation. The
+			// listing is current even when the container is not running.
+			fmt.Fprintf(w, `{"data":[{"vmid":200,"name":"worker","status":"stopped","maxdisk":%d,"disk":%d,"maxmem":%d}]}`, 10*gib, 3*gib, gib)
+		case "/api2/json/nodes/member/lxc/200/config":
+			fmt.Fprint(w, `{"data":{"hostname":"worker","ostype":"debian","rootfs":"mixed:subvol-200-disk-0,size=10G"}}`)
+		default:
+			unexpected.Add(1)
+			t.Errorf("unexpected provider read: %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wait := func() {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			m.recoveryIngestMu.Lock()
+			pending := m.recoveryIngestRunning
+			m.recoveryIngestMu.Unlock()
+			if !pending {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("recovery ingestion did not settle")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	t.Cleanup(wait)
+	nodes := []proxmox.Node{{Node: "member", Status: "online"}}
+	status := map[string]string{"member": "online"}
+	var originalID string
+	var originalObservedAt any
+	for p, name := range []string{"initial", "unread-storage", "missing-size", "recovered", "deleted"} {
+		t.Run(name, func(t *testing.T) {
+			phase.Store(int32(p))
+			containers := m.collectContainersWithNodes(context.Background(), "site", "", false, client, nodes, status)
+			if len(containers) != 1 || containers[0].Disk.Used != 3*int64(gib) || containers[0].Disk.Total != 10*int64(gib) || containers[0].Disk.Usage != 30 {
+				t.Fatalf("backup/snapshot/filtered content became live-root usage: %+v", containers)
+			}
+			m.state.UpdateContainersForInstance("site", containers)
+			m.pollStorageBackupsWithNodes(context.Background(), "site", client, nodes, status)
+			m.pollGuestSnapshots(context.Background(), "site", client)
+			wait()
+			state := m.GetState()
+			if len(state.PVEBackups.StorageBackups) != 1 || state.PVEBackups.StorageBackups[0].Volid != "mixed:backup/vzdump-lxc-200.tar" {
+				t.Fatalf("non-backup content became backup success: %+v", state.PVEBackups.StorageBackups)
+			}
+			wantSize := int64(0)
+			if p == 0 {
+				wantSize = 60 * int64(gib)
+			} else if p == 3 {
+				wantSize = 20 * int64(gib)
+			}
+			if p == 4 {
+				if len(state.PVEBackups.GuestSnapshots) != 0 {
+					t.Fatal("authoritative empty snapshot inventory did not remove the snapshot")
+				}
+			} else if len(state.PVEBackups.GuestSnapshots) != 1 || state.PVEBackups.GuestSnapshots[0].SizeBytes != wantSize {
+				t.Fatalf("partial or hidden snapshot total: %+v, want size %d", state.PVEBackups.GuestSnapshots, wantSize)
+			}
+			active := m.alertManager.GetActiveAlerts()
+			if p < 3 {
+				if len(active) != 1 || active[0].Value != 60 || active[0].Type != "snapshot-age" {
+					t.Fatalf("unread snapshot disk cleared/replaced a 60 GiB warning: %+v", active)
+				}
+				if p == 0 {
+					originalID, originalObservedAt = active[0].ID, active[0].Metadata["snapshotSizeObservedAt"]
+					if err := m.alertManager.AcknowledgeAlert(originalID, "fixture operator"); err != nil {
+						t.Fatal(err)
+					}
+				} else if active[0].ID != originalID || !active[0].Acknowledged || active[0].Metadata["snapshotSizeHeld"] != true || !reflect.DeepEqual(active[0].Metadata["snapshotSizeObservedAt"], originalObservedAt) || !strings.Contains(active[0].Message, "last known") {
+					t.Fatalf("held size renewed observation or lost acknowledgement/identity: %+v", active[0])
+				}
+			} else if len(active) != 0 {
+				t.Fatalf("complete smaller total did not resolve the warning: %+v", active)
+			}
+			store, err := recoveryManager.StoreForOrg("default")
+			if err != nil {
+				t.Fatal(err)
+			}
+			points, _, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{})
+			wantPoints := 2
+			if p == 4 {
+				wantPoints = 1
+			}
+			if err != nil || len(points) != wantPoints {
+				t.Fatalf("storage/snapshot recovery points lost isolation: %+v / %v", points, err)
+			}
+			for _, point := range points {
+				if point.Kind == recovery.KindSnapshot && ((wantSize == 0 && point.SizeBytes != nil) || (wantSize > 0 && (point.SizeBytes == nil || *point.SizeBytes != wantSize))) {
+					t.Fatalf("stored snapshot claimed a partial size: %+v", point)
+				}
+			}
+			// Retain collected wire inputs, not browser-authored success.
+			payload, err := json.Marshal(map[string]any{"phase": name, "state": m.GetState(), "history": m.alertManager.GetAlertHistory(20), "points": points})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("SNAPSHOT_STORAGE_CONSUMER %s", payload)
+		})
+	}
+	if unexpected.Load() != 0 {
+		t.Fatalf("unexpected native/provider operations: %d", unexpected.Load())
+	}
+}
+
 func TestIsPVEBackupPermissionError(t *testing.T) {
 	t.Parallel()
 
@@ -206,5 +384,368 @@ func TestPersistGuestIdentitySkipsUnchangedIdentities(t *testing.T) {
 	}
 	if !firstWrite.ModTime().Equal(secondWrite.ModTime()) {
 		t.Error("unchanged identity triggered a redundant write")
+	}
+}
+
+// A skipped/unreadable non-final log supplies no new guest observation. In
+// particular, it cannot extend the retained running task's alert-intent age.
+func TestPVELogRetryDoesNotRenewRetainedEvidence(t *testing.T) {
+	for _, cancelled := range []bool{false, true} {
+		t.Run(fmt.Sprint(cancelled), func(t *testing.T) {
+			observed := time.Now().Add(-time.Hour).UTC()
+			task := models.BackupTask{ID: "proof-job-100", Instance: "proof", Node: "pve1", VMID: 100, Status: "running", ObservedAt: observed}
+			m := &Monitor{state: models.NewState(), vzdumpJobTaskCache: map[string]vzdumpJobTaskCacheEntry{"proof|job": {tasks: []models.BackupTask{task}}}}
+			client := &unreadableJobLogClient{}
+			ctx := context.Background()
+			if cancelled {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			got := m.synthesizeVzdumpJobGuestTasks(ctx, "proof", client, []models.BackupTask{{ID: "parent", Node: "pve1"}}, map[string]string{"parent": "job"}, true, nil)
+			if !reflect.DeepEqual(got, []models.BackupTask{task}) {
+				t.Fatalf("retained log observation renewed or lost: %+v", got)
+			}
+		})
+	}
+}
+
+type unreadableJobLogClient struct{ PVEClientInterface }
+
+func (*unreadableJobLogClient) GetTaskLog(context.Context, string, string) ([]proxmox.TaskLogLine, error) {
+	return nil, errors.New("fixture unavailable")
+}
+
+func TestPVERunningLogCacheKeepsActualSuccessfulReceipt(t *testing.T) {
+	var failed atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api2/json/nodes":
+			fmt.Fprint(w, `{"data":[{"node":"pve1","status":"online"}]}`)
+		case r.URL.Path == "/api2/json/access/permissions":
+			if r.Method != http.MethodGet || r.URL.Query().Get("path") != "/nodes/pve1" {
+				t.Errorf("unexpected permission read: %s %s", r.Method, r.URL)
+			}
+			fmt.Fprint(w, `{"data":{"/nodes/pve1":{"Sys.Audit":1}}}`)
+		case r.URL.Path == "/api2/json/nodes/pve1/tasks":
+			fmt.Fprint(w, `{"data":[{"upid":"running-job","node":"pve1","type":"vzdump","starttime":1792028280}]}`)
+		case strings.HasSuffix(r.URL.Path, "/log"):
+			if failed.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			fmt.Fprint(w, `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 100 (qemu)"}]}`)
+		default:
+			t.Errorf("unexpected operation %s", r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Monitor{state: models.NewState()}
+	m.pollBackupTasks(context.Background(), "proof", client)
+	guestTask := func() models.BackupTask {
+		tasks := m.state.GetSnapshot().PVEBackups.BackupTasks
+		if len(tasks) != 2 {
+			t.Fatalf("expected parent and guest tasks: %+v", tasks)
+		}
+		for _, task := range tasks {
+			if task.VMID == 100 {
+				return task
+			}
+		}
+		t.Fatalf("guest100 task absent: %+v", tasks)
+		return models.BackupTask{}
+	}
+	initial := guestTask()
+	if initial.ObservedAt.IsZero() {
+		t.Fatalf("initial running guest observation missing: %+v", initial)
+	}
+	failed.Store(true)
+	m.pollBackupTasks(context.Background(), "proof", client)
+	retained := guestTask()
+	if !reflect.DeepEqual(retained, initial) {
+		t.Fatalf("unreadable running log lost/renewed the successful receipt: %+v -> %+v", initial, retained)
+	}
+	failed.Store(false)
+	m.pollBackupTasks(context.Background(), "proof", client)
+	resumed := guestTask()
+	if !resumed.ObservedAt.After(initial.ObservedAt) {
+		t.Fatalf("ordinary successful running log did not resume: %+v", resumed)
+	}
+}
+
+// Real read-only HTTP -> ordinary polling/cache -> the served backup snapshot.
+// A broken finished log cannot overwrite the earlier guest verdict, refresh
+// its observation time, or become an immutable cache entry. No guest, QGA,
+// backup, database or installed recovery operation is performed.
+func TestPVELogSequenceRejectsFalseCompletionAndResumes(t *testing.T) {
+	for _, broken := range []struct{ name, middle string }{
+		{"missing-text", `{"n":2}`},
+		{"null-text", `{"n":2,"t":null}`},
+		{"gap", `{"n":4,"t":"fixture line"}`},
+		{"duplicate", `{"n":1,"t":"fixture line"}`},
+	} {
+		t.Run(broken.name, func(t *testing.T) {
+			var phase, logReads atomic.Int32
+			start := time.Date(2026, 10, 17, 10, 0, 0, 0, time.UTC).Unix()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.URL.Path == "/api2/json/nodes":
+					fmt.Fprint(w, `{"data":[{"node":"pve-a","status":"online"}]}`)
+				case r.URL.Path == "/api2/json/access/permissions":
+					if r.Method != http.MethodGet || r.URL.Query().Get("path") != "/nodes/pve-a" {
+						t.Errorf("unexpected permission read: %s %s", r.Method, r.URL)
+					}
+					fmt.Fprint(w, `{"data":{"/nodes/pve-a":{"Sys.Audit":1}}}`)
+				case r.URL.Path == "/api2/json/nodes/pve-a/tasks":
+					upid, status := "job", ""
+					taskStart := start
+					end := int64(0)
+					if phase.Load() > 0 {
+						status, end = "OK", start+60
+					}
+					if phase.Load() == 2 {
+						status = "job errors"
+					}
+					if phase.Load() == 3 {
+						upid = "next-job"
+						taskStart = start + 120
+						end = taskStart + 60
+					}
+					fmt.Fprintf(w, `{"data":[{"upid":%q,"node":"pve-a","type":"vzdump","status":%q,"starttime":%d,"endtime":%d}]}`, upid, status, taskStart, end)
+				case strings.HasSuffix(r.URL.Path, "/log"):
+					logReads.Add(1)
+					first := `{"n":1,"t":"INFO: Starting Backup of VM 101 (qemu)"}`
+					switch phase.Load() {
+					case 0:
+						fmt.Fprint(w, `{"data":[`+first+`]}`)
+					case 1:
+						fmt.Fprint(w, `{"data":[`+first+`,`+broken.middle+`,{"n":3,"t":"INFO: Finished Backup of VM 101 (00:01:00)"}]}`)
+					case 2:
+						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"ERROR: Backup of VM 101 failed - synthetic archive failure"},{"n":3,"t":"TASK ERROR: backup job failed"}]}`)
+					case 3:
+						fmt.Fprint(w, `{"data":[`+first+`,{"n":2,"t":"INFO: Finished Backup of VM 101 (00:01:00)"},{"n":3,"t":"TASK OK"}]}`)
+					}
+				default:
+					t.Errorf("unexpected operation: %s", r.URL.Path)
+					w.WriteHeader(404)
+				}
+			}))
+			defer server.Close()
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: time.Second})
+			if err != nil {
+				t.Fatal(err)
+			}
+			m := &Monitor{state: models.NewState()}
+			poll := func(label string) models.BackupTask {
+				m.pollBackupTasks(context.Background(), "fixture-pve", client)
+				snapshot := m.state.GetSnapshot().PVEBackups
+				if broken.name == "missing-text" {
+					wire, err := json.Marshal(map[string]any{"data": snapshot})
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Logf("TASK_LOG_SEQUENCE_%s=%s", label, wire)
+				}
+				for _, task := range snapshot.BackupTasks {
+					if task.VMID == 101 {
+						return task
+					}
+				}
+				t.Fatal("guest task lost")
+				return models.BackupTask{}
+			}
+			initial := poll("initial")
+			if initial.Status != "running" || initial.ObservedAt.IsZero() {
+				t.Fatalf("running baseline missing: %+v", initial)
+			}
+			phase.Store(1)
+			retained := poll("retained")
+			if !reflect.DeepEqual(retained, initial) || m.vzdumpJobTaskCache["fixture-pve|job"].final {
+				t.Fatalf("broken finished log invented a final verdict/receipt: before=%+v after=%+v", initial, retained)
+			}
+			phase.Store(2)
+			failed := poll("failed")
+			if failed.Status != "error" || failed.Error != "synthetic archive failure" || !failed.ObservedAt.After(initial.ObservedAt) || logReads.Load() != 3 || !m.vzdumpJobTaskCache["fixture-pve|job"].final {
+				t.Fatalf("ordinary complete reread failed to replace held evidence: %+v reads=%d", failed, logReads.Load())
+			}
+			poll("cached")
+			if logReads.Load() != 3 {
+				t.Fatal("completed valid log no longer uses the immutable cache")
+			}
+			phase.Store(3)
+			completed := poll("success")
+			if completed.Status != "OK" || completed.Error != "" || logReads.Load() != 4 {
+				t.Fatalf("next ordinary successful job could not recover: %+v reads=%d", completed, logReads.Load())
+			}
+			if _, exists := m.vzdumpJobTaskCache["fixture-pve|job"]; exists {
+				t.Fatal("superseded job cache was not pruned")
+			}
+		})
+	}
+}
+
+// Real HTTP snapshot readers, ordinary polling, recovery ingestion, alert
+// evaluation and Monitor.GetState must agree. No QGA, guest mutation, backup,
+// clock change, permission change or customer incident is exercised.
+func TestSnapshotInventoryFailuresPreserveServedRecovery(t *testing.T) {
+	m, recoveryManager := recoveryIngestTestMonitor(t)
+	m.state = models.NewState()
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	cfg := manager.GetConfig()
+	cfg.Enabled = true
+	cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningDays: 7, CriticalDays: 14}
+	manager.UpdateConfig(cfg)
+	m.alertManager = manager
+	m.state.UpdateGuestsForInstance("pve1",
+		[]models.VM{{ID: "pve1:member:100", Instance: "pve1", Node: "member", VMID: 100, Name: "database", Status: "running"}},
+		[]models.Container{{ID: "pve1:member:200", Instance: "pve1", Node: "member", VMID: 200, Name: "worker", Type: "lxc", Status: "running"}})
+	// Another connection and a backup of another class are outside this poll.
+	birth := time.Now().UTC().Truncate(time.Second).Add(-10 * 24 * time.Hour)
+	peer := models.GuestSnapshot{ID: "other-member-200-peer", Name: "peer", Instance: "other", Node: "member", VMID: 200, Type: "lxc", Time: birth}
+	m.state.UpdateGuestSnapshotsForInstance("other", []models.GuestSnapshot{peer})
+	store, err := recoveryManager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	peerPoint := recoveryIngestTestPoint("pve-snapshot:other-member-200-peer", "other", birth)
+	backupPoint := recoveryIngestTestPoint("pve-backup:pve1-independent", "pve1", birth)
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{peerPoint, backupPoint}); err != nil {
+		t.Fatal(err)
+	}
+	type phase struct {
+		name, body string
+		status     int
+		incomplete bool
+	}
+	phases := []phase{
+		{"initial", fmt.Sprintf(`{"data":[{"name":"current"},{"name":"weekly","snaptime":%d,"description":"known worker snapshot"}]}`, birth.Unix()), 200, false},
+		{"http-unavailable", `snapshot service not available`, 596, false},
+		{"body-unavailable", `snapshot service not available`, 500, false},
+		{"permission-denied", `fixture denied`, 403, false},
+		{"null-inventory", `{"data":null}`, 200, false},
+		{"duplicate-inventory", `{"data":[{"name":"weekly"}],"data":[]}`, 200, false},
+		{"incomplete-empty-prefix", `{"data":[]}`, 200, true},
+		{"recovered", fmt.Sprintf(`{"data":[{"name":"weekly","snaptime":%d,"description":"fresh worker snapshot"}]}`, time.Now().Add(-time.Hour).Unix()), 200, false},
+		{"empty-worker", `{"data":[]}`, 200, false},
+		{"empty-all", `{"data":[]}`, 200, false},
+	}
+	var current, reads, unexpected atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		index := int(current.Load())
+		switch r.URL.Path {
+		case "/api2/json/nodes/member/lxc/200/snapshot":
+			reads.Add(1)
+			p := phases[index]
+			if p.incomplete {
+				w.Header().Set("Content-Length", fmt.Sprint(len(p.body)+100))
+			}
+			w.WriteHeader(p.status)
+			fmt.Fprint(w, p.body)
+		case "/api2/json/nodes/member/qemu/100/snapshot":
+			reads.Add(1)
+			if phases[index].name == "empty-all" {
+				fmt.Fprint(w, `{"data":[]}`)
+			} else {
+				fmt.Fprintf(w, `{"data":[{"name":"weekly","snaptime":%d,"description":"fresh VM inventory %d"}]}`, birth.Unix(), index)
+			}
+		case "/api2/json/nodes/member/storage":
+			fmt.Fprint(w, `{"data":[]}`)
+		default:
+			unexpected.Add(1)
+			http.Error(w, "unexpected fixture request", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForIngest := func() {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			m.recoveryIngestMu.Lock()
+			pending := m.recoveryIngestRunning
+			m.recoveryIngestMu.Unlock()
+			if !pending {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("snapshot recovery ingest did not settle")
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	t.Cleanup(waitForIngest)
+	originalAlerts := make(map[string]string)
+	for index, p := range phases {
+		t.Run(p.name, func(t *testing.T) {
+			current.Store(int32(index))
+			m.pollGuestSnapshots(context.Background(), "pve1", client)
+			waitForIngest()
+			state := m.GetState()
+			wantSnapshots, wantAlerts := 3, 2
+			if p.name == "recovered" {
+				wantAlerts = 1
+			}
+			if p.name == "empty-worker" {
+				wantSnapshots, wantAlerts = 2, 1
+			}
+			if p.name == "empty-all" {
+				wantSnapshots, wantAlerts = 1, 0
+			}
+			if len(state.PVEBackups.GuestSnapshots) != wantSnapshots || len(state.ActiveAlerts) != wantAlerts {
+				t.Fatalf("unknown inventory changed snapshot/alert truth: snapshots=%+v alerts=%+v", state.PVEBackups.GuestSnapshots, state.ActiveAlerts)
+			}
+			for _, alert := range state.ActiveAlerts {
+				if alert.Level != "warning" {
+					t.Fatalf("unexpected alert level: %+v", alert)
+				}
+				if index == 0 {
+					originalAlerts[alert.ResourceID] = alert.ID
+				} else if originalAlerts[alert.ResourceID] != alert.ID {
+					t.Fatalf("failed collection replaced alert identity: %+v", alert)
+				}
+			}
+			foundPeer, foundWorker := false, false
+			for _, snap := range state.PVEBackups.GuestSnapshots {
+				if snap.Instance == "other" {
+					foundPeer = reflect.DeepEqual(snap, peer)
+				} else if snap.Type == "qemu" && snap.Description != fmt.Sprintf("fresh VM inventory %d", index) {
+					t.Fatal("failed peer prevented independent VM refresh")
+				} else if snap.Type == "lxc" {
+					foundWorker = true
+					if index < 7 && (!snap.Time.Equal(birth) || snap.Description != "known worker snapshot") {
+						t.Fatalf("failed read renewed/replaced known snapshot: %+v", snap)
+					}
+				}
+			}
+			if !foundPeer || foundWorker != (index < 8) {
+				t.Fatal("snapshot deletion escaped its successful guest/connection scope")
+			}
+			ids := listRecoveryPointIDs(t, recoveryManager)
+			if len(ids) != wantSnapshots+1 || !ids[peerPoint.ID] || !ids[backupPoint.ID] || ids["pve-snapshot:pve1-member-200-weekly"] != (index < 8) {
+				t.Fatalf("recovery inventory diverged from snapshots: %+v", ids)
+			}
+			if reads.Load() != int32(2*(index+1)) || unexpected.Load() != 0 {
+				t.Fatalf("unexpected command or replay: reads=%d unexpected=%d", reads.Load(), unexpected.Load())
+			}
+			// Retain real served projections for the consuming surface, not
+			// hand-written alert text or synthetic success in the browser.
+			wire, err := json.Marshal(struct {
+				Phase string               `json:"phase"`
+				State models.StateSnapshot `json:"state"`
+			}{p.name, state})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("SNAPSHOT_INVENTORY_PROJECTION=%s", wire)
+		})
 	}
 }

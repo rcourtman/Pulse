@@ -796,15 +796,21 @@ describe('App architecture', () => {
       'type MobileNavBarPrimaryTab as PrimaryTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
-    expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
-    expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
+    // Both rails share the severity-aware name rather than a desktop-only total.
+    expect(appLayoutSource).toContain(
+      "import { getMobileNavTabCountSuffix as getUtilityTabCountSuffix } from '@/components/shared/mobileNavBarModel';",
+    );
+    expect(appLayoutSource).not.toContain('function getDesktopUtilityTabAriaLabel(');
     expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");
     expect(appLayoutSource).toContain("icon: getPlatformIcon('proxmox'),");
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={tab.label}');
-    expect(appLayoutSource).toContain('aria-label={getDesktopUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).not.toContain('aria-label={getUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).toContain(
+      '<span class="sr-only">{getUtilityTabCountSuffix(tab)}</span>',
+    );
     expect(appLayoutSource).toContain(
       '<span aria-hidden="true" class="inline-flex items-center justify-center">',
     );
@@ -850,6 +856,10 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       'const connectionStatus = createMemo<AppConnectionStatus>(() => {',
     );
+    // Presentation must consume connection-owned delivery evidence, never
+    // the retained admission facet or an extra estate-sized bootstrap read.
+    expect(appRuntimeStateSource).toContain('wsStore()?.connectionResourceSnapshotReceived()');
+    expect(appLayoutSource).toContain("props.connectionStatus().kind === 'awaiting-data'");
     expect(appRuntimeStateSource).toContain('const showOrgSwitcher = createMemo(() => {');
     expect(appRuntimeStateSource).toContain(
       'const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {',
@@ -1041,6 +1051,9 @@ describe('App architecture', () => {
 function collectFrontendSources(dir: string): Array<{ path: string; source: string }> {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = join(dir, entry.name);
+    // Tests are excluded below; do not traverse their trees just to discard
+    // every file. Keep the runtime scan bounded to the paths it actually reads.
+    if (entryPath.includes('__tests__')) return [];
     if (entry.isDirectory()) {
       return collectFrontendSources(entryPath);
     }

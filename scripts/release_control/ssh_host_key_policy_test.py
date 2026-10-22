@@ -1,5 +1,7 @@
 import unittest
 from pathlib import Path
+import subprocess
+import sys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -70,6 +72,24 @@ class SSHHostKeyPolicyTest(unittest.TestCase):
         self.assertIn("GlobalKnownHostsFile=none", script)
         self.assertIn("--ssh-known-hosts", script)
         self.assertIn("--local-only", script)
+
+    def test_sensor_proxy_discovery_reaches_strict_remote_cleanup_only_for_complete_targets(self) -> None:
+        # Keep the established trust proof executable, not just a string check:
+        # complete JSON must reach strict SSH; a missing target or key refusal
+        # must remain adverse. All provider/DNS/SSH operations are closed fakes.
+        suite = REPO_ROOT / "scripts/tests/test_sensor_proxy_cluster_cleanup.py"
+        cases = (
+            "test_complete_inventory_cleans_remote_with_strict_trust",
+            "test_failed_resolution_of_any_node_prevents_all_remote_actions",
+            "test_remote_key_rejection_remains_an_error_after_local_cleanup",
+        )
+        result = subprocess.run(
+            [sys.executable, str(suite),
+             *("SensorProxyClusterCleanupTest." + case for case in cases)],
+            text=True, capture_output=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Ran 3 tests", result.stderr)
 
 
 if __name__ == "__main__":

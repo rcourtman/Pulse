@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog"
@@ -167,7 +168,10 @@ func (m *Monitor) migrateAlertIdentities(resources []unifiedresources.Resource) 
 	}
 }
 
-// pruneStaleDockerAlerts removes docker alerts that reference hosts no longer present in state.
+// pruneStaleDockerAlerts retires alerts outside the authoritative mock estate.
+// Live agent inventory is populated by reports, not a complete estate read:
+// absence during startup/reload cannot prove removal or recovery. Explicit live
+// removal already owns HandleDockerHostRemoved in finalizeDockerHostRemoval.
 func (m *Monitor) pruneStaleDockerAlerts() bool {
 	if m.alertManager == nil {
 		return false
@@ -177,6 +181,9 @@ func (m *Monitor) pruneStaleDockerAlerts() bool {
 	// it must not remove Docker alerts the other mode raised after a switch.
 	// Only the hosts' IDs matter, so the view may predate the last metric ticks.
 	scope := m.mockModeFence.begin()
+	if !mock.IsMockEnabled() {
+		return false
+	}
 	readState := m.currentModeStructureReadState()
 	if readState == nil {
 		return false

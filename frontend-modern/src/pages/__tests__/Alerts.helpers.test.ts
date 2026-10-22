@@ -459,11 +459,16 @@ describe('tab path helpers', () => {
     expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_EMAIL_PANEL_TITLE');
     expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_APPRISE_PANEL_TITLE');
     expect(alertDestinationsTabSource).not.toContain('getAlertWebhooksSectionTitle');
-    expect(alertAppriseDestinationsSectionSource).toContain('TlsVerificationWarningBanner');
-    expect(alertAppriseDestinationsSectionSource).toContain('subject="this Apprise API endpoint"');
+    // Transport policy belongs to the feature's API/CLI-aware presentation,
+    // not the retired generic, self-signed-only banner or the page shell.
     expect(alertAppriseDestinationsSectionSource).toContain(
-      'Install a trusted certificate on the Apprise server before using this in production.',
+      'getAlertDestinationsAppriseTransportWarning(props.config.serverUrl, props.config.skipTlsVerify)',
     );
+    expect(alertAppriseDestinationsSectionSource).toContain(
+      'aria-label="Apprise API transport warning"',
+    );
+    expect(alertAppriseDestinationsSectionSource).toContain('role="status"');
+    expect(alertAppriseDestinationsSectionSource).not.toContain('TlsVerificationWarningBanner');
     expect(alertHistoryTabSource).not.toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getHistory');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getIncidentsForResource');

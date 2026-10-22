@@ -2,7 +2,16 @@
 
 Pulse provides a comprehensive REST API for automation and integration.
 
-**Base URL**: `http://<your-pulse-ip>:7655/api`
+**Base URL**: your Pulse installation's verified **HTTPS origin** followed by
+`/api`, for example `https://pulse.example.com/api`. Use the same public origin
+as the browser UI when a reverse proxy terminates TLS. Do not send API tokens,
+passwords or session cookies to a remote HTTP address, even on a private network.
+
+The local-only example `http://127.0.0.1:7655/api` applies when the client runs
+on the Pulse host and Pulse actually listens there. `127.0.0.1` on another
+machine refers to that machine, not the Pulse server. The
+[private-file request helper](#api-token-recommended) below explains both local
+loopback and remote HTTPS requests; keep certificate verification enabled.
 
 ## 🔐 Authentication
 
@@ -221,6 +230,44 @@ Check if Pulse is running.
 ### System State
 `GET /api/state`
 Returns the complete state of your infrastructure (Nodes, VMs, Containers, Storage, Alerts). This is the main endpoint used by the dashboard.
+
+#### Resource IDs and integration labels
+
+Treat each returned `id` as an opaque value. Keep it unchanged: do not split
+it on `-`, `:` or `/`, replace separators, or rebuild it from a display name.
+Colon-form guest IDs do not mean that node, storage or PBS IDs use the same
+format. Names can themselves contain separators.
+
+For Home Assistant, MQTT and other integrations, keep the resource collection
+and its returned `id` together as the key. Use the separate fields below for
+human-readable labels, not to reconstruct identity:
+
+| `/api/state` collection | Label and context fields |
+|---|---|
+| `nodes` | `name`, optional `displayName`, `instance` |
+| `vms`, `containers` | `name`, `instance`, `node`, `vmid` |
+| `storage` | `name`, `instance`, `node`, optional `nodes` |
+
+A storage row can represent shared cluster storage or a PBS datastore, so its
+`node` is not necessarily a single monitored host. A repeated name or VMID is
+not sufficient to link resources from independent installations. These fields
+describe the returned row, not a substitute for an explicit relationship.
+
+IDs from this legacy state response are not interchangeable with IDs returned
+by [Unified Resources](#unified-resources) or connection-settings endpoints.
+Use the ID returned by the endpoint you are consuming. When an endpoint takes
+an ID in a URL path, encode that whole ID as one path segment rather than
+altering its separators. Do not assume an ID survives a connection being
+removed and recreated.
+
+Hyphens in node or storage IDs do not by themselves indicate duplicate
+resources or corrupt metadata. Do not restart Pulse, recreate connections or
+edit/remove `guest_metadata.json` to make ID formats match. If actual duplicate
+rows or cross-host readings appear, preserve their distinct IDs and existing
+evidence for a bug report without repeating the connection change. Keep state
+exports and private names out of public reports.
+
+#### Integration summary
 
 `GET /api/state/summary`
 Returns a lightweight integration summary for external dashboards and checks. Requires `monitoring:read`.

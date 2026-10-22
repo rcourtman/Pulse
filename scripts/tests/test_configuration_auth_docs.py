@@ -44,11 +44,13 @@ sys.exit(int(os.environ.get('EDITOR_EXIT', '0')))
 '''
 
 DOCKER = '''#!/usr/bin/env python3
-import json, os, sys
+import json, os, stat, sys
 from pathlib import Path
 args = sys.argv[1:]
 p = Path(args[args.index('--env-file') + 1])
 assert p == Path.home() / '.config/pulse/docker-auth.env'
+assert stat.S_IMODE(p.stat().st_mode) == 0o600
+assert stat.S_IMODE(p.parent.stat().st_mode) == 0o700
 assert p.read_text() == os.environ['EXPECTED_FILE']
 assert os.environ['FIXTURE_HASH'] not in ' '.join(args)
 assert not any(a.startswith('PULSE_AUTH_PASS=') for a in args)
@@ -77,6 +79,115 @@ def private_file(home: Path, content: str = CONTENT) -> Path:
 
 
 class ConfigurationAuthDocsTest(unittest.TestCase):
+    def test_preparation_rejects_symlinked_config_ancestor_before_side_effects(self):
+        with tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
+            home = Path(temp)
+            target = home / "retained-config"
+            credential = target / "pulse/docker-auth.env"
+            credential.parent.mkdir(parents=True)
+            credential.write_text(CONTENT)
+            credential.chmod(0o644)
+            credential.parent.chmod(0o755)
+            (home / ".config").symlink_to(target, target_is_directory=True)
+            result = subprocess.run(["bash", "-c", recipe('vi "$auth_file"')],
+                                    env=environment(home), capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((home / "editor.json").exists())
+            self.assertEqual(credential.read_text(), CONTENT)
+            self.assertEqual(stat.S_IMODE(credential.stat().st_mode), 0o644)
+            self.assertEqual(stat.S_IMODE(credential.parent.stat().st_mode), 0o755)
+            self.assertNotIn(HASH.encode(), result.stdout + result.stderr)
+
+    def test_both_stages_reject_unsafe_paths_before_editor_or_docker(self):
+        for stage in ('vi "$auth_file"', "docker run -d"):
+            for kind in ("config-file", "directory-file", "credential-directory", "credential-fifo",
+                         "config-link", "directory-link", "credential-link",
+                         "dangling-config", "dangling-directory", "dangling-credential"):
+                with self.subTest(stage=stage, kind=kind), tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
+                    home = Path(temp)
+                    target = home / "retained-config"
+                    credential = target / "pulse/docker-auth.env"
+                    credential.parent.mkdir(parents=True)
+                    credential.write_text(CONTENT)
+                    credential.chmod(0o644)
+                    credential.parent.chmod(0o755)
+                    config = home / ".config"
+                    directory = config / "pulse"
+                    auth = directory / "docker-auth.env"
+                    if kind == "config-file":
+                        config.write_text("preserve config")
+                    elif kind == "directory-file":
+                        config.mkdir()
+                        directory.write_text("preserve directory")
+                    elif kind == "config-link":
+                        config.symlink_to(target, target_is_directory=True)
+                    elif kind == "dangling-config":
+                        config.symlink_to(home / "absent", target_is_directory=True)
+                    else:
+                        config.mkdir()
+                        if kind == "directory-link":
+                            directory.symlink_to(credential.parent, target_is_directory=True)
+                        elif kind == "dangling-directory":
+                            directory.symlink_to(home / "absent", target_is_directory=True)
+                        else:
+                            directory.mkdir()
+                            if kind == "credential-directory":
+                                auth.mkdir()
+                            elif kind == "credential-fifo":
+                                os.mkfifo(auth)
+                            elif kind == "credential-link":
+                                auth.symlink_to(credential)
+                            elif kind == "dangling-credential":
+                                auth.symlink_to(home / "absent")
+                    result = subprocess.run(["bash", "-c", recipe(stage)],
+                                            env=environment(home), capture_output=True, timeout=10)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse((home / "editor.json").exists())
+                    self.assertFalse((home / "docker.json").exists())
+                    self.assertEqual(credential.read_text(), CONTENT)
+                    self.assertEqual(stat.S_IMODE(credential.stat().st_mode), 0o644)
+                    self.assertEqual(stat.S_IMODE(credential.parent.stat().st_mode), 0o755)
+                    if kind == "config-file":
+                        self.assertEqual(config.read_text(), "preserve config")
+                    if kind == "directory-file":
+                        self.assertEqual(directory.read_text(), "preserve directory")
+                    self.assertNotIn(HASH.encode(), result.stdout + result.stderr)
+
+    def test_launch_rechecks_a_file_replaced_after_preparation(self):
+        with tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
+            home = Path(temp)
+            auth = private_file(home)
+            env = environment(home)
+            prepared = subprocess.run(["bash", "-c", recipe('vi "$auth_file"')],
+                                      env=env, capture_output=True, timeout=10)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr.decode())
+            retained = home / "retained.env"
+            auth.rename(retained)
+            retained.chmod(0o644)
+            auth.symlink_to(retained)
+            result = subprocess.run(["bash", "-c", recipe("docker run -d")],
+                                    env=env, capture_output=True, timeout=10)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((home / "docker.json").exists())
+            self.assertEqual(retained.read_text(), CONTENT)
+            self.assertEqual(stat.S_IMODE(retained.stat().st_mode), 0o644)
+
+    def test_permission_failure_stops_either_stage(self):
+        for stage in ('vi "$auth_file"', "docker run -d"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
+                home = Path(temp)
+                auth = private_file(home)
+                env = environment(home)
+                chmod = home / "tools/chmod"
+                chmod.write_text("#!/bin/sh\nexit 29\n")
+                chmod.chmod(0o700)
+                result = subprocess.run(["bash", "-c", recipe(stage)],
+                                        env=env, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 29)
+                self.assertFalse((home / "editor.json").exists())
+                self.assertFalse((home / "docker.json").exists())
+                self.assertEqual(auth.read_text(), CONTENT)
+
     def test_no_shared_password_or_secret_in_command_arguments(self):
         for name in GUIDES:
             with self.subTest(guide=name):
@@ -166,20 +277,24 @@ class ConfigurationAuthDocsTest(unittest.TestCase):
             self.assertEqual(path.read_text(), CONTENT)
 
     def test_launch_passes_only_private_path_and_preserves_hash_bytes(self):
-        with tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
-            home = Path(temp)
-            path = private_file(home)
-            result = subprocess.run(["bash", "-c", recipe("docker run -d")],
-                                    env=environment(home), capture_output=True, timeout=10)
-            self.assertEqual(result.returncode, 0, result.stderr.decode())
-            argv = json.loads((home / "docker.json").read_text())
-            self.assertEqual(argv, ["run", "-d", "--name", "pulse", "-p", "7655:7655",
-                                   "-v", "pulse_data:/data", "--env-file", str(path), "-e",
-                                   "PULSE_DEPLOYMENT_METHOD=docker_run", "--restart", "unless-stopped",
-                                   "rcourtman/pulse:vX.Y.Z"])
-            self.assertNotIn(HASH, json.dumps(argv))
-            self.assertNotIn(HASH.encode(), result.stdout + result.stderr)
-            self.assertEqual(path.read_text(), CONTENT)
+        for exposed in (False, True):
+            with self.subTest(exposed=exposed), tempfile.TemporaryDirectory(prefix="auth docs ") as temp:
+                home = Path(temp)
+                path = private_file(home)
+                if exposed:
+                    path.chmod(0o644)
+                    path.parent.chmod(0o755)
+                result = subprocess.run(["bash", "-c", recipe("docker run -d")],
+                                        env=environment(home), capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                argv = json.loads((home / "docker.json").read_text())
+                self.assertEqual(argv, ["run", "-d", "--name", "pulse", "-p", "7655:7655",
+                                       "-v", "pulse_data:/data", "--env-file", str(path), "-e",
+                                       "PULSE_DEPLOYMENT_METHOD=docker_run", "--restart", "unless-stopped",
+                                       "rcourtman/pulse:vX.Y.Z"])
+                self.assertNotIn(HASH, json.dumps(argv))
+                self.assertNotIn(HASH.encode(), result.stdout + result.stderr)
+                self.assertEqual(path.read_text(), CONTENT)
 
     def test_absent_or_empty_file_prevents_docker_start(self):
         for empty in (False, True):

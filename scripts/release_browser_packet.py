@@ -13,6 +13,7 @@ import tarfile
 
 MAX_ARCHIVE = 512 * 1024 * 1024
 MAX_SIGNATURE = 16 * 1024
+MAX_INSTALLER = 2 * 1024 * 1024
 MAX_BINARY = 1024 * 1024 * 1024
 MAX_EXPANDED = 2 * MAX_BINARY
 
@@ -29,14 +30,15 @@ def release_identity(release, *, tag, commit, prerelease):
         raise ValueError('Exact published immutable release/tag identity required')
     asset_name = f'pulse-{tag}-linux-amd64.tar.gz'
     assets = []
-    for name in (asset_name, asset_name + '.sshsig'):
+    for name in (asset_name, asset_name + '.sshsig', 'install.sh', 'install.sh.sshsig'):
         matches = [a for a in release.get('assets', []) if a.get('name') == name]
         if len(matches) != 1:
             raise ValueError('Missing or ambiguous release asset')
         asset = matches[0]
+        limit = MAX_SIGNATURE if name.endswith('.sshsig') else (MAX_INSTALLER if name == 'install.sh' else MAX_ARCHIVE)
         if (asset.get('browser_download_url') != f'https://github.com/rcourtman/Pulse/releases/download/{tag}/{name}'
                 or type(asset.get('id')) is not int or asset['id'] <= 0
-                or type(asset.get('size')) is not int or not 0 < asset['size'] <= (MAX_SIGNATURE if name.endswith('.sshsig') else MAX_ARCHIVE)
+                or type(asset.get('size')) is not int or not 0 < asset['size'] <= limit
                 or not re.fullmatch(r'sha256:[0-9a-f]{64}', str(asset.get('digest')))):
             raise ValueError('Unsafe or unbound release asset')
         assets.append({k: asset[k] for k in ['name', 'id', 'size', 'digest']})
@@ -82,6 +84,7 @@ def packet(baseline, candidate, from_commit, to_commit, tag, archives=None):
                 if file_sha256(p) != asset['digest'].split(':')[1]:
                     raise ValueError('Release asset digest differs from live identity')
             release['binary_sha256'] = archive_identity(archives / release['tag'] / release['assets'][0]['name'])
+            release['installer_sha256'] = file_sha256(archives / release['tag'] / 'install.sh')
     return {'schema_version': 1, 'repository': 'rcourtman/Pulse', 'releases': releases}
 
 

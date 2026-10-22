@@ -365,11 +365,22 @@ func newKubernetesHTTPClient(target TargetConfig) (*http.Client, error) {
 	}
 	return &http.Client{
 		Timeout:   15 * time.Second,
-		Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: tlsConfig},
+		Transport: &http.Transport{Proxy: kubernetesControlPlaneProxy, TLSClientConfig: tlsConfig},
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
 			return fmt.Errorf("server returned redirect to %s - use the final Pulse URL explicitly", req.URL)
 		},
 	}, nil
+}
+
+func kubernetesControlPlaneProxy(req *http.Request) (*url.URL, error) {
+	// An explicitly selected plaintext Pulse endpoint must not send its bearer
+	// and cluster inventory to an ambient HTTP proxy instead. This is the same
+	// direct-HTTP policy as the host agent; HTTPS retains the existing proxy
+	// support and TLS verification settings.
+	if req == nil || req.URL == nil || strings.EqualFold(req.URL.Scheme, "http") {
+		return nil, nil
+	}
+	return http.ProxyFromEnvironment(req)
 }
 
 func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, string, error) {

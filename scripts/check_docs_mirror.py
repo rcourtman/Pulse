@@ -18,6 +18,7 @@ Modes:
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +39,15 @@ ROOT_SOURCED_DOCS = frozenset(
 # scan (scripts/tests/test_repo_docs_link_drift.py) does not flag this
 # checker's own source for containing the pattern it forbids.
 FORBIDDEN_LINK = "https://github.com/rcourtman/Pulse/" + "blob/main/"
+GALLERY_LINK = FORBIDDEN_LINK + "docs/SCREENSHOTS.md"
+
+
+def has_branch_tip_link(mirror: str, content: str) -> bool:
+    # The index labels this unshipped gallery as an external GitHub destination,
+    # not installed-version setup help. No other document or target is exempt.
+    if mirror == f"{SHIPPED_ROOT}/README.md":
+        content = re.sub(re.escape(GALLERY_LINK) + r"(?=$|[\s\"')>\]])", "", content)
+    return FORBIDDEN_LINK in content
 
 
 def source_for(mirror: str) -> str:
@@ -119,8 +129,8 @@ def check_staged(root: Path) -> tuple[list[str], list[str]]:
                 f"{source} instead)"
             )
         else:
-            if touched and FORBIDDEN_LINK in git_output(
-                root, "cat-file", "blob", blobs[mirror]
+            if touched and has_branch_tip_link(
+                mirror, git_output(root, "cat-file", "blob", blobs[mirror])
             ):
                 errors.append(
                     f"{mirror}: shipped docs must not link to "
@@ -152,7 +162,7 @@ def check_worktree(root: Path) -> tuple[list[str], int]:
                 f"{source} and {mirror} differ; sync the shipped copy:\n"
                 f"    cp {source} {mirror}"
             )
-        elif FORBIDDEN_LINK.encode() in mirror_bytes:
+        elif has_branch_tip_link(mirror, mirror_bytes.decode("utf-8")):
             errors.append(
                 f"{mirror}: shipped docs must not link to {FORBIDDEN_LINK}"
             )

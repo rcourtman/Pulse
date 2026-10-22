@@ -8,6 +8,116 @@ A gate is only `passed` when its automated proof still passes and the manual
 scenario has been exercised in a staging-like environment with the expected
 result.
 
+## Backup activity without size readings
+
+Run the backup activity presentation and consuming Backups table tests. Build
+`build-coverage-workload-identity.mjs <full-source-SHA>`, then run
+`backup-activity-volume.cjs`. With recent completed PBS, PVE and guest-snapshot
+observations without positive sizes, switch Count to Volume and back using the
+keyboard and 320px touch. The chart must retain its metric/range controls, explain
+unavailable sizes and never claim no activity or a zero-byte backup. Check partial
+daily totals, tooltip/accessibility qualification, native captures and wrapping.
+Refresh to measured, partial and genuinely empty-window observations; retain the
+metric, widen/narrow the range and use/clear the day filter. Running, invalid/future
+and old observations must not inflate unavailable-size activity. Only fixture GETs
+are allowed. This proves collected-data presentation, not backup/guest recovery.
+
+## PBS datastore capacity access
+
+Build `build-pbs-capacity-details.mjs <full-source-SHA>` and run
+`pbs-capacity-details.cjs`. On desktop keyboard and 320px touch, activate the
+Unavailable/Unknown capacity cell. Its existing full-width row disclosure must
+name the correct server/store and explain why unavailable is not empty, without
+raw provider errors, executable names, clipped text or horizontal overflow.
+Switch between same-server stores, retain the same open disclosure through
+unavailable/unknown replacements, then replace it with measured zero and high
+usage. Check Enter, Space, tap, expanded/controls semantics, visible focus and
+close-to-disclosure focus return and visible state in the accessible name, including when the warning button disappears
+after recovery. Verify actual captures. All fixture API requests must be GETs;
+this is read access, not native PBS capacity recovery or a guest operation.
+
+## Coverage backup job diagnostics
+
+Run `ProxmoxCoverageTable.taskDetail.test.tsx` with the real inventory parser
+and recovery model, then `backup-job-detail.cjs` after preparing the existing
+Coverage fixture with `node browser-tests/build-coverage-workload-identity.mjs
+<full-source-SHA>`. On desktop and 320px touch, expand a workload with a failed
+job and read the full multiline error and start time, including long unbroken
+text and literal markup. Keep another connection's equal VMID/error separate.
+Refresh to Running, OK, an undated job, conflicting newest outcomes and no jobs:
+unambiguous/empty replacement must remove the old error without losing the open
+row/focus. Uncertain chronology must not fall back to an older OK result, but its
+matched collected jobs must remain readable and searchable in the separately
+labelled disclosure, including both conflicting observations of one ID. Run
+`backup-job-uncertainty.cjs` for absent/future/invalid starts, literal provider
+text, response-order reversal, same-VMID connection isolation and ordinary
+replacement. List order must never read as a latest-job timeline. Check wrapping, horizontal
+overflow and actual captured pixels. Only fixture GETs are allowed. This is
+stored-observation presentation, not native backup/thaw/restore or installed
+recovery acceptance.
+
+## Restore-point details without hover
+
+Run `ProxmoxCoverageTable.test.tsx`, including both consuming tables across all
+five container layouts. Build `build-backup-point-state.mjs <full-source-SHA>`
+and run `backup-artifact-details.cjs`. Through the real HTTP inventory readers,
+inspect two equal-format archives with distinct long full IDs, a long snapshot
+description and PBS file-count context in By date and expanded Coverage. Check
+desktop, narrow touch, intermediate layouts, native pixels, no clipping/overflow,
+correct fallback colspans and no duplicated text. Refresh the same open Coverage
+row and check replacement of the old identifier. Traverse the bounded feed to
+every archive despite wrapping. These GET-only fixture results establish text
+access, not backup/restore, guest thaw, installed recovery or release availability.
+
+## Automatic-update settings publication
+
+Run `TestRootInstallAutoUpdateSettingsPublication` (production shell plus
+`scripts/installtests/auto_update_settings.py`). Existing settings must preserve
+unrelated values, remain private, and be completely replaced before timer
+activation. Invalid/multiple JSON, missing parser, linked/nonregular files,
+failed staging/mode/owner/rename and interruption retain the old settings and
+do not enable/start the timer; staged files are removed. A concurrent directory
+must not receive settings as a child. Fresh stable/RC defaults remain unchanged.
+The old shared temporary link is confined inside the parent-control fixture;
+it is not a real host-file attack. These source controls are not native timer
+or installed recovery acceptance; existing native installer CI remains needed.
+
+## Backups local-calendar activity
+
+Run `proxmoxBackupActivityPresentation.calendar.test.ts` with timezone set
+before Vitest starts: UTC, Europe/London, America/New_York and
+Australia/Lord_Howe. All existing activity ranges must retain a unique ordered
+column per local date, its early/late-hour count and byte volume, the first
+midnight and exactly-now boundaries, and future exclusion.
+
+Consume synthetic PVE/PBS inventories through the real Backups table, chart,
+router, API client and CSS on desktop and narrow touch. Cross the spring
+change, the autumn changeover day and a window crossing it, including both
+occurrences of its repeated hour, plus a half-hour change. Select the
+previously missing/partial day with keyboard or touch, check URL and matching
+rows, change count/volume and 7/30/90/365-day ranges, then clear the filter.
+Inspect actual captured pixels for legible selected-date feedback, totals and
+rows. No native backup, thaw or installed recovery acceptance follows.
+
+## Efficient Proxmox guest inventory continuity
+
+Automated: `TestEfficientGuestInventoryEmptyAndGrace`,
+`TestEfficientGuestInventoryRecoveryAndDeletion` and
+`TestEfficientGuestInventoryMoveDoesNotResurrectOldCoordinates`.
+Exercise real `/nodes` and `/cluster/resources?type=vm` reads through the normal
+owned guest cycle. An actually online empty node removes its last guests;
+offline/omitted nodes still in grace retain complete source tuples and times,
+without new History. Expired/never-online nodes keep the existing removal
+policy. Migration/template evidence excludes old coordinates; independent
+connections with equal native identifiers remain unchanged.
+
+Consume actual producer resources through the production Workloads table and
+full drawer on desktop and narrow touch. Inspect retained values and the open
+drawer during a genuine grace gap, advancing ordinary recovery, then removal
+and drawer closure after an accepted online empty result. Inspect pixels as
+well as membership and errors. Synthetic source/surface proof is not native
+guest/thaw/backup, installed recovery or release acceptance; no new gate follows.
+
 ## Workloads guest interface source selection — issue #2757
 
 Automated: `useWorkloads.test.ts` (both REST and owning-snapshot VM/LXC
@@ -1321,3 +1431,62 @@ as verification progresses:
 - Exact-source race/vet/build and desktop/narrow consuming pixels are source qualification, not installed/native acceptance or release availability.
 
 `TestClusterFirstUseConcurrentSelectionSharesConstruction` holds a real first-use TLS capture while eight ordinary readers join: one captured pin, one short/full login pair, independent returned readings and usable concurrent health inspection.
+
+### Configuration transfer lifetime (15 October 2026)
+
+- `useBackupTransferFlow.lifecycle.test.tsx` must reject overlapping transfers,
+  mixed file/passphrase submissions, dispatch after a retired file read and late
+  export/download/reload effects. Exercise token-intent cancellation and exact
+  resume, preserved UI/legacy/CLI formats, invalid input, no-retry request options
+  and privacy-safe unconfirmed-write feedback.
+- `BackupTransferDialogs.test.tsx` and `settingsArchitecture.test.ts` keep the
+  pending/error state connected through Settings and verify visible pending
+  consequences, disabled fields/close/submit controls and encryption limits.
+- Desktop and narrow consuming-browser proof must exercise the actual Settings
+  recovery route, file selection, pending locking, uncertain server responses,
+  export and token handoff using synthetic archives/credentials. Inspect retained
+  pixels. None of this substitutes for a real installed migration or thaw proof.
+
+### Readable backup inventory refresh (15 October 2026)
+
+- `ProxmoxBackupsTable.test.tsx` must expose refresh for healthy, empty and failed
+  reads; replace new/removed restore points; and admit no duplicate whole-view
+  refresh until both inventory owners and foreground posture have settled.
+  Preserve independent source failure withdrawal, filters and expanded evidence.
+- Desktop and narrow consuming-browser proof must drive the existing PVE/PBS
+  snapshot and posture GETs, not status props: initial evidence, held reads,
+  changed replacement, a failed source and successful empty recovery. Inspect
+  retained pixels, route/expansion preservation and the visible inventory-read
+  boundary. No recurring full-inventory polling or guest command is introduced.
+- This is presentation/read recovery, not native inventory freshness, backup
+  completion, guest thaw, filesystem writes or installed recovery acceptance.
+
+
+### Backup activity scope integrity
+
+- `ProxmoxBackupsTable.activityScope.test.tsx` must bind chart counts/volumes,
+  missing-size totals and unknown-date notices to the list's non-day filters.
+  Cover workload search, node/type, source/verification, repository, combined and
+  empty scopes with independent targets. Day selection must narrow the list
+  without discarding other timeline days; sorting cannot mutate shared scope.
+- `backup-activity-scope.cjs` must exercise the real HTTP inventory readers,
+  model, chart/list and CSS at desktop and 320px. Check saved filter hydration,
+  live search, keyboard/touch day selection and clear, metric/range selection,
+  ordinary replacement and no extra read caused by filtering. Inspect actual
+  pixels for full-fleet, scoped-repository, scoped-volume and empty-scope states.
+- These synthetic consumer checks do not establish backup success, independent
+  thaw, filesystem liveness, installed recovery or release availability.
+
+### Accessible backup artifact state evidence
+
+- `proxmoxBackupsTableShared.test.tsx` must disclose verified, unverified,
+  unknown, running, failed, file and snapshot explanations, retain precedence
+  over contradictory flags, separate prune protection, withdraw replaced text
+  and isolate adjacent records and enclosing row actions.
+- `backup-artifact-evidence.cjs` must consume PVE/PBS inventory through the real
+  reader/model and both By date and expanded Coverage. At desktop and 320px,
+  inspect the collapsed affordance and disclosed evidence; verify keyboard/touch
+  activation, focus return/containment, complete wrapping, literal provider
+  text, ordinary replacement and no new request when disclosing evidence.
+- These checks establish access to collected evidence, not a successful restore,
+  guest responsiveness, thaw, installed recovery or published availability.

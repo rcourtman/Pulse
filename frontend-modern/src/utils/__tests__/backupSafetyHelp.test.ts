@@ -136,15 +136,38 @@ describe('manual backup safety help', () => {
     expect(read('frontend-modern/public/docs/VM_DISK_MONITORING.md')).toBe(guide);
     const troubleshooting = read('docs/TROUBLESHOOTING.md');
     expect(read('frontend-modern/public/docs/TROUBLESHOOTING.md')).toBe(troubleshooting);
-    // The opening precaution must precede the workflow list. Other symptoms
-    // can also link to backup safety, so document-wide label counts do not
-    // establish whether this entry point is present or correctly placed.
     const article = render(troubleshooting, 'TROUBLESHOOTING');
-    const openingLink = article.querySelector('h2 + p + p a');
-    expect(openingLink?.textContent).toBe('Backup safety');
-    expect(openingLink?.getAttribute('href')).toBe('/docs/VM_DISK_MONITORING#backup-safety');
+    // Different workflows may use the same safety label. Each must retain its
+    // own link; a link elsewhere in the guide cannot satisfy that requirement.
+    for (const [headingText, label] of [
+      ['Choose the affected workflow', 'Backup safety'],
+      ['Cluster members and conflicting saved trust', 'Backup safety'],
+      ['VMs show "-" for disk usage', 'manual backup precaution'],
+    ]) {
+      const headings = [...article.querySelectorAll('h2, h3, h4')].filter(
+        (heading) => heading.textContent === headingText,
+      );
+      expect(headings, headingText).toHaveLength(1);
+      const heading = headings[0];
+      const section = document.createElement('section');
+      for (let next = heading.nextElementSibling; next; next = next.nextElementSibling) {
+        if (/^H[1-6]$/.test(next.tagName) && next.tagName <= heading.tagName) break;
+        section.appendChild(next.cloneNode(true));
+      }
+      const links = section.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+      expect(
+        [...links].map((link) => link.textContent),
+        headingText,
+      ).toEqual([label]);
+    }
+    // The opening warning and later symptom guidance can both be labelled
+    // Backup safety. Check the warning in its own context, not global label
+    // uniqueness, while retaining the distinct manual-precaution destination.
     const links = article.querySelectorAll('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
     const labels = [...links].map((link) => link.textContent);
+    expect(labels[0]).toBe('Backup safety');
+    const warning = links[0].closest('p')?.textContent?.replace(/\s+/g, ' ');
+    expect(warning).toContain("an earlier guest request's state is uncertain");
     expect(labels.filter((text) => text === 'manual backup precaution')).toHaveLength(1);
     const target = render(guide, 'VM_DISK_MONITORING');
     expect(target.querySelector('#backup-safety')?.textContent).toBe('Backup safety');

@@ -1458,7 +1458,7 @@ describe('licensePresentation', () => {
       body: expect.stringContaining('Start the upgrade again'),
     });
     expect(getPurchaseActivationNotice('failed')).toMatchObject({
-      title: 'Plan needs attention',
+      title: 'Purchase activation not confirmed',
       body: expect.stringContaining('open recovery'),
       tone: expect.stringContaining('red'),
     });
@@ -1468,6 +1468,19 @@ describe('licensePresentation', () => {
       tone: expect.stringContaining('amber'),
     });
     expect(getPurchaseActivationNotice('')).toBeNull();
+  });
+
+  it('does not infer payment completion or unchanged entitlement from a failed return', () => {
+    // The callback uses `failed` for pending/unpaid sessions, lookup errors and
+    // fulfilled purchases whose local activation or final record failed.
+    const notice = getPurchaseActivationNotice(' FAILED ');
+    expect(notice).toMatchObject({
+      title: 'Purchase activation not confirmed',
+      body: 'Pulse could not confirm automatic plan activation for this checkout. Review the current plan below, and check Pulse Account before starting another purchase. If you already have an activation key, open recovery below.',
+    });
+    expect(notice?.body).not.toMatch(
+      /checkout completed|payment (?:succeeded|failed)|plan.*unchanged/i,
+    );
   });
 
   it('returns canonical organization and billing-admin billing vocabulary', () => {

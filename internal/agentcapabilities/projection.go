@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -546,8 +547,14 @@ func ProjectCapabilityCall(cap Capability, args map[string]any) (ProjectedCall, 
 			if pathParams[k] {
 				continue
 			}
-			if s, ok := v.(string); ok {
-				query.Set(k, s)
+			switch value := v.(type) {
+			case string:
+				query.Set(k, value)
+			case bool:
+				// Manifest booleans (including explicit false) must survive
+				// JSON-RPC decoding just like string filters. Do not stringify
+				// arbitrary values such as objects, arrays or null.
+				query.Set(k, strconv.FormatBool(value))
 			}
 		}
 		if len(query) > 0 {

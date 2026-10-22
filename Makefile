@@ -72,10 +72,9 @@ dev-hot:
 
 # Clean build artifacts
 clean:
-	rm -f pulse
-	rm -rf $(FRONTEND_DIST) $(FRONTEND_EMBED_DIR)
+	./scripts/cleanup.sh --build-only
 
-distclean: clean
+distclean:
 	./scripts/cleanup.sh
 
 # Quick managed restart for development

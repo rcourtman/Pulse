@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import {
   MAX_PROTECTION_POSTURE_BATCH_SIZE,
@@ -13,8 +13,57 @@ const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: apiFetchJSONMock }));
 
 afterEach(() => {
+  vi.useRealTimers();
   apiFetchJSONMock.mockReset();
   resetCreateNonSuspendingQueryCacheForTest();
+});
+
+describe('stalled protection verdict retention', () => {
+  it('keeps an abandoned evaluation unavailable across remount and late success, then recovers', async () => {
+    vi.useFakeTimers();
+    apiFetchJSONMock.mockResolvedValueOnce(postureResponse(['vm:1']));
+    const pending: { signal: AbortSignal; resolve: (value: unknown) => void }[] = [];
+    apiFetchJSONMock.mockImplementation(
+      (_url: string, { signal }: { signal: AbortSignal }) =>
+        new Promise((resolve) => pending.push({ signal, resolve })),
+    );
+    let dispose = () => {};
+    const mount = () =>
+      createRoot((stop) => {
+        dispose = stop;
+        return useProtectionPostures(() => ['vm:1']);
+      });
+    const first = mount();
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(first.postureByResourceID().get('vm:1')?.state).toBe('protected');
+      // The 30-second poll starts a read; its existing 150-second stall
+      // fallback abandons it and starts another. Both transports ignore abort.
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(pending).toHaveLength(2);
+      expect(pending[0].signal.aborted).toBe(true);
+      expect(first.response.error).toBeInstanceOf(Error);
+      expect(first.postures()).toEqual([]);
+      dispose();
+      expect(pending.every(({ signal }) => signal.aborted)).toBe(true);
+      const remounted = mount();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(remounted.response.error).toBeInstanceOf(Error);
+      expect(remounted.postures()).toEqual([]);
+      expect(remounted.policy().freshnessWindowSeconds).toBe(0);
+      // Neither the abandoned poll nor its replacement may renew the cache.
+      pending[0].resolve(postureResponse(['vm:1']));
+      pending[1].resolve(postureResponse(['vm:1']));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(remounted.postures()).toEqual([]);
+      apiFetchJSONMock.mockResolvedValueOnce(postureResponse(['vm:1'], 'unprotected'));
+      await remounted.refetch();
+      expect(remounted.response.error).toBeNull();
+      expect(remounted.postureByResourceID().get('vm:1')?.state).toBe('unprotected');
+    } finally {
+      dispose();
+    }
+  });
 });
 
 describe('useProtectionPostures transport', () => {
@@ -41,10 +90,10 @@ describe('useProtectionPostures transport', () => {
     expect(() => buildProtectionPostureBatchURL(resourceIDs)).toThrow(/limited to 200/);
   });
 
-  it('joins the batches of a large fleet into the rows and the policy the tab reads', async () => {
+  it('joins more than four batches into the exact rows and policy the tab reads', async () => {
     const resourceIDs = Array.from(
-      { length: MAX_PROTECTION_POSTURE_BATCH_SIZE + 1 },
-      (_, index) => `vm:${String(index).padStart(3, '0')}`,
+      { length: MAX_PROTECTION_POSTURE_BATCH_SIZE * 5 + 1 },
+      (_, index) => `vm:${String(index).padStart(4, '0')}`,
     );
     const policy = {
       freshnessWindowSeconds: 604800,
@@ -56,10 +105,7 @@ describe('useProtectionPostures transport', () => {
     apiFetchJSONMock.mockImplementation(async (url: string) => {
       const requested = new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId');
       return {
-        data: requested
-          .slice()
-          .reverse()
-          .map((subjectResourceId) => ({ subjectResourceId, state: 'protected' })),
+        data: postureResponse(requested.slice().reverse()).data,
         policy,
         meta: { page: 1, limit: 200, total: requested.length, totalPages: 1 },
       };
@@ -74,13 +120,19 @@ describe('useProtectionPostures transport', () => {
       const batchSizes = apiFetchJSONMock.mock.calls.map(
         ([url]) => new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId').length,
       );
-      expect(batchSizes).toEqual([MAX_PROTECTION_POSTURE_BATCH_SIZE, 1]);
+      expect(batchSizes).toEqual([200, 200, 200, 200, 200, 1]);
       // Each batch keeps the order the backend sent; the batches join in request order.
       expect(hook.postures().map((posture) => posture.subjectResourceId)).toEqual([
-        ...resourceIDs.slice(0, MAX_PROTECTION_POSTURE_BATCH_SIZE).reverse(),
-        ...resourceIDs.slice(MAX_PROTECTION_POSTURE_BATCH_SIZE),
+        ...Array.from({ length: 6 }, (_, index) =>
+          resourceIDs
+            .slice(
+              index * MAX_PROTECTION_POSTURE_BATCH_SIZE,
+              (index + 1) * MAX_PROTECTION_POSTURE_BATCH_SIZE,
+            )
+            .reverse(),
+        ).flat(),
       ]);
-      expect(hook.postureByResourceID().get('vm:200')?.state).toBe('protected');
+      expect(hook.postureByResourceID().get('vm:1000')?.state).toBe('protected');
       expect(hook.policy()).toEqual(policy);
       // The joined response is the rows and the policy at runtime too: the wire meta of the
       // batches is not carried over (the type pin below cannot see a spread of it).
@@ -96,5 +148,302 @@ describe('useProtectionPostures transport', () => {
     // the policy, and the hook joins 200-ID batches into one response, so a page
     // count or limit would only be invented client-side with no reader.
     expectTypeOf<keyof ProtectionPosturesResponse>().toEqualTypeOf<'data' | 'policy'>();
+  });
+});
+
+const postureResponse = (resourceIDs: readonly string[], state = 'protected') => ({
+  data: resourceIDs.map((subjectResourceId) => ({
+    subjectResourceId,
+    state,
+    freshness: 'current',
+    verification: 'verified',
+    coverage: 'complete',
+    providerStates: [],
+    repositoryResourceIds: [],
+    evidenceIds: ['point-1'],
+    explanation: 'A current verified backup is available.',
+    evaluatedAt: '2026-10-15T06:00:00Z',
+  })),
+  policy: {
+    freshnessWindowSeconds: 604800,
+    verificationWindowSeconds: 3600,
+    requireVerification: true,
+  },
+});
+
+const requestedIDs = (url: string) =>
+  new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId');
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => (resolve = resolvePromise));
+  return { promise, resolve };
+};
+
+describe('protection verdict ownership', () => {
+  it('keeps canonical nil evidence lists and valid empty evaluations readable', async () => {
+    const response = postureResponse(['vm:1']);
+    apiFetchJSONMock.mockResolvedValue({
+      ...response,
+      meta: { total: 1 },
+      data: [
+        {
+          ...response.data[0],
+          providerStates: null,
+          evidenceIds: null,
+          repositoryResourceIds: null,
+          futureField: 'ignored',
+        },
+      ],
+    });
+    let dispose = () => {};
+    const hook = createRoot((stop) => {
+      dispose = stop;
+      return useProtectionPostures(() => ['vm:1']);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(1));
+      expect(hook.response.error).toBeNull();
+      expect(hook.postures()[0]).toMatchObject({
+        state: 'protected',
+        providerStates: [],
+        repositoryResourceIds: [],
+        evidenceIds: [],
+      });
+      apiFetchJSONMock.mockResolvedValue(postureResponse([]));
+      await hook.refetch();
+      expect(hook.response.error).toBeNull();
+      expect(hook.postures()).toEqual([]);
+      expect(hook.resolvedOnce()).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each([
+    ['missing rows', {}],
+    ['non-list rows', { ...postureResponse(['vm:1']), data: {} }],
+    [
+      'duplicate conflicting verdicts',
+      {
+        ...postureResponse(['vm:1']),
+        data: [...postureResponse(['vm:1'], 'attention').data, ...postureResponse(['vm:1']).data],
+      },
+    ],
+    ['a verdict for a different batch', postureResponse(['vm:other'])],
+    [
+      'unreadable explanation',
+      {
+        ...postureResponse(['vm:1']),
+        data: [
+          { ...postureResponse(['vm:1']).data[0], explanation: { private: 'PRIVATE_PAYLOAD' } },
+        ],
+      },
+    ],
+    [
+      'unreadable provider evidence',
+      {
+        ...postureResponse(['vm:1']),
+        data: [{ ...postureResponse(['vm:1']).data[0], providerStates: [null] }],
+      },
+    ],
+    ['an unsupported verdict', postureResponse(['vm:1'], 'healthy')],
+    ['an unreadable rule', { ...postureResponse(['vm:1']), policy: null }],
+    [
+      'a coerced rule',
+      {
+        ...postureResponse(['vm:1']),
+        policy: { ...postureResponse([]).policy, requireVerification: 'false' },
+      },
+    ],
+    [
+      'an invalid time window',
+      {
+        ...postureResponse(['vm:1']),
+        policy: { ...postureResponse([]).policy, freshnessWindowSeconds: -1 },
+      },
+    ],
+  ])('withdraws current verdicts after a successful HTTP read with %s', async (_name, payload) => {
+    apiFetchJSONMock.mockResolvedValue(postureResponse(['vm:1']));
+    let dispose = () => {};
+    const hook = createRoot((stop) => {
+      dispose = stop;
+      return useProtectionPostures(() => ['vm:1']);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(1));
+      apiFetchJSONMock.mockResolvedValue(payload);
+      await hook.refetch();
+      expect(hook.response.error).toBeInstanceOf(Error);
+      expect(String(hook.response.error)).not.toContain('PRIVATE_PAYLOAD');
+      expect(hook.postures()).toEqual([]);
+      expect(hook.postureByResourceID().size).toBe(0);
+      expect(hook.policy().freshnessWindowSeconds).toBe(0);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not attach the first batch rule to verdicts evaluated under a different rule', async () => {
+    const ids = Array.from({ length: MAX_PROTECTION_POSTURE_BATCH_SIZE + 1 }, (_, i) => `vm:${i}`);
+    apiFetchJSONMock.mockImplementation(async (url: string) => {
+      const response = postureResponse(requestedIDs(url));
+      if (requestedIDs(url).length === 1) response.policy.requireVerification = false;
+      return response;
+    });
+    let dispose = () => {};
+    const hook = createRoot((stop) => {
+      dispose = stop;
+      return useProtectionPostures(() => ids);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.response.loading).toBe(false));
+      expect(hook.response.error).toBeInstanceOf(Error);
+      expect(hook.postures()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
+  it.each([1, MAX_PROTECTION_POSTURE_BATCH_SIZE + 1])(
+    'withdraws every current verdict and its rule when a refresh of %i workloads fails',
+    async (count) => {
+      const ids = Array.from({ length: count }, (_, index) => `vm:${index}`);
+      apiFetchJSONMock.mockImplementation(async (url: string) =>
+        postureResponse(requestedIDs(url)),
+      );
+      let dispose = () => {};
+      const hook = createRoot((stop) => {
+        dispose = stop;
+        return useProtectionPostures(() => ids);
+      });
+      try {
+        await vi.waitFor(() => expect(hook.postures()).toHaveLength(count));
+        apiFetchJSONMock.mockImplementation(async (url: string) => {
+          if (requestedIDs(url).includes(ids.at(-1)!)) throw new Error('Unavailable');
+          return postureResponse(requestedIDs(url), 'attention');
+        });
+        await hook.refetch();
+        expect(hook.response.error).toBeInstanceOf(Error);
+        expect(hook.resolvedOnce()).toBe(true);
+        expect(hook.postures()).toEqual([]);
+        expect(hook.postureByResourceID().size).toBe(0);
+        expect(hook.policy()).toEqual({
+          freshnessWindowSeconds: 0,
+          verificationWindowSeconds: 0,
+          requireVerification: false,
+        });
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it('keeps a failed verdict unavailable through a pending retry, then accepts the new result', async () => {
+    apiFetchJSONMock.mockResolvedValue(postureResponse(['vm:1']));
+    let dispose = () => {};
+    const hook = createRoot((stop) => {
+      dispose = stop;
+      return useProtectionPostures(() => ['vm:1']);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(1));
+      apiFetchJSONMock.mockRejectedValue(new Error('Unavailable'));
+      await hook.refetch();
+      const pending = deferred<ReturnType<typeof postureResponse>>();
+      apiFetchJSONMock.mockReturnValue(pending.promise);
+      const retry = hook.refetch();
+      expect(hook.response.loading).toBe(true);
+      expect(hook.postures()).toEqual([]);
+      pending.resolve(postureResponse(['vm:1'], 'unprotected'));
+      await retry;
+      expect(hook.response.error).toBeNull();
+      expect(hook.postureByResourceID().get('vm:1')?.state).toBe('unprotected');
+      expect(hook.policy().requireVerification).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not revive cached verdicts from a failed read when the tab remounts', async () => {
+    apiFetchJSONMock.mockResolvedValue(postureResponse(['vm:1']));
+    let dispose = () => {};
+    const mount = () =>
+      createRoot((stop) => {
+        dispose = stop;
+        return useProtectionPostures(() => ['vm:1']);
+      });
+    const first = mount();
+    try {
+      await vi.waitFor(() => expect(first.postures()).toHaveLength(1));
+      apiFetchJSONMock.mockRejectedValue(new Error('Unavailable'));
+      await first.refetch();
+    } finally {
+      dispose();
+    }
+    apiFetchJSONMock.mockReturnValue(new Promise(() => {}));
+    const remounted = mount();
+    try {
+      expect(remounted.response.error).toBeInstanceOf(Error);
+      expect(remounted.postures()).toEqual([]);
+      expect(remounted.policy().freshnessWindowSeconds).toBe(0);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('does not lend a previous fleet its verdicts or rule while the replacement is pending', async () => {
+    apiFetchJSONMock.mockResolvedValue(postureResponse(['vm:1']));
+    const [ids, setIDs] = createSignal(['vm:1']);
+    let dispose = () => {};
+    const hook = createRoot((stop) => {
+      dispose = stop;
+      return useProtectionPostures(ids);
+    });
+    try {
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(1));
+      const pending = deferred<ReturnType<typeof postureResponse>>();
+      apiFetchJSONMock.mockReturnValue(pending.promise);
+      setIDs(['vm:1', 'vm:2']);
+      await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(2));
+      expect(hook.resolvedOnce()).toBe(false);
+      expect(hook.postures()).toEqual([]);
+      expect(hook.policy().requireVerification).toBe(false);
+      pending.resolve(postureResponse(['vm:1', 'vm:2'], 'attention'));
+      await vi.waitFor(() => expect(hook.postures()).toHaveLength(2));
+      expect(hook.postureByResourceID().get('vm:1')?.state).toBe('attention');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('passes one abort signal to every batch and aborts disposed reads', async () => {
+    apiFetchJSONMock.mockReturnValue(new Promise(() => {}));
+    const ids = Array.from({ length: MAX_PROTECTION_POSTURE_BATCH_SIZE + 1 }, (_, i) => `vm:${i}`);
+    let dispose = () => {};
+    const hook = createRoot((stop) => {
+      dispose = stop;
+      return useProtectionPostures(() => ids);
+    });
+    try {
+      await vi.waitFor(() => expect(apiFetchJSONMock).toHaveBeenCalledTimes(2));
+      const signals = apiFetchJSONMock.mock.calls.map(([, options]) => options?.signal);
+      expect(signals[0]).toBeInstanceOf(AbortSignal);
+      expect(signals[1]).toBe(signals[0]);
+      expect(signals[0].aborted).toBe(false);
+      // A manual caller must also settle on disposal when the API transport
+      // ignores abort, not leave the table's containing refresh pending.
+      const refresh = hook.refetch();
+      const replacementSignals = apiFetchJSONMock.mock.calls
+        .slice(2)
+        .map(([, opts]) => opts.signal);
+      dispose();
+      await refresh;
+      expect(signals[0].aborted).toBe(true);
+      expect(replacementSignals).toHaveLength(2);
+      expect(replacementSignals.every((signal) => signal.aborted)).toBe(true);
+    } finally {
+      dispose();
+    }
   });
 });

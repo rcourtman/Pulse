@@ -31,16 +31,928 @@ covers the collect path without network access, and
 `TestGenerateDockerContainerUpdateStatusLocalImageShape` keeps the mock
 fixtures to the same shape.
 
+### Proxmox endpoint authority before authentication
 
-### Storage investigation history shares the chart source boundary
+`internal/config/client_helpers.go`, startup validation, the node save/test
+normalizer and the PVE/PBS/PMG client constructors
+validate the original HTTP(S) base URL before defaulting or changing its port.
+Explicit schemes are case-insensitive: `HTTPS://` continues to address the
+configured host, not a newly invented host named `HTTPS`. Unsupported explicit
+schemes, URL userinfo, queries and fragments must be refused by the client before
+authentication; configuration helpers must not strip them into a usable URL.
+Bare authorities retain the existing HTTPS and platform-default-port behaviour.
+The helpers retain their existing path-stripping policy for valid configuration
+URLs; direct clients continue to support validated reverse-proxy base paths.
 
-`ReadStorageMetricHistory` and `GetStorageMetricsForChart` use the same monitor
-selector for memory, retained and generated storage history. Analytical reads
-retain the requested window and propagate retained-store errors. Chart-only
-lookback remains presentation behavior and cannot supply older observations as
-current investigation history. Generated demo samples carry `mock_synthetic`;
-they are never evidence of a real storage growth rate. The requested-window and
-store-error regression is `internal/monitoring/storage_history_test.go`.
+The existing portless PVE recovery helper may remove only its configured default
+port from a valid URL. IPv6 brackets and percent-escaped zone identifiers survive
+that operation. This does not change which failures admit a recovery attempt,
+which endpoint is persisted, authentication, CA verification, pin precedence,
+saved-pin renewal/first-use policy, redirect policy or connection budgets.
+
+`internal/config/client_helpers_authority_test.go` checks all three configuration
+producers and IPv6 fallback, including invalid-input preservation. Constructor
+cases in each platform's `host_diagnostics_regression_test.go` check the actual
+request base, unchanged credentials, CA/pin/explicit-opt-out mode, redirects and
+timeouts without sockets.
+`internal/api/configapi/endpoint_authority_journey_test.go` uses owned IPv4/IPv6
+TLS sockets and ordinary saved/draft handlers: matching uppercase URLs complete
+password login and ordinary bounded reads (including PBS datastore RRD/status);
+a wrong pin, an untrusted strict chain or unsupported
+scheme sends neither login credentials nor API reads; restoring the known
+fixture pin recovers. It opens no database and changes no saved configuration.
+The emitted HTTP responses can be consumed by the production connection editor;
+synthetic acceptance does not establish installed certificate renewal or recovery.
+
+
+### PBS namespace aliases cannot select conflicting collection scopes
+
+Every supplied namespace identity (`ns`, `path`, or legacy `name`) must be a
+string and identify the same collection path. Only the existing root spellings
+`""` and `"/"` are equivalent; path case and whitespace remain significant.
+Missing aliases retain compatibility, but an explicit empty/root alias cannot
+silently defer to a different non-root alias. A conflict makes the entire
+namespace discovery unavailable, not an authoritative empty or complete list.
+Last-known nested artifacts and their original cache age are retained under
+partial protection evidence. Root and sibling datastore reads remain independent;
+cached namespace paths are not probed after failed discovery. A subsequent
+ordinary complete read can renew the exact scope, and genuine empty inventories
+still reconcile absence. Credentials, TLS policy and request cadence are unchanged.
+
+`TestPBSNamespaceInventoryAdmission` covers alias agreement, explicit roots,
+case-distinct paths, existing complete-body/cleanup/privacy bounds and legacy
+compatibility. `TestPBSNamespaceIdentityLifecycle` follows pinned synthetic TLS
+through ordinary foreground/background collection, cached artifacts, stored
+protection and served resources: repeated conflicts retain evidence without
+claiming health, a readable sibling advances, another connection is untouched,
+equivalent/legacy aliases recover, and empty/restored inventory reconciles safely.
+Its real observations feed the existing Backups/Coverage consumer at desktop and
+narrow widths. These are source/consumer proofs, not installed PBS recovery,
+backup usability, guest thaw or published availability.
+
+### Ambiguous PBS live-writer identities cannot certify idle backups
+
+The live backup/sync task reader admits compatibility aliases for worker type
+and worker ID only when every supplied spelling is a string and agrees after
+existing whitespace normalisation (type names are case-insensitive; IDs are not).
+Conflicting, null or wrongly typed aliases make the complete writer observation
+unavailable, rather than selecting the first value and hiding a running writer.
+A missing or empty worker ID remains conservative instance-wide activity.
+Canonical, underscore and legacy spellings, equivalent aliases, unrelated task
+filtering, request bounds, TLS and credentials retain their existing behaviour.
+
+`TestPBSRunningTaskIdentityAliases` checks the public reader, exact request/body
+cleanup and private diagnostic controls. The ordinary GET-only polling/cache
+journey in `TestPBSWriterResponseGapCannotClearGuestActivity` must retain an
+incomplete guest's conservative Backup Running state and last completed backup
+through ambiguous observations, keep the completed sibling unchanged, accept a
+real empty writer list, and resume on ordinary equivalent/canonical aliases.
+Its actual resource projections feed desktop/phone Machines rows and backup
+status disclosures. These fixtures do not establish guest thaw, installed
+recovery or published availability.
+
+### PBS datastore status must contain a real capacity observation
+
+A successful status HTTP response is not, by itself, an available or empty
+PBS datastore. Its complete, bounded body must contain one unambiguous JSON
+object with usable non-negative integer capacity counters. Missing/null data,
+omitted used/available counters, duplicate or case-conflicting recognised keys,
+error envelopes, wrong types, impossible/overflowing counters and failed body
+reads/closes become an unavailable datastore with a fixed private-body-free
+error. No arbitrary provider fields are copied into that error or diagnostic.
+
+Ordinary and legacy capacity names, positive used+available total inference,
+reserved filesystem space, explicit empty counters, status values and status/RRD/GC
+dedup precedence remain supported. Integer byte counters are decoded without
+float64 rounding. After the existing modern/legacy fallback and total inference,
+used plus available must not exceed total; a smaller sum still allows reserved
+space. The comparison must not add potentially overflowing int64 counters.
+A rejected status is local to its datastore: the server stays
+reachable when its connection reads succeeded, readable siblings advance, excluded
+stores are not queried, and the ordinary next valid read recovers availability.
+A missing observation cannot clear an existing capacity incident; a genuine low
+or empty reading can. This is not a backup archive, verification or thaw claim.
+
+`TestPBSDatastoreStatusAdmission` covers the public client, response cleanup,
+malformed/valid controls, precision, bounded private diagnostics and request
+selection, including combined-counter and int64-boundary controls.
+`TestPBSDatastoreStatusAdmissionLifecycle` joins pinned synthetic TLS,
+ordinary collection, datastore/storage projection, alert continuity and canonical
+presentation. Its emitted resources feed the actual Backups and Storage consumers
+at desktop and narrow sizes. Neither source nor browser fixtures establish
+installed recovery, protected publication or a release.
+
+### Retryable PBS reads retain history, not healthy protection
+
+HTTP 408 (request timeout) and 429 (rate limit) at datastore discovery,
+namespace discovery, group listing or snapshot reads retain last-known backup
+rows at their original timestamp and cache age. They do not establish missing
+backups or revoked access, refresh evidence, certify complete protection, or
+trigger an immediate retry from Retry-After. Readable siblings keep progressing.
+An ordinary subsequent complete read restores current observations; a complete
+empty inventory still reconciles absence. HTTP 401/403 and other terminal 4xx
+responses retain existing raw-scope withdrawal. Historical recovery facts and
+other connections remain independent. Legacy error compatibility uses the first
+4xx marker, not a later status quoted by the provider.
+
+`TestPBSBackupRetryableStatusLifecycle` exercises real pinned-TLS HTTP and the
+ordinary foreground/background collector through repeated 408/429 and 403
+controls at all four boundaries, stored protection, age/cache preservation,
+sibling progress, same-credential recovery and authoritative emptiness.
+`TestPBSBackupCacheHTTPStatusClassification` covers direct/wrapped typed statuses
+and contradictory private bodies; `TestShouldReuseCachedPBSBackups` keeps legacy
+controls. Source-bound Backups consumer proof uses the emitted rows and postures,
+not invented healthy readings. These are closed fixtures, not guest thaw,
+filesystem liveness, installed recovery or published availability.
+
+### PBS response failures are not diagnostic payloads
+
+PBS authentication and API errors expose the observed HTTP status and standard
+status name, plus fixed local body-read/size diagnostics. No provider error
+body is kept in the returned error or logs: it may echo a password, ticket,
+CSRF token, API secret or private provider metadata. Unknown statuses remain
+numeric, rather than trusting the provider's status text. Malformed or empty
+successful token-creation responses likewise return fixed messages, never the
+credential-bearing body or decoder detail.
+
+The existing JSON-to-form fallback remains limited to HTTP 400/415. Typed HTTP
+status remains available through wrapped errors for permission, cache-retention
+and not-found decisions. Legacy PBS user/token collision responses at HTTP
+400/409/500 retain an internal flag from the bounded body; authentication,
+transport and unrelated failures cannot become collisions just by mentioning
+"already exists". Repeated setup still performs no token deletion/replacement.
+Successful credentials, TLS policy, request selection and the 8 MiB response
+limit are unchanged. This does not sanitise arbitrary transport errors, all
+successful provider fields or historical logs, or prove installed recovery.
+
+`TestPBSProviderFailureDiagnostics` covers API/auth failures across ten statuses,
+JSON/HTML/oversize/read-error bodies, exact request/closure counts, failed-session
+nonpublication and bounded private diagnostics. `TestPBSTokenFailureDiagnostics`
+covers malformed, wrong-type, missing-value and valid token responses;
+`TestPBSCollisionClassificationDoesNotDependOnDiagnosticText` and the existing
+stateful collision controls preserve non-destructive setup. The pinned-TLS
+`TestPBSConnectionFailureDiagnostics` joins actual Settings ingress, PBS HTTP,
+operation logs and same-credential empty-datastore recovery. Its exact emitted
+logs feed the production `SystemLogsPanel` via the error-log browser control.
+
+The diagnostics consumer also recognises the body-free HTTP marker after an
+outstanding PBS poll error becomes serialized `LastError.message`. Actual
+API/login 401/403/429/503, direct and wrapped failures, must retain the typed
+classification and the positional monitor guidance in `Errors Detected` without
+restoring response bodies. `TestDiagnosticsPBSRetainedHTTPFailures` covers this
+producer-to-consumer boundary; legacy retained markers remain supported.
+
+### PBS status diagnostics do not retain whole provider payloads
+
+Node-status and datastore-status diagnostics report bounded response lengths,
+not raw successful or malformed JSON bodies. Routine datastore/RRD/GC success
+records are Debug-only; a malformed status still emits its store, byte count and
+parse error at Error. The datastore diagnostic includes only the existing typed
+numeric measurements, never an arbitrary map of provider extension fields. This
+bounds new status log content independently of unknown payload size and reduces
+normal Info-level polling writes. Decoding, availability, returned errors, metric
+values and deduplication precedence, request selection/order, authentication and
+response closure remain unchanged.
+
+`TestPBSStatusDiagnostics` in `pkg/pbs/host_diagnostics_regression_test.go` covers
+Info/Debug node, RRD, status-override, GC-fallback and malformed status responses at
+two payload sizes, preserving exact metrics, selected requests and body closure.
+Its emitted real log lines feed the production `SystemLogsPanel` through
+`scripts/check-pbs-status-logs.cjs`; `scripts/build-pbs-status-logs-preview.cjs`
+binds its compiled modules and served artifacts before bounded browser execution.
+These controls establish only this source/consumer behaviour, not installed
+performance relief or incident recovery. Existing resource/authentication names,
+other endpoint errors and previously retained logs remain private; no global
+redaction or public-safe support bundle is claimed.
+
+### PBS live-state slots belong to selected groups, not cache or response order
+
+The existing 5,000-row per-connection window reserves slots in descending
+last-backup group order within each enumerated datastore/namespace. Cache hits
+and refreshes consume the same budget; a cache hit cannot reset outstanding
+reservations. Selected groups publish in that order, each with its newest real
+snapshots, regardless of worker response order. Older cached rows cannot crowd
+out a newer refresh, and unselected older groups are not fetched to fill a
+failed or denied selected group's slots. Configured datastore/namespace traversal,
+the 100-snapshot group cap and five-reader HTTP ceiling remain unchanged.
+
+A group crossing the live-state boundary, or outgrowing its listed count during
+the snapshot read, makes collection partial rather than authorising deletion of
+unseen durable history. A clipped payload expires that exact group's cache so a
+still-stale count cannot certify completeness on the next poll. Failed refreshes
+retain their original age; access rejection withdraws raw rows without renewing
+them. Complete ordinary recovery resumes cache reuse, and authoritative empty
+history still reconciles deletion.
+
+`pbs_live_selection_test.go` joins real HTTP reads at the actual cap to raw/cache
+publication, guest backup age, recovery mapping, stored history and protection,
+including mixed reuse/refresh, transient and denied reads and ordinary recovery.
+Its complete emitted frames feed the production Backups surface through
+`scripts/check-pbs-live-selection-browser.cjs` at desktop and narrow viewports.
+These are source/consumer proofs, not installed PBS, restore, guest thaw or
+filesystem-liveness acceptance. No limit, permission, API field, guest operation
+or native-recovery prerequisite is added.
+
+
+### Running scheduled backups cannot qualify unidentified archive output
+
+An active vzdump parent without a positive guest ID cannot identify every file
+it may be writing. Its log is bounded and may be unreadable, deferred behind the
+existing 25-log budget, or a valid prefix ending after an earlier guest. The same
+connection's archive pass retains its exact previous inventory and age until a
+live read establishes that the parent has ended. Positive parent/guest task
+observations and independent guest snapshots continue. A later history verdict
+cannot retroactively qualify the earlier live writer scope. Individual-guest
+active tasks retain ordinary partial-file classification; terminal parents and
+complete-empty reads resume ordinary archive collection without requiring a
+successful log or broader permissions.
+
+This deliberately delays newly completed sibling archives until the scheduled
+parent ends, rather than guessing an incomplete file's guest or reporting a false
+restore point. Other connections and direct PBS collection are unchanged. No
+new field, request, log budget, guest operation or QGA admission is introduced.
+
+`pve_backup_unscoped_writer_test.go` joins both real HTTP adapters to the ordinary
+scan, exact archive retention, Last Backup, recovery mapping, bounded log reads,
+positive sibling evidence and ordinary scoped/finished/empty recovery. Its emitted
+frames feed the production Backups component at desktop and narrow viewports via
+`scripts/check-pve-unscoped-backup-writer.cjs`. These are synthetic source/consumer
+proofs, not installed, restore, thaw or filesystem-liveness acceptance.
+
+
+### PVE archive refresh requires the same scan's live task read
+
+A vzdump file is listed under its final name while still being written. If the
+live task inventory fails, retained tasks and successful history backfill cannot
+rule out a new writer. The ordinary scan therefore keeps its previous archive
+inventory, PBS visibility confirmations and protection collection age instead
+of enumerating/reconciling new archives or advancing Last Backup. Independent
+guest snapshot polling continues with its existing budget. A later successful
+live task read resumes ordinary partial-file classification, finished archives
+and complete-empty removal. Other connections and direct PBS polling are unchanged.
+
+A successful task response alone is insufficient: without confirmed `Sys.Audit`
+at each online node it may list only the caller's own tasks. The scoped inventory
+keeps those positive rows in the existing bounded live view, including ordinary
+guest-log expansion, but the archive pass retains its previous inventory and age.
+It does not request broader grants or discard observed tasks on a failed permission
+confirmation. When the recent 200-task page fills, a separate bounded `source=active`
+read must finish below its cap before absence can qualify archive output. Active
+rows precede overlapping recent rows so an older writer survives the live
+projection's 200-parent cap. Before deduplication, overlapping UPIDs must agree
+on execution identity (node, guest/parent ID, PID, process start, start time and
+owner). Only status and completion time may advance between these independent
+reads. A changed identity fails the whole live read without a prefix or an
+arbitrary winner, preserving prior live tasks and archive age under the existing
+failed-read barrier. Omitted redundant node labels remain bound to the request
+scope. A failed, malformed, foreign-node or full active page cannot qualify the pass; a short, audited active census lets busy nodes
+progress without unbounded history scanning. Ordinary confirmed reads recover
+Running, Finished and complete-empty states. These reads are not an atomic
+task/storage snapshot or a guarantee of multi-guest log attribution.
+
+`pve_backup_task_barrier_test.go` exercises both legacy/scoped adapters through
+the complete scan, unchanged archives, backup ages, repeated failure, running,
+finished and empty recovery. Its emitted snapshots feed the production Backups
+component using `scripts/check-pve-backup-task-barrier.cjs` at desktop and narrow
+viewports. These are closed source/consumer fixtures, not guest, thaw, filesystem
+liveness, restore, installed or reporter recovery proof. No provider mutation,
+new guest command, broader permission or new API field is introduced.
+
+`TestPVEArchiveScanRequiresConfirmedTaskVisibility` additionally joins both real
+HTTP adapters, own-only and bounded/failed active views, archive preservation,
+Last Backup, recovery mapping, positive task caps and independent snapshots.
+`TestBackupTaskInventoryOverlappingExecutionIdentity` covers both overlap
+positions, identity contradictions and ordinary completion changes without
+listeners or extra requests. `TestPVEArchiveScanRejectsChangedActiveExecutionIdentity`
+joins actual direct/cluster HTTP readers to the scan, retained live state,
+backup age and recovery mapping through changed guest/parent/start identities,
+ordinary running/finished recovery and complete emptiness. Its actual emitted
+snapshots feed the unchanged production Backups reader/model/table through
+`scripts/check-pve-active-execution-identity.cjs` at desktop and 320px widths;
+keyboard/touch refresh and incomplete-evidence interactions remain read-only.
+The companion SDK controls cover permission ambiguity, overlap and an older
+writer outside the newest-200 window; the observed-parent control keeps log
+expansion useful without full audit visibility. No installed recovery follows
+from these fixtures.
+
+### History backfill cannot change a live backup execution's identity
+
+A later History read may advance status and completion time only for the same
+opaque execution: UPID, bound node, guest/parent ID, PID, process start, start
+time and owner must agree. The live/recent-active merge and the live/History
+merge share `Task.SameExecutionIdentity`; a future task field participates by
+default rather than being silently ignored. Missing identity fields are not
+inferred from a UPID. Existing clients bind omitted node labels to request scope.
+
+Contradictory History retains the actual live task, independently observed tasks
+and report-only backfill, while marking History collection incomplete and
+withholding this scan's archive replacement authority. It cannot move a live
+failure to another guest or qualify a growing file as a completed restore point.
+Existing archive identity and age survive, independent snapshot/connection reads
+progress, and ordinary matching running/completed/empty reads recover without
+extra requests, changed caps, new permissions or provider mutations. Equivalent
+identity still permits the existing later outcome/completion update.
+
+`TestTaskSameExecutionIdentity` and `TestPVEBackupHistoryExecutionIdentity` cover
+identity fields, symmetric non-mutating comparison, both actual HTTP adapters,
+live failure retention, independent scope, report-only membership and ordinary
+completion compatibility. `TestPVEArchiveScanRejectsHistoryExecutionIdentity`
+joins both adapters to ordinary scan publication, repeated contradiction,
+unchanged archives/backup age/recovery mapping and independent snapshot progress.
+Its actual emitted frames feed both production Backups views through
+`scripts/check-pve-history-execution-identity.cjs` at desktop and 320px widths:
+read-only refresh, running/completed evidence, latest-job scope and detail
+interactions. These are source/consumer controls, not durable-store acceptance,
+guest thaw, filesystem liveness, native/installed recovery or released availability.
+
+### Bounded backup-log reads make progress past unfinished jobs
+
+The existing 25-log per-poll budget serves never/least-recently attempted
+multi-guest jobs before retrying others. Failed, empty, ambiguous or running
+logs cannot monopolise every cycle and hide later guests forever in a stable
+backlog. Request order follows private attempt metadata; published tasks retain
+provider order. Failed/deferred reads retain their original guest evidence and
+observation time. Offline scopes, immutable qualified results, connection/runtime
+withdrawal and cache pruning retain their existing boundaries. Attempt metadata
+is not guest evidence, report completeness or a restore artifact.
+
+`pve_backup_log_budget_test.go` covers sustained unfinished logs, reordered
+inventories, child cancellation, scope/retention and ordinary HTTP backlog
+recovery through state/cache and reporting reducers. The provider request cap,
+API shape and QGA/guest operations are unchanged.
+
+### Per-guest backup success requires matching section markers
+
+A multi-guest vzdump finish must match exactly one active start for that guest.
+Missing, repeated, reversed or overlapping markers cannot invent guest success,
+erase an explicit failure, or seal an immutable log cache. Affected results use
+existing Unknown/detail fields; well-formed siblings retain their own outcomes.
+An ordinary corrected read replaces the uncertain result and may qualify the
+finished-job cache. Failed reads retain the original observation time. Reports
+keep ambiguous attribution partial and do not advance that guest's last-success.
+No task result creates a restore artifact or proves guest/filesystem recovery.
+
+`pve_backup_log_attribution_test.go` exercises marker ordering, failure precedence,
+HTTP polling, cache/read failure, corrected reads and reporting consumers. This
+changes no provider request budget, QGA admission, guest operation or API shape.
+
+### Backup inventory readers do not clone unrelated estate state
+
+PVE archive collection reads running tasks and held archives together through
+the existing detached primary PVE-backup projection. PBS cache construction
+uses the existing primary PBS-backup projection, including its detached files
+and verification fields. Neither metadata-only read copies resource inventory
+or consumes the separately cached backup aggregate. Full-state reads needed for
+canonical fallback rebuilding and guest backup-time synchronisation remain.
+
+`TestBackupReadProjectionDoesNotScaleWithUnrelatedEstate` holds canonical guests
+and backup inputs fixed while unrelated estate metadata grows. The companion
+cache/collector controls pin independent connections/namespaces, primary fields,
+newest-first limits, detached mutation, unread-node archive retention and running
+task/partial-file correlation. Existing HTTP/lifecycle tests retain cancellation,
+replacement and ordinary recovery coverage. Fixed old/new benchmarks measure
+source allocation cost, not installed CPU/RSS relief or frozen-guest recovery.
+Request scope, budgets, publication fences, evidence decisions and served fields
+are unchanged.
+
+### Guest snapshot input reads avoid unrelated payload copies
+
+Snapshot polling retains typed canonical VM/container views for identity, name,
+tags, template and container-type lookups instead of materialising complete guest
+models with unused disks, interfaces and metrics. Prior snapshot inventory comes
+from the existing detached primary PVE-backup projection, not a second whole-estate
+snapshot. Canonical/mock selection and fallback rebuilding remain unchanged.
+Request targets/order, snapshot fields, tag suppression, names, budgets, worker
+bounds, unread-evidence retention and alert/recovery/publication fences retain
+their existing meaning. No API, resource field or rendered state changes.
+
+`TestGuestSnapshotProjectionDoesNotCopyUnconsumedPayload` varies only unrelated
+Kubernetes metadata or unused guest disk/interface data on fixed canonical inputs;
+`TestGuestSnapshotProjectionPreservesAlertIdentityAndScope` checks ordinary
+requests, exact published fields, templates, independent connections and canonical
+alert names/tag exclusions. Fixed-sample collector benchmarks measure source
+allocation cost, not installed RSS, incident cause or native guest recovery.
+
+### Guest snapshot polling bounds workers, not just requests
+
+Snapshot inventory uses at most eight reusable workers per existing connection
+scan, with no worker for an empty fleet. Waiting guests do not each retain a
+goroutine stack. The existing VM/LXC selection, template exclusions, request
+limit and bounded scan budget remain unchanged. Cancellation stops queued reads
+and still waits for active readers to actually return before releasing the scan.
+Completed per-guest observations remain usable; failed and undispatched guests
+retain prior inventory rather than becoming successful emptiness. Existing size
+uncertainty, alert/recovery semantics and connection/runtime publication fences
+remain in force. No resource field or rendered state is added or reinterpreted.
+
+`guest_snapshot_workers_test.go` counts actual collector goroutine frames under
+gated mixed-fleet reads, checks scoped inventory and actual-return cancellation,
+and measures fixed-sample allocation cost. These are source resource/evidence
+proofs, not installed RSS, incident diagnosis or frozen-guest recovery.
+
+### Snapshot sizing isolates slow nodes with bounded workers
+
+Snapshot volume sizing uses at most eight reusable workers per connection scan,
+rather than serialising every node behind one slow storage read. Each worker
+keeps a node's storage reads serial and publishes its totals only after all
+eligible storages complete. The existing inventory scan budget, query selection,
+size validation and unknown/held-alert semantics remain unchanged. Completed
+nodes survive another reader exhausting the sizing budget; cancellation withdraws
+queued nodes but joins every occupied reader before returning. No QGA command,
+guest operation, permission, API field, route or recovery claim is added.
+
+`snapshot_size_workers_test.go` gates actual workers/requests at 0/1/7/8/128 nodes,
+checks same-VMID isolation, pre-cancellation, real reader joins and completed-peer
+retention. `snapshot_size_http_test.go` joins single and cluster HTTP adapters,
+VM/LXC inventory, two-storage totals, a blocked node with a live healthy peer,
+unknown sizes, held/acknowledged alerts with their original observation time,
+recovery points, ordinary smaller-total recovery and authoritative removal.
+Its actual frames feed production Backups/Alerts at desktop and narrow widths
+through `scripts/check-snapshot-size-workers.cjs`. These synthetic controls do
+not establish installed performance, incident cause, thaw or filesystem liveness.
+
+### Storage content is shared evidence, not a backup-only list
+
+The validated Proxmox content reader returns every content kind to its existing
+consumers. Only `backup` entries may create storage-backup records or successful
+backup evidence. Storage-content allocation and size are not container
+filesystem readings, even for live `rootdir`/`images` volumes. Container
+filesystem usage remains owned by the guest listing and independent per-mount
+status/agent observations. Whole-response integrity, connection scope,
+ordinary read budgets and guest-operation exclusions are unchanged.
+
+Snapshot size is a complete sum, not a lower bound from whichever disk responded.
+Each node stages totals until all eligible storage reads succeed; inactive/unread
+storage makes that node's size unknown without blocking independently readable
+nodes. Missing/zero or overflowing matching volume sizes cannot establish a
+smaller total. Retained snapshot inventory does not renew an old size. Existing
+alert evidence keeps the last known breach, identity, acknowledgement and original
+size-observation time until a complete smaller reading or authoritative snapshot
+removal establishes recovery. No new route or settings surface is added.
+
+`TestStorageContentRetainsAllValidatedKinds` exercises single and cluster clients;
+`TestSnapshotStorageTotalsRequireCompleteNode` covers incomplete totals and peer
+independence. `TestStorageContentConsumersKeepSnapshotAndLiveRootEvidenceSeparate`
+joins real HTTP, the ordinary container/archive/snapshot collectors, collected
+state, recovery points and alert hold/recovery. Desktop/narrow browser proof uses
+these actual projections in existing Backups, workload and alert components.
+These fixtures do not establish appliance acceptance or frozen-guest recovery.
+
+
+### Root PBS datastore discovery owns backup replacement authority
+
+The foreground datastore-list result travels into the same connection/runtime-owned
+background scan as its namespace inputs. Admission checks the runtime epoch captured
+before discovery, even when replacement reuses an uncancelled parent context. A transient or malformed root discovery
+publishes unavailable protection evidence while retaining exact raw backups, cache
+read times and stored recovery points; it probes no cached datastore path. An
+access-rejected discovery withdraws only that connection's raw rows and reusable
+cache, retaining historical points with denied/unavailable evidence. Failed discovery
+does not re-observe those points or acquire reconciliation authority.
+
+A complete empty datastore array is an authoritative inventory and can clear that
+connection's raw/cache/recovery scope. Datastore/backups/global scope-off and cancelled
+foreground polls are not successful emptiness. The existing cadence, actual-return
+occupancy, publication fence, state limits, exclusions and guest/backup operation
+policy remain effective. Before filtering or detail requests, root list admission
+requires a complete bounded HTTP 200 array with unique nonblank datastore identities;
+missing/null, conflicting, truncated or unreadable replies are not empty evidence.
+
+`TestPBSDatastoreInventoryAdmission` covers client admission and closure;
+`TestPBSRootDatastoreDiscoveryRegression` joins ordinary HTTP polling, raw/cache,
+durable points and protection through unavailable/denied/empty/malformed discovery,
+removed-store and independent-connection controls, scope-off, cancellation and
+ordinary recovery. The existing Backups consumer is checked at desktop/narrow widths.
+These are source/consumer proofs, not installed backup/restore, independent guest
+thaw, filesystem writes/liveness or prior-active restoration.
+
+### PBS backup scans belong to their registered connection and runtime
+
+Background PBS inventory admits the registered client and current runtime
+atomically with cadence. Runtime replacement, client replacement and failed-node
+retirement cancel the old reader and fence its state, cache, recovery/alert and
+broadcast admission. A cancelled scan retains occupancy until actual return;
+settings resets cannot admit overlapping scans, and late return cannot postpone
+the next ordinary scan. Network reads stay outside the publication lock.
+
+Previously accepted rows can remain last known. A new connection cannot reuse
+the previous connection's snapshot-cache freshness even if group counts/times
+match. The same connection and independent siblings keep ordinary cache reuse.
+PBS namespace/time/size/verification admission, existing request budgets and
+partial-read preservation are unchanged; no backup or guest command is added.
+
+`TestPBSBackupLifecycleHTTP` exercises the ordinary foreground/background path
+with real synthetic group, snapshot and writer HTTP through runtime/client
+withdrawal, failed-node removal and ordinary resumption. The
+`TestPBSBackupLifecycle*` ownership controls pin actual-return occupancy,
+concurrent admission, publication ordering, ended-runtime rejection and scoped
+cache replacement. The existing By date/Coverage surface consumes emitted rows
+at desktop/narrow widths. These proofs do not establish native backup/restore,
+independent guest thaw, filesystem liveness or installed recovery.
+
+### PVE task pages require unambiguous execution identity
+
+Every task row needs a nonblank opaque UPID and task type, with no repeated
+UPID within a page. A missing/null/blank identity or duplicate makes the whole
+page unavailable before filtering, live replacement or History reconciliation.
+It cannot silently drop a failed guest task, publish an OK prefix or establish
+complete History. Earlier valid History pages and independently readable nodes
+remain available; malformed live reads retain their earlier observations and
+original observation times. Ordinary complete reads can recover normally.
+
+Scheduled parents may still have an empty guest ID; running tasks may omit their
+result/end time. Omitted redundant node fields, explicit other task kinds,
+additive metadata, genuine empty arrays and identical cross-page History
+overlap retain their existing meaning. No UPID format constraint, guest/backup command,
+request budget or privilege is added.
+
+`TestTaskListsRequireUnambiguousIdentity` covers all three HTTP task-list consumers;
+`TestTaskIdentityPreservesSupportedOptionalFields` and
+`TestBackupHistoryIdentityGapKeepsEarlierPagesAndPeer` pin compatibility and scope.
+`TestPVEBackupTaskIdentityGapCannotEraseFailure` joins ordinary direct/cluster
+polling to the served backup projection. Desktop/narrow Coverage proof consumes
+those actual emitted values, not invented verdicts. Persistence is unavailable
+in the fixture: these are evidence-integrity checks, not durable report storage,
+installed backup/restore, independent thaw or filesystem liveness.
+
+### PVE job logs retain their numbered text sequence
+
+The bounded task-log read starts at line zero and admits only a contiguous
+one-based sequence with present, non-null text. Missing, duplicate, reordered
+or gapped line identities and missing/null text are unavailable observations,
+not discarded log lines that can leave a false per-guest success. Empty logs,
+blank text and additive metadata remain valid; the existing body/line bounds,
+credential scope and no-guest-command behaviour are unchanged.
+
+An unreadable finished log cannot finalise the per-guest cache or renew the
+last successful running observation. An ordinary complete reread can publish
+the actual failure, then cache that immutable verdict; a later successful job
+can recover normally. `TestTaskLogRequiresNumberedTextSequence` and
+`TestPVELogSequenceRejectsFalseCompletionAndResumes` join wire admission,
+polling, cache and served snapshot. The existing Coverage view consumes those
+snapshots at desktop/narrow widths. This is truthful task evidence, not native
+backup completion, guest thaw, filesystem liveness or installed recovery.
+
+### Infrastructure plaintext destination confidentiality (16 October 2026)
+
+PVE/PBS/PMG's shared HTTP client does not send explicit plaintext infrastructure
+requests through inherited environment proxies, even for public-style hosts.
+The configured endpoint receives the existing token, ticket/CSRF or JSON/form
+password request directly. HTTPS CONNECT/authenticated proxying, `NO_PROXY`,
+local-target bypass and all CA/pin/explicit-opt-out verification stay unchanged.
+Public HTTP through an ambient forward proxy is deliberately no longer a route;
+use a direct path or verified HTTPS. This does not encrypt an HTTP connection.
+
+The shared factory's `TestInfrastructureProxyRouting` and all three client
+packages' `TestClientPlaintextProxyRouting` exercise actual HTTP, login/read/write
+and CONNECT/TLS bytes over listener-free pipes with isolated environment caches.
+Client tests seed password mode on the constructed transport before real login;
+they do not claim a new installed password-constructor acceptance. Host/base path,
+request encodings, ordinary node/version results and ticket/CSRF semantics remain.
+No resource model, monitoring health verdict, saved trust or frontend field/state
+changes. Guest/backup guards and separately owned native recovery remain required.
+
+### PBS job and writer replies require complete observations
+
+PBS running-writer, bounded task-history and job-configuration reads consume the
+complete bounded HTTP 200 body and close it before admitting evidence. Missing
+or null data, non-object rows, identity-less list entries, duplicate/case-variant
+consumed keys, provider errors, trailing JSON/bytes, invalid UTF-8 and read/close
+failures are not successful empty observations. Complete empty lists and an
+explicit empty GC configuration object remain valid; supported field aliases,
+additive metadata, bounded pagination and HTTP permission/404 handling remain.
+Malformed body contents do not enter errors or served partial-read evidence.
+Unobserved optional PBS job end/next-run timestamps are omitted on the wire,
+not serialized as year-0001 dates. The existing drawer can therefore show the
+actual observation time. Known timestamps, age/state and JSON round-trip meaning
+are pinned by `TestPBSJobHealthFreshnessJSONDoesNotInventRunTimes`.
+
+An unreadable enabled job family emits existing unknown/partial-error evidence,
+not an empty ledger or an invented permission denial. An unreadable live-writer
+view leaves an incomplete snapshot's write visibility unknown: it cannot clear
+the conservative guest backup-running flag, advance completed-backup time, or
+claim that a writer stopped. Complete empty writer reads can still clear that
+flag, and ordinary readable recovery restores direct job/task evidence.
+
+`TestPBSJobReadersRequireCompleteResponse` and
+`TestPBSRejectedJobListingsRemainPartialEvidence` cover all four readers and
+all enabled families. `TestPBSJobResponseGapReachesResources` joins ordinary
+polling to served Resources through failure, missing/null/trailing replies,
+confirmed empty, explicit success and failure again, preserving independent
+verification and connectivity. `TestPBSWriterResponseGapCannotClearGuestActivity`
+joins snapshot/cache polling, write correlation, guest backup times and served
+Resources while a completed peer remains unchanged. Consuming proof uses those
+emitted observations in the existing PBS and workload drawers at desktop and
+narrow widths. These synthetic read-only checks establish neither native
+backup/restore, guest thaw/liveness nor installed recovery.
+
+### PBS job health requires explicit successful completion
+
+PBS job-health evidence grants `healthy` only for a trimmed, case-insensitive
+`OK` or `success` state. Arbitrary status text (including `token`, `not OK` or
+`unsuccessful`) must not acquire a Healthy badge through substring matching.
+An exact `running` state remains unknown completion, not a successful last run.
+Explicit failure/error text outranks warning and overdue scheduling evidence;
+warning text remains warning even when it mentions OK/success. Partial reads
+remain unknown. Raw status, source, confidence, identity, timestamps and freshness
+are preserved separately; job failure does not turn working PBS connectivity off.
+
+`TestPBSJobHealthRequiresExplicitSuccess` covers classification and precedence.
+`TestPBSPollJobHealthStatusProjection` joins read-only synthetic PBS HTTP, the
+ordinary poll, published state and canonical Resources evidence through failed,
+warning, running, unknown, recovered and failed-again observations, with an
+independent successful verification job. Consuming proof must use these emitted
+observations in the existing PBS service drawer at desktop and narrow widths.
+This is truthful source/surface evidence, not native backup/restore, thaw,
+filesystem writes/liveness or installed recovery of the reported guests.
+
+### Disabled PVE backup stores retain known evidence
+
+A listed backup-capable store which is disabled (or not confirmed enabled)
+is not queried and cannot clear its known archives or PBS attribution. The
+same local/shared preservation scopes apply as for a failed content read;
+a complete readable shared view remains authoritative regardless of node
+order. Held rows keep their original archive identity, timestamps and size.
+Skipped content makes provider history partial/unavailable, not complete
+empty history and not a permission refusal. Ordinary re-enable refreshes the
+known copy; successful empty content or removal from a complete storage
+configuration can still withdraw it. No disabled store is probed.
+
+`TestPVEDisabledBackupStorageRetainsKnownEvidence` joins real synthetic HTTP,
+raw state, persisted recovery points and provider protection projection for
+local/shared/sole stores, both enable-field forms and node orders. Consuming
+proof uses these actual observations in the existing date/Coverage views.
+`TestPVEDisabledPBSStorageRetainsAttribution` protects saved PBS associations.
+This does not establish archive availability, backup/restore execution or
+native guest thaw, filesystem liveness or installed recovery.
+
+### PVE archive removal requires complete storage inventories
+
+Node/all-storage lists and storage-content lists become authoritative only
+when the whole bounded HTTP 200 body has completed and closed successfully.
+Missing/null inventories, conflicting envelopes or field spellings, duplicate
+identities, malformed rows and invalid UTF-8 are unavailable observations, not
+empty inventories or credential refusals. Content filtering follows validation
+of every row. Genuine empty arrays, measured zeroes, sparse optional fields and
+unique additive provider metadata remain supported; existing request timeouts,
+authentication, TLS, failover and guest-command admission are unchanged.
+
+The backup poll's existing per-node/per-storage failure paths keep an unreadable
+local archive's identity and original backup time while readable siblings can
+refresh or empty. An ordinary complete read replaces the held copy, and a
+complete empty read can remove it. `TestPVEStorageInventoryAdmissionPreservesUnreadableCopies`
+joins real read-only HTTP, polling, state and recovery mapping in both node
+orders with an independent-connection control. Consuming proof uses those
+emitted observations in the existing By date and Coverage tables. No backup,
+guest probe, thaw, restore or installed recovery is established by this proof.
+
+### PBS group cache follows the actual latest snapshot
+
+A successful group listing may move `last-backup` backwards as well as forwards
+without changing `backup-count` (for example, a prune plus an older import).
+Only an equal latest time permits snapshot-cache reuse before the existing TTL.
+Either direction of change causes an ordinary snapshot read, so a removed
+newest snapshot cannot keep its timestamp or verification in raw inventory,
+stored recovery points or protection posture. Unchanged sibling groups retain
+their own cache age and bounded read count. Verification-only changes with an
+unchanged group still use the existing TTL; no extra probe or backup is added.
+
+`TestPBSGroupLatestChangeRefreshesBeforeCacheTTL` joins real PBS HTTP,
+publication/cache, persisted recovery points and protection posture for VM/CT,
+root/nested namespaces and both time directions, plus unchanged reuse, actual
+removal and ordinary recovery. `TestPBSGroupLatestChangePreservesFailedRefreshBoundaries`
+retains transient history without renewing its cache, withdraws access-rejected
+raw rows, and never treats a failed refresh as current protection. Consuming
+proof exercises the emitted observations through existing Backups date and
+Coverage views. This does not establish native backup, restore or guest recovery.
+
+### PBS inventory failures retain only the unreadable namespace
+
+A transient or invalid group-list response preserves the exact datastore and
+normalised namespace's known raw backup rows, even when a sibling succeeds.
+Parent and child namespaces are independent scopes. Held rows keep their
+original identity, backup time and snapshot-read cache age; they do not establish
+complete provider history or current protection. Readable scopes still refresh
+or authoritatively empty, and access-rejected scopes still withdraw their raw
+rows. A different transient failure cannot reintroduce rejected raw rows through
+a datastore/global fallback. Historical recovery points remain governed by the
+existing incomplete-provider reconciliation rule, not by raw row presence.
+
+`TestPBSNamespaceFailuresRespectReadScope` joins real PBS HTTP collection,
+matching cache publication, stored recovery points and protection projections
+through sibling success, malformed/503 reads, rejection, ordinary recovery,
+mixed whole-provider failure and scoped empty reads, in both namespace orders.
+Root normalisation, a same-ID parent/child, another datastore and another
+connection stay distinct. Desktop/narrow consuming proof uses the emitted
+projections through the existing Backups table, filters and Coverage view.
+This does not start a backup, change access checks, verify restore readiness,
+or establish native guest thaw, writes/liveness or installed recovery.
+
+### Local PVE archive identity and partial-read scope
+
+Volume IDs identify one archive only inside its storage location. PVE's
+`shared` flag permits cross-node deduplication; otherwise IDs and failure
+preservation include the queried storage node. `StorageBackup.storageNode`
+retains that local host independently of the guest's current `node`, including
+after migration. An empty successful local-store inventory removes only its
+own rows; an unreadable or offline peer keeps its prior archives without
+renewing their dates. A successful shared view still replaces that shared
+inventory regardless of node order. PBS attribution confirmations retain their
+existing separate scope. `TestPVEBackupStorageScopeFailureAndRecovery` exercises
+real read-only HTTP collection, migration, persisted recovery points and
+connection isolation. This is not native backup, guest thaw or restore proof.
+
+### Snapshot inventories distinguish unavailable from empty
+
+PVE QEMU/LXC snapshot reads authorise removal only after a complete bounded
+HTTP 200 response with one unambiguous array and unique named rows. Missing/null
+inventories, conflicting error envelopes, duplicate/case-overwritten fields,
+invalid names/types, broken/truncated bodies and trailing values are collection
+failures, not empty success or a reason to rotate credentials. Additive metadata,
+optional snapshot times and PVE's filtered `current` position remain supported.
+Only endpoint scope supplies the guest's VMID. Invalid response contents do not
+appear in the new validation diagnostic.
+
+Every failed guest snapshot read, including an unavailable LXC endpoint, retains
+that guest's existing inventory. Error text containing `596` or `not available`
+cannot clear it. Independent guests still refresh; successful explicit empty
+lists remove only their scoped snapshots, recovery points and corresponding
+alerts. Other connections and backup classes remain outside that reconciliation.
+No QGA command, trust policy, guest action or notification routing is changed.
+
+`TestSnapshotInventoryResponseAdmission`, `TestSnapshotInventoryReadRecovery`
+and `TestSnapshotInventoryFailuresPreserveServedRecovery` cover real HTTP client
+admission, ordinary collection, original snapshot/alert identity, recovery-store
+reconciliation and served state through failure, usable recovery and scoped
+empty-list replacement. Consuming desktop/narrow proof exercises those actual
+projections through the production Backups and Alerts surfaces. This controlled
+proof is not native thaw, backup completion, every-filesystem writes/liveness,
+prior-active restoration or installed/fresh-install recovery.
+
+### Guest metadata safety follows the VM across node migration
+
+Guest metadata, OS-command suppression, refresh/backoff and whole-fetch ownership
+are keyed by exact configured connection and cluster-wide VMID, not the current
+node coordinate. Migration and a move back cannot repeat a known-unsupported OS
+command, reset its failure counter, bypass an outstanding metadata fetch or
+renew retained observations. Eligible network/version refresh still works while
+the OS command remains suppressed. The node used on the wire and in the served
+resource remains the current node; node-bound disk/memory observations and their
+origins are not transferred by this metadata key.
+
+Independent VMIDs and connection labels (including delimiters) remain isolated.
+Explicit guest invalidation, connection retirement, late-result exclusion,
+idle cleanup and every lower-level lock/uncertainty/TLS fence remain effective.
+This in-memory state does not survive process restart or establish native guest
+thaw, backup success, writes/liveness or recovery of any reported guest.
+
+`TestGuestMetadataMigrationKeepsSuppression` learns suppression through real
+HTTP clients and both ordinary guest collectors, then checks migration, eligible
+refresh, return migration, cleanup and explicit invalidation. The existing
+whole-HTTP-fetch reservation test also rejects a migrated duplicate, including
+after its scheduling hold expires. Consuming desktop/narrow browser proof uses
+the actual final producer projections through the production Workloads adapter,
+row and drawer; it is controlled surface proof, not native migration acceptance.
+The existing Windows bootstrap identity control uses distinct connection/VMID
+identities for Linux and unknown-OS peers. A same-VMID node move instead preserves
+the observed Windows metadata and sends no optional Linux read; the destination
+gets independent status memory, not a copy of the source node's memory cache.
+Its existing expired-OS/reinstalled-Linux and measured-zero controls still apply.
+
+### Filesystem diagnostics exclude reply payloads
+
+The Proxmox filesystem reader logs response byte count and node/VM attribution,
+not the raw QGA reply. Additive or rejected guest metadata must not be copied
+into persistent logs, the live log stream or support-bundle logs by that reader,
+even at Debug. Existing decoding, measured zero, partial-inventory errors and
+shared guest-command admission remain unchanged. Other diagnostic events may
+still contain guest names and paths: this is not whole-log sanitisation.
+Unrecognized object results retain only their byte count and node/VM attribution,
+never their raw contents, without changing the existing empty-result outcome.
+`TestGuestFilesystemResponseDiagnosticsNoPayload` covers array/object, large
+additive, incomplete, empty, null and small/large unrecognized object responses
+through the real HTTP client.
+
+Malformed filesystem arrays are decoded one row at a time, without reserving
+accepted-filesystem output for every rejected row. Non-object rows retain their
+existing rejection without constructing a per-filesystem object decoder.
+`TestGuestFilesystemNonObjectRowsRemainIncomplete` pins null/scalar/list rows,
+accepted measured-zero peers and unchanged completed-command admission.
+A completed reply with
+malformed rows emits one payload-free Warning with total rows, rejected rows,
+the first rejected zero-based index and node/VM attribution, not one event per
+rejection. Valid peers retain order, disk postprocessing and measured zero;
+the existing counted incomplete-inventory error remains authoritative. Empty,
+null and object compatibility, the 8 MiB body bound, both operation-lock checks,
+single-attempt admission and uncertainty cooldowns are unchanged. This bounds
+this reader's rejection warning volume, not all log events or total parsing
+cost; it does not establish native guest/backup or installed recovery.
+`TestGuestFilesystemMalformedReplyCost` joins 0/1/32/4096 rejections, Warn/Debug
+logs, peers at both ends, command counts and ordinary recovery through HTTP.
+`BenchmarkGuestFilesystemReplyCost` retains comparable reader allocations for
+small valid and rejection-heavy replies, without a timing acceptance threshold.
+The existing System Logs panel consumes an actual producer warning via SSE at
+desktop/narrow widths; Pause/Resume/Clear remain display-only controls.
+
+### Backups can reread healthy inventory without leaving the view
+
+The existing Backups surface discloses that its restore points reflect the last
+inventory read, not a live check. Refresh is available in readable, empty and
+failed states. It rereads the existing PVE/PBS collected-snapshot APIs and current
+protection posture; it starts no backup or guest command and adds no recurring
+inventory poll. No API, trust, policy or native recovery authority changes.
+
+The existing independent read owners settle each source. While either inventory
+or a foreground posture read is pending, another whole-view refresh is disabled
+and rejected by the handler. Retained readable observations stay visible pending
+replacement; a failed source withdraws its old points, while successful empty
+inventory is authoritative replacement. Existing per-source retry, organisation
+switch cancellation, query ownership and resource health remain independent.
+Filters, route, logical row expansion and the refresh control are not remounted
+to perform a read. This does not establish appliance collection freshness,
+backup completion, thaw or filesystem writes.
+
+The existing all-failed error action uses the same pending predicate, including
+an initial posture read that has not settled yet. It must not appear enabled
+while its handler would reject the click. Other platform error actions retain
+their existing behaviour when no disabled state is supplied.
+
+`ProxmoxBackupsTable.test.tsx` covers readable/empty/failed starts, replacement,
+per-owner pending settlement and disabled duplicate activation. Consuming desktop
+and narrow browser proof must drive actual synthetic GET responses through the
+production reader and tables, preserving view state and inspecting current,
+pending, changed, failed and successful-empty pixels.
+
+### Node-fallback History preserves missing filesystem evidence
+
+When the cluster guest endpoint is unavailable, ordinary node fallback uses the
+same VM disk-History admission as the efficient collector. Retained usage and
+allocation-only tuples with a disk-status reason remain display continuity,
+not new samples. Complete current readings, including measured zero and genuine
+volume removal, still append History and clear the corresponding disk alerts.
+Independent CPU/memory/counter recording, poll ownership, original disk age,
+unknown metrics and QGA/backup safety fences are unchanged. Existing History is
+not rewritten or deleted.
+
+`TestVMFilesystemIncompletePollingPreservesHistoryAndBreach/fallback` drives the
+actual client and owned fallback dispatch through complete, partial, expired and
+complete-zero recovery, checking persisted/in-memory History, canonical/served
+metrics, original observation times and filesystem breach continuity. This is
+controlled source/surface evidence, not native backup completion, guest thaw,
+every-filesystem writes/liveness, fresh-install or installed recovery.
+
+### Efficient guest inventory distinguishes deletion from node grace
+
+A completed cluster guest inventory with no guests on a currently online node
+is authoritative removal, including the last VM/container and template-only
+results. Effective Online alone is not evidence of a current node sighting:
+the efficient collector also carries the raw `/nodes` generation. Only nodes
+missing/offline there, still Online under the existing node grace policy and
+absent from the guest inventory retain prior guests. The existing fallback
+when no node data is available remains conservative; expired/never-online nodes
+retain their previous removal policy.
+
+Grace retention uses complete Proxmox-owned tuples, not reduced or linked-agent
+read-state enrichment. Values and original observation times remain unchanged
+and contribute no new History samples. A cluster-wide guest ID positively
+observed at new coordinates or as a template cannot be resurrected at an old
+node by grace retention. Other connections with the same node/VMID are not
+changed. Normal recovery on the same live connection advances observations;
+no cache, extra request, guest command, safety interval, TLS or schema changes.
+
+`efficient_guest_inventory_lifecycle_test.go` exercises real node/resource HTTP
+reads and ordinary owned publication for accepted emptiness, offline/omitted
+grace, expiry, unknown node data, templates, moves and subsequent recovery.
+Consuming desktop/narrow Workloads table/drawer verification uses actual final
+producer projections. These controlled source/surface checks are not native
+thaw, filesystem writes/liveness, restart/fresh-install or installed recovery.
+
+
+### PVE task evidence requires completed collection
+
+PVE node/backup task lists and task logs consume the complete bounded HTTP
+response before publishing rows. Explicit empty arrays remain valid; missing,
+null, invalid UTF-8, error-bearing or ambiguous envelopes/consumed fields do
+not become successful empty or completed task observations. Additive metadata,
+running tasks without status/endtime, filtering and offline-node scope remain.
+If any online node fails, the instance task read fails atomically; the monitor
+retains its prior tasks and original observation times rather than dropping
+running/failed peers. This does not claim the retained tasks are still current.
+
+A task log at the existing line cap is incomplete evidence, not an immutable
+finished-job log. Failed/cancelled/skipped log reads cannot renew a non-final
+cached guest observation. The cache itself stores the original successful read
+time, not merely the published copy; a later complete ordinary read can populate the
+cache, and completed immutable logs remain reusable. Independent guest status,
+zero/presence counters, operation-lock checks and every QGA safety fence are
+unchanged. Source/consumer proof establishes no backup success, guest thaw,
+writes/liveness, native recovery or published availability.
+
+`task_response_test.go`, `pve_backup_task_completion_test.go`,
+`TestIncompleteBackupTasksLeaveIndependentGuestCountersUsable` and
+`TestPVELogRetryDoesNotRenewRetainedEvidence` cover real HTTP failures,
+complete/empty recovery, retained producer timestamps, cache poisoning and the
+independent status boundary.
 
 ### Conflicting saved endpoint pins cannot select certificate trust
 
@@ -250,19 +1162,32 @@ partial or nil client. Startup retry exits without publishing a new health
 outcome or advancing another provider after its monitor stops. Discarded probe
 transports close their idle connections.
 
+Initial PVE login runs synchronously on that construction context: an unpublished
+client has no other readers to preserve. This is distinct from renewal on a
+retained PVE client, whose bounded shared login survives its starter leaving.
+Restoring constructor cancellation must not abort live renewal waiters, replay
+their failed login or lose a completed renewal. The JSON and 400/415 form paths
+use the same lifetime distinction. `TestClientSessionRenewalStarterCancellation`
+checks both encodings alongside the constructor and cluster caller-budget
+controls below; it preserves the existing detached-renewal timeout and
+ticket/CSRF publication tests.
+
+PVE response consumption retains the same owner boundary: cancellation or the
+login budget ending takes precedence over an empty, refused or unreadable reply.
+An ended exchange cannot try another encoding or publish a new ticket/CSRF/expiry
+and generation, even if complete valid bytes arrive as it ends. This checks the
+bounded shared login context, not the departed reader's context, so live renewal
+waiters remain independent. `TestClientCancelledAuthResponseOwnsErrorAndSession`
+cancels deterministically during JSON/form response reads, checks body closure
+and retained session/generation for five response classes, then exercises one
+distinct later login and an ordinary authenticated node read. This complements,
+and does not replace, the pinned-HTTPS constructor/deadline/renewal controls.
+
 The compatibility constructors retain their background-context behaviour.
 Accepted clients retain their configured full timeout, and subsequent ordinary
 reads use their own contexts, not the ended construction context. TLS pins,
 CA verification, redirects, first-use admission, auth encodings, retry cadence,
 provider permissions, guest/backup fences and History are unchanged.
-
-Initial PVE login runs synchronously under the caller and the configured total
-login timeout, including JSON/form fallback. It never joins the detached renewal
-used by an accepted session. Later expiry/401 renewal still coalesces by session
-generation under the client's bounded timeout, so cancellation of its starter or
-one waiting read cannot abandon other active readers. Both paths share the same
-password exchange and session parser. Ending an unaccepted constructor now also
-ends its password request, without changing the rendered health outcome.
 
 `TestClientConstructionHonoursContext` in both client packages covers ended
 password/token construction, in-flight JSON/form cancellation/deadlines,
@@ -274,11 +1199,6 @@ broadcast for desktop/phone consumption: cancellation cannot turn an offline
 server healthy, and accepted construction alone still cannot do so. These are
 secret-free local fixtures, not installed recovery, native guest safety or an
 attribution of any reporter's failure.
-
-`TestClientConstructionHonoursClientTimeout` additionally exercises both login
-encodings under the PVE client's own timeout while its caller remains live.
-Existing shared-renewal starter/waiter cancellation, expiry, late-401, failure
-recovery and stalled-login controls retain the accepted-session boundary.
 
 
 ### Cluster recovery requires a usable polling session
@@ -304,7 +1224,7 @@ incident's cause.
 
 ### Rejected infrastructure URLs stay out of diagnostics
 
-PVE/PBS constructors validate a host before logging it. URL syntax errors omit
+PVE/PBS/PMG constructors validate a host before logging it. URL syntax errors omit
 `url.Parse`'s copy of the supplied input; ordinary validation reasons remain.
 Cluster logs, health snapshots, recovery summaries and aggregate errors use
 display-only labels:
@@ -319,8 +1239,20 @@ base paths, authentication, CA/pin/opt-out choices and guest fences are unchange
 constructors, single/multiple endpoint routing and recovery with synthetic
 userinfo/query/fragment and malformed URLs. Accepted-host and
 `TestInfrastructureURLValidationPolicyUnchanged` controls preserve ordinary
-routing and diagnostics. This bounds client diagnostics, not arbitrary provider
-error text, previously saved logs, native trust recovery or an installed service.
+routing and diagnostics. Initial add/test request logs and saved-provider client
+initialisation (including the cluster endpoint list and refusal logs) use the
+same display-only labels; filtering never changes the supplied configuration.
+`TestNodeRequestEndpointDiagnosticsExcludeRejectedInput` exercises the ingress
+handlers before credentials are supplied, and
+`TestMonitorClientInitEndpointDiagnostics` exercises all three real
+constructors through saved-provider initialisation. Parseable saved input keeps
+its existing configuration normalisation; malformed syntax stays refused.
+Controls retain routing, client registration and the existing health outcomes,
+including PBS awaiting its first connectivity poll. The saved-PMG refusal test preserves
+the exact generic HTTP response while excluding raw parser input from its
+internal error. This bounds these diagnostics, not arbitrary provider error
+text, other log paths, previously saved logs, native trust recovery or an
+installed service.
 
 ### PBS password renewal publishes one complete shared session
 
@@ -379,6 +1311,16 @@ before Linux-only memory admission, and genuine repeated-failure suppression
 with a quoted 429. Existing unsupported-command, backup-lock and uncertain-reply
 fences are unchanged. Its fixtures use local sockets and synthetic credentials,
 not native guest recovery, History storage or a reported failure's cause.
+
+### Storage investigation history shares the chart source boundary
+
+`ReadStorageMetricHistory` and `GetStorageMetricsForChart` use the same monitor
+selector for memory, retained and generated storage history. Analytical reads
+retain the requested window and propagate retained-store errors. Chart-only
+lookback remains presentation behavior and cannot supply older observations as
+current investigation history. Generated demo samples carry `mock_synthetic`;
+they are never evidence of a real storage growth rate. The requested-window and
+store-error regression is `internal/monitoring/storage_history_test.go`.
 
 ### Cluster endpoint membership belongs to its client
 
@@ -736,20 +1678,24 @@ successful zero objects remain observations. `TestPMGCollectionMissingObjectData
 and `TestPMGCollectionObservedZeroData` in `pkg/pmg/client_test.go` exercise the
 real request/decoder boundary using an in-memory HTTP transport, with no listener.
 
-### PMG 9 cluster ids and the backup node fallback — issue #2960
+### PMG 9 cluster ids and backup node identity — issue #2960
 
 PMG 9 returns the cluster status `cid` as a string. `pmg.ClusterStatusEntry`
 no longer decodes the field, which Pulse never read, so no `cid` format can
-fail the cluster read and hide the node list. The PMG poller falls back to
-the connection name as the backup node only when PMG answered with no
-cluster entries; after a failed cluster read that name is a display label,
-and requesting backups with it produced a misleading hostname-lookup error
-without ever returning backups. The poll still records the cluster read
-failure. It requests no backups, and the connection's last-known backups
-are kept rather than replaced by an empty list (see the next section).
-`TestClientClusterStatusIgnoresClusterIDFormat` and the
-`TestPollPMGInstance*` issue tests in `monitor_pmg_test.go` pin all three
-cases.
+fail the cluster read and hide the node list. This supersedes the older typed
+integer decoder; node name, type, IP and fingerprint remain unchanged.
+The containing poller's existing completeness boundary stays strict: failed,
+empty or unnamed cluster enumeration cannot authorise node-specific reads.
+A connection display label is never substituted for a discovered node hostname.
+Failed enumeration retains the existing failed-collection and backup-preservation
+semantics rather than fabricating a successful empty inventory.
+`TestClusterStatusIgnoresUnusedCID`, `TestClientClusterStatusIgnoresClusterIDFormat`
+and the `TestPollPMGInstance*` issue tests preserve the upstream string-id repair
+and the containing no-guessed-node boundary. `TestPMGDiscoveredNodeRouting`
+also accepts unused textual ids through the full poller;
+`TestPMGNodeDiscoveryFailurePreservesAcceptedBackups` uses a malformed consumed
+node name, not an ignored id, to exercise decoder-failure preservation. These are source regressions,
+not native appliance recovery or release availability.
 
 ### PMG backups keep last-known entries for unread nodes
 
@@ -760,13 +1706,17 @@ read, a node whose backup read failed, and a node a cancelled poll never
 reached. This is the same per-scope carry that `preserveFailedStorageBackups`
 applies to failed PVE storages. A node that answered with no backups, or that
 a successful cluster read no longer lists, still clears its entries. The
-failed read is still recorded as a poll failure, and the connection-name
-fallback above is unchanged. `TestPMGBackupsSurviveFailedClusterRead`,
+failed read is still recorded as a poll failure; the stricter containing
+no-guessed-node boundary above remains unchanged. `TestPMGBackupsSurviveFailedClusterRead`,
 `TestPMGBackupsSurviveEveryNodeBackupReadFailing`,
 `TestPMGBackupsKeepFailedNodeOnPartialRead` and
 `TestPMGBackupsClearAfterCompleteEnumeration` in `monitor_pmg_test.go` cover
-the carry and the complete-enumeration clear. These are synthetic poller
-controls, not native PMG acceptance.
+the carry and the complete-enumeration clear, including a successfully read
+empty node beside an unread node. Discovery validation and unread-node carry
+use the same captured cluster-read error; later read errors cannot change
+which nodes were enumerated. The containing update publishes the combined
+per-node inventory, not an all-or-nothing replacement after any failed read.
+These are synthetic poller controls, not native PMG acceptance.
 
 ### Guest configuration reads preserve installation and node identity
 
@@ -1290,6 +2240,19 @@ keep distinct saved pins and the existing declared-member/no-replacement policy.
 Before each command and before returning its fully received bounded payload,
 Pulse reads the operation lock from VM config. Any nonempty lock (not just
 backup), missing/malformed config or an unverifiable lock defers the command.
+Only an absent `lock` or an exactly empty string establishes lock clearance.
+A nonempty whitespace-only value, including escaped and Unicode whitespace,
+is malformed evidence and returns `lock-unverified`, not an invented unlocked
+state or a named backup lock. It cannot dispatch a guest command or publish an
+already completed command's payload. A later complete, genuinely unlocked
+config resumes ordinary reads without clearing a transport-uncertainty fence.
+The lock-evidence matrix covers all six readers at both admission boundaries;
+the collector projection control retains known disk evidence without renewing
+it, leaves independent status memory usable, and resumes the same guest normally.
+These synthetic controls do not establish native thaw or installed recovery.
+Rooted and unrooted DNS names retain distinct admission and saved-trust keys:
+resolver search suffixes can give them different destinations. No DNS lookup
+or automatic alias inference is added to solve lock admission.
 Known locks in node inventory, cluster resources or detailed status suppress
 polling enrichment even when status fails and recent agent evidence exists.
 
@@ -1900,8 +2863,8 @@ are not native appliance or containing-release acceptance.
 A connection proven to run a recognized legacy CORE/FreeNAS release has no
 `reporting.realtime` JSON-RPC subscription, so live system telemetry and
 host-chart history are reconstructed from the REST reporting API
-(`reporting.get_data`, served as a POST endpoint keyed by its `graphs` and
-`query` parameters). The reporting `memory` and `arcsize` graphs supply the
+(`reporting.get_data`, served as a POST endpoint keyed by the middleware
+schema names `graphs` and `reporting_query`). The reporting `memory` and `arcsize` graphs supply the
 available and ARC readings that the JSON-RPC realtime subscription otherwise
 provides. When no available-memory reading can be established, the provider
 must not derive usage from an absent available value: the system memory metric is
@@ -1917,6 +2880,26 @@ and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
 
 
+
+### CORE REST reporting envelope — issues #2964 and #2077
+
+Legacy REST `POST /reporting/get_data` sends exactly `graphs` and
+`reporting_query`. WebSocket's positional second argument is not a REST key
+named `query`: CORE 13.0-U6.8 rejects that unknown attribute before collecting
+any graph. Both short live reads and full History use this same envelope and
+unchanged aggregate/start/end range. The graph catalogue, per-device selection,
+optional-graph isolation, transport gate, TLS, authentication and zero/unknown
+semantics are unchanged; no guessed-key or transport retry is added.
+
+The request-validating CORE and REST aggregation fixtures bind the corrected
+schema name. `TestCORE13RESTReportingQueryResourceJourney` in
+`internal/api/resourceapi/truenas_core_reporting_test.go` exercises a pinned-TLS
+CORE bridge, real client/provider, resource-list HTTP response and native History
+through complete, rejected, partial, observed-zero and recovered readings. It
+rejects the former key with the reported HTTP 400 before the normal path, retains
+inventory/capacity on telemetry failure and does not invent sibling metrics.
+These are synthetic protocol/consumption controls, not appliance acceptance,
+reporter confirmation, a data-pool capacity repair or release availability.
 
 ### TrueNAS partial samples and nonblocking telemetry diagnostics — issue #2077
 
@@ -4208,6 +5191,20 @@ named and default organizations. The custom event envelope stays unchanged.
     `TestClusterClient_GetTaskLog` in
     `pkg/proxmox/cluster_client_api_test.go`.
 
+    A guest-scoped `ERROR:` line without the explicit `Backup of VM ...
+    failed` verdict must not become clean success on `Finished Backup`.
+    Keep that guest running until completion; then publish `warning` with
+    a fixed logged-error summary, not the private log text. This does not
+    establish a failed archive or guest recovery. An explicit guest failure
+    retains precedence; job-wide/quoted errors and clean sibling guests
+    remain independent. The next clean job replaces the warning normally.
+    `TestVzdumpGuestWarningsDoNotBecomeSuccess`,
+    `TestVzdumpGuestWarningScopeAndFailurePrecedence`, and
+    `TestPVEGuestLogErrorSurvivesPollingCacheAndReports` in
+    `internal/monitoring/pve_backup_guest_warning_test.go` cover parsing,
+    real read-only HTTP polling, immutable cache, live inventory and report
+    counts/last-success without operating a guest or backup.
+
 14. A TrueNAS app container reported as `EXITED` is a completed workload and
     must raise no incident. TrueNAS classifies container exits before Pulse
     sees them: a normal exit code becomes `EXITED`, an abnormal one becomes
@@ -4246,19 +5243,71 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
-### PBS authentication keeps an ended response caller's outcome
+### Proxmox guest CPU observation gaps (21 October 2026)
 
-Initial and ordinary PBS authentication preserve the owning caller's context
-error when cancellation races with response consumption. A cancelled JSON
-refusal cannot authorize a form retry, and a complete response cannot replace
-the retained session after its caller has ended. The pending owner's result
-keeps that context class for joined readers. Live malformed or refused
-responses retain their existing admission and HTTP-status behavior; an
-independent later login can recover without resetting retained credentials.
-`TestClientCancelledAuthResponseOwnsErrorAndSession` deterministically cancels
-during response reading for JSON/form, complete and incomplete success,
-encoding and credential refusal, and body-read failure. The real TLS
-constructor cancellation/deadline and shared-renewal controls remain separate.
+Both cluster and node QEMU/LXC listings distinguish omitted/null CPU from a
+measured idle ratio. The existing listing authority and core-independent units
+remain unchanged; detail or an in-guest agent must not silently replace that
+observation. The internal unavailable marker is -1, including non-finite or
+negative alternate-client readings. Stopped guests retain their existing policy.
+History's CPU writer skips unavailable readings while recording independent
+current series and genuine zero. No new queries, guest commands or privileges.
+`TestGuestCPUObservationContract` joins both HTTP clients and both collectors
+through alerts, public state, History and ordinary idle recovery.
+
+
+### LXC runtime observations own running-only work
+
+Both the cluster/resources and per-node LXC collectors apply the nonempty
+runtime state from their already-fetched complete `status/current` before
+selecting memory, optional interfaces, Docker admission, alerts and History.
+An accepted newer non-running status cannot be overwritten by an older running
+listing or linked-agent memory. Absent or rejected detail leaves the independent
+listing fallback intact; no second status request or guest command is added.
+
+Non-running LXC CPU, memory and I/O follow the existing off-state policy, with
+memory unavailable from `powered-off`. Observed platform storage capacity and
+usage remain available: stopping a container does not empty its filesystems.
+The alert engine still suppresses metric alerts and History still admits only
+running guest observations. Config/OS/autostart metadata remain available and
+an ordinary subsequent running poll selects its own current readings.
+
+`TestLXCStoppedDetailedStatusTransition` in `monitor_pve_guest_lxc_test.go`
+crosses both real clients and both collectors through cold/repeated stops,
+ordinary running/resume, an explicitly stopped listing, a rejected short-body
+stopped reply and another non-running state. It checks work/request counts,
+linked-memory rejection, storage preservation, canonical/broadcast state and
+in-memory History. These synthetic controls are not native shutdown, thaw,
+filesystem-write/liveness or installed recovery acceptance.
+
+### Detailed guest status is a complete observation
+
+QEMU and LXC `status/current` reads require the entire bounded HTTP 200 body to
+finish and close successfully before assigning `ObservedAt`. A valid JSON prefix
+on a short, stalled or oversized body cannot supply current memory, counters,
+metadata, lock or agent evidence. One complete, unambiguous `data` object with a
+nonempty canonical `status` is required; duplicate/case-variant consumed fields,
+competing errors and missing/null status are rejected without copying response
+contents into diagnostics. Sparse stopped replies, unknown future status strings,
+unique additive metadata, optional metrics and measured zero/presence semantics
+remain compatible. Nested metric decoding and normal read authentication/failover
+are unchanged; this does not alter the QGA single-attempt or lock boundaries.
+
+A rejected container snapshot is explicitly prefetched absence for both counters
+and enrichment. Enrichment does not issue a second status request in that poll;
+direct enrichment without a prefetched snapshot still owns its ordinary read.
+Independent listing data remains usable. Rejected VM status cannot renew prior
+guest memory or turn it into a new History point; a later complete ordinary reply
+recovers, including a real zero-availability observation.
+
+`pkg/proxmox/guest_status_response_test.go` covers both client paths and guest
+kinds, complete-body/deadline/close/HTTP boundaries, ambiguous envelopes, sparse
+and additive compatibility and resumption. `guest_status_observation_test.go`
+crosses the real clients and both QEMU collectors through canonical state,
+broadcast projection and in-memory History, and exercises ordinary LXC counter
+and metadata recovery without a duplicate read. These are synthetic source
+controls, not installed recovery, native thaw, backup safety or a reported cause.
+
 
 ### AI Discovery removed (2026-10-11)
 
@@ -7046,6 +8095,21 @@ the temperature SSH key on disk) and from every system-settings save
 settings API), so repairing the key — or saving settings after repairing SSH
 access any other way — is retried on the next cycle rather than after a window
 that has compounded to fifteen minutes.
+Numeric socket destinations bypass DNS, preserving a scoped IPv6 literal's
+case-sensitive interface zone. The cache's `LookupIP` adapter cannot represent
+that zone in `net.IP`; turning a literal into an answer must not change its
+socket destination. Hostnames still use the same cached answers as discovery
+policy. Existing address-family filters, duplicate removal, caller cancellation,
+socket budgets, authority, TLS and certificate pin checks are unchanged.
+`pkg/tlsutil/literal_destination_test.go` checks exact zone preservation, literal
+sockets without DNS, named cache reuse and cancellation.
+`internal/api/configapi/scoped_literal_journey_test.go` follows scoped IPv6
+through the ordinary saved/draft PVE, PBS and PMG handlers with actual local TLS,
+password authentication, wrong-pin refusal and known-pin recovery. Its emitted
+responses feed the unchanged connection editor in
+`scripts/check-proxmox-scoped-literal.cjs`. Synthetic loopback proof does not
+establish native link-local routing, certificate renewal or guest recovery.
+
 The shared socket dialler also tries the usable addresses in that one cached
 answer rather than discarding all but the first. It preserves answer order,
 filters explicit IPv4/IPv6 networks and deduplicates equivalent literals.
@@ -7558,6 +8622,25 @@ signature for its other callers.
 fallback and the unknown case, with the registry answer seeded offline; on the
 previous code it reproduces the false no-update status.
 
+### Empty live Docker inventory is not removal evidence
+
+Agent inventory starts empty after a monitor restart/reload and grows as each
+agent reports. Alert-state synchronisation must not interpret an absent host
+as removed: router bootstrap could clear a restored update occurrence before
+its first report, discarding the pending age that the alert manager restored.
+`pruneStaleDockerAlerts` now uses membership-based removal only for the complete
+mock fixture estate, retaining the existing mode fence. Explicit live removal
+still owns `finalizeDockerHostRemoval` and clears that host's alerts, including
+when it has not reported in this process. Ordinary inactivity retention remains.
+
+`TestMonitor_PruneDockerAlerts_Extra` covers empty live inventory and explicit
+removal. `TestDockerUpdateCollectorAdmissionPreservesOccurrence` joins the real
+collector, compressed authenticated HTTPS report, admission/order checks,
+restored 24/48-hour occurrence and retention/recovery. Its aged JSON checkpoint
+and daemon/registry cache are synthetic; the legacy no-current-digest wire
+control is labelled separately from collector output. It establishes neither
+the reporter's installed cause nor a naturally elapsed day or release use.
+
 ### Forked host reports cannot bypass a base-identity removal block
 
 Host report admission resolves identity before consulting removal blocks, so a
@@ -7636,6 +8719,37 @@ that actually accepted the same occurrence. The connected
 HTTP 200/503 split, reopens the persistent queue, and requires the old accepted
 destination's recovery plus the new firing, with no recovery to the unannounced
 destination. Quiet hours and disabled recovery controls still apply.
+
+### Complete, unambiguous replication reads preserve the last useful observation
+
+Both replication inventory and source-job status require the bounded HTTP body
+through EOF and a successful close before publication. The complete envelope
+must have one canonical `data` field, no error payload, valid UTF-8 and no
+trailing JSON, duplicate or case-shadowed fields. Inventory requires unique,
+nonempty job identities; a rejected inventory preserves the previous rows,
+failure detail and original `LastPolled`, rather than replacing them with an
+apparently successful empty prefix. Explicit complete empty arrays still remove
+only that connection's jobs.
+
+Rejected per-job status does not hide readable configuration or become a
+successful sync. Object and array replies share validation and the existing
+job/source binding; conflicting legacy identity, failure-count or outcome
+aliases cannot conceal adverse evidence. Consistent native/legacy shapes,
+string/numeric zero and unique additive metadata remain supported. Independent
+jobs and connections retain their own observations, and a later ordinary read
+can recover without a restart. Raw provider response bodies no longer enter
+debug logs. Request scope, permissions, polling cadence and API shape are
+unchanged.
+
+`pkg/proxmox/replication_response_test.go` covers complete-body/close failures,
+malformed/ambiguous envelopes and identities, privacy and compatible shapes.
+`scripts/replication_read_acceptance.py` connects emitted client jobs to
+`replication_read_acceptance_test.go` in monitoring and API, preserving the exact
+five phases through ordinary conversion, scoped replacement and 25 handler
+requests. Consuming browser verification uses those emitted HTTP payloads, not
+hand-invented verdicts. Socket-free fixture transport is not wire/TLS or native
+PVE acceptance, and this repair does not diagnose #2606's original interruption
+or establish frozen-guest/backup recovery.
 
 ### Observed Proxmox replication sync outcome
 
@@ -7920,45 +9034,6 @@ through `publishPVEGuests` to the canonical state update. Publication reconcilia
 updates its former direct-call assertions without changing Docker ingestion or
 the runtime ownership gate; the behavioral withdrawal controls remain required.
 
-### Backup history collection carries completeness
-
-`GetBackupTaskHistory` in `pkg/proxmox/backup_history.go` enumerates a bounded
-ninety-day PVE task window with pagination and a fixed collection cutoff. Offline
-nodes, failed reads, repeated/capped pages and unconfirmed `Sys.Audit` authority
-remain explicit partial evidence. A successful HTTP response alone cannot prove
-visibility of other users' backup jobs. The cluster client retains its canonical
-transport failover wrapper. Older adapters can still supply live tasks but
-cannot qualify report observation coverage.
-
-`pollBackupTasks` persists mapped task evidence synchronously through the
-organization's recovery manager before recording collection quality. The
-continuity allowance derives from the configured backup interval/cycle cadence.
-An unavailable manager or failed write cannot certify complete observation.
-Multi-guest attribution requires a nontruncated, contiguous completed task log
-with a terminal marker and parsed guests. Incomplete logs remain unqualified
-and eligible for later collection. No backup artifact or restore assurance is
-created by an execution outcome.
-
-Proofs: `pkg/proxmox/backup_history_test.go` covers pagination, permissions,
-partial reads and offline nodes. `internal/monitoring/backup_task_history_test.go`
-covers durable failures surviving an empty poll and log qualification.
-
-Backup collection starts with a bounded retained-history backfill, then uses a
-durable collection checkpoint with a day of overlap. The oldest known pending
-execution remains in range until completion, including after restart. Failed
-reads do not advance the checkpoint. A capped backfill may advance a later
-incremental read without backdating observation coverage. Another node's
-failure cannot be hidden by a truncation reason. The live API/state keeps its
-existing 200 provider tasks per node plus their guest details, while the recovery
-store retains executions beyond that live window. Checkpoint, long-running-job,
-failed-read, capped-backfill and bounded-live-payload regression tests exercise
-these boundaries.
-
-Recovery rollup and alert readers take a locked snapshot of the manager pointer,
-matching the existing setter during live monitor dependency rebinding. The
-`TestBackupHealthRecoveryRebindingCanOverlapActiveReaders` race proof exercises
-rebinding while both consumers remain active.
-
 ### Complete guest enumeration before publication (14 October 2026)
 
 PVE `cluster/resources`, node `qemu` and node `lxc` enumeration consume and
@@ -8021,6 +9096,265 @@ credential. `TestComputeDiagnosticsAPIRejectionsPreserveCredentials` covers
 pinned PVE/PBS fixture use and preserves the separate PBS scheduler state.
 Native scoped-fleet recovery, QGA/thaw and installed trust remain separate.
 
+### Complete PBS backup history reads (15 October 2026)
+
+PBS group and snapshot listings consume and close their whole existing
+8 MiB-bounded response before publishing rows. An authoritative read requires
+HTTP 200, complete UTF-8 JSON, an explicit canonical `data` array and no
+conflicting errors. Missing/null data, duplicate or case-variant supported
+fields, trailing values, truncated/oversized bodies, failed closes and invalid
+rows are errors, not empty inventories or completed snapshot reads. Groups
+require unique type/ID, an explicit nonnegative count and a positive latest
+time when nonempty. Snapshots require unique positive times and the requested
+group identity; conflicting nested verification states cannot establish
+verification. Additive metadata, genuine empty arrays, zero-count groups,
+version-dependent verification and manifestless in-progress snapshots remain.
+
+The existing collector retains historical rows/points and their original cache
+read times on these failures. Its provider observation marks history partial
+or unavailable, rather than renewing verified protection or authoritatively
+deleting missing points. Ordinary complete reads resume refresh and protection;
+complete empty arrays still remove deleted history only for their connection.
+`TestPBSBackupInventoryAdmission` in `pkg/pbs/client_http_test.go` covers both
+real client readers and complete-body boundaries;
+`TestPBSBackupInventoryAdmissionPreservesHistoryAndResumes` covers ordinary
+HTTP collection, cache age, stored points, protection and recovery/deletion.
+These are controlled source proofs, not appliance backup/restore acceptance,
+native guest thaw, installed recovery or release availability.
+
+### PMG collection health and configured identity (15 October 2026)
+
+The PMG poller carries `connectionId` from the exact saved config key (`pmg:`
+plus that key), independently of its generated runtime ID, display and host.
+A successful version request proves reachability only: any failed selected
+read makes the resulting instance `degraded` and the provider health false.
+Offline version failures remain offline. Complete ordinary collection restores
+online/healthy; scope-off data remains absent and pause retains the observation.
+No request, credential, TLS, backup replacement or scope rule changes.
+`TestPMGCollectionFailureEvidence`, `TestPMGNodeDiscoveryFailurePreservesAcceptedBackups`
+and `TestPMGConfiguredConnectionSnapshotWire` cover failure/recovery and snapshot
+preservation. Consumer/HTTP and desktop/narrow evidence remains separate from
+native appliance recovery and release availability.
+
+The full PMG detail handler consumes the same canonical view reference as the slim resource. It preserves degraded collection health and optional configured attribution without an extra collection request; `TestContract_PMGConfiguredReferenceInFullDetail` covers both legacy absence and explicit reference.
+
+### Future-dated backup evidence and alert evaluation
+
+The shared PVE/PBS/mock backup-age evaluator retains an existing affected
+condition when its only reported success is in the future. A usable success
+for that subject can still be evaluated, and unrelated guests continue normally.
+Unusable evidence is surfaced via the existing system-scoped backup-evaluation
+warning with stable identity, deduplication and clock guidance; a successful
+rollup read alone cannot clear it. Deliberate disablement still clears it.
+`TestBackupFutureSuccessWarningThroughReadState` exercises persisted point
+replacement, independent guest alerts, repeated evidence, served-state output
+and genuine fresh recovery. This does not alter stored timestamps, rollup
+aggregation, backup-server clocks or native guest/backup operations.
+
+### Snapshot partial-evidence alert projection
+
+`TestSnapshotPartialEvidenceServedState` connects the production snapshot
+alert detector to `Monitor.GetState` across held age, current-size escalation,
+future/missing/epoch times, missing size, independent recovery and deletion.
+The served array preserves metric observation times/held flags and fixed
+explanations, without changing snapshot collection or issuing guest/backup
+commands. Its exact payloads feed desktop/narrow browser verification; source
+and browser proof do not establish installed/native guest or restore recovery.
+
+`TestSnapshotPartialEvidenceClockCorrectionServedState` restores a real alert
+with old-clock dates through the ordinary temporary-profile JSON seam and
+checks that a clock correction cannot establish recovery. It changes no system
+clock and emits the actual served frame for additional consuming proof.
+
+### Kubernetes inventory destination confidentiality (16 October 2026)
+
+Kubernetes report delivery no longer diverts plaintext Pulse traffic through
+an ambient HTTP proxy. The selected primary or explicitly admitted observer
+remains the sole plaintext recipient of both authentication headers and the
+compressed inventory. HTTPS proxy support, CA/pin verification, target admission,
+report content, timestamps and independent destination buffers are unchanged;
+this is a transport-only boundary, not a new field, health verdict or UI state.
+
+`TestKubernetesControlPlaneProxy` in `internal/kubernetesagent/multi_target_test.go`
+drives real HTTP reports and HTTPS CONNECT/TLS over in-memory connections,
+including base paths, IPv4, IPv6, service DNS, an observer, custom CA trust,
+matching/mismatched pins and an untrusted certificate. It compares the exact
+decompressed report bytes and both token headers at the admitted recipient.
+The fixture performs no DNS resolution, listener or network connection, and
+does not establish native Kubernetes or installed fleet recovery.
+### Backup history collection carries completeness
+
+Each history page must bind every backup task's explicit node to the node
+whose task endpoint was read, before appending rows or deduplicating UPIDs.
+A foreign-node row makes that whole page `collection_failed`: none of its
+prefix can replace live outcomes, enter report history or qualify complete
+observation. Earlier admitted pages and independently readable nodes remain
+available. An omitted redundant node field still inherits the request's node.
+Across offset pages, repeated opaque task IDs must agree in all decoded task
+fields after an omitted redundant node is bound to the request. Identical
+boundary overlap remains deduplicated. A changed result, guest, task kind or
+execution identity makes that node's collection `collection_failed`: withhold
+that whole new page and both versions of every conflicting earlier task.
+Unambiguous earlier executions and independent nodes remain available. Neither
+first/last response order nor filtering another task kind can turn ambiguity into
+a live success or complete report coverage. The read is not an atomic provider
+snapshot; a running task changing across overlapping pages is conservatively
+incomplete until a subsequent ordinary consistent read.
+
+Correctly scoped, unambiguous later history can still update a live task's outcome;
+the existing window, page/log budgets, authority and no-guest-operation boundaries
+are unchanged. `TestBackupHistoryCrossPageIdentityAdmission` covers second/third
+page overlap, all decoded identity/result fields, request bounds and equivalent
+node spellings. `TestBackupHistoryCrossPageConflictRemovesEveryAmbiguousExecution`
+checks multiple conflicts; `TestPVEBackupHistoryCrossPageConflictPreservesLiveFailure`
+joins direct/cluster HTTP, normal reconciliation, peer progress, same-VMID isolation
+and ordinary recovery without a database. The source-bound desktop/narrow
+`browser-tests/backup-history-pagination.cjs` consumes its actual emitted JSON
+through the production API reader, model and Coverage detail, including keyboard/
+touch refresh, retained disclosure, source search and corrected-result pixels. `TestBackupHistoryRejectsForeignNodePages` checks first/later
+pages, duplicate-UPID contamination and peer preservation;
+`TestPVEBackupHistoryForeignNodeCannotReplaceLiveFailure` joins direct/cluster
+HTTP readers, ordinary polling and the served Coverage projection without
+opening a database. This is evidence admission, not native backup/restore,
+independent guest thaw, filesystem liveness or installed recovery.
+
+`GetBackupTaskHistory` in `pkg/proxmox/backup_history.go` enumerates a bounded
+ninety-day PVE task window with pagination and a fixed collection cutoff. Offline
+nodes, failed reads, repeated/capped pages and unconfirmed `Sys.Audit` authority
+remain explicit partial evidence. A successful HTTP response alone cannot prove
+visibility of other users' backup jobs. The cluster client retains its canonical
+transport failover wrapper. Older adapters can still supply live tasks but
+cannot qualify report observation coverage.
+
+`pollBackupTasks` persists mapped task evidence synchronously through the
+organization's recovery manager before recording collection quality. The
+continuity allowance derives from the configured backup interval/cycle cadence.
+An unavailable manager or failed write cannot certify complete observation.
+Multi-guest attribution requires a nontruncated, contiguous completed task log
+with a terminal marker and parsed guests. Incomplete logs remain unqualified
+and eligible for later collection. No backup artifact or restore assurance is
+created by an execution outcome.
+
+Proofs: `pkg/proxmox/backup_history_test.go` covers pagination, permissions,
+partial reads and offline nodes. `internal/monitoring/backup_task_history_test.go`
+covers durable failures surviving an empty poll and log qualification.
+
+Backup collection starts with a bounded retained-history backfill, then uses a
+durable collection checkpoint with a day of overlap. The oldest known pending
+execution remains in range until completion, including after restart. Failed
+reads do not advance the checkpoint. A capped backfill may advance a later
+incremental read without backdating observation coverage. Another node's
+failure cannot be hidden by a truncation reason. The live API/state keeps its
+existing 200 provider tasks per node plus their guest details, while the recovery
+store retains executions beyond that live window. Checkpoint, long-running-job,
+failed-read, capped-backfill and bounded-live-payload regression tests exercise
+these boundaries.
+
+Recovery rollup and alert readers take a locked snapshot of the manager pointer,
+matching the existing setter during live monitor dependency rebinding. The
+`TestBackupHealthRecoveryRebindingCanOverlapActiveReaders` race proof exercises
+rebinding while both consumers remain active.
+
+### Live backup inventory and report backfill have separate admission
+
+The unwindowed, bounded `GetBackupTasks` read remains the replacement boundary
+for live backup tasks: every online node must return a complete valid response.
+A failed live collection preserves the entire instance's rows, original
+observation times and unseen job-log caches. A complete empty live inventory
+may clear them. Report backfill may still retain independently observed task
+executions while its collection quality is explicitly incomplete. An empty
+incremental report window, missing audit confirmation or failed history page
+cannot delete live tasks or certify complete report history.
+
+Both task-page and audit-authority admission consume the complete bounded
+HTTP body; a valid JSON prefix, null/duplicate envelope, provider error or
+ambiguous privilege cannot qualify observation coverage. The existing live
+200-task-per-node and shared 25-log-read budgets remain. Log finalisation still
+requires contiguous numbered, present-text lines and a terminal marker; a
+failed running-log reread retains its successful-read timestamp.
+
+`TestBackupHistoryCollectionCannotReplaceLiveInventory` joins the real HTTP
+readers, polling/cache, live snapshots and durable execution/coverage APIs
+through node/body/history/authority failures, incremental emptiness, recovery
+and authoritative live emptiness. `TestBackupHistoryRejectsIncompletePagesAndAuditEvidence`
+checks page and permission admission. Existing log fixtures now include the
+upstream terminal marker rather than weakening immutable-cache assertions.
+Source and consuming desktop/narrow proof do not establish installed backup,
+restore, independent guest thaw, writes/liveness or prior-active restoration.
+
+
+### Bounded VMware whole-inventory refresh budget
+
+`PULSE_VMWARE_POLL_TIMEOUT` is an optional positive Go duration for the whole
+vCenter refresh. The default stays twenty seconds. Empty values use the default;
+malformed, nonpositive and overflowing values warn without logging their raw
+contents, then keep the default bound. This changes neither the independent
+per-HTTP-request timeout nor a shorter caller lifetime. Polls stay serial and
+cancellable; extending one connection's allowed time can delay its siblings.
+Failure retains cached records, observed inventory and the last success time;
+only an accepted refresh replaces them and clears its consecutive failures.
+
+`TestVMwareInventoryRefreshBudgetContract` covers the parsing and private-value
+warning boundary, then uses Go's virtual clock to
+exercise a twenty-one-second production-provider refresh against the default
+and a configured thirty-second budget, then a shorter parent deadline. It
+checks cache/summary retention, ordinary successful replacement, serial
+multi-connection dispatch and canonical resource projection for consuming
+browser proof. No poll interval, API limit, TLS setting, provider permissions
+or timeout threshold is waived. These synthetic controls are not vCenter 8.0.3
+or installed recovery, and do not attribute #2070's HTTP 500 to refresh duration.
+
+### PBS namespace discovery is inventory evidence (18 October 2026)
+
+The ordinary foreground PBS poll carries each datastore's namespace-discovery
+result into the same admitted background backup scan. A readable root cannot
+certify complete history when discovery failed. Transient discovery failure
+retains only that datastore's previously observed nested rows at their original
+cache age; the root and other datastores retain independent replacement results.
+Rejected discovery withdraws those unread raw rows instead. Neither outcome
+probes cached namespace paths, renews their successful-read times, nor authorises
+instance-wide recovery-point deletion. The provider observation is partial (or
+unavailable without a readable scope), with unknown or partial/denied permission
+evidence as appropriate. An ordinary complete discovery and inventory can again
+confirm deletion and clear unused cache entries.
+
+Namespace success consumes and closes the whole existing 8 MiB-bounded response,
+requiring a canonical array and identifiable, unique namespace rows. Missing/null
+data, conflicting errors, duplicate/case-variant supported keys, incomplete
+bodies, trailing content and read/close failures are not empty inventories.
+Supported `ns`/`path`/`name` spellings, explicit root, additive metadata and genuine
+empty arrays remain accepted. Only an actual HTTP 404 preserves the older-PBS
+root-only compatibility result; a different status mentioning 404 does not.
+
+`TestPBSNamespaceInventoryAdmission` checks the real client boundary;
+`TestPBSNamespaceDiscoveryFailureIsNotEmptyInventory` and
+`TestPBSNamespaceDiscoveryAdmissionAndRecovery` join foreground discovery,
+background admission, raw/cache scope, stored protection and ordinary recovery.
+The controlled HTTP and consumer proofs do not establish incident cause,
+installed recovery, backup/restore availability or independent guest thaw.
+
+
+### CORE reporting reaches the existing chart consumer — #2077 / #2964
+
+The monitor's unified-resource snapshot carries History targets resolved from
+that same captured registry generation into the REST resource seed. The resource
+service must not lose a native TrueNAS connection ID while rebuilding canonical
+presentation rows, then make the drawer query the row's hashed ID instead.
+Captured absence clears a retained target; no display-name inference or lookup
+against a later live registry is allowed. Decorating a snapshot does not mutate
+shared rows or the captured target map. Existing freshness, tenant/scope/token
+checks, TLS verification and source precedence remain unchanged.
+
+`TestUnifiedSnapshotPreservesCapturedHistoryTargets` verifies ownership and
+known/unknown target preservation. `TestCORE13RESTReportingChartJourney` drives
+the pinned-TLS CORE REST client, provider, native poller/monitor fallback and
+actual authenticated resources/History routes for default-day and selected-hour
+reads, complete/rejected/partial/measured-zero/recovered telemetry, free/ARC
+memory and device I/O. `check-core-reporting-journey.cjs` serves those captured
+JSON documents to the production resource decoder, TrueNAS systems table, inline
+drawer and chart client at desktop and narrow widths. The fixture does not
+require local History persistence or establish appliance, installed or released
+recovery. Original scan/cleanup facts and stopped guest monitoring are separate.
 
 ### Persisted chart history uses the canonical value projection
 
@@ -8046,3 +9380,149 @@ unfiltered chart results against the full reader with 1,000-point series,
 including LTTB selection and caller mutation. Metrics-store guards compare the
 projections across mixed tiers and buckets, changed database snapshots and
 Docker legacy/observed provenance; the query-plan guard covers both SQL forms.
+
+
+### Non-destructive PBS monitoring-token collisions
+
+`SetupMonitoringAccess` makes one token-creation attempt. A provider response
+reporting an existing token returns `ErrMonitoringTokenExists` with its original
+HTTP status; it never deletes the token, retries creation or changes that token's
+ACL. An existing secret cannot be recovered by recreating its token. Explicit
+`DeleteUserToken` remains available only to its separate intentional callers.
+The ordinary new-token setup, monitoring-user ACL and token-ACL sequence remain.
+
+`TestSetupMonitoringAccessCollisionKeepsExistingReader` exercises the real
+request and version readers through 400, 409 and 500 collision responses,
+preserving a saved-token reader before and afterwards without listeners.
+`TestClient_SetupMonitoringAccess_PreservesExistingToken` replaces the former
+rotation expectation. API/persistence and consuming-editor proof are separate;
+these controls do not establish installed PBS or guest/backup recovery.
+
+
+### Coherent Proxmox task intervals before backup admission
+
+Node, live/recent, active and paginated History task reads require a positive
+start time. An active task (omitted/empty or `running` status) has no positive
+end; a terminal result, including errors and warnings, needs an end at or after
+its start. Negative times, missing/null starts, terminal results without an end,
+and active results with an end make the whole response unavailable. No prefix
+may replace earlier live evidence or qualify new archive output. Active census
+failure retains valid recent positives with unconfirmed visibility; History
+retains separately admitted pages/nodes and reports the failed page incomplete.
+Missing active status/end, scheduled parents without a guest ID, zero-duration
+completed jobs, explicit failures/warnings, additive metadata and genuine empty
+responses remain supported. UPIDs remain opaque; no fields are guessed from them.
+
+`TestTaskLifecycleAdmission` joins the actual node/live/active/History readers to
+valid and invalid intervals. Existing identity, scope, pagination and transport
+fixtures now supply coherent intervals so their original assertions remain
+independently meaningful. `TestPVETaskLifecycleCannotQualifyArchiveOutput` drives
+GET-only direct/cluster HTTP through ordinary polling, retained failure identity
+and observation time, archives, last-backup age, recovery outcomes, independent
+same-VMID connections, snapshots and completed/empty recovery. The source-bound
+`check-pve-task-lifecycle.cjs` protocol consumes those emitted frames in both
+production Backups views at desktop and 320px, including job and running-evidence
+controls. These are synthetic read-only proofs, not guest/QGA operations, durable
+store acceptance, incident cause, installed recovery or release availability.
+
+
+### LXC disk counters distinguish unknown usage from measured zero
+
+Both cluster/resources and node LXC collectors preserve whether `disk` and
+`maxdisk` were actually present and non-null in the complete decoded response.
+Missing usage/capacity or zero capacity yields the existing -1 unknown-usage
+sentinel, not a measured 0%. Root filesystem seeding and config-only enrichment
+preserve that sentinel: capacity alone cannot establish used/free space, enter
+History, or recover an existing disk incident. Explicit zero with positive
+capacity remains current and can recover normally. Legacy in-process producers,
+existing LXC overcommit clamping, independent current agent filesystem readings,
+identity, configuration, CPU, memory and access policy remain unchanged.
+
+`TestLXCDiskPresenceDistinguishesZeroNullAndMissing` covers the API boundary.
+`TestLXCDiskUsagePresenceLifecycle` joins direct/cluster HTTP clients to both
+collectors, root enrichment, acknowledged alert continuity, canonical public
+resources, History and ordinary measured-zero recovery. The root-seeding and
+independent-agent controls in `monitor_pve_guest_lxc_test.go` protect the shared
+sentinel and independent observations. These synthetic GET-only checks do not
+establish guest liveness, backup restore, incident cause or installed recovery.
+
+
+### Container filesystem usage is independent of storage allocation
+
+The node fallback and cluster collectors use the same filesystem `disk`/`maxdisk`
+observation. Storage-content `used`/`size` cannot lower a current usage reading,
+replace its denominator, supply missing filesystem bytes or prevent measured-zero
+recovery. Volume naming (including a guessed disk-0), compression, thin allocation
+and other storage inventory cannot establish this filesystem's fullness. Guest
+collection no longer enumerates storage for that purpose; archive/snapshot reads
+retain their existing separate consumers and evidence rules. Per-mount status,
+current agent enrichment, configured mount metadata, identity, CPU/memory, unknown
+sentinels and ordinary recovery remain unchanged. No access grant, new request,
+threshold change or native guest operation is introduced.
+
+`TestLXCFilesystemUsageIgnoresStorageAllocation` drives both concrete HTTP clients
+through both collectors. Full/acknowledged incidents, conflicting allocation and
+capacity, wrong/lookalike volume names, missing/null counters, canonical public
+resources, in-memory History and real measured-zero recovery are exercised. The
+node collector must make zero storage/content requests. The joined ordinary
+archive/snapshot test in `pve_protection_observation_test.go` keeps independently
+measured container usage while still retaining complete content and snapshot
+alert hold/recovery. These synthetic read-only controls and consuming browser
+proof do not establish native liveness, reporter cause or installed recovery.
+
+
+### LXC per-mount status rows require measured usage
+
+An LXC `diskinfo` row does not establish an empty filesystem merely because its
+mount is present. The decoder retains whether `total` and `used` were supplied
+and non-null. Conversion uses the listing's existing -1 unknown sentinel when
+either counter is missing/null or capacity is zero; no free space is inferred.
+Mount identity and independently known capacity remain available. Configured
+size, the listing rollup and a readable sibling cannot supply missing mount
+usage or resolve that filesystem's incident. A complete positive-capacity zero
+is still current and recovers normally. Legacy in-process producers, existing
+LXC overcommit clamping, independent agent enrichment, ordinary request counts,
+authentication and TLS policy remain unchanged.
+
+`TestLXCMountDiskPresenceDistinguishesZeroNullAndMissing` exercises nested JSON,
+reused destinations, private presence metadata, malformed counter types and
+legacy compatibility. `TestLXCMountDiskObservationContract` drives both concrete
+HTTP clients through both collectors for root and additional mounts, six gap
+shapes, repeated missing readings, acknowledged alert continuity, public tuples,
+independent CPU/memory/config/rollup History and measured-zero recovery. Its
+emitted resource and alert frames feed the existing Machines drawer and Alerts
+Overview at desktop and narrow widths. History remains the independent listing
+rollup; no per-mount History capability is claimed. These GET-only fixtures do
+not establish guest thaw/liveness, incident cause, installed recovery or release
+availability.
+
+
+### Serializable Proxmox task timestamps (22 October 2026)
+
+Node, live/recent, active and History task readers admit timestamp seconds only
+when the consumers' `time.Unix` conversion fits JSON's years 0–9999. A positive
+`int64` alone is insufficient: epoch milliseconds interpreted as seconds, year
+10000 or extreme integer dates otherwise reach `models.BackupTask` as
+`time.Time` and prevent encoding the entire served backup response. Existing
+positive-start/coherent-terminal requirements remain unchanged. This is a
+serialization bound, not a new freshness, clock-skew or unit-conversion policy.
+
+An unrepresentable date fails the complete page, not just its offending row.
+Prior live evidence and its observation times remain intact; failed active
+census cannot confirm writer visibility; History records incomplete collection
+without replacing a live failed/running execution. Independently readable
+snapshots/connections still progress, and a later valid result or complete empty
+read retains normal reconciliation authority. Do not clamp or divide timestamps
+to invent a plausible observation. This changes no guest/QGA/backup operation.
+
+`pkg/proxmox/task_response_test.go::TestTaskLifecycleAdmission` exercises both
+boundaries, millisecond mistakes and max-int64 dates through all four readers,
+with a valid prefix and retained optional/additive fields. The GET-only
+`internal/monitoring/pve_task_lifecycle_test.go` drives direct/cluster HTTP,
+ordinary polling, archives, last-backup age, recovery mapping and JSON encoding
+without opening a database. `scripts/check-pve-task-lifecycle.cjs` consumes its
+actual emitted frames in the existing desktop/narrow Backups table, Coverage
+and expandable task details, preserving original failures and independent
+connections until ordinary completion. These source/consumer checks do not
+establish a reported incident's cause, native backup usability, guest thaw,
+installed recovery, declared-compiler security acceptance or released availability.

@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createConnectionEvidenceScope } from './createConnectionEvidenceScope';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
@@ -219,6 +220,15 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
     () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
   );
 
+  const evidenceScope = createConnectionEvidenceScope();
+  const retireFormEvidence = () => {
+    evidenceScope.invalidate();
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableState(null);
+    setMonitoredSystemPreviewGenericError(null);
+  };
+  const readPending = () => testing() || previewing() || saving();
+
   const loadConnections = async () => {
     setLoading(true);
     setLoadingError(null);
@@ -259,30 +269,24 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
   });
 
   const openCreateDialog = () => {
+    retireFormEvidence();
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (connection: TrueNASConnection) => {
+    retireFormEvidence();
     setEditingConnectionId(connection.id);
     setForm(buildFormStateFromConnection(connection));
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
     setDialogOpen(true);
   };
 
   const resetDialogState = () => {
+    retireFormEvidence();
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
   };
 
   const closeDialog = () => {
@@ -306,13 +310,13 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
   };
 
   const updateForm = (patch: Partial<TrueNASConnectionFormState>) => {
-    setMonitoredSystemPreview(null);
-    setMonitoredSystemPreviewUnavailableState(null);
-    setMonitoredSystemPreviewGenericError(null);
+    retireFormEvidence();
     setForm((current) => ({ ...current, ...patch }));
   };
 
   const testCurrentForm = async () => {
+    if (readPending()) return false;
+    const isCurrent = evidenceScope.capture();
     setTesting(true);
     try {
       const payload = buildConnectionInput(form());
@@ -321,9 +325,11 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
       } else {
         await TrueNASAPI.testConnection(payload);
       }
+      if (!isCurrent()) return false;
       notificationStore.success('TrueNAS connection successful');
       return true;
     } catch (error) {
+      if (!isCurrent()) return false;
       const message = getTrueNASErrorMessage(error, 'TrueNAS connection failed');
       notificationStore.error(message);
       logger.error('[TrueNAS Settings] Connection test failed', error);
@@ -334,24 +340,31 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
   };
 
   const testSavedConnection = async (connection: TrueNASConnection) => {
+    if (readPending()) return;
+    const isCurrent = evidenceScope.capture();
     setTesting(true);
     try {
       await TrueNASAPI.testSavedConnection(connection.id);
+      if (!isCurrent()) return;
       notificationStore.success(
         `TrueNAS connection successful for ${connection.name || connection.host}`,
       );
     } catch (error) {
+      if (!isCurrent()) return;
       const message = getTrueNASErrorMessage(error, 'TrueNAS connection failed');
       notificationStore.error(message);
       logger.error('[TrueNAS Settings] Saved connection test failed', error);
     } finally {
       setTesting(false);
-      await loadConnections();
+      if (isCurrent()) await loadConnections();
     }
   };
 
   const previewCurrentForm = async () => {
+    if (readPending()) return null;
+    const isCurrent = evidenceScope.capture();
     setPreviewing(true);
+    setMonitoredSystemPreview(null);
     setMonitoredSystemPreviewUnavailableState(null);
     setMonitoredSystemPreviewGenericError(null);
     try {
@@ -359,11 +372,13 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
       const preview = editingConnectionId()
         ? await TrueNASAPI.previewSavedConnection(editingConnectionId()!, payload)
         : await TrueNASAPI.previewConnection(payload);
+      if (!isCurrent()) return null;
       setMonitoredSystemPreview(preview);
       setMonitoredSystemPreviewUnavailableState(null);
       setMonitoredSystemPreviewGenericError(null);
       return preview;
     } catch (error) {
+      if (!isCurrent()) return null;
       const unavailableState = monitoredSystemImpactPreviewUnavailableStateFromError(error);
       setMonitoredSystemPreview(null);
       if (unavailableState) {
@@ -383,22 +398,35 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
   };
 
   const saveCurrentForm = async () => {
+    if (readPending()) return;
+    const isCurrent = evidenceScope.capture();
+    const submittedHost = form().host.trim();
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
         await TrueNASAPI.updateConnection(editingConnectionId()!, payload);
-        notificationStore.success('TrueNAS connection updated');
+        if (isCurrent()) notificationStore.success('TrueNAS connection updated');
       } else {
         await TrueNASAPI.createConnection(payload);
-        notificationStore.success('TrueNAS connection added');
+        if (isCurrent()) notificationStore.success('TrueNAS connection added');
       }
-      resetDialogState();
+      if (!isCurrent()) {
+        notificationStore.success(`Saved earlier TrueNAS settings for ${submittedHost}.`);
+      }
+      // A save still completes once after departure or editing, but must not
+      // close a different target or discard a newer draft. Refresh the saved
+      // list independently; no old result is evidence for the current form.
+      if (isCurrent()) resetDialogState();
       await loadConnections();
     } catch (error) {
-      setMonitoredSystemPreviewUnavailableState(null);
       const message = getErrorMessage(error, 'Failed to save TrueNAS connection');
-      notificationStore.error(message);
+      if (isCurrent()) {
+        setMonitoredSystemPreviewUnavailableState(null);
+        notificationStore.error(message);
+      } else {
+        notificationStore.error(`Earlier TrueNAS save failed for ${submittedHost}: ${message}`);
+      }
       logger.error('[TrueNAS Settings] Save failed', error);
     } finally {
       setSaving(false);
@@ -447,6 +475,7 @@ export function useTrueNASSettingsPanelState({ canLoad }: { canLoad?: () => bool
     monitoredSystemPreviewError,
     monitoredSystemPreviewErrorTitle,
     previewing,
+    retireFormEvidence,
     saveCurrentForm,
     saving,
     testCurrentForm,

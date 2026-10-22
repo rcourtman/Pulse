@@ -2405,3 +2405,60 @@ it('replaces recovered availability without replacing independent metrics', () =
   expect(merged.memory).toEqual(previous.memory);
   expect(merged.disk).toEqual(previous.disk);
 });
+
+describe('source-owned Proxmox guest CPU absence', () => {
+  const guest = (): Resource => ({
+    ...createNodeResource({}),
+    type: 'vm',
+    cpu: { current: 98 },
+    proxmox: { vmid: 106, cpuUsageUnavailable: false },
+  });
+
+  it('withdraws old CPU through full, slow-delta, fast-delta and store paths', () => {
+    const previous = guest();
+    const incoming = { ...previous, proxmox: { vmid: 106, cpuUsageUnavailable: true } };
+    delete incoming.cpu;
+    const full = mergeCanonicalResourceSnapshot([incoming], [previous])[0];
+    const slow = mergeCanonicalResourceDeltaSnapshot(
+      [incoming],
+      [previous],
+      new Set([previous.id]),
+    )[0];
+    const fast = mergeCanonicalResourceDeltaSnapshot(
+      [incoming],
+      [previous],
+      new Set([previous.id]),
+      new Map([[previous.id, ['proxmox']]]),
+    )[0];
+    for (const row of [full, slow, fast]) {
+      expect(row.cpu).toBeUndefined();
+      expect(row.memory).toEqual(previous.memory);
+      expect(row.proxmox?.vmid).toBe(106);
+      expect(buildFastResourceStorePatchOps(row, ['proxmox'])).toContainEqual({
+        key: 'cpu',
+        value: undefined,
+        mode: 'set',
+      });
+    }
+  });
+
+  it('preserves a thin omitted CPU and restores a measured idle reading', () => {
+    const previous = guest();
+    const thin = { ...previous };
+    delete thin.cpu;
+    expect(mergeCanonicalResourceSnapshot([thin], [previous])[0].cpu).toEqual(previous.cpu);
+    const unknown = {
+      ...previous,
+      cpu: undefined,
+      proxmox: { vmid: 106, cpuUsageUnavailable: true },
+    };
+    const idle = {
+      ...unknown,
+      cpu: { current: 0 },
+      proxmox: { vmid: 106, cpuUsageUnavailable: false },
+    };
+    const [recovered] = mergeCanonicalResourceSnapshot([idle], [unknown]);
+    expect(recovered.cpu?.current).toBe(0);
+    expect(recovered.proxmox?.cpuUsageUnavailable).toBe(false);
+  });
+});

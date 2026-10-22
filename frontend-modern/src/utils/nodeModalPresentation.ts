@@ -133,8 +133,9 @@ export function getNodeUsernamePlaceholder(nodeType: NodeModalNodeType): string 
     case 'pbs':
       return 'admin@pbs';
     case 'pve':
-    case 'pmg':
       return 'root@pam';
+    case 'pmg':
+      return 'pulse-monitor@pmg';
   }
 }
 
@@ -143,7 +144,7 @@ export function getNodeUsernameHelp(nodeType: NodeModalNodeType): string | null 
     case 'pbs':
       return 'Must include realm (e.g., admin@pbs).';
     case 'pmg':
-      return 'Include realm (e.g., root@pam or api@pmg).';
+      return 'Include the service account realm (e.g., pulse-monitor@pmg).';
     case 'pve':
       return null;
   }
@@ -205,6 +206,24 @@ export function buildNodeModalMonitoringPayload(
         monitorDomainStats: formData.monitorDomainStats,
       };
   }
+}
+
+export type NodeModalConnectionTestScope = 'saved' | 'form';
+
+export function getNodeModalConnectionTestCopy(scope: NodeModalConnectionTestScope) {
+  return scope === 'saved'
+    ? {
+        button: 'Test saved connection',
+        result: 'Saved connection test',
+        description:
+          'Uses the saved endpoint, credentials and TLS settings. Unsaved changes are not tested.',
+      }
+    : {
+        button: 'Test entered settings',
+        result: 'Entered settings test',
+        description:
+          'Uses the endpoint, credentials and TLS settings entered in this form. No settings are saved.',
+      };
 }
 
 export function getNodeModalTestResultPresentation(

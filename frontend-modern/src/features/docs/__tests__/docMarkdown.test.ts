@@ -122,6 +122,15 @@ describe('renderDocMarkdown', () => {
     expect(html).not.toContain('target="_blank"');
   });
 
+  it('marks bare fragments for the same shared activation path as file-qualified links', () => {
+    const container = document.createElement('div');
+    container.innerHTML = renderDocMarkdown('[Cost](#cost-tracking)', 'AI');
+    const anchor = container.querySelector('a');
+    expect(anchor).toHaveAttribute('href', '#cost-tracking');
+    expect(anchor).toHaveAttribute('data-doc-link');
+    expect(anchor).not.toHaveAttribute('target');
+  });
+
   it('opens external links in a new tab', () => {
     const html = renderDocMarkdown('[Site](https://example.com)', 'README');
     expect(html).toContain('target="_blank"');
@@ -263,7 +272,80 @@ describe('documentation table column semantics', () => {
     );
     const header = container.querySelector('thead th');
     expect(header?.getAttribute('scope')).toBe('col');
-    expect(container.querySelector('[role], [onclick], th[class]')).toBeNull();
+    expect(container.querySelector('table [role], [onclick], th[class]')).toBeNull();
     expect(container.querySelector('tbody th')?.hasAttribute('scope')).toBe(false);
+  });
+});
+
+describe('documentation table keyboard admission', () => {
+  const table =
+    '| File | Purpose | Security Level |\n| --- | --- | --- |\n| .env | Secrets | Critical |';
+
+  it('gives each sanitized table a named native keyboard scroll target', () => {
+    const container = document.createElement('article');
+    container.innerHTML = renderDocMarkdown(table, 'CONFIGURATION');
+    const wrapper = container.querySelector<HTMLElement>('[data-doc-table-scroll]')!;
+    expect(wrapper.tabIndex).toBe(0);
+    expect(wrapper).toHaveAttribute('role', 'region');
+    expect(wrapper).toHaveAttribute('aria-label', 'Scrollable table');
+    expect(wrapper.classList).toContain('focus:outline-2');
+    expect(wrapper.classList).toContain('focus:outline-offset-2');
+    expect(wrapper.classList).toContain('focus:outline-blue-600');
+    expect(wrapper.classList).toContain('dark:focus:outline-blue-400');
+    expect(container.querySelectorAll('thead th[scope="col"]')).toHaveLength(3);
+    expect(container.querySelector('table')?.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('preserves the exact wrapper, semantics and links when admission runs again', () => {
+    const container = document.createElement('article');
+    container.innerHTML = renderDocMarkdown(table, 'CONFIGURATION');
+    const wrapper = container.querySelector('[data-doc-table-scroll]');
+    const html = container.innerHTML;
+    wrapTables(container);
+    expect(container.querySelector('[data-doc-table-scroll]')).toBe(wrapper);
+    expect(container.innerHTML).toBe(html);
+  });
+
+  it('cannot be bypassed or hidden by author-supplied focus, ARIA or wrapper markers', () => {
+    const container = document.createElement('article');
+    container.innerHTML = renderDocMarkdown(
+      '<div data-doc-table-scroll tabindex="-1" role="button" aria-label="Forged" aria-hidden="true">' +
+        '<table tabindex="-1" aria-hidden="true"><thead><tr><th scope="row" role="presentation">File</th></tr></thead>' +
+        '<tbody><tr><td onfocus="evil()">Value</td></tr></tbody></table></div>',
+      'CONFIGURATION',
+    );
+    const wrappers = container.querySelectorAll<HTMLElement>('[data-doc-table-scroll]');
+    expect(wrappers).toHaveLength(1);
+    expect(wrappers[0].tabIndex).toBe(0);
+    expect(wrappers[0]).toHaveAttribute('role', 'region');
+    expect(wrappers[0]).toHaveAttribute('aria-label', 'Scrollable table');
+    expect(wrappers[0].firstElementChild?.tagName).toBe('TABLE');
+    expect(container.querySelector('[aria-hidden], [tabindex="-1"], [onfocus]')).toBeNull();
+    expect(container.querySelector('thead th')).toHaveAttribute('scope', 'col');
+    expect(container.querySelector('thead th')).not.toHaveAttribute('role');
+  });
+
+  it('keeps independent table stops and ordinary internal and external links', () => {
+    const container = document.createElement('article');
+    container.innerHTML = renderDocMarkdown(
+      table +
+        '\n\n' +
+        '| Internal | External |\n| --- | --- |\n| [Install](INSTALL.md) | [Site](https://example.com) |\n\n' +
+        '[After](FAQ.md)',
+      'CONFIGURATION',
+    );
+    expect(container.querySelectorAll('[data-doc-table-scroll][tabindex="0"]')).toHaveLength(2);
+    const links = Array.from(container.querySelectorAll('a'));
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/docs/INSTALL',
+      'https://example.com',
+      '/docs/FAQ',
+    ]);
+    expect(links.every((link) => !link.hasAttribute('tabindex'))).toBe(true);
+    expect(links[0]).toHaveAttribute('data-doc-link');
+    expect(links[0]).not.toHaveAttribute('target');
+    expect(links[1]).toHaveAttribute('target', '_blank');
+    expect(links[1]).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(links[2].closest('[data-doc-table-scroll]')).toBeNull();
   });
 });

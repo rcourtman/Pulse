@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { NetworkInfoCell } from '../GuestRowCells';
 import { getWorkloadsGuestNetworkEmptyState } from '@/utils/workloadGuestPresentation';
@@ -50,4 +51,27 @@ describe('guest network tooltip palette', () => {
     for (const ip of ['192.0.2.80', '10.88.0.1'])
       expect(screen.getByText(ip)).toHaveClass('text-base-content');
   });
+});
+
+describe('guest network tooltip observation', () => {
+  it.each([true, false])(
+    'keeps retained qualification with named=%s and address-only evidence',
+    (named) => {
+      const [reason, setReason] = createSignal<string | null>(
+        'Retained fixture details, not a current connection.',
+      );
+      render(() => (
+        <NetworkInfoCell
+          ipAddresses={['192.0.2.80']}
+          networkInterfaces={named ? [{ name: 'eth0', addresses: ['192.0.2.80'] }] : []}
+          lastKnownReason={reason()}
+        />
+      ));
+      expect(screen.getByText('Retained fixture details, not a current connection.')).toBeVisible();
+      expect(screen.getByText('192.0.2.80')).toBeVisible();
+      setReason(null);
+      expect(screen.queryByText(/Retained fixture/)).not.toBeInTheDocument();
+      expect(screen.getByText('192.0.2.80')).toBeVisible();
+    },
+  );
 });

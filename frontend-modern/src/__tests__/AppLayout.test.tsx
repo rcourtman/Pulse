@@ -77,9 +77,11 @@ const renderLayout = (
   connectionStatus: Accessor<AppConnectionStatus> = () => ({
     kind: 'connected',
     label: 'Connected',
-    detail: 'Backend and live data stream are connected.',
+    detail:
+      'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
     tone: 'healthy',
   }),
+  stateOverrides: Accessor<Partial<State>> = () => ({}),
 ) => {
   window.history.replaceState({}, '', initialPath);
   const RouteStateProbe = () => {
@@ -113,6 +115,7 @@ const renderLayout = (
         ({
           activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
           resources,
+          ...stateOverrides(),
         }) as unknown as State
       }
       platformVisibility={platformVisibility ? () => platformVisibility : undefined}
@@ -140,6 +143,7 @@ const renderLayout = (
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
+    setKioskMode(false);
     setViewportWidth(1440);
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
@@ -157,6 +161,7 @@ describe('AppLayout navigation icons', () => {
     aiChatStore.setEnabled(false);
     clearRuntimeBranding();
     cleanup();
+    setKioskMode(false);
   });
 
   const getInfrastructureLink = (name: string) => {
@@ -199,7 +204,9 @@ describe('AppLayout navigation icons', () => {
       name: 'Patrol',
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
-    expect(within(systemGroup as HTMLElement).getByRole('link', { name: '1 Alerts' })).toBeTruthy();
+    expect(
+      within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts 1 warning' }),
+    ).toBeTruthy();
     expect(
       within(systemGroup as HTMLElement).queryByRole('link', {
         name: 'Pulse Patrol Patrol',
@@ -224,6 +231,48 @@ describe('AppLayout navigation icons', () => {
     expect(mobileSettingsTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
+  });
+
+  it('names the live critical and warning badges consistently on desktop and phone', async () => {
+    const alert = (id: string, level: string, acknowledged = false) =>
+      ({ id, level, acknowledged }) as State['activeAlerts'][number];
+    const [activeAlerts, setActiveAlerts] = createSignal([
+      alert('critical-1', 'critical'),
+      alert('critical-2', 'critical'),
+      alert('warning-1', 'warning'),
+      alert('warning-2', 'warning'),
+      alert('warning-3', 'warning'),
+      alert('acknowledged-critical', 'critical', true),
+    ]);
+    renderLayout([], '/actions', undefined, undefined, undefined, () => ({
+      activeAlerts: activeAlerts(),
+    }));
+
+    const expectAlertNames = async (name: string) => {
+      for (const navName of ['Primary navigation', 'Mobile navigation']) {
+        const nav = screen.getByRole('navigation', { name: navName });
+        await waitFor(() => {
+          const link = within(nav).getByRole('link', { name });
+          expect(link).toHaveAttribute('href', '/alerts');
+          expect(link).toHaveTextContent('Alerts');
+        });
+      }
+    };
+
+    await expectAlertNames('Alerts 2 critical, 3 warning');
+    const desktop = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const desktopAlert = within(desktop).getByRole('link', {
+      name: 'Alerts 2 critical, 3 warning',
+    });
+    expect(desktopAlert.querySelector('[aria-hidden="true"].gap-1')).toHaveTextContent('23');
+    expect(desktopAlert.querySelector('[aria-hidden="true"].gap-1')).not.toHaveTextContent('6');
+
+    setActiveAlerts([alert('warning-only', 'warning')]);
+    await expectAlertNames('Alerts 1 warning');
+    setActiveAlerts([alert('critical-only', 'critical')]);
+    await expectAlertNames('Alerts 1 critical');
+    setActiveAlerts([alert('ignored', 'critical', true)]);
+    await expectAlertNames('Alerts');
   });
 
   it('retains navigation labels, icons and focus as backend health changes to sync reconnecting', async () => {
@@ -267,6 +316,59 @@ describe('AppLayout navigation icons', () => {
     }
   });
 
+  it('keeps the data-wait warning readable without hover and removes it without replacing navigation', async () => {
+    const pending: AppConnectionStatus = {
+      kind: 'awaiting-data',
+      label: 'Waiting for data',
+      tone: 'warning',
+      detail:
+        'The live connection is open, but monitoring data has not arrived on this connection. Any retained readings may be out of date. Keep working sessions open.',
+    };
+    const [status, setStatus] = createSignal(pending);
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['settings:read'], status);
+    const warning = screen.getByRole('status', { name: 'Waiting for monitoring data' });
+    expect(warning).toHaveTextContent('Any retained readings may be out of date');
+    expect(warning).toHaveTextContent('Keep working sessions open');
+    expect(warning.querySelector('button')).toBeNull();
+    const proxmox = getInfrastructureLink('Proxmox');
+    proxmox.focus();
+    setStatus({
+      kind: 'connected',
+      label: 'Connected',
+      detail: 'Monitoring state received.',
+      tone: 'healthy',
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('status', { name: 'Waiting for monitoring data' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(getInfrastructureLink('Proxmox')).toBe(proxmox);
+    expect(proxmox).toHaveFocus();
+    setStatus(pending);
+    expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toBeInTheDocument();
+    expect(proxmox).toHaveFocus();
+  });
+
+  it('keeps the data-wait notice in a kiosk session without granting navigation or settings', () => {
+    setKioskMode(true);
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['monitoring:read'], () => ({
+      kind: 'awaiting-data',
+      label: 'Waiting for data',
+      detail: 'Monitoring data has not arrived on this connection.',
+      tone: 'warning',
+    }));
+    expect(isKioskMode()).toBe(true);
+    expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toHaveTextContent(
+      'Monitoring data has not arrived on this connection.',
+    );
+    expect(
+      screen.queryByRole('navigation', { name: 'Primary navigation' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Mobile navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Settings/ })).not.toBeInTheDocument();
+  });
+
   it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {
     patrolAttentionMockState.activeCount = 2;
     renderLayout();
@@ -276,18 +378,22 @@ describe('AppLayout navigation icons', () => {
     expect(systemGroup).toBeTruthy();
 
     const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('link', {
-      name: 'Patrol: 2 active attention items',
+      name: 'Patrol 2 active attention items',
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
+    expect(desktopPatrolTab).not.toHaveAttribute('aria-label');
+    expect(desktopPatrolTab).toHaveAccessibleName('Patrol 2 active attention items');
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     const mobilePatrolTab = within(mobileNav).getByRole('link', {
-      name: 'Patrol: 2 active attention items',
+      name: 'Patrol 2 active attention items',
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
+    expect(mobilePatrolTab).not.toHaveAttribute('aria-label');
+    expect(mobilePatrolTab).toHaveAccessibleName('Patrol 2 active attention items');
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -315,7 +421,7 @@ describe('AppLayout navigation icons', () => {
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
     const actionsTab = within(systemGroup as HTMLElement).getByRole('link', {
-      name: 'Actions: 3 actions await approval',
+      name: 'Actions 3 actions await approval',
     });
     expect(actionsTab.className).toContain('text-blue-600');
     expect(actionsTab).toHaveAttribute('href', '/actions');
@@ -324,7 +430,7 @@ describe('AppLayout navigation icons', () => {
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(
-      within(mobileNav).getByRole('link', { name: 'Actions: 3 actions await approval' }),
+      within(mobileNav).getByRole('link', { name: 'Actions 3 actions await approval' }),
     ).toHaveAttribute('aria-current', 'page');
     expect(document.title).toContain('Actions');
   });
