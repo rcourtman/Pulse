@@ -651,7 +651,10 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_no_uploads()
         # The failed run is not an encrypted success. Keep its partial files
         # private for diagnosis, just as for an archive encryption failure.
-        self.assertEqual(len(list(self.backups.glob("*.txt"))), 1)
+        # The expanded fixture includes an older plaintext inventory, which
+        # assert_stopped_before_retention already checks is preserved intact.
+        metadata = [path for path in self.backups.glob("*.txt") if path not in self.old]
+        self.assertEqual(len(metadata), 1)
         for path in self.backups.glob("pulse-backup-*-20261022-*"):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.backups.stat().st_mode & 0o777, 0o700)

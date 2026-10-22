@@ -61,8 +61,10 @@ Every timestamp position must be a digit; this is filename ownership, not
 calendar validation. Local cleanup only considers top-level regular files,
 not directories, symlinks or nested copies. Remote cleanup anchors the same
 includes at the prefix root, limits traversal to one level and excludes all
-other objects. Unrelated prefix/suffix lookalikes and operator-created material
-remain untouched. Metadata expires alongside archives in either encryption mode,
+other objects. Unrelated prefix/suffix lookalikes and material outside those
+flat filename shapes remain untouched. Names are not authenticated provenance:
+manually placed files using the exact generated namespace remain eligible.
+Metadata expires alongside archives in either encryption mode,
 so older plaintext inventories no longer accumulate indefinitely. Existing
 local `find -mtime` and remote `rclone --min-age` age boundaries are unchanged;
 neither pass promises atomic deletion or keeps an expired file just because
