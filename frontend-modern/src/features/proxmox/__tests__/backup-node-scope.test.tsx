@@ -136,7 +136,11 @@ describe('source-scoped backup Node filter', () => {
     await fireEvent.keyDown(screen.getByRole('textbox', { name: 'Filter Node values' }), {
       key: 'Enter',
     });
-    expect(new URLSearchParams(window.location.search).get('node')).toBe(nodeKey('east', 'pve-1'));
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('node')).toBe(
+        nodeKey('east', 'pve-1'),
+      ),
+    );
     await fireEvent.click(screen.getByRole('button', { name: 'Remove Node filter' }));
     await waitFor(() =>
       expect(new URLSearchParams(window.location.search).has('node')).toBe(false),
