@@ -52,12 +52,13 @@ if tool != "date":
         output.write(json.dumps([tool, *args]) + "\n")
 
 if tool == "tar":
-    assert len(args) == 5 and args[0] == "-czf" and args[2] == "-C", args
+    # Admit both literal-member argv and the exact base for regression controls.
+    assert len(args) in (5, 6) and args[0] == "-czf" and args[2] == "-C", args
+    assert len(args) == 5 or args[4] == "--", args
     output = Path(args[1]).resolve() if args[1] != "-" else None
-    source = Path(args[3]) / args[4]
+    source = Path(args[3]) / args[-1]
     assert output is None or output.is_relative_to(backups), output
     assert source.resolve().is_relative_to(root), source
-    assert source.name in ("tenants", "control-plane"), source
     number = 1 + sum(call[0] == tool for call in previous)
     if number == scenario.get("tar_fail"):
         if output is None:
@@ -479,6 +480,87 @@ class CloudBackupTest(unittest.TestCase):
                              PULSE_TENANTS_DIR="./data-alias/tenants")
         self.assertEqual(result.returncode, 0, self.output)
         self.assert_archive_contents()
+
+    def check_literal_source(self, source_name, parent_name=None, relative=False):
+        # A real file list makes GNU tar's old option interpretation succeed
+        # with the wrong data. The adapter does not model tar option parsing.
+        (self.root / "members.txt").write_text("unrelated.txt\n")
+        (self.root / "unrelated.txt").write_bytes(b"synthetic unrelated canary")
+        for directory, label, variable in (("tenants", "tenants", "PULSE_TENANTS_DIR"),
+                                            ("control-plane", "cp", "PULSE_CONTROL_PLANE_DIR")):
+            original = self.root / directory
+            parent = self.root / parent_name if parent_name else self.root
+            parent.mkdir(exist_ok=True)
+            configured = parent / source_name
+            original.rename(configured)
+            try:
+                for encrypted in ("false", "true"):
+                    with self.subTest(directory=directory, encrypted=encrypted, name=source_name):
+                        path = configured.relative_to(self.root) if relative else configured
+                        result = self.invoke(**{variable: str(path), "PULSE_BACKUP_ENCRYPT": encrypted})
+                        self.assertEqual(result.returncode, 0, self.output)
+                        suffix = ".tar.gz.age" if encrypted == "true" else ".tar.gz"
+                        files = [p for p in self.backups.glob(f"pulse-backup-{label}-*{suffix}")
+                                 if p not in self.old]
+                        # Each invocation uses a distinct timestamp; inspect the
+                        # latest archive, including the actual gzip/tar payload.
+                        archive_path = max(files, key=lambda p: p.name)
+                        content = archive_path.read_bytes()
+                        if encrypted == "true":
+                            self.assertTrue(content.startswith(b"FAKE-AGE\n"))
+                            content = content.removeprefix(b"FAKE-AGE\n")
+                        with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+                            self.assertEqual(set(archive.getnames()),
+                                             {source_name, f"{source_name}/fixture.txt"})
+                            self.assertEqual(archive.extractfile(f"{source_name}/fixture.txt").read(),
+                                             f"synthetic {directory} data\n".encode())
+                        self.assertIn("=== tarball backup finished ===", self.output)
+                        self.assertEqual(len([call for call in self.calls
+                                              if call[:2] == ["rclone", "copyto"]]), 3)
+                        self.assertEqual(len([call for call in self.calls if call[0] == "find"]), 1)
+                        self.assert_remote_retention_scope()
+                        self.assertEqual((configured / "fixture.txt").read_bytes(),
+                                         f"synthetic {directory} data\n".encode())
+            finally:
+                configured.rename(original)
+
+    def test_long_option_source_name_is_archived_literally(self):
+        self.check_literal_source("--files-from=members.txt")
+
+    def test_short_option_source_name_is_archived_literally(self):
+        self.check_literal_source("-Tmembers.txt")
+
+    def test_relative_option_source_name_is_archived_literally(self):
+        self.check_literal_source("-Tmembers.txt", relative=True)
+
+    def test_source_trailing_newline_is_preserved(self):
+        self.check_literal_source("literal-source\n")
+
+    def test_source_parent_trailing_newline_is_preserved(self):
+        self.check_literal_source("literal-source", parent_name="literal-parent\n")
+
+    def test_whitespace_and_embedded_newline_source_names_remain_literal(self):
+        self.check_literal_source("literal source\nwith spaces", relative=True)
+
+    def test_failed_member_or_parent_resolution_stops_without_upload_or_retention(self):
+        for name, message in (("dirname", "parent directory"), ("basename", "archive member")):
+            with self.subTest(tool=name):
+                executable = self.bin / name
+                real_tool = os.readlink(executable)
+                executable.unlink()
+                # Logging still uses ordinary dirname before preflight. Refuse
+                # only the archive-path resolver, not log setup.
+                executable.write_text(f'#!/bin/sh\n[ "$1" = "-z" ] && exit 1\nexec "{real_tool}" "$@"\n')
+                executable.chmod(0o700)
+                try:
+                    for encrypted in ("false", "true"):
+                        result = self.invoke(PULSE_BACKUP_ENCRYPT=encrypted)
+                        self.assert_stopped_before_retention(result, before_archives=True)
+                        self.assert_no_uploads()
+                        self.assertIn(f"Cannot determine required tenants {message}", self.output)
+                finally:
+                    executable.unlink()
+                    executable.symlink_to(real_tool)
 
     def test_same_second_failure_does_not_destroy_a_completed_backup(self):
         timestamp = "20261022-010001"

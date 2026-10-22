@@ -34,6 +34,19 @@ Symlinked parent paths still work, and nested symlinks remain links. The helper
 does not enable recursive link dereferencing or claim to prevent concurrent
 source mutation between its checks and tar.
 
+Configured source directory names are literal archive members, not tar options.
+Both plain and encrypted jobs end tar option parsing before the member name:
+`--files-from=...` and `-T...` cannot replace required data with an unrelated file
+list and then permit upload/retention. GNU coreutils `dirname`/`basename` use
+NUL-delimited output so trailing newlines in either the source or its parent
+are preserved rather than removed by shell command substitution. Resolution
+failure stops before tar, uploads or retention. Relative paths, whitespace,
+embedded newlines and existing ordinary archive layouts remain supported.
+`test_cloud_backup.py` runs those names through real GNU tar/gzip in both modes
+for each source and checks actual member names and fixture bytes, not just exit
+status. It also checks failure-preserving resolver errors. These are disposable
+file proofs, not application consistency or native restore acceptance.
+
 The staging directory must be outside both source trees. Before staging
 creation, permission changes or any archive, GNU coreutils `realpath` resolves
 physical source paths and the staging path (including missing descendants).
