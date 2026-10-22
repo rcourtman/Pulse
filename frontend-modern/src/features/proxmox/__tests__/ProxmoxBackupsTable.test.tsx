@@ -595,7 +595,7 @@ describe('ProxmoxBackupsTable', () => {
     );
     expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('1 incomplete entry');
     expect(screen.getByText(/Incomplete backups remain listed/)).toBeInTheDocument();
-    expect(screen.getByText(/No completed restore-point activity/)).toBeInTheDocument();
+    expect(await screen.findByText(/No completed restore-point activity/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /: 1 backup$/ })).not.toBeInTheDocument();
     expect(container.querySelector('[data-backup-artifact-state]')).toHaveTextContent('Running');
     expect(screen.getByRole('cell', { name: /1 entry$/ })).toBeInTheDocument();
