@@ -97,6 +97,14 @@ paths rather than defaults in self-hosted setup.
 
 ## Development and reference
 
+For local reproduction, follow the
+[isolated development workflow](../CONTRIBUTING.md#hot-reload-dev-loop) in a
+disposable VM or machine without production configuration, data or monitored
+systems. A fresh clone alone is not isolation. The guide uses separate data
+and a loopback-only development authentication bypass, reviews local environment
+files and refuses to stop existing listeners; do not use the takeover shortcuts
+or run development from an installed Pulse directory.
+
 - [REST API](API.md)
 - [Architecture](../ARCHITECTURE.md)
 - [Contributing](../CONTRIBUTING.md)

@@ -170,15 +170,18 @@ Localized getting started guides:
 
 ## Development
 
-Pulse uses Go 1.26 and a SolidJS/TypeScript frontend. The managed development
-runtime starts the frontend at `http://127.0.0.1:5173` and proxies API and
-WebSocket traffic to the backend on port `7655`.
+Pulse uses Go 1.26 and a SolidJS/TypeScript frontend. For local reproduction,
+follow the [isolated development workflow](CONTRIBUTING.md#hot-reload-dev-loop)
+for dependency setup, separate data, loopback-only access and starting without
+listener takeover. Use a disposable VM or machine with no production configuration,
+data or access to monitored systems; do not start development in an installed
+Pulse directory. A fresh clone alone is not isolation.
 
-```bash
-npm ci
-npm --prefix frontend-modern ci
-npm run dev
-```
+The `npm run dev` shortcut includes `--takeover` and can stop existing listeners.
+The linked workflow instead refuses occupied ports and explains how to choose
+unused ones. It also covers local environment files and the development
+authentication bypass; keep that bypass off untrusted networks. Use the browser
+entrypoint reported by the owned development runtime, not a production Pulse URL.
 
 Useful checks:
 

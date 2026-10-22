@@ -28,6 +28,28 @@ class ContributionReportSafetyTest(unittest.TestCase):
         recipe = re.search(r"```bash\n(.*?)```", section, re.S).group(1)
         return section, recipe
 
+    def test_root_readme_routes_development_to_the_isolated_workflow(self):
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        section = text.split("## Development\n", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("(CONTRIBUTING.md#hot-reload-dev-loop)", section)
+        self.assertIn("disposable", section)
+        self.assertIn("no production configuration", " ".join(section.split()))
+        self.assertIn("`--takeover`", section)
+        self.assertIn("stop existing listeners", " ".join(section.split()))
+        for block in re.findall(r"```(?:bash|sh)?\n(.*?)```", section, re.S):
+            self.assertNotRegex(block, r"npm(?: --prefix frontend-modern)? run dev(?:\s|$)")
+            self.assertNotIn("hot-dev-bg.sh start --takeover", block)
+
+    def test_shipped_index_reaches_the_same_isolated_workflow(self):
+        for name in ("docs/README.md", "frontend-modern/public/docs/README.md"):
+            with self.subTest(surface=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                section = text.split("## Development and reference\n", 1)[1].split("\n## ", 1)[0]
+                self.assertIn("(../CONTRIBUTING.md#hot-reload-dev-loop)", section)
+                for statement in ("disposable", "production", "authentication bypass",
+                                  "existing listeners", "fresh clone alone is not isolation"):
+                    self.assertIn(statement, " ".join(section.split()))
+
     def test_development_recipe_names_the_real_isolation_boundary(self):
         guide = " ".join((ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8").split())
         for statement in (
