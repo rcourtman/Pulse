@@ -254,7 +254,15 @@ func TestOrdinaryNotificationRetryBudgetBoundaries(t *testing.T) {
 				row := loadQuietReplay(t, q, id)
 				require.Equal(t, QueueStatusPending, row.Status)
 				q.processNotification(row)
-				require.Equal(t, attempt, loadQuietReplay(t, q, id).Attempts)
+				persisted := loadQuietReplay(t, q, id)
+				require.Equal(t, attempt, persisted.Attempts)
+				if persisted.Status == QueueStatusPending {
+					require.NotNil(t, persisted.NextRetryAt)
+					require.NotNil(t, persisted.LastAttempt)
+					delay := persisted.NextRetryAt.Sub(*persisted.LastAttempt)
+					require.GreaterOrEqual(t, delay, calculateBackoff(attempt)-time.Second)
+					require.LessOrEqual(t, delay, calculateBackoff(attempt))
+				}
 			}
 			switch mode {
 			case "disabled":

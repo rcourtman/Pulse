@@ -636,7 +636,9 @@ resolution timestamp intact. The fixture does not change production deadlines,
 rate limits, or retries. It checks unseen-destination and
 unannounced-alert suppression, per-occurrence resolution metadata, eleven
 recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
-rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and
+retained rate-limited retries and subsequent-window recovery. That burst control
+drives existing limiter window state without waiting a minute or changing
+production limits; the ordinary retry-horizon control uses real due times. The HTTP adapter is in-process; queue and
 receipt persistence are real. Focused and race runs establish this synthetic
 boundary, not a full notification-suite result, installed monitor recovery,
 provider acceptance, reporter confirmation or release qualification. The existing
@@ -1669,7 +1671,8 @@ channels, both events, grouping and quiet holds, then actual due-row selection,
 HTTP rejection and fourth-attempt acceptance for generic and ntfy firing and
 recovery. It retains the third-failure retry log and subsequent delivered log,
 telemetry and exact receipt checks. Controlled claims separately check the
-finite eighth-attempt boundary, terminal classification and cancellation without
+finite eighth-attempt boundary, every recorded backoff, terminal classification
+and cancellation without
 changing production clocks or backoff. Old rows are not upgraded or replayed.
 This is synthetic loopback source acceptance, not native recipient recovery or
 attribution of fleet notification failures.
