@@ -279,7 +279,8 @@ class CloudBackupTest(unittest.TestCase):
         finally:
             (self.root / "release-tar").touch()
             first_output = first.communicate(timeout=12)
-        self.assertEqual(first.returncode, 0, first_output)
+        self.output = "".join(first_output) + second.stdout + second.stderr + self.log.read_text()
+        self.assertEqual(first.returncode, 0, self.output)
         self.assertNotEqual(second.returncode, 0, second.stdout + second.stderr)
         self.assertEqual([call[0] for call in calls_before_release if call[0] != "date"], ["tar"])
         self.assertEqual(list(self.backups.glob(".pulse-backup-*.lock")), [])
