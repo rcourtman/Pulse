@@ -51,6 +51,37 @@ if tool != "date":
     with calls_file.open("a") as output:
         output.write(json.dumps([tool, *args]) + "\n")
 
+if tool in ("tar", "age"):
+    completed = sorted(p.name for p in backups.iterdir()
+                       if os.environ["FIXTURE_TIMESTAMP"] in p.name
+                       and p.name.endswith((".tar.gz", ".age", ".txt")))
+    with (root / "producer-observations.jsonl").open("a") as observations:
+        observations.write(json.dumps({"tool": tool, "completed": completed}) + "\n")
+
+if tool == "mv":
+    assert len(args) == 5 and args[:3] == ["-T", "-n", "--"], args
+    source, destination = map(Path, args[3:])
+    assert source == Path(str(destination) + ".partial"), args
+    assert source.resolve().is_relative_to(backups), args
+    assert destination.parent.resolve() == backups, args
+    assert source.is_file(), args
+    number = 1 + sum(call[0] == tool for call in previous)
+    if number == scenario.get("publish_fail"):
+        sys.exit(13)
+    if number == scenario.get("publish_collision"):
+        kind = scenario.get("collision_kind", "file")
+        if kind == "file":
+            destination.write_bytes(b"late unrelated fixture")
+        elif kind == "directory":
+            destination.mkdir()
+            (destination / "preserved.txt").write_bytes(b"late unrelated fixture")
+        else:
+            target = root / ("late-link-target-" + os.environ["FIXTURE_TIMESTAMP"])
+            if kind == "symlink":
+                target.write_bytes(b"late unrelated fixture")
+            destination.symlink_to(target)
+    sys.exit(subprocess.run([os.environ["REAL_MV"], *args], check=False).returncode)
+
 if tool == "tar":
     # Admit both literal-member argv and the exact base for regression controls.
     assert len(args) in (5, 6) and args[0] == "-czf" and args[2] == "-C", args
@@ -74,6 +105,8 @@ if tool == "tar":
             if time.monotonic() >= deadline:
                 sys.exit(91)
             time.sleep(0.02)
+    if number == scenario.get("native_tar_missing"):
+        source.rename(source.with_name(source.name + "-moved-before-tar"))
     result = subprocess.run([os.environ["REAL_TAR"], *args], check=False)
     if number == 1 and scenario.get("source_disappears"):
         (root / "control-plane").rename(root / "moved-control-plane")
@@ -101,7 +134,7 @@ if tool == "age":
     number = 1 + sum(call[0] == tool for call in previous)
     def observe_plaintext(phase):
         names = sorted(p.name for p in backups.glob("*" + os.environ["FIXTURE_TIMESTAMP"] + "*")
-                       if p.name.endswith((".txt", ".tar.gz")))
+                       if p.name.endswith((".txt", ".tar.gz", ".txt.partial", ".tar.gz.partial")))
         with (root / "plaintext-observations.jsonl").open("a") as observations:
             observations.write(json.dumps({"number": number, "phase": phase, "names": names}) + "\n")
     observe_plaintext("before-input")
@@ -227,14 +260,15 @@ class CloudBackupTest(unittest.TestCase):
             executable = shutil.which(name)
             self.assertIsNotNone(executable, f"required fixture dependency missing: {name}")
             (self.bin / name).symlink_to(executable)
-        for name in ("tar", "find", "age", "rclone", "docker", "hostname", "date"):
+        for name in ("tar", "find", "age", "rclone", "docker", "hostname", "date", "mv"):
             executable = self.bin / name
             executable.write_text(f"#!{sys.executable}\n" + FAKE)
             executable.chmod(0o700)
         self.env = {
             "PATH": str(self.bin), "FIXTURE": str(self.root), "HOME": str(self.root),
             "TMPDIR": str(self.root), "LC_ALL": "C", "REAL_TAR": shutil.which("tar"),
-            "REAL_FIND": shutil.which("find"), "PULSE_DATA_DIR": str(self.root),
+            "REAL_FIND": shutil.which("find"), "REAL_MV": shutil.which("mv"),
+            "PULSE_DATA_DIR": str(self.root),
             "PULSE_BACKUP_DIR": str(self.backups), "PULSE_BACKUP_LOG_FILE": str(self.log),
             "PULSE_RCLONE_REMOTE": "fixture-remote:bucket",
             "PULSE_BACKUP_AGE_RECIPIENT": "fixture-recipient",
@@ -248,8 +282,10 @@ class CloudBackupTest(unittest.TestCase):
         self.log.unlink(missing_ok=True)
         self.invocations += 1
         invocation_env = dict(self.env, FIXTURE_TIMESTAMP=f"20261022-01{self.invocations:04d}")
+        invocation_env.update(env)
+        self.timestamp = invocation_env["FIXTURE_TIMESTAMP"]
         result = subprocess.run([BASH, str(SCRIPT)], cwd=self.root,
-                                env=dict(invocation_env, **env), text=True, capture_output=True, timeout=20)
+                                env=invocation_env, text=True, capture_output=True, timeout=20)
         self.output = result.stdout + result.stderr + (self.log.read_text() if self.log.exists() else "")
         calls = self.root / "calls.jsonl"
         self.calls = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
@@ -275,6 +311,11 @@ class CloudBackupTest(unittest.TestCase):
     def assert_no_uploads(self):
         self.assertFalse(any(call[0] == "rclone" for call in self.calls), self.calls)
 
+    def assert_no_new_completed_files(self):
+        self.assertEqual([p.name for p in self.backups.iterdir() if p not in self.old
+                          and self.timestamp in p.name
+                          and p.name.endswith((".tar.gz", ".age", ".txt"))], [])
+
     def assert_remote_retention_scope(self):
         deletes = [call for call in self.calls if call[:2] == ["rclone", "delete"]]
         self.assertEqual(len(deletes), 1, self.calls)
@@ -294,6 +335,9 @@ class CloudBackupTest(unittest.TestCase):
                      "pulse-backup-tenants-2000010X-000000.tar.gz",
                      "pulse-backup-cp-20000101-00000X.tar.gz.age",
                      "pulse-backup-meta-20000101-000000.tar.gz",
+                     "pulse-backup-tenants-not-a-timestamp.tar.gz.partial",
+                     "pulse-backup-meta-20000101-000000.txt.age.partial.extra",
+                     "nested/pulse-backup-cp-20000101-000000.tar.gz.age.partial",
                      "nested/pulse-backup-tenants-20000101-000000.tar.gz",
                      "nested/pulse-backup-meta-20000101-000000.txt.age")
         for name in unrelated:
@@ -308,6 +352,11 @@ class CloudBackupTest(unittest.TestCase):
                 path.write_bytes(b"synthetic young preserved backup")
                 os.utime(path, (4102444800, 4102444800))
                 preserved[path] = path.read_bytes()
+                if parent == self.remote:
+                    partial = parent / f"pulse-backup-{label}-20000101-000000{suffix}{encrypted}.partial"
+                    partial.write_bytes(b"synthetic unrelated remote partial")
+                    os.utime(partial, (946684800, 946684800))
+                    preserved[partial] = partial.read_bytes()
         return preserved
 
     def check_retention_scope(self, **env):
@@ -810,13 +859,187 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_stopped_before_retention(self.invoke(), before_archives=True)
 
     def test_missing_tar_or_retention_tool_stops_before_archiving(self):
-        for name in ("tar", "find", "rmdir"):
+        for name in ("tar", "find", "rmdir", "mv"):
             with self.subTest(name=name):
                 content = (self.bin / name).read_bytes()
                 (self.bin / name).unlink()
                 self.assert_stopped_before_retention(self.invoke(), before_archives=True)
                 (self.bin / name).write_bytes(content)
                 (self.bin / name).chmod(0o700)
+
+    def test_failed_producers_never_publish_ordinary_backup_names(self):
+        for mode in ("false", "true"):
+            scenarios = [{"tar_fail": number} for number in (1, 2)]
+            if mode == "true":
+                scenarios += [{"age_fail": number} for number in (1, 2, 3)]
+                scenarios += [{"age_reject": number} for number in (1, 2, 3)]
+            for scenario in scenarios:
+                with self.subTest(mode=mode, scenario=scenario):
+                    result = self.invoke(scenario, PULSE_BACKUP_ENCRYPT=mode)
+                    self.assert_stopped_before_retention(result)
+                    self.assert_no_uploads()
+                    self.assert_no_new_completed_files()
+                    self.assertFalse(any(call[0] == "mv" for call in self.calls), self.calls)
+                    partial = list(self.backups.glob(f"*{self.timestamp}*.partial"))
+                    for path in partial:
+                        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                    if "tar_fail" in scenario or "age_fail" in scenario:
+                        self.assertTrue(partial, self.output)
+
+    def test_native_tar_failure_retains_no_ordinary_backup_names(self):
+        for mode in ("false", "true"):
+            for number in (1, 2):
+                with self.subTest(mode=mode, number=number):
+                    # Run native tar after its admitted source disappears, not
+                    # a fake exit code: gzip may still finish a readable archive.
+                    source = self.root / ("tenants" if number == 1 else "control-plane")
+                    try:
+                        result = self.invoke({"native_tar_missing": number}, PULSE_BACKUP_ENCRYPT=mode)
+                        self.assert_stopped_before_retention(result)
+                        self.assert_no_uploads()
+                        self.assert_no_new_completed_files()
+                        partials = list(self.backups.glob(f"*{self.timestamp}*.partial"))
+                        self.assertEqual(len(partials), number)
+                        self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in partials))
+                        self.assertTrue(any(p.stat().st_size > 0 for p in partials))
+                    finally:
+                        source.with_name(source.name + "-moved-before-tar").rename(source)
+
+    def test_partial_evidence_expires_only_locally_after_a_successful_job(self):
+        old_partials, preserved = [], {}
+        for label, suffix in OWNED_TYPES:
+            for encrypted in ("", ".age"):
+                filename = f"pulse-backup-{label}-20000101-000000{suffix}{encrypted}.partial"
+                local = self.backups / filename
+                local.write_bytes(b"old incomplete fixture")
+                os.utime(local, (946684800, 946684800))
+                old_partials.append(local)
+                # Partial names are never uploaded: they are not remotely owned.
+                remote = self.remote / filename
+                remote.write_bytes(b"unrelated remote fixture")
+                os.utime(remote, (946684800, 946684800))
+                preserved[remote] = remote.read_bytes()
+                young = self.backups / filename.replace("20000101", "20990101")
+                young.write_bytes(b"young incomplete fixture")
+                os.utime(young, (4102444800, 4102444800))
+                preserved[young] = young.read_bytes()
+        link = self.backups / "pulse-backup-meta-19990101-000000.txt.partial"
+        link.symlink_to(self.root / "absent-partial-target")
+        os.utime(link, (946684800, 946684800), follow_symlinks=False)
+        directory = self.backups / "pulse-backup-cp-19990101-000000.tar.gz.age.partial"
+        directory.mkdir()
+        (directory / "preserved.txt").write_bytes(b"preserved directory fixture")
+        os.utime(directory, (946684800, 946684800))
+        preserved[directory / "preserved.txt"] = b"preserved directory fixture"
+
+        self.assert_stopped_before_retention(self.invoke({"tar_fail": 1}))
+        self.assertTrue(all(p.exists() for p in old_partials))
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assertTrue(all(not p.exists() for p in old_partials))
+        self.assertEqual({p: p.read_bytes() for p in preserved}, preserved)
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(list(directory.iterdir()), [directory / "preserved.txt"])
+
+    def test_all_producers_finish_before_first_publication(self):
+        for mode in ("false", "true"):
+            with self.subTest(mode=mode):
+                observations_file = self.root / "producer-observations.jsonl"
+                observations_file.unlink(missing_ok=True)
+                result = self.invoke(PULSE_BACKUP_ENCRYPT=mode)
+                self.assertEqual(result.returncode, 0, self.output)
+                observations = [json.loads(line) for line in observations_file.read_text().splitlines()]
+                self.assertEqual(len(observations), 5 if mode == "true" else 2)
+                self.assertTrue(all(not row["completed"] for row in observations), observations)
+                publications = [index for index, call in enumerate(self.calls) if call[0] == "mv"]
+                self.assertEqual(len(publications), 3, self.calls)
+                last_producer = max(index for index, call in enumerate(self.calls)
+                                    if call[0] in ("tar", "age", "docker"))
+                first_upload = next(index for index, call in enumerate(self.calls)
+                                    if call[:2] == ["rclone", "copyto"])
+                self.assertLess(last_producer, publications[0])
+                self.assertLess(publications[-1], first_upload)
+                self.assertIn("pulse-backup-meta-", self.calls[publications[-1]][-1])
+                self.assertEqual(list(self.backups.glob(f"*{self.timestamp}*.partial")), [])
+                files = [p for p in self.backups.iterdir() if self.timestamp in p.name]
+                self.assertEqual(len(files), 3)
+                self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in files))
+
+    def test_publication_errors_preserve_evidence_without_upload_or_retention(self):
+        for mode in ("false", "true"):
+            for number in (1, 2, 3):
+                with self.subTest(mode=mode, number=number):
+                    result = self.invoke({"publish_fail": number}, PULSE_BACKUP_ENCRYPT=mode)
+                    self.assert_stopped_before_retention(result)
+                    self.assert_no_uploads()
+                    self.assertIn("Backup file publication failed", self.output)
+                    files = [p for p in self.backups.iterdir() if self.timestamp in p.name]
+                    self.assertEqual(len([p for p in files if p.name.endswith(".partial")]), 4 - number)
+                    self.assertEqual(len([p for p in files if not p.name.endswith(".partial")]), number - 1)
+                    self.assertTrue(all(p.stat().st_mode & 0o777 == 0o600 for p in files))
+                    for path in files:
+                        if path.name.endswith(".partial"):
+                            continue
+                        content = path.read_bytes()
+                        if mode == "true":
+                            self.assertTrue(content.startswith(b"FAKE-AGE\n"))
+                            content = content.removeprefix(b"FAKE-AGE\n")
+                        directory = "tenants" if "-tenants-" in path.name else "control-plane"
+                        with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+                            self.assertEqual(archive.extractfile(f"{directory}/fixture.txt").read(),
+                                             f"synthetic {directory} data\n".encode())
+
+    def test_late_publication_collisions_fail_closed_even_when_mv_exits_zero(self):
+        for mode in ("false", "true"):
+            for kind in ("file", "directory", "symlink", "dangling"):
+                with self.subTest(mode=mode, kind=kind):
+                    result = self.invoke({"publish_collision": 1, "collision_kind": kind},
+                                         PULSE_BACKUP_ENCRYPT=mode)
+                    self.assert_stopped_before_retention(result)
+                    self.assert_no_uploads()
+                    self.assertIn("Backup file publication failed", self.output)
+                    partials = list(self.backups.glob(f"*{self.timestamp}*.partial"))
+                    self.assertEqual(len(partials), 3)
+                    destination = Path(next(call for call in self.calls if call[0] == "mv")[-1])
+                    if kind == "directory":
+                        self.assertEqual(list(destination.iterdir()), [destination / "preserved.txt"])
+                        destination = destination / "preserved.txt"
+                    elif kind in ("symlink", "dangling"):
+                        self.assertTrue(destination.is_symlink())
+                    if kind == "dangling":
+                        self.assertFalse(destination.exists())
+                    else:
+                        self.assertEqual(destination.read_bytes(), b"late unrelated fixture")
+
+    def test_existing_partial_files_directories_and_links_are_never_overwritten(self):
+        for index, (label, suffix) in enumerate(OWNED_TYPES):
+            for mode, encrypted in (("false", ""), ("false", ".age"), ("true", ""), ("true", ".age")):
+                for kind in ("file", "directory", "symlink", "dangling"):
+                    with self.subTest(label=label, mode=mode, encrypted=encrypted, kind=kind):
+                        timestamp = f"20261022-09{self.invocations + 1:04d}"
+                        existing = self.backups / f"pulse-backup-{label}-{timestamp}{suffix}{encrypted}.partial"
+                        target = self.root / f"partial-target-{index}-{mode}-{kind}"
+                        if kind == "directory":
+                            existing.mkdir()
+                            (existing / "preserved.txt").write_bytes(b"preserved partial fixture")
+                        elif kind in ("symlink", "dangling"):
+                            if kind == "symlink":
+                                target.write_bytes(b"preserved partial fixture")
+                            existing.symlink_to(target)
+                        else:
+                            existing.write_bytes(b"preserved partial fixture")
+                        result = self.invoke(PULSE_BACKUP_ENCRYPT=mode, FIXTURE_TIMESTAMP=timestamp)
+                        self.assert_stopped_before_retention(result)
+                        self.assertEqual(self.calls, [])
+                        self.assertIn("already exists", self.output)
+                        if kind == "directory":
+                            self.assertEqual(list(existing.iterdir()), [existing / "preserved.txt"])
+                            self.assertEqual((existing / "preserved.txt").read_bytes(), b"preserved partial fixture")
+                        elif kind == "dangling":
+                            self.assertTrue(existing.is_symlink())
+                            self.assertFalse(target.exists())
+                        else:
+                            self.assertEqual(existing.read_bytes(), b"preserved partial fixture")
 
     def test_archive_failures_preserve_last_archives_and_skip_uploads(self):
         for number in (1, 2):
@@ -832,7 +1055,8 @@ class CloudBackupTest(unittest.TestCase):
 
     def assert_no_new_plaintext(self):
         self.assertEqual([path.name for path in self.backups.iterdir()
-                          if path not in self.old and path.name.endswith((".tar.gz", ".txt"))], [])
+                          if path not in self.old and path.name.endswith(
+                              (".tar.gz", ".txt", ".tar.gz.partial", ".txt.partial"))], [])
 
     def test_encryption_never_stages_plaintext_even_while_age_reads(self):
         result = self.invoke(PULSE_BACKUP_ENCRYPT="true")
@@ -871,7 +1095,7 @@ class CloudBackupTest(unittest.TestCase):
                 # The fake encryptor succeeds with the partial producer output.
                 # The job must still fail through Bash's pipefail.
                 self.assertIn(b"FAKE-AGE\nincomplete fixture archive",
-                              [path.read_bytes() for path in self.backups.glob("*.age") if path not in self.old])
+                              [path.read_bytes() for path in self.backups.glob("*.age.partial")])
 
     def test_each_upload_must_succeed_before_either_retention(self):
         for mode in ("false", "true"):
@@ -986,7 +1210,7 @@ class CloudBackupTest(unittest.TestCase):
         # Only the partial encrypted stream is retained, never a new plaintext
         # inventory. A failed job does not claim that stream is a usable backup.
         self.assert_no_new_plaintext()
-        metadata = next(path for path in self.backups.glob("pulse-backup-meta-*.txt.age") if path not in self.old)
+        metadata = next(self.backups.glob("pulse-backup-meta-*.txt.age.partial"))
         self.assertEqual(metadata.stat().st_mode & 0o777, 0o600)
 
     def test_each_encrypted_upload_preserves_prior_backups_on_failure(self):
@@ -1119,9 +1343,34 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_no_uploads()
         self.assert_no_new_plaintext()
 
+    @unittest.skipUnless(REAL_AGE and REAL_AGE_KEYGEN, "real age and age-keygen are not supplied or installed")
+    def test_real_age_keeps_failed_native_tar_output_partial(self):
+        identity = self.root / "fixture-failed-tar-age-identity"
+        keygen = subprocess.run([REAL_AGE_KEYGEN, "-o", str(identity)], capture_output=True, timeout=5)
+        self.assertEqual(keygen.returncode, 0, "fixture age identity creation failed")
+        identity.chmod(0o600)
+        public = subprocess.run([REAL_AGE_KEYGEN, "-y", str(identity)], capture_output=True, timeout=5)
+        self.assertEqual(public.returncode, 0, "fixture age recipient derivation failed")
+        (self.bin / "age").unlink()
+        (self.bin / "age").symlink_to(REAL_AGE)
+        result = self.invoke({"native_tar_missing": 1}, PULSE_BACKUP_ENCRYPT="true",
+                             PULSE_BACKUP_AGE_RECIPIENT=public.stdout.decode().strip())
+        self.assert_stopped_before_retention(result)
+        self.assert_no_uploads()
+        self.assert_no_new_plaintext()
+        self.assert_no_new_completed_files()
+        partials = list(self.backups.glob(f"*{self.timestamp}*.age.partial"))
+        self.assertEqual(len(partials), 1)
+        self.assertEqual(partials[0].stat().st_mode & 0o777, 0o600)
+        decrypted = subprocess.run([REAL_AGE, "--decrypt", "-i", str(identity), str(partials[0])],
+                                   capture_output=True, timeout=5)
+        self.assertEqual(decrypted.returncode, 0, "fixture partial age decryption failed")
+        with tarfile.open(fileobj=io.BytesIO(decrypted.stdout), mode="r:gz") as archive:
+            self.assertEqual(archive.getnames(), [])
+
 
 def run_native_suite():
-    """CI must execute the full suite, including both real-client cases."""
+    """CI must execute the full suite, including the required native clients."""
     tools = (("age", REAL_AGE, "--version"),
              ("age-keygen", REAL_AGE_KEYGEN, "--version"),
              ("rclone", REAL_RCLONE, "version"))

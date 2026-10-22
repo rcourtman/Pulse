@@ -79,7 +79,9 @@ remove the first job's reservation. Reservations are released on normal completi
 ordinary failures and handled HUP/INT/TERM; a forced kill may leave one for that
 timestamp, which does not prevent later timestamps. Collision messages direct an
 operator to preserve existing files and retry later, rather than delete backups.
-Archive filenames stay second-resolution and unchanged. This protects cooperating helpers
+The reservation also rejects either mode's `.partial` files, directories and
+links, preserving failed-run evidence across same-second retries. Completed
+archive filenames stay second-resolution and unchanged. This protects cooperating helpers
 in the same staging directory, not arbitrary concurrent filesystem mutation or
 independent staging directories uploading into the same remote namespace.
 
@@ -100,9 +102,25 @@ still explicitly marked unavailable and does not skip metadata encryption.
 Encrypted jobs stream tar/gzip and metadata output directly to age on stdin;
 they never create new plaintext staging archives or inventories, even when age
 rejects the recipient or fails after reading input. A failed tar pipeline must
-fail the job even if age successfully encrypts the incomplete stream. Partial
-encrypted files may remain under private modes for diagnosis, but are not a
-completed backup. Plaintext-mode output, encrypted filenames and decrypted
+fail the job even if age successfully encrypts the incomplete stream. All three
+selected producers initially write to their final path plus `.partial`, never
+an ordinary backup filename. Failed producer output remains under private modes
+for diagnosis, explicitly separated from completed files. Encrypted partials
+remain encrypted; this does not introduce plaintext staging in encrypted mode.
+Only after both archives and metadata finish successfully does the helper
+publish ordinary filenames by same-directory GNU `mv` renames, with metadata
+last and every publication before the first upload or retention pass. `mv -T -n`
+preserves a late file/directory/link collision; a remaining partial also fails
+publication because GNU `mv -n` can exit zero after skipping. Publication failure
+stops uploads and retention without deleting existing files or partial evidence.
+Each published file has complete producer output, but the three renames are not
+an atomic set transaction, an upload receipt or a power-loss durability promise.
+An interrupted or failed publication can leave a subset of complete files and
+remaining partials; only the successful job's finished message establishes
+completion of its configured operations. Failed-run `.partial` evidence stays
+local, private and subject to the same local age limit after a successful job.
+Earlier ordinary-named partial files are not retrospectively validated or renamed.
+Plaintext-mode completed output, encrypted filenames and decrypted
 archive layout are unchanged. Existing artifacts are not rewritten or
 retrospectively protected; prior plaintext may remain in local or remote
 history until eligible for the configured retention. This is no claim about
@@ -114,13 +132,17 @@ archive names/contents, encryption opt-in, remote prefix and retention ages stay
 unchanged. This is orchestration safety, not real-age encryption qualification,
 application-consistent snapshots, restore verification or native guest recovery.
 
-Both retention passes are limited to the helper's six generated filename
+Remote retention is limited to the helper's six generated filename
 shapes: `pulse-backup-{tenants,cp}-YYYYMMDD-HHMMSS.tar.gz` and
 `pulse-backup-meta-YYYYMMDD-HHMMSS.txt`, each optionally suffixed `.age`.
 Every timestamp position must be a digit; this is filename ownership, not
-calendar validation. Local cleanup only considers top-level regular files,
-not directories, symlinks or nested copies. Remote cleanup anchors the same
-includes at the prefix root, limits traversal to one level and excludes all
+calendar validation. Local retention also admits those exact six shapes with
+`.partial` appended, so repeated failed jobs do not accumulate forever. It still
+runs only after all new files and configured uploads succeed. Local cleanup only
+considers top-level regular files, not directories, symlinks or nested copies.
+Partial evidence is never uploaded and is excluded from remote deletion.
+Remote cleanup anchors the original six includes at the prefix root, limits
+traversal to one level and excludes all
 other objects. Unrelated prefix/suffix lookalikes and material outside those
 flat filename shapes remain untouched. Names are not authenticated provenance:
 manually placed files using the exact generated namespace remain eligible.
@@ -139,8 +161,19 @@ real tar/gzip and local retention on synthetic non-database files. It checks
 missing/disappearing/linked sources (also a link substituted after admission),
 unchanged parent/nested-link semantics, invalid configuration, missing selected tools,
 archive/encryption/upload failures, retention errors, actual archive bytes and
-private modes, plus successful local/remote ordering. Layout admission
-checks equal/nested staging under both sources and encryption modes before any
+private modes, plus successful local/remote ordering. Completion controls
+also check that failed archive/encryption producers expose no ordinary backup
+names, every producer finishes before the first publication and successful jobs
+leave no new partials. Real GNU `mv` runs behind a closed observer; injected
+publication failures and late files/directories/live or dangling symlinks preserve
+all existing data and stop uploads/retention, including its exit-zero skip case.
+Native tar failures after an admitted source disappears, also through real age,
+leave no ordinary filename even when gzip/age finish readable empty output.
+Any already published archives retain actual fixture bytes. Both modes reserve
+partial names before work; old local partials expire only after success, while
+young partials, directories, links, nested/lookalike and remote partials remain.
+Layout admission checks equal/nested staging under both sources and encryption
+modes before any
 source/staging permission or content change, physical aliases and relative/dot/
 parent/newline paths, resolver failure and valid similarly prefixed siblings.
 The native path resolver runs on disposable directories, not a lexical model.

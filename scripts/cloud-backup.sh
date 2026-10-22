@@ -9,8 +9,9 @@
 # Source directory names are literal tar members, never options or file lists.
 # Ambient TAR_OPTIONS must not omit data or change the archive/link policy.
 # Helpers sharing a staging directory reserve names before writing any output.
+# Failed producers retain .partial evidence, not ordinary backup filenames.
 # Archive, encryption and configured uploads must succeed before retention.
-# Retention only removes this helper's top-level archives and metadata.
+# Local retention also ages out this helper's old top-level partial evidence.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
 #
@@ -109,6 +110,7 @@ preflight() {
   have tar || die "tar is required"
   have find || die "find is required for local retention"
   have rmdir || die "rmdir is required to release backup name reservations"
+  have mv || die "mv (GNU coreutils) is required to publish completed backup files"
   have realpath || die "realpath (GNU coreutils) is required to validate the backup staging location"
   [[ -d "${TENANTS_DIR}" ]] || die "Required tenants directory not found; no backup or retention performed"
   [[ -d "${CONTROL_PLANE_DIR}" ]] || die "Required control-plane directory not found; no backup or retention performed"
@@ -127,7 +129,7 @@ preflight() {
 
 # A timestamp is only second-resolution. Reserve its whole output set before
 # opening any file, so overlapping helpers cannot both pass an existence check.
-# Keep the flat archive names and refuse existing files, directories and links.
+  # Keep the flat archive names and refuse existing files, directories and links.
 release_backup_names() {
   [[ -n "${BACKUP_NAME_RESERVATION}" ]] || return 0
   rmdir -- "${BACKUP_NAME_RESERVATION}" || return 1
@@ -146,11 +148,27 @@ reserve_backup_names() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
-  local output
+  local output candidate
   for output in "$@"; do
-    [[ ! -e "${output}" && ! -L "${output}" ]] ||
-      die "Backup output already exists; refusing to overwrite it; no archives or retention performed; retry at a later time; preserve existing files and check staging permissions"
+    for candidate in "${output}" "${output}.partial"; do
+      [[ ! -e "${candidate}" && ! -L "${candidate}" ]] ||
+        die "Backup output or partial file already exists; refusing to overwrite it; no archives or retention performed; retry at a later time; preserve existing files and check staging permissions"
+    done
   done
+}
+
+# Each rename stays in the same directory/filesystem. Never give a truncated
+# producer stream a normal backup name. Publish only after all three producers
+# succeed; a later publication/upload failure is still not a completed job.
+publish_backup_file() {
+  local output="$1"
+  # -T prevents moving into an existing directory, and -n preserves even a
+  # late destination collision. GNU mv can return zero after skipping with -n,
+  # so the still-present partial file must also make publication fail closed.
+  if ! mv -T -n -- "${output}.partial" "${output}" ||
+    [[ -e "${output}.partial" || -L "${output}.partial" ]]; then
+    die "Backup file publication failed; preserve existing files and .partial evidence; no uploads or retention performed"
+  fi
 }
 
 # Create tarball of a directory
@@ -175,7 +193,7 @@ create_tarball() {
     die "Cannot determine required ${label} archive member; backup incomplete, retention not performed"
 
   if [[ "${ENCRYPT}" == "true" ]]; then
-    log "creating encrypted tarball: ${label} -> ${output_path}.age"
+    log "creating encrypted tarball: ${label} -> ${output_path}.age.partial"
     # Keep plaintext in the pipe, not in the backup directory. pipefail must
     # reject a failed tar even when age successfully encrypts its partial stream.
     # End option parsing: a source named --files-from=... is still a directory,
@@ -183,14 +201,14 @@ create_tarball() {
     # Operator shell defaults must not silently exclude or rename recovery
     # data, dereference nested links, or suppress tar's failure reporting.
     TAR_OPTIONS='' tar -czf - -C "${parent_dir}" -- "${source_name}" |
-      age -r "${AGE_RECIPIENT}" -o "${output_path}.age"
-    log "encrypted tarball created: ${output_path}.age ($(du -sh "${output_path}.age" | cut -f1))"
+      age -r "${AGE_RECIPIENT}" -o "${output_path}.age.partial"
+    log "encrypted tarball staged: ${output_path}.age.partial ($(du -sh "${output_path}.age.partial" | cut -f1))"
     return 0
   fi
 
-  log "creating tarball: ${label} -> ${output_path}"
-  TAR_OPTIONS='' tar -czf "${output_path}" -C "${parent_dir}" -- "${source_name}"
-  log "tarball created: ${output_path} ($(du -sh "${output_path}" | cut -f1))"
+  log "creating tarball: ${label} -> ${output_path}.partial"
+  TAR_OPTIONS='' tar -czf "${output_path}.partial" -C "${parent_dir}" -- "${source_name}"
+  log "tarball staged: ${output_path}.partial ($(du -sh "${output_path}.partial" | cut -f1))"
 }
 
 # Emit metadata to the selected plaintext file or encryption pipe.
@@ -231,11 +249,11 @@ rotate_local() {
   local names=()
   for pattern in "${BACKUP_FILE_PATTERNS[@]}"; do
     if (( ${#names[@]} > 0 )); then names+=(-o); fi
-    names+=(-name "${pattern}")
+    names+=(-name "${pattern}" -o -name "${pattern}.partial")
   done
   log "rotating local backups (keeping last ${RETENTION_DAYS} days)"
   # Do not walk operator-created subdirectories or remove links/directories.
-  # Metadata has the same retention as archives, including earlier plaintext.
+  # Metadata and failed-run partial evidence have the same age/ownership bounds.
   if ! find "${BACKUP_DIR}" -maxdepth 1 -type f \( "${names[@]}" \) \
     -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null; then
     die "Local retention failed; new backup artifacts are retained, but cleanup may be incomplete"
@@ -297,10 +315,21 @@ main() {
   # Complete every encryption before the first upload or retention.
   if [[ "${ENCRYPT}" == "true" ]]; then
     meta_file="${meta_file}.age"
-    write_metadata "${timestamp}" | age -r "${AGE_RECIPIENT}" -o "${meta_file}"
+    write_metadata "${timestamp}" | age -r "${AGE_RECIPIENT}" -o "${meta_file}.partial"
   else
-    write_metadata "${timestamp}" > "${meta_file}"
+    write_metadata "${timestamp}" > "${meta_file}.partial"
   fi
+
+  # No ordinary filenames are visible while any archive/encryption producer
+  # may still fail. Metadata is published last, but is not an upload receipt.
+  if [[ "${ENCRYPT}" == "true" ]]; then
+    publish_backup_file "${tenants_tarball}.age"
+    publish_backup_file "${cp_tarball}.age"
+  else
+    publish_backup_file "${tenants_tarball}"
+    publish_backup_file "${cp_tarball}"
+  fi
+  publish_backup_file "${meta_file}"
 
   # Upload to remote
   local remote_prefix="pulse-cloud-tarballs"
