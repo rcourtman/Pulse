@@ -184,8 +184,9 @@ class RegistryAuditTest(unittest.TestCase):
                 "frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts",
             },
             ("storage-recovery", "storage-product-surface"): {
-                "frontend-modern/src/components/Storage/__tests__/DiskDetail.test.tsx",
-                "frontend-modern/src/components/Storage/__tests__/useDiskDetailModel.test.ts",
+                "frontend-modern/src/components/Storage/__tests__/DiskDrawer.history-collection.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/DiskDrawer.test.tsx",
+                "frontend-modern/src/features/storageBackups/__tests__/diskDrawerPresentation.test.ts",
                 "frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts",
             },
             ("unified-resources", "identity-canonicalization"): {

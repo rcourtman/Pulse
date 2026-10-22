@@ -19,7 +19,6 @@ import {
   isDrawerAvailabilityHealthy,
 } from '@/components/Workloads/drawerOverviewModel';
 import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { formatUptime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { SystemInfoCard } from '@/components/shared/cards/SystemInfoCard';
@@ -50,6 +49,7 @@ import {
 import {
   DrawerAttentionSection,
   type DrawerAttentionItem,
+  DrawerNoAlertsLine,
 } from '@/components/shared/DrawerAttentionSection';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
@@ -406,12 +406,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     <div class="space-y-3">
       <DrawerAttentionSection items={attentionItems()} />
       <Show when={attentionItems().length === 0}>
-        <p data-testid="drawer-no-attention" class="text-xs text-muted">
-          <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
-          <Show when={availabilityHealthy()}>
-            <span> · availability checks passing</span>
-          </Show>
-        </p>
+        <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />
       </Show>
       <DrawerExceptionList testId="resource-drawer-exceptions" rows={exceptionRows()} />
       {/* Stored history leads the reading path: the charts answer "is this

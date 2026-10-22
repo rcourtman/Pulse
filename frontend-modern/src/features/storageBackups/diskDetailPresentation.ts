@@ -1,22 +1,10 @@
 import {
-  getPhysicalDiskHealthStatus,
-  getPhysicalDiskHealthSummary,
   getPhysicalDiskTemperaturePresentation,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
-import type { HistoryTimeRange } from '@/api/charts';
 import { formatPowerOnHours } from '@/utils/format';
 import { getMetricSeverity, type MetricDisplayThresholds } from '@/utils/metricThresholds';
 import type { StatusIndicatorVariant } from '@/utils/status';
-import { formatHistoryRangeOptionLabel } from '@/components/shared/historyChartModel';
-
-export function getDiskAttributeValueTextClass(ok: boolean): string {
-  return ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
-}
-
-export function getDiskAttributeCardValueTextClass(card: DiskDetailAttributeCard): string {
-  return card.lastKnown ? 'text-muted' : getDiskAttributeValueTextClass(card.ok);
-}
 
 export function getLinkedDiskHealthDotVariant(hasIssue: boolean): StatusIndicatorVariant {
   return hasIssue ? 'warning' : 'success';
@@ -56,67 +44,6 @@ export type DiskDetailAttributeCard = {
   /** A retained value that is not a current reading. */
   lastKnown?: boolean;
 };
-
-export type DiskDetailChartOption = {
-  value: HistoryTimeRange;
-  label: string;
-};
-
-export type DiskDetailLiveChartConfig = {
-  label: string;
-  unit: string;
-  metric: 'disk';
-  series: 'read' | 'write' | 'io';
-};
-
-export type DiskDetailHistoryChartConfig = {
-  metric:
-    'smart_temp' | 'smart_reallocated_sectors' | 'smart_percentage_used' | 'smart_available_spare';
-  label: string;
-  unit: string;
-  color: string;
-};
-
-export const DISK_DETAIL_HISTORY_RANGE_OPTIONS: readonly DiskDetailChartOption[] = (
-  ['1h', '6h', '12h', '24h', '7d', '14d', '30d', '90d'] as const
-).map((value) => ({ value, label: formatHistoryRangeOptionLabel(value) }));
-
-export const DISK_DETAIL_LIVE_CHARTS: readonly DiskDetailLiveChartConfig[] = [
-  { label: 'Read', unit: 'B/s', metric: 'disk', series: 'read' },
-  { label: 'Write', unit: 'B/s', metric: 'disk', series: 'write' },
-  { label: 'Busy', unit: '%', metric: 'disk', series: 'io' },
-] as const;
-
-export const getDiskDetailLiveBadgeLabel = (): string => 'Real-time';
-
-export const getDiskDetailHistoryFallbackMessage = (): string =>
-  'Historical disk charts are unavailable until Pulse can resolve a stable identity for this disk.';
-
-export type DiskDetailHealthPresentation = {
-  label: string;
-  summary: string;
-  tone: string;
-};
-
-// The drawer header carries the disk's verdict and its reason. The table row
-// shows only the verdict word, so this is where the reason is read in full.
-export const DISK_DETAIL_HEADER_STACK_CLASS = 'min-w-0 space-y-1';
-export const DISK_DETAIL_HEALTH_ROW_CLASS =
-  'flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]';
-export const DISK_DETAIL_HEALTH_LABEL_CLASS = 'font-semibold';
-export const DISK_DETAIL_HEALTH_SUMMARY_CLASS =
-  'min-w-0 max-w-full whitespace-normal wrap-break-word text-muted';
-
-export function getDiskDetailHealthPresentation(
-  disk: PhysicalDiskPresentationData,
-): DiskDetailHealthPresentation {
-  const status = getPhysicalDiskHealthStatus(disk);
-  return {
-    label: status.label,
-    summary: getPhysicalDiskHealthSummary(status),
-    tone: status.tone,
-  };
-}
 
 export function getDiskDetailAttributeCards(
   disk: PhysicalDiskPresentationData,
@@ -223,63 +150,4 @@ export function getDiskDetailAttributeCards(
   }
 
   return cards;
-}
-
-const DISK_TEMPERATURE_HISTORY_CHART: DiskDetailHistoryChartConfig = {
-  metric: 'smart_temp',
-  label: 'Temperature',
-  unit: 'C',
-  color: '#ef4444',
-};
-
-const ATA_DISK_HISTORY_CHARTS: readonly DiskDetailHistoryChartConfig[] = [
-  DISK_TEMPERATURE_HISTORY_CHART,
-  {
-    metric: 'smart_reallocated_sectors',
-    label: 'Reallocated Sectors',
-    unit: 'sectors',
-    color: '#f59e0b',
-  },
-];
-
-const NVME_DISK_HISTORY_CHARTS: readonly DiskDetailHistoryChartConfig[] = [
-  DISK_TEMPERATURE_HISTORY_CHART,
-  {
-    metric: 'smart_percentage_used',
-    label: 'Life Used',
-    unit: '%',
-    color: '#f59e0b',
-  },
-  {
-    metric: 'smart_available_spare',
-    label: 'Available Spare',
-    unit: '%',
-    color: '#10b981',
-  },
-];
-
-/**
- * Charts a phone keeps on screen when the rest fold behind one button: the
- * first History chart, and any chart whose SMART card is out of bounds (the
- * cards and charts share labels). Live I/O never pins.
- */
-export function getDiskDetailPhonePinnedChartLabels(
-  historyCharts: readonly DiskDetailHistoryChartConfig[],
-  cards: readonly DiskDetailAttributeCard[],
-): string[] {
-  const failing = new Set(cards.filter((card) => !card.ok && !card.lastKnown).map((c) => c.label));
-  return historyCharts
-    .filter((chart, index) => index === 0 || failing.has(chart.label))
-    .map((chart) => chart.label);
-}
-
-export function getDiskDetailHistoryCharts(
-  disk: PhysicalDiskPresentationData,
-): readonly DiskDetailHistoryChartConfig[] {
-  // Missing current collection does not erase stored observations. Ask for the
-  // existing disk-family catalog and let the store return samples or an honest
-  // empty series; never synthesize a value from the current snapshot.
-  // Stable entries also keep Solid's reference-keyed For from remounting charts
-  // and restarting History reads on every ordinary disk snapshot replacement.
-  return disk.type?.toLowerCase() === 'nvme' ? NVME_DISK_HISTORY_CHARTS : ATA_DISK_HISTORY_CHARTS;
 }

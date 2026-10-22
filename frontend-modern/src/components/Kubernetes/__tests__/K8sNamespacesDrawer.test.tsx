@@ -33,22 +33,24 @@ describe('K8sNamespacesDrawer', () => {
     cleanup();
   });
 
-  it('navigates to the Kubernetes Workloads tab from the cluster summary', async () => {
+  it('opens the Workloads tab scoped to the whole cluster', async () => {
     apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'default' }]));
 
-    render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
+    render(() => <K8sNamespacesDrawer cluster="cluster-a" scopeCluster="cluster-a-id" />);
 
     await waitFor(() => {
       expect(screen.getByText('default')).toBeInTheDocument();
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Open All Pods' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open all workloads' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
+    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads?cluster=cluster-a-id');
   });
 
-  it('navigates to the Kubernetes Workloads tab from a namespace row', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'kube-system' }]));
+  it('opens the workloads scoped to the cluster and namespace of the row', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce(
+      makeResponse([{ namespace: 'kube-system' }, { namespace: 'default' }]),
+    );
 
     render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
 
@@ -56,9 +58,46 @@ describe('K8sNamespacesDrawer', () => {
       expect(screen.getByText('kube-system')).toBeInTheDocument();
     });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Open Pods' }));
+    // Each row's action names its namespace, so a screen reader can tell the
+    // rows' buttons apart. Pods and deployments share the Workloads tab.
+    await fireEvent.click(screen.getByRole('button', { name: 'Open workloads in kube-system' }));
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/kubernetes/workloads?cluster=cluster-a&namespace=kube-system',
+    );
 
-    expect(navigateMock).toHaveBeenCalledWith('/kubernetes/workloads');
+    await fireEvent.click(screen.getByRole('button', { name: 'Open workloads in default' }));
+    expect(navigateMock).toHaveBeenLastCalledWith(
+      '/kubernetes/workloads?cluster=cluster-a&namespace=default',
+    );
+  });
+
+  it('shows the failure state when the namespaces read fails', async () => {
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('namespaces endpoint unavailable'));
+
+    render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Failed to load namespaces');
+    expect(screen.getByRole('alert')).toHaveTextContent('namespaces endpoint unavailable');
+  });
+
+  it('wraps long namespace names instead of truncating them', async () => {
+    const longName = 'team-payments-reconciliation-batch-processing-production';
+    apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: longName }]));
+
+    render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
+
+    const name = await screen.findByText(longName);
+    expect(name).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(name).not.toHaveClass('truncate');
+  });
+
+  it('does not repeat the tab label in a nested card header', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce(makeResponse([{ namespace: 'default' }]));
+
+    render(() => <K8sNamespacesDrawer cluster="cluster-a" />);
+
+    await screen.findByText('default');
+    expect(screen.queryByText('Scope Pods and Deployments by namespace')).toBeNull();
   });
 
   it('uses the shared platform table spacing and divider contract', async () => {
@@ -79,7 +118,7 @@ describe('K8sNamespacesDrawer', () => {
   it('does not navigate when cluster is empty', async () => {
     render(() => <K8sNamespacesDrawer cluster="" />);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Open All Pods' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Open all workloads' }));
 
     expect(navigateMock).not.toHaveBeenCalled();
   });

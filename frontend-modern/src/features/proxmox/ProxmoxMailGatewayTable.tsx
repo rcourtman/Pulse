@@ -1,8 +1,7 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
-import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
+import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { getAlertsForResource } from '@/utils/alerts';
 import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
@@ -33,10 +32,10 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailTableRow,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
-import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 
 type MailGatewayAlertColumn = 'queue' | 'deferred' | 'quarantine' | 'spam' | 'virus';
 
@@ -177,7 +176,9 @@ export const ProxmoxMailGatewayTable: Component<{
     ...getResourceIdentityAliases(resource),
   ];
   // One scan of the active-alert map per gateway, shared by the filter, the
-  // status counts, the row and its drawer.
+  // status counts and the row. The drawer lists the same alerts through the
+  // canonical resource matcher (PMG alerts carry the instance id, which is
+  // the resource's metrics target).
   const openAlertsById = createMemo(() => {
     const byId = new Map<string, Alert[]>();
     for (const resource of props.resources) {
@@ -203,12 +204,17 @@ export const ProxmoxMailGatewayTable: Component<{
       ? resource.status
       : 'warning';
   };
-  // The dot follows the most severe open alert, so a critical one reads red.
-  const indicatorFor = (resource: Resource) => {
-    const base = getSimpleStatusIndicator(effectiveStatus(resource));
-    return openAlertsFor(resource)[0]?.level === 'critical'
-      ? { ...base, variant: 'danger' as const }
-      : base;
+  // The dot follows the most severe open alert, so a critical one reads red,
+  // and a reachable gateway with open alerts reads as needing attention. The
+  // drawer header repeats this indicator rather than judging again.
+  const indicatorFor = (resource: Resource): StatusIndicator => {
+    const base = getSimpleStatusIndicator(resource.status);
+    const alerts = openAlertsFor(resource);
+    if (alerts.length === 0 || base.variant === 'danger') return base;
+    return {
+      variant: alerts[0]?.level === 'critical' ? 'danger' : 'warning',
+      label: 'Needs attention',
+    };
   };
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
@@ -515,19 +521,14 @@ export const ProxmoxMailGatewayTable: Component<{
                             </AlertedMetric>
                           </TableCell>
                         </TableRow>
-                        <Show when={isOpen()}>
-                          <InlineDetailTableRow
-                            cellId={detailRowId()}
-                            colspan={visibleColumnCount()}
-                            data-inline-detail-for={instance.id}
-                          >
-                            <ProxmoxMailGatewayDrawer
-                              instanceRow={instance}
-                              onClose={() => detail.close(instance)}
-                              alerts={rowAlerts()}
-                            />
-                          </InlineDetailTableRow>
-                        </Show>
+                        <PlatformResourceDetailTableRow
+                          resource={instance}
+                          statusIndicator={indicator()}
+                          open={isOpen()}
+                          detailRowId={detailRowId()}
+                          colSpan={visibleColumnCount()}
+                          onClose={() => detail.close(instance)}
+                        />
                       </>
                     );
                   }}

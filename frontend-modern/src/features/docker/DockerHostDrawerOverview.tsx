@@ -1,15 +1,19 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
 import {
   buildDrawerDiskListItems,
   type DrawerDiskListItem,
 } from '@/components/Workloads/DrawerDiskListCard';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
+import { Button } from '@/components/shared/Button';
 import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DrawerAttentionSection,
+  DrawerNoAlertsLine,
+} from '@/components/shared/DrawerAttentionSection';
 import {
   DetailSectionTable,
   compactDetailRows,
@@ -20,6 +24,7 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
 import { useWebSocket } from '@/contexts/appRuntime';
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
@@ -36,18 +41,26 @@ import {
 } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { getSimpleStatusIndicator } from '@/utils/status';
 import type { HistoryTimeRange } from '@/api/charts';
-import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
 import {
   getAlertStatedRowLabels,
   getDrawerChartAlerts,
   isDrawerAvailabilityHealthy,
   partitionDrawerExceptionRows,
 } from '@/components/Workloads/drawerOverviewModel';
-import type {
-  GuestDrawerHistoryGroupConfig,
-  GuestDrawerHistoryTarget,
+import {
+  GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  type GuestDrawerHistoryGroupConfig,
+  type GuestDrawerHistoryTarget,
 } from '@/components/Workloads/guestDrawerModel';
+
+// Loaded once a host drawer opens, so the Docker table chunk does not carry it.
+const GuestDrawerHistory = lazy(() =>
+  import('@/components/Workloads/GuestDrawerHistory').then(({ GuestDrawerHistory }) => ({
+    default: GuestDrawerHistory,
+  })),
+);
 
 interface DockerHostDrawerOverviewProps {
   host: Resource;
@@ -97,14 +110,21 @@ const getDetailTone = (valueClass: string | undefined): DetailValueTone => {
 const toDetailRows = (rows: DockerOverviewRow[]): DetailRow[] =>
   compactDetailRows(
     rows.map((row) =>
+      // Details is where a reader goes for the full value; wrap rather than
+      // cut it off behind an ellipsis and a hover-only title.
       makeDetailRow(row.label, row.value, {
         title: row.title,
         tone: getDetailTone(row.valueClass),
+        wrap: true,
       }),
     ),
   );
 
-export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps) {
+/**
+ * The host's container update controls for Manage, built like the other
+ * Manage sections: a titled card, key facts, then its actions.
+ */
+export function DockerHostDrawerManagement(props: { host: Resource }) {
   const now = useRelativeTimeNow();
   const docker = () => props.host.docker;
   const hostSourceId = createMemo(() => cleanText(docker()?.hostSourceId) || null);
@@ -132,7 +152,7 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
 
   return (
     <Show when={hostSourceId() && !summaryOnly()}>
-      <InfoCardFrame data-testid="docker-host-management-actions" class="max-w-md">
+      <InfoCardFrame data-testid="docker-host-management-actions">
         <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
           Container updates
         </h3>
@@ -150,50 +170,54 @@ export function DockerHostDrawerManagement(props: DockerHostDrawerOverviewProps)
             <InfoCardKeyValueRow
               label={titleCase(cleanText(hostCommand()?.type).replace(/_/g, ' ') || 'Command')}
               value={titleCase(cleanText(hostCommand()?.status).replace(/_/g, ' ') || 'unknown')}
-              valueClass={`truncate ${hostCommandActive() ? 'text-sky-700 dark:text-sky-300' : ''}`}
+              valueClass={hostCommandActive() ? 'text-sky-700 dark:text-sky-300' : undefined}
               valueTitle={hostCommand()?.failureReason || hostCommand()?.message || undefined}
             />
           </Show>
-          <Show when={updateActions.dockerActionError()}>
-            <div class="rounded-sm border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900/25 dark:text-red-200">
-              {updateActions.dockerActionError()}
-            </div>
-          </Show>
-          <Show when={updateActions.dockerActionNote()}>
-            <div class="rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
-              {updateActions.dockerActionNote()}
-            </div>
-          </Show>
-          <div class="flex flex-wrap items-center gap-2 border-t border-border pt-2">
-            <button
-              type="button"
+        </div>
+        <Show when={updateActions.dockerActionError()}>
+          {(message) => (
+            <InlineNotice tone="danger" role="alert" class="mt-2">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+        <Show when={updateActions.dockerActionNote()}>
+          {(message) => (
+            <InlineNotice tone="info" role="status" class="mt-2">
+              {message()}
+            </InlineNotice>
+          )}
+        </Show>
+        <div class="mt-2 flex flex-wrap items-center gap-2 border-t border-border pt-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={
+              updateActions.dockerActionBusy() || updateActionsLoading() || hostCommandActive()
+            }
+            onClick={() => void updateActions.queueDockerUpdateCheck()}
+            title={updateActionsLoading() ? 'Loading settings...' : undefined}
+          >
+            Check updates
+          </Button>
+          <Show when={!updateAllHidden()}>
+            <Button
+              variant="primaryFlat"
+              size="sm"
               disabled={
-                updateActions.dockerActionBusy() || updateActionsLoading() || hostCommandActive()
+                updateActions.dockerActionBusy() ||
+                updateActionsLoading() ||
+                hostCommandActive() ||
+                updatesAvailable() <= 0
               }
-              onClick={() => void updateActions.queueDockerUpdateCheck()}
-              class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
-              title={updateActionsLoading() ? 'Loading settings...' : undefined}
+              onClick={() => void updateActions.queueDockerUpdateAll()}
             >
-              Check updates
-            </button>
-            <Show when={!updateAllHidden()}>
-              <button
-                type="button"
-                disabled={
-                  updateActions.dockerActionBusy() ||
-                  updateActionsLoading() ||
-                  hostCommandActive() ||
-                  updatesAvailable() <= 0
-                }
-                onClick={() => void updateActions.queueDockerUpdateAll()}
-                class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
-              >
-                {updateActions.confirmUpdateAll()
-                  ? 'Confirm update'
-                  : `Update all${updatesAvailable() > 0 ? ` (${updatesAvailable()})` : ''}`}
-              </button>
-            </Show>
-          </div>
+              {updateActions.confirmUpdateAll()
+                ? 'Confirm update'
+                : `Update all${updatesAvailable() > 0 ? ` (${updatesAvailable()})` : ''}`}
+            </Button>
+          </Show>
         </div>
       </InfoCardFrame>
     </Show>
@@ -378,11 +402,12 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
                 { tone: 'danger' },
               )
             : null,
-          makeDetailRow('Runtime', runtimeLabel()),
-          makeDetailRow('System', osLabel()),
+          makeDetailRow('Runtime', runtimeLabel(), { wrap: true }),
+          makeDetailRow('System', osLabel(), { wrap: true }),
           makeDetailRow(
             'Pulse coverage',
             linkedAgentId() ? `Agent ${stripAgentPrefix(linkedAgentId())}` : 'Direct API',
+            { wrap: true },
           ),
           typeof docker()?.updatesAvailableCount === 'number' &&
           (docker()?.updatesAvailableCount ?? 0) > 0
@@ -413,6 +438,17 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     );
   const exceptionRows = () => inventory().lifted;
   const detailSections = () => inventory().details;
+  // The table withholds readings from an offline host and dims a stale one;
+  // the charts do the same instead of presenting the last numbers as live.
+  const liveReadingsWithheld = (): string | null => {
+    if (getSimpleStatusIndicator(props.host.status).variant === 'danger') {
+      return 'Docker host is offline. Showing its history only.';
+    }
+    const stale = getResourceStaleness(props.host);
+    if (stale) return `${stale.label}. Showing its history only.`;
+    return null;
+  };
+  const liveMetrics = () => (liveReadingsWithheld() ? undefined : props.currentMetrics);
   const sizeFact = (
     source: { total?: number; used?: number; free?: number } | undefined,
     label: string,
@@ -430,7 +466,9 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
           : undefined;
     const observation = (source as { observation?: { state?: string } } | undefined)?.observation;
     const current = !observation || observation.state === 'current';
-    const reporting = props.host.status === 'online' || props.host.status === 'running';
+    const reporting =
+      (props.host.status === 'online' || props.host.status === 'running') &&
+      !liveReadingsWithheld();
     return reporting && current && typeof used === 'number' && used >= 0
       ? `${formatBytes(used)} of ${formatBytes(total)} ${label}`
       : `${formatBytes(total)} ${label}`;
@@ -478,26 +516,28 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     <div class="space-y-3">
       <DrawerAttentionSection items={attentionItems()} />
       <Show when={attentionItems().length === 0}>
-        <p data-testid="drawer-no-attention" class="text-xs text-muted">
-          <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
-          <Show when={availabilityHealthy()}>
-            <span> · availability checks passing</span>
-          </Show>
-        </p>
+        <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />
       </Show>
       <DrawerExceptionList testId="docker-host-drawer-exceptions" rows={exceptionRows()} />
       <Show when={props.historyTarget}>
-        {(target) => (
+        <Show when={liveReadingsWithheld()}>
+          {(message) => (
+            <p data-testid="docker-host-drawer-readings-withheld" class="text-xs text-muted">
+              {message()}
+            </p>
+          )}
+        </Show>
+        <Suspense fallback={<div class="h-48" aria-hidden="true" />}>
           <GuestDrawerHistory
-            target={target()}
-            range={props.historyRange ?? '24h'}
+            target={props.historyTarget ?? null}
+            range={props.historyRange ?? GUEST_DRAWER_HISTORY_DEFAULT_RANGE}
             onRangeChange={props.onHistoryRangeChange}
             enabled={props.historyEnabled ?? true}
             groups={props.historyGroups}
-            currentMetrics={props.currentMetrics}
+            currentMetrics={liveMetrics()}
             alerts={chartAlerts()}
           />
-        )}
+        </Suspense>
       </Show>
       {/* A failing check stays in front, after the charts as in every drawer. */}
       <Show when={availabilityChecks().length > 0 && !availabilityHealthy()}>
@@ -513,7 +553,9 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
           data-testid="docker-host-drawer-facts"
           class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
         >
-          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+          <For each={facts()}>
+            {(fact) => <span class="max-w-full whitespace-normal wrap-anywhere">{fact}</span>}
+          </For>
         </div>
       </Show>
       <Show when={detailSections().length > 0 || availabilityHealthy()}>

@@ -213,8 +213,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
   it('uses terse availability notices for specialized tabs', () => {
     expect(getSpecializedTabAvailabilityMessage('mail')).toBe('PMG resources only.');
     expect(getSpecializedTabAvailabilityMessage('namespaces')).toBe('Kubernetes clusters only.');
-    expect(getSpecializedTabAvailabilityMessage('deployments')).toBe('Kubernetes clusters only.');
-    expect(getSpecializedTabAvailabilityMessage('swarm')).toBe('Docker runtimes with Swarm only.');
   });
 
   it('keeps host detail cards behind a secondary overview disclosure', async () => {

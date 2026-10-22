@@ -175,10 +175,9 @@ const proxmoxBespokeTableSources = [
   proxmoxReplicationTableSource,
 ];
 
-const proxmoxInlineDetailTableSources = [
-  proxmoxCephClusterDrawerSource,
-  proxmoxMailGatewayDrawerSource,
-];
+// The Ceph cluster drawer shows its pools and daemons as detail-section
+// cards, so only the Mail Gateway's node and domain tables remain here.
+const proxmoxInlineDetailTableSources = [proxmoxMailGatewayDrawerSource];
 
 type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
 
@@ -361,6 +360,10 @@ describe('platform overview layout guardrails', () => {
       expect(source).not.toContain('<tbody');
       expect(source).not.toContain('divide-y divide-border-subtle');
     }
+    // Ceph pools and daemons are shared detail-section cards, not a hand list.
+    expect(proxmoxCephClusterDrawerSource).toContain('<TechnicalDetailsSection');
+    expect(proxmoxCephClusterDrawerSource).not.toContain('<dl');
+    expect(proxmoxCephClusterDrawerSource).not.toContain('<table');
   });
 
   it('keeps Mail Gateway drawer tables prioritized for narrow inline details', () => {
@@ -514,7 +517,6 @@ describe('platform overview layout guardrails', () => {
       dockerTasksTableSource,
       dockerVolumesTableSource,
       proxmoxCoverageTableSource,
-      proxmoxMailGatewayDrawerSource,
       proxmoxRecoverableTableSource,
       vsphereHostsTableSource,
       kubernetesAutoscalingTableSource,
@@ -532,6 +534,10 @@ describe('platform overview layout guardrails', () => {
       // A block span that ellipsizes in its own cell, toned or not.
       expect(source).toMatch(/class=(?:"|\{`)block truncate\b/);
     }
+    // Inside a drawer a phone cannot hover a clipped value, so the Mail
+    // Gateway's domain and node names wrap in their cells instead.
+    expect(proxmoxMailGatewayDrawerSource).not.toMatch(/class="[^"]*\btruncate\b/);
+    expect(proxmoxMailGatewayDrawerSource).toContain('block whitespace-normal wrap-anywhere');
   });
 
   it('keeps long tablet headers from clipping', () => {

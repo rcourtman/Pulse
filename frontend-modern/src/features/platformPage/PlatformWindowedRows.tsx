@@ -9,6 +9,7 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
+import { createVisibleTableColumnSpan } from '@/components/shared/tableVisibleColumnSpan';
 import { usePlatformWindowedItems } from './usePlatformWindowedItems';
 
 export interface PlatformWindowedRowsProps<Row> {
@@ -20,6 +21,7 @@ export interface PlatformWindowedRowsProps<Row> {
    * automatically; non-resource rows retain reference-keyed rendering.
    */
   keyExtractor?: (item: Row) => string | number;
+  /** Fixed span for the spacer rows; by default they span the visible header cells. */
   colSpan?: number;
   estimatedRowHeight?: number;
   enableThreshold?: number;
@@ -132,6 +134,13 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
     windowSize: props.windowSize,
   });
 
+  // Spacer rows span exactly the visible columns: a larger span creates
+  // phantom columns that take the width a phone's visible column
+  // percentages leave over, so rows and drawers stop short of the edge.
+  const [spacerRow, setSpacerRow] = createSignal<HTMLTableRowElement | null>(null);
+  const visibleColumnSpan = createVisibleTableColumnSpan(spacerRow);
+  const spacerSpan = () => props.colSpan ?? visibleColumnSpan();
+
   // Keep the For owner mounted when its window changes. Recreating it would
   // discard editors and expanded detail state in rows retained by both windows.
   const renderRows = (
@@ -148,13 +157,16 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
   return (
     <Show when={windowing.isWindowed()} fallback={renderRows(renderItems, () => 0)}>
       <tr
-        ref={windowing.setAnchorRef}
+        ref={(row) => {
+          windowing.setAnchorRef(row);
+          setSpacerRow(row);
+        }}
         aria-hidden="true"
         data-platform-window-spacer="top"
         style={{ height: `${windowing.topSpacerHeight()}px` }}
       >
         <td
-          colspan={props.colSpan ?? 100}
+          colspan={spacerSpan()}
           class="p-0!"
           style={{ height: `${windowing.topSpacerHeight()}px` }}
         />
@@ -166,7 +178,7 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
         style={{ height: `${windowing.bottomSpacerHeight()}px` }}
       >
         <td
-          colspan={props.colSpan ?? 100}
+          colspan={spacerSpan()}
           class="p-0!"
           style={{ height: `${windowing.bottomSpacerHeight()}px` }}
         />

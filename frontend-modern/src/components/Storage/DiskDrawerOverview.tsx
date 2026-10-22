@@ -1,7 +1,10 @@
 import { Component, For, Show, Suspense, createMemo, lazy } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { DetailSection } from '@/components/shared/DetailSectionTable';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DrawerAttentionSection,
+  DrawerNoAlertsLine,
+} from '@/components/shared/DrawerAttentionSection';
 import {
   TechnicalDetailsDisclosure,
   TechnicalDetailsSection,
@@ -31,7 +34,6 @@ import {
 import type { PhysicalDiskPresentationData } from '@/features/storageBackups/diskPresentation';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { resolvePhysicalDiskHistoryResourceId } from './diskResourceUtils';
 
@@ -116,9 +118,7 @@ export const DiskDrawerOverview: Component<DiskDrawerOverviewProps> = (props) =>
         }))}
       />
       <Show when={(props.alerts ?? []).length === 0}>
-        <p data-testid="drawer-no-attention" class="text-xs font-medium text-base-content">
-          {ALERTS_EMPTY_STATE}
-        </p>
+        <DrawerNoAlertsLine />
       </Show>
 
       <DrawerExceptionList testId="disk-drawer-exceptions" rows={exceptionRows()} />

@@ -21,14 +21,12 @@ vi.mock('@solidjs/router', async () => {
 });
 
 vi.mock('@/components/Kubernetes/K8sNamespacesDrawer', () => ({
-  K8sNamespacesDrawer: (props: { cluster: string }) => (
-    <div data-testid="k8s-namespaces-drawer" data-cluster={props.cluster} />
-  ),
-}));
-
-vi.mock('@/components/Kubernetes/K8sDeploymentsDrawer', () => ({
-  K8sDeploymentsDrawer: (props: { cluster: string }) => (
-    <div data-testid="k8s-deployments-drawer" data-cluster={props.cluster} />
+  K8sNamespacesDrawer: (props: { cluster: string; scopeCluster?: string }) => (
+    <div
+      data-testid="k8s-namespaces-drawer"
+      data-cluster={props.cluster}
+      data-scope-cluster={props.scopeCluster}
+    />
   ),
 }));
 
@@ -99,7 +97,8 @@ describe('ResourceDetailDrawer kubernetes capabilities', () => {
     expect(queryByText('K8s Node CPU/Memory')).toBeNull();
     expect(queryByText('Node Telemetry (Agent)')).toBeNull();
     expect(screen.getByRole('tab', { name: 'Namespaces' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Deployments' })).toBeInTheDocument();
+    // Deployments live on Kubernetes > Workloads; the drawer does not repeat them.
+    expect(screen.queryByRole('tab', { name: 'Deployments' })).toBeNull();
   });
 
   it('uses the canonical Kubernetes cluster name for drawer fetch keys', async () => {
@@ -112,13 +111,31 @@ describe('ResourceDetailDrawer kubernetes capabilities', () => {
         'cluster-a',
       );
     });
+    // Without a reported cluster id the page scopes by the cluster name.
+    expect(screen.getByTestId('k8s-namespaces-drawer')).toHaveAttribute(
+      'data-scope-cluster',
+      'cluster-a',
+    );
+  });
 
-    await fireEvent.click(screen.getByRole('tab', { name: 'Deployments' }));
+  it('scopes namespace links by the cluster id the Kubernetes page filters on', async () => {
+    const resource = buildKubernetesResource();
+    resource.platformData = {
+      ...resource.platformData,
+      kubernetes: { clusterId: 'cluster-a-uid', clusterName: 'cluster-a' },
+    };
+    render(() => <ResourceDetailDrawer resource={resource} />);
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Namespaces' }));
     await waitFor(() => {
-      expect(screen.getByTestId('k8s-deployments-drawer')).toHaveAttribute(
-        'data-cluster',
-        'cluster-a',
+      expect(screen.getByTestId('k8s-namespaces-drawer')).toHaveAttribute(
+        'data-scope-cluster',
+        'cluster-a-uid',
       );
     });
+    expect(screen.getByTestId('k8s-namespaces-drawer')).toHaveAttribute(
+      'data-cluster',
+      'cluster-a',
+    );
   });
 });

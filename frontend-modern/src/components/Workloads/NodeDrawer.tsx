@@ -1,10 +1,13 @@
 import { Show, createMemo, createSignal, type Component } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
+import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
+import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Alert, Disk, Node } from '@/types/api';
@@ -30,6 +33,8 @@ interface NodeDrawerProps {
    * name. `alerts` also lists its guests'; only these describe its metrics.
    */
   ownAlerts?: Alert[];
+  /** The node's web interface, the same link its table row opens. */
+  webInterfaceUrl?: string;
   onClose?: () => void;
 }
 
@@ -82,6 +87,18 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           <ObjectDrawerHeader
             collapseLabel={`Collapse ${displayName()} details`}
             onCollapse={onClose()}
+            actions={
+              <Show when={props.webInterfaceUrl?.trim()}>
+                <WebInterfaceLink
+                  url={props.webInterfaceUrl}
+                  ariaLabel={`Open web interface for ${displayName()}`}
+                  class={getDrawerHeaderActionButtonClass()}
+                >
+                  <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Open</span>
+                </WebInterfaceLink>
+              </Show>
+            }
           >
             <DrawerSubjectHeading
               headingId={headingId()}

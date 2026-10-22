@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertsAPI } from '@/api/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -18,16 +18,31 @@ const queryState = vi.hoisted(() => ({
   realtimeEnabled: undefined as (() => boolean) | undefined,
 }));
 
-// The expanded disk detail now shows its history charts in view; the chart
-// measures itself with ResizeObserver, which jsdom lacks. Its rendering is
-// covered by the HistoryChart and DiskDetail suites.
-vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChartHoverGroup: (props: { children: JSX.Element }) => <div>{props.children}</div>,
-  HistoryChart: (props: { label: string; enabled?: boolean }) => (
-    <div data-testid="history-chart" data-enabled={String(props.enabled !== false)}>
-      {props.label}
+// An opened disk shows the Storage disk drawer's Overview, whose charts read
+// metrics history. Their rendering is covered by the GuestDrawerHistory and
+// DiskDrawer suites; here they only report what they were asked to chart.
+vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
+  GuestDrawerHistory: (props: {
+    target: { resourceType: string; resourceId: string } | null;
+    range: string;
+    enabled?: boolean;
+    groups?: Array<{ label: string }>;
+  }) => (
+    <div
+      data-testid="history-chart"
+      data-enabled={String(props.enabled !== false)}
+      data-range={props.range}
+      data-target={props.target?.resourceId ?? ''}
+    >
+      {(props.groups ?? []).map((group) => group.label).join(', ')}
     </div>
   ),
+}));
+
+const activeAlertsMock = vi.hoisted(() => ({}) as Record<string, unknown>);
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: activeAlertsMock }),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -69,10 +84,10 @@ const disk: Resource = {
 };
 
 describe('GuestPhysicalDisks', () => {
-  // The first expansion lazy-loads the Storage disk detail; a cold transform of
-  // that module can outlast findByText's default wait on a loaded machine.
+  // The first expansion lazy-loads the Storage disk Overview; a cold transform
+  // of that module can outlast findByText's default wait on a loaded machine.
   beforeAll(async () => {
-    await import('@/components/Storage/DiskDetail');
+    await import('@/components/Storage/DiskDrawerOverview');
   }, 30_000);
 
   beforeEach(() => {
@@ -83,7 +98,10 @@ describe('GuestPhysicalDisks', () => {
     queryState.enabled = false;
     queryState.realtimeEnabled = undefined;
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    for (const id of Object.keys(activeAlertsMock)) delete activeAlertsMock[id];
+  });
 
   it('shows the linked guest disk and loads its existing SMART detail on expansion', async () => {
     queryState.resources = [disk, { ...disk, id: 'host-disk', parentId: 'pve-node-1' }];
@@ -100,12 +118,55 @@ describe('GuestPhysicalDisks', () => {
     const row = within(card).getByTestId('guest-physical-disk') as HTMLDetailsElement;
     row.open = true;
     fireEvent(row, new Event('toggle'));
-    // The SMART card and the disk's Reallocated Sectors history chart both
-    // name the attribute once the detail is open.
-    expect((await within(card).findAllByText('Reallocated Sectors')).length).toBeGreaterThan(0);
-    expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
-    expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
+    // The same Overview the Storage tab's disk drawer shows: alerts line,
+    // charts, facts, SMART health card, then every attribute under Details.
+    const overview = await within(card).findByTestId('disk-drawer-overview');
+    expect(within(overview).getByTestId('drawer-no-attention')).toHaveTextContent(
+      'No active alerts',
+    );
+    expect(await within(overview).findByTestId('history-chart')).toHaveAttribute(
+      'data-range',
+      '24h',
+    );
+    expect(within(overview).getByTestId('disk-drawer-health-card')).toBeInTheDocument();
+    expect(within(overview).getByText('Reallocated Sectors')).toBeInTheDocument();
+    expect(within(overview).getByText('Pending Sectors')).toBeInTheDocument();
+    expect(within(overview).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);
+  });
+
+  it("lists the disk's own open alerts in its Overview", async () => {
+    activeAlertsMock['disk-alert'] = {
+      id: 'disk-alert',
+      type: 'disk-health',
+      level: 'critical',
+      resourceId: 'disk-101-a',
+      resourceName: 'Guest SATA',
+      node: 'pve-node-1',
+      instance: 'cluster-a',
+      message: 'SMART health check failed',
+      value: 0,
+      threshold: 0,
+      startTime: '2026-10-20T10:00:00Z',
+      acknowledged: false,
+    };
+    activeAlertsMock['other-disk-alert'] = {
+      ...(activeAlertsMock['disk-alert'] as object),
+      id: 'other-disk-alert',
+      resourceId: 'disk-202-b',
+      message: 'Another disk failed',
+    };
+    queryState.resources = [disk];
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+    row.open = true;
+    fireEvent(row, new Event('toggle'));
+
+    const overview = await screen.findByTestId('disk-drawer-overview');
+    const attention = within(overview).getByTestId('drawer-attention-section');
+    expect(attention).toHaveTextContent('SMART health check failed');
+    expect(attention).not.toHaveTextContent('Another disk failed');
+    expect(within(overview).queryByTestId('drawer-no-attention')).toBeNull();
   });
 
   it('pauses an expanded disk and the live list while its Overview is hidden', async () => {

@@ -1,4 +1,3 @@
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
@@ -11,7 +10,10 @@ import {
   TechnicalDetailsDisclosure,
   TechnicalDetailsSection,
 } from '@/components/shared/TechnicalDetailsDisclosure';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DrawerAttentionSection,
+  DrawerNoAlertsLine,
+} from '@/components/shared/DrawerAttentionSection';
 import { DrawerExceptionList } from './DrawerExceptionList';
 import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
@@ -462,12 +464,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         }))}
       />
       <Show when={(props.alerts ?? []).length === 0}>
-        <p data-testid="drawer-no-attention" class="text-xs text-muted">
-          <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
-          <Show when={availabilityHealthy()}>
-            <span> · availability checks passing</span>
-          </Show>
-        </p>
+        <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />
       </Show>
 
       <DrawerExceptionList testId="guest-drawer-exceptions" rows={exceptionRows()} />
@@ -502,6 +499,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
         <Suspense fallback={null}>
           <GuestPhysicalDisks
             parentId={props.guest.canonicalResourceId ?? props.guest.id}
+            reportingAgentId={props.guest.agentId}
             alertResourceIds={[
               ...(props.guest.agentId ? [props.guest.agentId] : []),
               ...(props.guest.canonicalResourceId ? [props.guest.canonicalResourceId] : []),

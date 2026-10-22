@@ -10,12 +10,9 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
-import {
-  formatPlatformTableDateTimeValue,
-  formatPlatformTableDurationValue,
-  formatPlatformTableRelativeTimeValue,
-} from '@/features/platformPage/sharedPlatformPage';
+import { formatPlatformTableDurationValue } from '@/features/platformPage/sharedPlatformPage';
 import { drawerContentCardTestId } from './resourceDetailDrawerOverviewModel';
+import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
 
 export type ResourceDetailDrawerKubernetesSection = DetailSection;
 
@@ -246,27 +243,9 @@ const autoscalerAtLimitRow = (current?: number, max?: number): DetailRow | null 
 };
 const dangerWhenPositive = (count: number): DetailValueTone => (count > 0 ? 'danger' : 'default');
 
-// Kubernetes reports controller timestamps as RFC 3339 strings. The table row
-// only has room for an age, so the expansion carries the absolute time first
-// and the age after it: "Oct 2, 2026, 09:13 PM (1h ago)". The value wraps
-// because a phone-width detail cell is too narrow for both on one line. The
-// age is measured from `now`, which an open drawer passes from the shared
-// relative-time clock so the age keeps moving while the drawer stays open.
-const timestampRow = (
-  label: string,
-  timestamp: string | null | undefined,
-  now: number | undefined,
-): DetailRow | null => {
-  const raw = asString(timestamp);
-  if (!raw) return null;
-  const absolute = formatPlatformTableDateTimeValue(raw, {
-    emptyText: '',
-    dateTimeFormat: { year: 'numeric' },
-  });
-  if (!absolute) return makeRow(label, raw, { wrap: true });
-  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '', now });
-  return makeRow(label, relative ? `${absolute} (${relative})` : absolute, { wrap: true });
-};
+// Kubernetes reports controller timestamps as RFC 3339 strings; the drawer
+// shows the absolute time and its age (see makeDetailTimestampRow).
+const timestampRow = makeDetailTimestampRow;
 
 const elapsedSeconds = (start?: string | null, end?: string | null): number | undefined => {
   const startedAt = Date.parse(asString(start) ?? '');

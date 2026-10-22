@@ -1032,7 +1032,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 30. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
 31. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
-32. `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`
 33. `frontend-modern/src/features/docker/DockerConfigsTable.tsx`
 34. `frontend-modern/src/features/docker/DockerContainersTable.tsx`
     34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
@@ -1048,7 +1047,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 41. `frontend-modern/src/features/docker/DockerTasksTable.tsx`
 42. `frontend-modern/src/features/docker/DockerVolumesTable.tsx`
 43. `frontend-modern/src/features/docker/dockerPageModel.ts`
-44. `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`
 45. `frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`
 46. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
 47. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
@@ -8629,3 +8627,19 @@ count and involved object and no longer offers maintenance windows; a
 Secret's key names and values are never shown. Namespaces keep the object
 drawer because they carry alerts. No resource identity, status or alert rule
 changes.
+
+The remaining bespoke object drawers follow the guest drawer. The Proxmox Mail
+Gateway row opens the shared resource drawer (row status, Overview, Manage)
+with mail flow as its headless Mail tab, so a PMG has one drawer instead of
+two; the Ceph cluster drawer has the canonical header, Overview (alerts, Worth
+checking for health checks, down OSDs and full pools, capacity history, facts,
+pool and service cards, closed Details) and Manage. The Kubernetes cluster
+drawer's Deployments tab, which repeated the Workloads table with dead-end
+rows, is removed; its Namespaces tab opens the Workloads tab scoped to the
+cluster and namespace. The unreachable Docker Swarm tab and the drawer state
+nothing read any more are removed. PBS and PMG alerts are matched on their
+instance id too, so the drawer finds them without a metrics target. The
+Proxmox node and Docker host drawers gain the guest drawer's Open action,
+Docker host readings are withheld while it is offline or stale, its Manage
+lists operator state first and shows its action history, and a guest's own
+agent reports its physical disks' temperature alerts inside the guest drawer.

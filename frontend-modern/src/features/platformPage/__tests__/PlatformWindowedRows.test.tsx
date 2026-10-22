@@ -46,6 +46,34 @@ describe('PlatformWindowedRows', () => {
     expect(container.querySelectorAll('[data-platform-window-spacer]')).toHaveLength(2);
   });
 
+  it('spans spacer rows over the visible header cells only', () => {
+    // A wider span creates phantom fixed-layout columns that take the width a
+    // phone's visible column percentages leave over.
+    const items = () => Array.from({ length: 1_000 }, (_, index) => index);
+    const { container } = render(() => (
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th style={{ display: 'none' }}>Cluster</th>
+            <th colspan={2}>Ready</th>
+          </tr>
+        </thead>
+        <tbody>
+          <PlatformWindowedRows items={items}>
+            {(item) => <tr data-row-id={item} />}
+          </PlatformWindowedRows>
+        </tbody>
+      </table>
+    ));
+
+    const spacerCells = container.querySelectorAll<HTMLTableCellElement>(
+      '[data-platform-window-spacer] > td',
+    );
+    expect(spacerCells).toHaveLength(2);
+    for (const cell of spacerCells) expect(cell.colSpan).toBe(3);
+  });
+
   it('preserves keyed row component state when live snapshots replace row objects', async () => {
     let mounts = 0;
     let disposals = 0;

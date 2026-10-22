@@ -6,10 +6,9 @@ import {
   K8S_NAMESPACES_COLUMN_PODS_LABEL,
   K8S_NAMESPACES_DRAWER_DESCRIPTION,
   K8S_NAMESPACES_DRAWER_TITLE,
-  K8S_NAMESPACES_OPEN_ALL_PODS_LABEL,
-  K8S_NAMESPACES_OPEN_PODS_LABEL,
+  K8S_NAMESPACES_OPEN_ALL_WORKLOADS_LABEL,
+  K8S_NAMESPACES_OPEN_WORKLOADS_LABEL,
   K8S_NAMESPACES_SEARCH_PLACEHOLDER,
-  K8S_NAMESPACES_VIEW_DEPLOYMENTS_LABEL,
   getK8sNamespacesFailureState,
 } from '../k8sNamespacePresentation';
 
@@ -45,9 +44,8 @@ describe('k8sNamespacePresentation.branchcov0718 — residual uncovered exports'
     });
 
     it('exposes the canonical action button labels', () => {
-      expect(K8S_NAMESPACES_OPEN_ALL_PODS_LABEL).toBe('Open All Pods');
-      expect(K8S_NAMESPACES_OPEN_PODS_LABEL).toBe('Open Pods');
-      expect(K8S_NAMESPACES_VIEW_DEPLOYMENTS_LABEL).toBe('View Deployments');
+      expect(K8S_NAMESPACES_OPEN_ALL_WORKLOADS_LABEL).toBe('Open all workloads');
+      expect(K8S_NAMESPACES_OPEN_WORKLOADS_LABEL).toBe('Open workloads');
     });
 
     it('exposes the canonical table column labels', () => {

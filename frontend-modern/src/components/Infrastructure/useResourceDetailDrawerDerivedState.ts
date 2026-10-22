@@ -76,21 +76,12 @@ import {
   buildResourceIdentityView,
   buildSourceSections,
 } from './resourceDetailDrawerIdentityModel';
-import {
-  buildVMwareDetailsSummary,
-  buildVMwareDetailSections,
-} from './resourceDetailDrawerVmwareModel';
-import {
-  buildTrueNASDetailsSummary,
-  buildTrueNASDetailSections,
-} from './resourceDetailDrawerTrueNASModel';
-import {
-  buildKubernetesDetailsSummary,
-  buildKubernetesDetailSections,
-} from './resourceDetailDrawerKubernetesModel';
+import { buildVMwareDetailSections } from './resourceDetailDrawerVmwareModel';
+import { buildTrueNASDetailSections } from './resourceDetailDrawerTrueNASModel';
+import { buildKubernetesDetailSections } from './resourceDetailDrawerKubernetesModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
-type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'debug';
 
 interface UseResourceDetailDrawerDerivedStateOptions {
   resource: Resource;
@@ -220,11 +211,6 @@ export const useResourceDetailDrawerDerivedState = (
   });
   const dockerUpdateActionsDisabled = createMemo(() => shouldHideDockerUpdateActions());
   const dockerUpdateActionsLoading = createMemo(() => !areSystemSettingsLoaded());
-  const dockerSwarmInfo = createMemo(() => dockerHostData()?.swarm);
-  const dockerSwarmClusterKey = createMemo(() => {
-    const swarm = dockerSwarmInfo();
-    return (swarm?.clusterName || swarm?.clusterId || '').trim();
-  });
 
   const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
   const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
@@ -333,19 +319,11 @@ export const useResourceDetailDrawerDerivedState = (
   const vmwareDetailSections = createMemo(() =>
     buildVMwareDetailSections(resource().type, vmwareData()),
   );
-  const hasVMwareDetails = createMemo(() => vmwareDetailSections().length > 0);
-  const vmwareDetailsSummary = createMemo(() =>
-    buildVMwareDetailsSummary(resource().type, vmwareData()),
-  );
   const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
   const trueNASDetailSections = createMemo(() =>
     buildTrueNASDetailSections(resource(), getTrueNASDiskTemperatureThresholds),
   );
-  const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
-  const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource()));
   const kubernetesDetailSections = createMemo(() => buildKubernetesDetailSections(resource()));
-  const hasKubernetesDetails = createMemo(() => kubernetesDetailSections().length > 0);
-  const kubernetesDetailsSummary = createMemo(() => buildKubernetesDetailsSummary(resource()));
   const metricsHistoryTarget = createMemo(() => getResourceMetricsHistoryTarget(resource()));
   const metricsHistoryCurrentMetrics = createMemo(() =>
     getResourceMetricsHistoryCurrentMetrics(resource()),
@@ -388,14 +366,11 @@ export const useResourceDetailDrawerDerivedState = (
       { id: 'overview' as DrawerTab, label: 'Overview' },
       { id: 'manage' as DrawerTab, label: 'Manage' },
       ...(resource().type === 'pmg' ? [{ id: 'mail' as DrawerTab, label: 'Mail' }] : []),
+      // Deployments and Swarm services have their own platform tabs
+      // (Kubernetes > Workloads, Docker > Swarm), so the drawer does not
+      // repeat them; namespaces scope those tabs from here.
       ...(resource().type === 'k8s-cluster'
         ? [{ id: 'namespaces' as DrawerTab, label: 'Namespaces' }]
-        : []),
-      ...(resource().type === 'k8s-cluster'
-        ? [{ id: 'deployments' as DrawerTab, label: 'Deployments' }]
-        : []),
-      ...(resource().type === 'docker-host' && dockerSwarmClusterKey()
-        ? [{ id: 'swarm' as DrawerTab, label: 'Swarm' }]
         : []),
     ];
     if (debugEnabled()) {
@@ -442,8 +417,6 @@ export const useResourceDetailDrawerDerivedState = (
     dockerHostCommandActive,
     dockerUpdateActionsDisabled,
     dockerUpdateActionsLoading,
-    dockerSwarmInfo,
-    dockerSwarmClusterKey,
     resourceDependencies,
     resourceDependents,
     resourceCorrelations,
@@ -485,14 +458,8 @@ export const useResourceDetailDrawerDerivedState = (
     metricsHistoryGroups,
     hasMetricsHistory,
     guestReadPrecaution,
-    hasVMwareDetails,
-    vmwareDetailsSummary,
     vmwareDetailSections,
-    hasTrueNASDetails,
-    trueNASDetailsSummary,
     trueNASDetailSections,
-    hasKubernetesDetails,
-    kubernetesDetailsSummary,
     kubernetesDetailSections,
     relatedLinks,
     hasRuntimeOperationalContext,

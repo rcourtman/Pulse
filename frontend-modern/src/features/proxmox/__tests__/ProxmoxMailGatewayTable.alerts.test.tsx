@@ -14,8 +14,26 @@ vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({ detectionEnabled: () => true }),
 }));
 
-vi.mock('@/utils/apiClient', () => ({
+vi.mock('@/utils/apiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/apiClient')>()),
   apiFetch: vi.fn(async () => new Response(JSON.stringify(null), { status: 200 })),
+}));
+
+// The row opens the canonical resource drawer; its remote reads stay quiet.
+vi.mock('@/api/resources', () => ({
+  ResourceAPI: {
+    getFacetBundle: vi.fn().mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    }),
+  },
+}));
+
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getResourceIntelligence: vi.fn().mockResolvedValue(null),
+  },
 }));
 
 const gateway = (id: string, name: string, instanceId: string): Resource =>
@@ -29,6 +47,9 @@ const gateway = (id: string, name: string, instanceId: string): Resource =>
     status: 'online',
     lastSeen: Date.now(),
     canonicalIdentity: { primaryId: `agent:${instanceId}`, aliases: [instanceId, name] },
+    // The backend points a gateway's metrics target at its PMG source id,
+    // which is the id its alerts carry.
+    metricsTarget: { resourceType: 'agent', resourceId: instanceId },
     pmg: { instanceId, nodeCount: 1, mailCountTotal: 10, queueTotal: 3, queueDeferred: 1 },
   }) as unknown as Resource;
 
@@ -73,12 +94,17 @@ describe('ProxmoxMailGatewayTable open alerts', () => {
     expect(nameCell).not.toHaveTextContent('Message Age');
 
     fireEvent.click(screen.getByRole('button', { name: /mail-gateway-eu/ }));
-    const drawerMatches = (
-      await screen.findAllByText(/queued for 41 minutes \(threshold: 30 minutes\)/)
-    ).filter((element) => !element.closest('.sr-only'));
-    expect(drawerMatches.length).toBeGreaterThan(0);
-    expect(drawerMatches[0]).toBeVisible();
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
+    // The row opens the gateway's resource drawer, whose Overview lists the
+    // same alert the row marks.
+    const attention = await screen.findByTestId('drawer-attention-section');
+    expect(attention).toHaveTextContent(/queued for 41 minutes \(threshold: 30 minutes\)/);
+    expect(attention).toBeVisible();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
+    // The header dot repeats the row's verdict.
+    const heading = screen.getByRole('heading', { level: 2, name: 'mail-gateway-eu' });
+    expect(heading.parentElement?.querySelector('[aria-label="Needs attention"]')).not.toBeNull();
+    expect(screen.getByRole('tab', { name: 'Mail' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 
   it('ignores acknowledged alerts', () => {

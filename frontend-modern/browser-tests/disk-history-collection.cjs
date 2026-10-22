@@ -54,27 +54,26 @@ const parent = false;
         if (url.pathname === '/api/metrics-store/history') {
           const query = Object.fromEntries(url.searchParams);
           requests.push(query);
-          const value =
-            query.metric === 'smart_temp'
-              ? query.resourceId.includes('nas-b')
-                ? 55
-                : 42
-              : query.metric === 'smart_percentage_used'
-                ? 12
-                : query.metric === 'smart_available_spare'
-                  ? 97
-                  : 0;
-          const empty = query.range === '1h' && query.metric === 'smart_temp';
+          // The disk drawer reads every series of its one target at once.
+          const series = (value) => [
+            { timestamp: observedAt - 60000, value, min: value, max: value },
+            { timestamp: observedAt, value, min: value, max: value },
+          ];
+          const temperature = query.resourceId.includes('nas-b') ? 55 : 42;
           return route.fulfill({
             json: {
               resourceType: query.resourceType,
               resourceId: query.resourceId,
-              metric: query.metric,
               range: query.range,
-              start: Date.now() - 60000,
+              start: Date.now() - 180000,
               end: Date.now(),
               source: 'store',
-              points: empty ? [] : [{ timestamp: observedAt, value, min: value, max: value }],
+              metrics: {
+                smart_temp: query.range === '1h' ? [] : series(temperature),
+                smart_reallocated_sectors: series(0),
+                smart_percentage_used: series(12),
+                smart_available_spare: series(97),
+              },
             },
           });
         }
@@ -100,6 +99,7 @@ const parent = false;
           checks.push({ label, passed: false, error: error.message });
         }
       };
+      const plots = page.locator('[data-testid="guest-history-plot"]');
       const screenshot = async (state) => {
         const file = `${name}-${state}.png`;
         await page.screenshot({
@@ -111,91 +111,98 @@ const parent = false;
           browser: name,
           state,
           screenshot: file,
-          visibleCharts: await page.locator('canvas[role="img"]').allTextContents(),
-          selectedTabs: await page
-            .getByRole('tab')
-            .evaluateAll((tabs) =>
-              tabs.map((tab) => ({
-                label: tab.textContent,
-                selected: tab.getAttribute('aria-selected'),
-                border: getComputedStyle(tab).borderBottomColor,
-              })),
-            ),
+          visibleCharts: await plots.evaluateAll((items) =>
+            items.filter((el) => el.getBoundingClientRect().width > 0).map((el) => el.ariaLabel),
+          ),
           overflow: await page.evaluate(
             () => document.documentElement.scrollWidth > window.innerWidth,
           ),
           body: await page.locator('main').innerText(),
         });
       };
-      const thermal = () => page.getByRole('img', { name: 'Temperature chart' });
-      const description = async () =>
-        thermal().evaluate(
-          (el) => document.getElementById(el.getAttribute('aria-describedby')).textContent,
+      const chart = (label) => page.getByRole('img', { name: `${label} history`, exact: true });
+      const thermal = () => chart('Temperature');
+      const description = async (label = 'Temperature') =>
+        chart(label).evaluate(
+          (el) =>
+            document.getElementById(el.getAttribute('aria-describedby').split(' ')[0]).textContent,
         );
+      // Snapshots arrive from the store, not from a click that moves focus.
+      const snapshot = (label) =>
+        page.getByRole('button', { name: label }).evaluate((button) => button.click());
+      const range = () => page.getByRole('combobox', { name: 'History range' });
       await page.goto('http://127.0.0.1:5251/browser-tests/disk-history-collection.html');
       if (phone) await page.evaluate(() => document.documentElement.classList.add('dark'));
-      // Disk details have no tabs: SMART evidence, then History, in one view.
-      const historySection = page.getByTestId('disk-detail-history');
+      // The disk Overview has no tabs: notices, then History, then the facts.
+      const historySection = page.getByTestId('guest-history-region');
       await historySection.waitFor();
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('[data-testid="guest-history-plot"]')].some((el) =>
+          document.getElementById(el.getAttribute('aria-describedby').split(' ')[0])?.textContent.includes('42°C'),
+        ),
+      );
       // A phone folds every chart after the first behind one button; open it,
       // as a reader inspecting the disk's history would.
       if (phone) {
-        const fold = page.getByTestId('disk-detail-phone-toggle');
+        const fold = page.getByTestId('history-phone-toggle');
         if (await fold.isVisible()) await fold.click();
       }
       await page.waitForTimeout(300);
       await check('Stored ATA history is accessible before any current fields', async () => {
-        assert.equal(await page.locator('canvas[role="img"]').count(), 2);
-        assert.match(await description(), /42°C/);
+        assert.deepEqual(await plots.evaluateAll((items) => items.map((el) => el.ariaLabel)), [
+          'Temperature history',
+          'Reallocated sectors history',
+        ]);
+        assert.match(await description(), /Disk 42°C/);
+        assert.match(await description('Reallocated sectors'), /Reallocated 0 sectors/);
       });
       await check('History shows without a tab to select', async () => {
         assert.equal(await page.getByRole('tab').count(), 0);
         assert.equal(await historySection.isVisible(), true);
+        assert.equal(await chart('Reallocated sectors').isVisible(), true);
       });
       await screenshot('missing-current');
-      await page.getByRole('button', { name: 'Restore current fields' }).click();
+      await snapshot('Restore current fields');
       await thermal().waitFor();
-      await page.getByRole('combobox', { name: 'Disk history range' }).selectOption('7d');
-      await page.waitForFunction(
-        () =>
-          document
-            .querySelector('canvas[aria-label="Temperature chart"]')
-            ?.getAttribute('aria-describedby') &&
-          document
-            .getElementById(
-              document
-                .querySelector('canvas[aria-label="Temperature chart"]')
-                .getAttribute('aria-describedby'),
-            )
-            .textContent.includes('42°C'),
-      );
-      if (phone) await thermal().tap({ position: { x: 80, y: 60 } });
-      else {
-        await thermal().focus();
-        await thermal().press('End');
-      }
-      await page.waitForTimeout(100);
-      await check('Stored zero and exact temperature can be inspected', async () => {
-        assert.equal(await page.locator('[data-history-chart-tooltip]').count(), 2);
-        assert.match(
-          await page
-            .locator('[data-history-chart-tooltip]')
-            .allTextContents()
-            .then((parts) => parts.join(' ')),
-          /0 sectors/,
-        );
+      await range().selectOption('7d');
+      await page.waitForFunction(() => {
+        const el = document.querySelector('[aria-label="Temperature history"]');
+        const id = el?.getAttribute('aria-describedby')?.split(' ')[0];
+        return id && document.getElementById(id).textContent.includes('42°C');
       });
+      const inspect = page.getByRole('slider', { name: 'Inspect Temperature history' });
+      if (phone) {
+        // A tap on the plot hands inspection to touch: the scrubber shows.
+        await thermal().tap({ position: { x: 120, y: 30 } });
+        await inspect.waitFor();
+      }
+      await inspect.focus();
+      await inspect.press('Home');
+      await page.waitForTimeout(100);
+      const firstObservation = await page.evaluate(
+        (time) => new Date(time).toLocaleString(),
+        observedAt - 60000,
+      );
+      await check('Stored zero and exact temperature can be inspected', async () => {
+        assert.equal(await inspect.isVisible(), true);
+        assert.ok((await description()).startsWith(firstObservation), await description());
+        assert.match(await description(), /Disk 42°C/);
+        assert.match(await description('Reallocated sectors'), /Reallocated 0 sectors/);
+      });
+      const inspected = await description();
       await thermal().evaluate((el) => (el.dataset.proofOwner = 'original'));
       const reads = requests.length;
-      await page.getByRole('button', { name: 'Update current fields' }).click();
+      await snapshot('Update current fields');
       await page.waitForTimeout(200);
       await check('Same-ID snapshot keeps mounted chart and makes no extra reads', async () => {
         assert.equal(await thermal().getAttribute('data-proof-owner'), 'original');
         assert.equal(requests.length, reads);
-        assert.equal(await page.getByRole('combobox').inputValue(), '7d');
+        assert.equal(await range().inputValue(), '7d');
+        assert.equal(await inspect.evaluate((el) => document.activeElement === el), true);
+        assert.equal(await description(), inspected);
       });
       await screenshot('updated-current');
-      await page.getByRole('button', { name: 'Lose current fields' }).click();
+      await snapshot('Lose current fields');
       await page.waitForTimeout(200);
       await check(
         'Missing current fields do not withdraw stored readings or invent live I/O',
@@ -204,7 +211,8 @@ const parent = false;
           assert.equal(await thermal().getAttribute('data-proof-owner'), 'original');
           assert.match(await description(), /42°C/);
           assert.equal(requests.length, reads);
-          assert.equal(await page.getByText('Live I/O (30m)').count(), 0);
+          assert.equal(await chart('Disk I/O').count(), 0);
+          assert.equal(await chart('Busy').count(), 0);
         },
       );
       await screenshot('missing-again');
@@ -225,42 +233,50 @@ const parent = false;
                   [...document.querySelectorAll('main *')].filter(
                     (el) =>
                       el.children.length === 0 &&
-                      el.textContent.trim() === '42°C' &&
-                      !el.closest('[data-testid="disk-detail-history"]'),
+                      el.textContent.trim().includes('42°C') &&
+                      !el.closest('[data-testid="guest-history-region"]'),
                   ).length,
               ),
               0,
             );
           },
         );
-        await page.getByRole('combobox').selectOption('1h');
-        await page.getByText('No history samples in this time range.').waitFor();
+        await range().selectOption('1h');
+        const thermalPanel = thermal().locator(
+          'xpath=ancestor::*[@data-testid="guest-history-group-chart"][1]',
+        );
+        await thermalPanel.getByText('No stored history in this range').waitFor();
         await check(
           'Empty temperature is not zero and reallocated zero remains stored',
           async () => {
             assert.doesNotMatch(await description(), /0°C/);
-            assert.equal(await page.locator('canvas[role="img"]').count(), 2);
+            assert.match(await description(), /No stored history observations\./);
+            assert.equal(await thermalPanel.locator('[data-history-series]').count(), 0);
+            assert.equal(await plots.count(), 2);
+            assert.match(await description('Reallocated sectors'), /Reallocated 0 sectors/);
           },
         );
         await screenshot('empty-temperature');
-        await page.getByRole('combobox').selectOption('7d');
-        await page.getByRole('button', { name: 'Select NVMe B' }).click();
-        await page.getByRole('img', { name: 'Available Spare chart' }).waitFor();
-        await page.waitForTimeout(200);
+        await range().selectOption('7d');
+        await snapshot('Select NVMe B');
+        await chart('Wear').waitFor();
+        await page.waitForFunction(() => {
+          const el = document.querySelector('[aria-label="Temperature history"]');
+          const id = el?.getAttribute('aria-describedby')?.split(' ')[0];
+          return id && document.getElementById(id).textContent.includes('55°C');
+        });
         await check(
           'NVMe History uses explicit B target and its own metrics without live fields',
           async () => {
-            assert.equal(await page.locator('canvas[role="img"]').count(), 3);
-            assert.equal(
-              await page.getByRole('img', { name: 'Reallocated Sectors chart' }).count(),
-              0,
-            );
+            assert.deepEqual(await plots.evaluateAll((items) => items.map((el) => el.ariaLabel)), [
+              'Temperature history',
+              'Wear history',
+            ]);
+            assert.equal(await chart('Reallocated sectors').count(), 0);
             assert.match(await description(), /55°C/);
+            assert.match(await description('Wear'), /Spare 97\.0%/);
             const own = requests.filter((r) => r.resourceId === 'disk:nas-b:nvme0n1');
-            assert.equal(
-              own.some((r) => r.metric === 'smart_available_spare'),
-              true,
-            );
+            assert.ok(own.length > 0);
             assert.equal(
               own.every((r) => r.resourceType === 'disk'),
               true,
@@ -269,27 +285,32 @@ const parent = false;
         );
         await screenshot('nvme');
         const beforeClear = requests.length;
-        await page.getByRole('button', { name: 'Clear identity' }).click();
+        await snapshot('Clear identity');
         await page.waitForTimeout(200);
         await check(
           'Unresolvable identity withdraws History and does not guess a target',
           async () => {
             assert.equal(await historySection.count(), 0);
-            assert.equal(await page.locator('canvas[role="img"]').count(), 0);
+            assert.equal(await plots.count(), 0);
+            assert.equal(await page.getByTestId('disk-drawer-history-unavailable').isVisible(), true);
             assert.equal(requests.length, beforeClear);
           },
         );
         await screenshot('no-identity');
       }
-      await check('No page errors, off-origin data reads or horizontal overflow', async () => {
+      await check('No page errors, off-target reads or horizontal overflow', async () => {
         assert.deepEqual(errors, []);
         assert.equal(
           await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
           false,
         );
         assert.equal(
-          requests.some((r) => ['diskread', 'diskwrite', 'disk'].includes(r.metric)),
-          false,
+          requests.every(
+            (r) =>
+              r.resourceType === 'disk' &&
+              ['disk:nas-a:sda', 'disk:nas-b:nvme0n1'].includes(r.resourceId),
+          ),
+          true,
         );
       });
       observations.push({ browser: name, version: browser.version(), checks, requests, errors });
@@ -309,7 +330,7 @@ const parent = false;
     JSON.stringify({
       parent,
       checks: observations.flatMap((o) => o.checks ?? []).length,
-      failed: failed.map((c) => c.label),
+      failed: failed.map((c) => `${c.label}: ${c.error}`),
     }),
   );
   if (!parent) assert.equal(failed.length, 0);

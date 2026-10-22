@@ -13,14 +13,16 @@ import mailGatewayDrawerSource from '../ProxmoxMailGatewayDrawer.tsx?raw';
 import mailGatewayTableSource from '../ProxmoxMailGatewayTable.tsx?raw';
 
 describe('ProxmoxMailGatewayTable phone presentation', () => {
-  it('keeps compact drawer statistics on the shared responsive row contract', () => {
-    expect(mailGatewayDrawerSource).toContain('InfoCardKeyValueRow');
+  it('keeps mail-flow figures on shared detail rows and card chrome', () => {
+    expect(mailGatewayDrawerSource).toContain('makeDetailRow(');
+    expect(mailGatewayDrawerSource).toContain('<TechnicalDetailsSection');
+    expect(mailGatewayDrawerSource).toContain('<InfoCardFrame');
+    expect(mailGatewayDrawerSource).not.toContain('function InOutBar');
+    expect(mailGatewayDrawerSource).not.toContain('<Card');
+    expect(mailGatewayDrawerSource).not.toContain('<h4');
     expect(mailGatewayDrawerSource).not.toMatch(
       /class="flex items-baseline justify-between[^\"]*">\s*<span class="text-muted">/,
     );
-    expect(
-      mailGatewayDrawerSource.match(/class="col-span-2 text-\[11px\] sm:col-span-1"/g),
-    ).toHaveLength(3);
   });
 
   it('keeps gateway names distinguishable with five phone tracks', () => {
@@ -69,13 +71,19 @@ describe('ProxmoxMailGatewayTable phone presentation', () => {
     expect(widths.reduce((total, width) => total + width, 0)).toBeCloseTo(100, 1);
   });
 
-  it('matches gateway alerts across identity aliases and shows the problem in the drawer', () => {
+  it('matches gateway alerts across identity aliases and opens the one resource drawer', () => {
     // Alerts are keyed by the PMG instance id, rows by the unified id.
     expect(mailGatewayTableSource).toContain('getResourceIdentityAliases(resource)');
     expect(mailGatewayTableSource).toContain(
       'filterPlatformResources(resources, search, status, effectiveStatus)',
     );
-    expect(mailGatewayDrawerSource).toContain('<DrawerAttentionSection');
+    // The row opens the canonical resource drawer headed by its own dot; the
+    // Mail tab body is headless and leaves status and alerts to that drawer.
+    expect(mailGatewayTableSource).toContain('<PlatformResourceDetailTableRow');
+    expect(mailGatewayTableSource).toContain('statusIndicator={indicator()}');
+    expect(mailGatewayDrawerSource).not.toContain('DrawerAttentionSection');
+    expect(mailGatewayDrawerSource).not.toContain('ObjectDrawerHeader');
+    expect(mailGatewayDrawerSource).not.toContain('function classifyHealth');
   });
 
   it('keeps alerting rows single-line by marking the metric the alert is about', () => {

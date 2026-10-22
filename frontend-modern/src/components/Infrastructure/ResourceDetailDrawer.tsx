@@ -9,10 +9,8 @@ import { Subtabs } from '@/components/shared/Subtabs';
 import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import type { StatusIndicator } from '@/utils/status';
 import { ReportMergeModal } from './ReportMergeModal';
-import { ProxmoxMailGatewayDrawer } from '@/features/proxmox/ProxmoxMailGatewayDrawer';
-import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
+import { ProxmoxMailGatewayMailFlow } from '@/features/proxmox/ProxmoxMailGatewayDrawer';
 import { K8sNamespacesDrawer } from '@/components/Kubernetes/K8sNamespacesDrawer';
-import { SwarmServicesDrawer } from '@/components/Docker/SwarmServicesDrawer';
 import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import {
   ResourceAccessDisclosure,
@@ -47,27 +45,23 @@ interface ResourceDetailDrawerProps {
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
-  initialShowTrueNASDetails?: boolean;
   onResourceActionSettled?: () => void | Promise<void>;
 }
 
 const TabAvailabilityNotice: Component<{ message: string }> = (props) => (
-  <div class="rounded-sm border border-dashed border-border bg-surface-hover p-4 text-sm text-muted">
+  <InlineNotice tone="info" role="status">
     {props.message}
-  </div>
+  </InlineNotice>
 );
 
-type SpecializedDrawerTab = 'mail' | 'namespaces' | 'deployments' | 'swarm';
+type SpecializedDrawerTab = 'mail' | 'namespaces';
 
 export const getSpecializedTabAvailabilityMessage = (tab: SpecializedDrawerTab): string => {
   switch (tab) {
     case 'mail':
       return 'PMG resources only.';
     case 'namespaces':
-    case 'deployments':
       return 'Kubernetes clusters only.';
-    case 'swarm':
-      return 'Docker runtimes with Swarm only.';
   }
 };
 
@@ -81,11 +75,14 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     resolveResourceLabel: props.resolveResourceLabel,
     initialShowAccessContext: props.initialShowAccessContext,
     initialShowHostDetails: props.initialShowHostDetails,
-    initialShowTrueNASDetails: props.initialShowTrueNASDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
   const statusIndicator = () => props.statusIndicator ?? drawer.statusIndicator();
   const customUrl = () => props.resource.customUrl?.trim() ?? '';
+  // The Kubernetes page scopes its rows by cluster id, or by name when no id
+  // is reported, the same value its cluster table writes into the URL.
+  const kubernetesScopeCluster = () =>
+    drawer.kubernetesMeta()?.clusterId?.trim() || drawer.kubernetesClusterName();
   // The health issue is the first "Worth checking" item on Overview, so the
   // header names the subject only; source and identity badges say what the
   // row cannot (an agent merged with PVE, an Unraid host).
@@ -235,7 +232,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
               <TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('mail')} />
             }
           >
-            <ProxmoxMailGatewayDrawer instanceRow={props.resource} />
+            <ProxmoxMailGatewayMailFlow resource={props.resource} />
           </Show>
         </Show>
       </div>
@@ -252,48 +249,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           >
             <K8sNamespacesDrawer
               cluster={drawer.kubernetesClusterName()}
-              onOpenDeployments={(ns) => {
-                drawer.setK8sDeploymentsPrefillNamespace((ns || '').trim());
-                drawer.setActiveTab('deployments');
-              }}
-            />
-          </Show>
-        </Show>
-      </div>
-
-      {/* Kubernetes Deployments Tab */}
-      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'deployments' ? '' : 'hidden'}`}>
-        {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
-        <Show when={drawer.activeTab() === 'deployments'}>
-          <Show
-            when={props.resource.type === 'k8s-cluster'}
-            fallback={
-              <TabAvailabilityNotice
-                message={getSpecializedTabAvailabilityMessage('deployments')}
-              />
-            }
-          >
-            <K8sDeploymentsDrawer
-              cluster={drawer.kubernetesClusterName()}
-              initialNamespace={drawer.k8sDeploymentsPrefillNamespace() || null}
-            />
-          </Show>
-        </Show>
-      </div>
-
-      {/* Docker Swarm Tab */}
-      <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'swarm' ? '' : 'hidden'}`}>
-        {/* Mount on-demand to avoid background fetching when the tab isn't open. */}
-        <Show when={drawer.activeTab() === 'swarm'}>
-          <Show
-            when={props.resource.type === 'docker-host' && drawer.dockerSwarmClusterKey()}
-            fallback={
-              <TabAvailabilityNotice message={getSpecializedTabAvailabilityMessage('swarm')} />
-            }
-          >
-            <SwarmServicesDrawer
-              cluster={drawer.dockerSwarmClusterKey()}
-              swarm={drawer.dockerSwarmInfo()}
+              scopeCluster={kubernetesScopeCluster()}
             />
           </Show>
         </Show>
@@ -343,7 +299,6 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
           resolveResourceLabel={props.resolveResourceLabel}
           initialShowAccessContext={props.initialShowAccessContext}
           initialShowHostDetails={props.initialShowHostDetails}
-          initialShowTrueNASDetails={props.initialShowTrueNASDetails}
           onResourceActionSettled={props.onResourceActionSettled}
         />
       )}

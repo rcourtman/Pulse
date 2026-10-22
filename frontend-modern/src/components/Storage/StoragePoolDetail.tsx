@@ -6,7 +6,10 @@ import {
   type DetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DrawerAttentionSection,
+  DrawerNoAlertsLine,
+} from '@/components/shared/DrawerAttentionSection';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   TechnicalDetailsDisclosure,
@@ -42,7 +45,6 @@ import {
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { formatTemperature } from '@/utils/temperature';
 import { useStoragePoolDetailModel } from './useStoragePoolDetailModel';
@@ -188,9 +190,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
         }))}
       />
       <Show when={(props.alerts ?? []).length === 0}>
-        <p data-testid="drawer-no-attention" class="text-xs font-medium text-base-content">
-          {ALERTS_EMPTY_STATE}
-        </p>
+        <DrawerNoAlertsLine />
       </Show>
 
       <DrawerExceptionList testId="storage-pool-drawer-exceptions" rows={exceptionRows()} />

@@ -138,6 +138,28 @@ describe('NodeDrawer', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('opens the node web interface from the header, like the guest drawer', () => {
+    const onClose = vi.fn();
+    render(() => (
+      <NodeDrawer
+        node={makeNode()}
+        onClose={onClose}
+        webInterfaceUrl="https://pve-node-1.example:8006"
+      />
+    ));
+
+    const open = screen.getByRole('link', { name: 'Open web interface for pve-node-1' });
+    expect(open).toHaveAttribute('href', 'https://pve-node-1.example:8006');
+    expect(open).toHaveTextContent('Open');
+    fireEvent.click(open);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows no Open action when the node has no web interface', () => {
+    render(() => <NodeDrawer node={makeNode()} onClose={vi.fn()} webInterfaceUrl=" " />);
+    expect(screen.queryByRole('link', { name: /Open web interface/ })).toBeNull();
+  });
+
   it('shows a guest-drawer style Proxmox node overview with detailed node context', () => {
     render(() => (
       <NodeDrawer

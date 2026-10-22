@@ -113,5 +113,14 @@ describe('physical disk alert owner', () => {
     it('lists nothing while alert detection is off', () => {
       expect(getPhysicalDiskAlerts(agentDisk, owners, active, false)).toEqual([]);
     });
+
+    it("takes a known reporting agent's temperature key without a loaded machine", () => {
+      // A guest drawer lists the guest's own disks: no agent machine is loaded
+      // there, but the guest names the agent that reports their temperatures.
+      const ids = getPhysicalDiskAlerts(agentDisk, new Map(), active, true, 'host-tower').map(
+        (alert) => alert.id,
+      );
+      expect(ids).toEqual(['pve', 'own', 'agent']);
+    });
   });
 });

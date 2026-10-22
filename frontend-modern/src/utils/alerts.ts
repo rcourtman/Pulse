@@ -194,6 +194,11 @@ const getUnifiedResourceAlertKeys = (
   resource.canonicalIdentity?.supersededIds?.forEach(add);
   add(resource.proxmox?.sourceId);
   add(resource.metricsTarget?.resourceId);
+  // PBS and PMG alerts are keyed on the instance id (internal/alerts pmg.go,
+  // pbs.go), which the platform tables match too; the drawer must not depend
+  // on a metrics target being set to find them.
+  add(resource.pbs?.instanceId);
+  add(resource.pmg?.instanceId);
   // The alert engine keys a Docker container's alerts on its host and
   // container ID ("docker:<host>/<container ID>"), or on its name when it has
   // no ID (internal/alerts DockerContainerResourceID).

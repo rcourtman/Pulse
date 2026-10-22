@@ -168,6 +168,11 @@ type DockerLinkOptions = {
   host?: string | null;
 };
 
+type KubernetesLinkOptions = {
+  cluster?: string | null;
+  namespace?: string | null;
+};
+
 type StorageLinkOptions = {
   tab?: string | null;
   group?: string | null;
@@ -320,6 +325,18 @@ export const buildDockerRouteSearch = (options: DockerLinkOptions = {}): string 
 export const buildKubernetesPath = (tab: string = KUBERNETES_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${KUBERNETES_PATH}/${normalized}` : KUBERNETES_PATH;
+};
+
+// The cluster and namespace scope the Kubernetes tabs read from the URL. The
+// cluster value is the one the page matches rows on: the cluster id, or its
+// name when no id is reported.
+export const buildKubernetesRouteSearch = (options: KubernetesLinkOptions = {}): string => {
+  const params = new URLSearchParams();
+  const cluster = normalizeQueryValue(options.cluster);
+  const namespace = normalizeQueryValue(options.namespace);
+  if (cluster) params.set(KUBERNETES_QUERY_PARAMS.cluster, cluster);
+  if (namespace) params.set(KUBERNETES_QUERY_PARAMS.namespace, namespace);
+  return serializedRouteSearch(params);
 };
 
 export const buildTrueNASPath = (tab: string = TRUENAS_DEFAULT_TAB): string => {

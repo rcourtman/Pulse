@@ -4416,3 +4416,13 @@ controls. `browser-tests/host-disk-usage.cjs` exercises the actual resource
 HTTP/table/summary/drawer flow at desktop and touch widths. Disclosure adds no
 measurement or storage operation. This is truthful presentation, not native
 collector recovery or an installed performance result.
+
+Windowed platform tables keep their spacer rows to the visible columns:
+`PlatformWindowedRows` spacers span the header's visible cells
+(`components/shared/tableVisibleColumnSpan.ts`, re-measured on resize and
+header changes) instead of `colspan={100}`, which created phantom fixed-layout
+columns and left rows and drawers short of the table edge on phones. The
+windowing budget, runway and mounted-row counts are unchanged. The Docker host
+drawer loads its history charts lazily inside `Suspense` like the node and
+guest drawers, keeping them out of the table chunk, and its action history is
+fetched only when Manage opens.
