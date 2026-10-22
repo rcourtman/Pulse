@@ -351,6 +351,7 @@ describe('AppLayout navigation icons', () => {
   });
 
   it('keeps the data-wait notice in a kiosk session without granting navigation or settings', () => {
+    setKioskMode(true);
     renderLayout(platformResources(), '/proxmox/overview', undefined, ['monitoring:read'], () => ({
       kind: 'awaiting-data',
       label: 'Waiting for data',
