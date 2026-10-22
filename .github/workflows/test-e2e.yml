@@ -78,8 +78,8 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      # Reject known-invalid non-rendering proposals before runtime fan-out.
-      # Frontend ranges still need locked formatting tools in the unchanged
+      # Reject invalid non-rendering commits, including in mixed proposals.
+      # Frontend commits still need locked formatting tools in the unchanged
       # full Canonical Governance job; early deferral is not its acceptance.
       - name: Check canonical source before dependency work
         env:

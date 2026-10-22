@@ -38,7 +38,7 @@ callers. It checks byte/metadata preservation, no temporary/backup files and
 no command or runtime-control calls. The managed-runtime smoke suite consumes
 the same focused proof instead of requiring destructive legacy behaviour.
 
-### Invalid non-rendering proposals stop before runtime CI fan-out
+### Contract-invalid commits stop before runtime CI fan-out
 
 The dependency-free Build and Test changes job, E2E scope job and Canonical
 Governance precheck use the same exact per-commit contract admission. They bind
@@ -49,17 +49,25 @@ registered split completion must pass its existing exact-pair validator; an
 ambient override or failed history read cannot bypass it. Receipt-only changes
 also run the existing final-content browser guard before dependency work.
 
-Ranges containing frontend runtime source, including intermediate/reverted
-edits and merge resolutions, explicitly defer the early check: their established
-formatting-only exception needs locked Prettier. Full required Canonical
-Governance still installs that graph and checks every contract and final browser
-receipt. Early deferral is not a source, browser or runtime pass. Invalid
-non-rendering ranges fail before application installs, builds and test-shard
-fan-out; the independent delivered-history secret scan remains unconditional.
+Commits containing frontend runtime source explicitly defer their early check:
+the established formatting-only exception needs locked Prettier. Unrelated
+commits in the same range still undergo exact contract and history validation;
+a frontend tip or ancestor cannot hide their missing contracts, failed history
+or required proof. A single commit mixing frontend and backend changes remains
+deferred as a whole, never partly accepted. Intermediate/reverted frontend edits
+and merge-only frontend resolutions still require full final browser evidence.
+Full required Canonical Governance installs the locked graph and checks every
+contract and final browser receipt. Early deferral is not a source, browser or
+runtime pass. An invalid non-rendering commit stops application installs, builds
+and test-shard fan-out even beside deferred frontend commits; the independent
+delivered-history secret scan remains unconditional.
 All existing required audits and runtime checks remain. No release or installed
 acceptance follows from admission. `scripts/tests/test_ci_source_admission.py`
 executes the actual workflow steps and real guard consumers, including failure,
 source identity, trailer/history, formatting deferral and dependency-stop controls.
+Mixed-range controls execute all three actual workflow shells and the real
+completion guard, retaining both rejected backend debt and valid neutral or
+registered-history cases. They prove admission behaviour, not hosted time saved.
 
 ### Portal build drift is rejected before ordinary CI fan-out
 

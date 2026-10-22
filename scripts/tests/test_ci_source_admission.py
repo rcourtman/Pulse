@@ -257,9 +257,7 @@ class ContractRangeTest(SourceAdmissionFixture):
         result = self.run_guard(early=True)
         self.assertEqual(result.returncode, 0)
         self.assertIn("defer early admission", result.stdout)
-        self.assertEqual([c["files"] for c in self.recorded()
-                          if c["guard"] == "canonical_completion_guard.py"],
-                         [["side.md"], ["main.md"]])
+        self.assertEqual(self.recorded(), [])
 
     def test_reverted_frontend_source_does_not_hide_an_invalid_backend_commit(self):
         path = "frontend-modern/src/example.ts"
@@ -285,7 +283,9 @@ class ContractRangeTest(SourceAdmissionFixture):
         result = self.run_guard(early=True)
         self.assertEqual(result.returncode, 0)
         self.assertIn("defer early admission", result.stdout)
-        self.assertEqual(self.recorded(), [])
+        self.assertEqual([c["files"] for c in self.recorded()
+                          if c["guard"] == "canonical_completion_guard.py"],
+                         [["side.md"], ["main.md"]])
 
     def test_receipt_rules_run_actual_browser_guard_not_an_assumed_skip(self):
         self.changed("frontend-modern/browser-verification.json")
@@ -438,7 +438,7 @@ class RealGuardConsumerTest(SourceAdmissionFixture):
     def test_real_guard_preserves_backend_trailer_and_full_frontend_obligation(self):
         self.install_real_guards()
         self.changed("internal/monitoring/poller.go", trailer="fixture refactor has no observable contract change")
-        self.changed("frontend-modern/src/fixture.tsx")
+        self.changed("frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx")
         result = self.run_early_workflow("build-and-test.yml")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(self.installs.exists())
