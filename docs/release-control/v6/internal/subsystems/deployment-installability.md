@@ -34,6 +34,17 @@ Symlinked parent paths still work, and nested symlinks remain links. The helper
 does not enable recursive link dereferencing or claim to prevent concurrent
 source mutation between its checks and tar.
 
+Each UTC-second output name is reserved with an atomic directory creation before
+any archive, encryption output or metadata is opened. A concurrent invocation
+using that name fails without releasing the winning invocation's reservation.
+An existing plaintext archive, encrypted archive or metadata entry (including
+a directory or dangling symlink) also fails before archiving, upload or retention,
+regardless of the newly selected encryption mode. This preserves recovery files
+from completed or failed runs when a scheduler/manual retry shares a timestamp.
+The owner removes only its reservation on ordinary exit; a stale reservation
+fails safely for that timestamp without blocking later timestamps. It is not
+a lock on source data or a guarantee against concurrent external source changes.
+
 Both archive/encryption steps and every configured upload must succeed before
 either retention pass. Local or remote cleanup errors return failure rather
 than a finished message; retention itself can partially progress before an
@@ -48,6 +59,13 @@ unchanged parent/nested-link semantics, invalid configuration, missing selected 
 archive/encryption/upload failures, retention errors, actual archive bytes and
 private modes, plus successful local/remote ordering. age, rclone, Docker and
 host identity are closed recording fakes, not encryption or cloud acceptance.
+Deterministic clock cases check all five output names in both encryption modes,
+output links/directories, sequential retries and later-timestamp usability. A
+bounded two-process case pauses the real entrypoint at its first tar invocation
+and proves that the losing same-second process opens no artifact, performs no
+upload/retention and cannot release the winner's reservation. Failure and stale
+reservation controls preserve ownership. These are local synthetic-file proofs,
+not application consistency, restored credentials or native recovery.
 
 ### Retired mock-alert cleanup preserves history and monitoring
 

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 
 
@@ -26,6 +27,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 root = Path(os.environ["FIXTURE"])
 tool, args = Path(sys.argv[0]).name, sys.argv[1:]
@@ -43,6 +45,13 @@ if tool == "tar":
     assert source.resolve().is_relative_to(root), source
     assert source.name in ("tenants", "control-plane"), source
     number = 1 + sum(call[0] == tool for call in previous)
+    if number == 1 and scenario.get("pause_first_tar"):
+        (root / "tar-entered").touch()
+        deadline = time.monotonic() + 10
+        while not (root / "release-tar").exists():
+            if time.monotonic() >= deadline:
+                sys.exit(91)
+            time.sleep(0.01)
     if number == scenario.get("tar_fail"):
         output.write_bytes(b"incomplete fixture archive")
         sys.exit(7)
@@ -111,7 +120,7 @@ class CloudBackupTest(unittest.TestCase):
             self.old.append(archive)
         # PATH admits only these local utilities and closed fakes. No real
         # Docker, encryption client or cloud client can be reached.
-        for name in ("mkdir", "touch", "chmod", "dirname", "basename", "date", "du", "cut", "rm", "gzip"):
+        for name in ("mkdir", "rmdir", "touch", "chmod", "dirname", "basename", "du", "cut", "rm", "gzip"):
             executable = shutil.which(name)
             self.assertIsNotNone(executable, f"required fixture dependency missing: {name}")
             (self.bin / name).symlink_to(executable)
@@ -119,22 +128,38 @@ class CloudBackupTest(unittest.TestCase):
             executable = self.bin / name
             executable.write_text(f"#!{sys.executable}\n" + FAKE)
             executable.chmod(0o700)
+        # Give each ordinary invocation a distinct deterministic timestamp.
+        # Collision tests deliberately reuse it; log dates still use real date.
+        date = self.bin / "date"
+        date.write_text(f"#!{sys.executable}\n" + r'''import os, subprocess, sys
+if sys.argv[1:] == ["-u", "+%Y%m%d-%H%M%S"]:
+    print(os.environ["FIXTURE_TIMESTAMP"])
+else:
+    sys.exit(subprocess.run([os.environ["REAL_DATE"], *sys.argv[1:]], check=False).returncode)
+''')
+        date.chmod(0o700)
         self.env = {
             "PATH": str(self.bin), "FIXTURE": str(self.root), "HOME": str(self.root),
             "TMPDIR": str(self.root), "LC_ALL": "C", "REAL_TAR": shutil.which("tar"),
             "REAL_FIND": shutil.which("find"), "PULSE_DATA_DIR": str(self.root),
+            "REAL_DATE": shutil.which("date"),
             "PULSE_BACKUP_DIR": str(self.backups), "PULSE_BACKUP_LOG_FILE": str(self.log),
             "PULSE_RCLONE_REMOTE": "fixture-remote:bucket",
             "PULSE_BACKUP_AGE_RECIPIENT": "fixture-recipient",
         }
         self.calls = []
+        self.invocations = 0
 
     def invoke(self, scenario=None, **env):
+        self.invocations += 1
         (self.root / "scenario.json").write_text(json.dumps(scenario or {}))
         (self.root / "calls.jsonl").unlink(missing_ok=True)
         self.log.unlink(missing_ok=True)
+        run_env = dict(self.env, FIXTURE_TIMESTAMP=f"20300101-0000{self.invocations:02d}")
+        run_env.update(env)
         result = subprocess.run([BASH, str(SCRIPT)], cwd=self.root,
-                                env=dict(self.env, **env), text=True, capture_output=True, timeout=20)
+                                env=run_env,
+                                text=True, capture_output=True, timeout=20)
         self.output = result.stdout + result.stderr + (self.log.read_text() if self.log.exists() else "")
         calls = self.root / "calls.jsonl"
         self.calls = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
@@ -167,6 +192,138 @@ class CloudBackupTest(unittest.TestCase):
             with tarfile.open(archives[0], "r:gz") as archive:
                 self.assertEqual(archive.extractfile(f"{directory}/fixture.txt").read(),
                                  f"synthetic {directory} data\n".encode())
+
+    def assert_timestamp_released(self):
+        self.assertEqual(list(self.backups.glob(".pulse-backup-*.lock")), [])
+
+    def test_existing_artifacts_are_never_overwritten_in_either_mode(self):
+        timestamp = "20300101-120000"
+        for encrypt in ("false", "true"):
+            for name in (f"pulse-backup-tenants-{timestamp}.tar.gz",
+                         f"pulse-backup-tenants-{timestamp}.tar.gz.age",
+                         f"pulse-backup-cp-{timestamp}.tar.gz",
+                         f"pulse-backup-cp-{timestamp}.tar.gz.age",
+                         f"pulse-backup-meta-{timestamp}.txt"):
+                with self.subTest(encrypt=encrypt, artifact=name):
+                    prior = self.backups / name
+                    prior.write_bytes(b"previous recovery evidence")
+                    result = self.invoke(PULSE_BACKUP_ENCRYPT=encrypt, FIXTURE_TIMESTAMP=timestamp)
+                    self.assert_stopped_before_retention(result)
+                    self.assertEqual(self.calls, [])
+                    self.assertEqual(set(self.backups.iterdir()), {*self.old, prior})
+                    self.assertIn("Backup timestamp already has artifacts", self.output)
+                    self.assertEqual(prior.read_bytes(), b"previous recovery evidence")
+                    self.assert_timestamp_released()
+                    prior.unlink()
+
+    def test_output_symlinks_and_directories_are_not_followed_or_replaced(self):
+        timestamp = "20300101-120000"
+        outside = self.root / "preserved.txt"
+        outside.write_bytes(b"synthetic unrelated evidence")
+        for kind in ("link", "dangling-link", "directory"):
+            for prefix, suffix in (("tenants", ".tar.gz"), ("cp", ".tar.gz.age"), ("meta", ".txt")):
+                with self.subTest(kind=kind, prefix=prefix):
+                    artifact = self.backups / f"pulse-backup-{prefix}-{timestamp}{suffix}"
+                    target = outside if kind == "link" else self.root / "must-not-be-created"
+                    if kind == "directory":
+                        artifact.mkdir()
+                    else:
+                        artifact.symlink_to(target)
+                    result = self.invoke(FIXTURE_TIMESTAMP=timestamp, PULSE_BACKUP_ENCRYPT="true")
+                    self.assert_stopped_before_retention(result)
+                    self.assertEqual(self.calls, [])
+                    self.assertEqual(set(self.backups.iterdir()), {*self.old, artifact})
+                    self.assertIn("Backup timestamp already has artifacts", self.output)
+                    self.assertEqual(outside.read_bytes(), b"synthetic unrelated evidence")
+                    self.assertFalse((self.root / "must-not-be-created").exists())
+                    self.assert_timestamp_released()
+                    if kind == "directory":
+                        artifact.rmdir()
+                    else:
+                        self.assertTrue(artifact.is_symlink())
+                        artifact.unlink()
+
+    def test_same_second_retry_preserves_successful_pair_and_metadata(self):
+        timestamp = "20300101-120000"
+        self.assertEqual(self.invoke(FIXTURE_TIMESTAMP=timestamp).returncode, 0, self.output)
+        prior = {path.name: path.read_bytes() for path in self.backups.iterdir()}
+        result = self.invoke(FIXTURE_TIMESTAMP=timestamp)
+        self.assertNotEqual(result.returncode, 0, self.output)
+        self.assertIn("Backup timestamp already has artifacts", self.output)
+        self.assertEqual(self.calls, [])
+        self.assertEqual({path.name: path.read_bytes() for path in self.backups.iterdir()}, prior)
+        self.assert_timestamp_released()
+        # A later invocation is still usable without deleting recovery files.
+        self.assertEqual(self.invoke(FIXTURE_TIMESTAMP="20300101-120001").returncode, 0, self.output)
+        for name, content in prior.items():
+            self.assertEqual((self.backups / name).read_bytes(), content)
+        self.assertEqual(len(list(self.backups.glob("*.tar.gz"))), 4)
+        self.assert_timestamp_released()
+
+    def test_same_second_concurrent_run_cannot_open_first_runs_artifacts(self):
+        (self.root / "scenario.json").write_text(json.dumps({"pause_first_tar": True}))
+        env = dict(self.env, FIXTURE_TIMESTAMP="20300101-120000")
+        first = subprocess.Popen([BASH, str(SCRIPT)], cwd=self.root, env=env,
+                                 text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 10
+            while not (self.root / "tar-entered").exists():
+                self.assertIsNone(first.poll(), "first run exited before entering tar")
+                self.assertLess(time.monotonic(), deadline, "first run did not enter tar")
+                time.sleep(0.01)
+            second = subprocess.run([BASH, str(SCRIPT)], cwd=self.root, env=env,
+                                    text=True, capture_output=True, timeout=10)
+            log = self.log.read_text()
+            reserved_while_first_active = list(self.backups.glob(".pulse-backup-*.lock"))
+        finally:
+            (self.root / "release-tar").touch()
+            try:
+                first.communicate(timeout=15)
+            finally:
+                if first.poll() is None:
+                    first.kill()
+                    first.communicate()
+        self.assertNotEqual(second.returncode, 0, log)
+        self.assertIn("Backup timestamp is already reserved", log)
+        self.assertEqual(len(reserved_while_first_active), 1, "losing run released winner's reservation")
+        self.assertEqual(first.returncode, 0, self.log.read_text())
+        self.output = self.log.read_text()
+        calls = [json.loads(line) for line in (self.root / "calls.jsonl").read_text().splitlines()]
+        self.assertEqual(len([call for call in calls if call[0] == "tar"]), 2)
+        self.assertEqual(len([call for call in calls if call[:2] == ["rclone", "copyto"]]), 3)
+        self.assert_archive_contents()
+        self.assert_timestamp_released()
+
+    def test_failure_releases_only_its_own_reservation(self):
+        result = self.invoke({"tar_fail": 1})
+        self.assert_stopped_before_retention(result)
+        self.assert_timestamp_released()
+        # A stale reservation, or any other entry with its name, is not ours.
+        lock = self.backups / ".pulse-backup-20300101-120000.lock"
+        lock.mkdir()
+        result = self.invoke(FIXTURE_TIMESTAMP="20300101-120000")
+        self.assert_stopped_before_retention(result)
+        self.assertEqual(self.calls, [])
+        self.assertIn("Backup timestamp is already reserved", self.output)
+        self.assertTrue(lock.is_dir())
+        lock.rmdir()
+
+    def test_missing_reservation_cleanup_tool_stops_before_archiving(self):
+        (self.bin / "rmdir").unlink()
+        self.assert_stopped_before_retention(self.invoke(), before_archives=True)
+        self.assertIn("rmdir is required for backup timestamp reservations", self.output)
+
+    def test_reservation_cleanup_failure_is_not_a_finished_success(self):
+        cleanup = self.bin / "rmdir"
+        cleanup.unlink()
+        cleanup.write_text("#!/bin/sh\nexit 12\n")
+        cleanup.chmod(0o700)
+        result = self.invoke()
+        self.assertNotEqual(result.returncode, 0, self.output)
+        self.assertNotIn("=== tarball backup finished ===", self.output)
+        self.assertIn("backup and retention already completed", self.output)
+        self.assertEqual(len(list(self.backups.glob(".pulse-backup-*.lock"))), 1)
+        self.assert_archive_contents()
 
     def symlink_source(self, name):
         target = self.root / ("physical-" + name)

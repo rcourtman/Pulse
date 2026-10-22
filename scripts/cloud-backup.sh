@@ -4,6 +4,7 @@
 # Both source directories are required, even when remote upload is disabled.
 # Configure physical source directories: tar would store a root symlink alone.
 # Archive, encryption and configured uploads must succeed before retention.
+# A timestamp must be exclusively reserved and must not replace existing files.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
 #
@@ -70,6 +71,7 @@ preflight() {
 
   have tar || die "tar is required"
   have find || die "find is required for local retention"
+  have rmdir || die "rmdir is required for backup timestamp reservations"
   [[ -d "${TENANTS_DIR}" ]] || die "Required tenants directory not found; no backup or retention performed"
   [[ -d "${CONTROL_PLANE_DIR}" ]] || die "Required control-plane directory not found; no backup or retention performed"
   reject_linked_source "${TENANTS_DIR}" "tenants"
@@ -159,6 +161,33 @@ rotate_remote() {
   fi
 }
 
+# Manual and scheduled invocations can start in the same UTC second. Reserve
+# that name atomically before opening any artifact, and never reuse artifacts
+# left by an earlier run (including a failed or encrypted one).
+reserve_timestamp() {
+  local timestamp="$1"
+  local lock_dir="${BACKUP_DIR}/.pulse-backup-${timestamp}.lock"
+  if ! mkdir -- "${lock_dir}"; then
+    die "Backup timestamp is already reserved; no backup or retention performed"
+  fi
+  # Install cleanup only after acquiring our own directory. A losing invocation
+  # must never release another run's reservation. SIGKILL may leave it behind;
+  # later timestamps remain usable, and reusing that timestamp fails safely.
+  run_lock_dir="${lock_dir}"
+  trap 'rmdir -- "${run_lock_dir}" || { log "ERROR: Could not release backup timestamp reservation"; exit 1; }' EXIT
+
+  local artifact
+  for artifact in \
+    "${BACKUP_DIR}/pulse-backup-tenants-${timestamp}.tar.gz" \
+    "${BACKUP_DIR}/pulse-backup-tenants-${timestamp}.tar.gz.age" \
+    "${BACKUP_DIR}/pulse-backup-cp-${timestamp}.tar.gz" \
+    "${BACKUP_DIR}/pulse-backup-cp-${timestamp}.tar.gz.age" \
+    "${BACKUP_DIR}/pulse-backup-meta-${timestamp}.txt"; do
+    [[ ! -e "${artifact}" && ! -L "${artifact}" ]] ||
+      die "Backup timestamp already has artifacts; no backup or retention performed"
+  done
+}
+
 main() {
   # Set up logging
   mkdir -p "$(dirname "${LOG_FILE}")"
@@ -175,6 +204,9 @@ main() {
   umask 077
   mkdir -p "${BACKUP_DIR}"
   chmod 0700 "${BACKUP_DIR}"
+  # Global for the EXIT trap, which also runs after main's local scope ends.
+  run_lock_dir=""
+  reserve_timestamp "${timestamp}"
 
   # Backup tenants
   local tenants_tarball="${BACKUP_DIR}/pulse-backup-tenants-${timestamp}.tar.gz"
@@ -210,6 +242,8 @@ main() {
   rotate_local
   rotate_remote
 
+  trap - EXIT
+  rmdir -- "${run_lock_dir}" || die "Could not release backup timestamp reservation; backup and retention already completed"
   log "=== tarball backup finished ==="
 }
 
