@@ -6,6 +6,7 @@
 # Configure physical source directories: tar would store a root symlink alone.
 # Helpers sharing a staging directory reserve names before writing any output.
 # Archive, encryption and configured uploads must succeed before retention.
+# Retention only removes this helper's top-level archives and metadata.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
 #
@@ -35,6 +36,17 @@ LOG_FILE="${PULSE_BACKUP_LOG_FILE:-/var/log/pulse-cloud-backup-tarball.log}"
 ENCRYPT="${PULSE_BACKUP_ENCRYPT:-false}"
 AGE_RECIPIENT="${PULSE_BACKUP_AGE_RECIPIENT:-}"
 BACKUP_NAME_RESERVATION=""
+# Keep local and remote ownership identical. Match the generated timestamp
+# shape, not arbitrary files that happen to share a prefix or archive suffix.
+BACKUP_TIMESTAMP_PATTERN='[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]'
+BACKUP_FILE_PATTERNS=(
+  "pulse-backup-tenants-${BACKUP_TIMESTAMP_PATTERN}.tar.gz"
+  "pulse-backup-tenants-${BACKUP_TIMESTAMP_PATTERN}.tar.gz.age"
+  "pulse-backup-cp-${BACKUP_TIMESTAMP_PATTERN}.tar.gz"
+  "pulse-backup-cp-${BACKUP_TIMESTAMP_PATTERN}.tar.gz.age"
+  "pulse-backup-meta-${BACKUP_TIMESTAMP_PATTERN}.txt"
+  "pulse-backup-meta-${BACKUP_TIMESTAMP_PATTERN}.txt.age"
+)
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -172,8 +184,17 @@ upload_remote() {
 rotate_local() {
   [[ -d "${BACKUP_DIR}" ]] || return 0
 
+  local pattern
+  local names=()
+  for pattern in "${BACKUP_FILE_PATTERNS[@]}"; do
+    if (( ${#names[@]} > 0 )); then names+=(-o); fi
+    names+=(-name "${pattern}")
+  done
   log "rotating local backups (keeping last ${RETENTION_DAYS} days)"
-  if ! find "${BACKUP_DIR}" -name "pulse-backup-*.tar.gz*" -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null; then
+  # Do not walk operator-created subdirectories or remove links/directories.
+  # Metadata has the same retention as archives, including earlier plaintext.
+  if ! find "${BACKUP_DIR}" -maxdepth 1 -type f \( "${names[@]}" \) \
+    -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null; then
     die "Local retention failed; new backup artifacts are retained, but cleanup may be incomplete"
   fi
 }
@@ -185,8 +206,16 @@ rotate_remote() {
   fi
 
   local remote_dir="${PULSE_RCLONE_REMOTE}/pulse-cloud-tarballs"
+  local pattern
+  local filters=()
+  for pattern in "${BACKUP_FILE_PATTERNS[@]}"; do
+    filters+=(--include "/${pattern}")
+  done
   log "rotating remote backups (${RETENTION_DAYS} day retention)"
-  if ! rclone delete "${remote_dir}" --min-age "${RETENTION_DAYS}d" 2>/dev/null; then
+  # Anchor each include at the remote root, then exclude everything else.
+  # Sharing the prefix must not make unrelated objects eligible for deletion.
+  if ! rclone delete "${remote_dir}" --min-age "${RETENTION_DAYS}d" \
+    --max-depth 1 "${filters[@]}" --exclude '*' 2>/dev/null; then
     die "Remote retention failed; backup uploads completed, but cleanup may be incomplete"
   fi
 }
