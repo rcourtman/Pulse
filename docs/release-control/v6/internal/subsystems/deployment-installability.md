@@ -4915,6 +4915,21 @@ No real check is created, workflow dispatched or latency workload executed.
 
 ## Current State
 
+### Staged server version checks have a kill backstop
+
+Both archive and source-build staged `--version` commands escalate to KILL one
+second after the five-second TERM deadline. A TERM-resistant executable must
+not turn that admission check into an unbounded wait, even when it prints a
+plausible version first. Its failed probe still refuses before any service
+observation, stop or binary replacement, preserves the existing executable,
+metadata and configuration, and cleans allocated extraction/build/staging
+paths. This per-command backstop is not a whole-install deadline or proof of
+native recovery. The real-time, single-process TERM-resistant control in
+`test_server_installer_stop.py` covers downloaded archives, local archives and
+source builds, including process state, refusal and file/mode preservation.
+`TestRootInstallScriptStagesUpdateBeforeStoppingService` keeps the explicit
+kill backstop before the existing confirmed-stop and atomic-rename steps.
+
 ### Private authenticated Go toolchain inputs
 
 The developer toolchain installer reads a single stable `goX.Y.Z` pin (or its

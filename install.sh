@@ -3802,7 +3802,9 @@ install_pulse_archive() {
         rm -rf "$binary_stage" "$temp_extract"
         return 1
     fi
-    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null); then
+    # TERM alone does not bound an unresponsive executable. Keep the same
+    # pre-stop admission deadline, with one second to terminate before KILL.
+    if ! version_output=$(timeout -k 1 5 "$binary_stage/pulse" --version 2>/dev/null); then
         print_error "Staged Pulse binary could not report its version; Pulse has not been stopped"
         rm -rf "$binary_stage" "$temp_extract"
         return 1
@@ -4265,7 +4267,7 @@ build_from_source() {
         rm -rf "$binary_stage" "$temp_build"
         return 1
     fi
-    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null) || [[ -z "${version_output//[[:space:]]/}" ]]; then
+    if ! version_output=$(timeout -k 1 5 "$binary_stage/pulse" --version 2>/dev/null) || [[ -z "${version_output//[[:space:]]/}" ]]; then
         print_error "Built Pulse binary could not report its version; Pulse has not been stopped"
         cd "$original_dir" >/dev/null 2>&1 || true
         rm -rf "$binary_stage" "$temp_build"
