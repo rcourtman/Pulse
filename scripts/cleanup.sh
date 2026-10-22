@@ -2,14 +2,21 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+# Cleanup is for regenerable build output, not a reset of a local installation.
+# Never scan arbitrary files by suffix: .bak, logs and empty directories can all
+# be recovery evidence. Keep data, environment files and local settings intact.
+ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 
-TARGETS=(
+BUILD_TARGETS=(
+  "pulse"
+  "frontend-modern/dist"
+  "internal/api/frontend-modern"
+)
+
+EXTRA_TARGETS=(
   "bin"
   "build"
   "dist"
-  "downloads"
-  "frontend-modern/dist"
   "frontend-modern/node_modules"
   "frontend-modern/release"
   "frontend-modern/.vite"
@@ -23,11 +30,7 @@ TARGETS=(
   "frontend-modern/public/pulse-agent-linux-amd64"
   "frontend-modern/public/pulse-agent-linux-arm64"
   "frontend-modern/public/pulse-agent-linux-armv7"
-  "data"
-  "internal/api/frontend-modern"
   "node_modules"
-  "pulse"
-  "pulse.log"
   "pulse-server"
   "pulse-test"
   "pulse-agent"
@@ -41,16 +44,6 @@ TARGETS=(
   "release"
   "scripts/macos/dist"
   "testing-tools/node_modules"
-  "tmp"
-  ".codex"
-  ".claudecode-hooks"
-  ".claudecode-settings.json"
-  ".claude"
-  ".mcp-servers"
-  ".env"
-  ".env.local"
-  ".tmp"
-  ".cache"
   ".parcel-cache"
   ".sass-cache"
   ".turbo"
@@ -59,37 +52,74 @@ TARGETS=(
   ".gradle"
 )
 
-try_remove() {
-  local path="$1"
-  if [ -e "$path" ]; then
-    local rel="${path#"${ROOT}/"}"
-    if git -C "${ROOT}" ls-files --error-unmatch "$rel" >/dev/null 2>&1; then
-      echo "Skipping tracked ${rel}"
-      return
-    fi
-    if rm -rf "$path" 2>/dev/null; then
-      echo "Removed ${path#"${ROOT}/"}"
-    elif command -v sudo >/dev/null 2>&1; then
-      sudo rm -rf "$path"
-      echo "Removed ${path#"${ROOT}/"} (via sudo)"
-    else
-      echo "Warning: unable to remove ${path#"${ROOT}/"}" >&2
-    fi
-  fi
+TARGETS=("${BUILD_TARGETS[@]}")
+case "${1:-}" in
+  "")
+    [[ $# == 0 ]] || { echo "Usage: $0 [--build-only]" >&2; exit 2; }
+    TARGETS+=("${EXTRA_TARGETS[@]}")
+    ;;
+  --build-only)
+    [[ $# == 1 ]] || { echo "Usage: $0 [--build-only]" >&2; exit 2; }
+    ;;
+  *)
+    echo "Usage: $0 [--build-only]" >&2
+    exit 2
+    ;;
+esac
+
+# An unavailable Git index is not evidence that a file is untracked. Verify the
+# checkout identity and finish every index query before deleting the first file.
+if ! git_root="$(git -C "${ROOT}" rev-parse --show-toplevel)" || [[ "${git_root}" != "${ROOT}" ]]; then
+  echo "Error: cannot verify the cleanup checkout; no files removed." >&2
+  exit 1
+fi
+
+has_linked_component() {
+  local relative="$1" current="${ROOT}" component
+  while :; do
+    component="${relative%%/*}"
+    current="${current}/${component}"
+    [[ ! -L "${current}" ]] || return 0
+    [[ "${relative}" == */* ]] || break
+    relative="${relative#*/}"
+  done
+  return 1
 }
 
+removals=()
 for target in "${TARGETS[@]}"; do
-  try_remove "${ROOT}/${target}"
+  # rm does not follow a final symlink, but it would follow a linked ancestor
+  # such as frontend-modern -> another checkout before reaching dist.
+  if has_linked_component "${target}"; then
+    echo "Skipping linked ${target}"
+    continue
+  fi
+  [[ -e "${ROOT}/${target}" ]] || continue
+  if ! tracked="$(git -C "${ROOT}" ls-files -- "${target}")"; then
+    echo "Error: cannot check tracked ${target}; no files removed." >&2
+    exit 1
+  fi
+  if [[ -n "${tracked}" ]]; then
+    echo "Skipping tracked ${target}"
+    continue
+  fi
+  removals+=("${target}")
 done
 
-find "${ROOT}" -maxdepth 1 -type f -name "*.log" -print -delete
-find "${ROOT}/frontend-modern" -maxdepth 1 -type f -name "*.log" -print -delete
-find "${ROOT}" -maxdepth 2 -type d -name "coverage" -prune -exec rm -rf {} +
-find "${ROOT}" -maxdepth 2 -type f \( -name "*.coverage" -o -name "coverage*.out" \) -delete
-find "${ROOT}" -type d -name "__pycache__" -prune -exec rm -rf {} +
-find "${ROOT}" -type f -name "*.pyc" -delete
-find "${ROOT}" -type f \( -name "*.tmp" -o -name "*.bak" -o -name "*.backup" -o -name "*~" -o -name "*.orig" \) -delete
-find "${ROOT}" -type f \( -name ".DS_Store" -o -name "Thumbs.db" \) -delete
-find "${ROOT}" -maxdepth 2 -type d -empty -delete
+failed=0
+for target in ${removals[@]+"${removals[@]}"}; do
+  if rm -rf -- "${ROOT:?}/${target:?}"; then
+    echo "Removed ${target}"
+  else
+    # Ownership failures must not turn a build cleanup into privileged removal.
+    echo "Error: unable to remove ${target}; no privilege escalation attempted." >&2
+    failed=1
+  fi
+done
 
-echo "Cleanup complete."
+if (( failed )); then
+  echo "Cleanup incomplete; local data and settings were not targeted." >&2
+  exit 1
+fi
+
+echo "Cleanup complete. Local data, settings, logs and recovery files outside build outputs were preserved."

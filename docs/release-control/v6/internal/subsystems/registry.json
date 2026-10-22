@@ -4691,6 +4691,7 @@
         "scripts/capture-release-note-visuals.sh",
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
+        "scripts/cleanup.sh",
         "scripts/cloud-backup.sh",
         "scripts/com.pulse.hot-dev.plist.template",
         "scripts/demo_public_browser_smoke.cjs",
@@ -5325,6 +5326,7 @@
               "package-lock.json",
               "package.json",
               "scripts/clean-mock-alerts.sh",
+              "scripts/cleanup.sh",
               "scripts/com.pulse.hot-dev.plist.template",
               "scripts/dev-check.sh",
               "scripts/dev-deploy-agent.sh",
@@ -5352,6 +5354,7 @@
               "scripts/tests/test-hot-dev-bg.sh",
               "scripts/tests/test-hot-dev-runtime.sh",
               "scripts/tests/test-toggle-mock.sh",
+              "scripts/tests/test_cleanup.py",
               "scripts/tests/test_hot_dev_config.py",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"

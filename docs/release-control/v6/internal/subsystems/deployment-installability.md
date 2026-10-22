@@ -334,6 +334,33 @@ install/update and text/JSON modes. Registered, unconfirmed and missing-process
 controls remain distinct. The fixtures do not contact a server, replace a
 credential or establish installed recovery.
 
+### Development cleanup preserves local state and recovery evidence
+
+`make clean`, `make distclean` and the direct `scripts/cleanup.sh` entrypoint
+share one guarded generated-output allowlist. Clean selects only the server
+binary and frontend build copies; distclean also selects known generated build
+and dependency-cache paths. Neither scans arbitrary filenames/extensions nor
+targets data, environment files, assistant settings, logs, downloads, temporary
+evidence or backups outside those generated outputs. This is not a state reset,
+process stop, secure erasure or restoration of files deleted by an older helper.
+
+Before the first deletion, Git must confirm this exact checkout root and every
+candidate's tracked-file query must succeed. Tracked files and directories with
+tracked descendants are preserved as a whole, as are symbolic links and targets
+below linked parent directories. Failed deletion reports an incomplete result;
+the helper never retries with sudo. These checks do not defend against arbitrary
+concurrent filesystem/index replacement or data deliberately put in an untracked
+build directory.
+
+`scripts/tests/test_cleanup.py` exercises both real Make targets and the direct
+helper in fresh synthetic checkouts, with native Git, Bash, Make and rm. It
+checks preserved bytes/modes and empty recovery directories, actual generated
+output removal, tracked outputs, external/dangling links, complete pre-deletion
+index checks, refusal without a repository or Git, idempotence and failure
+without privilege escalation. Only failure observations use closed adapters;
+no installed/runtime data, process, database or external service is involved.
+The ordinary script-smoke inventory discovers this verifier.
+
 ### Development does not implicitly import installed credentials or targets
 
 The hot-dev launcher defaults both installed-data selectors to `false`.
@@ -2884,6 +2911,7 @@ transport and private-file controls in `scripts/tests/test_install_go_toolchain.
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
 38a. `scripts/cloud-backup.sh`
+38b. `scripts/cleanup.sh`
 39. `scripts/com.pulse.hot-dev.plist.template`
 40. `scripts/dev-check.sh`
 41. `scripts/dev-deploy-agent.sh`
