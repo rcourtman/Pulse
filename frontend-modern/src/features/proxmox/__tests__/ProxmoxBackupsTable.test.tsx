@@ -2270,7 +2270,7 @@ describe('backup-date-evidence connected inventory', () => {
     );
     expect(warning).toHaveAttribute('role', 'status');
     expect(warning).toHaveTextContent('excluded from the activity chart and day filters');
-    expect(screen.getByText(/No completed restore-point activity/)).toBeInTheDocument();
+    expect(await screen.findByText(/No completed restore-point activity/)).toBeInTheDocument();
     const future = [...document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')].find(
       (row) => row.textContent?.includes('PBS'),
     )! as HTMLElement;
