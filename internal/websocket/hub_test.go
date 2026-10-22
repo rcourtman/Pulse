@@ -2,9 +2,15 @@ package websocket
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1740,4 +1746,182 @@ func TestHubTimedOutTenantBroadcastClosesOnlyItsAudience(t *testing.T) {
 	for raw := range a.send {
 		t.Fatalf("late result reached retired audience: %s", raw)
 	}
+}
+
+// Keep the actual Gorilla upgrade/control/close path. Only the server-side
+// transport's post-upgrade writes are controllably slow, without depending on
+// kernel send-buffer sizes or allocating a large message to fill them.
+type stateCloseConn struct {
+	net.Conn
+	slow     atomic.Bool
+	closed   chan struct{}
+	once     sync.Once
+	mu       sync.Mutex
+	deadline time.Time
+	writes   []time.Time
+}
+
+func (c *stateCloseConn) SetWriteDeadline(deadline time.Time) error {
+	c.mu.Lock()
+	c.deadline = deadline
+	c.mu.Unlock()
+	return c.Conn.SetWriteDeadline(deadline)
+}
+
+func (c *stateCloseConn) Write(data []byte) (int, error) {
+	c.mu.Lock()
+	deadline := c.deadline
+	c.writes = append(c.writes, deadline)
+	c.mu.Unlock()
+	if !c.slow.Load() {
+		return c.Conn.Write(data)
+	}
+	if deadline.IsZero() {
+		return 0, errors.New("fixture: control write has no deadline")
+	}
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return 0, os.ErrDeadlineExceeded
+	case <-c.closed:
+		return 0, net.ErrClosed
+	}
+}
+
+func (c *stateCloseConn) Close() error {
+	c.once.Do(func() { close(c.closed) })
+	return c.Conn.Close()
+}
+
+type stateCloseListener struct {
+	net.Listener
+	accepted chan *stateCloseConn
+}
+
+func (l stateCloseListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	wrapped := &stateCloseConn{Conn: c, closed: make(chan struct{})}
+	l.accepted <- wrapped
+	return wrapped, nil
+}
+
+func stateCloseSocketFactory(t *testing.T, hub *Hub) func(string, bool) (*Client, *gorillawebsocket.Conn, *stateCloseConn) {
+	t.Helper()
+	accepted := make(chan *stateCloseConn, 8)
+	upgraded := make(chan *gorillawebsocket.Conn, 8)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&gorillawebsocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("fixture upgrade: %v", err)
+			return
+		}
+		upgraded <- conn
+	}))
+	server.Listener = stateCloseListener{Listener: server.Listener, accepted: accepted}
+	server.Start()
+	t.Cleanup(server.Close)
+	return func(org string, slow bool) (*Client, *gorillawebsocket.Conn, *stateCloseConn) {
+		t.Helper()
+		peer, _, err := gorillawebsocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http"), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn, transport := <-upgraded, <-accepted
+		transport.mu.Lock()
+		transport.writes = nil // HTTP upgrade is not a control-frame write.
+		transport.mu.Unlock()
+		transport.slow.Store(slow)
+		client := &Client{hub: hub, conn: conn, id: fmt.Sprint(peer.LocalAddr()), orgID: org, send: make(chan []byte, 1)}
+		// No client pumps or synthetic getter are needed to test retirement.
+		hub.mu.Lock()
+		hub.clients[client] = true
+		if hub.clientsByTenant[org] == nil {
+			hub.clientsByTenant[org] = make(map[*Client]bool)
+		}
+		hub.clientsByTenant[org][client] = true
+		hub.mu.Unlock()
+		t.Cleanup(func() { _ = peer.Close(); _ = conn.Close() })
+		return client, peer, transport
+	}
+}
+
+func TestHubUnavailableAudienceSharesControlDeadlineAndKeepsOtherTenant(t *testing.T) {
+	hub := NewHub(nil)
+	dial := stateCloseSocketFactory(t, hub)
+	var clients []*Client
+	var peers []*gorillawebsocket.Conn
+	var transports []*stateCloseConn
+	for i := 0; i < 3; i++ {
+		client, peer, transport := dial("org-a", false)
+		clients, peers, transports = append(clients, client), append(peers, peer), append(transports, transport)
+	}
+	other, otherPeer, _ := dial("org-b", false)
+	hub.closeUnavailableStateAudience("org-a")
+	var common time.Time
+	for i, client := range clients {
+		_ = peers[i].SetReadDeadline(time.Now().Add(time.Second))
+		_, _, err := peers[i].ReadMessage()
+		var closed *gorillawebsocket.CloseError
+		if !errors.As(err, &closed) || closed.Code != gorillawebsocket.CloseTryAgainLater || closed.Text != "State delivery temporarily unavailable" {
+			t.Fatalf("client %d close = %v", i, err)
+		}
+		if !client.closed.Load() {
+			t.Fatal("closed socket remained in the audience")
+		}
+		transports[i].mu.Lock()
+		writes := append([]time.Time(nil), transports[i].writes...)
+		transports[i].mu.Unlock()
+		if len(writes) != 1 || writes[0].IsZero() {
+			t.Fatalf("client %d control deadlines = %v", i, writes)
+		}
+		if i == 0 {
+			common = writes[0]
+		} else if !writes[0].Equal(common) {
+			t.Fatalf("audience received a new deadline per client: %v != %v", writes[0], common)
+		}
+	}
+	if other.closed.Load() || hub.GetClientCount() != 1 || hub.GetTenantClientCount("org-a") != 0 || hub.GetTenantClientCount("org-b") != 1 {
+		t.Fatal("retirement crossed the tenant audience")
+	}
+	if err := other.conn.WriteMessage(gorillawebsocket.TextMessage, []byte("org-b-still-live")); err != nil {
+		t.Fatal(err)
+	}
+	_ = otherPeer.SetReadDeadline(time.Now().Add(time.Second))
+	if _, body, err := otherPeer.ReadMessage(); err != nil || string(body) != "org-b-still-live" {
+		t.Fatalf("other tenant lost delivery: %q, %v", body, err)
+	}
+}
+
+func TestHubUnavailableAudienceSlowWritesHaveOneBudget(t *testing.T) {
+	hub := NewHub(nil)
+	dial := stateCloseSocketFactory(t, hub)
+	var transports []*stateCloseConn
+	for i := 0; i < 5; i++ {
+		_, _, transport := dial("org-a", true)
+		transports = append(transports, transport)
+	}
+	started := time.Now()
+	hub.closeUnavailableStateAudience("org-a")
+	elapsed := time.Since(started)
+	// The former per-client deadline consumed five seconds. Allow scheduling
+	// room without relying on sub-millisecond comparisons as the sole proof;
+	// the responsive-socket test checks exact common deadline identity too.
+	if elapsed > 3*time.Second {
+		t.Fatalf("five slow peers multiplied the one-second budget: %v", elapsed)
+	}
+	if hub.GetClientCount() != 0 || hub.GetTenantClientCount("org-a") != 0 {
+		t.Fatal("slow clients remain registered")
+	}
+	for _, transport := range transports {
+		select {
+		case <-transport.closed:
+		default:
+			t.Fatal("expired control budget left a socket open")
+		}
+	}
+	t.Logf("five slow peers retired in %v", elapsed)
 }

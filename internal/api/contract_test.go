@@ -27611,37 +27611,79 @@ func TestSSOConfigConcurrentReadsAndAdminWrites(t *testing.T) {
 	}
 }
 
-// Uses only a controlled in-memory getter, a real hub/socket and the real
-// public health handler. No monitor, guest, endpoint or database is started.
+// Gate one read of the real in-memory registry adapter from BuildFrontendState.
+// Its owner is deliberately known; this does not reproduce #3105's unknown
+// lock cycle. No monitor loops, provider, guest or database are started.
+type stateDeliveryReadGate struct {
+	*unifiedresources.MonitorAdapter
+	block   atomic.Bool
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *stateDeliveryReadGate) LastRebuiltAt() time.Time {
+	if s.block.CompareAndSwap(true, false) {
+		close(s.entered)
+		<-s.release
+	}
+	return s.MonitorAdapter.LastRebuiltAt()
+}
+
+// Keep this fixture's one seeded registry generation, rather than refreshing
+// it from the bare monitor's intentionally absent collectors after 30 seconds.
+func (s *stateDeliveryReadGate) TryReplaceRegistryForRead(models.StateSnapshot, time.Duration, func() map[unifiedresources.DataSource][]unifiedresources.IngestRecord) bool {
+	return false
+}
+
+// Uses BuildFrontendState, the real registry projection, hub/socket and public
+// health handler. The controlled read gate is not a customer-cause diagnosis.
 func TestContractStateDeliveryStallReadiness(t *testing.T) {
 	t.Setenv("PULSE_DEV_ALLOW_CONTAINER_SSH", "false")
+	previousMock := mock.IsMockEnabled()
+	if err := mock.SetEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = mock.SetEnabled(previousMock) })
 	entered, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	var releaseOnce sync.Once
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
 	defer unblock()
 	var builds atomic.Int64
-	state := models.EmptyStateFrontend()
-	state.Resources = []models.ResourceFrontend{{ID: "fixture-node", Type: "agent", Name: "recovered-node", DisplayName: "Recovered node", PlatformID: "fixture-pve", PlatformType: "proxmox-pve", SourceType: "api", Status: "online", Proxmox: json.RawMessage(`{"node":"recovered-node","instance":"fixture-pve"}`), LastSeen: time.Now().UnixMilli()}}
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSupplementalRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{{
+		SourceID: "fixture-node",
+		Resource: unifiedresources.Resource{
+			ID: "fixture-node", Type: unifiedresources.ResourceTypeAgent, Name: "recovered-node",
+			Status: unifiedresources.StatusOnline, LastSeen: time.Now().UTC(),
+			Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+			Proxmox: &unifiedresources.ProxmoxData{NodeName: "recovered-node", Instance: "fixture-pve"},
+			Metrics: &unifiedresources.ResourceMetrics{CPU: &unifiedresources.MetricValue{Value: 12.5, Unit: "percent", Source: unifiedresources.SourceProxmox}},
+		},
+	}})
+	store := &stateDeliveryReadGate{MonitorAdapter: adapter, entered: entered, release: release}
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(store)
+	store.block.Store(true)
 	hub := pulsews.NewHub(func(orgID string) interface{} {
-		if builds.Add(1) == 1 {
-			close(entered)
-			<-release
-			close(returned)
-		}
+		first := builds.Add(1) == 1
 		if orgID != "default" {
 			t.Errorf("unexpected state scope %q", orgID)
+		}
+		state := monitor.BuildFrontendState()
+		if first {
+			close(returned)
 		}
 		return state
 	})
 	go hub.Run()
 	defer func() { unblock(); hub.Stop() }()
-	router := &Router{monitor: &monitoring.Monitor{}, wsHub: hub}
+	router := &Router{monitor: monitor, wsHub: hub}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", hub.HandleWebSocket)
 	mux.HandleFunc("/api/health", router.handleHealth)
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	proof := map[string]interface{}{"kind": "controlled-getter-real-hub-and-health", "timeoutSeconds": 30}
+	proof := map[string]interface{}{"kind": "BuildFrontendState-real-registry-hub-and-health-controlled-read-gate", "timeoutSeconds": 30}
 	health := func(phase string, expected int) {
 		t.Helper()
 		start := time.Now()
@@ -27742,6 +27784,15 @@ func TestContractStateDeliveryStallReadiness(t *testing.T) {
 	}
 	recovered := dial()
 	proof["recoveredInitial"] = read(recovered, "initialState")
+	var recoveredFrame struct {
+		Data models.StateFrontend `json:"data"`
+	}
+	if err := json.Unmarshal(proof["recoveredInitial"].(json.RawMessage), &recoveredFrame); err != nil {
+		t.Fatal(err)
+	}
+	if len(recoveredFrame.Data.Resources) != 1 || recoveredFrame.Data.Resources[0].Name != "recovered-node" || recoveredFrame.Data.Resources[0].PlatformType != "proxmox-pve" {
+		t.Fatalf("real monitor projection lost canonical recovered state: %+v", recoveredFrame.Data.Resources)
+	}
 	health("recovered", http.StatusOK)
 	recovered.Close()
 	stopped := make(chan struct{})

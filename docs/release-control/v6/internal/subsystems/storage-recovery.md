@@ -3823,6 +3823,13 @@ until actual completion; no invented empty estate or late result is delivered.
 This is observation/containment, not disk, backup, thaw, restore or installed
 recovery acceptance. The controlled hub/health proof starts no storage workload.
 
+An unavailable broadcast audience shares one close-write deadline; retirement
+cannot multiply its delay by the number of slow browser sockets. A transport
+which cannot accept the generic close frame is closed anyway, without treating
+that as backup, filesystem or workload recovery. Socket controls and a real
+`BuildFrontendState`/in-memory-registry health fixture start no provider, guest
+or database operation.
+
 
 ### Shared guest availability metadata keeps CPU separate from storage (21 October 2026)
 
