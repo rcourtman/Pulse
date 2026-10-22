@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "c936e550de90baf5509596f131667de203abcf3b",
+  "verified_at": "2026-10-22T04:07:05.270878Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "d4778e41a7420ea3bdf2a125470911ec67b06f9cd622c5eb621337b22487915e"
+  },
+  "routes": [
+    "/browser-tests/configuration-migration.html (production transfer flow, dialogs, API client and toast consumer)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Missing/null/array/error/contradictory HTTP-success replies remain unconfirmed; bad exports with missing, blank or non-string archives never download or show success.",
+    "Unconfirmed imports preserve selected file/passphrase, warn settings may already have changed, and do not reload, retry or prompt for another token.",
+    "Acknowledged export downloads only status/data; acknowledged import uses the existing disabled/reloading state and ordinary reload."
+  ],
+  "interactions": [
+    "Thirty synthetic transfer operations through real production consumers: eight malformed export and five malformed import replies, then two valid acknowledgements per viewport.",
+    "Native file selection/password input, keyboard Cancel, no implicit replay, preserved document identity for failures, actual downloaded archive-byte inspection and normal successful reload.",
+    "All six retained captures opened with native view_image at original detail and actual pixels inspected; light desktop and dark 320px touch WebKit."
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "c936e550de90baf5509596f131667de203abcf3b",
+  "producer_receipt": "source-xi9isd4v",
+  "browser_report_sha256": "e4a78f3cfff514bf70a3262a74f1bf15fbae62d21446477ba8839db233474706",
+  "limits": "Safe synthetic HTTP responses and archive strings; response-envelope acknowledgement only, not decryption/restore integrity, full Settings route/auth journey, real server configuration replacement or guest health. The separate mobile-WebKit Docs history/reload path was not exercised or cleared."
+}
