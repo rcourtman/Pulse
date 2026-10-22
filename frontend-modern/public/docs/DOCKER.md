@@ -11,20 +11,26 @@ Pulse is distributed as a lightweight, Alpine-based Docker image.
 > line to use the `PULSE_IMAGE` variable, as shown below. If your compose file
 > hardcodes `image: rcourtman/pulse:...`, replace that line with the variable
 > form or with the private image shown on the download page before restarting.
+> With a paid activation on the community image, **Settings → Updates** shows
+> these commands for your license.
 
 ## 🚀 Quick Start
 
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-Access at `http://<your-ip>:7655`.
+This new-install example binds the published port to the Docker host's IPv4
+loopback, not every host interface. Use [protected first-time setup](INSTALL.md#open-a-protected-setup-connection)
+before entering a bootstrap token or password: verified HTTPS, a browser on
+that host, or an SSH tunnel from your workstation. Do not send setup credentials
+to a remote plain-HTTP address.
 
 ---
 
@@ -39,7 +45,7 @@ services:
     container_name: pulse
     restart: unless-stopped
     ports:
-      - "7655:7655"
+      - "127.0.0.1:7655:7655"
     volumes:
       - pulse_data:/data
     environment:
@@ -51,6 +57,18 @@ volumes:
 ```
 
 Run with: `docker compose up -d`
+
+The Compose example also publishes only on host loopback. These are new-install
+examples, not replacement definitions for an existing deployment: keep its data
+mount, image edition, credentials and network configuration. Loopback publishing
+does not configure HTTPS or change Pulse's listener inside the container.
+
+For remote agents and ordinary remote browser access, provide a reachable,
+verified HTTPS origin through your [reverse proxy](REVERSE_PROXY.md#before-configuring-the-proxy).
+A proxy in another container needs a shared private network and the Pulse
+service name, not that proxy container's `127.0.0.1`. Do not expose the plain-HTTP
+backend on every host interface to make it reachable. The setup tunnel is not
+an address to give agents or register as an SSO callback.
 
 **Freeze-enabled VM backups:** API-only monitoring can still send QEMU Guest
 Agent requests. For an affected installation, follow the
@@ -262,9 +280,96 @@ execution disabled when you only need monitoring.
 
 ### How It Works
 
-1. **Update Detection**: Pulse compares the local image digest with the latest digest from the container registry
+1. **Update Detection**: Pulse compares the running image's local RepoDigests with the registry's tag and platform-manifest digests. A match with any applicable local digest means that comparison found no update; the displayed **Current digest** is only the primary local digest.
 2. **Visual Indicator**: Containers with available updates show a blue upward arrow icon
 3. **Reviewed Update**: Review the target and approve the action, then verify the application yourself
+
+### Image update disagrees with the runtime
+
+An **Image update: Available** reading is not a reason to pull or recreate a
+container as a test. Start with existing observations of the **same host,
+container and time**, and keep detection separate from an update action's
+outcome. If an action was already sent or its result is uncertain, use
+[the existing receipt and workload-state checks](#check-a-failed-or-pending-workload-update)
+instead of sending it again.
+
+In the container details, retain **Current digest**, **Target digest** and any
+displayed error. Keep the original observation time and any available check
+time; unavailable is valid. A page refresh or an
+unchanged tag such as `latest` does not establish a new registry check or an
+unchanged running image.
+
+| Existing observation | Interpretation |
+| --- | --- |
+| Current and target digests differ, but both belong to the same running image's RepoDigests | One image can have several manifest digests. Comparing only the displayed pair can invent an update; Pulse must compare the applicable local set. |
+| A tag/manifest-list digest differs from a platform-manifest digest | These identify different layers of a multi-platform image. Compare the matching repository and platform, not arbitrary `sha256:` strings. |
+| The runtime's local ImageID differs from Pulse's target digest | ImageID is not a registry manifest digest. This difference alone establishes neither an update nor a detection fault. |
+| Registry read failed, no RepoDigests are available, or the observation is old | The comparison is incomplete. An empty list is not proof that the image is current, and an earlier successful check is not current recovery. |
+
+Existing runtime evidence is enough to start a report. If a local check is safe
+and needed, use your normal administration shell **on the affected runtime
+host**, with the same account and Docker context or rootless Podman connection
+that owns the workload. Do not use a shell inside Pulse or change socket access.
+This optional Bash recipe reads only the running container's image ID and that
+exact local image's RepoDigests; it does not contact a registry or pull an image:
+
+```bash
+container='affected-container'
+image_id=$(docker inspect --type container --format '{{.Image}}' "$container") &&
+docker image inspect --format '{{json .RepoDigests}}' "$image_id"
+```
+
+For Podman, replace both `docker` commands with `podman` in the existing owning
+connection; do not switch to root's separate image store. Inspect the running
+container's ImageID, not just the image currently stored under its tag: a tag
+may have moved since that container started. If inspection fails, retain the
+error and stop; do not substitute a full inspection or pull, restart or recreate
+anything to make it succeed. A matching digest is not application or data-health
+proof.
+
+For help, give the Pulse server and affected agent versions, runtime version,
+original time, displayed status/error and whether the target matches one of the
+running image's applicable RepoDigests, if already known. Keep the local image
+references, names and raw inspection private; use consistent aliases and only
+the relevant comparison. Never share registry credentials, environment variables
+or a full inspection. Do not change registry logins, enable command execution,
+clear alerts or retry an update just to diagnose the disagreement. A daily
+resolve/reopen cycle with unchanged image evidence is a separate symptom;
+use the [alert-lifecycle checks](#update-alert-resolves-and-returns-without-an-image-change)
+below rather than forcing another cycle.
+
+### Update alert resolves and returns without an image change
+
+A **resolved** image-update alert does not establish that the container was
+updated. Keep three observations separate: the running image, the registry
+comparison and the alert's lifecycle. An unchanged running image can still be
+current if the registry tag moved back; a fresh agent report can carry an older
+cached registry result.
+
+Use the existing alert History and container details for the same host and
+container. Retain the original resolve/reopen times, **Last seen**, any image-check
+time and the displayed digest/error, where already available. **Last seen**
+advancing means the host is reporting, not that the registry comparison is new.
+The configured image-update alert delay is how long an observed update waits
+before alerting, not the registry-check interval. Do not shorten it or wait for
+another daily cycle just to gather evidence.
+
+Older agents could report **no update** after a failed local image inspection,
+without knowing the current digest. That is an incomplete comparison, not proof
+of recovery. Later safeguards retain pending alerts on unknown or failed checks,
+and preserve their age across cleanup and restart; those are distinct from
+correcting a wrong registry digest. The label `legacy-alert-recovery-adapter`
+alone does not identify what initiated a resolution. Neither that label nor a
+source-code fix establishes what an installed server and agent contain.
+
+For an already observed cycle, add the original sequence and the separate
+server/agent versions to the existing report; unknown details are valid. No
+new registry request, Test, update, restart or diagnostic run is needed to file
+it. Keep using the owning deployment manager's existing image and workload
+state, not a cleared Pulse alert, to judge whether an update actually happened.
+Do not pull or recreate a workload, clear History, change registry credentials
+or replay a notification to investigate this symptom. Keep raw inspections,
+registry credentials and private host/image names out of the report.
 
 ### Updating a Container
 
@@ -430,15 +535,49 @@ other container names, environments or registry credentials.
 
 ### Private Registries
 
-For private registries, log in with Docker on the container host **as the user the agent runs as** (the installer's systemd service runs the agent as root, so use `sudo docker login`):
+For private-registry update detection, use the credential store available to
+the **account running the agent**, including its configured paths and helpers.
+A login in your interactive account is not necessarily visible to a system
+service or container. For a planned login, Docker's interactive prompt avoids
+putting a password or token in command arguments:
 
 ```bash
 docker login registry.example.com
 ```
 
-Pulling updates goes through the Docker daemon, which reads these credentials natively. Update **detection** reads the same credential store: `config.json` `auths` entries, configured `credsStore`/`credHelpers` credential helpers, and Podman's `auth.json` (`REGISTRY_AUTH_FILE` and `DOCKER_CONFIG` overrides are honored). The agent presents the stored login to the registry when it rejects anonymous digest checks, so private images get real update detection instead of a permanent failed check. Credentials never leave the host — they are only sent to the registry itself and are never reported to the Pulse server.
+Do not switch a least-privilege agent to root, relax credential-file permissions
+or expose your whole home directory to a container just to enable these checks.
+Keep login files, credential-helper output and passwords or tokens private.
 
-To keep update detection anonymous-only (no credential store reads, no credential helper execution), set `PULSE_DISABLE_REGISTRY_CREDENTIALS=true` (or pass `--disable-registry-credentials`) on the agent.
+Update **detection** reads Docker `config.json` `auths` entries, configured
+`credsStore`/`credHelpers` helpers, and Podman authentication files selected by
+`REGISTRY_AUTH_FILE` or `XDG_RUNTIME_DIR`. `DOCKER_CONFIG` selects a Docker config
+directory; the agent also checks its own home directory's `.docker/config.json`.
+Configured helpers execute as the agent's account.
+
+**Authentication is not host-local.** Credentials are resolved locally, but the
+agent can send a stored password or token to the registry or its HTTPS token
+service. The token service can have a different hostname, such as Docker Hub's
+`auth.docker.io`. Trust both the registry and its authentication service, as
+well as the configured local helpers. Stored login entries are not included in
+the update-check report sent to the Pulse server.
+
+To prevent credential-file reads and helper execution for **detection**, set
+`PULSE_DISABLE_REGISTRY_CREDENTIALS=true` (or pass
+`--disable-registry-credentials`) on the agent. Public checks can continue
+anonymously; private checks requiring a login can fail authentication. This does
+not stop all registry traffic, revoke a login or disable container actions.
+To disable registry checks entirely, use the separate
+[agent update-check setting](#disabling-update-features).
+
+**Detection and pulling an update are separate.** The current in-app image-pull
+action does not pass detection's stored registry login to the Docker API, so a
+private pull can fail even when its digest check succeeds. Do not assume a
+successful check proves that Pulse can update that private image. Use your
+established private-registry deployment procedure for an actual update, not
+repeated Pulse actions to test the login. If an action already failed or its
+result is uncertain, [check its existing receipt and workload state](#check-a-failed-or-pending-workload-update)
+before making another change.
 
 Paid Pulse Pro Docker installs use the private Pulse Pro registry rather than
 the public `rcourtman/pulse` image. Open <https://pulserelay.pro/download.html>,

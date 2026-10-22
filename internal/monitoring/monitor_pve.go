@@ -122,7 +122,10 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	if len(prefetchedStatus) > 0 {
 		status = prefetchedStatus[0]
 	}
-	if isRunning && status == nil {
+	// An explicitly prefetched nil records a failed snapshot, not an unread
+	// one. Keep the same absence for counters and metadata instead of sending a
+	// second status request within this poll after rejecting its first reply.
+	if isRunning && len(prefetchedStatus) == 0 {
 		status = m.fetchContainerStatusSnapshot(
 			ctx,
 			client,
@@ -445,6 +448,7 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 	m.mu.Lock()
 	instanceCfg.Host = persistHost
 	m.cancelPVEGuestPollLocked(instanceName)
+	m.cancelPVEBackupPollLocked(instanceName)
 	m.pveClients[instanceName] = fallbackClient
 
 	// Update in-memory config so subsequent polls build clients against the working port.
@@ -829,7 +833,7 @@ func (m *Monitor) pollGuestsWithFallback(
 	// Always try the efficient cluster/resources endpoint first
 	// This endpoint works on both clustered and standalone nodes
 	// Testing confirmed it works on standalone nodes like pimox
-	useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodeEffectiveStatus)
+	useClusterEndpoint := m.pollVMsAndContainersEfficient(ctx, instanceName, instanceCfg.ClusterName, instanceCfg.IsCluster, client, nodes, nodeEffectiveStatus)
 
 	if !useClusterEndpoint {
 		if ctx.Err() != nil {

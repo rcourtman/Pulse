@@ -591,7 +591,7 @@ test.describe("Operational trust availability resource facet", () => {
     await expect(queue).toBeVisible({ timeout: 30_000 });
     await expect(
       primaryNavigation(page).getByRole("link", {
-        name: /Patrol: 1 (?:action awaits approval|active attention item)/,
+        name: /Patrol 1 (?:action awaits approval|active attention item)/,
       }),
     ).toBeVisible();
     await expect(

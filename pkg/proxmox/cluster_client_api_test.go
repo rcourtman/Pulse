@@ -471,7 +471,7 @@ func TestClusterClient_GetBackupTasks(t *testing.T) {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
 			return
 		}
-		fmt.Fprint(w, `{"data":[{"upid":"upid:1","type":"vzdump","status":"ok"}]}`)
+		fmt.Fprint(w, `{"data":[{"endtime":1700000060,"starttime":1700000000,"upid":"upid:1","type":"vzdump","status":"ok"}]}`)
 	}))
 	defer server.Close()
 

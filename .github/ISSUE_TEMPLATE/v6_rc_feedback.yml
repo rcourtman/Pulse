@@ -52,7 +52,7 @@ body:
     id: agent_version
     attributes:
       label: Agent version
-      description: Running version of the affected agent, separately from the Pulse server; write "none" for an API-only connection or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
+      description: Optional, only if an agent is affected. Give its running version separately from the Pulse server; leave blank or write "none" for an API-only connection, or "unknown" if unavailable. Do not reinstall or re-enrol an agent to find out.
       placeholder: v6.x.y, none, or unknown
     validations:
       required: false
@@ -141,17 +141,15 @@ body:
     id: license_tier
     attributes:
       label: License tier
+      description: Optional, only if the problem depends on plan access. Select an existing subscription, not a plan to buy; Relay is no longer sold. Do not include licence keys, account or payment details.
       options:
         - Community / Free
-        - Relay
         - Pro
-        - Pro+
-        - Cloud
-        - MSP
-        - Enterprise
+        - Existing Relay subscription
+        - Other / legacy tier
         - Not sure
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
@@ -200,15 +198,24 @@ body:
     id: additional_topics
     attributes:
       label: Additional actionable topics
-      description: Enter "None" for a single topic. If this report also raises another bug, feature, or workflow, list each topic here; triage will preserve it with a separate linked disposition.
-      placeholder: None
+      description: Leave blank for a single problem. Only list separate bugs, requests or workflows here; triage will preserve each with a linked disposition. Put workarounds for the primary problem in What happened? instead.
+      placeholder: Optional separate problem or request
     validations:
-      required: true
+      required: false
 
   - type: markdown
     attributes:
       value: |
         Optional context: open only the section that matches your report. Use existing observations; missing details are valid.
+
+        <details>
+        <summary>Sign-in or permissions: keep working access</summary>
+
+        Give the sign-in method or provider type, original time and redacted error where already known. Distinguish refused sign-in from a successful login with a denied page or action. Say whether it followed a provider save, including a save without changes; use existing observations, or write "unknown". A successful provider Test checks discovery, not sign-in or permissions; a blank Client Secret field does not prove the saved secret is lost.
+        Keep any working administrator session open. Do not sign out, repeat a save or login, recreate the provider, rotate secrets, enable Debug or relax TLS/access restrictions just to complete this report.
+        Keep passwords, client secrets, authorization codes, tokens, cookies, full callback URLs and claim/configuration dumps private. Use consistent aliases for users and groups; an existing locally reviewed, redacted error is enough, not a HAR export or Copy as cURL command.
+
+        </details>
 
         <details>
         <summary>Notification delivery: Test versus ordinary alerts</summary>

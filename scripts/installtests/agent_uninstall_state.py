@@ -5,8 +5,9 @@ Production credential detection, record confirmation and directory-authority
 functions remain intact. Only transport and service/process operations are
 private doubles; deletion is confined to three owned temporary directories.
 The argument parser and token-file ingress also execute before the removal gate.
-Root-trust is projected onto the private fixture owner for the shell reader;
-these controls are not native installation, TLS or provider acceptance.
+The legacy shell reader uses the real private-file/parent checks for the
+fixture owner. These controls are not native installation, TLS or provider
+acceptance.
 """
 
 import os
@@ -42,7 +43,8 @@ class UnixUninstallState(unittest.TestCase):
 
     def exercise(self, credential="runtime", url="", reply="confirmed", authority=True,
                  input_token=False, interactive=False, root_refusal=False, action="uninstall",
-                 ingress_only=False, quiescence_refused=False):
+                 ingress_only=False, quiescence_refused=False, token_contents=None,
+                 token_option="--token-file", expected_token=None, recovery_only=False):
         source = self.source
         # Keep the real entry and all initial credential/service/state teardown.
         # Stop before unrelated platform boot/log cleanup; never run it on a host.
@@ -74,7 +76,8 @@ class UnixUninstallState(unittest.TestCase):
                 elif credential == "fifo":
                     os.mkfifo(path, 0o600)
                 else:
-                    path.write_text("" if credential == "empty" else "synthetic-collector-credential\n")
+                    path.write_bytes(token_contents if token_contents is not None else
+                                     b"" if credential == "empty" else b"synthetic-collector-credential\n")
                     path.chmod(0 if credential == "unreadable" else 0o600)
             before = snapshot(root)
             ingress = ""
@@ -83,11 +86,11 @@ class UnixUninstallState(unittest.TestCase):
                 parser = source.split("# --- Parse Arguments ---\n", 1)[1].split(
                     '\nif [[ "$RETARGET_ONLY"', 1)[0]
                 token_reader = source.split("# Read token from file if --token-file was provided\n", 1)[1].split(
-                    '\nif [[ -n "$ACTION_TOKEN_FILE_PATH" ]]', 1)[0]
+                    '\nif [[ -n "$PROXMOX_TYPE"', 1)[0]
                 ingress = parser + "\n" + token_reader
                 arguments = {"uninstall": ["--uninstall"], "install": [],
                              "update": ["--update"], "runner": ["--uninstall-action-runner"]}[action]
-                arguments += ["--token-file", str(path)]
+                arguments += [token_option, str(path)]
                 if not interactive:
                     arguments.append("--non-interactive")
                 if url:
@@ -108,8 +111,12 @@ class UnixUninstallState(unittest.TestCase):
                       "QUIESCENCE_REFUSED": str(quiescence_refused).lower()}
             setup = "\n".join(f"{key}={shlex.quote(str(value))}" for key, value in values.items())
             functions = "\n".join(function(source, name) for name in names)
-            if input_token:
-                functions += "\n" + function(source, "read_collector_token_file_safely")
+            if input_token or recovery_only:
+                functions += "\n" + "\n".join(function(source, name) for name in (
+                    "portable_path_uid", "portable_path_mode", "trusted_private_lifecycle_regular_file",
+                    "read_collector_token_file_safely"))
+            if recovery_only:
+                functions += "\n" + function(source, "recover_token_from_default_agent_token_file")
             # A whitelist protects the fixture even if production cleanup changes.
             shell = r'''
 set -euo pipefail
@@ -117,20 +124,13 @@ UNINSTALL=true AGENT_NAME=pulse-agent EXIT_GENERAL=1 EXIT_MISSING_ARGS=16
 ACTION_RUNNER_NAME=pulse-agent-runner PRIVILEGED_HELPER_NAME=pulse-agent-helper
 OUTPUT_FORMAT=text NON_INTERACTIVE=true
 TOKEN_FILE_PATH="" UNINSTALL_ACTION_RUNNER=false UPDATE_ONLY=false
+ACTION_TOKEN="" ACTION_TOKEN_FILE_PATH=""
 RETARGET_ONLY=false PREFLIGHT_ONLY=false SAFE_PROFILE_ACTION=""
 log_info() { :; }
 log_warn() { printf 'warning:%s\n' "$*"; }
 log_error() { printf 'error:%s\n' "$*"; }
-# Project only the fixture's ownership onto the legacy root-file boundary.
-# The production reader still performs its ordinary bounded read.
+# No installed lifecycle binary is present: exercise legacy compatibility.
 collector_lifecycle_binary() { return 1; }
-trusted_private_lifecycle_regular_file() {
-    [[ -f "$1" && ! -L "$1" ]] || return 1
-    local mode="" owner=""
-    mode=$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1") || return 1
-    owner=$(stat -c '%u' "$1" 2>/dev/null || stat -f '%u' "$1") || return 1
-    [[ "$owner" == "$EUID" && "$mode" =~ ^[0-7]{3,4}$ ]] && (( (8#$mode & 8#077) == 0 ))
-}
 recover_agent_id_from_state_file() { printf 'owned-agent\n'; }
 run_collector_lifecycle_command() {
     printf 'request:%s\n' "$*" >> "$EVENTS"
@@ -170,8 +170,13 @@ rm() {
             invocation = ""
             if input_token:
                 invocation = "UNINSTALL=false NON_INTERACTIVE=false\nset -- " + shlex.join(arguments) + "\n" + ingress + "\n"
-                if ingress_only:
-                    invocation += "exit 0\n"
+            if recovery_only:
+                invocation = "STATE_DIR_SOURCE=explicit\nrecover_token_from_default_agent_token_file || exit 1\n"
+            if expected_token is not None:
+                selected = "ACTION_TOKEN" if token_option == "--action-token-file" else "PULSE_TOKEN"
+                invocation += "[[ \"$" + selected + "\" == " + shlex.quote(expected_token) + " ]] || exit 95\n"
+            if ingress_only or recovery_only:
+                invocation += "exit 0\n"
             result = subprocess.run(["bash", "-c", shell + "\n" + setup + "\n" + functions +
                                      "\nmain() {\n" + invocation + entry + "}\nmain\n"],
                                     capture_output=True, text=True, timeout=5)
@@ -296,6 +301,63 @@ rm() {
         result, events, before, after = self.exercise(
             "selected", input_token=True, interactive=True, ingress_only=True)
         self.assert_retained(result, events, before, after, 0)
+
+    def test_malformed_token_files_stop_both_ingress_paths_before_host_work(self):
+        malformed = {
+            "empty": b"", "newline": b"\n", "carriage-return": b"synthetic-collector-credential\r\n",
+            "second-value": b"synthetic-collector-credential\nanother-value\n",
+            "extra-newline": b"synthetic-collector-credential\n\n",
+            "nul-prefix": b"\0synthetic-collector-credential",
+            "nul-interior": b"synthetic-collector\0-credential",
+            "nul-suffix": b"synthetic-collector-credential\0",
+            "over-limit": b"s" * 4097,
+            "newline-over-limit": b"s" * 4096 + b"\n",
+        }
+        for label, payload in malformed.items():
+            for option in ("--token-file", "--action-token-file"):
+                for action in ("install", "update", "uninstall", "runner"):
+                    with self.subTest(payload=label, option=option, action=action):
+                        result, events, before, after = self.exercise(
+                            "selected", token_contents=payload, token_option=option,
+                            input_token=True, action=action, ingress_only=True)
+                        self.assert_retained(result, events, before, after, 16)
+                        self.assertIn("Token file must" if option == "--token-file" else
+                                      "Action token file must", result.stdout)
+
+    def test_valid_token_files_preserve_the_complete_value_and_caller_file(self):
+        for payload in (b"synthetic-collector-credential", b"synthetic-collector-credential\n",
+                        b"s" * 4096, b"s" * 4095 + b"\n", "synthetic-caf\u00e9".encode(),
+                        b"'synthetic-collector-credential'", b"PULSE_TOKEN=synthetic-collector-credential"):
+            for option in ("--token-file", "--action-token-file"):
+                for action in ("install", "update", "uninstall", "runner"):
+                    with self.subTest(size=len(payload), option=option, action=action):
+                        result, events, before, after = self.exercise(
+                            "selected", token_contents=payload, token_option=option,
+                            input_token=True, action=action, ingress_only=True,
+                            expected_token=payload.rstrip(b"\n").decode())
+                        self.assert_retained(result, events, before, after, 0)
+
+    def test_saved_legacy_token_recovery_never_recovers_a_truncated_prefix(self):
+        for payload, expected in (
+                (b"synthetic-collector-credential", "synthetic-collector-credential"),
+                (b"synthetic-collector-credential\n", "synthetic-collector-credential"),
+                (b"synthetic-collector-credential\nanother-value", None),
+                (b"synthetic-collector-credential\n\n", None),
+                (b"synthetic-collector\0-credential", None),
+                (b"synthetic-collector-credential\0", None),
+                (b"s" * 4097, None)):
+            with self.subTest(size=len(payload), valid=expected is not None):
+                result, events, before, after = self.exercise(
+                    "legacy", token_contents=payload, recovery_only=True, expected_token=expected)
+                self.assert_retained(result, events, before, after, 0 if expected is not None else 1)
+
+    def test_unreadable_and_nonregular_token_files_stop_before_host_work(self):
+        for kind in ("unreadable", "broken-link", "fifo"):
+            for option in ("--token-file", "--action-token-file"):
+                with self.subTest(kind=kind, option=option):
+                    result, events, before, after = self.exercise(
+                        kind, input_token=True, token_option=option, ingress_only=True)
+                    self.assert_retained(result, events, before, after, 16)
 
 
 if __name__ == "__main__":

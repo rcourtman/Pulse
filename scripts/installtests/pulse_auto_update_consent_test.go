@@ -1,6 +1,7 @@
 package installtests
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,6 +30,249 @@ func extractAutoUpdateAdmissionFunction(t *testing.T, name string) string {
 		t.Fatalf("cannot find actual unattended-update function %s", name)
 	}
 	return string(match)
+}
+
+func TestAutoUpdateDiscoveryParserKeepsDiagnosticsOutOfVersion(t *testing.T) {
+	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := `source "$UPDATER_UNDER_TEST"
+# Keep the actual log function; a stderr-only log double concealed this fault.
+logger() { :; }
+command() { if [[ "$*" == '-v jq' ]]; then return 1; fi; builtin command "$@"; }
+curl() { echo UNEXPECTED_TRANSPORT; return 97; }
+get_latest_stable_version
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater)
+	var diagnostic strings.Builder
+	cmd.Stderr = &diagnostic
+	out, err := cmd.Output()
+	if err != nil || len(out) != 0 || !strings.Contains(diagnostic.String(), "jq is required to verify release metadata") {
+		t.Fatalf("missing parser contaminated version output: %v; stdout=%q stderr=%q", err, out, diagnostic.String())
+	}
+}
+
+func TestAutoUpdateDiscoveryFailuresCannotReportLatest(t *testing.T) {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		t.Fatal("discovery main-flow proof requires a non-Docker environment")
+	}
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Fatal("jq is required for the real release-selector controls")
+	}
+	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const stable = `[{"tag_name":"v6.6.0","draft":false,"prerelease":false}]`
+	for _, tc := range []struct {
+		name, document, selector string
+		curlExit, exit, reads    int
+		missingParser, install   bool
+	}{
+		{name: "missing parser", missingParser: true, exit: 1},
+		{name: "failed transport with partial valid output", document: stable, curlExit: 22, exit: 1, reads: 2},
+		{name: "malformed metadata", document: "[", exit: 1, reads: 2},
+		{name: "unconfirmed maturity", document: `[{"tag_name":"v6.6.0"}]`, exit: 1, reads: 2},
+		{name: "failed selector with valid tag", selector: `printf '%s\n' v6.6.0; return 23`, exit: 1},
+		{name: "diagnostic instead of tag", selector: `printf '%s\n' 'release lookup unavailable'`, exit: 1},
+		{name: "preview instead of stable", selector: `printf '%s\n' v6.6.0-rc.1`, exit: 1},
+		{name: "verified current stable", document: `[{"tag_name":"v6.5.0","draft":false,"prerelease":false}]`, reads: 1},
+		{name: "verified newer stable", document: stable, reads: 1, install: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			script := `source "$UPDATER_UNDER_TEST"
+logger() { :; }
+check_auto_updates_enabled() { :; }
+installed_binary_is_pulse_pro() { return 1; }
+get_current_version() { printf '%s\n' v6.5.0; }
+curl() {
+  printf 'READ\n' >> "$FIXTURE_DIR/actions"
+  printf '%s\n' "$RELEASE_DOCUMENT"
+  return "$CURL_EXIT"
+}
+perform_update() { printf 'INSTALL %s\n' "$1" >> "$FIXTURE_DIR/actions"; }
+`
+			if tc.missingParser {
+				script += "command() { if [[ \"$*\" == '-v jq' ]]; then return 1; fi; builtin command \"$@\"; }\n"
+			}
+			if tc.selector != "" {
+				script += "get_latest_stable_version() { " + tc.selector + "; }\n"
+			}
+			cmd := exec.Command("bash", "-c", script+"main\n")
+			cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater, "FIXTURE_DIR="+dir,
+				"RELEASE_DOCUMENT="+tc.document, "CURL_EXIT="+strconv.Itoa(tc.curlExit))
+			out, err := cmd.CombinedOutput()
+			exit := 0
+			if err != nil {
+				if e, ok := err.(*exec.ExitError); ok {
+					exit = e.ExitCode()
+				} else {
+					t.Fatal(err)
+				}
+			}
+			actions, readErr := os.ReadFile(filepath.Join(dir, "actions"))
+			if readErr != nil && !os.IsNotExist(readErr) {
+				t.Fatal(readErr)
+			}
+			wantActions := strings.Repeat("READ\n", tc.reads)
+			if tc.install {
+				wantActions += "INSTALL v6.6.0\n"
+			}
+			if exit != tc.exit || string(actions) != wantActions {
+				t.Fatalf("exit=%d actions=%q; want exit=%d actions=%q; output %s", exit, actions, tc.exit, wantActions, out)
+			}
+			if tc.exit != 0 {
+				for _, forbidden := range []string{"Already running latest version", "Auto-update check completed", "Update completed successfully", "Latest stable version:", "operand expected"} {
+					if strings.Contains(string(out), forbidden) {
+						t.Fatalf("failed discovery reached comparison/completion (%s): %s", forbidden, out)
+					}
+				}
+				if !strings.Contains(string(out), "Could not determine latest version from GitHub") {
+					t.Fatalf("missing useful discovery failure: %s", out)
+				}
+			} else if !strings.Contains(string(out), "Auto-update check completed") {
+				t.Fatalf("verified stable control lost normal completion: %s", out)
+			}
+		})
+	}
+}
+
+func TestAutoUpdateTimerObservationFailsClosed(t *testing.T) {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		t.Fatal("timer main-flow proof requires a non-Docker environment")
+	}
+	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, state, diagnostic, unit string
+		managerExit, exit             int
+		admitted                      bool
+	}{
+		{name: "enabled", state: "enabled\n", admitted: true},
+		{name: "runtime enabled", state: "enabled-runtime\n", admitted: true},
+		{name: "alias", state: "alias\n", admitted: true},
+		{name: "static", state: "static\n", admitted: true},
+		{name: "indirect", state: "indirect\n", admitted: true},
+		{name: "generated", state: "generated\n", admitted: true},
+		{name: "transient", state: "transient\n", admitted: true},
+		{name: "disabled", state: "disabled\n", managerExit: 1},
+		{name: "masked", state: "masked\n", managerExit: 1},
+		{name: "runtime masked", state: "masked-runtime\n", managerExit: 1},
+		{name: "linked", state: "linked\n", managerExit: 1},
+		{name: "runtime linked", state: "linked-runtime\n", managerExit: 1},
+		{name: "unavailable manager", diagnostic: "synthetic-private-manager-diagnostic\n", managerExit: 1, exit: 1},
+		{name: "empty success", exit: 1},
+		{name: "failed enabled", state: "enabled\n", managerExit: 1, exit: 1},
+		{name: "enabled with diagnostic", state: "enabled\n", diagnostic: "synthetic-private-manager-diagnostic\n", exit: 1},
+		{name: "unknown state", state: "unknown\n", exit: 1},
+		{name: "truncated record", state: "enabled", exit: 1},
+		{name: "trailing blank record", state: "enabled\n\n", exit: 1},
+		{name: "duplicate record", state: "enabled\nenabled\n", exit: 1},
+		{name: "wrong disabled exit", state: "disabled\n", exit: 1},
+		{name: "wrong static exit", state: "static\n", managerExit: 1, exit: 1},
+		{name: "missing unit", state: "not-found\n", managerExit: 4, exit: 1},
+		{name: "timed out partial record", state: "enabled\n", managerExit: 124, exit: 1},
+		{name: "killed partial record", state: "enabled\n", managerExit: 137, exit: 1},
+		{name: "configured timer", state: "enabled\n", unit: "pulse-custom-update.timer", admitted: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			manager := `#!/bin/bash
+printf '%s\n' "$*" >> "$FIXTURE_DIR/manager-args"
+printf '%s' "$TIMER_OBSERVATION"
+printf '%s' "$TIMER_DIAGNOSTIC" >&2
+exit "$TIMER_EXIT"
+`
+			if err := os.WriteFile(filepath.Join(dir, "systemctl"), []byte(manager), 0700); err != nil {
+				t.Fatal(err)
+			}
+			script := `source "$UPDATER_UNDER_TEST"
+logger() { :; }
+installed_binary_is_pulse_pro() { return 1; }
+get_current_version() { printf '%s\n' v6.5.0; }
+get_latest_stable_version() { printf 'READ\n' >> "$FIXTURE_DIR/actions"; printf '%s\n' v6.5.0; }
+perform_update() { printf 'UNEXPECTED_INSTALL\n' >> "$FIXTURE_DIR/actions"; }
+main
+`
+			unit := tc.unit
+			if unit == "" {
+				unit = "pulse-update.timer"
+			}
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater, "FIXTURE_DIR="+dir,
+				"PULSE_CONFIG_DIR="+filepath.Join(dir, "missing-config"), "PULSE_UPDATE_TIMER_UNIT="+unit,
+				"TIMER_OBSERVATION="+tc.state, "TIMER_DIAGNOSTIC="+tc.diagnostic,
+				"TIMER_EXIT="+strconv.Itoa(tc.managerExit), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			out, err := cmd.CombinedOutput()
+			exit := 0
+			if err != nil {
+				if e, ok := err.(*exec.ExitError); ok {
+					exit = e.ExitCode()
+				} else {
+					t.Fatal(err)
+				}
+			}
+			actions, readErr := os.ReadFile(filepath.Join(dir, "actions"))
+			if readErr != nil && !os.IsNotExist(readErr) {
+				t.Fatal(readErr)
+			}
+			wantActions := ""
+			if tc.admitted {
+				wantActions = "READ\n"
+			}
+			if exit != tc.exit || string(actions) != wantActions {
+				t.Fatalf("exit=%d actions=%q; want exit=%d actions=%q; output %s", exit, actions, tc.exit, wantActions, out)
+			}
+			if strings.Contains(string(out), "synthetic-private-manager-diagnostic") {
+				t.Fatalf("raw manager diagnostic leaked: %s", out)
+			}
+			if tc.exit != 0 && !strings.Contains(string(out), "Cannot verify auto-update timer state") {
+				t.Fatalf("missing truthful unknown-state diagnostic: %s", out)
+			}
+			if !tc.admitted && strings.Contains(string(out), "Auto-update check completed") {
+				t.Fatalf("unadmitted timer reported completion: %s", out)
+			}
+			args, err := os.ReadFile(filepath.Join(dir, "manager-args"))
+			if err != nil || string(args) != "is-enabled "+unit+"\n" {
+				t.Fatalf("timer observation must be one exact non-quiet read: %v %q", err, args)
+			}
+		})
+	}
+}
+
+func TestAutoUpdateTimerReadHasHardDeadline(t *testing.T) {
+	updater, err := filepath.Abs(filepath.Join("..", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	// Even a plausible enabled record must not admit an unfinished process.
+	// The self-bounded fixture execs sleep so the actual timeout owns all work.
+	manager := "#!/bin/bash\ntrap '' TERM\nprintf 'enabled\\n'\nexec sleep 9\n"
+	if err := os.WriteFile(filepath.Join(dir, "systemctl"), []byte(manager), 0700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", "-c", `source "$UPDATER_UNDER_TEST"
+logger() { :; }
+check_auto_updates_enabled
+printf 'ADMITTED\n'
+`)
+	cmd.Env = append(os.Environ(), "UPDATER_UNDER_TEST="+updater,
+		"PULSE_CONFIG_DIR="+filepath.Join(dir, "missing-config"), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	start := time.Now()
+	out, err := cmd.CombinedOutput()
+	status, ok := err.(*exec.ExitError)
+	if !ok || status.ExitCode() != 1 || ctx.Err() != nil || time.Since(start) > 8*time.Second ||
+		!strings.Contains(string(out), "Cannot verify auto-update timer state") || strings.Contains(string(out), "ADMITTED") {
+		t.Fatalf("timer deadline: %v, duration %s, context %v, output %s", err, time.Since(start), ctx.Err(), out)
+	}
 }
 
 func TestAutoUpdateRequiresVerifiedCommunityEdition(t *testing.T) {
@@ -226,7 +470,8 @@ func TestAutoUpdateRequiresCompleteTopLevelConsent(t *testing.T) {
 			}
 			script := `set -eu
 log() { printf '%s\n' "$*"; }
-systemctl() { test "$*" = 'is-enabled --quiet pulse-update.timer'; }
+systemctl() { test "$*" = 'is-enabled pulse-update.timer' && printf 'enabled\n'; }
+timeout() { [[ "$*" == '-k 1 5 systemctl is-enabled pulse-update.timer' ]] || return 98; shift 3; "$@"; }
 curl() { echo UNEXPECTED_NETWORK; exit 99; }
 ` + extractAutoUpdateConsentGate(t) + `
 check_auto_updates_enabled
@@ -259,14 +504,15 @@ func TestAutoUpdateConsentKeepsTimerAndParserBoundaries(t *testing.T) {
 			dir := t.TempDir()
 			script := `set -eu
 log() { printf '%s\n' "$*"; }
-systemctl() { return 0; }
+systemctl() { printf 'enabled\n'; }
+timeout() { [[ "$*" == '-k 1 5 systemctl is-enabled pulse-update.timer' ]] || return 98; shift 3; "$@"; }
 `
 			wantExit, wantAdmitted := 0, false
 			switch scenario {
 			case "missing_config_enabled_timer":
 				wantAdmitted = true // Preserve the legacy explicit timer opt-in.
 			case "disabled_timer":
-				script += "systemctl() { return 1; }\n"
+				script += "systemctl() { printf 'disabled\\n'; return 1; }\n"
 			case "missing_jq":
 				if err := os.WriteFile(filepath.Join(dir, "system.json"), []byte(`{"autoUpdateEnabled":true}`), 0600); err != nil {
 					t.Fatal(err)

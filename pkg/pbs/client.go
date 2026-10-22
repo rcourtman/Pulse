@@ -20,13 +20,15 @@ import (
 
 const maxResponseBodyBytes int64 = 8 << 20 // 8 MiB
 
+var errResponseBodyTooLarge = fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+
 func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(body)) > maxResponseBodyBytes {
-		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+		return nil, errResponseBodyTooLarge
 	}
 	return body, nil
 }
@@ -126,17 +128,13 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	// Normalize host URL - ensure it has a protocol
-	defaultedScheme := !strings.HasPrefix(cfg.Host, "http://") && !strings.HasPrefix(cfg.Host, "https://")
-	if defaultedScheme {
-		// Default to HTTPS if no protocol specified
-		cfg.Host = "https://" + cfg.Host
-	}
-
-	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "")
+	// Add HTTPS only to a bare authority, never to an explicit scheme.
+	defaultedScheme := !strings.Contains(strings.TrimSpace(cfg.Host), "://")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(cfg.Host, "https")
 	if err != nil {
 		return nil, fmt.Errorf("invalid PBS host: %w", err)
 	}
+	cfg.Host = baseHostURL.String()
 	// Logs must use validated input: a refused host can contain credentials.
 	if defaultedScheme {
 		log.Debug().Str("host", baseHostURL.String()).Msg("No protocol specified in PBS host, defaulting to HTTPS")
@@ -335,11 +333,8 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 
 func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return &authHTTPError{status: resp.StatusCode, body: err.Error()}
-		}
-		return &authHTTPError{status: resp.StatusCode, body: string(body)}
+		_, err := readResponseBodyLimited(resp.Body)
+		return &authHTTPError{status: resp.StatusCode, diagnostic: responseReadDiagnostic(err)}
 	}
 	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {
 		return err
@@ -365,16 +360,37 @@ func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) er
 	return nil
 }
 
+// HTTP failures retain only status and local diagnostics. Provider bodies can
+// echo submitted passwords/tickets/tokens and must never become error text.
+func responseReadDiagnostic(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, errResponseBodyTooLarge) {
+		return errResponseBodyTooLarge.Error()
+	}
+	return "could not read response body"
+}
+
+func httpFailureMessage(prefix string, status int, diagnostic string) string {
+	message := fmt.Sprintf("%s (HTTP %d", prefix, status)
+	if text := http.StatusText(status); text != "" {
+		message += " " + text
+	}
+	message += ")"
+	if diagnostic != "" {
+		message += ": " + diagnostic
+	}
+	return message
+}
+
 type authHTTPError struct {
-	status int
-	body   string
+	status     int
+	diagnostic string
 }
 
 func (e *authHTTPError) Error() string {
-	if e.status == http.StatusUnauthorized || e.status == http.StatusForbidden {
-		return fmt.Sprintf("authentication failed (status %d): %s", e.status, e.body)
-	}
-	return fmt.Sprintf("authentication failed: %s", e.body)
+	return httpFailureMessage("authentication failed", e.status, e.diagnostic)
 }
 
 func shouldFallbackToForm(err error) bool {
@@ -387,15 +403,20 @@ func shouldFallbackToForm(err error) bool {
 	return false
 }
 
-// apiHTTPError preserves the response status separately from the server body
-// so callers can make retry and permission decisions without parsing text.
+// apiHTTPError preserves classification separately from its public message.
+// A collision flag retains the legacy PBS 400/409/500 collision behaviour,
+// without keeping provider text in an error or classifying transport failures.
 type apiHTTPError struct {
-	status int
-	body   string
+	status        int
+	diagnostic    string
+	alreadyExists bool
 }
 
 func (e *apiHTTPError) Error() string {
-	message := fmt.Sprintf("API error %d: %s", e.status, e.body)
+	message := httpFailureMessage("API request failed", e.status, e.diagnostic)
+	if e.alreadyExists {
+		message += "; resource already exists"
+	}
 	if e.status == http.StatusUnauthorized || e.status == http.StatusForbidden {
 		return "authentication error: " + message
 	}
@@ -496,11 +517,12 @@ func (c *Client) request(ctx context.Context, method, path string, data url.Valu
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, &apiHTTPError{status: resp.StatusCode, body: fmt.Sprintf("read response body: %v", err)}
+		collisionStatus := resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusConflict || resp.StatusCode == http.StatusInternalServerError
+		return nil, &apiHTTPError{
+			status:        resp.StatusCode,
+			diagnostic:    responseReadDiagnostic(err),
+			alreadyExists: err == nil && collisionStatus && bytes.Contains(bytes.ToLower(body), []byte("already exists")),
 		}
-
-		return nil, &apiHTTPError{status: resp.StatusCode, body: string(body)}
 	}
 
 	if err := securityutil.LimitResponseBody(resp, maxResponseBodyBytes); err != nil {
@@ -557,7 +579,8 @@ func (c *Client) CreateUser(ctx context.Context, userID, comment string) error {
 }
 
 func isAlreadyExistsError(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), "already exists")
+	var apiErr *apiHTTPError
+	return errors.As(err, &apiErr) && apiErr.alreadyExists
 }
 
 // SetUserACL sets ACL permissions for a user
@@ -599,7 +622,7 @@ func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) 
 
 	body, err := readResponseBodyLimited(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, fmt.Errorf("read PBS token creation response: %s", responseReadDiagnostic(err))
 	}
 
 	// Parse response - PBS returns {"data": {"tokenid": "...", "value": "..."}}
@@ -607,11 +630,11 @@ func (c *Client) CreateUserToken(ctx context.Context, userID, tokenName string) 
 		Data TokenResponse `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("parse response: %w (body: %s)", err, string(body))
+		return nil, errors.New("invalid PBS token creation response")
 	}
 
 	if result.Data.Value == "" {
-		return nil, fmt.Errorf("empty token value in response: %s", string(body))
+		return nil, errors.New("PBS token creation response contains no token value")
 	}
 
 	log.Info().
@@ -645,8 +668,12 @@ func (c *Client) DeleteUserToken(ctx context.Context, userID, tokenName string) 
 	return nil
 }
 
-// SetupMonitoringAccess creates a monitoring user with Audit role and returns API token
-// This is the turnkey method for setting up PBS monitoring access
+// ErrMonitoringTokenExists means setup cannot recover an existing token's secret.
+// Creating monitoring access must not revoke credentials still used elsewhere.
+var ErrMonitoringTokenExists = errors.New("PBS reported an existing monitoring token")
+
+// SetupMonitoringAccess creates a monitoring user with Audit role and returns API token.
+// An existing token is left unchanged; its secret must be supplied separately.
 func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (tokenID, tokenValue string, err error) {
 	const (
 		monitorUser    = "pulse-monitor@pbs"
@@ -671,15 +698,9 @@ func (c *Client) SetupMonitoringAccess(ctx context.Context, tokenName string) (t
 	token, err := c.CreateUserToken(ctx, monitorUser, tokenName)
 	if err != nil {
 		if isAlreadyExistsError(err) {
-			log.Warn().Str("tokenName", tokenName).Msg("PBS SetupMonitoringAccess: token already exists; rotating in place")
-			if deleteErr := c.DeleteUserToken(ctx, monitorUser, tokenName); deleteErr != nil {
-				return "", "", fmt.Errorf("delete existing token: %w", deleteErr)
-			}
-			token, err = c.CreateUserToken(ctx, monitorUser, tokenName)
+			return "", "", fmt.Errorf("%w: %w", ErrMonitoringTokenExists, err)
 		}
-		if err != nil {
-			return "", "", fmt.Errorf("create token: %w", err)
-		}
+		return "", "", fmt.Errorf("create token: %w", err)
 	}
 
 	// Step 4: Grant Audit role to the token as well
@@ -837,13 +858,13 @@ func (c *Client) GetNodeStatus(ctx context.Context) (*NodeStatus, error) {
 	}
 	defer statusResp.Body.Close()
 
-	// Read the response body to log it
+	// Keep the bounded payload for decoding, never for diagnostic output.
 	body, err := readResponseBodyLimited(statusResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read status response: %w", err)
 	}
 
-	log.Debug().Str("response", string(body)).Msg("PBS node status response")
+	log.Debug().Int("responseBytes", len(body)).Msg("PBS node status response")
 
 	var statusResult struct {
 		Data *NodeStatus `json:"data"`
@@ -903,14 +924,13 @@ func (c *Client) GetDatastoresFiltered(
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	body, err := readResponseBodyLimited(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+	body, readErr := readResponseBodyLimited(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil || closeErr != nil || resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("invalid PBS datastore inventory response")
 	}
 
-	// Check if response is HTML (error page) instead of JSON
+	// Keep the existing actionable HTML diagnosis, without exposing body text.
 	if len(body) > 0 && body[0] == '<' {
 		// If using HTTP, suggest HTTPS
 		if strings.HasPrefix(c.config.Host, "http://") {
@@ -919,24 +939,14 @@ func (c *Client) GetDatastoresFiltered(
 		return nil, fmt.Errorf("PBS returned HTML instead of JSON (likely an error page). Please check your PBS URL and port (default is 8007)")
 	}
 
-	var datastoreList struct {
-		Data []struct {
-			Store   string `json:"store"`
-			Comment string `json:"comment,omitempty"`
-		} `json:"data"`
-	}
-
-	if err := json.Unmarshal(body, &datastoreList); err != nil {
-		log.Error().
-			Str("response", string(body)).
-			Err(err).
-			Msg("Failed to parse PBS datastore list response")
-		return nil, fmt.Errorf("failed to parse datastore list: %w", err)
+	datastoreList, err := decodeBackupDatastores(body)
+	if err != nil {
+		return nil, fmt.Errorf("invalid PBS datastore inventory response")
 	}
 
 	// Now get status for each datastore
 	var datastores []Datastore
-	for _, ds := range datastoreList.Data {
+	for _, ds := range datastoreList {
 		if include != nil && !include(ds.Store) {
 			continue
 		}
@@ -965,7 +975,7 @@ func (c *Client) GetDatastoresFiltered(
 			if json.Unmarshal(rrdBody, &rrdResult) == nil && len(rrdResult.Data) > 0 {
 				// Get the most recent deduplication factor
 				dedupFactor = rrdResult.Data[len(rrdResult.Data)-1].DedupFactor
-				log.Info().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
+				log.Debug().Float64("dedup_from_rrd", dedupFactor).Str("store", ds.Store).Msg("Got dedup factor from RRD")
 			}
 		}
 
@@ -981,58 +991,26 @@ func (c *Client) GetDatastoresFiltered(
 			})
 			continue
 		}
-		defer statusResp.Body.Close()
-
-		statusBody, err := readResponseBodyLimited(statusResp.Body)
-		if err != nil {
-			log.Error().Str("store", ds.Store).Err(err).Msg("Failed to read datastore status response")
-			datastores = append(datastores, Datastore{
-				Store:  ds.Store,
-				Status: "unavailable",
-				Error:  fmt.Sprintf("Failed to read status: %v", err),
-			})
-			continue
-		}
-
-		var statusResult struct {
-			Data map[string]interface{} `json:"data"`
-		}
-
-		if err := json.Unmarshal(statusBody, &statusResult); err != nil {
+		statusBody, readErr := readResponseBodyLimited(statusResp.Body)
+		closeErr := statusResp.Body.Close()
+		datastore, hasDedupFactor, decodeErr := decodeDatastoreStatus(statusBody)
+		if readErr != nil || closeErr != nil || statusResp.StatusCode != http.StatusOK || decodeErr != nil {
+			// Read/close/decoder errors may contain private provider details.
+			// A malformed success is not a healthy, empty datastore.
 			log.Error().
 				Str("store", ds.Store).
-				Str("response", string(statusBody)).
-				Err(err).
+				Int("responseBytes", len(statusBody)).
+				Err(errInvalidDatastoreStatus).
 				Msg("Failed to parse datastore status")
 			datastores = append(datastores, Datastore{
-				Store:  ds.Store,
-				Status: "unavailable",
-				Error:  fmt.Sprintf("Failed to parse status: %v", err),
+				Store: ds.Store, Status: "unavailable",
+				Error: "Failed to parse status: " + errInvalidDatastoreStatus.Error(),
 			})
 			continue
 		}
-
-		// Extract fields from the map
-		total, _ := statusResult.Data["total"].(float64)
-		used, _ := statusResult.Data["used"].(float64)
-		avail, _ := statusResult.Data["avail"].(float64)
-
-		totalSpace, _ := statusResult.Data["total-space"].(float64)
-		usedSpace, _ := statusResult.Data["used-space"].(float64)
-		availSpace, _ := statusResult.Data["avail-space"].(float64)
-
-		// Check for deduplication_factor in status response
-		if df, ok := statusResult.Data["deduplication-factor"].(float64); ok {
-			dedupFactor = df
-		} else if df, ok := statusResult.Data["deduplication_factor"].(float64); ok {
-			dedupFactor = df
+		if hasDedupFactor {
+			dedupFactor = datastore.DeduplicationFactor
 		}
-
-		status := "available"
-		if rawStatus, ok := statusResult.Data["status"].(string); ok && strings.TrimSpace(rawStatus) != "" {
-			status = strings.TrimSpace(rawStatus)
-		}
-		gcStatus, _ := statusResult.Data["gc-status"].(string)
 
 		// If still no dedup factor, try gc-status endpoint
 		if dedupFactor == 0 {
@@ -1054,7 +1032,7 @@ func (c *Client) GetDatastoresFiltered(
 					// Calculate deduplication factor from index-data-bytes / disk-bytes
 					if gcResult.Data.DiskBytes > 0 && gcResult.Data.IndexDataBytes > 0 {
 						dedupFactor = gcResult.Data.IndexDataBytes / gcResult.Data.DiskBytes
-						log.Info().
+						log.Debug().
 							Float64("index_bytes", gcResult.Data.IndexDataBytes).
 							Float64("disk_bytes", gcResult.Data.DiskBytes).
 							Float64("dedup_factor", dedupFactor).
@@ -1065,29 +1043,18 @@ func (c *Client) GetDatastoresFiltered(
 			}
 		}
 
-		// Create datastore with status info
-		datastore := Datastore{
-			Store:               ds.Store,
-			Total:               int64(total),
-			Used:                int64(used),
-			Avail:               int64(avail),
-			TotalSpace:          int64(totalSpace),
-			UsedSpace:           int64(usedSpace),
-			AvailSpace:          int64(availSpace),
-			Status:              status,
-			GCStatus:            strings.TrimSpace(gcStatus),
-			DeduplicationFactor: dedupFactor,
-		}
+		datastore.Store = ds.Store
+		datastore.DeduplicationFactor = dedupFactor
 
-		// Log all fields to see what's available
-		log.Info().
+		// Polling diagnostics use only the modelled numeric fields. Provider
+		// extensions may contain private data and do not belong in the log.
+		log.Debug().
 			Str("store", datastore.Store).
 			Int64("total", datastore.Total).
 			Int64("used", datastore.Used).
 			Int64("avail", datastore.Avail).
 			Float64("dedup_factor", datastore.DeduplicationFactor).
-			Interface("all_fields", statusResult.Data).
-			Msg("PBS datastore status - ALL FIELDS")
+			Msg("PBS datastore status")
 
 		datastores = append(datastores, datastore)
 	}
@@ -1199,19 +1166,12 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 			if err != nil {
 				return nil, err
 			}
-			var result struct {
-				Data []map[string]interface{} `json:"data"`
-			}
-			decodeErr := json.NewDecoder(resp.Body).Decode(&result)
-			closeErr := resp.Body.Close()
-			if decodeErr != nil {
-				return nil, fmt.Errorf("failed to decode running PBS %s tasks: %w", requestedType, decodeErr)
-			}
-			if closeErr != nil {
-				return nil, fmt.Errorf("failed to close running PBS %s task response: %w", requestedType, closeErr)
+			rows, err := readPBSJobList(resp, pbsTaskFields, validPBSRunningTaskIdentity)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read running PBS %s tasks: %w", requestedType, err)
 			}
 
-			for _, raw := range result.Data {
+			for _, raw := range rows {
 				workerType := strings.ToLower(stringJobField(raw, "worker-type", "worker_type", "type"))
 				if workerType != requestedType {
 					continue
@@ -1222,7 +1182,7 @@ func (c *Client) ListRunningDataTasks(ctx context.Context) ([]RunningDataTask, e
 					StartTime:  int64JobField(raw, "starttime", "start-time", "start_time"),
 				})
 			}
-			if len(result.Data) < limit {
+			if len(rows) < limit {
 				break
 			}
 			if page == maxPages-1 {
@@ -1430,15 +1390,10 @@ func (c *Client) listJobConfigMaps(ctx context.Context, path string) ([]map[stri
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
+	return readPBSJobList(resp, pbsJobConfigFields, func(row map[string]interface{}) bool {
+		fact := jobEvidenceFromConfigMap("", row)
+		return firstNonEmptyString(fact.ID, fact.Store, fact.LastRunUPID) != ""
+	})
 }
 
 func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]interface{}, error) {
@@ -1446,18 +1401,13 @@ func (c *Client) getJobConfigMap(ctx context.Context, path string) (map[string]i
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	data, err := readPBSJobData(resp)
+	if err != nil {
 		return nil, err
 	}
-	if result.Data == nil {
-		result.Data = map[string]interface{}{}
-	}
-	return result.Data, nil
+	// An explicit empty GC object is valid config-only evidence. Missing/null
+	// data is not such an observation and was rejected before this point.
+	return decodePBSJobObject(data, pbsJobConfigFields)
 }
 
 type taskHistoryQuery struct {
@@ -1648,17 +1598,15 @@ func (c *Client) listTaskHistoryPage(ctx context.Context, query taskHistoryQuery
 		}
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []map[string]interface{} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	rows, err := readPBSJobList(resp, pbsTaskFields, func(row map[string]interface{}) bool {
+		return firstNonEmptyString(stringJobField(row, "upid"), stringJobField(row, "worker-type", "worker_type", "type"), stringJobField(row, "worker-id", "worker_id", "id")) != ""
+	})
+	if err != nil {
 		return nil, err
 	}
 
-	tasks := make([]JobHealthEvidence, 0, len(result.Data))
-	for _, raw := range result.Data {
+	tasks := make([]JobHealthEvidence, 0, len(rows))
+	for _, raw := range rows {
 		task := JobHealthEvidence{
 			UPID:           stringJobField(raw, "upid"),
 			WorkerType:     stringJobField(raw, "worker-type", "worker_type", "type"),
@@ -1939,22 +1887,12 @@ func (c *Client) ListNamespaces(ctx context.Context, datastore string, parentNam
 	resp, err := c.get(ctx, path)
 	if err != nil {
 		// If namespace endpoint doesn't exist (older PBS versions), return empty list
-		if strings.Contains(err.Error(), "404") {
+		if isPBSNotFoundError(err) {
 			return []Namespace{}, nil
 		}
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Namespace `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readBackupNamespaces(resp)
 }
 
 // ListBackupGroups lists all backup groups in a datastore/namespace
@@ -1978,28 +1916,16 @@ func (c *Client) ListBackupGroups(ctx context.Context, datastore string, namespa
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Data []BackupGroup `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode backup groups: %w", err)
+	groups, err := readBackupGroups(resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read backup groups: %w", err)
 	}
 
 	log.Debug().
 		Str("namespace", namespace).
-		Int("count", len(result.Data)).
+		Int("count", len(groups)).
 		Msg("PBS API: Backup groups found")
-	return result.Data, nil
+	return groups, nil
 }
 
 // ListBackupSnapshots lists all snapshots for a specific backup group
@@ -2020,24 +1946,11 @@ func (c *Client) ListBackupSnapshots(ctx context.Context, datastore string, name
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	snapshots, err := readBackupSnapshots(resp, backupType, backupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read snapshots: %w", err)
 	}
-
-	var result struct {
-		Data []BackupSnapshot `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode snapshots: %w", err)
-	}
-
-	return result.Data, nil
+	return snapshots, nil
 }
 
 // ListAllBackups fetches all backups from all namespaces concurrently

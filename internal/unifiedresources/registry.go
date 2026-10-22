@@ -4317,6 +4317,7 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 		// Retaining the previous reason/status can hide a newly paused read or
 		// leave a recovered guest paused forever. Non-guest partial facets do
 		// not own these fields.
+		merged.CPUUsageUnavailable = incoming.CPUUsageUnavailable
 		merged.DiskStatusReason = incoming.DiskStatusReason
 		// A completed guest observation also owns loss/recovery of its original
 		// filesystem evidence. Missing time must not inherit an older origin.
@@ -6787,6 +6788,12 @@ func mergeCPUMetric(
 	status map[DataSource]SourceStatus,
 	thresholds map[DataSource]time.Duration,
 ) *MetricValue {
+	// A complete Proxmox guest observation can explicitly withdraw CPU. Do
+	// not retain the preceding sample as current, or fill it with an in-guest
+	// agent's incomparable accounting. Other metrics keep their own sources.
+	if target != nil && target.Proxmox != nil && target.Proxmox.CPUUsageUnavailable && hypervisorManagedGuest(target) {
+		return nil
+	}
 	if incoming == nil {
 		return existing
 	}

@@ -22,6 +22,17 @@ func dockerAlertScopeAlias(hostID, containerID, containerName string) string {
 	return alerts.DockerContainerResourceID(hostID, containerID, containerName)
 }
 
+// Keep the host-qualified name reference as the source identity when an older
+// Docker report has no container ID. A bare name is not an identity: it can
+// belong to several hosts. The same reference must survive both resolution and
+// projection back to the Docker host that supplies the container's context.
+func dockerPatrolContainerScopeIDs(hostID, containerID, containerName string) []string {
+	if strings.TrimSpace(containerID) != "" {
+		return []string{containerID}
+	}
+	return []string{dockerAlertScopeAlias(hostID, containerID, containerName)}
+}
+
 // dockerServiceAlertScopeAliases mirrors the alert subsystem's Swarm service
 // resource IDs ("docker:<host>/service/<serviceID>", or
 // "docker:<host>/service/name:<name>" without an ID) onto the owning Docker
@@ -308,7 +319,8 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, dc := range rs.DockerContainers() {
-			if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID(), dc.ContainerID()}, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID(), dc.Name())) {
+			ids := append([]string{dc.ID()}, dockerPatrolContainerScopeIDs(dc.HostSourceID(), dc.ContainerID(), dc.Name())...)
+			if !emit(patrolRuntimeResourceDockerItem, ids, dc.Name(), dockerAlertScopeAlias(dc.HostSourceID(), dc.ContainerID(), dc.Name())) {
 				return
 			}
 		}
@@ -360,7 +372,7 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 				return
 			}
 			for _, dc := range dh.Containers {
-				if !emit(patrolRuntimeResourceDockerItem, []string{dc.ID}, dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID, dc.Name)) {
+				if !emit(patrolRuntimeResourceDockerItem, dockerPatrolContainerScopeIDs(dh.ID, dc.ID, dc.Name), dc.Name, dockerAlertScopeAlias(dh.ID, dc.ID, dc.Name)) {
 					return
 				}
 			}

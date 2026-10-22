@@ -857,6 +857,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--json isDraft,publishedAt,tagName", floating_tags)
         self.assertIn("Floating-tag promotion refuses inactive release", floating_tags)
 
+    def test_helm_pages_waits_for_pages_build_without_weakening_receipt(self) -> None:
+        runner = helm_pages_retry_test.PublicReceiptTests()
+        result = runner.receipt('match', ready_after=75)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('[OK]', result.stdout)
+        result = runner.receipt('wrong', ready_after=75)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Public Helm chart bytes differ', result.stdout)
+        self.assertNotIn('[OK]', result.stdout)
+
     def test_helm_pages_retry_requires_explicitly_published_chart(self) -> None:
         runner = helm_pages_retry_test.HelmPagesRetryTests()
         for draft, digest in ((True, helm_pages_retry_test.DIGEST), (True, ""),
@@ -1140,7 +1150,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("uploaded but not publicly readable yet", await_commit)
         self.assertIn("does not match the expected immutable release identity", await_commit)
         self.assertIn("EXPECTED_CONVERGENCE_RUN_ID: ${{ github.run_id }}", await_commit)
-        self.assertIn('original_status}" != "completed"', await_commit)
+        self.assertIn('--activation-owner "${activation_owner_run_id}"', await_commit)
+        self.assertIn('completed|history-missing)', await_commit)
         self.assertIn("successor adoption is not yet allowed", await_commit)
         self.assertIn("activation_marker_sha256", await_commit)
 
@@ -1212,7 +1223,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             and original_status == "completed"
         )
         self.assertTrue(successor_may_adopt)
-        self.assertIn("Adopting committed ${TAG} from completed convergence owner", await_commit)
+        self.assertIn("Adopting attested ${TAG}; original owner", await_commit)
         self.assertIn("ACTIVATION_OWNER_RUN_ID", lease)
         self.assertIn("ACTIVATION_MARKER_SHA256", lease)
         self.assertIn(
@@ -1226,6 +1237,129 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         stale_name = f"release-convergence-owner-{original_owner}-5.json"
         successor_name = f"release-convergence-owner-{successor_owner}-1.json"
         self.assertNotEqual(stale_name, successor_name)
+
+    def test_history_loss_does_not_bypass_attestation_or_global_lease(self) -> None:
+        convergence = read(".github/workflows/release-convergence.yml")
+        await_commit = workflow_job_block(convergence, "await_activation_commit")
+        lease = workflow_job_block(convergence, "acquire_customer_promotion_lease")
+        observe = await_commit.index('--activation-owner "${activation_owner_run_id}"')
+        self.assertLess(await_commit.index("./scripts/verify-github-release-integrity.sh"), observe)
+        self.assertLess(await_commit.index("Public activation marker for ${TAG} does not match"), observe)
+        self.assertLess(observe, await_commit.index('echo "activation_owner_run_id='))
+        self.assertIn("Original convergence owner observation failed; no successor adoption", await_commit)
+        self.assertIn("Unknown activation-owner observation; no successor adoption", await_commit)
+        self.assertIn("needs: await_activation_commit", lease)
+        self.assertIn('customer_promotion_lease.sh acquire "${TAG}"', lease)
+        # Missing history is not permission to steal a live/unknown lease.
+        lease_script = read("scripts/release_control/customer_promotion_lease.sh")
+        self.assertNotIn("history-missing", lease_script)
+        self.assertIn('if [ "${owner_status}" = "completed" ]', lease_script)
+
+    def test_actual_marker_waiter_handles_owner_history_without_inventing_completion(self) -> None:
+        workflow = yaml.safe_load(read(".github/workflows/release-convergence.yml"))
+        steps = workflow["jobs"]["await_activation_commit"]["steps"]
+        script = next(s["run"] for s in steps if s.get("id") == "marker")
+        script = script.replace("${{ github.repository }}", "rcourtman/Pulse")
+        marker = {
+            "schema_version": 1, "tag": "v6.5.0-rc.1", "release_id": "300",
+            "target_commitish": "c" * 40, "source_release_run_id": "200",
+            "convergence_run_id": "90", "r2_prefix": "packet",
+            "server_image_digest": "sha256:" + "d" * 64,
+            "control_plane_image_digest": "sha256:" + "e" * 64,
+            "helm_chart_digest": "sha256:" + "f" * 64,
+        }
+        owner = {
+            "id": 90, "workflow_id": 42, "path": ".github/workflows/release-convergence.yml",
+            "event": "workflow_dispatch", "repository": {"full_name": "rcourtman/Pulse"},
+            "display_title": "Release convergence v6.5.0-rc.1 source 200", "status": "completed",
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            tools = root / "bin"
+            tools.mkdir()
+            controls = root / "scripts" / "release_control"
+            controls.mkdir(parents=True)
+            (controls / "reconcile_release_convergence.py").write_text(
+                read("scripts/release_control/reconcile_release_convergence.py")
+            )
+            # Closed provider/integrity adapters: this exercises the actual
+            # waiter/helper, not GitHub signatures or an installed mutation.
+            fixtures = {
+                "gh": '''#!/usr/bin/env python3
+import json, os, pathlib, sys
+args = sys.argv[1:]
+assert args[0] == "api" and "--method" not in args
+endpoint = next(a for a in args if a.startswith("repos/"))
+if endpoint.endswith("/releases/tags/v6.5.0-rc.1"):
+    print("300\\tv6.5.0-rc.1\\t" + "c"*40 + "\\tfalse\\ttrue\\t2026-09-02T00:00:00Z")
+elif endpoint.endswith("/actions/workflows/release-convergence.yml"):
+    print('{"id":42}')
+elif endpoint.endswith("/actions/runs/90"):
+    with open(os.environ["CALL_LOG"], "a") as f: f.write("owner\\n")
+    error = os.environ.get("OWNER_ERROR")
+    if error:
+        print(error, file=sys.stderr); sys.exit(1)
+    print(os.environ["OWNER_JSON"])
+else:
+    raise AssertionError(endpoint)
+''',
+                "curl": '''#!/usr/bin/env python3
+import os, pathlib, sys
+args=sys.argv[1:]
+pathlib.Path(args[args.index("-o")+1]).write_bytes(pathlib.Path(os.environ["MARKER_FILE"]).read_bytes())
+''',
+                "sleep": "#!/bin/sh\nexit 75\n",
+            }
+            for name, contents in fixtures.items():
+                path = tools / name
+                path.write_text(contents)
+                path.chmod(0o700)
+            integrity = root / "scripts" / "verify-github-release-integrity.sh"
+            integrity.write_text('#!/bin/sh\nprintf "integrity\\n" >> "$CALL_LOG"\nexit "$INTEGRITY_EXIT"\n')
+            integrity.chmod(0o700)
+            marker_file = root / "marker.json"
+            output = root / "output"
+            calls = root / "calls"
+            env = {**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"],
+                   "GH_BIN": str(tools / "gh"), "GITHUB_REPOSITORY": "rcourtman/Pulse",
+                   "TAG": "v6.5.0-rc.1", "EXPECTED_COMMIT": "c" * 40,
+                   "EXPECTED_RELEASE_ID": "300", "EXPECTED_SOURCE_RUN_ID": "200",
+                   "EXPECTED_CONVERGENCE_RUN_ID": "100", "EXPECTED_R2_PREFIX": "packet",
+                   "MARKER_FILE": str(marker_file), "GITHUB_OUTPUT": str(output), "CALL_LOG": str(calls)}
+            for case, error, status, integrity_exit, expected in (
+                ("completed", "", "completed", "0", 0),
+                ("missing", "gh: Not Found (HTTP 404)", "completed", "0", 0),
+                ("refused", "gh: Forbidden (HTTP 403)", "completed", "0", 1),
+                ("unavailable", "transport unavailable", "completed", "0", 1),
+                ("active", "", "in_progress", "0", 75),
+                ("unknown", "", "unknown", "0", 1),
+                ("bad-attestation", "gh: Not Found (HTTP 404)", "completed", "1", 1),
+                ("bad-marker", "gh: Not Found (HTTP 404)", "completed", "0", 1),
+            ):
+                with self.subTest(case=case):
+                    value = {**marker, "release_id": "301"} if case == "bad-marker" else marker
+                    marker_file.write_text(json.dumps(value))
+                    output.write_text("")
+                    calls.write_text("")
+                    result = subprocess.run(["bash", "-c", script], cwd=root,
+                                            env={**env, "OWNER_ERROR": error,
+                                                 "OWNER_JSON": json.dumps({**owner, "status": status}),
+                                                 "INTEGRITY_EXIT": integrity_exit},
+                                            text=True, capture_output=True, timeout=15)
+                    self.assertEqual(expected, result.returncode, result.stdout + result.stderr)
+                    if expected == 0:
+                        self.assertEqual(["integrity", "owner"], calls.read_text().splitlines())
+                        self.assertIn("activation_owner_run_id=90\n", output.read_text())
+                        digest = hashlib.sha256(marker_file.read_bytes()).hexdigest()
+                        self.assertIn("activation_marker_sha256=" + digest, output.read_text())
+                        if case == "missing":
+                            self.assertIn("history=history-missing", result.stdout)
+                            self.assertNotIn("completed", result.stdout)
+                    else:
+                        self.assertEqual("", output.read_text())
+                        self.assertNotIn("Adopting attested", result.stdout)
+                        if case in {"bad-attestation", "bad-marker"}:
+                            self.assertEqual(["integrity"], calls.read_text().splitlines())
 
     def test_customer_promotion_lease_commit_contains_exact_owner_evidence(self) -> None:
         script = REPO_ROOT / "scripts" / "release_control" / "customer_promotion_lease.sh"
@@ -1843,7 +1977,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertEqual(agent["type"], "input")
         self.assertEqual(agent["attributes"]["label"], "Agent version")
         self.assertFalse(agent["validations"]["required"])
-        for distinction in ("affected agent", "separately from the Pulse server", '"none"',
+        for distinction in ("only if an agent is affected", "separately from the Pulse server", '"none"',
                             '"unknown"', "Do not reinstall or re-enrol"):
             self.assertIn(distinction, agent["attributes"]["description"])
         self.assertIn("affected monitored platform and its release", fields["environment"]["attributes"]["description"])
@@ -1941,6 +2075,42 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertEqual(evidence["attributes"]["label"], "Logs, screenshots, or diagnostics")
                 self.assertFalse(evidence.get("validations", {}).get("required", False))
 
+    def test_signin_report_context_preserves_access_without_requesting_secrets(self) -> None:
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                fields = {field["id"]: field for field in form["body"] if "id" in field}
+                context = expandable_intake_context(
+                    form, evidence_id, "Sign-in or permissions: keep working access",
+                )
+                for distinction in (
+                    "sign-in method or provider type", "original time and redacted error",
+                    "refused sign-in", "successful login with a denied page or action",
+                    "including a save without changes", 'write "unknown"',
+                    "Test checks discovery, not sign-in or permissions",
+                    "blank Client Secret field does not prove the saved secret is lost",
+                    "Keep any working administrator session open",
+                    "Do not sign out, repeat a save or login, recreate the provider",
+                    "rotate secrets, enable Debug or relax TLS/access restrictions",
+                    "passwords, client secrets, authorization codes, tokens, cookies",
+                    "full callback URLs and claim/configuration dumps private",
+                    "consistent aliases", "not a HAR export or Copy as cURL command",
+                ):
+                    self.assertIn(distinction, context)
+                self.assertFalse(fields[evidence_id].get("validations", {}).get("required", False))
+                self.assertTrue(fields["pulse_version"]["validations"]["required"])
+                self.assertNotIn("client_secret", fields)
+                self.assertNotIn("callback_url", fields)
+        triage = read("docs/ISSUE_TRIAGE.md")
+        self.assertEqual(triage, read("frontend-modern/public/docs/ISSUE_TRIAGE.md"))
+        section = normalize_ws(triage.split("### Sign-in and access reports", 1)[1]
+                               .split("## Required disposition", 1)[0])
+        for boundary in ("Use the full thread's existing", "unchanged save",
+                         "existing reports need no refile or repeated workaround",
+                         "OIDC.md#safe-diagnosis", "not a local password reset for an SSO failure",
+                         "not evidence that the login or save defect is repaired"):
+            self.assertIn(boundary, section)
+
     def test_notification_report_context_is_optional_and_passive(self) -> None:
         for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
             with self.subTest(form=name):
@@ -1979,6 +2149,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         ):
             for field_id, heading in (
                 (summary_id, "Several hosts or clusters: preserve which names and IDs repeat"),
+                (evidence_id, "Sign-in or permissions: keep working access"),
                 (evidence_id, "Notification delivery: Test versus ordinary alerts"),
             ):
                 with self.subTest(form=name, field=field_id):

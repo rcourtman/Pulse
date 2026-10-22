@@ -29,8 +29,8 @@ Pulse uses a split config model:
 - **System settings**: `system.json` (editable in the UI unless locked by env)
 - **Nodes and credentials**: `nodes.enc` (encrypted)
 - **Notification config**: `email.enc`, `webhooks.enc`, `apprise.enc` (encrypted)
-- **OIDC config**: `oidc.enc` (encrypted)
-- **SSO config**: `sso.enc` (encrypted)
+- **Legacy single-provider OIDC config**: `oidc.enc` (encrypted)
+- **UI/API-managed OIDC and SAML providers**: `sso.enc` (encrypted, including mappings and secrets)
 - **API tokens**: `api_tokens.json`
 - **AI config**: `ai.enc` (encrypted)
 - **AI patrol data**: `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`
@@ -68,6 +68,8 @@ These are defaults, not a backup inventory. Check the active deployment's
 `PULSE_DATA_DIR`, mounts and any external stores before copying or restoring
 files. Metrics can use a separate `PULSE_METRICS_DB_PATH`; see
 [Metrics storage](METRICS_HISTORY.md#storage-location).
+Use the [recovery-state checklist](CONFIGURATION.md#back-up-recoverable-state)
+before choosing what to preserve; selected settings files alone are not a full backup.
 
 The audit paths above are the default store, not a licence-dependent guarantee
 that storage initialised successfully. Runtime-specific storage can differ;
@@ -134,8 +136,19 @@ saved deployment values. Review changes to persistence, Secret references and
 image edition before rollout; keep the current PVC, keys and settings. Do not
 let a default Community image replace paid Pro.
 
-See [Kubernetes deployment settings](KUBERNETES.md) and use your cluster's
-rollout and recovery procedure. A Helm rollback changes release resources; it
+New-install examples are not upgrade commands. Keep a single Pulse server per
+data directory and reconcile the deployment strategy with your storage before
+rollout. The chart defaults to `RollingUpdate`; the
+[new-install recipe](KUBERNETES.md#option-a-using-helm-recommended) explicitly uses
+`Recreate` to avoid overlapping servers, with a brief monitoring interruption.
+A storage class alone does not provide single-writer safety. Do not delete or
+replace a PVC, change its access mode or scale up to clear a stuck rollout.
+
+See [Kubernetes deployment settings](KUBERNETES.md) for the available values.
+Review the chosen chart and saved values through your existing cluster change
+procedure before applying. If an upgrade reports failure, inspect its current
+release and pod state before retrying; failure is not proof that nothing changed.
+A Helm rollback changes release resources; it
 does not guarantee restoration of Pulse data changed by a newer binary.
 
 ### Provider-hosted MSP

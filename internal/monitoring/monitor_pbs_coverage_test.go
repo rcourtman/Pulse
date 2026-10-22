@@ -2,7 +2,9 @@ package monitoring
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -689,12 +691,78 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	monitor.alertManager = manager
 	client := newPBSHealthTestClient(t, server.URL)
 	adapter := unifiedresources.NewMonitorAdapter(nil)
+	// Unavailable status also has independent connectivity/provider incidents.
+	// Select capacity by its complete identity, never by alert count or severity
+	// order: a critical datastore error must not mask a lost usage occurrence.
+	var retained *alerts.Alert
+	requireRetainedCapacity := func(stage string) {
+		t.Helper()
+		if retained == nil {
+			return
+		}
+		var capacity []alerts.Alert
+		for _, alert := range manager.GetActiveAlerts() {
+			if alert.Type == "usage" {
+				capacity = append(capacity, alert)
+			}
+		}
+		if len(capacity) != 1 {
+			t.Fatalf("%s: got %d capacity incidents, want the retained occurrence", stage, len(capacity))
+		}
+		got := capacity[0]
+		if got.ID != retained.ID || got.ResourceID != retained.ResourceID || got.Value != retained.Value || got.Threshold != retained.Threshold || !got.StartTime.Equal(retained.StartTime) || !got.LastSeen.Equal(retained.LastSeen) {
+			t.Fatalf("%s: missing capacity changed occurrence: id=%s value=%v threshold=%v start=%s lastSeen=%s", stage, got.ID, got.Value, got.Threshold, got.StartTime, got.LastSeen)
+		}
+		if got.MetricStatus == nil || retained.MetricStatus == nil || !got.MetricStatus.ObservedAt.Equal(retained.MetricStatus.ObservedAt) || got.MetricStatus.Value != retained.MetricStatus.Value {
+			t.Fatalf("%s: missing capacity refreshed the last usable metric observation", stage)
+		}
+		if manager.GetResolvedAlert(retained.ID) != nil {
+			t.Fatalf("%s: missing capacity recorded a false recovery", stage)
+		}
+	}
+	var fired, recovered atomic.Int32
+	manager.SetAlertCallback(func(alert *alerts.Alert) {
+		if alert.Type == "usage" {
+			fired.Add(1)
+		}
+	})
+	manager.SetResolvedCallback(func(id string) {
+		if strings.HasSuffix(id, "::metric-threshold:usage") {
+			recovered.Add(1)
+		}
+	})
 	poll := func() {
 		t.Helper()
 		for range 5 {
 			monitor.pollPBSInstance(context.Background(), instance.Name, client)
+			requireRetainedCapacity("after ordinary poll")
 			adapter.PopulateFromSnapshot(monitor.state.GetSnapshot())
 			monitor.syncUnifiedResourceAlertsToState(adapter.GetAll(), monitor.mockModeFence.begin())
+			requireRetainedCapacity("after unified reconciliation")
+		}
+	}
+	emit := func(phase string) {
+		t.Helper()
+		snapshot := monitor.state.GetSnapshot()
+		frame, err := json.Marshal(map[string]any{
+			"phase": phase, "activeAlerts": snapshot.ActiveAlerts,
+			"recentlyResolved": snapshot.RecentlyResolved,
+			"pbsInstances":     snapshot.PBSInstances, "storage": snapshot.Storage,
+			"resources": adapter.GetAll(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("PBS_CAPACITY_CONSUMER %s", base64.StdEncoding.EncodeToString(frame))
+	}
+	requireCallbackCount := func(counter *atomic.Int32, want int32) {
+		t.Helper()
+		deadline := time.Now().Add(time.Second)
+		for counter.Load() < want && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		if got := counter.Load(); got != want {
+			t.Fatalf("capacity callbacks = %d, want %d", got, want)
 		}
 	}
 	// Exercise the production poll-to-storage conversion, not just the
@@ -735,7 +803,10 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	if original.ResourceID != "pbs-pbs-capacity-backups" {
 		t.Fatalf("unexpected datastore identity: %q", original.ResourceID)
 	}
-	for _, missing := range []string{
+	emit("high")
+	requireCallbackCount(&fired, 1)
+	retained = &original
+	for i, missing := range []string{
 		`{"data":null}`,
 		`{"data":{}}`,
 		`{"data":{"total":1000}}`,
@@ -743,10 +814,22 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	} {
 		response.Store(missing)
 		poll()
-		active = manager.GetActiveAlerts()
-		if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 85 || !active[0].StartTime.Equal(original.StartTime) || manager.GetResolvedAlert(original.ID) != nil {
-			t.Fatalf("missing capacity %s changed incident: %+v", missing, active)
+		// A rejected detail read must still report its independent availability
+		// failure. Do not "fix" continuity by suppressing these alerts.
+		kinds := make(map[string]int)
+		codes := make(map[string]int)
+		for _, alert := range manager.GetActiveAlerts() {
+			kinds[alert.Type]++
+			if code, ok := alert.Metadata["incidentCode"].(string); ok {
+				codes[code]++
+			}
 		}
+		if kinds["usage"] != 1 || kinds["offline"] != 1 || kinds["backup-posture-incident"] != 2 || kinds["backup-storage-incident"] != 2 || codes["pbs_datastore_error"] != 2 || codes["pbs_datastore_state"] != 2 || codes["capacity_runway_low"] != 0 {
+			t.Fatalf("missing capacity %s lost independent failure evidence: kinds=%v codes=%v", missing, kinds, codes)
+		}
+		requireCallbackCount(&fired, 1)
+		requireCallbackCount(&recovered, 0)
+		emit(fmt.Sprintf("missing-%d", i))
 	}
 	// Losing the listing itself must not turn a retained capacity incident
 	// into recovery when unified resources are repopulated from the snapshot.
@@ -763,14 +846,14 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 		listingStatus.Store(int64(missing.status))
 		listing.Store(missing.body)
 		poll()
-		active = manager.GetActiveAlerts()
-		if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 85 || !active[0].StartTime.Equal(original.StartTime) || manager.GetResolvedAlert(original.ID) != nil {
-			t.Fatalf("%s changed capacity incident: %+v", missing.name, active)
-		}
+		requireCallbackCount(&fired, 1)
+		requireCallbackCount(&recovered, 0)
+		emit(missing.name)
 	}
 	listingStatus.Store(http.StatusOK)
 	listing.Store(`{"data":[{"store":"backups"}]}`)
 	response.Store(`{"data":{"total":1000,"used":0,"avail":1000}}`)
+	retained = nil // Only a new complete byte observation can recover capacity.
 	poll()
 	if len(manager.GetActiveAlerts()) != 0 {
 		t.Fatal("observed empty datastore did not recover")
@@ -778,6 +861,9 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	if resolved := manager.GetResolvedAlert(original.ID); resolved == nil || resolved.Value != 0 || !resolved.StartTime.Equal(original.StartTime) {
 		t.Fatalf("incorrect recovery: %+v", resolved)
 	}
+	requireCallbackCount(&fired, 1)
+	requireCallbackCount(&recovered, 1)
+	emit("empty-recovery")
 	// Alternate PBS counter names must feed the same policy and identity.
 	// The configured minimum delta of one permits this immediate recurrence.
 	response.Store(`{"data":{"total-space":1000,"used-space":860,"avail-space":140}}`)
@@ -786,6 +872,9 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	if len(active) != 1 || active[0].ID != original.ID || active[0].Value != 86 || !active[0].StartTime.After(original.StartTime) {
 		t.Fatalf("incorrect recurrent incident: %+v", active)
 	}
+	requireCallbackCount(&fired, 2)
+	requireCallbackCount(&recovered, 1)
+	emit("recurrence")
 	// The reported 97.9% crosses both topology bands. Neither the datastore
 	// nor parent posture may bypass the UI's 99% capacity policy.
 	response.Store(`{"data":{"total":1000,"used":979,"avail":21}}`)
@@ -798,14 +887,57 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	if active := manager.GetActiveAlerts(); len(active) != 0 {
 		t.Fatalf("97.9%% poll bypassed 99%% policy with topology incidents: %+v", active)
 	}
+	emit("raised-policy")
 	manager.UpdateConfig(basePolicy)
 	poll()
 	if active := manager.GetActiveAlerts(); len(active) != 1 || active[0].Type != "usage" {
 		t.Fatalf("high usage must have one policy-owned alert: %+v", active)
 	}
+	emit("high-recurrence")
 	manager.UpdateConfig(highPolicy)
 	poll()
 	if active := manager.GetActiveAlerts(); len(active) != 0 {
 		t.Fatalf("raised policy did not clear high-usage alert: %+v", active)
 	}
+	emit("policy-recovery")
+}
+
+// Ordinary discovery and successful recovery retain per-scope replacement.
+func TestPBSNamespaceDiscoveryAdmissionAndRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		status           int
+		body             string
+		denied, complete bool
+	}{
+		{name: "denied", status: http.StatusForbidden, body: "fixture denied", denied: true},
+		{name: "unauthorized", status: http.StatusUnauthorized, body: "fixture denied", denied: true},
+		{name: "status-not-body", status: http.StatusServiceUnavailable, body: "fixture references error 404"},
+		{name: "missing-array", status: http.StatusOK, body: `{}`},
+		{name: "null-array", status: http.StatusOK, body: `{"data":null}`},
+		{name: "provider-error", status: http.StatusOK, body: `{"data":[],"errors":{"fixture":"unavailable"}}`},
+		{name: "trailing-json", status: http.StatusOK, body: `{"data":[]} {"data":[]}`},
+		{name: "missing-identity", status: http.StatusOK, body: `{"data":[{}]}`},
+		{name: "successful-empty", status: http.StatusOK, body: `{"data":[]}`, complete: true},
+		{name: "legacy-404", status: http.StatusNotFound, body: "fixture endpoint unavailable", complete: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projection := ""
+			if tc.name == "denied" {
+				projection = "denied"
+			}
+			exercisePBSNamespaceDiscovery(t, tc.status, tc.body, tc.denied, tc.complete, projection)
+		})
+	}
+}
+
+// Complete discovery and deliberate scope-off must not collapse into the same
+// no-op. Use the ordinary foreground/background path and durable projection.
+func TestPBSRootDatastoreInventoryAndScope(t *testing.T) {
+	exercisePBSRootDatastoreDiscovery(t, []pbsDatastoreDiscoveryCase{
+		{"empty", 3, ""}, {"removed_store", 7, ""},
+		{"datastores_off", 3, "datastores"}, {"backups_off", 3, "backups"}, {"global_off", 3, "global"},
+		{"cancelled", 9, "cancelled"},
+		{"withdrawn_empty", 10, "withdrawn"}, {"withdrawn_denied", 11, "withdrawn"},
+	})
 }

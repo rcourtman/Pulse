@@ -325,13 +325,13 @@ func TestSendGroupedAppriseInvokesExecutor(t *testing.T) {
 	done := make(chan struct{}, 1)
 	var capturedArgs []string
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
 		capturedArgs = append([]string(nil), args...)
 		select {
 		case done <- struct{}{}:
 		default:
 		}
-		return []byte("success"), nil
+		return int64(len("success")), nil
 	}
 
 	nm.SetAppriseConfig(AppriseConfig{
@@ -1052,11 +1052,11 @@ func TestSendTestNotificationApprise(t *testing.T) {
 	var once sync.Once
 	var capturedArgs []string
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
 		capturedArgs = append([]string(nil), args...)
 		// Use sync.Once to safely close channel even if callback is invoked multiple times
 		once.Do(func() { close(done) })
-		return []byte("success"), nil
+		return int64(len("success")), nil
 	}
 
 	nm.SetAppriseConfig(AppriseConfig{
@@ -1109,11 +1109,11 @@ func TestSendTestAppriseWithConfig(t *testing.T) {
 	var once sync.Once
 	var called bool
 
-	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) (int64, error) {
 		called = true
 		// Use sync.Once to safely close channel even if callback is invoked multiple times
 		once.Do(func() { close(done) })
-		return []byte("ok"), nil
+		return int64(len("ok")), nil
 	}
 
 	err = nm.SendTestAppriseWithConfig(AppriseConfig{

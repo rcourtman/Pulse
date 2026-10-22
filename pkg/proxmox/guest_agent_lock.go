@@ -36,5 +36,11 @@ func guestAgentConfigLock(body []byte) (string, bool) {
 	if json.Unmarshal(value, &lock) != nil || lock == nil {
 		return "", false
 	}
+	// Only an absent field or an exactly empty string establishes clearance.
+	// Trimming a nonempty, whitespace-only value invents an unlocked state;
+	// it is malformed evidence, not a named operation lock or transport fault.
+	if *lock != "" && strings.TrimSpace(*lock) == "" {
+		return "", false
+	}
 	return *lock, true
 }

@@ -2,22 +2,52 @@ package monitoring
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	pveapi "github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+func TestPVEBackupStorageIdentityRequiresExplicitSharedScope(t *testing.T) {
+	localA := pveStorageBackupScope(pveapi.Storage{Storage: "archive"}, "node-a")
+	localB := pveStorageBackupScope(pveapi.Storage{Storage: "archive"}, "node-b")
+	sharedA := pveStorageBackupScope(pveapi.Storage{Storage: "archive", Shared: 1}, "node-a")
+	sharedB := pveStorageBackupScope(pveapi.Storage{Storage: "archive", Shared: 1}, "node-b")
+	if localA == localB || sharedA != sharedB || localA == sharedA || localB == sharedB {
+		t.Fatal("storage name replaced explicit shared/local ownership")
+	}
+	if pveStorageBackupID("estate", localA, "archive:copy") == pveStorageBackupID("estate", localB, "archive:copy") ||
+		pveStorageBackupID("estate", sharedA, "archive:copy") != "estate-archive:copy" {
+		t.Fatal("local copies collapsed or shared identity changed")
+	}
+	if pveStorageBackupID("a-b", pveBackupStorageScope{node: "c"}, "archive:copy") ==
+		pveStorageBackupID("a", pveBackupStorageScope{node: "b-c"}, "archive:copy") {
+		t.Fatal("delimiter ambiguity merged independent storage identities")
+	}
+}
 
 type canonicalBackupStorageClient struct {
 	mockPVEClientExtra
@@ -270,6 +300,7 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 		backupID := strconv.Itoa(1000 + i)
 		requests = append(requests, pbsBackupFetchRequest{
 			datastore: "archive",
+			limit:     1,
 			group: pbs.BackupGroup{
 				BackupType:  "vm",
 				BackupID:    backupID,
@@ -1112,4 +1143,619 @@ func TestPollPBSBackups_PreservesCacheOnTransientDatastoreError(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Ordinary persisted rollups, canonical guest lookup, alert manager and served
+// state: a future success must be visible as lost age evidence, not recovery.
+func TestBackupFutureSuccessWarningThroughReadState(t *testing.T) {
+	m, _ := backupEvaluationMonitor(t)
+	m.resourceStore = backupReadStateResourceStore([]unifiedresources.Resource{
+		{ID: "vm-100", Name: "database", Type: unifiedresources.ResourceTypeVM, Status: unifiedresources.StatusOnline, Proxmox: &unifiedresources.ProxmoxData{Instance: "pve1", NodeName: "node1", VMID: 100}},
+		{ID: "vm-101", Name: "archive", Type: unifiedresources.ResourceTypeVM, Status: unifiedresources.StatusOnline, Proxmox: &unifiedresources.ProxmoxData{Instance: "pve1", NodeName: "node1", VMID: 101}},
+	})
+	store, err := m.recoveryManager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	now := time.Now().UTC()
+	point := backupEvaluationPoint(now.Add(-4 * 24 * time.Hour))
+	put := func(points ...recovery.RecoveryPoint) {
+		if err := store.UpsertPoints(context.Background(), points); err != nil {
+			t.Fatal(err)
+		}
+	}
+	project := func(phase string) {
+		wire, err := json.Marshal(struct {
+			Phase        string         `json:"phase"`
+			ActiveAlerts []models.Alert `json:"activeAlerts"`
+		}{phase, m.GetState().ActiveAlerts})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("BACKUP_TIMESTAMP_PROJECTION=%s", wire)
+	}
+	put(point)
+	m.checkBackupAlerts(context.Background())
+	project("stale")
+	before := m.alertManager.GetActiveAlerts()
+	if len(before) != 1 {
+		t.Fatal("missing initial stale backup")
+	}
+	point.CompletedAt = ptrBackupTime(now.Add(24 * time.Hour))
+	peer := backupEvaluationPoint(now.Add(-3 * 24 * time.Hour))
+	peer.ID, peer.SubjectResourceID = "pve-backup:fixture-101", "vm-101"
+	peer.SubjectRef = &recovery.ExternalRef{Type: "proxmox-vm", ID: "pve1:node1:101", Name: "archive"}
+	put(point, peer)
+	m.checkBackupAlerts(context.Background())
+	project("future")
+	warning, ages := backupEvaluationAlerts(t, m)
+	if warning == nil || ages != 2 {
+		t.Fatalf("future success was silent recovery or blocked a peer: warning=%v ages=%d", warning != nil, ages)
+	}
+	if warning.ResourceID != "" || warning.Level != alerts.AlertLevelWarning || warning.Metadata["systemAlert"] != true || !strings.Contains(warning.Message, "future") || !strings.Contains(warning.Message, "clocks") {
+		t.Fatal("clock warning has incorrect scope, severity or guidance")
+	}
+	for _, a := range m.alertManager.GetActiveAlerts() {
+		if a.ID == before[0].ID && (!a.StartTime.Equal(before[0].StartTime) || !a.LastSeen.Equal(before[0].LastSeen) || a.Value != before[0].Value) {
+			t.Error("future time renewed the retained backup condition")
+		}
+	}
+	m.checkBackupAlerts(context.Background())
+	repeated, ages := backupEvaluationAlerts(t, m)
+	if repeated == nil || ages != 2 || !repeated.StartTime.Equal(warning.StartTime) || repeated.Metadata["systemAlertFingerprint"] != warning.Metadata["systemAlertFingerprint"] {
+		t.Fatal("unchanged invalid evidence replaced the warning")
+	}
+	project("repeated")
+	point.CompletedAt = ptrBackupTime(now)
+	put(point)
+	m.checkBackupAlerts(context.Background())
+	if self, ages := backupEvaluationAlerts(t, m); self != nil || ages != 1 {
+		t.Fatal("usable fresh evidence did not clear only its condition and evaluator warning")
+	}
+	project("recovered")
+	point.CompletedAt = ptrBackupTime(now.Add(24 * time.Hour))
+	put(point)
+	m.checkBackupAlerts(context.Background())
+	cfg := m.alertManager.GetConfig()
+	cfg.BackupDefaults.Enabled = false
+	m.alertManager.UpdateConfig(cfg)
+	m.checkBackupAlerts(context.Background())
+	if self, ages := backupEvaluationAlerts(t, m); self != nil || ages != 0 {
+		t.Fatal("deliberate disablement did not clear the warning and age conditions")
+	}
+	project("disabled")
+}
+
+func ptrBackupTime(at time.Time) *time.Time { return &at }
+
+// The actual detector and served-state projection feed the consuming browser
+// fixture. No guest, snapshot, backup, clock or installed service is changed.
+func TestSnapshotPartialEvidenceServedState(t *testing.T) {
+	if mock.IsMockEnabled() {
+		t.Fatal("snapshot producer proof requires ordinary served state, not mock mode")
+	}
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	cfg := manager.GetConfig()
+	cfg.Enabled = true
+	cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningDays: 7, CriticalDays: 14, WarningSizeGiB: 50, CriticalSizeGiB: 100}
+	manager.UpdateConfig(cfg)
+	m := &Monitor{state: models.NewState(), alertManager: manager}
+	birth := time.Now().UTC().Add(-10 * 24 * time.Hour)
+	snapshot := models.GuestSnapshot{ID: "pve1-node1-100-weekly", Name: "weekly", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu", Time: birth, SizeBytes: 1 << 30}
+	guest := alerts.GuestLookup{ResourceID: "pve1:node1:100", Name: "database", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu"}
+	guests := map[string]alerts.GuestLookup{guest.ResourceID: guest}
+	var projections []struct {
+		Phase        string         `json:"phase"`
+		ActiveAlerts []models.Alert `json:"activeAlerts"`
+	}
+	project := func(phase string, level string) models.Alert {
+		rows := []models.GuestSnapshot{snapshot}
+		if phase == "deleted" {
+			rows = nil
+		}
+		manager.CheckSnapshotsForInstance("pve1", rows, guests)
+		state := m.GetState()
+		if state.ActiveAlerts == nil {
+			state.ActiveAlerts = []models.Alert{}
+		}
+		projections = append(projections, struct {
+			Phase        string         `json:"phase"`
+			ActiveAlerts []models.Alert `json:"activeAlerts"`
+		}{phase, state.ActiveAlerts})
+		if level == "" {
+			if len(state.ActiveAlerts) != 0 {
+				t.Fatalf("%s invented an alert: %+v", phase, state.ActiveAlerts)
+			}
+			return models.Alert{}
+		}
+		if len(state.ActiveAlerts) != 1 || state.ActiveAlerts[0].Level != level {
+			t.Fatalf("%s lost condition: %+v", phase, state.ActiveAlerts)
+		}
+		return state.ActiveAlerts[0]
+	}
+	initial := project("age-warning", "warning")
+	snapshot.Time = time.Now().UTC().Add(24 * time.Hour)
+	snapshot.SizeBytes = 120 << 30
+	mixed := project("future-size-critical", "critical")
+	if mixed.Metadata["snapshotAgeHeld"] != true || mixed.Metadata["snapshotSizeHeld"] != false || !strings.Contains(mixed.Message, "clocks") || mixed.ID != initial.ID {
+		t.Fatal("mixed evidence not explicit in served state")
+	}
+	snapshot.Time, snapshot.SizeBytes = time.Time{}, 1<<30
+	held := project("missing-time-held-age", "warning")
+	if held.Metadata["snapshotAgeDays"] != initial.Metadata["snapshotAgeDays"] || held.Metadata["snapshotAgeObservedAt"] != initial.Metadata["snapshotAgeObservedAt"] {
+		t.Fatal("served held age was renewed")
+	}
+	project("repeated", "warning")
+	snapshot.Time = time.Now().UTC().Add(-time.Hour)
+	project("recovered", "")
+	// No old time is available for this new size condition.
+	snapshot.Time, snapshot.SizeBytes = time.Unix(0, 0), 120<<30
+	sizeOnly := project("epoch-size-only", "critical")
+	if _, invented := sizeOnly.Metadata["snapshotAgeDays"]; invented {
+		t.Fatal("epoch fabricated age")
+	}
+	snapshot.SizeBytes = 0
+	missingSize := project("missing-size-held", "critical")
+	if missingSize.Metadata["snapshotSizeHeld"] != true || !strings.Contains(missingSize.Message, "last known 120.0 GiB") {
+		t.Fatal("missing size fabricated recovery")
+	}
+	snapshot.SizeBytes = 1 << 30
+	project("size-recovered", "")
+	snapshot.SizeBytes = 120 << 30
+	project("size-returned", "critical")
+	project("deleted", "")
+	for _, projection := range projections {
+		wire, err := json.Marshal(projection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("SNAPSHOT_PARTIAL_PROJECTION=%s", wire)
+	}
+}
+
+func TestSnapshotPartialEvidenceClockCorrectionServedState(t *testing.T) {
+	if mock.IsMockEnabled() {
+		t.Fatal("clock-correction proof requires ordinary served state")
+	}
+	makeManager := func(dir string) *alerts.Manager {
+		manager := alerts.NewManagerWithDataDir(dir)
+		cfg := manager.GetConfig()
+		cfg.Enabled = true
+		cfg.SnapshotDefaults = alerts.SnapshotAlertConfig{Enabled: true, WarningDays: 7, CriticalDays: 14, WarningSizeGiB: 50, CriticalSizeGiB: 100}
+		manager.UpdateConfig(cfg)
+		return manager
+	}
+	manager := makeManager(t.TempDir())
+	snapshot := models.GuestSnapshot{ID: "pve1-node1-100-weekly", Name: "weekly", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu", Time: time.Now().UTC().Add(-10 * 24 * time.Hour), SizeBytes: 1 << 30}
+	guests := map[string]alerts.GuestLookup{"pve1:node1:100": {ResourceID: "pve1:node1:100", Name: "database", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu"}}
+	manager.CheckSnapshotsForInstance("pve1", []models.GuestSnapshot{snapshot}, guests)
+	active := manager.GetActiveAlerts()
+	manager.Stop()
+	if len(active) != 1 {
+		t.Fatal("missing initial clock-correction condition")
+	}
+	// Persist a real accepted alert with the old clock's dates, then restart
+	// through the ordinary JSON restoration seam in a fresh temporary profile.
+	shift := 30 * 24 * time.Hour
+	active[0].Metadata["snapshotCreatedAt"] = snapshot.Time.Add(shift)
+	active[0].Metadata["snapshotAgeObservedAt"] = active[0].LastSeen.Add(shift)
+	active[0].Metadata["snapshotSizeObservedAt"] = active[0].LastSeen.Add(shift)
+	active[0].LastSeen = active[0].LastSeen.Add(shift)
+	data, err := json.Marshal(active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "alerts"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "alerts", "active-alerts.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager = makeManager(dir)
+	t.Cleanup(manager.Stop)
+	snapshot.Time, snapshot.SizeBytes = snapshot.Time.Add(shift), 0
+	manager.CheckSnapshotsForInstance("pve1", []models.GuestSnapshot{snapshot}, guests)
+	m := &Monitor{state: models.NewState(), alertManager: manager}
+	state := m.GetState()
+	if len(state.ActiveAlerts) != 1 || state.ActiveAlerts[0].Level != "warning" || state.ActiveAlerts[0].Metadata["snapshotAgeHeld"] != true || !strings.Contains(state.ActiveAlerts[0].Message, "clocks") {
+		t.Fatal("restored old-clock evidence became false served recovery")
+	}
+	wire, err := json.Marshal(struct {
+		Phase        string         `json:"phase"`
+		ActiveAlerts []models.Alert `json:"activeAlerts"`
+	}{"clock-correction-held", state.ActiveAlerts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("SNAPSHOT_PARTIAL_PROJECTION=%s", wire)
+}
+
+// Real read-only HTTP -> ordinary collector -> raw/cache and recovery consumers.
+// No guest command, appliance, backup or restore operation is exercised.
+func TestPBSNamespaceFailuresRespectReadScope(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reverse=%t", reverse), func(t *testing.T) {
+			f := newPBSPosturePollFixture(t, 1)
+			var phase atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet {
+					t.Errorf("unexpected method %s", r.Method)
+				}
+				p := phase.Load()
+				foreign := strings.HasPrefix(r.URL.Path, "/other/")
+				ns := r.URL.Query().Get("ns")
+				id := "100"
+				if foreign {
+					id = "200" // An independent connection and subject.
+				}
+				if strings.HasSuffix(r.URL.Path, "/groups") {
+					if !foreign && p == 6 {
+						status := http.StatusForbidden
+						if ns == "tenant/child" {
+							status = http.StatusServiceUnavailable
+						}
+						http.Error(w, "fixture unavailable", status)
+						return
+					}
+					if !foreign && ns == "tenant/child" {
+						switch p {
+						case 1:
+							http.Error(w, "upstream API error 403 is not the wire status", http.StatusServiceUnavailable)
+							return
+						case 2:
+							fmt.Fprint(w, `{"data":null}`)
+							return
+						case 3:
+							http.Error(w, "fixture denied", http.StatusForbidden)
+							return
+						case 5:
+							fmt.Fprint(w, `{"data":[]}`)
+							return
+						}
+					}
+					// The parent namespace can authoritatively empty independently
+					// of its unreadable child; namespace matching is not by prefix.
+					if !foreign && ns == "tenant" && p > 0 {
+						fmt.Fprint(w, `{"data":[]}`)
+						return
+					}
+				}
+				backupAt, size := f.backupAt, 1024
+				if !foreign && p > 0 {
+					backupAt += 3600
+					size = 2048
+					if p >= 4 {
+						backupAt += 3600
+						size = 4096
+						if ns == "tenant/child" {
+							size = 3072
+						}
+					}
+				}
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/groups"):
+					fmt.Fprintf(w, `{"data":[{"backup-type":"vm","backup-id":%q,"backup-count":1,"last-backup":%d}]}`, id, backupAt)
+				case strings.HasSuffix(r.URL.Path, "/snapshots"):
+					fmt.Fprintf(w, `{"data":[{"backup-type":"vm","backup-id":%q,"backup-time":%d,"size":%d,"files":["index.json.blob"],"verification":{"state":"ok"},"comment":%q}]}`, id, backupAt, size, "guest-"+id)
+				default:
+					t.Errorf("unexpected read %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client := func(prefix string) *pbs.Client {
+				c, err := pbs.NewClient(pbs.ClientConfig{Host: server.URL + prefix, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only", Timeout: time.Second})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return c
+			}
+			f.client = client("")
+			datastores := []models.PBSDatastore{
+				{Name: "archive", Namespaces: []models.PBSNamespace{{Path: "/"}, {Path: "tenant"}, {Path: "tenant/child"}}},
+				{Name: "independent"},
+			}
+			if reverse {
+				s := datastores[0].Namespaces
+				s[0], s[2] = s[2], s[0]
+			}
+			poll := func(p int32) {
+				phase.Store(p)
+				f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores)
+				f.wait(t)
+			}
+			rows := func(instance string) []models.PBSBackup {
+				var out []models.PBSBackup
+				for _, row := range f.m.state.GetSnapshot().PBSBackups {
+					if row.Instance == instance {
+						out = append(out, row)
+					}
+				}
+				sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+				return out
+			}
+			project := func(label string) {
+				if reverse {
+					return
+				}
+				payload, err := json.Marshal(map[string]any{"backups": f.m.state.GetSnapshot().PBSBackups, "postures": f.postures(t), "vms": f.m.state.GetSnapshot().VMs, "policy": recovery.DefaultProtectionPosturePolicy.Payload(), "now": time.Now().UTC()})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("PBS_NAMESPACE_PROJECTION_%s=%s", label, payload)
+			}
+			poll(0)
+			if len(rows("pbs-main")) != 4 || len(f.points(t, "pbs-main")) != 4 {
+				t.Fatal("initial fixture did not enumerate all datastore/namespace scopes")
+			}
+			project("initial")
+			// This separate connection has no subject overlap with the target
+			// provider's posture, but its raw and persisted points must survive.
+			f.m.pollPBSBackups(context.Background(), "pbs-other", client("/other"), []models.PBSDatastore{{Name: "archive"}})
+			f.wait(t)
+			foreignRows := rows("pbs-other")
+			foreignPoints := f.points(t, "pbs-other")
+			if len(foreignRows) != 1 || len(foreignPoints) != 1 {
+				t.Fatal("independent connection was not seeded")
+			}
+			var held models.PBSBackup
+			for _, row := range rows("pbs-main") {
+				if row.Namespace == "tenant/child" {
+					held = row
+				}
+			}
+			key := pbsBackupGroupKey{datastore: "archive", namespace: "tenant/child", backupType: "vm", backupID: "100"}
+			oldRead := time.Now().Add(-2 * pbsBackupCacheTTL)
+			f.m.setPBSBackupCacheTime("pbs-main", key, oldRead)
+			for _, p := range []int32{1, 2} {
+				poll(p)
+				actual := rows("pbs-main")
+				if len(actual) != 3 {
+					t.Fatalf("phase %d dropped the transiently unreadable namespace or retained the successfully emptied parent: rows=%+v", p, actual)
+				}
+				for _, row := range actual {
+					if row.Namespace == "tenant/child" {
+						if !reflect.DeepEqual(row, held) {
+							t.Fatal("unreadable namespace renewed or changed its original backup evidence")
+						}
+					} else if row.Size != 2048 || row.BackupTime.Unix() != f.backupAt+3600 {
+						t.Fatal("unreadable namespace prevented independent fresh scope publication")
+					}
+				}
+				if !f.m.pbsBackupCacheTimeFor("pbs-main", key).Equal(oldRead) {
+					t.Fatal("failed group read renewed its snapshot cache time")
+				}
+				for _, posture := range f.postures(t) {
+					if posture.State == recovery.ProtectionStateProtected || posture.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial {
+						t.Fatalf("held history falsely established complete protection: %+v", posture)
+					}
+				}
+				project(fmt.Sprintf("partial_%d", p))
+			}
+			poll(3)
+			if len(rows("pbs-main")) != 2 || len(f.points(t, "pbs-main")) < 4 {
+				t.Fatal("access rejection must withdraw raw rows without deleting historical recovery facts")
+			}
+			project("denied")
+			poll(4)
+			if len(rows("pbs-main")) != 3 || len(f.points(t, "pbs-main")) != 3 || !f.m.pbsBackupCacheTimeFor("pbs-main", key).After(oldRead) {
+				t.Fatal("complete recovery did not replace rows, publish matching read times and reconcile obsolete points")
+			}
+			project("recovered")
+			poll(6)
+			if got := rows("pbs-main"); len(got) != 1 || got[0].Namespace != "tenant/child" || got[0].Size != 3072 {
+				t.Fatalf("mixed unavailable/denied scopes kept rejected raw rows or lost held history: %+v", got)
+			}
+			project("mixed_failure")
+			poll(4)
+			poll(5)
+			if len(rows("pbs-main")) != 2 || len(f.points(t, "pbs-main")) != 2 || !f.m.pbsBackupCacheTimeFor("pbs-main", key).IsZero() {
+				t.Fatal("successful scoped empty inventory did not withdraw its rows, cache and recovery points")
+			}
+			project("withdrawn")
+			if !reflect.DeepEqual(rows("pbs-other"), foreignRows) || !reflect.DeepEqual(f.points(t, "pbs-other"), foreignPoints) {
+				t.Fatal("partial failure or empty inventory crossed the PBS connection boundary")
+			}
+		})
+	}
+}
+
+// Real synthetic foreground -> background -> stored-protection evidence.
+func exercisePBSNamespaceDiscovery(t *testing.T, status int, response string, denied, complete bool, projection string) {
+	t.Helper()
+	f := newPBSPosturePollFixture(t, 3)
+	const instance = "pbs-main"
+	var phase atomic.Int32
+	var mu sync.Mutex
+	reads := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected provider mutation %s %s", r.Method, r.URL.Path)
+			http.Error(w, "read only", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		store := "archive"
+		if strings.Contains(r.URL.Path, "/mirror/") {
+			store = "mirror"
+		}
+		ns := r.URL.Query().Get("ns")
+		mu.Lock()
+		reads[fmt.Sprintf("%d/%s/%s/%s", phase.Load(), store, ns, r.URL.Path)]++
+		mu.Unlock()
+		snapshotAt := f.backupAt
+		size := 1024
+		if store == "mirror" && phase.Load() > 0 {
+			snapshotAt += 3600
+			size = 4096
+		}
+		body := `{"data":[]}`
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/version"):
+			body = `{"data":{"version":"3.4.2"}}`
+		case r.URL.Path == "/api2/json/nodes/localhost/status":
+			body = `{"data":{"cpu":0.1,"memory":{"used":512,"total":1024},"uptime":120}}`
+		case r.URL.Path == "/api2/json/admin/datastore":
+			body = `{"data":[{"store":"archive","total":1000,"used":250,"avail":750},{"store":"mirror","total":1000,"used":250,"avail":750}]}`
+		case strings.HasSuffix(r.URL.Path, "/status"):
+			body = `{"data":{"status":"available","total":1000,"used":250,"avail":750}}`
+		case strings.HasSuffix(r.URL.Path, "/namespace"):
+			if store == "archive" {
+				if phase.Load() == 1 {
+					w.WriteHeader(status)
+					_, _ = fmt.Fprint(w, response)
+					return
+				}
+				body = `{"data":[{"ns":"team/production"}]}`
+			}
+		case strings.HasSuffix(r.URL.Path, "/groups"):
+			id := "101"
+			if store == "mirror" {
+				id = "102"
+			} else if ns == "team/production" {
+				id = "100"
+			}
+			if store == "mirror" || phase.Load() == 0 {
+				body = fmt.Sprintf(`{"data":[{"backup-type":"vm","backup-id":%q,"backup-count":1,"last-backup":%d}]}`, id, snapshotAt)
+			}
+		case strings.HasSuffix(r.URL.Path, "/snapshots"):
+			body = fmt.Sprintf(`{"data":[{"backup-type":"vm","backup-id":%q,"backup-time":%d,"size":%d,"files":["index.json.blob"],"verification":{"state":"ok"}}]}`, r.URL.Query().Get("backup-id"), snapshotAt, size)
+		}
+		_, _ = fmt.Fprint(w, body)
+	}))
+	defer server.Close()
+	f.m.config = &config.Config{EnableBackupPolling: true, BackupPollingCycles: 1, PBSInstances: []config.PBSInstance{{Name: instance, Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only", MonitorDatastores: true, MonitorBackups: true}}}
+	f.m.pollStatusMap = make(map[string]*pollStatus)
+	f.m.initPBSClients(f.m.config)
+	client, ok := f.m.getPBSClient(instance)
+	require.True(t, ok)
+	f.m.setRuntimeContext(context.Background(), nil)
+	project := func(label string) {
+		if projection == "" {
+			return
+		}
+		payload, err := json.Marshal(map[string]any{"backups": f.m.PBSBackupsSnapshot(), "postures": f.postures(t)})
+		require.NoError(t, err)
+		t.Logf("PBS_NAMESPACE_BROWSER_%s_%s=%s", projection, label, base64.StdEncoding.EncodeToString(payload))
+	}
+	poll := func(p int32) {
+		phase.Store(p)
+		// An unchanged interval does not reset cadence. Reduce the configured
+		// interval through the ordinary catch-up route for each synthetic phase.
+		f.m.SetBackupPollingInterval(2 * time.Second)
+		f.m.SetBackupPollingInterval(time.Second)
+		f.m.pollPBSInstance(context.Background(), instance, client)
+		waitForPBSBackupReturn(t, f.m)
+		f.wait(t)
+	}
+	poll(0)
+	f.assertProtected(t, instance)
+	initialPoints := f.points(t, instance)
+	project("initial")
+	key := pbsBackupGroupKey{datastore: "archive", namespace: "team/production", backupType: "vm", backupID: "100"}
+	at := f.m.pbsBackupCacheTimeFor(instance, key)
+	require.False(t, at.IsZero())
+	poll(1)
+	raw := f.m.PBSBackupsSnapshot()
+	project("partial")
+	wantRaw, wantPoints := 2, 4
+	if denied || complete {
+		wantRaw = 1
+	}
+	if complete {
+		wantPoints = 1
+	}
+	if len(raw) != wantRaw {
+		t.Errorf("namespace discovery result lost scope: raw=%+v want=%d", raw, wantRaw)
+	}
+	for _, b := range raw {
+		if b.VMID == "102" {
+			require.Equal(t, int64(4096), b.Size, "readable sibling must advance independently")
+			require.Equal(t, f.backupAt+3600, b.BackupTime.Unix())
+		}
+		if b.VMID == "100" {
+			require.Equal(t, "team/production", b.Namespace)
+			require.Equal(t, f.backupAt, b.BackupTime.Unix(), "retained row cannot gain a new backup time")
+		}
+	}
+	for _, b := range raw {
+		require.NotEqual(t, "101", b.VMID, "a successful empty root must still replace its own raw scope")
+	}
+	points := f.points(t, instance)
+	require.Len(t, points, wantPoints, "incomplete discovery retains old history plus the newly observed sibling point")
+	if !complete {
+		for _, before := range initialPoints {
+			found := false
+			for _, after := range points {
+				if after.ID == before.ID {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "incomplete discovery deleted original point %s", before.ID)
+		}
+	}
+	if denied || complete {
+		require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key), "withdrawn raw scope cannot retain a reusable cache age")
+	} else {
+		require.Equal(t, at, f.m.pbsBackupCacheTimeFor(instance, key), "unread namespace cannot renew or lose its original cache age")
+	}
+	for _, p := range f.postures(t) {
+		if complete && p.SubjectResourceID != f.ids[2] {
+			require.Equal(t, recovery.ProtectionStateUnknown, p.State, "a workload without remaining evidence is not healthy")
+			require.Empty(t, p.ProviderStates)
+			continue
+		}
+		require.Len(t, p.ProviderStates, 1)
+		provider := p.ProviderStates[0]
+		if complete {
+			require.Equal(t, recovery.ProtectionHistoryComplete, provider.HistoryCompleteness)
+			continue
+		}
+		wantState := recovery.ProtectionStateUnknown
+		wantPermissions := operationaltrust.EvidencePermissionsUnknown
+		if denied {
+			wantState = recovery.ProtectionStateAttention
+			wantPermissions = operationaltrust.EvidencePermissionsPartial
+		}
+		if p.State != wantState || provider.HistoryCompleteness != recovery.ProtectionHistoryPartial || provider.JobState != recovery.OutcomeWarning || provider.Permissions != wantPermissions {
+			t.Errorf("namespace discovery failure presented complete/healthy evidence: %+v", p)
+		}
+	}
+	mu.Lock()
+	for read, count := range reads {
+		if strings.HasPrefix(read, "1/archive/team/production/") && count != 0 {
+			t.Errorf("failed discovery must not probe an old namespace: %s", read)
+		}
+	}
+	mu.Unlock()
+	poll(2)
+	require.Len(t, f.m.PBSBackupsSnapshot(), 1, "complete discovery and empty nested enumeration confirm deletion")
+	require.Len(t, f.points(t, instance), 1, "only a complete scan may reconcile old points")
+	require.Zero(t, f.m.pbsBackupCacheTimeFor(instance, key))
+	for _, posture := range f.postures(t) {
+		if posture.SubjectResourceID == f.ids[2] {
+			require.Equal(t, recovery.ProtectionStateProtected, posture.State)
+			require.Len(t, posture.ProviderStates, 1)
+			require.Equal(t, recovery.ProtectionHistoryComplete, posture.ProviderStates[0].HistoryCompleteness)
+		} else {
+			require.Equal(t, recovery.ProtectionStateUnknown, posture.State)
+			require.Empty(t, posture.ProviderStates)
+		}
+	}
+	project("complete")
+	t.Logf("namespace_status=%d complete=%t denied=%t retained_raw=%d stored=%d recovered_raw=1 recovered_stored=1", status, complete, denied, len(raw), wantPoints)
+}
+
+// Focused test callers supply already-known namespace inventories. Production
+// carries actual foreground discovery quality into pollPBSBackupInventory.
+func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
+	observed := make([]pbsBackupDatastore, 0, len(datastores))
+	for _, ds := range datastores {
+		observed = append(observed, pbsBackupDatastore{PBSDatastore: ds})
+	}
+	m.pollPBSBackupInventory(ctx, instanceName, client, pbsBackupInventory{datastores: observed})
 }

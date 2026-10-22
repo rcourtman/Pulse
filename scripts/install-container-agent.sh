@@ -16,9 +16,11 @@ Usage:
 
 Supported options:
   --url <url>             Pulse server URL (required when local install.sh is unavailable)
-  --token <token>         API token
+  --token-file <path>     Read API token from a private file (recommended)
+  --token <token>         API token (legacy; visible in process arguments)
   --interval <duration>   Reporting interval (forwarded)
-  --insecure              Skip TLS verification for self-signed certs
+  --cacert <path>         Verified CA bundle (used for bootstrap and forwarded)
+  --insecure             Forward to a local install.sh only; never disable bootstrap TLS
   --uninstall             Uninstall Pulse agent
   --help                  Show this help message
 
@@ -28,19 +30,37 @@ Notes:
 
   Use install.sh directly with --enable-host=false for an intentional
   workload-only deployment.
+
+  Prefer --token-file to keep the token out of shell history and process
+  arguments. The caller owns the file and its cleanup; do not combine it
+  with --token. File validation remains with install.sh.
+
+  Without a local install.sh, bootstrap requires authenticated HTTPS and a
+  complete HTTP 200 download. Redirects are not followed. For a private CA,
+  use --cacert with a bundle verified independently; do not disable TLS checks.
+  Ambient curl configuration and proxies are ignored during bootstrap.
 USAGE
 }
 
 URL=""
 TOKEN=""
+TOKEN_FILE=""
 INTERVAL=""
+CA_CERT=""
 INSECURE="false"
 UNINSTALL="false"
 
 unsupported_flag() {
-  echo "[ERROR] Unsupported option for v6 wrapper: $1" >&2
+  echo "[ERROR] Unsupported option for v6 wrapper." >&2
   echo "[ERROR] Use install.sh directly for advanced install modes." >&2
   exit 1
+}
+
+require_value() {
+  if [[ $# -ne 2 || -z "$2" || "$2" == --* ]]; then
+    printf '[ERROR] %s requires a non-empty value.\n' "$1" >&2
+    exit 1
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -50,15 +70,28 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     --url)
+      require_value "$1" "${2:-}"
       URL="${2:-}"
       shift 2
       ;;
     --token)
+      require_value "$1" "${2:-}"
       TOKEN="${2:-}"
       shift 2
       ;;
+    --token-file)
+      require_value "$1" "${2:-}"
+      TOKEN_FILE="$2"
+      shift 2
+      ;;
     --interval)
+      require_value "$1" "${2:-}"
       INTERVAL="${2:-}"
+      shift 2
+      ;;
+    --cacert)
+      require_value "$1" "${2:-}"
+      CA_CERT="$2"
       shift 2
       ;;
     --insecure)
@@ -78,6 +111,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ -n "$TOKEN" && -n "$TOKEN_FILE" ]]; then
+  echo "[ERROR] Use either --token-file or --token, not both." >&2
+  exit 1
+fi
+
 forward_args=()
 if [[ -n "$URL" ]]; then
   forward_args+=(--url "$URL")
@@ -85,8 +123,14 @@ fi
 if [[ -n "$TOKEN" ]]; then
   forward_args+=(--token "$TOKEN")
 fi
+if [[ -n "$TOKEN_FILE" ]]; then
+  forward_args+=(--token-file "$TOKEN_FILE")
+fi
 if [[ -n "$INTERVAL" ]]; then
   forward_args+=(--interval "$INTERVAL")
+fi
+if [[ -n "$CA_CERT" ]]; then
+  forward_args+=(--cacert "$CA_CERT")
 fi
 if [[ "$INSECURE" == "true" ]]; then
   forward_args+=(--insecure)
@@ -107,9 +151,52 @@ if [[ -z "$URL" ]]; then
   exit 1
 fi
 
-curl_flags=(-fsSL)
 if [[ "$INSECURE" == "true" ]]; then
-  curl_flags=(-kfsSL)
+  echo "[ERROR] Remote bootstrap requires TLS verification. Use --cacert or a trusted, saved local install.sh." >&2
+  exit 1
 fi
 
-curl "${curl_flags[@]}" "$URL/install.sh" | bash -s -- "${forward_args[@]}"
+# This URL may include a reverse-proxy base path, but not embedded credentials,
+# query/fragment data or controls. Curl still validates the HTTPS authority.
+if [[ ! "$URL" =~ ^[Hh][Tt][Tt][Pp][Ss]:// || "$URL" =~ [[:space:][:cntrl:]] ||
+      "$URL" == *\?* || "$URL" == *\#* || "$URL" == *\\* ]]; then
+  echo "[ERROR] Remote bootstrap requires an https:// URL without credentials, query, fragment or whitespace." >&2
+  exit 1
+fi
+authority="${URL#*://}"
+authority="${authority%%/*}"
+if [[ -z "$authority" || "$authority" == *@* ]]; then
+  echo "[ERROR] Remote bootstrap requires an HTTPS server authority without embedded credentials." >&2
+  exit 1
+fi
+
+# Never pipe a download to a shell: a partial script can execute even when
+# pipefail eventually reports the failed transfer. Keep the file private and
+# remove only this invocation's owned paths on every normal failure/success.
+bootstrap_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-container-bootstrap.XXXXXXXX")"
+installer="$bootstrap_dir/install.sh"
+cleanup_bootstrap() {
+  if [[ -f "$installer" ]]; then rm -- "$installer"; fi
+  rmdir -- "$bootstrap_dir"
+}
+trap cleanup_bootstrap EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+curl_flags=(--disable --fail --silent --show-error --globoff --proto '=https'
+  --noproxy '*' --connect-timeout 5 --max-time 60 --output "$installer"
+  --write-out '%{http_code}')
+if [[ -n "$CA_CERT" ]]; then
+  curl_flags+=(--cacert "$CA_CERT")
+fi
+if ! status="$(umask 077; curl "${curl_flags[@]}" --url "${URL%/}/install.sh" 2>/dev/null)"; then
+  echo "[ERROR] Installer download failed; nothing was executed. Check HTTPS trust and the server address privately." >&2
+  exit 1
+fi
+if [[ "$status" != 200 || ! -s "$installer" ]]; then
+  echo "[ERROR] Installer download was not a complete, non-empty HTTP 200 response; nothing was executed." >&2
+  exit 1
+fi
+
+bash "$installer" "${forward_args[@]}"

@@ -11,6 +11,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func TestKubernetesControlPlaneProxy(t *testing.T) {
+	runKubernetesControlPlaneProxyFixture(t)
+}
+
 func TestKubernetesDestinationBuffersAreIndependent(t *testing.T) {
 	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	defer primary.Close()

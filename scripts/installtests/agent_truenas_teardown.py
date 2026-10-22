@@ -13,7 +13,9 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_TRUENAS_SOURCE", ROOT / "scripts/install.sh"))
@@ -41,12 +43,12 @@ def definitions(source):
     return "\n".join(selected)
 
 
-MODEL = r'''#!/usr/bin/python3
+MODEL = r'''
 import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FIXTURE'])
 path = root / 'model.json'
 v = json.loads(path.read_text())
-role, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
+role, args = sys.argv[1], sys.argv[2:]
 fault = v['fault']
 def save():
     pending = root / 'model.pending'
@@ -141,6 +143,62 @@ save(); print('true')
 '''
 
 
+def write_model_tools(root, tools):
+    # Use the runner's interpreter, not Darwin's unrelated /usr/bin/python3.
+    # These closed models need only stdlib; site startup adds work to every
+    # manager observation and must not change the synthetic failure controls.
+    model = root / "manager-model.py"
+    model.write_text(MODEL)
+    for name in ("midclt", "ps", "systemctl"):
+        tool = tools / name
+        tool.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
+                        + " -I -S " + shlex.quote(str(model)) + " " + name + ' "$@"\n')
+        tool.chmod(0o700)
+
+
+def observed_process_absence(pid_file):
+    # Darwin has no /proc. Missing evidence is not proof of a stopped child.
+    try:
+        pid = int(pid_file.read_text())
+    except (OSError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return False
+
+
+class TrueNASTimingResult(unittest.TextTestResult):
+    def startTest(self, test):
+        self.started = time.monotonic()
+        if not hasattr(self, "suite_started"):
+            self.suite_started = self.started
+        self.subcases = 0
+        self.progress("start", test)
+        super().startTest(test)
+
+    def addSubTest(self, test, subtest, err):
+        self.subcases += 1
+        super().addSubTest(test, subtest, err)
+
+    def stopTest(self, test):
+        super().stopTest(test)
+        self.progress("complete", test)
+
+    def progress(self, phase, test):
+        now = time.monotonic()
+        self.stream.writeln("TrueNAS fixture timing: " + json.dumps(dict(
+            phase=phase, control=test._testMethodName, completed_subcases=self.subcases,
+            suite_seconds=round(now - self.suite_started, 6),
+            control_seconds=round(now - self.started, 6)), sort_keys=True))
+        self.stream.flush()
+
+
 class AgentTrueNASTeardown(unittest.TestCase):
     source = SOURCE.read_text()
 
@@ -149,16 +207,7 @@ class AgentTrueNASTeardown(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tools = root / "tools"; tools.mkdir()
-            models = root / "models"; models.mkdir()
-            for name in ("midclt", "ps", "systemctl"):
-                model = models / name; model.write_text(MODEL)
-                # These closed stdlib models share the interpreter selected by
-                # the containing suite. The host's /usr/bin/python3 may differ
-                # and pays its site startup cost on every observed operation.
-                file = tools / name
-                file.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
-                                + " -I -S " + shlex.quote(str(model)) + ' "$@"\n')
-                file.chmod(0o700)
+            write_model_tools(root, tools)
             if fault == "missing-midclt": (tools / "midclt").unlink()
             for name in ("state", "helper", "profile", "unit"):
                 directory = root / name; directory.mkdir(mode=0o700)
@@ -254,7 +303,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
             events = (root / "events").read_text() if (root / "events").exists() else ""
             after = self.snapshot(root)
             state = json.loads((root / "model.json").read_text())
-            timed_stopped = not (root / "timed-pid").exists() or not Path('/proc/' + (root / "timed-pid").read_text()).exists()
+            timed_stopped = observed_process_absence(root / "timed-pid")
             return result, second, events.splitlines(), before, after, state, timed_stopped
 
     @staticmethod
@@ -396,6 +445,81 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         self.retained(result)
         self.assertTrue(result[6], 'timed middleware child still exists')
 
+    def test_private_models_use_selected_isolated_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="truenas model ") as directory:
+            root = Path(directory)
+            tools = root / "tools"; tools.mkdir()
+            invocations = root / "arguments"
+            interpreter = root / "selected python"
+            interpreter.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> '
+                                   + shlex.quote(str(invocations)) + '\nexec '
+                                   + shlex.quote(sys.executable) + ' "$@"\n')
+            interpreter.chmod(0o700)
+            with mock.patch.object(sys, "executable", str(interpreter)):
+                write_model_tools(root, tools)
+            (root / "sitecustomize.py").write_text(
+                'from pathlib import Path\nPath(' + repr(str(root / "site-ran")) + ').touch()\n')
+            (root / "model.json").write_text(json.dumps(dict(
+                fault="", active="inactive", enabled="disabled", tasks=[], queries=0)))
+            env = dict(os.environ, FIXTURE=str(root), PYTHONPATH=str(root))
+            for name, args in (
+                ("ps", ["-ax", "-o", "pid=", "-o", "ppid=", "-o", "comm=", "-o", "args="]),
+                ("systemctl", ["show", "pulse-agent.service", "--property=LoadState,ActiveState,UnitFileState"]),
+                ("midclt", ["call", "initshutdownscript.query"]),
+            ):
+                result = subprocess.run([str(tools / name), *args], env=env,
+                                        capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stderr, "")
+            recorded = invocations.read_text().splitlines()
+            self.assertEqual(recorded.count("-I"), 3)
+            self.assertEqual(recorded.count("-S"), 3)
+            self.assertEqual(recorded.count(str(root / "manager-model.py")), 3)
+            self.assertFalse((root / "site-ran").exists())
+            self.assertEqual((root / "events").read_text().splitlines(), [
+                "process:read", "unit:read:pulse-agent.service", "task:query"])
+
+    def test_timeout_child_absence_requires_observed_exit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "child-pid"
+            with mock.patch.object(os, "kill") as probe:
+                for value in (None, "", "invalid", "0", "-1"):
+                    if value is not None:
+                        pid_file.write_text(value)
+                    self.assertFalse(observed_process_absence(pid_file))
+                probe.assert_not_called()
+            process = subprocess.Popen(["sleep", "30"])
+            try:
+                pid_file.write_text(str(process.pid))
+                self.assertFalse(observed_process_absence(pid_file))
+                with mock.patch.object(os, "kill", side_effect=PermissionError):
+                    self.assertFalse(observed_process_absence(pid_file))
+            finally:
+                process.terminate()
+                process.wait(timeout=3)
+            self.assertTrue(observed_process_absence(pid_file))
+
+    def test_timing_reports_control_and_cumulative_progress(self):
+        import io
+
+        class Control(unittest.TestCase):
+            def test_control(self):
+                with self.subTest():
+                    self.assertTrue(True)
+
+        stream = io.StringIO()
+        result = unittest.TextTestRunner(stream=stream, verbosity=2, resultclass=TrueNASTimingResult).run(
+            unittest.defaultTestLoader.loadTestsFromTestCase(Control))
+        self.assertTrue(result.wasSuccessful())
+        records = [json.loads(line.split("timing: ", 1)[1])
+                   for line in stream.getvalue().splitlines() if line.startswith("TrueNAS fixture timing: ")]
+        self.assertEqual([r["phase"] for r in records], ["start", "complete"])
+        self.assertEqual([r["completed_subcases"] for r in records], [0, 1])
+        for record in records:
+            self.assertEqual(record["control"], "test_control")
+            self.assertGreaterEqual(record["suite_seconds"], record["control_seconds"])
+        self.assertGreaterEqual(records[-1]["control_seconds"], records[0]["control_seconds"])
+
 
 if __name__ == '__main__':
-    unittest.main(verbosity=2)
+    unittest.main(testRunner=unittest.TextTestRunner(verbosity=2, resultclass=TrueNASTimingResult))

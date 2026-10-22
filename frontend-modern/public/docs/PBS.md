@@ -39,6 +39,25 @@ only for extra local telemetry such as SMART and temperatures; see
 
 ## Setting Up Direct PBS Connection
 
+### Before changing an existing connection
+
+Check **Settings → Infrastructure** for an existing PBS connection before
+running setup again. PBS shows a token's secret only when it is created;
+listing an existing token does not recover that secret.
+
+| What you already have | Safe next step |
+| --- | --- |
+| A saved Pulse connection using an API token | Edit that connection rather than removing and re-adding it. Keep **API Token** selected and **Token ID** unchanged. Leave **Token Value** blank to keep the stored secret; blank does not clear it. Keep the existing TLS verification and fingerprint unless you are deliberately updating trust. |
+| The token ID and its privately saved secret, for an intentional new connection | Choose **API Token → Manual Token Setup** and enter both values as described [below](#method-1-api-only-connection-recommended). Token creation is not needed. |
+| An existing token, but no saved secret or saved Pulse connection to reuse | Stop setup. Do not delete or recreate that token: another reader may still depend on it. Arrange a separate, distinctly named, least-privilege `Audit` token for the new reader instead of revoking the existing one. |
+
+Changing **Token ID** is a credential change and requires the corresponding
+secret; leaving **Token Value** blank cannot move a saved secret to another ID
+or a new connection. Do not switch to **Username & Password** or rerun assisted
+setup to recover a secret. If monitoring has failed, use the
+[connection checks](#connection-failed-error) with the existing configuration;
+replacing a token is not a diagnosis.
+
 ### Method 1: API-Only Connection (Recommended)
 
 Use a dedicated PBS monitoring user and token, not a root password. On a new
@@ -203,6 +222,11 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 
 ## Troubleshooting
 
+If the service's **State** looks Healthy despite a collection error, distinguish
+[connection state from complete collection](TROUBLESHOOTING.md#pbs-or-mail-gateway-state-disagrees-with-a-failed-read)
+before changing the connection. A green State is not current datastore, job or
+guest-recovery evidence.
+
 ### PBS is Active but missing from monitoring
 
 **Active** in **Settings → Infrastructure** describes the configured
@@ -216,7 +240,7 @@ Use the existing views to distinguish what is missing:
 | Observation | Where to look next |
 | --- | --- |
 | The PBS server itself is missing | Open **Proxmox → Backups** and look for its **Backup server** row. Note any existing search or view filter. The PBS VM/LXC in **Overview** is a different resource. If Proxmox navigation is absent too, retain that fact. |
-| The server row exists, but datastores or backups are missing | Compare the affected view with the connection's existing collection scope. PVE passthrough backups do not establish that direct PBS inventory is available. Do not widen permissions or change scope just to diagnose the gap. |
+| The server row exists, but datastores or backups are missing | Check the [affected datastore and namespace](#one-pbs-namespace-is-missing-or-stops-changing). PVE passthrough backups do not establish that direct PBS inventory is available. Do not widen permissions or change scope just to diagnose the gap. |
 | Current readings exist, but a chart is empty | Use the [PBS History checks](#pbs-is-connected-but-history-stays-empty) for that server and time range. An empty chart is not the same as a missing server. |
 
 When reporting a missing server, keep the Pulse server version separate from
@@ -233,6 +257,43 @@ These actions can lose evidence or change the affected path. Keep certificate
 verification and existing access restrictions intact. If the original incident
 also involved an unresponsive guest or uncertain freeze/thaw, follow
 [Backup safety](VM_DISK_MONITORING.md#backup-safety) before any live checks.
+
+### One PBS namespace is missing or stops changing
+
+**A fresh sibling namespace does not prove that this namespace was read.**
+A PBS poll can succeed for one scope and fail for another. A visible older
+row is not a fresh inventory result, and a missing row does not establish
+that PBS deleted the backup.
+
+In **Proxmox → Backups → By date**, keep the current search and location filter
+with your observation, then clear them to distinguish a hidden row from a
+missing one. Match **Source** and **Location** with the existing PBS record:
+owning server, datastore, full namespace path (including root), guest type/ID
+and backup time. Root and nested namespaces are different scopes; the same
+guest ID in a sibling namespace is not the same stored backup. Use the
+[copy checks](#duplicate-backups) if two collection paths show the same point.
+
+| Existing evidence | What it means |
+| --- | --- |
+| PBS lists the expected point, but Pulse lacks it or shows only older points | An inventory disagreement, not proof that the backup failed. Keep the affected scope distinct from a sibling that refreshed. |
+| The scope's last read failed or timed out | Its current inventory is unknown. Retained rows can describe an earlier read; their presence is not proof of current collection or protection. |
+| Access to that scope was rejected | Missing rows are not evidence of an empty namespace. Preserve the intended access boundary; do not grant broader access to make the list agree. |
+| A successful read returned no points | That result applies only to the exact scope and filters read, not its parent, children, siblings or the whole datastore. |
+
+**Created** is the backup's time, not the time Pulse last read its namespace.
+An advancing connection time, a changing “ago” label or an OK job elsewhere
+cannot supply the missing read result. If no scope-specific error or collection
+time is available, keep it unknown rather than running a request to obtain one.
+
+For help, retain one affected scope and, if already observed, one working
+sibling, the original time, running Pulse/PBS versions, Source/Location,
+filters and relevant redacted error. Use consistent aliases that preserve the
+namespace hierarchy; keep full inventories, logs, tokens and private paths out
+of public reports. Existing observations are enough: do not run Diagnostics,
+retry the poll, restart, recreate the connection or change permissions,
+retention or backups as a test. Use PBS's existing records meanwhile; see
+[backup health](#backups-are-visible-but-coverage-says-unprotected) separately
+for a Coverage disagreement.
 
 ### "Connection Failed" Error
 
@@ -506,6 +567,45 @@ Pulse Agent's stored History request. Restarting that guest is not a diagnosis
 of an empty PBS chart. See [VM Disk Monitoring](VM_DISK_MONITORING.md) if the
 separate symptom is missing filesystem information in a PVE VM row.
 
+### Backup-age alerts name a deleted or renamed guest
+
+PBS can retain backups after a VM or container has been removed. A retained
+backup is not evidence that the guest is still running, and a last-known name
+or location does not prove live ownership. With orphaned-backup alerts enabled,
+those retained backups can still reach the configured age threshold. A wrong
+node on a **live** guest is a separate attribution problem; use the
+[cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations),
+not an ignore rule to hide it.
+
+Keep the intended policy unchanged while diagnosing. If you deliberately want
+to change which retained backups raise age alerts, the existing controls are
+under **Alerts → Thresholds → Proxmox → Recovery** (called **Proxmox Backups**
+in older versions). Expand Recovery and find **Orphaned backups**:
+
+- Its **Alerts** switch applies to **all orphaned guests**, not just the named
+  guest. Turning it off is suppression, not a repaired identity or successful
+  backup. It does not delete the stored backups or History.
+- **Ignore VMIDs** also excludes **live guests with the same VMID**, across
+  connected installations. A trailing `*` matches a VMID prefix. Do not use this
+  global filter to silence only one guest when another installation reuses its
+  ID; it would remove that other guest's backup-age protection too.
+
+Save an intentional policy change with **Save changes**, then observe ordinary
+polling. Do not treat an old received message or a retained History entry as a
+new firing, or a disappeared alert as proof that backups are healthy. If new
+notifications continue despite the intended saved policy, or the corresponding
+active alert cannot be found, retain that as an unresolved alerting problem.
+
+For a report, use the already-received message's time and the affected view
+(**Alerts → Overview**, History, or notification only), plus the saved orphan
+policy if already known. Use consistent aliases for the source, guest type/VMID
+and datastore/namespace; share only the relevant redacted facts, not a full
+payload or queue export. Do not edit Pulse's state files or databases, and do
+not delete backups, clear History, rename/re-add sources or restart to clear
+the symptom. No new backup, guest-agent probe, notification test or queue replay
+is needed. An unresponsive guest needs the separate [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+procedure, not an alert-policy change.
+
 ### Slow Backup Loading
 
 A slow backup list does not establish an encrypted-datastore or PVE-proxy
@@ -552,12 +652,37 @@ a loaded list or an OK task is not proof of restore readiness or guest thaw.
 
 ### Duplicate Backups
 
-Check the source, datastore, namespace, guest type/ID and backup time on each
-entry. Independent PVE installations can reuse a guest ID; matching VMIDs alone
-are not proof of a duplicate. Keep both records while checking their origin.
-If the same backup remains listed twice, report those redacted distinctions and
-whether each entry came from direct PBS or PVE passthrough. Do not delete backups
-or change retention to hide a display problem.
+**Matching names, VMIDs and backup times do not prove that two rows are the
+same stored copy.** Open **Proxmox → Backups → By date** and compare **Source**
+and **Location**, keeping any search or location filter with the observation.
+Use the provider's existing inventory in an authorised session to distinguish:
+
+| Existing evidence | How to interpret it |
+| --- | --- |
+| Two PVE nodes each have node-local storage named `local`, with the same archive filename | These can be independent stored copies, even within one cluster. Compare the **storage node**, not just the guest's current node: a guest can migrate without moving its older backup files. |
+| The same archive on genuinely shared PVE storage is visible through several nodes | Several observations can refer to one stored copy. A common storage name alone does not establish that the storage is shared; use its existing PVE configuration. |
+| Direct PBS and a PBS-backed PVE storage both show the same point | They can be two collection paths to one PBS snapshot. Match the owning PBS server, datastore, namespace, guest type/ID and backup time before treating them as duplicates. |
+
+Keep independent PVE installations separate too: they can reuse node names,
+storage names and VMIDs. If Pulse does not show a storage node or other needed
+distinction, retain it as **unknown**, not proof of shared storage or a safe
+copy to remove. A Location filter changes the view, not what exists on disk.
+One row does not prove that there is only one copy, and two rows do not prove
+two independent recovery options.
+
+**A missing row after a collection error is not a deletion receipt.** An empty
+inventory on one node does not establish that another node's local archive is
+gone. Compare the original location and time with existing provider records;
+do not rerun a backup or rescan repeatedly just to make the rows agree.
+
+If the discrepancy remains, add the affected view/filter, Source and Location,
+owning installation, storage node or known shared-storage relationship, guest
+type/ID, backup time and any existing collection error to the existing report.
+Use consistent aliases for private names and paths; unknown is valid. Do not
+attach a full inventory, rename storage, migrate a guest, delete backups or
+change retention to hide a display problem. Row counts do not establish restore
+readiness or guest thaw; use [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+for an unresponsive guest or uncertain freeze/thaw, not these display checks.
 
 If overlapping VMIDs also coincide with wrong-node errors or lost agent-backed
 Docker monitoring after adding another Proxmox connection, use the

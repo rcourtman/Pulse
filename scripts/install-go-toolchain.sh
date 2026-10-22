@@ -10,29 +10,66 @@ GOPATH_DIR="/var/lib/pulse/go"
 CACHE_DIR="/var/cache/pulse/go-build"
 TMP_DIR="/var/cache/pulse/tmp"
 
-if [[ ! -f "$VERSION_FILE" ]]; then
-  echo "$DEFAULT_VERSION" | sudo tee "$VERSION_FILE" >/dev/null
+VERSION="$DEFAULT_VERSION"
+if [[ -f "$VERSION_FILE" ]]; then
+  VERSION="$(cat "$VERSION_FILE")"
+  VERSION="${VERSION%$'\r'}"
 fi
-VERSION="$(tr -d '
+# This value becomes both a URL component and a privileged install path.
+# Do not turn a malformed or multiline pin into a different version/path.
+if [[ ! "$VERSION" =~ ^go[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid Go toolchain pin: expected goX.Y.Z in scripts/.go-version" >&2
+  exit 1
+fi
 
-' < "$VERSION_FILE")"
 ARCHIVE="${VERSION}.linux-amd64.tar.gz"
-DOWNLOAD_DIR="${TMPDIR:-/tmp}/go-install"
+# Never consume a cached archive from a predictable, possibly shared directory.
+# The private directory also keeps the archive and digest together until use.
+DOWNLOAD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pulse-go-install.XXXXXXXX")"
 ARCHIVE_PATH="$DOWNLOAD_DIR/$ARCHIVE"
 SHA_PATH="$ARCHIVE_PATH.sha256"
 
-mkdir -p "$DOWNLOAD_DIR"
+cleanup_download() {
+  local result=$?
+  trap - EXIT HUP INT TERM
+  if ! rm -rf -- "$DOWNLOAD_DIR"; then
+    echo "Could not remove the private Go download directory" >&2
+    if [[ "$result" == 0 ]]; then
+      result=1
+    fi
+  fi
+  exit "$result"
+}
+trap cleanup_download EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-if [[ ! -f "$ARCHIVE_PATH" ]]; then
-  curl -fsSL "$DOWNLOAD_ROOT/$ARCHIVE" -o "$ARCHIVE_PATH"
+download_go_asset() (
+  umask 077
+  curl --disable --fail --silent --show-error --location \
+    --proto '=https' --proto-redir '=https' --noproxy '*' \
+    --connect-timeout 5 --max-time "$3" \
+    "$DOWNLOAD_ROOT/$1" --output "$2"
+)
+
+download_go_asset "$ARCHIVE" "$ARCHIVE_PATH" 300
+download_go_asset "$ARCHIVE.sha256" "$SHA_PATH" 60
+
+CHECKSUM="$(cat "$SHA_PATH")"
+CHECKSUM="${CHECKSUM%$'\r'}"
+if [[ ! "$CHECKSUM" =~ ^[a-fA-F0-9]{64}$ ]]; then
+  echo "Invalid Go archive checksum response" >&2
+  exit 1
 fi
-curl -fsSL "$DOWNLOAD_ROOT/$ARCHIVE.sha256" -o "$SHA_PATH"
-
-CHECKSUM="$(tr -d '
-
-' < "$SHA_PATH")"
-printf '%s  %s
-' "$CHECKSUM" "$ARCHIVE_PATH" | sha256sum -c -
+# Hash stdin rather than a filename, so even a TMPDIR with spaces/newlines
+# cannot become checksum-file syntax. Both downloads must succeed first.
+ACTUAL_CHECKSUM="$(sha256sum < "$ARCHIVE_PATH")"
+ACTUAL_CHECKSUM="${ACTUAL_CHECKSUM%% *}"
+if [[ "$ACTUAL_CHECKSUM" != "${CHECKSUM,,}" ]]; then
+  echo "Go archive checksum mismatch; refusing installation" >&2
+  exit 1
+fi
 
 sudo mkdir -p "$TARGET_ROOT"
 sudo rm -rf "$TARGET_ROOT/$VERSION"

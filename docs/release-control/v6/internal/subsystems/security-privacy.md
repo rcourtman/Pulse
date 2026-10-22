@@ -18,90 +18,119 @@
 
 ## Purpose
 
-### Restricted outbound connections keep approved destinations pinned
+### Apprise subprocess output is counted without capture
 
-`pkg/securityutil/outbound_http.go` owns restricted HTTP destination validation,
-redirect policy and DNS pinning. `pkg/securityutil/pinned_dial.go` owns shared
-numeric-address connection scheduling, including notification callers. The
-dialer never resolves a hostname or expands destination permissions. Callers
-must validate every candidate before handing it over.
+The fixed CLI sender drains both output streams into a constant-space byte
+counter. Provider output, which may contain credentials or private alert text,
+is neither accumulated for diagnostics nor retained in an `exec.ExitError`.
+Only the total byte count reaches existing structured logs. Executable choice,
+exact target/payload arguments, context cancellation, typed failures, retry
+policy and ordinary delivery verdicts are unchanged. A one-second additional
+pipe-drain limit prevents inherited stdout/stderr from retaining a sender after
+the main process exits or its context expires; incomplete drain fails without
+retaining output. It does not terminate or sandbox a provider's descendants.
+`apprise_pipe_wait_test.go` covers inherited streams and typed failures, and
+`apprise_exec_test.go` exercises
+real synthetic process pipes and exit/cancellation paths; existing CLI
+confidentiality and firing/recovery/Test controls preserve their assertions.
+This is output-memory isolation, not a provider sandbox or installed-delivery
+proof; historical logs and other subprocesses are outside this change.
 
-The primitive validates and normalises numeric IPs, rejects malformed input,
-deduplicates equivalent IPv4 forms, respects the requested TCP address family,
-and races at most two staggered serial workers under one positive connection
-timeout. Remaining time is shared among each worker's remaining candidates.
-Caller cancellation cancels in-flight work. A successful connection cancels
-competitors and closes any late successful loser without writing an HTTP
-payload to it. Transport TLS and destination-policy checks remain in place.
+### Single-alert response failures do not echo diagnostics
 
-`pkg/securityutil/pinned_dial_test.go` verifies family fallback, later-address
-budget, concurrency, cancellation, late-connection closure, numeric-only input
-and error preservation. Notification loopback controls exercise both clients
-against a real stalled TCP address and a healthy receiver. The registry routes
-both shared runtime files to these controls and the existing outbound policy
-tests, keeping this primitive owned without moving notification allowlisting.
+Client admission of acknowledgement/restore/snooze/resume bodies requires the
+existing affirmative marker and, for snooze, the requested expiry. An error
+field conflicts with success. Rejected bodies produce input-free uncertainty;
+the existing translated failure consumer never echoes response diagnostics.
+`alertActionConfirmation.test.tsx` covers contradictory bodies and preserved
+transport failures; `alert-action-confirmation.cjs` verifies no diagnostic text
+reaches the actual overview/toast consumer in English, German and Spanish.
+No authentication, scope, CSRF, mutation transport, persistence or actor changes.
 
-### Reporting usage remains content-free and distinguishable from missing measurements
+### PBS response failures do not copy credential-bearing provider bodies
 
-`internal/config/reporting_activity.go` is the canonical durable count store.
-It retains 30 UTC-day buckets of closed report kinds and outcomes. Local opaque
-schedule/period SHA-256 markers expire after 90 days and use existing config
-storage encryption when configured. No raw report, recipient, schedule, scope,
-organization identifier, range or error content enters the tally. Only schema
-v20 scalar counters, measurement availability and elapsed observation days leave
-the installation through the existing opt-out-controlled heartbeat. Local tally
-errors never fail reporting. Mock mode never records real reporting activity.
+Authentication/API failure errors retain status and fixed local diagnostics,
+not response bodies or arbitrary body-read error text. Token-creation decoder
+and missing-value errors also exclude the complete successful response, which
+may already contain a one-time secret. Typed classification preserves form
+fallback, permission/not-found/cache handling and non-destructive collision
+behaviour. See the [monitoring contract](monitoring.md#pbs-response-failures-are-not-diagnostic-payloads)
+for exact synthetic transport, pinned-TLS ingress and real Logs-consumer proof.
+No live credential, permission, TLS or provider operation is changed by these
+controls. Other transport diagnostics, successful provider fields and previous
+logs are not certified public-safe.
 
-Generation counts include separate attempts and complete direct response writes.
-Distinct successful-generation days measure activity, including manual downloads
-and scheduled retries, with same-day attempts counted once. Multiple days alone
-cannot establish a fresh successful period or returning manual use. The adoption
-summary keeps multi-day generation separate from successful repeat periods.
-Saved files, SMTP acceptance, definite failures and uncertain acceptance remain
-separate. Persisted successful saved-schedule windows count once. A successful
-repeat period requires a different window on that schedule within 90 days,
-including monthly reuse, so retries and same-period reruns do not inflate that
-period metric. The aggregate
-query uses only each eligible rotating ID's latest counts and marks old-schema,
-missing-column and unavailable-tally data unmeasured. Elapsed observation days do
-not establish continuous uptime, and SMTP acceptance does not prove inbox receipt.
-No customer/account joins or paying-customer census are permitted.
+### Issue label automation does not inherit the App's full grant
 
-`internal/config/reporting_activity_test.go`,
-`internal/api/reporting_activity_test.go`, the telemetry payload/disclosure tests,
-the server snapshot tests and the adoption-report tests verify this boundary.
-Both privacy document copies and `docs/releases/TELEMETRY_SCHEMA_V20.md` disclose
-the payload. Client source landing and compatible receiver activation remain
-separate from release and installed fleet measurement.
+`issue-version-label-sync.yml` requests a short-lived App token for only
+`rcourtman/Pulse`, with `permission-issues: write`. It must not inherit the
+installation's source, Actions, administration or other repository grants.
+GitHub's implicit metadata read remains necessary. The pinned token action's
+normal post-job revocation remains enabled. Parser checks still precede minting;
+read-only job permissions, no persisted checkout credential, and disabled
+credential-job caching are unchanged. This does not alter the App installation
+or any other maintainer identity's authority.
 
+`triage-comment-policy.test.cjs` checks the actual issuer's exact input map and
+rejects omitted, wider, duplicate and misplaced grants. The restricted-client
+control in `issue-version-triage.test.cjs` runs the real helper's issue reads,
+label creation/addition/removal and delayed event-history consumer without
+source or Actions APIs. Source proof is not provider token issuance or live
+issue-mutation acceptance; the published workflow's next issue event supplies
+that separate observation.
 
-### Investigation evidence retains tenant and runtime-source boundaries
+### Private lifecycle values cannot lose NUL bytes through a shell
 
-Recovery HTTP and tool reads share `Manager.ListPointsForOrg`: a nonblank tenant
-is required, cancellation and read failures remain errors, and ordinary reads
-use that tenant's cached store. The optional demo source follows the current
-fixture graph and never merges persisted tenant rows into demo evidence. The
-real-to-demo-to-real regression checks both consumers and retained store data;
-the persisted task regression excludes another tenant and another guest with
-the same provider VM ID. Historical storage reads preserve source labels and
-requested time bounds. These read paths add no credential, execution or approval
-authority.
+The descriptor-safe Go reader rejects any NUL before returning a private value
+or initializing an authenticated lifecycle client. `collector-read-token`
+therefore fails without credential output instead of letting Bash silently
+remove bytes and select another credential. Errors do not include the value.
+Existing size, no-follow, regular-file, mode/owner checks and whitespace
+normalization remain in place; no token precedence, trust or transport policy
+changes. Reader/client, CLI-output and actual Unix-ingress controls are recorded
+in the [agent lifecycle contract](agent-lifecycle.md#the-descriptor-safe-credential-reader-rejects-nul-before-output).
+They do not establish standalone binary, native installation or release use.
 
-### Reports and metric summaries read only the requesting organization
+### Unsupported agent-installer arguments are not diagnostic content
 
-The server's report engine (`pkg/server/server.go`) resolves the metrics store
-of each request's organization through the multi-tenant monitor
-(`EngineConfig.MetricsStoreForOrg`) and refuses a request that names no
-organization, so no report path falls back to the default organization's
-store. Report handlers also reject a resource that is not in the requesting
-organization's inventory, scheduled runs resolve their scope against their
-owning organization's inventory, and Pulse Assistant's `pulse_summarize`
-reads its executor's organization. A resource ID that exists in two
-organizations yields each organization only its own history.
-`internal/api/reporting_org_scope_test.go`,
-`TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics`,
-`pkg/reporting/engine_org_scope_test.go` and
-`TestSummarizeToolReadsOnlyItsOrganizationsMetrics` hold this boundary.
+The Unix agent parser must not echo an unrecognised option or stray value:
+it may contain a miscopied credential, private path, URL password or terminal
+control characters. Both text and JSON errors use a fixed message and exit 16
+without prompting or reaching credential/host work. The shipped-script controls
+in `agent_argument_errors.py` and its Go hook exercise those inputs and preserve
+caller files. Other installer/runtime diagnostics are not claimed to be
+sanitised; credential selection, redaction, TLS and lifecycle policy are unchanged.
+
+### Unix lifecycle fallback credentials are transient
+
+The agent installer's lifecycle scope owns only the temporary mode-0600 bearer
+it creates when no saved runtime/configured/bootstrap file is selected. It arms
+EXIT/INT/TERM cleanup before writing the secret and keeps that cleanup local to
+the call, including command substitutions. Retained credentials and caller-owned
+staging are not deletion authority. Existing binary trust, TLS and private-file
+argv boundaries stay intact; inability to remove the owned file cannot report
+command success. `TestInstallSHLifecycleTemporaryTokenCleanup` checks production
+selection/cleanup against closed peers, including adverse cleanup and preserved
+saved files. This is not a SIGKILL/power-loss or native recovery guarantee.
+
+### Repeated PVE installer registration cannot revoke an existing token
+
+Automatic root-installer registration treats an existing deterministic monitoring
+token as a stop condition, not authority to delete/recreate it. No token-scoped
+ACL or registration POST follows that collision. Its one-time secret and any
+previous working or unconfirmed registration remain intact; fixed guidance
+mentions the node and a separate installation's own token, never raw PVE output
+or credentials. User/role provisioning and deliberate manual setup remain
+separate. This does not establish native monitoring or installed recovery.
+
+The real-curl/closed-PVE caller matrix in `pve_auto_register_response.py` retains
+modern/legacy replies, four collision diagnostics and repeated explicit calls,
+checking modelled token state and zero destructive/token-ACL/registration work.
+`TestRootInstallAutoRegisterPreservesExistingDeterministicToken` pins the
+producer boundary; existing credential confidentiality, TLS and bootstrap
+non-replay controls are unchanged and remain required. The TLS ordering control
+must check the remaining setup/create/ACL operations and explicitly reject token
+removal, rather than requiring that deleted operation to exist.
 
 ### Conflicting saved endpoint pins cannot select certificate trust
 
@@ -225,7 +254,7 @@ PBS, Windows guest, restart or workload-safety incident.
 
 ### Rejected infrastructure URLs stay out of diagnostics
 
-PVE/PBS constructors validate a host before logging it. URL syntax errors omit
+PVE/PBS/PMG constructors validate a host before logging it. URL syntax errors omit
 `url.Parse`'s copy of the supplied input; ordinary validation reasons remain.
 Cluster logs, health snapshots, recovery summaries and aggregate errors use
 display-only labels:
@@ -240,8 +269,105 @@ base paths, authentication, CA/pin/opt-out choices and guest fences are unchange
 constructors, single/multiple endpoint routing and recovery with synthetic
 userinfo/query/fragment and malformed URLs. Accepted-host and
 `TestInfrastructureURLValidationPolicyUnchanged` controls preserve ordinary
-routing and diagnostics. This bounds client diagnostics, not arbitrary provider
-error text, previously saved logs, native trust recovery or an installed service.
+routing and diagnostics. Initial add/test request logs and saved-provider client
+initialisation (including the cluster endpoint list and refusal logs) use the
+same display-only labels; filtering never changes the supplied configuration.
+`TestNodeRequestEndpointDiagnosticsExcludeRejectedInput` exercises the ingress
+handlers before credentials are supplied, and
+`TestMonitorClientInitEndpointDiagnostics` exercises all three real
+constructors through saved-provider initialisation. Parseable saved input keeps
+its existing configuration normalisation; malformed syntax stays refused.
+Controls retain routing, client registration and the existing health outcomes,
+including PBS awaiting its first connectivity poll. The saved-PMG refusal test preserves
+the exact generic HTTP response while excluding raw parser input from its
+internal error. This bounds these diagnostics, not arbitrary provider error
+text, other log paths, previously saved logs, native trust recovery or an
+installed service.
+
+### Restricted outbound connections keep approved destinations pinned
+
+`pkg/securityutil/outbound_http.go` owns restricted HTTP destination validation,
+redirect policy and DNS pinning. `pkg/securityutil/pinned_dial.go` owns shared
+numeric-address connection scheduling, including notification callers. The
+dialer never resolves a hostname or expands destination permissions. Callers
+must validate every candidate before handing it over.
+
+The primitive validates and normalises numeric IPs, rejects malformed input,
+deduplicates equivalent IPv4 forms, respects the requested TCP address family,
+and races at most two staggered serial workers under one positive connection
+timeout. Remaining time is shared among each worker's remaining candidates.
+Caller cancellation cancels in-flight work. A successful connection cancels
+competitors and closes any late successful loser without writing an HTTP
+payload to it. Transport TLS and destination-policy checks remain in place.
+
+`pkg/securityutil/pinned_dial_test.go` verifies family fallback, later-address
+budget, concurrency, cancellation, late-connection closure, numeric-only input
+and error preservation. Notification loopback controls exercise both clients
+against a real stalled TCP address and a healthy receiver. The registry routes
+both shared runtime files to these controls and the existing outbound policy
+tests, keeping this primitive owned without moving notification allowlisting.
+
+### Reporting usage remains content-free and distinguishable from missing measurements
+
+`internal/config/reporting_activity.go` is the canonical durable count store.
+It retains 30 UTC-day buckets of closed report kinds and outcomes. Local opaque
+schedule/period SHA-256 markers expire after 90 days and use existing config
+storage encryption when configured. No raw report, recipient, schedule, scope,
+organization identifier, range or error content enters the tally. Only schema
+v20 scalar counters, measurement availability and elapsed observation days leave
+the installation through the existing opt-out-controlled heartbeat. Local tally
+errors never fail reporting. Mock mode never records real reporting activity.
+
+Generation counts include separate attempts and complete direct response writes.
+Distinct successful-generation days measure activity, including manual downloads
+and scheduled retries, with same-day attempts counted once. Multiple days alone
+cannot establish a fresh successful period or returning manual use. The adoption
+summary keeps multi-day generation separate from successful repeat periods.
+Saved files, SMTP acceptance, definite failures and uncertain acceptance remain
+separate. Persisted successful saved-schedule windows count once. A successful
+repeat period requires a different window on that schedule within 90 days,
+including monthly reuse, so retries and same-period reruns do not inflate that
+period metric. The aggregate
+query uses only each eligible rotating ID's latest counts and marks old-schema,
+missing-column and unavailable-tally data unmeasured. Elapsed observation days do
+not establish continuous uptime, and SMTP acceptance does not prove inbox receipt.
+No customer/account joins or paying-customer census are permitted.
+
+`internal/config/reporting_activity_test.go`,
+`internal/api/reporting_activity_test.go`, the telemetry payload/disclosure tests,
+the server snapshot tests and the adoption-report tests verify this boundary.
+Both privacy document copies and `docs/releases/TELEMETRY_SCHEMA_V20.md` disclose
+the payload. Client source landing and compatible receiver activation remain
+separate from release and installed fleet measurement.
+
+
+### Investigation evidence retains tenant and runtime-source boundaries
+
+Recovery HTTP and tool reads share `Manager.ListPointsForOrg`: a nonblank tenant
+is required, cancellation and read failures remain errors, and ordinary reads
+use that tenant's cached store. The optional demo source follows the current
+fixture graph and never merges persisted tenant rows into demo evidence. The
+real-to-demo-to-real regression checks both consumers and retained store data;
+the persisted task regression excludes another tenant and another guest with
+the same provider VM ID. Historical storage reads preserve source labels and
+requested time bounds. These read paths add no credential, execution or approval
+authority.
+
+### Reports and metric summaries read only the requesting organization
+
+The server's report engine (`pkg/server/server.go`) resolves the metrics store
+of each request's organization through the multi-tenant monitor
+(`EngineConfig.MetricsStoreForOrg`) and refuses a request that names no
+organization, so no report path falls back to the default organization's
+store. Report handlers also reject a resource that is not in the requesting
+organization's inventory, scheduled runs resolve their scope against their
+owning organization's inventory, and Pulse Assistant's `pulse_summarize`
+reads its executor's organization. A resource ID that exists in two
+organizations yields each organization only its own history.
+`internal/api/reporting_org_scope_test.go`,
+`TestReportingScheduledRunReadsOnlyItsOwningOrganizationsMetrics`,
+`pkg/reporting/engine_org_scope_test.go` and
+`TestSummarizeToolReadsOnlyItsOrganizationsMetrics` hold this boundary.
 
 ### Patrol maintenance coverage widens no authority
 
@@ -294,6 +420,36 @@ monitoring-only scopes/commands and ordinary process identity continuity.
 Neither this local journey nor a credential's inventory entry establishes
 authentication or recovery of an unobserved installed agent.
 
+### Plaintext infrastructure credentials are never ambient-proxy traffic
+
+The shared `tlsutil.CreateHTTPClientWithTimeout` transport sends explicit HTTP
+requests directly to their configured infrastructure endpoint, including public
+DNS names and public-address literals. An inherited `HTTP_PROXY` cannot become
+a plaintext recipient of API tokens, tickets, CSRF headers or JSON/form login
+bodies. This follows the existing host/Kubernetes agent plaintext boundary;
+local-address classification alone was insufficient for publicly named targets.
+Explicit HTTP remains supported and unencrypted, not recommended or made safe
+against network observers. A deployment that depended on a forward HTTP proxy
+must instead use a direct path or verified HTTPS; no new proxy setting is added.
+
+HTTPS retains environment CONNECT proxying/authentication and `NO_PROXY`, the
+local-infrastructure bypass, CA/leaf-pin verification and explicit opt-out modes.
+DNS, Host/base-path/query and authentication bytes, URL admission, timeouts,
+connection bounds, redirects and guest/backup admission do not change.
+`client_proxy_test.go` in `pkg/tlsutil` exercises real HTTP and CONNECT/TLS over
+owned in-memory pipes, including public/private IPv4/IPv6 and DNS targets,
+token/ticket/password encodings, trusted CA, matching/wrong pins, untrusted TLS,
+explicit opt-out, local bypass and `NO_PROXY`. Invalid TLS carries no credential
+request. Environment proxy credentials never enter the infrastructure request.
+
+Adjacent `TestClientPlaintextProxyRouting` tests retain each actual PVE/PBS/PMG
+constructor's transport and exercise token reads, seeded password JSON/form
+login, ordinary node/version reads and fixture-only ticket/CSRF writes at three
+public-style authorities. The production request/authentication code supplies
+the bytes; no listener, DNS, socket, provider or installed service is used.
+These are source confidentiality controls, not installed trust recovery,
+field incident attribution, a changed rendered state or native guest safety.
+
 ### Infrastructure credentials remain within the configured HTTP origin
 
 The shared `tlsutil.CreateHTTPClientWithTimeout` transport permits redirects
@@ -306,8 +462,9 @@ case remains significant. The existing ten-redirect limit and same-origin
 proxy path/query redirects remain supported.
 
 System CA checks, configured leaf pins, the TLS floor, explicit verification
-opt-outs, initial HTTP configuration, DNS/proxy routing and independent cluster
-member admission do not change. Guest-agent commands and backup-lock evidence
+opt-outs, initial HTTP configuration, DNS routing and independent cluster
+member admission do not change. Ambient plaintext proxying follows the direct-HTTP
+boundary above; HTTPS proxy routing is unchanged. Guest-agent commands and backup-lock evidence
 retain their stricter no-redirect policy, including same-origin redirects; an
 ordinary read's policy cannot admit a redirected guest command.
 
@@ -810,6 +967,12 @@ with missing, unknown, or unrelated scopes fail closed.
 18. `pkg/extensions/audit_admin.go` shared with `api-contracts`: the enterprise audit endpoint and canonical store configuration seam is both a security persistence trust boundary and a canonical API extension contract.
 
 ## Extension Points
+
+The localized Alerts Overview notification-status notice uses only fixed
+observation-unavailable copy. It must not interpolate API error bodies,
+destination credentials or endpoints, nor turn an unreadable diagnosis into
+a delivery-failure or delivery-success claim. Alert catalog changes preserve
+all security terms and token/privacy strings unchanged.
 
 The agent-lifecycle-owned `internal/collectorlifecycle/` package and
 `cmd/pulse-agent/collector_lifecycle.go` are the security boundary for
@@ -1397,6 +1560,23 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
     `TestStartupWatchdogLogsPhaseAndStack` in `pkg/server/service_health_test.go`.
 
 ## Current State
+
+### Dashboard state-delivery liveness boundary
+
+Public health retains only its existing status, timing and dependency fields
+when state delivery stalls. It returns 503 with a false websocket dependency
+without reading a tenant's state, naming a tenant or endpoint, or starting new
+getter work. Initial/requested state failure uses generic retryable WebSocket
+close 1013, never auth close 1008; late abandoned results are discarded and
+recovery still calls the getter for the requesting tenant. Hub cancellation,
+reconnect/tenant and health-shape regressions cover this boundary.
+
+One content-free close deadline covers an entire affected audience. A blocked
+peer may miss the best-effort 1013 frame, but its socket and registration still
+close; unaffected tenants remain live. Real socket tests check the common
+deadline, exact generic reason and continued other-tenant delivery. The real
+monitor-projection health control uses only a gated in-memory registry read.
+
 
 ### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
 
@@ -2324,8 +2504,9 @@ silently inheriting whatever older protocol floor the host runtime would allow.
 The same shared client transport must not leak local infrastructure API
 requests through inherited environment proxies: loopback, private, link-local,
 CGNAT/Tailscale, mDNS/local, and single-label infrastructure hosts are direct
-connections by default, while public endpoints may still honor the operator's
-proxy environment. Proxy-bypass changes for this path require targeted TLS
+connections by default. All explicit HTTP targets, including public endpoints,
+are also direct; only public HTTPS endpoints may honor the operator's proxy
+environment. Proxy-bypass changes for this path require targeted TLS
 client tests plus adjacent Proxmox, PBS, and PMG client coverage.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
@@ -3587,6 +3768,33 @@ controls in `send_report_test.go` and `observer_delivery_test.go` verify observe
 status/endpoint, non-disclosure and resumed ordinary reporting with the same
 credential. They are not a credential inventory probe or native recovery proof.
 
+### Diagnostics does not prescribe credential or ACL churn (14 October 2026)
+
+Proxmox 403 is an access denial, not evidence that a saved token must be
+rotated or privileges broadened. Diagnostic recovery keeps intentional target
+boundaries, both user/token ACLs and privilege separation; 401 replacement is
+conditional on confirmed invalidity. Typed HTTP status precedes untrusted
+provider text. The existing displayed error summary uses connection positions
+and fixed diagnoses/guidance, not host, token, username or provider-body text.
+No credential, TLS, authorization, caller-filtering or endpoint contract is
+weakened. The diagnostic wire/identity and ordinary same-credential recovery
+controls in `diagnostics_access_test.go`, `diagnostics_additional_test.go`,
+`contract_test.go` and `client_request_test.go` cover these properties; they do
+not establish provider or installed acceptance.
+
+### Consumer-bound Proxmox setup handoff
+
+The existing separate-token PVE/PBS setup handoff accepts asynchronous output
+only for its current consuming editor revision. Endpoint/name/target, strategy,
+authentication, installer TLS and import-review changes (including reversals),
+close/reset and disposal retire old output. The handler also honours the existing
+review boundary; no concurrent copy/download/agent issuance is started while an
+earlier action remains outstanding. Clipboard completion is checked before
+revealing a token or reporting success. A clipboard write already sent to the
+browser is not retractable, and retiring output does not cancel an issuance,
+revoke a server token or grant stronger permissions. Monitoring-only scope,
+verified TLS defaults, credential-free command/download URLs and the silent
+separate-token prompt remain unchanged.
 ### Concurrent chart service publication retains tenant boundaries (16 October 2026)
 
 `internal/api/router.go` initializes each router's chart service through the
@@ -3631,16 +3839,33 @@ explicitly. `pkg/server/server_test.go` retains runtime identity separation.
 Backup reporting tests cover missing renderer and unchanged entitlement refusal.
 The live disposable Pro runtime proof exercises actual registered rendering.
 
-### Diagnostics does not prescribe credential or ACL churn (14 October 2026)
+### Legacy Unix credential reads cannot hide extra file bytes
 
-Proxmox 403 is an access denial, not evidence that a saved token must be
-rotated or privileges broadened. Diagnostic recovery keeps intentional target
-boundaries, both user/token ACLs and privilege separation; 401 replacement is
-conditional on confirmed invalidity. Typed HTTP status precedes untrusted
-provider text. The existing displayed error summary uses connection positions
-and fixed diagnoses/guidance, not host, token, username or provider-body text.
-No credential, TLS, authorization, caller-filtering or endpoint contract is
-weakened. The diagnostic wire/identity and ordinary same-credential recovery
-controls in `diagnostics_access_test.go`, `diagnostics_additional_test.go`,
-`contract_test.go` and `client_request_test.go` cover these properties; they do
-not establish provider or installed acceptance.
+The root-owned compatibility path in `read_collector_token_file_safely` retains
+the existing private regular-file and trusted-parent checks. A byte-counted,
+bounded read additionally rejects multiline, extra-newline and NUL-discarded
+contents before collector/action-token ingress can proceed. Values and caller
+files are not repaired, rewritten or deleted. The single-open descriptor-safe
+Go reader, credential precedence, TLS and lifecycle authority are unchanged;
+the shell compatibility path gains no claim of descriptor-race safety.
+
+`agent_uninstall_state.py` exercises malformed/limit/UTF-8/literal-value cases,
+both ingress consumers, saved recovery and unreadable/symlink/FIFO refusal with
+unchanged private files and no host actions. Native and installed acceptance
+remain separate from these closed source controls.
+
+### Installer service values cannot become systemd directives or XML markup
+
+The agent installer's service accumulator serializes literal values for the
+consumer grammar. systemd assignments quote C-style bytes and escape percent
+specifiers rather than interpolating raw text into `Environment=`. Newlines
+and quotes inside a CA path remain data, not additional environment entries
+or ExecStart directives. Plist XML entities escape ampersands literally even
+when Bash 5.2's `patsub_replacement` is enabled; value text cannot become markup.
+Shell exports retain their existing non-evaluating quoted representation.
+
+`TestInstallSHServiceEnvironmentPreservesLiteralValues` includes actual native
+unit-parser readback, inert directive/shell-substitution controls, XML parsing
+and first-key ownership. No unit is started, no token is read or disclosed and
+no service, TLS, command, profile or credential authority is widened. Native
+service execution and customer recovery remain separate acceptance.

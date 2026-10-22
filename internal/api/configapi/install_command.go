@@ -85,7 +85,7 @@ func privateBootstrapCommand(scriptURL, curlFlags, preflight, run string, needsT
 			`token_file="$token_dir/token";`,
 			`unset pulse_token pulse_discard tty_state;`,
 			`tty_control=();`,
-			`cleanup() { unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
+			`cleanup() { kill %1 2>/dev/null || :; wait 2>/dev/null || :; unset pulse_token pulse_discard; if [ -n "${tty_state:-}" ]; then "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null || :; fi; rm -f -- "$token_file"; rmdir -- "$token_dir"; };`,
 			`trap cleanup EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM;`,
 			// A normal canonical tty silently truncates long lines (4095 bytes on
 			// Linux). Bounded character input preserves valid input and detects
@@ -98,12 +98,19 @@ func privateBootstrapCommand(scriptURL, curlFlags, preflight, run string, needsT
 			`if command -v stty >/dev/null 2>&1; then tty_control=(stty); elif command -v busybox >/dev/null 2>&1; then tty_control=(busybox stty); else echo "Silent token input requires stty or BusyBox stty. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;`,
 			`if ! tty_state=$("${tty_control[@]}" -g </dev/tty 2>/dev/null) || [ -z "$tty_state" ]; then echo "Cannot read terminal settings with stty or BusyBox stty. Use a private token-file command instead. No installation was attempted." >&2; exit 1; fi;`,
 			`if ! "${tty_control[@]}" -echo </dev/tty 2>/dev/null; then echo "Cannot disable terminal echo. No token was requested and no installation was attempted." >&2; exit 1; fi;`,
+			// Bash's terminal read can consume a signal just after its prompt
+			// without running the pending trap. Keep the cleanup owner in wait,
+			// not read; reap its private input child before restoring the tty.
+			// Cleanup targets the sole owned job, even if a signal arrives before
+			// wait starts; no inherited/caller-selected PID can select its target.
+			`( trap - EXIT HUP INT TERM;`,
 			`if ! IFS= read -r -s -p `+posixShellQuote(prompt+" (paste at this prompt, not in the command): ")+` -n 4097 pulse_token </dev/tty; then echo "Token input was interrupted. No installation was attempted." >&2; exit 1; fi;`,
 			`if [ "${#pulse_token}" -gt 4096 ]; then while IFS= read -r -s -n 4097 pulse_discard </dev/tty && [ "${#pulse_discard}" -eq 4097 ]; do :; done; unset pulse_discard; fi;`,
-			`if ! "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null; then echo "Cannot restore terminal settings. No installation was attempted." >&2; exit 1; fi; unset tty_state;`,
-			`printf '\n' >/dev/tty;`,
 			`if [ -z "$pulse_token" ] || [ "${#pulse_token}" -gt 4096 ]; then echo "A non-empty token of at most 4096 characters is required." >&2; exit 1; fi;`,
 			`printf %s "$pulse_token" > "$token_file"; unset pulse_token;`,
+			`) & wait "$!";`,
+			`if ! "${tty_control[@]}" "$tty_state" </dev/tty 2>/dev/null; then echo "Cannot restore terminal settings. No installation was attempted." >&2; exit 1; fi; unset tty_state;`,
+			`printf '\n' >/dev/tty;`,
 		)
 	}
 	privileged = append(privileged, run)

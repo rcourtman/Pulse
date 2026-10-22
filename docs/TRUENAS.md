@@ -343,11 +343,30 @@ does not establish a live reading; check the CPU/memory usage columns and
 History series separately. A disk-utilisation line does not establish that
 CPU, memory or network History is available.
 
-Check whether the corresponding graphs work in the TrueNAS web UI. If Pulse
-still shows missing readings, report the affected panels, running Pulse and
-TrueNAS versions, and the relevant sanitized evidence above. Do not replace
-an otherwise working key or clear stored History merely because a graph is
-empty.
+Use TrueNAS's own **Reporting** graphs for CPU, memory and I/O while those
+readings are unavailable in Pulse. Missing readings, or zeros displayed after
+a rejected request, are not measured idle values.
+
+For **CORE 13 using legacy REST**, an existing HTTP 400 from
+`/reporting/get_data` saying **“The following attributes are not expected:
+query”** identifies a reporting-request format rejection, before graph data
+is returned. Inventory, a successful connection test or an advancing snapshot
+time does not establish that this request recovered. Keep the original error
+and time; this error does not call for another graph capture, a replacement
+API key or weaker TLS verification. Do not restart, reinstall or clear stored
+History to obtain more evidence. Use the [ordinary polling checks](#stale-truenas-data)
+to interpret observations you already have, not to repeat the failing action.
+
+**Disk I/O and storage capacity are separate.** Read/write rates come from
+reporting; pool used/free bytes come from inventory. Working I/O does not
+establish a missing pool's capacity, and working pool capacity does not prove
+that I/O or History recovered. Keep the affected pool distinct from its
+datasets; do not sum dataset sizes or substitute zero for unknown pool bytes.
+
+For other missing readings, use existing observations of the affected panels,
+running Pulse and TrueNAS versions, and the relevant sanitised error. Check
+what the corresponding TrueNAS graph already shows before collecting more;
+do not replace an otherwise working key merely because a Pulse graph is empty.
 
 If a maintainer requests a **CORE 13 native graph response**, use your existing
 signed-in **TrueNAS** browser session, not the Pulse page:
@@ -400,7 +419,7 @@ collection step.
 | `lastAttemptAt` advances, but `lastSuccessAt` and `observed.collectedAt` do not; failures increase | Polling returns failures. Use the actual error category and method to distinguish TLS, authentication, permissions and collection errors; a stale badge alone does not distinguish them. |
 | `observed.collectedAt` advances, but some usage or History panels stay empty | Inventory is refreshing, not necessarily every metric. Follow the [missing-telemetry checks](#inventory-works-but-cpu-memory-or-history-is-missing); do not replace a working key to populate a chart. |
 | No timestamps advance, or no completed attempt is recorded | Check that the connection and integration are enabled, then preserve the bounded local error above. This is not proof of an invalid key. |
-| Reconnects or TrueNAS sign-ins increase while `observed.collectedAt` advances | Session turnover alone does not establish failed authentication or stopped polling. Record the timing and any existing close/error message separately from the data freshness. |
+| Reconnects or TrueNAS sign-ins increase while `observed.collectedAt` advances | Session turnover alone does not establish failed authentication or stopped polling. Record the timing and any existing close/error message separately from the data freshness; see [repeated sign-ins](#repeated-sign-ins-or-unexpectedly-high-traffic). |
 
 **Test Connection** is not a complete poll. Some older builds, including Pulse
 6.4.1 and 6.4.5, also let a saved-connection test update `lastAttemptAt` and
@@ -424,8 +443,60 @@ authentication messages, cookies or a full browser network capture. If safe
 inspection is unavailable, describe what you could observe without repeating
 the failure or collecting a larger dump.
 
+### Repeated sign-ins or unexpectedly high traffic
+
+Keep **session lifetime**, **traffic volume** and **successful readings** separate.
+A working keepalive does not prove that app-stat decoding or stream cleanup
+succeeded. A collection error can discard an authenticated session, causing
+another login on the next request even while inventory timestamps advance.
+This can happen on a direct connection too; repeated sign-ins alone are not a
+reason to change reverse-proxy timeouts or replace the API key.
+
+Use an existing close message, audit entry or network graph, not another
+capture or subscription probe. Retain its time/window, units and direction:
+a short traffic burst is not a measured daily total. A close message naming
+`app.stats` and `protocol_error` is not an authentication verdict. A longer
+session alone does not establish that app CPU, memory, network readings and
+History recovered; check the affected surfaces during ordinary safe use.
+**Test Connection** opens a separate connection and can add a login itself.
+Do not repeat it, enable Debug, change Apps or restart to create evidence.
+
+If the traffic or audit volume must stop, use the [scoped pause](#disabling-truenas-integration) below and the
+appliance's own monitoring meanwhile. For help, share only the running Pulse
+and TrueNAS versions, affected panels, observation window and manually redacted
+close/error category. Keep authentication frames, API keys, cookies, private
+addresses and full captures private; evidence already in the report need not
+be collected again.
+
 ### Disabling TrueNAS integration
-Set `PULSE_ENABLE_TRUENAS=false` and restart Pulse. Existing connection data is preserved but polling stops.
+
+**For one appliance, pause its saved connection rather than restarting Pulse.**
+In **Settings → Infrastructure → Connected systems**, open the affected
+TrueNAS connection and choose **Pause connection**. This preserves the saved
+connection and credentials and excludes it from subsequent ordinary polls
+when the poller applies the change. It is not an immediate cancellation
+receipt for a request already in flight, and it does not stop a separate Pulse
+Agent monitoring that appliance.
+
+Pausing removes this API monitoring coverage: inventory, readings and alerts
+may be absent or stale. Use TrueNAS's own monitoring or other independent
+coverage; an empty view or quieter audit log is not verified recovery.
+Disabling alerts alone does not stop collection or its traffic. Do not delete
+the connection, rotate its key or change TLS trust merely to pause it.
+
+If the pause response is lost or fails, check the saved connection's **Paused**
+state or `enabled` value using the [existing read-only view](#stale-truenas-data)
+before taking another action. Do not click the toggle again blindly: it may
+resume a pause that already succeeded. When it is safe to resume, choose
+**Resume connection** only for the connection you deliberately paused, then
+check fresh ordinary readings; resuming is not proof of recovery.
+
+To disable **all** TrueNAS API connections, set `PULSE_ENABLE_TRUENAS=false` in
+the Pulse server's active deployment configuration and apply it through that
+deployment during a safe maintenance window. This requires a Pulse restart,
+unlike the scoped pause. Existing connection data is preserved. It is not a
+reason to restart during a backup freeze/thaw or unresponsive-guest incident;
+follow [backup safety](VM_DISK_MONITORING.md#backup-safety) first.
 
 ## See Also
 

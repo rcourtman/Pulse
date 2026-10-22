@@ -407,7 +407,7 @@ test.describe('Alert operator qualification', () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        'Completed attempts are retained for 7 days. Deliveries Pulse has stopped retrying remain available for 30 days.',
+        'Entries marked "Failed, no further retries" remain available for 30 days. Other completed attempts are retained for 7 days.',
         { exact: false },
       ),
     ).toBeVisible();

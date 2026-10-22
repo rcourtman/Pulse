@@ -28,6 +28,10 @@ func TestGuestAgentLockEvidenceRejectsAmbiguity(t *testing.T) {
 		{"null-lock", `{"data":{"lock": null }}`},
 		{"number-lock", `{"data":{"lock":0}}`},
 		{"object-lock", `{"data":{"lock":{}}}`},
+		{"whitespace-spaces", `{"data":{"lock":"  "}}`},
+		{"whitespace-escaped", `{"data":{"lock":"\t\r\n"}}`},
+		{"whitespace-unicode", `{"data":{"lock":"\u00a0\u2003"}}`},
+		{"whitespace-mixed", `{"data":{"lock":" \t\u00a0\u2003\r\n "}}`},
 		{"invalid-utf8-config-key", "{\"data\":{\"na\xffme\":\"fixture\"}}"},
 		{"invalid-utf8-config-value", "{\"data\":{\"name\":\"fixture\xff\"}}"},
 		{"invalid-utf8-lock-key", "{\"data\":{\"lo\xffck\":\"backup\"}}"},
@@ -162,7 +166,7 @@ func TestGuestAgentLockEvidenceHealthyConfigAndSessionRecovery(t *testing.T) {
 	for _, body := range []string{
 		`{"data":{}}`,
 		`{"data":{"lock":"","agent":1,"digest":"fixture","name":"fixture"}}`,
-		`{"data":{"lock":"  ","description":"backup; lock","scsi0":"fixture:disk","tags":"backup;ha"}}`,
+		`{"data":{"lock":"","description":"backup; lock","scsi0":"fixture:disk","tags":"backup;ha"}}`,
 		`{"data":{"\u006cock":"","nested":{"data":"fixture","lock":"backup"}}}`, // Only the actual operation lock is authoritative.
 		`{"data":{"name":"café-東京-🖥","description":"backup; lock"}}`,
 		`{"data":{"lock":"","name":"replacement-�"}}`, // A real U+FFFD is valid UTF-8, not malformed wire bytes.

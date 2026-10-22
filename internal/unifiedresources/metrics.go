@@ -107,7 +107,9 @@ func buildHostMetricPayload(
 ) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
 	cpuPercent := percentFromReportedPercent(cpuUsage)
-	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
+	if cpuPercent >= 0 {
+		metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
+	}
 	if memory.Total > 0 && memory.HasKnownUsage() {
 		percent := percentFromReportedPercent(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source, Observation: memory.Observation}
@@ -207,7 +209,9 @@ func buildVMMetricPayload(
 ) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
 	cpuPercent := ProxmoxGuestCPUPercent(cpu)
-	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
+	if cpuPercent >= 0 {
+		metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
+	}
 	if memory.Total > 0 && memory.HasKnownUsage() {
 		percent := percentFromUsage(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source, Observation: memory.Observation}
@@ -808,11 +812,17 @@ func percentFromUsage(value float64) float64 {
 }
 
 // ProxmoxGuestCPUPercent converts the Proxmox guest capacity ratio to the
-// canonical 0..100 percent unit shared by live state, alerts, and history.
+// canonical percent unit shared by live state, alerts, and history, or -1
+// when there is no valid observation.
 // Values already expressed as percent are retained for compatibility with
 // normalized fixtures and read-state adapters. Guest CPU is not divided by
 // the configured core count: Proxmox already reports capacity utilization.
+// An unavailable observation stays unavailable at this numeric compatibility
+// boundary; canonical resource payloads omit it rather than publishing -1%.
 func ProxmoxGuestCPUPercent(value float64) float64 {
+	if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+		return -1
+	}
 	return percentFromUsage(value)
 }
 

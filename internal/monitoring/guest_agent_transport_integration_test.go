@@ -110,11 +110,10 @@ func testGuestAgentTransportDeferralKeepsLastKnownHistory(t *testing.T, kinds ..
 			}))
 			defer server.Close()
 			host := server.URL
-			timeout := guestPollFixtureHangGuard
 			if strings.HasPrefix(kind, "foreign ") {
 				host += "/command-reply-fixture/" + strings.ReplaceAll(kind, " ", "-")
 			}
-			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: host, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: timeout})
+			client, err := proxmox.NewClient(proxmox.ClientConfig{Host: host, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: guestPollFixtureHangGuard})
 			if err != nil {
 				t.Fatal(err)
 			}

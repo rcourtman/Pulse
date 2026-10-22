@@ -1881,11 +1881,13 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	index := s.metricsReadIndex()
 	var tx *pdb.InstrumentedTx
 	var err error
-	if stepSecs > 1 {
-		// Determine which tiers exist in the same read snapshot used below. An
-		// all-raw series should cost a direct range read, not a UNION and an empty
-		// overlap probe for every observation. Presence does not imply coverage:
-		// every tier with any matching observations still participates.
+	if stepSecs > 1 || (len(resourceIDs) > 1 && len(tiers) > 1) {
+		// Determine which tiers exist in the same read snapshot used below.
+		// Unaggregated fleet reads also benefit: reconciling absent tiers adds
+		// UNION merges and overlap checks to every retained observation. Keep
+		// single-resource plain reads on their one-statement path. Presence does
+		// not imply coverage: every tier with any matching observations still
+		// participates, and no presence result is cached across read snapshots.
 		// EXISTS needs only indexed identity and time columns. Do not build or
 		// order the value projection for each presence probe.
 		idSlots := strings.TrimSuffix(strings.Repeat("?,", len(resourceIDs)), ",")

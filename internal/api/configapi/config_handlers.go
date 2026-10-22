@@ -17,9 +17,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
@@ -231,6 +233,10 @@ type ConfigHandlers struct {
 	recentAutoRegistered     map[string]time.Time
 	recentAutoRegMutex       sync.Mutex
 	autoRegisterMutex        sync.Mutex
+	// A per-handler construction seam lets token setup's persistence/error
+	// boundary be exercised with in-process HTTP, without a shared global hook.
+	// Nil always selects the ordinary PBS client and its TLS/authentication.
+	pbsSetupClientFactory func(pbs.ClientConfig) (*pbs.Client, error)
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance
@@ -1789,31 +1795,19 @@ func normalizeNodeHost(rawHost, nodeType string) (string, error) {
 		return "", fmt.Errorf("host is required")
 	}
 
-	scheme := "https"
-	if strings.HasPrefix(host, "http://") {
-		scheme = "http"
-		host = strings.TrimPrefix(host, "http://")
-	} else if strings.HasPrefix(host, "https://") {
-		host = strings.TrimPrefix(host, "https://")
-	}
-
-	// Strip any path/query fragments before parsing
-	if slash := strings.Index(host, "/"); slash != -1 {
-		host = host[:slash]
-	}
-
 	hostWithoutBrackets := strings.Trim(host, "[]")
 	if ip := net.ParseIP(hostWithoutBrackets); ip != nil && strings.Contains(hostWithoutBrackets, ":") && !strings.HasPrefix(host, "[") {
 		host = "[" + host + "]"
 	}
 
-	hostForParse := scheme + "://" + host
-	parsed, err := url.Parse(hostForParse)
-	if err != nil || parsed.Host == "" {
+	// Validate the submitted authority before dropping its path or adding a
+	// platform port. A scheme, userinfo or query cannot become another host.
+	parsed, err := securityutil.NormalizeInfrastructureBaseURL(host, "https")
+	if err != nil {
 		return "", fmt.Errorf("invalid host format")
 	}
 
-	// Drop any path/query fragments to avoid persisting unsafe values
+	// Keep the existing platform-config path policy after URL validation.
 	parsed.Path = ""
 	parsed.RawPath = ""
 	parsed.RawQuery = ""

@@ -1671,6 +1671,9 @@
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/availability_test.go",
+              "internal/hostagent/cluster_sensors_regression_test.go",
+              "internal/hostagent/cluster_sensors_ssh_test.go",
+              "internal/hostagent/cluster_sensors_test.go",
               "internal/hostagent/command_client_test.go",
               "internal/hostagent/commands_deploy_test.go",
               "internal/hostagent/commands_host_update_test.go",
@@ -3367,6 +3370,7 @@
               "internal/api/availability_handlers_test.go",
               "internal/api/chartapi/history_activity_test.go",
               "internal/api/configapi/config_handlers_connection_test.go",
+              "internal/api/configapi/node_endpoint_diagnostics_test.go",
               "internal/api/contract_test.go",
               "internal/api/docker_agents_report_size_test.go",
               "internal/api/docker_container_action_executor_test.go",
@@ -4687,6 +4691,8 @@
         "scripts/capture-release-note-visuals.sh",
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
+        "scripts/cleanup.sh",
+        "scripts/cloud-backup.sh",
         "scripts/com.pulse.hot-dev.plist.template",
         "scripts/demo_public_browser_smoke.cjs",
         "scripts/dependency_advisory_watch.py",
@@ -4701,6 +4707,7 @@
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
         "scripts/install-docker.sh",
+        "scripts/install-go-toolchain.sh",
         "scripts/install-mcp.ps1",
         "scripts/install-mcp.sh",
         "scripts/install.ps1",
@@ -4709,6 +4716,7 @@
         "scripts/installtests/run_unix_contracts.py",
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
+        "scripts/lib/hot-dev-config.sh",
         "scripts/lib/hot-dev-runtime.sh",
         "scripts/prepare-release-container-context.sh",
         "scripts/pulse-auto-update.sh",
@@ -4743,6 +4751,7 @@
         "scripts/run_demo_public_browser_smoke.sh",
         "scripts/run_hosted_staging_smoke.sh",
         "scripts/shard_go_tests.py",
+        "scripts/sync-production-config.sh",
         "scripts/toggle-mock.sh",
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
@@ -5228,6 +5237,21 @@
             ]
           },
           {
+            "id": "build-test-workflow",
+            "label": "required CI build, dependency security and native backup proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/build-and-test.yml"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/security/__tests__/dependencySecurity.test.ts",
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/tests/test_cloud_backup_ci.py"
+            ]
+          },
+          {
             "id": "frontend-dependency-security",
             "label": "frontend dependency security proof",
             "match_prefixes": [],
@@ -5236,7 +5260,6 @@
               ".github/scripts/record-internal-api-test-seconds.py",
               ".github/scripts/refresh-internal-api-test-seconds.py",
               ".github/scripts/select-internal-api-shard.sh",
-              ".github/workflows/build-and-test.yml",
               "frontend-modern/package-lock.json",
               "frontend-modern/package.json"
             ],
@@ -5268,6 +5291,32 @@
             ]
           },
           {
+            "id": "hosted-tarball-backup",
+            "label": "hosted tarball source admission and retention proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/cloud-backup.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_cloud_backup.py"
+            ]
+          },
+          {
+            "id": "toolchain-installer-download",
+            "label": "Go toolchain private authenticated download proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/install-go-toolchain.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_install_go_toolchain.py"
+            ]
+          },
+          {
             "id": "dev-runtime-orchestration",
             "label": "dev runtime orchestration proof",
             "match_prefixes": [],
@@ -5278,6 +5327,7 @@
               "package-lock.json",
               "package.json",
               "scripts/clean-mock-alerts.sh",
+              "scripts/cleanup.sh",
               "scripts/com.pulse.hot-dev.plist.template",
               "scripts/dev-check.sh",
               "scripts/dev-deploy-agent.sh",
@@ -5286,7 +5336,9 @@
               "scripts/hot-dev-bg.sh",
               "scripts/hot-dev.sh",
               "scripts/lib/hot-dev-auth.sh",
+              "scripts/lib/hot-dev-config.sh",
               "scripts/lib/hot-dev-runtime.sh",
+              "scripts/sync-production-config.sh",
               "scripts/toggle-mock.sh",
               "tests/integration/playwright.config.ts",
               "tests/integration/QUICK_START.md",
@@ -5304,6 +5356,9 @@
               "scripts/tests/test-hot-dev-bg.sh",
               "scripts/tests/test-hot-dev-runtime.sh",
               "scripts/tests/test-toggle-mock.sh",
+              "scripts/tests/test_cleanup.py",
+              "scripts/tests/test_dev_config_import.py",
+              "scripts/tests/test_hot_dev_config.py",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
@@ -6081,6 +6136,7 @@
               "frontend-modern/src/components/Workloads/__tests__/WorkloadsFilter.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformEstateOverviewModel.test.ts",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+              "frontend-modern/src/features/platformPage/__tests__/PlatformResourceDetailTableRow.test.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.test.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.test.tsx",
               "frontend-modern/src/features/platformPage/platformSearchSuggestions.test.ts"
@@ -6256,6 +6312,11 @@
         "pkg/proxmox/client.go",
         "pkg/proxmox/cluster_client.go",
         "pkg/proxmox/io_counters.go",
+        "pkg/proxmox/replication.go",
+        "pkg/proxmox/replication_response.go",
+        "pkg/proxmox/snapshot_inventory_response.go",
+        "pkg/proxmox/storage_inventory_response.go",
+        "pkg/proxmox/task_response.go",
         "pkg/proxmox/zfs.go",
         "pkg/tlsutil/certificate.go"
       ],
@@ -6276,7 +6337,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/backup_history_scope_test.go",
               "internal/monitoring/backup_task_history_test.go",
+              "pkg/proxmox/backup_history_scope_test.go",
               "pkg/proxmox/backup_history_test.go"
             ]
           },
@@ -6719,11 +6782,19 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/backup_read_projection_test.go",
               "internal/monitoring/backup_task_history_test.go",
+              "internal/monitoring/guest_snapshot_projection_test.go",
+              "internal/monitoring/guest_snapshot_workers_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",
               "internal/monitoring/monitor_backups_dir_storage_test.go",
               "internal/monitoring/monitor_full_coverage_test.go",
               "internal/monitoring/pbs_protection_observation_test.go",
+              "internal/monitoring/pve_backup_guest_warning_test.go",
+              "internal/monitoring/pve_backup_log_attribution_test.go",
+              "internal/monitoring/pve_backup_log_budget_test.go",
+              "internal/monitoring/pve_backup_task_barrier_test.go",
+              "internal/monitoring/pve_disabled_storage_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/recovery_ingest_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
@@ -6775,6 +6846,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/canonical_guardrails_test.go",
               "internal/monitoring/resource_stale_thresholds_test.go",
               "internal/monitoring/unified_inventory_read_refresh_test.go"
             ]
@@ -6816,6 +6888,7 @@
               "internal/monitoring/monitor_alert_override_migration_test.go",
               "internal/monitoring/monitor_backups_readstate_test.go",
               "internal/monitoring/monitor_docker_test.go",
+              "internal/monitoring/monitor_endpoint_diagnostics_test.go",
               "internal/monitoring/monitor_host_agent_removal_lifecycle_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
               "internal/monitoring/monitor_mock_alerts_test.go",
@@ -6824,6 +6897,8 @@
               "internal/monitoring/monitor_pve_guest_lxc_test.go",
               "internal/monitoring/physical_disk_roundtrip_test.go",
               "internal/monitoring/proxmox_large_cluster_poll_budget_test.go",
+              "internal/monitoring/pve_backup_task_barrier_test.go",
+              "internal/monitoring/pve_disabled_storage_test.go",
               "internal/monitoring/pve_protection_observation_test.go",
               "internal/monitoring/ratetracker_test.go",
               "internal/monitoring/recovery_rollups_resilience_test.go",
@@ -6851,6 +6926,68 @@
               "internal/filesystemprobe/observer_test.go",
               "internal/monitoring/docker_filesystem_evidence_test.go",
               "pkg/agents/filesystem/report_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-snapshot-inventory-runtime",
+            "label": "Complete Proxmox snapshot inventory admission and ordinary recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/snapshot_inventory_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pve_protection_observation_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go",
+              "pkg/proxmox/snapshot_inventory_response_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-storage-inventory-runtime",
+            "label": "Complete PVE storage/archive inventory admission and scoped ordinary recovery proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/storage_inventory_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pve_storage_inventory_admission_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go",
+              "pkg/proxmox/storage_inventory_response_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-task-response-runtime",
+            "label": "Complete, unambiguous PVE task and numbered-log evidence",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/task_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/backup_task_identity_test.go",
+              "pkg/proxmox/host_diagnostics_regression_test.go",
+              "pkg/proxmox/task_identity_test.go",
+              "pkg/proxmox/task_response_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-replication-response-runtime",
+            "label": "Complete and unambiguous replication observation through client, monitor and HTTP consumers",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/replication.go",
+              "pkg/proxmox/replication_response.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/replication_read_acceptance_test.go",
+              "internal/monitoring/replication_read_acceptance_test.go",
+              "pkg/proxmox/replication_response_test.go"
             ]
           }
         ],
@@ -7458,6 +7595,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pkg/metrics/batch_tier_presence_test.go",
               "pkg/metrics/clustered_layout_test.go",
               "pkg/metrics/identity_index_test.go",
               "pkg/metrics/issue1124_write_amplification_test.go",
@@ -8063,6 +8201,10 @@
             "exact_files": [
               "internal/config/config_load_test.go",
               "internal/config/watcher_test.go",
+              "pkg/pbs/client_proxy_test.go",
+              "pkg/pmg/client_proxy_test.go",
+              "pkg/proxmox/client_proxy_test.go",
+              "pkg/tlsutil/client_proxy_test.go",
               "pkg/tlsutil/tlsutil_test.go"
             ]
           },
@@ -8338,6 +8480,7 @@
             "exact_files": [
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.branchcov.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.capacity.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx",
@@ -8701,6 +8844,7 @@
               "frontend-modern/src/features/kubernetes/__tests__/KubernetesServicesTable.test.tsx",
               "frontend-modern/src/features/kubernetes/__tests__/KubernetesStorageTable.test.tsx",
               "frontend-modern/src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.capacity.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
@@ -8708,6 +8852,7 @@
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxPageModel.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxReplicationTable.test.tsx",
               "frontend-modern/src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
               "frontend-modern/src/features/standalone/__tests__/AvailabilityChecksTable.test.tsx",
               "frontend-modern/src/features/standalone/__tests__/standalonePageModel.test.ts",

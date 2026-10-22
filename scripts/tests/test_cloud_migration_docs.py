@@ -24,6 +24,43 @@ class CloudMigrationDocsTest(unittest.TestCase):
     def test_in_app_guide_matches_canonical(self):
         self.assertEqual(guide(), (ROOT / "frontend-modern/public/docs/CLOUD.md").read_text())
 
+    def test_hosted_policy_is_not_inferred_from_source_or_configuration_export(self):
+        text = section(guide(), "Data & Privacy", "##")
+        for boundary in (
+            "Confirm the schedule, retention, encryption coverage and recovery procedure",
+            "hosting operator", "configuration export does not establish these properties",
+            "most recent restore result", "not raw archives, credentials or command inventories",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, text)
+        self.assertNotIn("Daily encrypted backups with 7-day retention", guide())
+        self.assertNotIn("Backups are automated and encrypted", guide())
+
+    def test_encrypted_secret_files_are_not_whole_storage_encryption(self):
+        text = section(guide(), "Data & Privacy", "##")
+        for boundary in (
+            "Encrypted credential files do not establish encryption of all monitoring data",
+            "backup metadata", "installed storage policy", "existing archives",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, text)
+        self.assertNotIn("Data is stored encrypted at rest", guide())
+        # The helper is source evidence for why encryption is conditional,
+        # not evidence of the settings or schedule on a hosted installation.
+        helper = (ROOT / "scripts/cloud-backup.sh").read_text()
+        self.assertIn('ENCRYPT="${PULSE_BACKUP_ENCRYPT:-false}"', helper)
+
+    def test_assurance_checks_preserve_backups_and_operator_boundaries(self):
+        text = section(guide(), "Data & Privacy", "##")
+        for boundary in (
+            "Use existing records", "do not run a new backup or restore",
+            "delete older copies or change retention just to check this guide",
+            "does not grant hosted filesystem or service access",
+            "MIGRATION.md#full-state-recovery",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, text)
+
     def test_export_scope_is_not_a_portable_installation_promise(self):
         text = section(guide(), "Migrating To/From Cloud", "##")
         for boundary in (

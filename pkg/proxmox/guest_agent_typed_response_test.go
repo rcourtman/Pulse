@@ -61,14 +61,17 @@ func TestGuestAgentTypedSuccessDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					// Uncertainty outlives this listener. A recycled port is not
+					// the same synthetic guest, but every client in this case is.
+					endpoint := typedSuccessFixtureEndpoint(server.URL)
+					c := backupTestClient(t, endpoint)
 					if err := first(context.Background(), c, 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Fatalf("typed reply released admission: %v", err)
 					}
 					if commands.Load() != 1 || configs.Load() != 1 {
 						t.Fatal("reply was treated as complete and received a postflight lock read")
 					}
-					diagnostic := backupTestClient(t, server.URL)
+					diagnostic := backupTestClient(t, endpoint)
 					for later, read := range backupAgentReads() {
 						if err := read(context.Background(), diagnostic, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s escaped uncertainty: %v", later, err)
@@ -85,6 +88,59 @@ func TestGuestAgentTypedSuccessDefersEveryRead(t *testing.T) {
 			}
 		})
 	}
+}
+
+var typedSuccessFixtureIDs atomic.Uint64
+
+// Allocate once per independent fixture, then retain the endpoint for all its
+// clients. The sequence also distinguishes repeated -count invocations; no
+// existing guard is cleared, expired or weakened to make a fixture admissible.
+func typedSuccessFixtureEndpoint(serverURL string) string {
+	return fmt.Sprintf("%s/typed-success-fixture/%d", serverURL, typedSuccessFixtureIDs.Add(1))
+}
+
+// Reuse a listener deliberately instead of waiting for ephemeral-port reuse.
+// Reusing the old base path must retain its fence; independent fixtures must
+// each exercise their first invalid reply and keep every later reader fenced.
+func TestGuestAgentTypedSuccessFixtureIsolation(t *testing.T) {
+	var commands, configs atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			configs.Add(1)
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		fmt.Fprint(w, `{"data":{"result":17}}`)
+	}))
+	defer server.Close()
+	endpoints := make([]string, 0, 3)
+	for index := 0; index < 3; index++ {
+		endpoint := typedSuccessFixtureEndpoint(server.URL)
+		endpoints = append(endpoints, endpoint)
+		if _, err := backupTestClient(t, endpoint).GetVMNetworkInterfaces(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+			t.Fatalf("independent fixture %d never reached its invalid reply: %v", index, err)
+		}
+		// A fresh client on a reused path is still the original channel,
+		// exactly as it would be after the OS recycled a raw listener URL.
+		if _, err := backupTestClient(t, endpoint).GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+			t.Fatalf("reused fixture %d lost its uncertainty fence: %v", index, err)
+		}
+		if commands.Load() != int32(index+1) || configs.Load() != int32(index+1) {
+			t.Fatal("fixture independence admitted a postflight or replayed command")
+		}
+	}
+	for _, endpoint := range endpoints {
+		for name, read := range backupAgentReads() {
+			if err := read(context.Background(), backupTestClient(t, endpoint), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+				t.Errorf("another fixture erased the original %s fence: %v", name, err)
+			}
+		}
+	}
+	if commands.Load() != 3 || configs.Load() != 3 {
+		t.Fatal("retained fences dispatched follow-up guest commands or lock reads")
+	}
+	t.Log("one listener; three independent invalid replies; all six readers retain every original fence")
 }
 
 func TestGuestAgentTypedSuccessSharesUnrenewedFenceAndResumes(t *testing.T) {
@@ -195,7 +251,7 @@ func TestGuestAgentTypedSuccessPreservesFieldAndMeasurementSemantics(t *testing.
 				backupAgentPayload(w, r)
 			}))
 			defer server.Close()
-			c := backupTestClient(t, server.URL)
+			c := backupTestClient(t, typedSuccessFixtureEndpoint(server.URL))
 			info, err := c.GetVMMemoryAvailabilityFromAgent(context.Background(), "node", 105)
 			if err == nil || GuestAgentDeferredReason(err) != "" || info != (LinuxMemoryAvailability{}) {
 				t.Fatalf("completed but unusable memory became telemetry or uncertainty: %+v %v", info, err)

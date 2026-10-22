@@ -22,6 +22,118 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Run the maintained evidence/writer shells with a fake proof process and a
+// capturing, credential-free provider. This protects the actual exit mapping
+// and token separation without creating a check or executing a timed workload.
+func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "build-and-test.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type step struct {
+		ID, Run, Uses string
+		Env           map[string]string
+	}
+	var workflow struct {
+		Permissions map[string]string
+		Jobs        map[string]struct {
+			Permissions map[string]string
+			Needs       any
+			If          string
+			Steps       []step
+		}
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	evidence := workflow.Jobs["chart-latency-slo"]
+	writer := workflow.Jobs["chart-latency-verdict"]
+	if len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" || len(evidence.Permissions) != 0 {
+		t.Fatal("PR-built executables must keep the read-only workflow token")
+	}
+	if len(writer.Permissions) != 1 || writer.Permissions["checks"] != "write" || writer.Needs != "chart-latency-slo" ||
+		!strings.Contains(writer.If, "always()") || !strings.Contains(writer.If, "'failure'") || len(writer.Steps) != 1 || writer.Steps[0].Uses != "" {
+		t.Fatal("verdict writer must remain a separate no-checkout job, including failed evidence")
+	}
+	publish := writer.Steps[0]
+	if publish.Env["CONCLUSION"] != "${{ needs.chart-latency-slo.outputs.conclusion || 'failure' }}" ||
+		publish.Env["HEAD_SHA"] != "${{ github.event.pull_request.head.sha }}" {
+		t.Fatal("missing proof output must fail at the exact PR head")
+	}
+	proofShell := ""
+	for _, candidate := range evidence.Steps {
+		if candidate.ID == "proof" {
+			proofShell = candidate.Run
+		}
+	}
+	if proofShell == "" || publish.Run == "" || !strings.Contains(proofShell, "chart_latency_proof.py") {
+		t.Fatal("missing actual chart proof/writer shell")
+	}
+	for _, tc := range []struct {
+		name, conclusion string
+		processExit      int
+		stepPass         bool
+	}{
+		{"valid", "success", 0, true},
+		{"contended", "neutral", 78, true},
+		{"budget failure", "failure", 1, false},
+		{"broken proof", "failure", 2, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			directory := t.TempDir()
+			bin := filepath.Join(directory, "bin")
+			samples := filepath.Join(directory, "chart-latency", "samples")
+			for _, path := range []string{bin, samples} {
+				if err := os.MkdirAll(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for name, script := range map[string]string{
+				"python3": "#!/bin/sh\nexit \"$CHART_PROOF_STATUS\"\n",
+				"gh":      "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$CAPTURE_ARGS\"\n",
+			} {
+				if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			const report = "charts/workloads p50=40ms p95=82ms p99=86ms SLO=90ms"
+			if err := os.WriteFile(filepath.Join(samples, "candidate.log"), []byte(report+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			outputs := filepath.Join(directory, "outputs")
+			summary := filepath.Join(directory, "summary")
+			capture := filepath.Join(directory, "provider-args")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			command := exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", proofShell)
+			command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"RUNNER_TEMP="+directory, "GITHUB_OUTPUT="+outputs, "GITHUB_STEP_SUMMARY="+summary,
+				"CHART_PROOF_STATUS="+strconv.Itoa(tc.processExit))
+			if output, err := command.CombinedOutput(); (err == nil) != tc.stepPass {
+				t.Fatalf("evidence shell status: %v\n%s", err, output)
+			}
+			got, err := os.ReadFile(outputs)
+			if err != nil || string(got) != "conclusion="+tc.conclusion+"\nreport="+report+"\n" {
+				t.Fatalf("wrong downstream evidence: %q, %v", got, err)
+			}
+			command = exec.CommandContext(ctx, "bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", publish.Run)
+			const head = "1234567890123456789012345678901234567890"
+			command.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"CONCLUSION="+tc.conclusion, "REPORT="+report, "CAPTURE_ARGS="+capture, "HEAD_SHA="+head,
+				"GITHUB_REPOSITORY=rcourtman/Pulse", "DETAILS_URL=https://github.com/rcourtman/Pulse/actions/runs/1", "GH_TOKEN=")
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("writer shell: %v\n%s", err, output)
+			}
+			args, err := os.ReadFile(capture)
+			if err != nil || !strings.Contains(string(args), "api\nrepos/rcourtman/Pulse/check-runs\n") ||
+				!strings.Contains(string(args), "head_sha="+head+"\n") ||
+				!strings.Contains(string(args), "conclusion="+tc.conclusion+"\n") {
+				t.Fatalf("wrong captured check identity/verdict: %q, %v", args, err)
+			}
+		})
+	}
+}
+
 func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "build-release.sh"))
 	if err != nil {
@@ -171,6 +283,13 @@ func TestPublishedLifecycleRehearsalPreservesAutoUpdateChoice(t *testing.T) {
 	}
 }
 
+func TestGitHubReleaseInventoryTransportBoundary(t *testing.T) {
+	cmd := exec.Command("python3", repoFile("scripts", "tests", "test_github_release_inventory.py"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("GitHub release inventory transport boundary: %v\n%s", err, output)
+	}
+}
+
 func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "security-scan.yml"))
 	if err != nil {
@@ -189,8 +308,7 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 		`scripts/release_control/release_continuity.py release`,
 		"release-diagnostic.json",
 		"Reject orphaned stable publication tags",
-		`"repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100"`,
-		`"repos/${REPOSITORY}/releases?per_page=100"`,
+		`bash scripts/read-github-release-inventory.sh "$REPOSITORY" "$evidence"`,
 		"https://ghcr.io/token?service=ghcr.io&scope=repository:",
 		"https://auth.docker.io/token?service=registry.docker.io&scope=repository:",
 		`"${registry_url}/v2/${image}/tags/list?n=10000"`,
@@ -1500,15 +1618,15 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		// following the secure-install path saw "Could not verify signature".
 		// validate-release.sh must extract the README's pinned key and actually
 		// run ssh-keygen -Y verify against the signed installer.
-		`Validating README pinned signature key matches install.sh.sshsig`,
-		`grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$readme_path"`,
+		`Validating documented installation signature key matches install.sh.sshsig`,
+		`grep -oE "ssh-ed25519 [A-Za-z0-9+/=]+ pulse-installer" "$install_guide_path"`,
 		`ssh-keygen -Y verify \`,
-		`README's pinned signature key does not verify install.sh.sshsig`,
+		`Documented installation key does not verify install.sh.sshsig`,
 	}
 
-	readmeBytes, err := os.ReadFile(repoFile("README.md"))
+	readmeBytes, err := os.ReadFile(repoFile("docs", "INSTALL.md"))
 	if err != nil {
-		t.Fatalf("read README.md: %v", err)
+		t.Fatalf("read docs/INSTALL.md: %v", err)
 	}
 	readme := string(readmeBytes)
 	// Lock in the actual signing key documented to customers. This is the public
@@ -1517,7 +1635,7 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	// regress to the stale Ds21c5 key without tripping this assertion.
 	const correctReadmeKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
 	if !strings.Contains(readme, correctReadmeKey) {
-		t.Fatalf("README.md must pin the correct pulse-installer ed25519 key for install.sh signature verification")
+		t.Fatalf("docs/INSTALL.md must pin the correct pulse-installer ed25519 key for install.sh signature verification")
 	}
 	const staleReadmeKey = "Ds21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV"
 	if strings.Contains(readme, staleReadmeKey) {
@@ -2995,6 +3113,19 @@ func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T)
 	if !strings.Contains(string(output), "does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY") {
 		t.Fatalf("expected mismatched signing public key error, got:\n%s", output)
 	}
+}
+
+func TestBuildReleaseMCPInstallerPublication(t *testing.T) {
+	// The packaging control below establishes that this exact Unix installer
+	// is shipped unchanged. Signed assets still need recoverable publication.
+	runMCPInstallerChecks(t,
+		"test_publication_preserves_previous_until_atomic_rename",
+		"test_copy_failure_preserves_previous_and_cleans_staging",
+		"test_termination_before_publication_preserves_previous",
+		"test_rename_refusal_preserves_previous",
+		"test_directory_destination_is_not_reported_as_installed",
+		"test_symlink_destinations_are_replaced_not_followed",
+		"test_temporary_allocation_failure_cleans_previous_inputs")
 }
 
 // TestBuildReleasePackagesPulseMcpForAllPlatforms pins the
@@ -5588,5 +5719,12 @@ func TestProviderMSPStartupWorkflowRequiresMountedDaemonAcceptance(t *testing.T)
 	}
 	if !accepted || strings.Contains(string(content), "secrets.") || strings.Contains(string(content), "pull_request_target") {
 		t.Fatal("missing mounted-daemon acceptance or unsafe credential/event scope")
+	}
+}
+
+func TestReleaseDocumentedInstallerKeyFollowsCanonicalGuide(t *testing.T) {
+	cmd := exec.Command("python3", repoFile("scripts", "tests", "test_documented_installer_key.py"), "-v")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("documented installer key controls: %v\n%s", err, out)
 	}
 }

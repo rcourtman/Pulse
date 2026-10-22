@@ -13,43 +13,81 @@ This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kub
 ## 1. Deploying the Pulse Server
 
 The Pulse Server is the central hub that collects metrics and manages agents.
+The recipes below are for a **new release**, not an existing installation.
+Privately check your current kubectl context and intended namespace first.
+For an existing release, keep its name, namespace, image edition, saved values
+and PVC; follow the [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm)
+instead of applying new-install defaults.
 
 ### Option A: Using Helm (Recommended)
 
-1.  Add the Pulse Helm repository:
-    ```bash
-    helm repo add pulse https://rcourtman.github.io/Pulse
-    helm repo update
-    ```
+Replace `X.Y.Z` with the exact published **chart version**, without a leading `v`
+(for example, `6.5.0`). A `helm-chart-…` release contains the chart, not a server
+archive. By default its `appVersion` selects the server image tag; an existing
+image override is a separate setting. This new Community example is not a
+replacement for a paid Pro deployment.
 
-2.  Install the chart:
-    ```bash
-    helm upgrade --install pulse pulse/pulse \
-      --namespace pulse \
-      --create-namespace \
-      --set persistence.enabled=true \
-      --set persistence.size=10Gi
-    ```
+```bash
+(
+  set -eu
+  helm repo add pulse https://rcourtman.github.io/Pulse
+  helm repo update pulse
+  helm install pulse pulse/pulse \
+    --version X.Y.Z \
+    --namespace pulse \
+    --create-namespace \
+    --set replicaCount=1 \
+    --set strategy.type=Recreate \
+    --set persistence.enabled=true \
+    --set persistence.size=10Gi
+)
+```
 
-    > **Note**: For production, ensure you configure a proper `persistence.storageClass` or `strategy.type=Recreate` if using ReadWriteOnce (RWO) volumes. The chart's default `strategy.type` is `RollingUpdate`, which can hit Multi-Attach errors with RWO PVCs during upgrade.
+`helm install` refuses an already-used release name instead of upgrading it.
+Stop on any error; do not switch to `upgrade --install`, `--replace` or `--force`
+to get past it. Reconcile the existing release before deciding what to change.
+
+Keep a **single Pulse server** using this data directory. The chart defaults to
+`RollingUpdate` and a ReadWriteOnce (RWO) PVC; the recipe explicitly selects
+`Recreate` so an ordinary rollout does not start a replacement beside the old
+pod. This causes a brief monitoring interruption; arrange independent coverage
+where needed. A storage class or ReadWriteMany volume is not high availability
+and does not make concurrent Pulse writers safe. Choose storage suitable for
+your cluster, but do not change an existing claim, access mode or replica count
+merely to get past an attachment error.
 
 ### Option B: Generating Static Manifests (For Talos / GitOps)
 
-If you cannot use Helm directly on the cluster (e.g., restricted Talos environment), you can generate standard Kubernetes YAML manifests:
+Helm runs on your administration workstation, not inside Talos or another node.
+For a **new GitOps-managed deployment**, you can instead render the same pinned,
+single-server settings to a new local file. This block refuses to overwrite an
+existing `pulse-server.yaml`; do not regenerate over an existing deployment's
+saved configuration.
 
 ```bash
-helm repo add pulse https://rcourtman.github.io/Pulse
-helm repo update
-helm template pulse pulse/pulse \
-  --namespace pulse \
-  --set persistence.enabled=true \
-  > pulse-server.yaml
+(
+  set -euC
+  helm repo add pulse https://rcourtman.github.io/Pulse
+  helm repo update pulse
+  helm template pulse pulse/pulse \
+    --version X.Y.Z \
+    --namespace pulse \
+    --set replicaCount=1 \
+    --set strategy.type=Recreate \
+    --set persistence.enabled=true \
+    --set persistence.size=10Gi \
+    > pulse-server.yaml
+)
 ```
 
-You can then apply this file:
+Do not apply after a render error: a partial file can remain. Review the complete
+output privately and create the intended namespace through your normal cluster
+workflow first. Rendering does not create it or prove API admission. The chart's
+namespaced resources do not all declare `metadata.namespace`, so name the
+namespace explicitly when applying, rather than relying on your current default:
 
 ```bash
-kubectl apply -f pulse-server.yaml
+kubectl --namespace pulse apply -f pulse-server.yaml
 ```
 
 ## 2. Deploying the Pulse Agent
@@ -158,20 +196,31 @@ the agent pods because these examples read it into the environment at startup.
 The chart has an SCC-compatible OpenShift profile for the Pulse server and an
 optional cluster-level Kubernetes collector:
 
-For a new server, deploy the server first and complete its browser setup before
-creating the scoped agent token:
+For a new server, prepare the chart repository as above, replace `X.Y.Z` with the
+chosen published chart version, deploy the server first and complete its browser setup before
+creating the scoped agent token. This retains the same single-writer rollout:
 
 ```bash
-helm upgrade --install pulse pulse/pulse \
+helm install pulse pulse/pulse \
+  --version X.Y.Z \
   --namespace pulse --create-namespace \
+  --set replicaCount=1 \
+  --set strategy.type=Recreate \
+  --set persistence.enabled=true \
   --set openShift.enabled=true
 ```
 
 Create `pulse-agent-env` using the private-file steps above, then enable the
-collector:
+collector on that existing release. Use the **same installed chart version**
+for `X.Y.Z`; `--reuse-values` preserves its current image, storage and other
+saved values while changing these collector settings. This is not a version-upgrade recipe.
+Stop if the release is missing or the change fails; do not add `--install` or
+repeat it without checking the actual release state.
 
 ```bash
-helm upgrade --install pulse pulse/pulse \
+helm upgrade pulse pulse/pulse \
+  --version X.Y.Z \
+  --reuse-values \
   --namespace pulse \
   --set openShift.enabled=true \
   --set openShift.kubernetesAgent.enabled=true \

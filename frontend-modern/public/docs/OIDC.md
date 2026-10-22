@@ -43,6 +43,26 @@ Only after verifying SSO, optionally hide the local username/password form with
 Appending `?show_local=true` to your Pulse URL shows that form again; it does
 not create or restore local credentials, bypass the proxy or revoke SSO sessions.
 
+### Hiding the local login form
+
+**Hiding is not password rejection.** `PULSE_AUTH_HIDE_LOCAL_LOGIN=true` and
+**Hide local login form** in **Settings → Security** change the login page only.
+Local password authentication remains enabled, including `POST /api/login`;
+`?show_local=true` reveals the form again. Existing password checks, rate limits
+and lockouts still apply. An IdP's MFA requirement does not apply to a local
+password sign-in.
+
+If your policy requires OIDC-only authentication, this setting does **not**
+enforce it. An existing authenticated proxy or network boundary must cover every
+reachable Pulse listener, including direct backend access. Blocking only
+`/api/login` is not a complete password-authentication boundary: HTTP Basic
+authentication is a separate path. Preserve the scoped API-token and agent
+access your deployment needs; do not block all API routes as a substitute.
+
+Keep an independent, policy-compliant administrator recovery path and verify SSO
+in a separate browser session before changing access. Do not disable Pulse
+authentication, remove credentials or delete configuration to hide the form.
+
 ## ⚙️ Configuration
 
 | Setting | Description |
@@ -224,10 +244,47 @@ separate-session login and permission checks in Quick Start.
 
 | Issue | Solution |
 | :--- | :--- |
+| **`invalid_client` after a provider edit** | Keep the working administrator session and follow [save-related sign-in recovery](#sign-in-fails-after-editing-a-provider). This error does not identify which client-authentication detail was rejected. |
 | **`invalid_id_token`** | Compare the configured issuer with the IdP issuer locally; use the existing redacted error, not a token dump or newly enabled Debug logs. |
 | **`unexpected signature algorithm "HS256"`** | Your IdP is signing with HS256. Configure it to use **RS256**. |
 | **Redirect Loop** | Check `X-Forwarded-Proto` header (must be `https`) and cookie settings. |
 | **Self-Signed Certs** | The SSO provider form in Settings has no CA Bundle field. Set `oidc.caBundle` on the provider through the SSO provider API (`/api/security/sso/providers`) to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). For a provider configured with the legacy `OIDC_ENABLED` environment variables, set `OIDC_CA_BUNDLE` instead (see [Configuration](CONFIGURATION.md)). |
+
+### Sign-in fails after editing a provider
+
+When editing an existing provider, **Client Secret** starts blank deliberately;
+**leave blank to keep** is intended to preserve the saved secret. The empty
+field alone does not show whether the stored secret is present. Conversely,
+**Save** succeeding does not establish that the next sign-in will work.
+
+If sign-in worked before the edit but now fails with `invalid_client`:
+
+1. **Keep independent administrator access.** Leave your working administrator
+   session open. If you already have local administrator credentials but its
+   form is hidden, open your Pulse URL with `?show_local=true` in a separate
+   browser session. This only reveals the form: it does not restore credentials,
+   bypass a proxy or grant administrator rights. If you have no working
+   administrator access, use your instance administrator's normal recovery
+   process rather than disabling authentication or editing encrypted files.
+2. **Recover without replacing the provider.** If the issuer and client ID are
+   unchanged and you still have the original client secret privately, enter that
+   existing secret in the provider's **Client Secret** field over HTTPS and save
+   with the intended mappings and access restrictions. Do not put it in a
+   command, URL or report. Do not delete and recreate the provider, rotate the
+   IdP credentials or clear access restrictions merely to diagnose this error;
+   recreating a provider can also change its callback URL.
+3. **Check sign-in separately.** Keep the working administrator session open
+   while signing in through SSO in another browser session, then check the
+   intended [role and access rules](#access-control). Provider **Test** checks
+   discovery, not the authenticated code exchange or resulting permissions.
+   Reopening the edit form and finding a blank secret is not a failed retest.
+
+If you already tried this recovery, do not repeat the save or login sequence just
+to collect evidence. Retain the running Pulse version, the original error and
+time, which non-secret setting changed and the result already observed; use
+[safe diagnosis](#safe-diagnosis). Keep secrets and full callback URLs private.
+This is a bounded recovery path, not proof of a repaired save operation or a
+reason to upgrade to an unrelated release.
 
 ### Safe diagnosis
 

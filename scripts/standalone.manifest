@@ -5,7 +5,7 @@
 # - Only include tracked `scripts/**/*.sh` files.
 # - Keep reasons short and concrete.
 
-scripts/clean-mock-alerts.sh | Operator recovery utility for removing mock-alert contamination from live alert history.
+scripts/clean-mock-alerts.sh | Retired compatibility entrypoint: refuses ambiguous mock-alert deletion without reading history or stopping monitoring.
 scripts/cloud-backup.sh | Hosted backup orchestration helper for cloud deployment operators.
 scripts/conformance-smoke.sh | Runtime conformance harness preserved for release ratification replay.
 scripts/dev-check.sh | Local development runtime/process sanity checker and cleanup helper.

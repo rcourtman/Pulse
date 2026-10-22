@@ -300,7 +300,7 @@ func TestResolveBackupIntentContextAcceptsSynthesizedJobGuestTask(t *testing.T) 
 		// no EndTime: the job is still running
 	}
 
-	synthesized := parseVzdumpJobLog(jobTask, "UPID:node-a:000E9F2C:0AC734B2:68A1B2C3:vzdump::root@pam:", []proxmox.TaskLogLine{
+	synthesized, _ := parseVzdumpJobLog(jobTask, "UPID:node-a:000E9F2C:0AC734B2:68A1B2C3:vzdump::root@pam:", []proxmox.TaskLogLine{
 		{LineNumber: 1, Text: "INFO: Starting Backup of VM 101 (qemu)"},
 		{LineNumber: 2, Text: "INFO: Finished Backup of VM 101 (00:01:30)"},
 		{LineNumber: 3, Text: "INFO: Starting Backup of VM 102 (lxc)"},

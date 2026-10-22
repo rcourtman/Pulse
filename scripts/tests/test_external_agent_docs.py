@@ -5,6 +5,8 @@ The copied HTTP recipes run only against synthetic guest-local fixtures.
 """
 
 from pathlib import Path
+import json
+import os
 import re
 import subprocess
 import tempfile
@@ -23,6 +25,10 @@ def adapter_readme():
     return (ROOT / "cmd/pulse-mcp/README.md").read_text(encoding="utf-8")
 
 
+def installer_section():
+    return adapter_readme().split("## Install\n", 1)[1].split("### 3. Build from source", 1)[0]
+
+
 def compact(value):
     return " ".join(value.split())
 
@@ -33,6 +39,96 @@ def requests():
 
 
 class ExternalAgentDocsTest(unittest.TestCase):
+    def test_install_guides_distinguish_release_signatures_from_platform_approval(self):
+        for source in (guide(), adapter_readme()):
+            text = compact(source)
+            for boundary in ("pinned release key", "notaris", "Gatekeeper", "Authenticode",
+                             "ssh-keygen", "-Y verify", "do not clear quarantine"):
+                with self.subTest(boundary=boundary):
+                    self.assertIn(boundary, text)
+            self.assertNotRegex(text, r"xattr\s+-d|ExecutionPolicy\s+Bypass|same unsigned binary")
+            self.assertIn("do not cryptographically authenticate the script itself", text)
+        # The guide describes both production installers' existing trust check,
+        # not a newly implemented signing or OS-notarisation capability.
+        for name in ("install-mcp.sh", "install-mcp.ps1"):
+            source = (ROOT / "scripts" / name).read_text()
+            self.assertIn("checksums.txt", source)
+            self.assertIn("pulse-install", source)
+            self.assertRegex(source, r"-Y[\s\S]{0,4}verify")
+
+    def test_adapter_downloads_are_separate_from_execution(self):
+        readme = installer_section()
+        shell = re.findall(r"```sh\n(.*?)```", readme, re.DOTALL)
+        powershell = re.findall(r"```powershell\n(.*?)```", readme, re.DOTALL)
+        self.assertEqual(len(shell), 2)
+        self.assertEqual(len(powershell), 2)
+        for download in (shell[0], powershell[0]):
+            self.assertNotRegex(download, r"\|\s*(?:bash|sh|iex|Invoke-Expression)\b")
+            self.assertNotIn("PULSE_API_TOKEN", download)
+        self.assertIn("mktemp -d", shell[0])
+        self.assertIn("&&", shell[0])
+        self.assertIn("[Guid]::NewGuid()", powershell[0])
+        self.assertIn("-ErrorAction Stop", powershell[0])
+        self.assertIn("-TimeoutSec 60", powershell[0])
+        self.assertEqual(powershell[1].strip(), "& $pulseMcpInstaller")
+
+    def test_copied_unix_download_never_executes_received_bytes(self):
+        shell = re.findall(r"```sh\n(.*?)```", installer_section(), re.DOTALL)
+        # Run the exact copied download block. curl is a local argument/payload
+        # fixture, not a network client; the received script only writes a marker.
+        for exit_code in (0, 22, 28):
+            with self.subTest(exit_code=exit_code), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "bin").mkdir()
+                (root / "scratch").mkdir()
+                curl = root / "bin/curl"
+                curl.write_text("#!/usr/bin/env python3\n"
+                    "import json, os, pathlib, sys\n"
+                    "args = sys.argv[1:]\n"
+                    "pathlib.Path(os.environ['CURL_ARGS']).write_text(json.dumps(args))\n"
+                    "pathlib.Path(args[args.index('--output') + 1]).write_text("
+                    "'printf executed > \"$INSTALL_EXECUTED\"\\n')\n"
+                    "sys.exit(int(os.environ['CURL_EXIT']))\n")
+                curl.chmod(0o700)
+                env = {**os.environ, "PATH": str(root / "bin") + os.pathsep + os.environ['PATH'],
+                       "TMPDIR": str(root / "scratch"), "CURL_ARGS": str(root / "args.json"),
+                       "CURL_EXIT": str(exit_code), "INSTALL_EXECUTED": str(root / "executed")}
+                result = subprocess.run(["bash", "-c", shell[0]], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, exit_code, result.stderr)
+                self.assertFalse((root / "executed").exists())
+                args = json.loads((root / "args.json").read_text())
+                self.assertEqual(args[0], "--disable")
+                for flag, value in (("--proto", "=https"), ("--proto-redir", "=https"),
+                                    ("--connect-timeout", "10"), ("--max-time", "60")):
+                    self.assertEqual(args[args.index(flag) + 1], value)
+                for flag in ("--fail", "--silent", "--show-error", "--location"):
+                    self.assertIn(flag, args)
+                self.assertEqual(args[-1], "https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh")
+                download = Path(args[args.index("--output") + 1])
+                self.assertTrue(download.is_relative_to(root / "scratch"))
+                self.assertEqual(download.parent.stat().st_mode & 0o777, 0o700)
+                if exit_code == 0:
+                    # Only the separate, explicitly selected execution block
+                    # runs the benign received fixture, in the same saved path.
+                    run = subprocess.run(["bash", "-c", shell[1]],
+                        env={**env, "pulse_mcp_setup": str(download.parent)}, capture_output=True, text=True)
+                    self.assertEqual(run.returncode, 0, run.stderr)
+                    self.assertEqual((root / "executed").read_text(), "executed")
+
+    def test_copied_unix_download_stops_when_private_directory_creation_fails(self):
+        download = re.findall(r"```sh\n(.*?)```", installer_section(), re.DOTALL)[0]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "mktemp").write_text("#!/bin/sh\nexit 1\n")
+            (root / "mktemp").chmod(0o700)
+            (root / "curl").write_text('#!/bin/sh\nprintf called > "$CURL_CALLED"\n')
+            (root / "curl").chmod(0o700)
+            result = subprocess.run(["bash", "-c", download], capture_output=True, text=True,
+                env={**os.environ, "PATH": str(root) + os.pathsep + os.environ['PATH'],
+                     "CURL_CALLED": str(root / "called")})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((root / "called").exists())
+
     def test_shipped_guide_matches_canonical(self):
         self.assertEqual(guide(), (ROOT / "frontend-modern/public/docs/AGENT_SUBSTRATE.md").read_text())
 

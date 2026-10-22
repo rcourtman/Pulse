@@ -5,14 +5,155 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+// A complete HTTP envelope is not a complete task log if a numbered line was
+// lost or its text silently decoded to a zero value. Keep errors bounded: log
+// contents may include private guest names and command output.
+func TestTaskLogRequiresNumberedTextSequence(t *testing.T) {
+	for _, tc := range []struct{ name, rows string }{
+		{"missing-number", `[{"t":"private-log-fixture"}]`},
+		{"null-number", `[{"n":null,"t":"private-log-fixture"}]`},
+		{"zero-number", `[{"n":0,"t":"private-log-fixture"}]`},
+		{"negative-number", `[{"n":-1,"t":"private-log-fixture"}]`},
+		{"prefix-missing", `[{"n":2,"t":"private-log-fixture"}]`},
+		{"gap", `[{"n":1,"t":"start"},{"n":3,"t":"private-log-fixture"}]`},
+		{"duplicate", `[{"n":1,"t":"start"},{"n":1,"t":"private-log-fixture"}]`},
+		{"reordered", `[{"n":2,"t":"start"},{"n":1,"t":"private-log-fixture"}]`},
+		{"missing-text", `[{"n":1,"t":"private-log-fixture"},{"n":2}]`},
+		{"null-text", `[{"n":1,"t":"private-log-fixture"},{"n":2,"t":null}]`},
+		{"wrong-number-type", `[{"n":"1","t":"private-log-fixture"}]`},
+		{"wrong-text-type", `[{"n":1,"t":7}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("start") != "0" || r.URL.Query().Get("limit") != fmt.Sprint(taskLogLineLimit) {
+					t.Error("task log request no longer starts at the bounded origin")
+				}
+				fmt.Fprint(w, `{"data":`+tc.rows+`}`)
+			}))
+			defer server.Close()
+			lines, err := backupTestClient(t, server.URL).GetTaskLog(context.Background(), "node", "job")
+			if err == nil || lines != nil {
+				t.Fatalf("incomplete sequence published: %d rows, error=%v", len(lines), err)
+			}
+			if strings.Contains(err.Error(), "private-log-fixture") || isAuthError(err) {
+				t.Fatal("invalid log became private diagnostics or an authentication diagnosis")
+			}
+		})
+	}
+	for _, rows := range []string{`[]`, `[{"n":1,"t":""},{"n":2,"t":"  "},{"n":3,"t":"INFO: complete","metadata":true}]`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `{"data":`+rows+`,"errors":null,"metadata":true}`)
+		}))
+		lines, err := backupTestClient(t, server.URL).GetTaskLog(context.Background(), "node", "job")
+		server.Close()
+		if err != nil || (rows != `[]` && (len(lines) != 3 || lines[0].Text != "" || lines[1].Text != "  ")) {
+			t.Fatalf("complete empty/blank/additive log changed: %+v, %v", lines, err)
+		}
+	}
+}
+
+// Non-parallel, like the other diagnostic tests in this file. Large/additive
+// replies must not copy guest data into logs even when Debug is enabled.
+func TestGuestFilesystemResponseDiagnosticsNoPayload(t *testing.T) {
+	const marker = "synthetic-private-filesystem-metadata"
+	row := `{"name":"` + marker + `","mountpoint":"/data","type":"ext4","total-bytes":1000,"used-bytes":0}`
+	unrecognized := `{"unused":"` + marker + `"}`
+	largeUnrecognized := `{"unused":"` + marker + strings.Repeat("x", 128*1024) + `"}`
+	for _, tc := range []struct {
+		name, payload string
+		wantRows      int
+		wantError     bool
+		resultBytes   int
+	}{
+		{"array", `{"data":{"result":[` + row + `]}}`, 1, false, 0},
+		{"object", `{"data":{"result":` + row + `}}`, 1, false, 0},
+		{"large-additive", `{"data":{"result":[` + row + `],"unused":"` + marker + strings.Repeat("x", 128*1024) + `"}}`, 1, false, 0},
+		{"incomplete", `{"data":{"result":[` + row + `,{"mountpoint":"/other","type":"ext4","total-bytes":9000}],"unused":"` + marker + `"}}`, 1, true, 0},
+		{"empty", `{"data":{"result":[],"unused":"` + marker + `"}}`, 0, false, 0},
+		{"null", `{"data":{"result":null,"unused":"` + marker + `"}}`, 0, false, 0},
+		{"unrecognized-object", `{"data":{"result":` + unrecognized + `}}`, 0, false, len(unrecognized)},
+		{"large-unrecognized-object", `{"data":{"result":` + largeUnrecognized + `}}`, 0, false, len(largeUnrecognized)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var commands atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/config"):
+					fmt.Fprint(w, `{"data":{}}`)
+				case strings.HasSuffix(r.URL.Path, "/agent/get-fsinfo"):
+					commands.Add(1)
+					fmt.Fprint(w, tc.payload)
+				default:
+					t.Error("unexpected diagnostic fixture request")
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			client := backupTestClient(t, server.URL)
+			var captured bytes.Buffer
+			prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+			log.Logger = zerolog.New(zerolog.SyncWriter(&captured)).Level(zerolog.DebugLevel)
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+			defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+			rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+			if (err != nil) != tc.wantError || len(rows) != tc.wantRows || commands.Load() != 1 {
+				t.Fatal("diagnostic filtering changed decoding, completeness or command count")
+			}
+			if len(rows) > 0 && (rows[0].Name != marker || rows[0].UsedBytes != 0 || rows[0].TotalBytes != 1000 || rows[0].Mountpoint != "/data") {
+				t.Fatal("diagnostic filtering changed a measured zero or guest metadata")
+			}
+			if strings.Contains(captured.String(), marker) || strings.Contains(captured.String(), `"response":`) || strings.Contains(captured.String(), `"result":`) {
+				t.Fatal("filesystem reply contents escaped into diagnostics")
+			}
+			if captured.Len() > 2048 {
+				t.Fatal("filesystem diagnostics grew with unused response data")
+			}
+			decoder := json.NewDecoder(&captured)
+			found := false
+			foundUnrecognized := false
+			logBytes := captured.Len()
+			for decoder.More() {
+				var event map[string]interface{}
+				if err := decoder.Decode(&event); err != nil {
+					t.Fatal("diagnostic is not a complete JSON event")
+				}
+				if event["message"] == "Received guest agent filesystem response" {
+					found = true
+					if event["response_bytes"] != float64(len(tc.payload)) || event["node"] != "node" || event["vmid"] != float64(105) {
+						t.Fatal("diagnostic lost useful response size or guest attribution")
+					}
+				}
+				if event["message"] == "GetVMFSInfo received unrecognized result instead of filesystem array" {
+					foundUnrecognized = true
+					if event["result_bytes"] != float64(tc.resultBytes) || event["node"] != "node" || event["vmid"] != float64(105) {
+						t.Fatal("unrecognized-result diagnostic lost useful size or guest attribution")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("bounded filesystem diagnostic is absent")
+			}
+			if foundUnrecognized != (tc.resultBytes > 0) {
+				t.Fatal("unrecognized-result diagnostic does not match the decoded shape")
+			}
+			t.Logf("response_bytes=%d log_bytes=%d rows=%d incomplete=%t commands=%d", len(tc.payload), logBytes, len(rows), err != nil, commands.Load())
+		})
+	}
+}
 
 // Non-parallel: temporarily replace the package logger, then restore it before
 // parallel tests can run. Only synthetic URLs/credentials enter this fixture.
@@ -163,6 +304,17 @@ func TestClientConstructionHonoursContext(t *testing.T) {
 	testClientConstructionHonoursContext(t)
 }
 
+func TestClientCancelledAuthResponseOwnsErrorAndSession(t *testing.T) {
+	testClientCancelledAuthResponseOwnsErrorAndSession(t)
+}
+
+// Unlike unpublished construction, renewal belongs to every live reader.
+// Exercise both authentication encodings so restoring constructor cancellation
+// cannot accidentally restore cancellation of a shared renewal too.
+func TestClientSessionRenewalStarterCancellation(t *testing.T) {
+	testClientSessionRenewalStarterCancellation(t)
+}
+
 func TestClientConstructionHonoursClientTimeout(t *testing.T) {
 	testClientConstructionHonoursContext(t, "client-timeout")
 }
@@ -173,4 +325,296 @@ func TestClusterCancelledCallerStartsNoSession(t *testing.T) {
 
 func TestClusterSessionConstructionHonoursCallerBudget(t *testing.T) {
 	testClusterSessionConstructionHonoursCallerBudget(t)
+}
+
+// A malformed snapshot inventory is a collection failure, not a new empty
+// list or an instruction to change credentials. Ordinary rereading recovers.
+func TestSnapshotInventoryReadRecovery(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if calls.Add(1) == 1 {
+					fmt.Fprint(w, `{"data":null,"detail":"fixture-private-detail"}`)
+					return
+				}
+				fmt.Fprint(w, `{"data":[{"name":"current"},{"name":"weekly","snaptime":1700000000}]}`)
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.httpClient.CloseIdleConnections()
+			read := func() ([]Snapshot, error) {
+				if kind == "lxc" {
+					return client.GetContainerSnapshots(context.Background(), "member", 105)
+				}
+				return client.GetVMSnapshots(context.Background(), "member", 105)
+			}
+			if rows, err := read(); err == nil || rows != nil || strings.Contains(err.Error(), "authentication") || strings.Contains(err.Error(), "fixture-private-detail") {
+				t.Fatalf("unknown inventory became empty success or unsafe diagnosis: %+v / %v", rows, err)
+			}
+			rows, err := read()
+			if err != nil || len(rows) != 1 || rows[0].VMID != 105 || calls.Load() != 2 {
+				t.Fatalf("ordinary snapshot reread failed: %+v / %v / %d calls", rows, err, calls.Load())
+			}
+		})
+	}
+}
+
+// Storage replies can contain archive names and operator notes. A malformed
+// success must be an unavailable inventory, never an auth diagnosis or a copy
+// of the private payload in an error/log, including with Debug enabled.
+func TestStorageInventoryDiagnosticsNoPayload(t *testing.T) {
+	const marker = "synthetic-private-archive-metadata"
+	for _, endpoint := range []string{"node-storages", "all-storages", "content"} {
+		for _, malformed := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/malformed=%t", endpoint, malformed), func(t *testing.T) {
+				body := `{"data":[` + storageInventoryFixtureRow(endpoint) + `],"metadata":"` + marker + strings.Repeat("x", 128*1024) + `"}`
+				if malformed {
+					body = `{"data":[],"errors":{"private":"` + marker + strings.Repeat("x", 128*1024) + `"}}`
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) }))
+				defer server.Close()
+				var captured bytes.Buffer
+				prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+				log.Logger = zerolog.New(zerolog.SyncWriter(&captured)).Level(zerolog.DebugLevel)
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
+				defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+				rows, err := storageInventoryReader(t, server.URL, "single", endpoint)(context.Background())
+				if (err != nil) != malformed || (!malformed && len(rows) != 1) || (malformed && (len(rows) != 0 || isAuthError(err))) {
+					t.Fatal("diagnostic filtering changed inventory admission or auth classification")
+				}
+				if strings.Contains(captured.String(), marker) || (err != nil && strings.Contains(err.Error(), marker)) || captured.Len() > 2048 {
+					t.Fatal("storage reply payload escaped or inflated diagnostics")
+				}
+			})
+		}
+	}
+}
+
+// A bounded wire body can contain thousands of rejected rows. It must not turn
+// one ordinary read into one warning and one reserved filesystem slot per row.
+// Synthetic HTTP only: no native QGA, backup or guest recovery is attempted.
+func TestGuestFilesystemMalformedReplyCost(t *testing.T) {
+	for _, malformed := range []int{0, 1, 32, 4096} {
+		for _, level := range []zerolog.Level{zerolog.WarnLevel, zerolog.DebugLevel} {
+			t.Run(fmt.Sprintf("rows-%d/%s", malformed, level), func(t *testing.T) {
+				const marker = "synthetic-private-rejected-volume"
+				peer := `{"name":"root","mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}`
+				bad := `{"mountpoint":"/` + marker + `","type":"ext4","total-bytes":9000}`
+				// Valid peers at both ends pin ordering and the last measured zero.
+				last := `{"name":"data","mountpoint":"/data","type":"ext4","total-bytes":2000,"used-bytes":0}`
+				payload := `{"data":{"result":[` + peer + "," + strings.Repeat(bad+",", malformed) + last + `]}}`
+				var commands, configs atomic.Int32
+				var healthy atomic.Bool
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasSuffix(r.URL.Path, "/config") {
+						configs.Add(1)
+						fmt.Fprint(w, `{"data":{}}`)
+						return
+					}
+					commands.Add(1)
+					if strings.HasSuffix(r.URL.Path, "/get-fsinfo") && !healthy.Load() {
+						fmt.Fprint(w, payload)
+					} else {
+						backupAgentPayload(w, r)
+					}
+				}))
+				defer server.Close()
+				client := commandReplyTestClient(t, server.URL+"/malformed-reply-cost/"+fmt.Sprint(malformed)+"/"+level.String())
+				var captured bytes.Buffer
+				prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+				log.Logger = zerolog.New(zerolog.SyncWriter(&captured)).Level(level)
+				zerolog.SetGlobalLevel(level)
+				defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+				rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+				if (err != nil) != (malformed > 0) || len(rows) != 2 || commands.Load() != 1 || configs.Load() != 2 {
+					t.Fatal("diagnostic bound changed valid peers, completeness or command/lock count")
+				}
+				if err != nil && err.Error() != fmt.Sprintf("guest filesystem inventory is incomplete: %d malformed entries", malformed) {
+					t.Fatal("diagnostic bound changed the existing counted error")
+				}
+				if rows[0].Name != "root" || rows[0].TotalBytes != 1000 || rows[0].UsedBytes != 0 || rows[0].Disk != "root-filesystem" ||
+					rows[1].Name != "data" || rows[1].TotalBytes != 2000 || rows[1].UsedBytes != 0 || rows[1].Disk != "/data" {
+					t.Fatal("valid peer identity, order, bytes or measured zero changed")
+				}
+				if cap(rows) > 2*len(rows) {
+					t.Errorf("accepted output reservation follows rejected rows: capacity=%d accepted=%d", cap(rows), len(rows))
+				}
+				if strings.Contains(captured.String(), marker) {
+					t.Fatal("rejected volume payload escaped into diagnostics")
+				}
+				logBytes := captured.Len()
+				decoder := json.NewDecoder(bytes.NewReader(captured.Bytes()))
+				var warnings []map[string]interface{}
+				for decoder.More() {
+					var event map[string]interface{}
+					if err := decoder.Decode(&event); err != nil {
+						t.Fatal("malformed log event")
+					}
+					if event["level"] == "warn" {
+						warnings = append(warnings, event)
+					}
+				}
+				t.Logf("response_bytes=%d malformed=%d log_bytes=%d warnings=%d accepted=%d commands=%d configs=%d", len(payload), malformed, logBytes, len(warnings), len(rows), commands.Load(), configs.Load())
+				wantWarnings := 0
+				if malformed > 0 {
+					wantWarnings = 1
+				}
+				if len(warnings) != wantWarnings || logBytes > 2048 {
+					t.Errorf("diagnostics amplify rejected rows: warnings=%d want=%d bytes=%d limit=2048", len(warnings), wantWarnings, logBytes)
+				} else if malformed > 0 {
+					event := warnings[0]
+					if event["malformed_entries"] != float64(malformed) || event["filesystem_entries"] != float64(malformed+2) || event["first_invalid_index"] != float64(1) || event["node"] != "node" || event["vmid"] != float64(105) {
+						t.Error("counted warning lost rejection total, first index or guest attribution")
+					} else if malformed == 4096 && level == zerolog.WarnLevel {
+						// Real producer event, consumed unchanged by the browser proof.
+						wire, _ := json.Marshal(event)
+						t.Logf("FILESYSTEM_LOG_PRODUCER %s", wire)
+					}
+				}
+				// Malformed completed readings are not uncertain command completion.
+				if _, err := client.GetVMAgentInfo(context.Background(), "migrated", 105); err != nil {
+					t.Fatalf("completed reading incorrectly fenced metadata: %v", err)
+				}
+				healthy.Store(true)
+				if next, err := client.GetVMFSInfo(context.Background(), "migrated", 105); err != nil || len(next) != 0 || commands.Load() != 3 || configs.Load() != 6 {
+					t.Fatal("ordinary complete inventory did not resume with unchanged lock checks")
+				}
+			})
+		}
+	}
+}
+
+// Measure the unchanged public reader, including guarded HTTP and parsing, on
+// an identical small valid inventory and a large rejected inventory. Allocation
+// observations are comparative evidence, not a timing/CI performance threshold.
+func BenchmarkGuestFilesystemReplyCost(b *testing.B) {
+	prior, priorLevel := log.Logger, zerolog.GlobalLevel()
+	log.Logger = zerolog.New(io.Discard).Level(zerolog.Disabled)
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	defer func() { log.Logger = prior; zerolog.SetGlobalLevel(priorLevel) }()
+	for _, malformed := range []int{0, 4096} {
+		b.Run(fmt.Sprintf("malformed-%d", malformed), func(b *testing.B) {
+			peer := `{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0}`
+			payload := `{"data":{"result":[` + peer + "," + strings.Repeat("null,", malformed) + peer + `]}}`
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+				} else {
+					fmt.Fprint(w, payload)
+				}
+			}))
+			defer server.Close()
+			client, err := NewClient(ClientConfig{Host: server.URL, TokenName: "fixture@pve!pulse", TokenValue: "fixture", Timeout: 15 * time.Second})
+			if err != nil {
+				b.Fatal(err)
+			}
+			defer client.httpClient.CloseIdleConnections()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+				if len(rows) != 2 || (err != nil) != (malformed > 0) {
+					b.Fatal("reader lost valid peers or counted failure")
+				}
+			}
+		})
+	}
+}
+
+// The cheap shape rejection must retain the original completed-reading
+// semantics. It is neither successful emptiness nor an uncertainty cooldown.
+func TestGuestFilesystemNonObjectRowsRemainIncomplete(t *testing.T) {
+	for _, bad := range []string{`null`, `false`, `true`, `7`, `"synthetic-private-scalar"`, `[]`, `[{}]`} {
+		t.Run(fmt.Sprintf("case-%d", len(bad)), func(t *testing.T) {
+			var commands atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/config") {
+					fmt.Fprint(w, `{"data":{}}`)
+					return
+				}
+				commands.Add(1)
+				if strings.HasSuffix(r.URL.Path, "/get-fsinfo") {
+					fmt.Fprintf(w, `{"data":{"result":[%s,{"mountpoint":"/","type":"ext4","total-bytes":1000,"used-bytes":0},%s]}}`, bad, bad)
+				} else {
+					backupAgentPayload(w, r)
+				}
+			}))
+			defer server.Close()
+			// Keep independent cases outside any prior listener's guest fence.
+			client := commandReplyTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
+			rows, err := client.GetVMFSInfo(context.Background(), "node", 105)
+			if len(rows) != 1 || rows[0].UsedBytes != 0 || cap(rows) > 2 || err == nil || err.Error() != "guest filesystem inventory is incomplete: 2 malformed entries" {
+				t.Fatal("known malformed row shape changed accepted peer, output reservation or counted error")
+			}
+			if strings.Contains(err.Error(), "synthetic-private-scalar") {
+				t.Fatal("raw row entered the counted error")
+			}
+			if _, err := client.GetVMAgentInfo(context.Background(), "node", 105); err != nil || commands.Load() != 2 {
+				t.Fatal("completed rejected shape acquired an uncertainty fence or repeated a command")
+			}
+		})
+	}
+}
+
+// Token construction is socket-free. URL parsing must never reinterpret an
+// explicit scheme as an HTTPS hostname before an authenticated request is built.
+func TestClientEndpointAuthorityNormalization(t *testing.T) {
+	for _, tc := range []struct{ name, host, want string }{
+		{"upper-https", "HTTPS://pve.example.invalid:8443/tenant", "https://pve.example.invalid:8443/tenant/api2/json"},
+		{"mixed-https", "hTtPs://pve.example.invalid:8443/tenant/", "https://pve.example.invalid:8443/tenant/api2/json"},
+		{"upper-http", "HTTP://pve.example.invalid:8080/tenant", "http://pve.example.invalid:8080/tenant/api2/json"},
+		{"trimmed-bare", "  pve.example.invalid:8443/tenant  ", "https://pve.example.invalid:8443/tenant/api2/json"},
+		{"ipv6", "HTTPS://[2001:db8::1]:8443/tenant", "https://[2001:db8::1]:8443/tenant/api2/json"},
+		{"zoned-ipv6", "HTTPS://[fe80::1%25ZoneA]:8443/tenant", "https://[fe80::1%25ZoneA]:8443/tenant/api2/json"},
+		{"ordinary", "https://pve.example.invalid:8443/tenant", "https://pve.example.invalid:8443/tenant/api2/json"},
+	} {
+		for _, trust := range []struct {
+			name, pin string
+			verify    bool
+		}{{"ca", "", true}, {"pin", strings.Repeat("a", 64), true}, {"explicit-opt-out", "", false}} {
+			t.Run(tc.name+"/"+trust.name, func(t *testing.T) {
+				cfg := ClientConfig{Host: tc.host, TokenName: "fixture@pam!pulse", TokenValue: "synthetic-token", VerifySSL: trust.verify, Fingerprint: trust.pin, Timeout: 3 * time.Second}
+				client, err := NewClient(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer client.httpClient.CloseIdleConnections()
+				if client.baseURL != tc.want {
+					t.Errorf("request destination = %q, want %q", client.baseURL, tc.want)
+				}
+				if client.config.VerifySSL != cfg.VerifySSL || client.config.Fingerprint != cfg.Fingerprint || client.auth.tokenValue != cfg.TokenValue || client.httpClient.Timeout != cfg.Timeout {
+					t.Error("URL normalization changed trust, credentials or request budget")
+				}
+				transport := client.httpClient.Transport.(*http.Transport)
+				if transport.TLSClientConfig.InsecureSkipVerify != (trust.pin != "" || !trust.verify) || (trust.pin != "" && transport.TLSClientConfig.VerifyPeerCertificate == nil) || client.httpClient.CheckRedirect == nil {
+					t.Error("URL normalization changed TLS or redirect policy")
+				}
+			})
+		}
+	}
+}
+
+func TestClientEndpointExplicitSchemeRefused(t *testing.T) {
+	for _, host := range []string{
+		"ftp://pve.example.invalid:8006/tenant", "ws://pve.example.invalid:8006/tenant", "wss://pve.example.invalid:8006/tenant",
+		"file://pve.example.invalid/tenant", "ssh://pve.example.invalid:22/tenant", "https://fixture:synthetic-secret@pve.example.invalid",
+		"HTTPS://fixture:synthetic-secret@pve.example.invalid", "HTTPS://pve.example.invalid?token=synthetic-secret", "HTTPS://pve.example.invalid#synthetic-secret",
+	} {
+		t.Run(host, func(t *testing.T) {
+			client, err := NewClient(ClientConfig{Host: host, TokenName: "fixture@pam!pulse", TokenValue: "synthetic-token", VerifySSL: true})
+			if err == nil || client != nil {
+				if client != nil {
+					client.httpClient.CloseIdleConnections()
+				}
+				t.Fatal("invalid endpoint became an authenticated client")
+			}
+			if strings.Contains(err.Error(), "synthetic-secret") || strings.Contains(err.Error(), "synthetic-token") {
+				t.Error("rejected URL diagnostic disclosed fixture credentials")
+			}
+		})
+	}
 }

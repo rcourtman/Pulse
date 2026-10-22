@@ -10231,3 +10231,53 @@ func TestRemediationLockHoldsOnTheRetiredIDWhileThePreviousGenerationServes(t *t
 		}
 	}
 }
+
+func TestRegistryProxmoxGuestCPUWithdrawalAndIdleRecovery(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			rr := NewRegistry(nil)
+			for _, cpu := range []float64{.98, -1, -1, 0} {
+				memory := models.Memory{Total: 1000, Used: 250, Free: 750, Usage: 25}
+				vm := models.VM{ID: "lab:member:106", VMID: 106, Instance: "lab", Node: "member", Name: "guest", Type: "qemu", Status: "running", CPU: cpu, CPUs: 2, Memory: memory, LastSeen: time.Now()}
+				ct := models.Container{ID: vm.ID, VMID: vm.VMID, Instance: vm.Instance, Node: vm.Node, Name: vm.Name, Type: "lxc", Status: vm.Status, CPU: cpu, CPUs: 2, Memory: memory, LastSeen: vm.LastSeen}
+				snap := models.StateSnapshot{VMs: []models.VM{vm}}
+				if kind == "lxc" {
+					snap.VMs = nil
+					snap.Containers = []models.Container{ct}
+				}
+				rr.IngestSnapshot(snap)
+				rows := rr.List()
+				if len(rows) != 1 {
+					t.Fatalf("guest disappeared: %+v", rows)
+				}
+				r := rows[0]
+				if r.Proxmox.CPUUsageUnavailable != (cpu < 0) || r.Metrics.Memory == nil || r.Metrics.Memory.Percent != 25 {
+					t.Fatal("source-owned CPU absence lost or changed memory")
+				}
+				if cpu < 0 && r.Metrics.CPU != nil {
+					t.Fatalf("old CPU refreshed as current: %+v", r.Metrics.CPU)
+				}
+				if cpu >= 0 && (r.Metrics.CPU == nil || r.Metrics.CPU.Percent != cpu*100) {
+					t.Fatalf("measured CPU did not return: %+v", r.Metrics.CPU)
+				}
+				partial := mergeProxmoxData(r.Proxmox, &ProxmoxData{NodeName: "member"})
+				if partial.CPUUsageUnavailable != (cpu < 0) {
+					t.Fatal("non-guest facet erased CPU admission")
+				}
+				var observed float64
+				if kind == "qemu" {
+					observed = rr.VMs()[0].CPUPercent()
+				} else {
+					observed = rr.Containers()[0].CPUPercent()
+				}
+				want := cpu * 100
+				if cpu < 0 {
+					want = -1
+				}
+				if observed != want {
+					t.Fatalf("read view CPU=%v want %v", observed, want)
+				}
+			}
+		})
+	}
+}

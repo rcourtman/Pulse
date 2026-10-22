@@ -23,6 +23,36 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Service connection states stay conservative in an open drawer
+
+The PBS/PMG service State row uses complete recognised provider states, never
+the `healthy` substring in `unhealthy` or an unfamiliar description. Explicit
+resource `offline` takes precedence over a retained healthy service facet.
+Blank health falls back to the observed resource state; a reachable service
+with a resource-level storage warning remains distinguishable from a failed
+connection. Unknown explicit values retain neutral, escaped literal text.
+
+An open service card recomputes its state and tone after carrier-only changes,
+nested health changes and same-identity snapshot reconciliation. Its disclosure,
+state row and keyboard focus stay in place; PBS and PMG do not borrow each
+other's health. `serviceHealthPresentation.test.ts` and
+`ResourceDetailDrawer.service-cards.test.tsx` cover those boundaries. The
+read-only `service-connection.cjs` fixture exercises the production normalizer,
+state helper, full drawers and CSS at desktop and 320px using keyboard/touch.
+This is connection-state presentation proof, not a new current-metric/job
+observation, native PBS/PMG recovery, guest responsiveness, thaw or restore.
+
+### Root aggregate projection preserves missing counters
+
+The existing detail mapper preserves absent capacity and used/free bytes rather
+than defaulting them to zero. It derives free space and utilization only from
+observed byte inputs and retains invalid/unavailable aggregate percentages as
+unavailable. This is a local presentation projection, not a canonical payload,
+collector, identity, freshness or History change. Mapper regressions and the
+source-bound `root-disk-observation.cjs` full-drawer fixture exercise missing,
+partial, invalid, zero, measured and removed canonical observations without
+changing their source values or closing the open disclosure.
+
 ### Websocket-first routes always obtain their REST snapshot (21 October 2026)
 
 Action readiness, scoped facets and other REST-only enrichment arrive only
@@ -37,22 +67,264 @@ snapshot is absent or older than the cache window, and the delayed revalidation
 forces the network. `revalidates a prefer-ws-then-rest screen seeded from a
 websocket-only cache on mount` covers the navigation path.
 
+### Native guest power qualifies only its own agent cards
 
-### Docker object aliases do not identify their reporting host
+Canonical power-only Proxmox deltas qualify the detail drawer's retained in-guest
+filesystem, RAID, thermal/SMART, custom and interface evidence, even while the
+resource is online and its agent lease unexpired. The drawer shares Workloads'
+VM/LXC power rules but reads only the native runtime field, not row health.
+Other scopes, host/API inventory and independent physical disk collection remain
+separate. Source values, failures, identities and timestamps are not rewritten.
+Mapper, primitive and full-drawer tests plus the source-bound
+`resource-agent-observation.cjs` fixture cover recovery and scope boundaries at
+desktop and 320px touch widths; this is not native recovery or guest liveness.
 
-Containers and other Docker child objects own their native IDs, names and
-subject-typed discovery/metrics targets. Reporting-agent IDs, Docker host IDs,
-hostnames and task placement nodes remain routing metadata, not child aliases.
-Canonical hostname/platform presentation must not reintroduce those parent
-identities. Missing child targets cannot promote the parent to primary identity.
-Host aliases and same-entity host facets retain their existing semantics.
 
-`TestDockerChildIdentityDoesNotClaimItsCommandHost` covers all nine child kinds,
-owned aliases and missing-target boundaries. The registered Docker log-read
-control in `internal/ai/tools/internal_routing_identity_test.go` consumes actual
-registry ingestion with collected containers, images and networks. Genuine
-duplicate names must still fail closed. Source controls alone do not establish
-installed command transport or autonomous recovery.
+### Guest physical-disk inventory distinguishes pending and empty reads
+
+The existing guest drawer names the pending scoped inventory read. A successful
+response with no physical disks belonging to this guest shows missing inventory,
+not disk absence or healthy hardware. Foreign-parent and non-disk rows cannot
+fill that result. Existing disks remain visible during an ordinary refresh;
+read failures still withdraw them and retain the existing explicit Retry.
+A successful empty retry clears the failure without inventing a disk. No guest
+probe, collector, identity, reporting lease or health rule changes.
+
+`GuestPhysicalDisks.test.tsx` and `browser-tests/guest-disk-inventory-state.cjs`
+cover these transitions through the actual guest drawer and scoped reader at
+desktop and 320px touch widths. This is consumer-state proof, not a repair or
+verification of native disk collection, guest thaw or filesystem liveness.
+
+### Retained custom metrics do not claim current service or backup health
+
+The existing machine detail carries the linked agent's expired reporting lease
+into every custom sensor row, even when an independent platform keeps the machine
+online. Boolean and numeric evidence remains visibly last known; unavailable
+values stay unavailable. A retained timestamp is its age **when observed**, not
+an age relative to now. Sensor-specific failures remain stale after the parent
+reports again, and reported statuses/errors are preserved as historical evidence.
+A wrapping, visible explanation reaches keyboard and touch users without hover.
+The shared sensor card reacts to first reports and removal without remounting the
+machine or losing its open disclosure. Provider state, readings, alert evaluation,
+collection and independently sourced disk temperature rules are unchanged.
+
+`resourceDetailMappers.test.ts`, `ResourceDetailDrawer.machine-history.test.tsx`
+and `browser-tests/custom-sensor-observation.cjs` cover current, parent-retained,
+sensor-retained, missing, zero, replacement and removal states through the actual
+canonical merger and machine drawer at desktop and 320px touch widths. This is
+synthetic consumer proof, not a service, backup, thaw or installed recovery check.
+
+
+### PBS backup counts preserve source attribution
+
+The Backups consumer selects one whole PBS inventory source per server.
+Configured connection names take precedence over unclaimed, unique legacy
+instance-ID aliases; `backup` cannot borrow `pbs-backup`'s entries. Duplicate
+or missing identities stay Unknown rather than becoming a zero or a shared
+count. Datastore lookup follows source selection. This is inventory attribution,
+not host/agent correlation, capacity, protection posture or native recovery.
+`ProxmoxBackupServersTable.capacity.test.tsx` and `pbs-count-sources.cjs`
+cover the actual rows/disclosure, canonical resource adapter and HTTP reader.
+
+
+### PBS datastore capacity explanations are not hover-only
+
+Unavailable and Unknown capacity cells open the existing full-width resource
+row disclosure using a named native button with expanded/controls semantics.
+Its accessible name includes the visible Unavailable/Unknown state. The control
+contains its click so the summary row cannot toggle the disclosure again.
+The disclosure names the backup server and datastore, explains that a failed or
+unknown capacity read is not an empty datastore, and does not confuse server
+reachability with a successful datastore read. Fixed copy does not expose raw
+provider errors; reported names remain escaped, wrapping text. Ordinary same-row
+updates replace the explanation with measured capacity, including a genuine
+zero, without closing the disclosure. Other datastores remain independently
+attributed. No probe, backup, guest action or new route is added.
+
+`ProxmoxBackupServersTable.capacity.test.tsx` and `pbs-capacity-details.cjs`
+exercise the production table, canonical adapter and row-specific context at
+desktop and 320px touch widths. Synthetic observations are not native datastore
+recovery or guest-safety acceptance.
+
+### Replication reports outcomes without inventing health or queued work
+
+The existing Replication table presents a successful last sync as **OK**, not
+an overall Healthy verdict. A reported error or positive failure count wins over
+successful aliases, including a zero-count error. Missing, blank and unrecognised
+last results remain **Unknown**, not Pending. Only an explicit pending result is
+Pending; disabled jobs remain Disabled with their historical error/result readable.
+Outcome aliases are trimmed and case-insensitive. Status counts and filtering use
+the same predicate as the scanning row and update after ordinary HTTP replacement.
+
+The existing keyboard/touch disclosure shows the full plain-text reported last
+result and its interpretation without hover. The table explains that status is
+not a restore check or current guest health, and keeps Next sync independent so
+an overdue schedule cannot be hidden by a previous OK result. Neither collection,
+API shape, polling cadence nor any replication/guest/recovery operation changes.
+`ProxmoxReplicationTable.test.tsx` pins outcome/error precedence, unknown versus
+explicitly pending, plain-text results and live filter replacement.
+`replication-result-verdicts.cjs` exercises the real page/query/HTTP reader/table
+and CSS at desktop and narrow widths. These are synthetic consumer proofs, not
+native sync, restore, thaw, filesystem-liveness or installed-recovery acceptance.
+
+
+### Backup artifact detail access
+
+The existing By date and Coverage consumers keep full reported archive paths
+and detail text readable without hover at every container width. Hidden Details
+columns move to a correctly spanned provenance continuation rather than dropping
+their values. Short format/context and a different full identifier remain
+distinct; equal values are not repeated. Attribution and repository/filter keys
+are unchanged. The consuming-table tests and HTTP/browser protocol cover resize,
+inventory replacement and bounded variable-height scrolling, not native recovery.
+
+### Phone protection summaries prioritise readable evidence
+
+Below the existing 34rem table-container breakpoint, TrueNAS Protection keeps
+Dataset (with Snapshot/Replication kind), Time and Outcome visible, rather than
+squeezing Artifact and Target into unreadable tracks. Artifact and Target remain
+in the existing expandable detail and return as columns when the container has
+room. Detail values use the existing stacked, wrapping row mode, including unbroken
+target/dataset names, rather than requiring a hover title or a fixed label/value
+grid to read omitted evidence in a phone or narrow desktop pane. Headers and cells hide together, including keyboard sort targets. Desktop
+columns, persisted sort keys, filters and row identity are unchanged.
+
+The narrow timestamp uses separate localised date and clock lines for the same
+reported instant used by sorting and detail. Its native time element retains
+that instant and labels Last run, Created or Observed without inventing completion;
+missing/invalid times remain unavailable. Outcome labels must fit in full at
+320px. `TrueNASProtectionTable.test.tsx` covers meaning and disclosure, and
+`truenas-protection-density.cjs` exercises the actual HTTP reader/decoder and
+production table/CSS at desktop, phone and constrained-container widths. This
+is read-only presentation, not appliance, backup or guest recovery.
+
+### TrueNAS Protection preserves the meaning of reported task evidence
+
+The TrueNAS replication mapper mirrors its best-effort LastRun into both
+transport timestamp fields; the consuming table must not present those as
+independent start/end or successful-completion evidence, including for running
+tasks. Protection labels the date column Reported time and the replication
+detail Last run. A snapshot with creation in StartedAt uses Created; a
+CompletedAt-only collection fallback uses Observed. Sorting consumes the same
+selected time and retains the existing internal/persisted key. Unreadable time
+remains unknown rather than displaying invalid provider text as a date.
+
+The existing replication detail exposes nonblank `details.lastError` as
+Reported error, escaped and wrapping, even if it differs from the supplied
+outcome. Missing/non-text errors do not invent a clean result. Accepted refresh
+replaces/removes this text without retaining an old error in the open detail.
+`TrueNASProtectionTable.test.tsx` and the connected HTTP/browser regression
+`truenas-protection-evidence.cjs` cover these cases. No transport/collector,
+canonical identity, outcome evaluation or appliance/guest operation changes.
+
+### TrueNAS protection-read failure does not replace inventory
+
+The existing TrueNAS Protection table consumes an all-or-nothing recovery-point
+page. Unreadable envelopes/rows are failures, not zero events or a usable subset.
+A transient failed read retains the last loaded point identities, filters and
+open disclosure with an explicit historical-record notice. Successful replacement
+updates the same consumer; readable empty data clears the page. An actual access
+denial still withdraws retained rows through the existing query boundary. No
+resource identity, API schema, persistence or appliance operation changes.
+The TrueNAS table, connected reader/admission and desktop/narrow browser tests
+exercise these transitions through the ordinary HTTP path.
+
+### Backup job detail keeps its workload and observation owner
+
+Coverage consumes the existing selected `latestTask` fields inside that
+workload's disclosure. Another connection's equal VMID or an older task cannot
+provide its error. Missing/uncertain selection supplies no invented latest
+detail. Reconciled inventory replacement retires old errors while preserving
+the logical workload's disclosure and focus. This changes no matching,
+provider posture, wire format, collection or recovery execution.
+
+### Incomplete backup observations retain their identity
+
+Running and failed entries remain attached to their existing workload, source
+and native artifact identity while completed-point summaries exclude them.
+Ordinary inventory replacement changes completion, not matching or disclosure
+keys. Day grouping counts visible entries rather than promising completed
+backups; a completed guest-local snapshot still does not fill the independent
+latest-backup slot. Connected recovery-model/table and browser regressions
+check counts, bytes, visible evidence and same-open replacement without new
+collection, resource, persistence or recovery execution paths.
+
+
+### Backup-job time uncertainty stays local to its workload
+
+Coverage propagates unorderable job chronology through its existing canonical
+workload match, without changing identity resolution, provider protection or
+restore-point selection. One guest's undated job cannot suppress another's
+known latest result. Conflicting normalized outcomes at the same newest start
+instant also stay Unknown only on their matched workload, with an accurate
+conflict explanation. Older ties cannot override a strictly newer result;
+agreement and duplicate observations do not fabricate uncertainty. Rebuilt
+rows clear the uncertainty after a corrected inventory, and their existing
+disclosure/focus identity stays stable. Unresolved collected jobs remain attached
+only through that same workload match; job ID is not a deduplication key for
+conflicting observations. Their recorded connection/node are never inferred from
+current placement. Unknown-only diagnostic search cannot leak another workload's
+failure or keep an older failure searchable after unambiguous replacement.
+The recovery-model and Coverage tests and `backup-job-uncertainty.cjs` cover
+isolation, exact evidence, response-order reversal and ordinary replacement.
+No new API, resource, persistence or execution path is introduced.
+
+### Coverage window geometry follows workload identity
+
+Expanded backup detail measurements are associated with the same canonical row
+key as the existing reconciled workload/disclosure, not the array index. A
+viewport offset inside that detail cannot advance the mounted runway past its
+own workload. Inventory replacement, filtering and sorting keep their existing
+identity/ownership semantics; no collection or recovery operation is added.
+The connected Coverage and shared window tests plus the 200-workload browser
+regression verify bounded, reachable presentation separately from native use.
+
+
+### Provider evidence identity stays separate from guest identity
+
+Existing backup Coverage exposes each observation's scope and source alongside
+its own result/history/access facts and includes them in the existing text search, even when the
+source has no current artifact. These labels are not inferred from the guest's
+connection and cannot change matching, location-facet identity or protection.
+`coverageProviderEvidence.test.tsx` and `ProxmoxCoverageTable.test.tsx` check
+identity preservation, missing values and refresh; desktop/narrow consuming
+proof is recorded separately by `backup-provider-evidence.cjs`.
+
+### Backup source provenance does not change guest identity
+
+Restore-point presentation retains its observed source connection separately
+from the matched workload. Both existing backup views expose full source paths
+without hover, including on phones. Connection-aware search/sorting and measured
+windowed row blocks do not alter guest matching, location-filter identity,
+resource attribution or recovery judgments. The connected model/table and
+`backup-location-access.cjs` checks require distinct source locations through
+ordinary refresh and complete-label viewport reachability on a large feed.
+
+
+### PMG same-open stored-detail lifecycle (15 October 2026)
+
+The existing Mail Gateway drawer refreshes stored full detail for a changed
+accepted PMG collection observation or health state; legacy rows use lastSeen
+when the collection timestamp is absent. Equal observations, unrelated alerts,
+object replacements and shared-clock ticks add no reads. Cached adverse detail
+cannot become healthy just because a newer slim row arrived: the accepted
+replacement must complete, and obsolete successful or rejected responses cannot
+replace it. These GETs read stored observations, not the appliance.
+
+A detail-read failure stays inside the drawer's existing error/Retry UI, with a
+resource-derived heading and independently open alerts preserved. Retry admits
+one pending request, exposes its busy/disabled state and becomes available again
+after failure. A later accepted observation may recover the same drawer without
+manual Retry. No diagnostic response text, fabricated queue value, timer,
+collection operation, new route or inferred identity is introduced.
+
+`ProxmoxMailGatewayTable.test.ts` covers the production drawer's
+observation changes, missing/zero readings, initial/repeated failures, bounded
+Retry and completed obsolete-response handling. Existing readings, alert-clock,
+table and presentation controls remain. Consuming acceptance still requires
+exact-source same-open desktop/narrow browser proof using the retained actual
+producer HTTP phases and native inspection of captures; component proof alone
+is not browser, native-appliance, protected-source or release acceptance.
 
 ### Workload aggregate disk presence survives projection (14 October 2026)
 
@@ -111,6 +383,22 @@ ordinary retries. `ProxmoxBackupsTable.test.tsx` checks stable server-table
 ownership through loading, single/both failures and valid response recovery.
 This consumes existing resources; it adds no producer or native recovery claim.
 
+### Docker object aliases do not identify their reporting host
+
+Containers and other Docker child objects own their native IDs, names and
+subject-typed discovery/metrics targets. Reporting-agent IDs, Docker host IDs,
+hostnames and task placement nodes remain routing metadata, not child aliases.
+Canonical hostname/platform presentation must not reintroduce those parent
+identities. Missing child targets cannot promote the parent to primary identity.
+Host aliases and same-entity host facets retain their existing semantics.
+
+`TestDockerChildIdentityDoesNotClaimItsCommandHost` covers all nine child kinds,
+owned aliases and missing-target boundaries. The registered Docker log-read
+control in `internal/ai/tools/internal_routing_identity_test.go` consumes actual
+registry ingestion with collected containers, images and networks. Genuine
+duplicate names must still fail closed. Source controls alone do not establish
+installed command transport or autonomous recovery.
+
 ### Shared interpretation of selected guest memory
 
 `GuestMemoryEvidenceForResource` and the VM/container `MemoryEvidence` accessors
@@ -139,6 +427,15 @@ reading for callers that do not know the type. `TestGuestMemoryClusterResourcesI
 covers both kinds, retained readings and the other cache-inclusive sources.
 
 ### Selected guest memory observation in typed read state
+
+Web's shared memory presentation treats the historical `powered-off` source as
+non-running evidence, not proof of a power-off: paused and suspended guests use
+it too. Workloads row/drawer and canonical drawer History say the reading is
+unavailable while the guest is not running, without changing its wire source,
+runtime status, timestamps or withheld numbers. The non-running matrix in
+`frontend-modern/src/utils/__tests__/memoryObservation.test.ts` and the canonical
+drawer checks in `resourceDetailDrawerMetricsHistoryModel.branchcov0712.test.ts`
+verify this distinction, unchanged input, and absence of a current zero.
 
 VM and system-container views expose a value-copy of the selected memory
 metric's observation and an explicit presence bit. A selected measured zero
@@ -559,6 +856,15 @@ not retain a former target's identification while the next read is pending.
 Availability fleet selection stores an ID, not a clicked snapshot: the open
 drawer resolves that ID in the current fleet. Removing the selected check
 closes and clears its selection, including when the ID subsequently reappears.
+Explicit tile activation must reveal the inline detail heading and focus its
+labelled group, with expanded/controlled relationships exposed on the tile.
+Collapse returns to the current same-ID tile; live replacements retain History,
+active tabs and focus without another scroll. A removed focused detail returns
+to a surviving neighbour, or to search/Add-check when its parent becomes empty.
+Outside controls and page-unmount focus stay untouched. This fifty-check
+navigation contract is exercised by AvailabilityFleetView.test.tsx and the
+bounded desktop/320px fleet-details browser profiles, using the preserved
+source-n3h389mz History output; no live probe or target mutation is needed.
 
 ResourceDetailDrawer.snapshot.test.tsx covers immutable and reconciled-store
 updates, target withdrawal/restoration, current availability and late facet
@@ -866,6 +1172,11 @@ at the adapter boundary; a mutation that arrives during a rebuild must apply to
 the newly published registry rather than a superseded pointer. Authoritative
 snapshot omissions still remove resources and emit the normal canonical
 history change.
+Workload rows and their expanded drawer preserve reported paused, suspended,
+transitional and unknown states instead of treating every non-running guest
+as stopped. Both use the same parent-online and attached-availability-probe
+presentation, without deriving filesystem health or guest liveness from
+power state. This display does not initiate guest reads or recovery actions.
 Proxmox guest I/O projection preserves the monitoring-owned rate validity
 contract. A valid idle interval publishes an explicit zero-valued `bytes/s`
 metric; an unknown first, missing, partial, or out-of-order observation leaves
@@ -1153,6 +1464,14 @@ remain; transport order must not decide whether mail counters or lifecycle
 refusal explanations are present. A replaced REST snapshot clears removed
 facets instead of retaining old counters or refusal reasons. Mapping does not
 invent capabilities or bypass planning, review, server authorisation or execution.
+PMG table/drawer consumers preserve adverse resource state even if the full
+instance still reports a successful version read. Queue absence is unknown,
+not a measured zero. Their alert keys are explicit instance/canonical IDs and
+typed connection aliases; display names, hostnames and generated-prefix guesses
+are not identity joins. An absent configured connection alias remains a producer
+gap, not permission for the consumer to infer it. `pmgPresentation.test.ts`,
+`ProxmoxMailGatewayDrawer.readings.test.tsx` and the PMG table alert tests cover
+these boundaries, including colliding labels and recovery.
 `useUnifiedResources.test.ts` checks actual lifecycle refusal consumers for stale,
 failed and server-denied observations alongside a no-invented-grant control.
 
@@ -1596,6 +1915,18 @@ truncated line, and the narrower layouts drop the error, schedule, duration,
 and failure columns, so the reason a job failed must never depend on the
 column being present or wide enough. Replication search matches that error
 text.
+Live replication observations reconcile into the mounted row store. Its verdict,
+indicator, interpretation, error, comment, guest label and route must therefore
+remain reactive, including removal of optional fields, without remounting the
+row or closing its disclosure. A Failed → Unknown → OK transition withdraws the
+old error rather than showing a new count beside an old verdict; a new error
+overrides a historical OK result. Disclosure ownership follows the scoped job ID,
+not a shared VMID or a mutable label, and control IDs stay unique after insertion
+or reordering. `ProxmoxReplicationTable.test.tsx` checks mounted element/focus
+continuity and independent jobs; `replication-live-rows.cjs` exercises the actual
+page, HTTP reader, ordinary polling, filters and disclosure at desktop and phone
+widths. This proves presentation of collected evidence, not native replication,
+guest health, restore or operational recovery.
 `ProxmoxCephTable` and `ProxmoxMailGatewayTable` size every visible column
 through `getPlatformTableWeightedColumnWidthStyle` above their phone
 projections. A fixed-layout table that sizes only its always-on columns leaves
@@ -3284,6 +3615,54 @@ application resource-provider or WebSocket lifecycle.
     (`TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows`).
 
 ## Current State
+
+### Guest CPU absence replaces, rather than refreshes, a sample (21 October 2026)
+
+Complete Proxmox guest observations own `proxmox.cpuUsageUnavailable` (a boolean,
+including false on recovery). When true there is no canonical CPU metric. The
+registry withdraws previous CPU and must not substitute an in-guest agent's
+incomparable accounting; independent memory, storage and identities are intact.
+Guest scalar compatibility views return -1 for explicit unavailable CPU, not
+measured zero. Legacy unannotated producers remain compatible. A real zero
+reinstates the ordinary ratio-to-percent metric without changing CPU authority.
+
+The existing frontend full-snapshot, slow/fast delta and store-commit paths remove
+cached CPU only on that source-authored withdrawal. Omission alone can still be a
+thin snapshot. Workload rows/drawers use their existing unavailable presentation;
+no route or feature is added. Regression proof covers registry lifecycle, clone,
+views, metric authority and all four frontend merge paths.
+
+
+The backup inventory Refresh button remains focusable while it announces its
+pending read with `aria-disabled`; its existing single-flight handler refuses
+repeated activations until both inventories and posture settle. This avoids
+native disabled-button focus loss without enabling duplicate reads. Connected
+controlled-response tests and the browser fixture cover pending and completed
+focus plus a second keyboard activation. No pending read is cancelled or replayed.
+
+
+
+### Backup point pruning and verification are independent (15 October 2026)
+
+Coverage restore evidence and the By date feed show a backup point's completion
+or verification state separately from the provider's `protected` flag. The
+additional **Prune protected** badge means protection from pruning, not a
+verified point or a workload protection verdict. Verified and Unverified remain
+visible when that flag is set; absent PBS verification is **Unknown**, not a
+failed verification job. Running and incomplete points cannot acquire a Verified
+badge, and a guest snapshot remains distinct from a separate backup. Ordinary
+PVE files without a verification result retain their Backup file label.
+
+Both badges wrap within their State cell and update on the existing inventory
+refresh without losing Coverage expansion, focus or route. Sorting State uses
+completion/verification, not the pruning flag. Resource matching, API formats,
+server-owned workload posture, backup operations, retention and collection
+behaviour are unchanged. Shared component controls plus
+`ProxmoxBackupsTable.test.tsx` exercise the real parser/model consumers in both
+views; the offline `backup-point-state.cjs` browser fixture also consumes the
+shipped PBS help. These are source/consuming proofs, not native restore, guest
+thaw, every-filesystem writes, installed recovery or publication evidence.
+
 
 ### Retained Machines and Debug status (11 October 2026)
 
@@ -8673,3 +9052,191 @@ The Proxmox Coverage drawer's restore evidence values (location and details)
 wrap on their own spans rather than through the table cell, so a long snapshot
 description no longer runs past the drawer edge. No resource identity, status
 or recovery rule changes.
+### PMG explicit connection-alert reference (15 October 2026)
+
+PMG `connectionId` is an optional scoped reference supplied by the poller from
+configuration. The adapter preserves it in PMG data; canonical aliases include
+only that explicit reference, never one inferred by stripping a generated ID
+or joining presentation names/hostnames. Existing resource IDs, primary
+identities, metrics targets and aliases remain. Legacy absence stays absent.
+`TestPMGConfiguredConnectionIdentity` exercises colliding labels/hosts, exact
+alias resolution and degraded-to-online replacement without merging siblings.
+`TestPMGConnectionAliasRequiresExplicitReference` rejects inferred references.
+The reference is attribution, not permission, a health override or proof of
+native monitoring/release recovery.
+
+The canonical PMG view also exposes the explicit connection reference unchanged
+(or empty for legacy/nil data), allowing full-instance consumers to retain the
+same attribution as the slim resource. `TestPMGViewConfiguredConnectionReference`
+covers this boundary without inferring a value from the runtime ID or label.
+
+Canonical PMG health matches a connection alert through that same explicit
+configured `PMG.ConnectionID`, not arbitrary canonical/name/hostname aliases.
+A critical connection failure therefore survives actual Resources HTTP health
+projection without colouring a sibling sharing its presentation data.
+`TestPMGConnectionHealthUsesOnlyConfiguredReference` covers critical precedence,
+collision negatives, absent references, degraded collection and recovery.
+
+### Readable per-resource operator consequences (15 October 2026)
+
+The shared operator overrides section owns its text wrapping even when mounted
+inside a fixed-layout workload table. Priority, monitoring, lifecycle and
+maintenance guidance, confirmation text and saved attribution stay readable
+without overlapping adjacent controls. Inventory ownership, retirement,
+maintenance, remediation locking and saved-policy behaviour are unchanged.
+The connected render control and desktop/narrow workload-drawer browser proof
+cover descriptions plus discard, confirmation cancellation and synthetic
+retirement/restoration; none establishes native or installed recovery.
+
+Coverage's collapsed identity retains the actual workload connection and folds
+hidden type/target/node facts under the name. Equal names or VMIDs in separate
+connections stay visibly distinct without opening backup evidence. Missing
+connection identity is not borrowed from a repository. Per-workload summary and
+detail geometry keeps wrapped identity reachable in the bounded Coverage window;
+width changes invalidate off-screen measurements. The five-layout component and
+desktop/phone consuming checks in `coverageWorkloadIdentity.test.tsx`,
+`ProxmoxCoverageTable.test.tsx` and `coverage-workload-identity.cjs` verify this
+presentation, not a new resource identity, matching rule or native recovery.
+
+### Restore-point lists retain workload identity at every width
+
+By date's Workload cell now folds type/ID whenever Target ID is hidden and
+keeps current matched workload connection/native-node facts beside the name.
+Backup repository provenance remains separate; an unresolved PBS namespace is
+not a workload node and cannot supply a missing workload connection. The
+existing resource keys, matching rules, API and collection authority do not
+change. Per-key point/day geometry keeps wrapped facts reachable within the
+unchanged window budgets. `recoverableWorkloadIdentity.test.tsx` and
+`recoverable-workload-identity.cjs` cover the existing list's projections and
+refresh, not installed identity or native recovery.
+
+
+### CORE reporting reaches the existing chart consumer — #2077 / #2964
+
+The monitor's unified-resource snapshot carries History targets resolved from
+that same captured registry generation into the REST resource seed. The resource
+service must not lose a native TrueNAS connection ID while rebuilding canonical
+presentation rows, then make the drawer query the row's hashed ID instead.
+Captured absence clears a retained target; no display-name inference or lookup
+against a later live registry is allowed. Decorating a snapshot does not mutate
+shared rows or the captured target map. Existing freshness, tenant/scope/token
+checks, TLS verification and source precedence remain unchanged.
+
+`TestUnifiedSnapshotPreservesCapturedHistoryTargets` verifies ownership and
+known/unknown target preservation. `TestCORE13RESTReportingChartJourney` drives
+the pinned-TLS CORE REST client, provider, native poller/monitor fallback and
+actual authenticated resources/History routes for default-day and selected-hour
+reads, complete/rejected/partial/measured-zero/recovered telemetry, free/ARC
+memory and device I/O. `check-core-reporting-journey.cjs` serves those captured
+JSON documents to the production resource decoder, TrueNAS systems table, inline
+drawer and chart client at desktop and narrow widths. The fixture does not
+require local History persistence or establish appliance, installed or released
+recovery. Original scan/cleanup facts and stopped guest monitoring are separate.
+
+### Backup failure summaries preserve attributed provider evidence
+
+Coverage recognises the ordinary poller's explicit `ERROR:` status prefix as
+Failed without merging equal names or VMIDs across connections. Its existing
+job disclosure keeps the exact status as plain text beside any separately
+reported error; search indexes both that status and the normalised verdict.
+The original job connection/node, chronology, observation age and server
+protection verdict remain independent. Unknown status strings are not assumed
+to have failed or succeeded, and contradictory successful status/error evidence
+stays Unknown. `ProxmoxCoverageTable.taskDetail.test.tsx` covers raw-status
+visibility and same-open withdrawal; the read-only `backup-failure-status.cjs`
+protocol checks actual HTTP/search/disclosure consumers at desktop and 320px.
+Neither establishes native backup, guest safety or installed fleet recovery.
+
+### Proxmox Coverage job identity and interval remain source-scoped
+
+The existing expanded Coverage evidence shows the selected collected job ID and
+reported end/duration; local search includes that selected ID and recorded
+start/end. The unchanged API identifier can contain an instance prefix and a
+per-guest suffix around its parent UPID; no raw-UPID extraction is implied.
+Unorderable jobs keep their individual raw values without becoming a
+latest result. Invalid, missing, future or reversed times cannot produce an
+elapsed duration. Zero-second recorded intervals remain explicit. Original job
+connection/node and observation provenance do not change, and job timing does
+not settle workload protection, current guest state, thaw or filesystem writes.
+`ProxmoxCoverageTable.taskDetail.test.tsx` exercises literal wrapping and live
+replacement; `backup-job-interval.cjs` consumes the real HTTP/model/table surface
+at desktop and 320px. No resource identity, routing, polling or operation changes.
+
+### Guest physical-disk revalidation failures remain visible through remounts
+
+The scoped guest disk reader opts into reported background errors. Its ordinary
+metadata/REST revalidation failure reaches the same error state as a foreground
+read, so its Overview can withdraw retained current-looking SMART views. This
+opt-in keeps the failed state with that tenant/query cache entry; a warm remount
+must revalidate it rather than laundering the old successful snapshot into a
+successful read. A successful scoped response or canonical snapshot clears it.
+Other consumers retain their existing background-error behaviour and cache
+ownership. Query and organisation keys, pagination, cancellation fences, WebSocket
+projection, collection and polling cadence are unchanged.
+
+`useUnifiedResources.test.ts` covers default/opted-in failure reporting, warm
+failed-cache remount and successful recovery. The child component's tests and
+`guest-disk-read-recovery.cjs` connect the opt-in to actual Overview withdrawal,
+explicit/coalesced retries, empty success and retired old-tenant responses at
+desktop/320px. These are read-only synthetic consumers, not guest-safety recovery.
+
+The guest physical-disk consumer additionally opts into a 20-second complete
+shared-read deadline. Callers sharing its cache key share one deadline policy;
+other readers retain the unbounded default. One controller covers the API
+client, response bodies and every page, and binds bounded pages to the original
+organisation rather than following a new active organisation mid-read. A local
+race settles even if abort is ignored; only its winner can populate the cache,
+so expired late bodies cannot renew freshness or block the next explicit read.
+Page settlement checks abort before advancing a growing inventory. Deadline
+cleanup does not cancel a surviving coalesced owner merely because one drawer
+unmounts. The deadline expires naturally for an otherwise abandoned shared read.
+`useUnifiedResources.test.ts` and `guest-disk-read-recovery.cjs` cover the complete
+allowance, actual HTTP bodies/Retry-After, cache/remount recovery and existing
+organisation fencing. No collection, polling cadence or native operation changes.
+
+### Unresolved PVE jobs are unrated evidence, not live resource identity
+
+Coverage's existing unmatched-target disclosure retains positive-VMID jobs even
+when their provider job type supplies no guest type and inventory matching fails
+or conflicts. It never attaches that job to a guessed resource or counts the
+fallback as a monitored target/restore point. The explanation explicitly covers
+both backup artifacts and job-only evidence. Valid inventory can later resolve
+the job; renewed ambiguity withdraws that ownership without losing its record.
+`ProxmoxBackupsTable.test.tsx` protects counts, native disclosure, escaped error
+text and both identity transitions; `unmatched-backup-jobs.cjs` covers HTTP,
+keyboard/touch and narrow pixels. This changes neither canonical resource IDs nor
+collection, guest operations or operational-recovery acceptance.
+
+
+### Exact backup-location filters and conservative saved scopes
+
+Backup-location keys preserve the source kind, case-sensitive connection and
+repository, and (for local archives) storage node as a framed tuple. Missing or
+repeated source fields cannot collapse identity. Operator labels are not keys.
+Legacy saved URLs resolve only when all observed aliases identify one exact
+location or one intentional store-wide local-node group. A case/delimiter/field
+collision remains explicitly ambiguous; a missing location remains unavailable.
+Neither silently selects All or unrelated restore points. The same resolved
+scope governs By date, activity and Coverage; new choices save exact keys.
+Normal refresh or organisation changes must withdraw a newly ambiguous/missing
+selection. Clearing filters restores the unscoped collected inventory.
+
+`proxmoxBackupRecoveryModel.locations.test.ts`, `proxmoxBackupLocation.test.ts`
+and `ProxmoxBackupsTable.locations.test.tsx` check identity framing, saved-scope
+compatibility, collisions, conservative empty states and actual consuming filters.
+The read-only `backup-location-scope.cjs` HTTP/browser protocol exercises desktop
+keyboard and 320px touch using the production decoders, model, tables and CSS.
+This changes inventory selection, not collection, protection verdicts, guest
+operations, thaw, filesystem liveness or native backup recovery.
+
+### Resource admission and current-connection delivery are different
+
+`resourceSnapshotReceived` retains display admission through reconnects. The
+separate `connectionResourceSnapshotReceived` flag resets at connection retirement
+and replacement, including organisation changes. Only an explicit resource array
+successfully committed by the current connection's socket or REST recovery may
+set it. An empty array is valid delivery, not a failed estate; alert-only,
+malformed, baseline-less or retired messages are not delivery. This flag does not
+establish current readings, ongoing collection, guest liveness or thaw.
+`websocket-unified.test.ts` covers socket/REST, empty, retained and retired paths;
+the shell keeps retained readings visible with an explicit data-wait warning.

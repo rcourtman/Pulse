@@ -20,6 +20,12 @@ on:
       - 'scripts/tests/test_e2e_container_logs.py'
       - 'scripts/ci_browser_proof_only.py'
       - 'scripts/tests/test_ci_browser_proof_only.py'
+      - 'scripts/release_control/check_source_contracts.py'
+      - 'scripts/release_control/canonical_completion_guard.py'
+      - 'scripts/release_control/canonical_completion_history.py'
+      - 'scripts/release_control/canonical_completion_history.json'
+      - 'scripts/release_control/browser_verification_guard.py'
+      - 'scripts/tests/test_ci_source_admission.py'
   push:
     branches:
       - main
@@ -40,6 +46,12 @@ on:
       - 'scripts/tests/test_e2e_container_logs.py'
       - 'scripts/ci_browser_proof_only.py'
       - 'scripts/tests/test_ci_browser_proof_only.py'
+      - 'scripts/release_control/check_source_contracts.py'
+      - 'scripts/release_control/canonical_completion_guard.py'
+      - 'scripts/release_control/canonical_completion_history.py'
+      - 'scripts/release_control/canonical_completion_history.json'
+      - 'scripts/release_control/browser_verification_guard.py'
+      - 'scripts/tests/test_ci_source_admission.py'
   workflow_dispatch:
 
 # Let branch runs finish so busy main and release branches retain verdicts.
@@ -65,6 +77,21 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+
+      # Reject invalid non-rendering commits, including in mixed proposals.
+      # Frontend commits still need locked formatting tools in the unchanged
+      # full Canonical Governance job; early deferral is not its acceptance.
+      - name: Check canonical source before dependency work
+        env:
+          SOURCE_EVENT: ${{ github.event_name }}
+          SOURCE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SOURCE_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$SOURCE_EVENT" = workflow_dispatch ]; then
+            SOURCE_BASE=$(git rev-parse "${SOURCE_HEAD}^")
+          fi
+          python3 scripts/release_control/check_source_contracts.py --early --base "$SOURCE_BASE" --head "$SOURCE_HEAD"
 
       - name: Check shipped docs before dependency work
         run: python3 scripts/check_docs_mirror.py
@@ -181,7 +208,11 @@ jobs:
           npm ci --prefix internal/cloudcp/portal/frontend
 
       - name: Install Playwright browser and OS dependencies
-        timeout-minutes: 10
+        # Chromium's 25.9 MB OS graph was still downloading through the
+        # provider's mirror fallback when the ten-minute setup cap expired.
+        # Allow that bounded acquisition to finish, without extending this
+        # job's 25-minute limit or relaxing apt authentication/error handling.
+        timeout-minutes: 20
         working-directory: tests/integration
         run: npx playwright install --with-deps chromium
       - name: Validate offline issuer boundaries

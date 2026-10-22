@@ -56,6 +56,18 @@ updates:
         applies-to: "version-updates"
         patterns:
           - "*"
+        # The SQLite/native runtime has separate compatibility evidence. Keep
+        # its named updates out of independent compression/metrics/agent PRs;
+        # the resulting full transitive graph still needs ordinary review/CI.
+        exclude-patterns:
+          - "modernc.org/*"
+        update-types:
+          - "minor"
+          - "patch"
+      go-storage-minor-patch:
+        applies-to: "version-updates"
+        patterns:
+          - "modernc.org/*"
         update-types:
           - "minor"
           - "patch"
@@ -126,6 +138,11 @@ updates:
       - dependency-name: "eslint"
         update-types:
           - "version-update:semver-major"
+      # @eslint/js 10 requires eslint ^10.0.0. Reserve the companion ruleset's
+      # major for that same migration; an isolated proposal retains ESLint 9.
+      - dependency-name: "@eslint/js"
+        update-types:
+          - "version-update:semver-major"
       # lucide-solid 1.x removes an icon subpath still imported by the app.
       # Keep majors explicit until the icon imports and frontend proof migrate.
       - dependency-name: "lucide-solid"
@@ -140,6 +157,21 @@ updates:
       - dependency-name: "@vitest/coverage-v8"
         update-types:
           - "version-update:semver-major"
+      # The standalone jsdom 30 proposal fails accessible-name checks
+      # (PR #3059); the portal has its own jsdom test graph
+      # (PR #3061). Migrate both consumers deliberately, not as isolated bumps.
+      - dependency-name: "jsdom"
+        update-types:
+          - "version-update:semver-major"
+      # The Vite 8 proposal fails tracked-chunk and icon-size checks
+      # (PR #3060). Keep the bundler, consumers and size accounting together;
+      # do not reset budgets just to accept a version-update proposal.
+      - dependency-name: "vite"
+        update-types:
+          - "version-update:semver-major"
+      # These deferrals do not dispose of security findings: the independent
+      # complete-graph advisory watch and all-lockfile security scan stay on.
+      # An applicable advisory or concrete consumer need reopens migration.
 
   - package-ecosystem: "docker"
     directories:

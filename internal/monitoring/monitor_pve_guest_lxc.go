@@ -77,6 +77,12 @@ func (m *Monitor) buildContainerFromClusterResource(
 			res.VMID,
 		)
 		currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
+		// The container may have stopped after the listing was sampled. Use the
+		// already-fetched complete status before selecting running-only readings
+		// or enrichment; an older listing is not evidence it is still running.
+		if statusSnapshot != nil && statusSnapshot.Status != "" {
+			res.Status = statusSnapshot.Status
+		}
 	}
 	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(
 		makeGuestRateKey(instanceName, "lxc", res.VMID),
@@ -111,9 +117,9 @@ func (m *Monitor) buildContainerFromClusterResource(
 		false,
 	)
 
-	// Clamp memory and disk values to prevent >100% usage
+	// Clamp memory values to prevent >100% usage
 	// (Proxmox can report used > total for LXC due to cgroup accounting,
-	// shared pages, or thin-provisioned disk overcommit)
+	// or shared pages)
 	clampedMemUsed := memUsed
 	if clampedMemUsed > memTotal && memTotal > 0 {
 		clampedMemUsed = memTotal
@@ -135,34 +141,21 @@ func (m *Monitor) buildContainerFromClusterResource(
 		source: memorySource, providerObservedAt: observedAtOr(res.ObservedAt, sampleTime),
 		previous: previousMemory, linkedAgent: agentHost,
 	}, time.Now())
-	diskUsed := res.Disk
-	if diskUsed > res.MaxDisk && res.MaxDisk > 0 {
-		diskUsed = res.MaxDisk
-	}
-	diskFree := int64(res.MaxDisk) - int64(diskUsed)
-	if diskFree < 0 {
-		diskFree = 0
-	}
 
 	lastSeen := time.Now()
 	container := models.Container{
-		ID:       guestID,
-		VMID:     res.VMID,
-		Name:     res.Name,
-		Node:     res.Node,
-		Pool:     strings.TrimSpace(res.Pool),
-		Instance: instanceName,
-		Status:   res.Status,
-		Type:     "lxc",
-		CPU:      safeFloat(res.CPU),
-		CPUs:     res.MaxCPU,
-		Memory:   memory,
-		Disk: models.Disk{
-			Total: int64(res.MaxDisk),
-			Used:  int64(diskUsed),
-			Free:  diskFree,
-			Usage: safePercentage(float64(diskUsed), float64(res.MaxDisk)),
-		},
+		ID:             guestID,
+		VMID:           res.VMID,
+		Name:           res.Name,
+		Node:           res.Node,
+		Pool:           strings.TrimSpace(res.Pool),
+		Instance:       instanceName,
+		Status:         res.Status,
+		Type:           "lxc",
+		CPU:            guestCPUUsage(res.CPU),
+		CPUs:           res.MaxCPU,
+		Memory:         memory,
+		Disk:           containerDiskUsage(res.MaxDisk, res.Disk, res.DiskUsage),
 		NetworkIn:      networkInValue,
 		NetworkOut:     networkOutValue,
 		DiskRead:       diskReadValue,
@@ -203,8 +196,10 @@ func (m *Monitor) buildContainerFromClusterResource(
 	// unknown usage (#1477).
 	m.enrichContainerWithAgentLXCFilesystems(instanceName, res.Node, &container, sampleTime)
 
-	// For non-running containers, zero out resource usage metrics to prevent false alerts.
-	// Proxmox may report stale or residual metrics for stopped containers.
+	// Non-running containers have no current runtime CPU/memory/I/O usage.
+	// Platform storage usage remains an independent observation; a stopped
+	// container still occupies its filesystems. Alerting already excludes
+	// metric alerts for non-running guests, so do not invent an empty disk.
 	if container.Status != "running" {
 		log.Debug().
 			Str("container", container.Name).
@@ -215,7 +210,6 @@ func (m *Monitor) buildContainerFromClusterResource(
 
 		container.CPU = 0
 		container.Memory.Usage = 0
-		container.Disk.Usage = 0
 		container.NetworkIn = 0
 		container.NetworkOut = 0
 		container.DiskRead = 0

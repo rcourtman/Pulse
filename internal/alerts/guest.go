@@ -19,12 +19,17 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 	defer m.mu.Unlock()
 
 	// Get the correct thresholds for this guest (includes custom rules evaluation)
-	thresholds := m.getGuestThresholds(guest, guestID)
+	thresholdPolicy := m.guestThresholdPolicyNoLock(guest, guestID)
+	thresholds := thresholdPolicy.Thresholds
 
 	// Check all metric types for this guest
 	metricTypes := []string{"cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut"}
 
 	for _, metricType := range metricTypes {
+		if !m.guestSignalPolicyKnownNoLock(thresholdPolicy, metricType) {
+			m.interruptMetricRunNoLock(guestID, canonicalMetricSpecID(guestID, metricType), canonicalMetricStateID(guestID, metricType))
+			continue
+		}
 		alertID := canonicalMetricStateID(guestID, metricType)
 		alert, exists := m.getActiveAlertNoLock(alertID)
 		if !exists {
@@ -58,7 +63,7 @@ func (m *Manager) ReevaluateGuestAlert(guest any, guestID string) {
 		}
 
 		// If threshold is disabled or doesn't exist, clear the alert
-		if threshold == nil || threshold.Trigger <= 0 {
+		if thresholds.Disabled || threshold == nil || threshold.Trigger <= 0 {
 			m.clearAlertNoLock(trackingKey)
 			log.Info().
 				Str("alertID", alertID).
@@ -141,6 +146,17 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		return
 	}
 
+	switch status {
+	case "running", "stopped", "paused", "suspended":
+		// Only an affirmative supported state can drive the lifecycle below.
+	default:
+		// An outage, omitted state or additive provider state is not a shutdown
+		// or a return to running. Keep open incidents and interrupt activation /
+		// recovery timing without treating placeholder metrics as observations.
+		m.interruptGuestObservationRuns(guestID)
+		return
+	}
+
 	monitorOnly := policy.TagSettings.MonitorOnly
 	if monitorOnly || m.guestHasMonitorOnlyAlerts(guestID) {
 		log.Debug().
@@ -173,25 +189,31 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.clearGuestPoweredOffAlert(guestID, name)
 			} else {
 				m.mu.RLock()
-				thresholds := m.getGuestThresholds(guest, guestID)
+				thresholdPolicy := m.guestThresholdPolicyNoLock(guest, guestID)
+				knownPolicy := m.guestSignalPolicyKnownNoLock(thresholdPolicy, "powered-off")
 				m.mu.RUnlock()
-				observedAt := m.policyNow().UTC()
-				backupContext := BackupIntentContext{
-					Active:     strings.EqualFold(strings.TrimSpace(snapshot.Lock), "backup"),
-					ObservedAt: observedAt,
-					Evidence:   "guest_lock",
-				}
-				if !backupContext.Active {
-					m.mu.RLock()
-					resolver := m.backupIntentResolver
-					m.mu.RUnlock()
-					if resolver != nil {
-						if resolved, ok := resolver(guestID, instanceName, node, snapshot.VMID, observedAt); ok {
-							backupContext = resolved
+				if !knownPolicy {
+					m.interruptMetricRunIDs(guestID, canonicalPoweredStateSpecID(guestID), canonicalPoweredStateStateID(guestID))
+				} else {
+					thresholds := thresholdPolicy.Thresholds
+					observedAt := m.policyNow().UTC()
+					backupContext := BackupIntentContext{
+						Active:     strings.EqualFold(strings.TrimSpace(snapshot.Lock), "backup"),
+						ObservedAt: observedAt,
+						Evidence:   "guest_lock",
+					}
+					if !backupContext.Active {
+						m.mu.RLock()
+						resolver := m.backupIntentResolver
+						m.mu.RUnlock()
+						if resolver != nil {
+							if resolved, ok := resolver(guestID, instanceName, node, snapshot.VMID, observedAt); ok {
+								backupContext = resolved
+							}
 						}
 					}
+					m.checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, backupContext, snapshot.Tags)
 				}
-				m.checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, name, node, instanceName, guestType, thresholds, monitorOnly, backupContext, snapshot.Tags)
 			}
 		} else {
 			// For paused/suspended, clear powered-off alert
@@ -217,11 +239,16 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	// Get thresholds (defaults, custom rules, overrides, then the
 	// pulse-relaxed floor)
 	m.mu.RLock()
-	thresholds := m.getGuestThresholds(guest, guestID)
+	thresholdPolicy := m.guestThresholdPolicyNoLock(guest, guestID)
+	thresholds := thresholdPolicy.Thresholds
+	knownPolicy := make(map[string]bool, 8)
+	for _, signal := range [...]string{"disabled", "cpu", "memory", "disk", "diskRead", "diskWrite", "networkIn", "networkOut"} {
+		knownPolicy[signal] = m.guestSignalPolicyKnownNoLock(thresholdPolicy, signal)
+	}
 	m.mu.RUnlock()
 
 	// If alerts are disabled for this guest, clear any existing alerts and return
-	if thresholds.Disabled {
+	if thresholds.Disabled && knownPolicy["disabled"] {
 		if alertsCleared := m.clearGuestMetricAlerts(guestID); alertsCleared > 0 {
 			log.Info().
 				Str("guest", name).
@@ -247,32 +274,36 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		evalOpts = &metricOptions{MonitorOnly: true}
 	}
 	var memoryMetric *UnifiedResourceMetric
-	if !snapshot.MemoryUnavailable {
+	if !snapshot.MemoryUnavailable && knownPolicy["memory"] {
 		memoryMetric = &UnifiedResourceMetric{Percent: memUsage}
 	}
+	var cpuMetric *UnifiedResourceMetric
+	if knownPolicy["cpu"] {
+		cpuMetric = &UnifiedResourceMetric{Percent: cpu}
+	}
 	diskReadMetric, diskWriteMetric, networkInMetric, networkOutMetric := guestIORateMetrics(snapshot)
+	if !knownPolicy["diskRead"] {
+		diskReadMetric = nil
+	}
+	if !knownPolicy["diskWrite"] {
+		diskWriteMetric = nil
+	}
+	if !knownPolicy["networkIn"] {
+		networkInMetric = nil
+	}
+	if !knownPolicy["networkOut"] {
+		networkOutMetric = nil
+	}
 	var diskMetric *UnifiedResourceMetric
-	if !snapshot.DiskUnavailable {
+	if !snapshot.DiskUnavailable && knownPolicy["disk"] {
 		diskMetric = &UnifiedResourceMetric{Percent: diskUsage}
 	}
-	if !snapshot.DiskUnavailable && len(disks) > 0 {
-		seenAggregateDiskKeys := make(map[string]struct{})
-		for idx, disk := range disks {
-			if disk.Total <= 0 || disk.Usage < 0 {
-				continue
-			}
-			_, _, sanitizedKey := guestDiskIdentity(disk, idx)
-			if _, exists := seenAggregateDiskKeys[sanitizedKey]; exists {
-				continue
-			}
-			seenAggregateDiskKeys[sanitizedKey] = struct{}{}
-		}
-		if len(seenAggregateDiskKeys) > 0 {
-			// Filesystem evidence is more actionable than the guest-wide rollup.
-			// Evaluating both creates two incidents for the same full filesystem.
-			diskMetric = nil
-			m.clearAlert(canonicalMetricStateID(guestID, "disk"))
-		}
+	diskRows, hasDiskUsageRows := guestDiskAlertRows(disks)
+	if !snapshot.DiskUnavailable && hasDiskUsageRows && knownPolicy["disk"] {
+		// Filesystem evidence is more actionable than the guest-wide rollup.
+		// Evaluating both creates two incidents for the same full filesystem.
+		diskMetric = nil
+		m.clearAlert(canonicalMetricStateID(guestID, "disk"))
 	}
 	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
 		ID:         guestID,
@@ -281,7 +312,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 		Node:       node,
 		Instance:   instanceName,
 		Tags:       snapshot.Tags,
-		CPU:        &UnifiedResourceMetric{Percent: cpu},
+		CPU:        cpuMetric,
 		Memory:     memoryMetric,
 		Disk:       diskMetric,
 		DiskRead:   diskReadMetric,
@@ -300,36 +331,45 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	}
 
 	if len(disks) > 0 {
-		seenDiskKeys := make(map[string]struct{})
 		seenDiskResources := make(map[string]struct{})
 		for idx, disk := range disks {
-			if disk.Total <= 0 {
-				continue
-			}
-			if disk.Usage < 0 {
-				continue
-			}
-
 			label, keySource, sanitizedKey := guestDiskIdentity(disk, idx)
 
-			// Avoid duplicate checks if two disks resolve to the same key
-			if _, exists := seenDiskKeys[sanitizedKey]; exists {
+			// One conservative observation per existing alert identity, not
+			// whichever alias happened to arrive first in the inventory.
+			if diskRows[sanitizedKey] != idx {
 				continue
 			}
-			seenDiskKeys[sanitizedKey] = struct{}{}
 
 			perDiskResourceID := fmt.Sprintf("%s-disk-%s", guestID, sanitizedKey)
 			seenDiskResources[perDiskResourceID] = struct{}{}
 			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
 
 			m.mu.RLock()
-			effectiveDiskThreshold, diskDisabled := m.guestDiskUsageThresholdNoLock(guest, guestID, keySource, thresholds.Disk)
+			diskPolicy := m.guestFilesystemPolicyNoLock(thresholdPolicy, guest, guestID, keySource)
+			diskPolicyKnown := m.guestSignalPolicyKnownNoLock(diskPolicy, "disk")
 			m.mu.RUnlock()
-			if diskDisabled {
+			if !diskPolicyKnown {
+				m.rehomeStrandedGuestAlert(canonicalMetricStateID(perDiskResourceID, "disk"), canonicalMetricSpecID(perDiskResourceID, "disk"), string(alertspecs.AlertSpecKindMetricThreshold), perDiskResourceID, name, node, instanceName, snapshot.resourceType())
+				m.interruptMetricRunIDs(perDiskResourceID, canonicalMetricSpecID(perDiskResourceID, "disk"), canonicalMetricStateID(perDiskResourceID, "disk"))
+				continue
+			}
+			effectiveDiskThreshold := diskPolicy.Thresholds.Disk
+			if diskPolicy.Thresholds.Disabled {
 				m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
 				continue
 			}
-			if snapshot.DiskUnavailable {
+			if snapshot.DiskUnavailable || !guestDiskAlertRowAvailable(disk) {
+				// Presence is not measurement validity. Keep this identity out
+				// of removal cleanup, without triggering/recovering from its
+				// sentinel or completing activation across the observation gap.
+				if !snapshot.DiskUnavailable {
+					// A current inventory may name the same filesystem on a new
+					// node. Re-home the occurrence before cleanup compares IDs;
+					// an unavailable reading is still not a removed filesystem.
+					m.rehomeStrandedGuestAlert(canonicalMetricStateID(perDiskResourceID, "disk"), canonicalMetricSpecID(perDiskResourceID, "disk"), string(alertspecs.AlertSpecKindMetricThreshold), perDiskResourceID, name, node, instanceName, snapshot.resourceType())
+					m.interruptMetricRunIDs(perDiskResourceID, canonicalMetricSpecID(perDiskResourceID, "disk"), canonicalMetricStateID(perDiskResourceID, "disk"))
+				}
 				if effectiveDiskThreshold == nil || effectiveDiskThreshold.Trigger <= 0 {
 					m.clearAlert(canonicalMetricStateID(perDiskResourceID, "disk"))
 				}
@@ -415,6 +455,63 @@ func guestDiskIdentity(disk models.Disk, idx int) (label, keySource, sanitizedKe
 	return label, keySource, sanitizedKey
 }
 
+// Preserve the existing alert/override identities, but do not let a low alias
+// hide or recover a full filesystem. Select a whole observed row, never a
+// synthetic percentage/byte tuple. An unavailable row remains a gap in evidence
+// rather than being discarded in favour of a healthy duplicate or treated as
+// filesystem removal. The second result preserves the existing aggregate
+// fallback for inventories containing only rows the evaluator used to skip.
+// Original indices keep fallback identities and metadata intact; caller-owned
+// inventories are never reordered or modified.
+func guestDiskAlertRows(disks []models.Disk) (map[string]int, bool) {
+	rows := make(map[string]int)
+	hasDiskUsageRows := false
+	for idx, disk := range disks {
+		if disk.Total > 0 && !(disk.Usage < 0) {
+			hasDiskUsageRows = true
+		}
+		_, _, key := guestDiskIdentity(disk, idx)
+		previous, exists := rows[key]
+		if !exists || guestDiskAlertRowPreferred(disk, disks[previous]) {
+			rows[key] = idx
+		}
+	}
+	return rows, hasDiskUsageRows
+}
+
+func guestDiskAlertRowAvailable(disk models.Disk) bool {
+	return disk.Total > 0 && finiteMetricValue(disk.Usage) && disk.Usage >= 0 && disk.Usage <= 100
+}
+
+func guestDiskAlertRowPreferred(candidate, current models.Disk) bool {
+	candidateInvalid := !guestDiskAlertRowAvailable(candidate)
+	currentInvalid := !guestDiskAlertRowAvailable(current)
+	if candidateInvalid != currentInvalid {
+		return candidateInvalid
+	}
+	if !candidateInvalid && candidate.Usage != current.Usage {
+		return candidate.Usage > current.Usage
+	}
+	// A stable tie-break keeps messages and byte metadata on the same actual
+	// row when equivalent keys have equal percentages in a different order.
+	if candidate.Mountpoint != current.Mountpoint {
+		return candidate.Mountpoint < current.Mountpoint
+	}
+	if candidate.Device != current.Device {
+		return candidate.Device < current.Device
+	}
+	if candidate.Type != current.Type {
+		return candidate.Type < current.Type
+	}
+	if candidate.Total != current.Total {
+		return candidate.Total > current.Total
+	}
+	if candidate.Used != current.Used {
+		return candidate.Used > current.Used
+	}
+	return candidate.Free > current.Free
+}
+
 // guestDiskUsageThresholdNoLock resolves the usage threshold one guest
 // filesystem is judged by: the filesystem's own override, else the guest's disk
 // threshold. disabled reports an override that switches the filesystem's
@@ -434,24 +531,40 @@ func (m *Manager) guestDiskUsageThresholdNoLock(guest any, guestID, diskKey stri
 	return guestDisk, false
 }
 
-// resolveGuestAlertThresholdsNoLock resolves thresholds for a persisted guest
+// guestFilesystemPolicyNoLock applies the filesystem override to every possible
+// guest policy, preserving explicit disablement even with a missing rule input.
+func (m *Manager) guestFilesystemPolicyNoLock(policy EffectiveAlertPolicy, guest any, guestID, diskKey string) EffectiveAlertPolicy {
+	apply := func(thresholds ThresholdConfig) ThresholdConfig {
+		var disabled bool
+		thresholds.Disk, disabled = m.guestDiskUsageThresholdNoLock(guest, guestID, diskKey, thresholds.Disk)
+		thresholds.Disabled = thresholds.Disabled || disabled
+		return thresholds
+	}
+	policy.Thresholds = apply(policy.Thresholds)
+	alternatives := make([]ThresholdConfig, len(policy.guestAlternatives))
+	for i, alternative := range policy.guestAlternatives {
+		alternatives[i] = apply(alternative)
+	}
+	policy.guestAlternatives = alternatives
+	return policy
+}
+
+// resolveGuestAlertThresholdPolicyNoLock resolves thresholds for a persisted guest
 // alert. A filesystem alert ("<guestID>-disk-<key>") resolves its guest's
 // thresholds by the guest ID, and its Disk by the filesystem's own override, as
 // CheckGuest does. Resolved by the filesystem's resource ID, which names no
 // guest, it missed both overrides, and a config save resolved an alert the next
 // poll raised again. Callers must hold m.mu.
-func (m *Manager) resolveGuestAlertThresholdsNoLock(alert *Alert, resourceID string) ThresholdConfig {
+func (m *Manager) resolveGuestAlertThresholdPolicyNoLock(alert *Alert, resourceID string) EffectiveAlertPolicy {
 	resourceID = strings.TrimSpace(resourceID)
 	if identity, ok := parseGuestAlertIdentity(resourceID); ok {
 		if diskKey, isFilesystem := strings.CutPrefix(identity.resourceSuffix, "-disk-"); isFilesystem {
 			guestID := strings.TrimSuffix(resourceID, identity.resourceSuffix)
 			guest := guestSnapshotFromAlert(alert, guestID)
-			thresholds := m.getGuestThresholds(guest, guestID)
-			thresholds.Disk, _ = m.guestDiskUsageThresholdNoLock(guest, guestID, diskKey, thresholds.Disk)
-			return thresholds
+			return m.guestFilesystemPolicyNoLock(m.guestThresholdPolicyNoLock(guest, guestID), guest, guestID, diskKey)
 		}
 	}
-	return m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
+	return m.guestThresholdPolicyNoLock(guestSnapshotFromAlert(alert, resourceID), resourceID)
 }
 
 func guestIORateMetrics(snapshot guestSnapshot) (diskRead, diskWrite, networkIn, networkOut *UnifiedResourceMetric) {
@@ -479,9 +592,14 @@ func guestIORateMetrics(snapshot guestSnapshot) (diskRead, diskWrite, networkIn,
 // checkGuestPoweredOff creates an alert for powered-off guests.
 func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string, monitorOnly bool) {
 	m.mu.RLock()
-	thresholds := m.getGuestThresholds(guestSnapshotFromIdentity(guestID, name, node, instanceName, guestType, "stopped"), guestID)
+	policy := m.guestThresholdPolicyNoLock(guestSnapshotFromIdentity(guestID, name, node, instanceName, guestType, "stopped"), guestID)
+	knownPolicy := m.guestSignalPolicyKnownNoLock(policy, "powered-off")
 	m.mu.RUnlock()
-	m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, thresholds, monitorOnly)
+	if !knownPolicy {
+		m.interruptMetricRunIDs(guestID, canonicalPoweredStateSpecID(guestID), canonicalPoweredStateStateID(guestID))
+		return
+	}
+	m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, policy.Thresholds, monitorOnly)
 }
 
 func (m *Manager) checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType string, thresholds ThresholdConfig, monitorOnly bool) {

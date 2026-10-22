@@ -159,6 +159,13 @@ func testClientConstructionHonoursContext(t *testing.T, endings ...string) {
 				if _, err := client.GetNodes(context.Background()); err != nil || reads.Load() != 1 || client.config.Timeout != cfg.Timeout {
 					t.Errorf("retained client lost full timeout or ordinary independent reads: %v reads=%d", err, reads.Load())
 				}
+				// A completed constructor's ended context must not own a later
+				// shared renewal either, including the form-only provider path.
+				beforeRenewal := logins.Load()
+				expireSessionFixture(client)
+				if _, err := client.GetNodes(context.Background()); err != nil || reads.Load() != 2 || logins.Load() != beforeRenewal+want {
+					t.Errorf("later renewal inherited construction cancellation or changed encoding: %v reads=%d logins=%d", err, reads.Load(), logins.Load())
+				}
 				before := logins.Load()
 				bad := cfg
 				bad.Fingerprint = strings.Repeat("0", 64)

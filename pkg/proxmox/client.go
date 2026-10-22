@@ -369,11 +369,8 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	if baseHost == "" {
 		return nil, fmt.Errorf("host is required")
 	}
-	defaultedScheme := !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://")
-	if defaultedScheme {
-		baseHost = "https://" + baseHost
-	}
-	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(baseHost, "")
+	defaultedScheme := !strings.Contains(baseHost, "://")
+	baseHostURL, err := securityutil.NormalizeInfrastructureBaseURL(baseHost, "https")
 	if err != nil {
 		return nil, fmt.Errorf("invalid Proxmox host: %w", err)
 	}
@@ -437,32 +434,40 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	return client, nil
 }
 
-// Initial authentication belongs only to the constructing caller. It has no
-// retained session or other readers whose login must outlive that caller.
+// authenticate owns one password login attempt, including the form fallback.
+// An unpublished client's initial login belongs to its constructor's context;
+// there are no live readers that need to keep that attempt running.
 func (c *Client) authenticate(ctx context.Context) error {
-	loginCtx, cancel := context.WithTimeout(ctx, c.sessionRenewalTimeout())
+	loginCtx, cancel := context.WithTimeout(ctx, c.sessionLoginTimeout())
 	defer cancel()
-	auth, _ := c.authSnapshot()
-	return c.authenticatePassword(loginCtx, auth.user+"@"+auth.realm)
-}
-
-func (c *Client) authenticatePassword(ctx context.Context, username string) error {
-	err := c.authenticateJSON(ctx, username, c.config.Password)
-	if shouldFallbackToForm(err) {
-		err = c.authenticateForm(ctx, username, c.config.Password)
+	if err := loginCtx.Err(); err != nil {
+		return err
+	}
+	current, _ := c.authSnapshot()
+	username := current.user + "@" + current.realm
+	err := c.authenticateJSON(loginCtx, username, c.config.Password)
+	if loginCtx.Err() == nil && shouldFallbackToForm(err) {
+		err = c.authenticateForm(loginCtx, username, c.config.Password)
+	}
+	// The response can finish while its owner is ending. An empty/refused
+	// reply from that exchange is not a new credential diagnosis or permission
+	// to try another encoding. Shared renewal uses its own bounded owner here.
+	if ctxErr := loginCtx.Err(); ctxErr != nil {
+		return ctxErr
 	}
 	return err
 }
 
 // expected binds expiry or a 401 to the session actually used by that read.
 // A late rejection of an old ticket cannot trigger another renewal after a
-// concurrent request has already replaced it.
-func (c *Client) renewAuthentication(ctx context.Context, expected uint64) error {
+// concurrent request has already replaced it. Only renewal of a published
+// client's session is shared independently of any single reader's lifetime.
+func (c *Client) renewAuthentication(ctx context.Context, expected *uint64) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	c.authMu.Lock()
-	if c.authGeneration != expected {
+	if expected != nil && c.authGeneration != *expected {
 		c.authMu.Unlock()
 		return nil
 	}
@@ -477,7 +482,6 @@ func (c *Client) renewAuthentication(ctx context.Context, expected uint64) error
 	}
 	pending := &authRefresh{done: make(chan struct{})}
 	c.authInFlight = pending
-	username := c.auth.user + "@" + c.auth.realm
 	c.authMu.Unlock()
 
 	// The login is shared, so no single caller's cancellation may end it: a
@@ -485,10 +489,8 @@ func (c *Client) renewAuthentication(ctx context.Context, expected uint64) error
 	// must not fail every live read waiting on it. The detached attempt keeps
 	// the caller's values, is bounded by the client's request timeout, and
 	// publishes its result for later reads even after its starter has left.
-	loginCtx, cancelLogin := context.WithTimeout(context.WithoutCancel(ctx), c.sessionRenewalTimeout())
 	go func() {
-		defer cancelLogin()
-		err := c.authenticatePassword(loginCtx, username)
+		err := c.authenticate(context.WithoutCancel(ctx))
 		c.authMu.Lock()
 		pending.err = err
 		c.authInFlight = nil
@@ -504,9 +506,9 @@ func (c *Client) renewAuthentication(ctx context.Context, expected uint64) error
 	}
 }
 
-// sessionRenewalTimeout bounds one shared login attempt (JSON plus any form
-// fallback) by the same per-request timeout the client applies to API reads.
-func (c *Client) sessionRenewalTimeout() time.Duration {
+// sessionLoginTimeout bounds one login attempt (JSON plus any form fallback),
+// initial or shared, by the same per-request timeout the client applies to reads.
+func (c *Client) sessionLoginTimeout() time.Duration {
 	if c.httpClient != nil && c.httpClient.Timeout > 0 {
 		return c.httpClient.Timeout
 	}
@@ -540,7 +542,7 @@ func (c *Client) authenticateJSON(ctx context.Context, username, password string
 	}
 	defer resp.Body.Close()
 
-	return c.handleAuthResponse(resp)
+	return c.handleAuthResponse(ctx, resp)
 }
 
 func (c *Client) authenticateForm(ctx context.Context, username, password string) error {
@@ -565,10 +567,10 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 	}
 	defer resp.Body.Close()
 
-	return c.handleAuthResponse(resp)
+	return c.handleAuthResponse(ctx, resp)
 }
 
-func (c *Client) handleAuthResponse(resp *http.Response) error {
+func (c *Client) handleAuthResponse(ctx context.Context, resp *http.Response) error {
 	if resp.StatusCode != http.StatusOK {
 		body, err := readResponseBodyLimited(resp.Body)
 		if err != nil {
@@ -590,12 +592,14 @@ func (c *Client) handleAuthResponse(resp *http.Response) error {
 	}
 
 	c.authMu.Lock()
+	defer c.authMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.auth.ticket = ticket
 	c.auth.csrfToken = csrf
 	c.auth.expiresAt = time.Now().Add(2 * time.Hour) // PVE tickets expire after 2 hours
 	c.authGeneration++
-	c.authMu.Unlock()
-
 	return nil
 }
 
@@ -634,7 +638,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 	// Re-authenticate if needed
 	auth, generation := c.authSnapshot()
 	if c.config.Password != "" && auth.tokenName == "" && time.Now().After(auth.expiresAt) {
-		if err := c.renewAuthentication(ctx, generation); err != nil {
+		if err := c.renewAuthentication(ctx, &generation); err != nil {
 			return nil, fmt.Errorf("re-authentication failed: %w", err)
 		}
 		auth, generation = c.authSnapshot()
@@ -696,7 +700,7 @@ func (c *Client) requestWithRetryUsingClient(ctx context.Context, method, path s
 		// Password sessions can be invalidated server-side before local expiry.
 		// Retry once after forcing re-authentication on 401.
 		if resp.StatusCode == http.StatusUnauthorized && !retriedAfter401 && c.config.Password != "" && auth.tokenName == "" {
-			if err := c.renewAuthentication(ctx, generation); err != nil {
+			if err := c.renewAuthentication(ctx, &generation); err != nil {
 				return nil, fmt.Errorf("re-authentication failed after 401: %w", err)
 			}
 			return c.requestWithRetryUsingClient(ctx, method, path, data, true, httpClient)
@@ -1161,6 +1165,7 @@ type Container struct {
 	DiskInfo   map[string]ContainerDiskUsage     `json:"diskinfo,omitempty"`
 	RootFS     string                            `json:"rootfs,omitempty"`
 	IOCounters IOCounterPresence                 `json:"-"`
+	DiskUsage  DiskUsagePresence                 `json:"-"`
 	ObservedAt time.Time                         `json:"-"`
 }
 
@@ -1181,8 +1186,9 @@ type ContainerNetworkConfig struct {
 
 // ContainerDiskUsage captures disk usage details returned by the LXC status API.
 type ContainerDiskUsage struct {
-	Total uint64 `json:"total,omitempty"`
-	Used  uint64 `json:"used,omitempty"`
+	Total     uint64            `json:"total,omitempty"`
+	Used      uint64            `json:"used,omitempty"`
+	DiskUsage DiskUsagePresence `json:"-"`
 }
 
 // ContainerInterfaceAddress describes an IP entry associated with a container interface.
@@ -1350,17 +1356,7 @@ func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Storage `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readStorageList(resp)
 }
 
 // GetAllStorage returns storage information across all nodes
@@ -1380,17 +1376,7 @@ func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Storage `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readStorageList(resp)
 }
 
 // Task represents a Proxmox task
@@ -1413,17 +1399,7 @@ func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Task `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readTasks(resp)
 }
 
 // backupTaskListLimit caps how many vzdump tasks are listed per node. The PVE
@@ -1431,45 +1407,15 @@ func (c *Client) GetNodeTasks(ctx context.Context, node string) ([]Task, error) 
 // busy nodes; filtering server-side keeps the window useful.
 const backupTaskListLimit = 200
 
-// GetBackupTasks gets all backup tasks across all nodes, including currently
-// running ones (source=all) so in-progress backup jobs are visible.
+// GetBackupTasks preserves the compatibility view of readable online nodes.
+// It supplies no replacement authority for skipped nodes. Live state consumers
+// use GetBackupTaskInventory to retain unread scopes separately.
 func (c *Client) GetBackupTasks(ctx context.Context) ([]Task, error) {
-	// First get all nodes
-	nodes, err := c.GetNodes(ctx)
+	inventory, err := c.GetBackupTaskInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	var allTasks []Task
-	for _, node := range nodes {
-		if node.Status != "online" {
-			continue
-		}
-
-		resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/tasks?typefilter=vzdump&source=all&limit=%d", node.Node, backupTaskListLimit))
-		if err != nil {
-			// Log error but continue with other nodes
-			continue
-		}
-
-		var result struct {
-			Data []Task `json:"data"`
-		}
-		decodeErr := json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
-		if decodeErr != nil {
-			continue
-		}
-
-		// Filter for backup tasks
-		for _, task := range result.Data {
-			if task.Type == "vzdump" {
-				allTasks = append(allTasks, task)
-			}
-		}
-	}
-
-	return allTasks, nil
+	return inventory.Tasks, nil
 }
 
 // TaskLogLine is a single line of a task's log output.
@@ -1489,25 +1435,17 @@ func (c *Client) GetTaskLog(ctx context.Context, node, upid string) ([]TaskLogLi
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, err := readResponseBodyLimited(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to get task log (status %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var result struct {
-		Data []TaskLogLine `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	lines, err := readTaskLog(resp)
+	if err != nil {
 		return nil, err
 	}
-
-	return result.Data, nil
+	// A bounded prefix of a long finished log is not immutable per-guest
+	// completion evidence. Keep the existing request budget, but do not cache
+	// that prefix forever as though it covered every guest in the job.
+	if len(lines) >= taskLogLineLimit {
+		return nil, fmt.Errorf("Proxmox task log reached bounded limit (%d lines)", taskLogLineLimit)
+	}
+	return lines, nil
 }
 
 // GetContainerInterfaces returns the network interfaces (with IPs) for a container.
@@ -1554,81 +1492,26 @@ func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []StorageContent `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter for backup content only
-	var backups []StorageContent
-	for _, content := range result.Data {
-		if content.Content == "backup" || content.Content == "vztmpl" {
-			backups = append(backups, content)
-		}
-	}
-
-	return backups, nil
+	return readStorageContentInventory(resp)
 }
 
-// GetVMSnapshots returns snapshots for a specific VM
+// GetVMSnapshots returns snapshots for a specific VM. Only a complete
+// inventory can authorise removal of previously collected snapshots.
 func (c *Client) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/snapshot", node, vmid))
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Snapshot `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter out the 'current' snapshot which is not a real snapshot
-	var snapshots []Snapshot
-	for _, snap := range result.Data {
-		if snap.Name != "current" {
-			snap.VMID = vmid
-			snapshots = append(snapshots, snap)
-		}
-	}
-
-	return snapshots, nil
+	return readSnapshotInventory(resp, vmid)
 }
 
-// GetContainerSnapshots returns snapshots for a specific container
+// GetContainerSnapshots returns snapshots for a specific container.
 func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid int) ([]Snapshot, error) {
 	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/lxc/%d/snapshot", node, vmid))
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Snapshot `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter out the 'current' snapshot which is not a real snapshot
-	var snapshots []Snapshot
-	for _, snap := range result.Data {
-		if snap.Name != "current" {
-			snap.VMID = vmid
-			snapshots = append(snapshots, snap)
-		}
-	}
-
-	return snapshots, nil
+	return readSnapshotInventory(resp, vmid)
 }
 
 // ClusterStatus represents the cluster status response
@@ -2144,45 +2027,16 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		return nil, err
 	}
 
-	// Log the raw response for debugging
+	// The reply can include private guest paths, device identifiers and arbitrary
+	// unused metadata. Keep diagnostics independent of its contents and size:
+	// these events also reach log files, the live viewer and support bundles.
 	log.Debug().
 		Str("node", node).
 		Int("vmid", vmid).
-		Str("response", string(bodyBytes)).
-		Msg("Raw response from guest agent get-fsinfo")
+		Int("response_bytes", len(bodyBytes)).
+		Msg("Received guest agent filesystem response")
 
-	// Decode entry-by-entry to retain valid peers, but never mistake that
-	// remainder for a complete inventory after dropping a malformed record.
-	var arrayResult struct {
-		Data struct {
-			Result []json.RawMessage `json:"result"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
-		filesystems := make([]VMFileSystem, 0, len(arrayResult.Data.Result))
-		invalidEntries := 0
-		for idx, rawFS := range arrayResult.Data.Result {
-			var fs VMFileSystem
-			if err := json.Unmarshal(rawFS, &fs); err != nil {
-				invalidEntries++
-				log.Warn().
-					Err(err).
-					Str("node", node).
-					Int("vmid", vmid).
-					Int("filesystem_index", idx).
-					Msg("Skipping malformed guest agent filesystem entry")
-				continue
-			}
-			filesystems = append(filesystems, fs)
-		}
-		postProcessVMFilesystems(node, vmid, filesystems)
-		if invalidEntries > 0 {
-			return filesystems, fmt.Errorf("guest filesystem inventory is incomplete: %d malformed entries", invalidEntries)
-		}
-		return filesystems, nil
-	}
-
-	// If that fails, try as an object (might be an error response or different format)
+	// Keep one raw result, then decode its supported array or object shape.
 	var objectResult struct {
 		Data struct {
 			Result json.RawMessage `json:"result"`
@@ -2190,6 +2044,52 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
 		rawFS := bytes.TrimSpace(objectResult.Data.Result)
+		if len(rawFS) > 0 && rawFS[0] == '[' {
+			// Decode one row at a time. A bounded body may contain many tiny
+			// rejected rows: do not reserve a filesystem slot or emit a warning
+			// for each one. All valid peers still retain their original order.
+			decoder := json.NewDecoder(bytes.NewReader(rawFS))
+			if _, err := decoder.Token(); err != nil {
+				return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+			}
+			filesystems := make([]VMFileSystem, 0)
+			entries, invalidEntries, firstInvalid := 0, 0, -1
+			var row json.RawMessage // Reuse only the current raw row's buffer.
+			for decoder.More() {
+				if err := decoder.Decode(&row); err != nil {
+					return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+				}
+				var fs VMFileSystem
+				// The row decoder already rejects every non-object. Reject that
+				// known shape before allocating another decoder for each null or
+				// scalar in a large incomplete inventory.
+				row = bytes.TrimSpace(row)
+				if len(row) == 0 || row[0] != '{' || json.Unmarshal(row, &fs) != nil {
+					invalidEntries++
+					if firstInvalid < 0 {
+						firstInvalid = entries
+					}
+				} else {
+					filesystems = append(filesystems, fs)
+				}
+				entries++
+			}
+			if _, err := decoder.Token(); err != nil {
+				return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+			}
+			postProcessVMFilesystems(node, vmid, filesystems)
+			if invalidEntries > 0 {
+				log.Warn().
+					Str("node", node).
+					Int("vmid", vmid).
+					Int("filesystem_entries", entries).
+					Int("malformed_entries", invalidEntries).
+					Int("first_invalid_index", firstInvalid).
+					Msg("Skipping malformed guest agent filesystem entries")
+				return filesystems, fmt.Errorf("guest filesystem inventory is incomplete: %d malformed entries", invalidEntries)
+			}
+			return filesystems, nil
+		}
 		if len(rawFS) == 0 || bytes.Equal(rawFS, []byte("null")) {
 			log.Debug().
 				Str("node", node).
@@ -2212,8 +2112,8 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		log.Debug().
 			Str("node", node).
 			Int("vmid", vmid).
-			Interface("result", objectResult.Data.Result).
-			Msg("GetVMFSInfo received object instead of array")
+			Int("result_bytes", len(rawFS)).
+			Msg("GetVMFSInfo received unrecognized result instead of filesystem array")
 		return []VMFileSystem{}, nil
 	}
 
@@ -2535,18 +2435,12 @@ func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMSta
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data VMStatus `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	status, err := readGuestStatus[VMStatus](resp)
+	if err != nil {
 		return nil, err
 	}
-
-	result.Data.ObservedAt = time.Now().UTC()
-	return &result.Data, nil
+	status.ObservedAt = time.Now().UTC()
+	return status, nil
 }
 
 // GetContainerStatus returns detailed container status using real-time endpoint
@@ -2555,18 +2449,12 @@ func (c *Client) GetContainerStatus(ctx context.Context, node string, vmid int) 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data Container `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	status, err := readGuestStatus[Container](resp)
+	if err != nil {
 		return nil, err
 	}
-
-	result.Data.ObservedAt = time.Now().UTC()
-	return &result.Data, nil
+	status.ObservedAt = time.Now().UTC()
+	return status, nil
 }
 
 // ClusterResource represents a resource from /cluster/resources
@@ -2592,6 +2480,7 @@ type ClusterResource struct {
 	Template   int               `json:"template,omitempty"`
 	Tags       string            `json:"tags,omitempty"`
 	IOCounters IOCounterPresence `json:"-"`
+	DiskUsage  DiskUsagePresence `json:"-"`
 	ObservedAt time.Time         `json:"-"`
 	Lock       string            `json:"lock,omitempty"`
 }

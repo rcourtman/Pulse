@@ -212,7 +212,13 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 - Existing Pro+ entitlements remain supported for current holders, but Pro+ is no longer presented as a public self-hosted plan because monitored-system volume is no longer the paid boundary.
 
 ### Cloud
-- Hosted Pulse with Pro-level capabilities and hosted lifecycle management.
+
+Pulse Cloud is **not generally available**. The Cloud tier and feature mapping
+above describe hosted capabilities, not a public sign-up or provisioning offer.
+Self-hosted Pro does not create a hosted instance. For an existing hosted
+service, use its operator-supplied access and the [Cloud guide](CLOUD.md).
+
+- Hosted Pulse has Pro-level capabilities and hosted lifecycle management.
 - Cloud Enterprise adds internal multi-organization mode and multi-user mode.
 
 ### MSP
@@ -229,7 +235,42 @@ Pulse plan upgrades are activated locally with a license key.
 - Pulse v6 prefers v6 activation keys, but it can migrate valid Pulse v5 Pro or Lifetime JWT-style licenses into the v6 activation model.
 - If a v5 license is already persisted on disk during upgrade and no v6 activation state exists yet, Pulse will try to auto-exchange it on startup.
 - If you are activating manually in v6, paste the v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email. You can also paste a valid v5 Pro or Lifetime license key and Pulse will try to exchange it automatically.
-- If the exchange cannot complete, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key.
+- If migration or paid-feature access is incomplete, use the [recovery checks below](#already-paid-but-pro-features-are-unavailable) before applying another key.
+
+### Already paid but Pro features are unavailable
+
+**Payment, local activation and the installed runtime are separate.** A failed
+response does not establish that a payment failed, and an accepted key does not
+install a different runtime. Do not buy again, clear a working key or repeat
+checkout merely to troubleshoot missing features.
+
+1. Open **Settings → Plans & Billing → Current plan** on the affected instance.
+   Keep the displayed plan, runtime warning and redacted error with their time.
+   A failed status refresh is unavailable evidence, not proof that the licence
+   expired or that a new purchase is needed.
+2. **Active plan with “Pro runtime missing” or “Pulse Pro runtime required”:**
+   public GitHub releases and the public Docker image are Community builds.
+   They do not contain Pro-only runtime hooks. Use the panel's **Open Pulse Pro
+   downloads** link to the [private runtime download page](https://pulserelay.pro/download.html).
+   Review its instructions for your existing installation before changing it;
+   preserve its persistent data, configuration and keys. Downloading an archive
+   or selecting an image is not an installed or running Pro runtime.
+3. **Missing activation key or an older purchase:** open
+   [self-serve retrieval](https://pulserelay.pro/retrieve-license) with the
+   purchase email. Keep the email verification code private; it is not the
+   activation key. The download page expects a v6 activation key starting
+   `ppk_live_`, not a legacy v5 licence key. For local activation, open
+   **License recovery → Manual key recovery** and use **Apply key**; that panel
+   also accepts supported legacy v5 Pro/Lifetime keys for migration. **Clear
+   key** removes the local activation; it is not a status refresh or a billing
+   cancellation.
+
+Enter keys and verification codes only in the intended trusted browser form,
+not in a command, URL or GitHub report. Keep licence files and `.encryption.key`
+private and intact; do not delete them, reinstall or run Diagnostics just to
+obtain evidence. If recovery still fails, retain the exact redacted error and
+Pulse version. Payment, account or licence disputes belong through the site's
+private support route, not a public thread with emails, keys, codes or receipts.
 
 ### Feature Status API
 

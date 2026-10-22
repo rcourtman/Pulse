@@ -224,48 +224,106 @@ func newResolvedContractServer(handler http.Handler) *resolvedContractServer {
 func (s *resolvedContractServer) Client() *http.Client { return s.client }
 func (s *resolvedContractServer) Close()               {}
 
-// Disabled grouping remains immediate. With the same 15-alert workload this
-// deliberately hits the unchanged internal 10/minute destination limit; grouped
-// recovery above sends one request instead and creates no dead letters.
+// Disabled grouping remains individual and hits the unchanged 10/minute
+// destination limit. The extra deliveries now retain the shared retry horizon
+// rather than exhausting a caller-local three-attempt budget. Drive claims and
+// the limiter's next-window state explicitly; real due-time/backoff acceptance
+// is covered by TestOrdinaryNotificationTransientRetryHorizon.
 func TestResolvedGroupingDisabledBurstRetainsRateLimit(t *testing.T) {
-	server := newResolvedContractServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
-	m := NewNotificationManagerWithDataDir("", t.TempDir())
-	defer m.Stop()
-	m.webhookClient = server.Client()
+	now := time.Now()
+	q := newQuietReplayQueue(t, t.TempDir(), &now)
+	requests := 0
+	server := newResolvedContractServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+	}))
+	hook := WebhookConfig{ID: "ops", Name: "ops", URL: server.URL, Enabled: true}
+	m := &NotificationManager{enabled: true, notifyOnResolve: true, queue: q,
+		webhookClient: server.Client(), webhooks: []WebhookConfig{hook},
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+		lastNotified:      make(map[string]notificationRecord), deliveryReceipts: make(map[string]struct{}),
+		groupingEnabled: true, groupWindow: time.Hour}
+	t.Cleanup(func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if m.groupTimer != nil {
+			m.groupTimer.Stop()
+		}
+	})
 	if err := m.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
 		t.Fatal(err)
 	}
-	hook := WebhookConfig{ID: "ops", Name: "ops", URL: server.URL, Enabled: true}
-	m.AddWebhook(hook)
-	m.SetNotifyOnResolve(true)
-	m.SetGroupingConfig(true, 1, false, false)
+	q.SetProcessor(m.ProcessQueuedNotification)
 	batch := make([]*alerts.Alert, 15)
 	for i := range batch {
-		batch[i] = &alerts.Alert{ID: fmt.Sprintf("limit-%d", i), ResourceName: fmt.Sprintf("limit-%d", i), StartTime: time.Now().Add(-time.Minute), Level: alerts.AlertLevelWarning}
+		batch[i] = &alerts.Alert{ID: fmt.Sprintf("limit-%d", i), ResourceName: fmt.Sprintf("limit-%d", i), StartTime: now.Add(-time.Minute), Level: alerts.AlertLevelWarning}
 		m.SendAlert(batch[i])
 	}
-	waitResolvedContract(t, func() bool { stats, err := m.GetQueue().GetQueueStats(); return err == nil && stats["sent"] == 1 })
+	m.sendGroupedAlerts()
+	rows := quietReplayRows(t, q)
+	if len(rows) != 1 {
+		t.Fatalf("firing groups=%d, want 1", len(rows))
+	}
+	q.processNotification(rows[0])
 	m.SetGroupingConfig(false, 1, false, false)
 	for _, a := range batch {
 		m.CancelAlert(a.ID)
-		m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: time.Now()})
+		m.SendResolvedAlert(&alerts.ResolvedAlert{Alert: a, ResolvedTime: now})
 	}
-	waitResolvedContract(t, func() bool {
-		stats, err := m.GetQueue().GetQueueStats()
-		return err == nil && stats["dlq"] == 6 && stats["sent"] == 10
-	})
-	dlq, err := m.GetQueue().GetDLQ(20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(dlq) != 6 {
-		t.Fatalf("dead letters=%d", len(dlq))
-	}
-	for _, job := range dlq {
-		if job.Attempts != 3 || (job.LastError == nil || !strings.Contains(*job.LastError, "rate limit exceeded")) {
-			t.Errorf("wrong retry outcome: %+v", job)
+	for attempt := 1; attempt <= 3; attempt++ {
+		for _, row := range quietReplayRows(t, q) {
+			if row.Status == QueueStatusPending {
+				q.processNotification(row)
+			}
+		}
+		stats, err := q.GetQueueStats()
+		if err != nil || stats["pending"] != 6 || stats["sent"] != 10 || stats["dlq"] != 0 || requests != 10 {
+			t.Fatalf("attempt %d: rows=%v requests=%d error=%v; want six pending, ten sent and ten requests", attempt, stats, requests, err)
 		}
 	}
+	for _, row := range quietReplayRows(t, q) {
+		if row.Status != QueueStatusPending {
+			continue
+		}
+		if row.Attempts != 3 || row.MaxAttempts != defaultQueueMaxAttempts {
+			t.Fatalf("retry lost shared budget: %+v", row)
+		}
+		entries, err := q.GetDeliveryLog(now.Add(-time.Hour), 200)
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, entry := range entries {
+			if entry.NotificationID == row.ID {
+				count++
+				if entry.Outcome != DeliveryOutcomeRetry || entry.Success || entry.FailureClass != string(NotificationFailureRateLimited) {
+					t.Fatalf("wrong rate-limited outcome: %+v", entry)
+				}
+			}
+		}
+		if count != 3 {
+			t.Fatalf("retry audits=%d, want 3", count)
+		}
+	}
+	// Expire this test receiver's real limiter state, without changing its
+	// count/window constants or retry deadlines. No background workers exist.
+	m.webhookRateMu.Lock()
+	m.webhookRateLimits[hook.URL].lastSent = time.Now().Add(-WebhookRateLimitWindow - time.Second)
+	m.webhookRateMu.Unlock()
+	for _, row := range quietReplayRows(t, q) {
+		if row.Status == QueueStatusPending {
+			q.processNotification(row)
+		}
+	}
+	stats, err := q.GetQueueStats()
+	if err != nil || stats["pending"] != 0 || stats["sent"] != 16 || stats["dlq"] != 0 || requests != 16 {
+		t.Fatalf("next-window recovery: rows=%v requests=%d error=%v; want sixteen sent", stats, requests, err)
+	}
+	telemetry, err := q.GetTelemetryStats(now.Add(-time.Hour))
+	if err != nil || telemetry.Attempts != 34 || telemetry.Deliveries != 16 || telemetry.Failures != 0 {
+		t.Fatalf("recovery accounting: %+v error=%v", telemetry, err)
+	}
+	t.Logf("ungrouped burst: six rate-limited jobs remain pending after three failures; next-window acceptance gives %d requests, %d audited attempts, no dead letters", requests, telemetry.Attempts)
 }
 
 // A restart must not terminally cancel a due persisted delivery before the

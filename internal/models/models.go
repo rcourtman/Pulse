@@ -3087,7 +3087,10 @@ type PBSJobHealthFreshness struct {
 
 // PMGInstance represents a Proxmox Mail Gateway connection
 type PMGInstance struct {
-	ID               string               `json:"id"`
+	ID string `json:"id"`
+	// ConnectionID is the configured connection's scoped alert identity, not a
+	// display name or a value inferred from the generated runtime ID.
+	ConnectionID     string               `json:"connectionId,omitempty"`
 	Name             string               `json:"name"`
 	Host             string               `json:"host"`
 	GuestURL         string               `json:"guestURL,omitempty"` // Optional guest-accessible URL (for navigation)
@@ -3483,8 +3486,11 @@ type BackupTask struct {
 
 // StorageBackup represents a backup file in storage
 type StorageBackup struct {
-	ID           string    `json:"id"`
-	Storage      string    `json:"storage"`
+	ID      string `json:"id"`
+	Storage string `json:"storage"`
+	// StorageNode is the archive's local storage host, not the guest's current
+	// placement in Node. Empty means shared storage or older unscoped evidence.
+	StorageNode  string    `json:"storageNode,omitempty"`
 	Node         string    `json:"node"`
 	Instance     string    `json:"instance"` // Unique instance identifier (for nodes with duplicate names)
 	Type         string    `json:"type"`
@@ -6212,13 +6218,20 @@ func (s *State) UpdatePMGInstance(instance PMGInstance) {
 
 // UpdateBackupTasksForInstance updates backup tasks for a specific instance, merging with existing tasks
 func (s *State) UpdateBackupTasksForInstance(instanceName string, tasks []BackupTask) {
+	s.UpdateBackupTasksForInstanceWithUnreadNodes(instanceName, tasks, nil)
+}
+
+// UpdateBackupTasksForInstanceWithUnreadNodes atomically replaces observed
+// node scopes while retaining unread ones verbatim, including ObservedAt.
+// An unavailable node is not an empty task inventory. Other instances are
+// independent even when their node names and VMIDs coincide.
+func (s *State) UpdateBackupTasksForInstanceWithUnreadNodes(instanceName string, tasks []BackupTask, unreadNodes map[string]bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map of existing tasks, excluding those from this instance
 	taskMap := make(map[string]BackupTask)
 	for _, task := range s.PVEBackups.BackupTasks {
-		if task.Instance != instanceName {
+		if task.Instance != instanceName || unreadNodes[task.Node] {
 			taskMap[task.ID] = task
 		}
 	}

@@ -68,10 +68,9 @@ Releases follow a fixed schedule rather than individual judgment.
    after the last stable release**, provided `main` has changed since that release.
    The next release candidate becomes eligible **one day earlier**, reserving the
    full 24-hour soak. Preparation and qualification can move publication later.
-   An important fix that should not wait for the schedule can bring that cut
-   forward, or replace a candidate that is still soaking with a fresh one
-   that starts its own soak. A candidate carries everything merged to `main` at the
-   cut. Nothing is selected for it or added to it afterwards.
+   A candidate carries everything merged to `main` at the cut. Nothing is selected
+   for it or added to it afterwards. An important fix does not bring the weekly
+   candidate or stable release forward.
 2. **Qualify and publish it.** Required checks include targeted tests, installation
    smoke checks, release-pipeline validation, and recorded rollback instructions.
    RCs also run the integration checks required for stable releases. Release notes
@@ -86,18 +85,21 @@ Releases follow a fixed schedule rather than individual judgment.
 
 - Each release is the next minor version: after `6.5.0` comes `6.6.0`. Patch
   releases are not scheduled.
-- Only an open issue labelled `release-blocker` stops a promotion. That label marks
-  something that worked in the current stable release but is broken in the
-  candidate. Each such issue is closed once its fix is on `main`. When every one is
-  closed, a fresh candidate is cut from `main` and starts its own 24-hour soak.
+- Only an open issue labelled `release-blocker` stops a promotion. It records a
+  regression from the previous stable release or a failed release attempt.
+  Candidate regressions are repaired on `main`; once those issues are closed,
+  a fresh candidate is cut from `main` and starts its own 24-hour soak. Release
+  preparation or publication failures are also repaired on `main`, then retried.
 - Successive candidates for the same version are published at least **24 hours**
   apart. Time spent on a beta does not count towards an RC's soak.
 - A defect that the current stable release already has is fixed on `main` and ships
   in the next release.
 
-An important fix can bring the next candidate cut forward. It still carries
-everything on `main` at the cut and goes through the same required checks and
-24-hour soak; it is not a selected patch release or a testing exemption.
+Before the RC is due, use a published beta that contains the fix for earlier
+access on Preview. Work merged during the soak reaches the next cycle's betas
+and candidate. Only a candidate regression replaces a soaking candidate;
+an unrelated fix does not restart its soak. Every replacement still needs the
+required checks and its full 24-hour soak.
 
 ## Taking part in Preview testing
 

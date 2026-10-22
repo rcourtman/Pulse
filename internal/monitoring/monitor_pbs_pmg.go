@@ -150,20 +150,23 @@ func pbsJobHealthPosture(fact pbs.JobHealthEvidence, freshness models.PBSJobHeal
 	if fact.Error != "" {
 		return "unknown", strings.TrimSpace(fact.Confidence)
 	}
-	if freshness.State == "overdue" {
-		return "warning", "job-overdue"
-	}
+	// PBS exit-status text can contain arbitrary failure details. In particular,
+	// "token" contains "ok", and a warning can mention a successful operation.
+	// Only an explicit success state may earn the consumer's Healthy badge.
+	// Known failures also outrank warnings and overdue scheduling evidence.
 	switch {
-	case status == "":
-		return "unknown", "no-run-observed"
-	case strings.Contains(status, "ok") || strings.Contains(status, "success"):
-		return "healthy", "last-run-success"
-	case strings.Contains(status, "running"):
-		return "healthy", "running"
-	case strings.Contains(status, "warn"):
-		return "warning", "last-run-warning"
 	case strings.Contains(status, "fail") || strings.Contains(status, "error"):
 		return "critical", "last-run-failed"
+	case strings.Contains(status, "warn"):
+		return "warning", "last-run-warning"
+	case freshness.State == "overdue":
+		return "warning", "job-overdue"
+	case status == "":
+		return "unknown", "no-run-observed"
+	case status == "ok" || status == "success":
+		return "healthy", "last-run-success"
+	case status == "running":
+		return "unknown", "running"
 	default:
 		return "unknown", "last-run-state-" + strings.ReplaceAll(status, " ", "-")
 	}
@@ -175,6 +178,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
 	var pollErr error
 	var pbsInst models.PBSInstance
+	m.mu.RLock()
+	backupInventory := pbsBackupInventory{runtimeEpoch: m.pbsBackupRuntimeEpoch}
+	m.mu.RUnlock()
 	publishResult := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")
@@ -361,6 +367,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	// Poll datastores if enabled
 	if instanceCfg.MonitorDatastores {
 		datastores, err := client.GetDatastoresFiltered(ctx, includeDatastore)
+		backupInventory.datastoreDiscoveryErr = err
 		if err != nil {
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get datastores")
@@ -452,6 +459,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				}
 
 				pbsInst.Datastores = append(pbsInst.Datastores, modelDS)
+				backupInventory.datastores = append(backupInventory.datastores, pbsBackupDatastore{PBSDatastore: modelDS, namespaceDiscoveryErr: err})
 			}
 		}
 	}
@@ -522,86 +530,20 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 	// Poll backups if enabled
 	if instanceCfg.MonitorBackups {
-		if len(pbsInst.Datastores) == 0 {
+		if ctx.Err() != nil {
+			// A cancelled foreground discovery cannot admit a new background
+			// observation into a replacement runtime.
+			return
+		} else if !instanceCfg.MonitorDatastores {
 			log.Debug().
 				Str("instance", instanceName).
-				Msg("No PBS datastores available for backup polling")
+				Msg("Skipping PBS backup polling - datastore monitoring disabled")
 		} else if !m.backupPollingEnabledSetting() {
 			log.Debug().
 				Str("instance", instanceName).
 				Msg("Skipping PBS backup polling - globally disabled")
 		} else {
-			now := time.Now()
-
-			m.mu.Lock()
-			lastPoll := m.lastPBSBackupPoll[instanceName]
-			if m.pbsBackupPollers == nil {
-				m.pbsBackupPollers = make(map[string]bool)
-			}
-			inProgress := m.pbsBackupPollers[instanceName]
-			m.mu.Unlock()
-
-			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-			if !shouldPoll {
-				if reason != "" {
-					log.Debug().
-						Str("instance", instanceName).
-						Str("reason", reason).
-						Msg("Skipping PBS backup polling this cycle")
-				}
-			} else if inProgress {
-				log.Debug().
-					Str("instance", instanceName).
-					Msg("PBS backup polling already in progress")
-			} else {
-				datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
-				copy(datastoreSnapshot, pbsInst.Datastores)
-
-				// Atomically check and set poller flag
-				m.mu.Lock()
-				if m.pbsBackupPollers[instanceName] {
-					// Race: another goroutine started between our check and lock
-					m.mu.Unlock()
-					log.Debug().
-						Str("instance", instanceName).
-						Msg("PBS backup polling started by another goroutine")
-				} else {
-					m.pbsBackupPollers[instanceName] = true
-					m.lastPBSBackupPoll[instanceName] = newLast
-					m.mu.Unlock()
-
-					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
-						defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", inst))
-						defer func() {
-							m.mu.Lock()
-							delete(m.pbsBackupPollers, inst)
-							m.lastPBSBackupPoll[inst] = time.Now()
-							m.mu.Unlock()
-						}()
-
-						log.Info().
-							Str("instance", inst).
-							Int("datastores", len(ds)).
-							Msg("Starting background PBS backup polling")
-
-						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-						// so derive the backup poll context from the long-lived runtime context instead.
-						parentCtx := m.getRuntimeContext()
-						if parentCtx == nil {
-							parentCtx = context.Background()
-						}
-						backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
-						defer cancel()
-
-						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
-
-						log.Info().
-							Str("instance", inst).
-							Dur("duration", time.Since(start)).
-							Msg("Completed background PBS backup polling")
-					}(datastoreSnapshot, instanceName, now, client)
-				}
-			}
+			m.pollPBSBackupsAsync(instanceName, client, backupInventory)
 		}
 	} else {
 		log.Debug().
@@ -763,6 +705,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	now := time.Now()
 	pmgInst := models.PMGInstance{
 		ID:               PMGMonitorResourceID(instanceName),
+		ConnectionID:     "pmg:" + instanceCfg.Name,
 		Name:             instanceName,
 		Host:             instanceCfg.Host,
 		GuestURL:         instanceCfg.GuestURL,
@@ -796,11 +739,10 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if version != nil {
 		pmgInst.Version = strings.TrimSpace(version.Version)
 	}
-	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, true)
 	m.resetAuthFailures(instanceName, "pmg")
 
-	// A successful version read establishes connection health, not complete
-	// downstream collection. Preserve missing readings and report failed polls.
+	// Version establishes reachability only. Final collection health must also
+	// account for every selected read; missing readings remain absent.
 	recordReadError := func(operation string, err error) {
 		if err != nil {
 			pollErr = stderrors.Join(pollErr, errors.WrapAPIError(operation, instanceName, err, 0))
@@ -808,8 +750,22 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	}
 
 	cluster, clusterErr := client.GetClusterStatus(ctx, true)
+	if clusterErr == nil {
+		if len(cluster) == 0 {
+			clusterErr = fmt.Errorf("PMG cluster response contained no nodes")
+		}
+		for _, entry := range cluster {
+			if strings.TrimSpace(entry.Name) == "" {
+				clusterErr = fmt.Errorf("PMG cluster response contained a node without a name")
+				break
+			}
+		}
+	}
 	recordReadError("pmg_cluster_status", clusterErr)
 	if clusterErr != nil {
+		// Failed/incomplete enumeration cannot authorise node-specific reads.
+		// The connection display name is not a PMG node hostname (#2960).
+		cluster = nil
 		if debugEnabled {
 			log.Debug().Err(clusterErr).Str("instance", instanceName).Msg("failed to retrieve PMG cluster status")
 		}
@@ -861,23 +817,13 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		pmgInst.Nodes = nodes
 	}
 
-	// Fall back to the connection name only when PMG answered with no cluster
-	// entries. After a failed cluster read the name is a display label, not a
-	// node: requesting backups with it fails with a misleading hostname-lookup
-	// error on PMG (#2960) and cannot return backups.
-	if len(backupNodes) == 0 && clusterErr == nil {
-		trimmed := strings.TrimSpace(instanceName)
-		if trimmed != "" {
-			backupNodes[trimmed] = struct{}{}
-		}
-	}
-
 	pmgBackups := make([]models.PMGBackup, 0)
 	seenBackupIDs := make(map[string]struct{})
 	readBackupNodes := make(map[string]struct{}, len(backupNodes))
 
 	for nodeName := range backupNodes {
 		if ctx.Err() != nil {
+			recordReadError("pmg_backups", ctx.Err())
 			break
 		}
 
@@ -1072,7 +1018,15 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
+	// Each successfully read node replaces only its own accepted inventory.
+	// Unread nodes were carried above, including every node after failed or
+	// incomplete discovery; no connection label authorises a node read.
 	m.state.UpdatePMGBackups(instanceName, pmgBackups)
+	if pollErr != nil {
+		pmgInst.Status = "degraded"
+		pmgInst.ConnectionHealth = "degraded"
+	}
+	m.setProviderConnectionHealth(InstanceTypePMG, instanceName, pollErr == nil)
 	m.state.UpdatePMGInstance(pmgInst)
 	log.Info().
 		Str("instance", instanceName).

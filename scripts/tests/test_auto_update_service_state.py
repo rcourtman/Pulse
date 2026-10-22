@@ -9,19 +9,20 @@ transaction tests separately exercise real local SSH signatures and metadata.
 import json
 import os
 from pathlib import Path
-import shutil
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
 UPDATER = Path(os.environ.get("PULSE_AUTO_UPDATER_UNDER_TEST", ROOT / "scripts/pulse-auto-update.sh")).resolve()
 
-MANAGER = r'''#!/usr/bin/env python3
+MANAGER = r'''
 import json, os, sys, time
 from pathlib import Path
 f = Path(os.environ["FIXTURE"])
@@ -33,6 +34,12 @@ after = (f / "installer-ran").exists()
 stopped = (f / "stop-ran").exists()
 state = (f / "state").read_text().strip()
 if args[0] == "show":
+    if after and mode == "wait-read-hang":
+        p = f / "wait-reads"
+        count = int(p.read_text()) + 1 if p.exists() else 1
+        p.write_text(str(count))
+        if count == 2:
+            time.sleep(8)  # Finite; the remaining one-second read must time out.
     if not after and mode == "initial-hang": time.sleep(30)
     if not after and mode == "initial-error":
         print("LoadState=loaded\nActiveState=inactive")
@@ -74,6 +81,43 @@ if args[0] == "start":
 sys.exit(97)
 '''
 
+
+def write_manager(root):
+    # The native runner selected this interpreter. Use its isolated stdlib
+    # instead of paying site startup on every synthetic systemctl observation.
+    model = root / "manager-model.py"
+    model.write_text(MANAGER)
+    tool = root / "tools/systemctl"
+    tool.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
+                    + " -I -S " + shlex.quote(str(model)) + ' "$@"\n')
+    tool.chmod(0o755)
+
+
+class UpdaterTimingResult(unittest.TextTestResult):
+    def startTest(self, test):
+        self.started = time.monotonic()
+        if not hasattr(self, "suite_started"):
+            self.suite_started = self.started
+        self.subcases = 0
+        self.progress("start", test)
+        super().startTest(test)
+
+    def addSubTest(self, test, subtest, err):
+        self.subcases += 1
+        super().addSubTest(test, subtest, err)
+
+    def stopTest(self, test):
+        super().stopTest(test)
+        self.progress("complete", test)
+
+    def progress(self, phase, test):
+        now = time.monotonic()
+        self.stream.writeln("Updater fixture timing: " + json.dumps(dict(
+            phase=phase, control=test._testMethodName, completed_subcases=self.subcases,
+            suite_seconds=round(now - self.suite_started, 6),
+            control_seconds=round(now - self.started, 6)), sort_keys=True))
+        self.stream.flush()
+
 HARNESS = r'''
 source "$UPDATER"
 if [[ "$REAL_LOG" != true ]]; then
@@ -98,7 +142,12 @@ verify_update_running_executable() {
     return "$RUNTIME_EXIT"
 }
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
-sleep() { :; } # Only the liveness wait; timeout/manager deadlines are real.
+sleep() {
+    # The deadline consumer control advances to the final second of the real
+    # twenty-second wait. Manager execution and timeout remain real.
+    if [[ "$MODE" == wait-read-hang ]]; then SECONDS=$((SECONDS + 19))
+    else SECONDS=$((SECONDS + $1)); fi
+}
 verify_release_signature() { :; }
 mktemp() {
     local -a args=("$@")
@@ -195,14 +244,7 @@ class UpdaterFixture(unittest.TestCase):
             f = Path(directory)
             for name in ("tools", "tmp", "install/bin", "config"):
                 (f / name).mkdir(parents=True)
-            (f / "manager.py").write_text(MANAGER)
-            # Use the suite's selected interpreter, without site startup, for
-            # this stdlib-only model. Re-resolving python3 for every manager
-            # observation can select a different, slower host installation.
-            (f / "tools/systemctl").write_text(
-                "#!/bin/sh\nexec " + shlex.quote(sys.executable) + " -I -S "
-                + shlex.quote(str(f / "manager.py")) + ' "$@"\n')
-            (f / "tools/systemctl").chmod(0o755)
+            write_manager(f)
             # The production log() remains intact in real-log controls. Only
             # its external sink is confined; no host journal is contacted.
             (f / "tools/logger").write_text(LOGGER)
@@ -397,6 +439,56 @@ class UpdateLogSinks(UpdaterFixture):
 
 
 class UpdateServiceState(UpdaterFixture):
+    def test_manager_uses_selected_isolated_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="updater model ") as directory:
+            root = Path(directory)
+            (root / "tools").mkdir()
+            invocations = root / "arguments"
+            interpreter = root / "selected python"
+            interpreter.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> '
+                                   + shlex.quote(str(invocations)) + '\nexec '
+                                   + shlex.quote(sys.executable) + ' "$@"\n')
+            interpreter.chmod(0o700)
+            with mock.patch.object(sys, "executable", str(interpreter)):
+                write_manager(root)
+            (root / "sitecustomize.py").write_text(
+                'from pathlib import Path\nPath(' + repr(str(root / "site-ran")) + ').touch()\n')
+            (root / "state").write_text("active\n")
+            env = dict(os.environ, FIXTURE=str(root), PYTHONPATH=str(root), MODE="normal",
+                       LOAD_STATE="loaded", OBSERVATION_PHASE="", OBSERVATION_FAULT="")
+            args = ["show", "pulse-custom@department", "--no-pager",
+                    "--property=LoadState", "--property=ActiveState"]
+            result = subprocess.run([str(root / "tools/systemctl"), *args], env=env,
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout, "ActiveState=active\nLoadState=loaded\n")
+            self.assertEqual(result.stderr, "")
+            self.assertEqual(invocations.read_text().splitlines(), [
+                "-I", "-S", str(root / "manager-model.py"), *args])
+            self.assertFalse((root / "site-ran").exists())
+            self.assertEqual([json.loads(line) for line in (root / "calls").read_text().splitlines()], [args])
+
+    def test_timing_reports_control_and_cumulative_progress(self):
+        import io
+
+        class Control(unittest.TestCase):
+            def test_control(self):
+                with self.subTest():
+                    self.assertTrue(True)
+
+        stream = io.StringIO()
+        result = unittest.TextTestRunner(stream=stream, verbosity=2, resultclass=UpdaterTimingResult).run(
+            unittest.defaultTestLoader.loadTestsFromTestCase(Control))
+        self.assertTrue(result.wasSuccessful())
+        records = [json.loads(line.split("timing: ", 1)[1])
+                   for line in stream.getvalue().splitlines() if line.startswith("Updater fixture timing: ")]
+        self.assertEqual([r["phase"] for r in records], ["start", "complete"])
+        self.assertEqual([r["completed_subcases"] for r in records], [0, 1])
+        for record in records:
+            self.assertEqual(record["control"], "test_control")
+            self.assertGreaterEqual(record["suite_seconds"], record["control_seconds"])
+        self.assertGreaterEqual(records[-1]["control_seconds"], records[0]["control_seconds"])
+
     def test_manager_diagnostics_refuse_initial_update_and_restart(self):
         for fault in ("stderr-warning", "stderr-blank", "stdout-blank", "stdout-unterminated"):
             for flow, state in (("update", "active"), ("update", "inactive"), ("backstop", "inactive")):
@@ -466,6 +558,22 @@ class UpdateServiceState(UpdaterFixture):
                 self.assertIn("Running Pulse executable is unverified; backup retained", r["output"])
                 self.assertNotIn("Update successfully installed and verified", r["output"])
                 self.assertNotIn("Restoring from backup", r["output"])
+
+    def test_startup_deadline_uncertainty_preserves_completed_install_and_backup(self):
+        r = self.run_fixture(mode="wait-read-hang", state="active", success=True)
+        self.assertEqual(r["exit"], 1, r)
+        self.assertLess(r["elapsed"], 4, r)
+        self.assertTrue(r["installed"] and r["installer_finished"], r)
+        self.assertFalse(r["started"] or r["stopped"], r)
+        self.assertEqual(len(r["calls"]), 3, r)  # Initial state and two wait reads; no replay.
+        self.assertEqual(r["runtime_probes"], [], r)
+        self.assertEqual(r["state"], "inactive", r)
+        self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.6.0'\n", r)
+        self.assertEqual(r["version"], "v6.6.0\n", r)
+        self.assertEqual(r["backups"], [b"#!/bin/sh\necho 'Pulse v6.5.0'\n"], r)
+        self.assertIn("Update service state is uncertain; backup retained", r["output"])
+        self.assertNotIn("Update successfully installed and verified", r["output"])
+        self.assertNotIn("Restoring from backup", r["output"])
 
     def test_rollback_keeps_backup_until_restored_running_executable_matches(self):
         r = self.run_fixture(state="active", success=False, runtime_exit=2)
@@ -751,4 +859,4 @@ class RunningExecutable(unittest.TestCase):
         self.assertLess(elapsed, 8)
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(testRunner=unittest.TextTestRunner(verbosity=2, resultclass=UpdaterTimingResult))

@@ -21,6 +21,113 @@
 
 ## Purpose
 
+### Typed MCP fleet filters survive HTTP projection
+
+GET/DELETE capability projection preserves public string and boolean query
+arguments, including explicit `false`, without stringifying numbers, null,
+arrays or objects. Path parameters and internal approval metadata remain out
+of the query; write-body and authentication contracts are unchanged.
+`get_fleet_context` still advertises `hasFindings` as boolean: true narrows to
+resources with active findings; false/omitted applies no finding-presence
+filter. String dimensions intersect with it, and legacy string transport stays
+compatible. No endpoint or API-handler filter semantics change.
+
+`TestProjectCapabilityCallGETDELETEPreservesTypedFilters` pins conversion and
+shielding; the HTTP request test pins encoding and token preservation.
+`TestServer_FleetBooleanFiltersReachRealHandler` joins actual MCP stdio/schema,
+HTTP transport, production fleet handler and text/structured output over safe
+resource/finding fixtures. It covers true/false/omission, composed filters and
+an empty intersection; this is not released-binary or customer-estate proof.
+
+### Single-alert mutation response admission
+
+The client requires the existing acknowledge/unacknowledge/snooze/unsnooze
+producer's literal `success: true` with no error field. A snooze response must
+also contain a string `snoozedUntil` matching the requested instant; equivalent
+UTC/offset representations remain valid. Malformed or contradictory successful
+HTTP bodies reject with input-free uncertainty. Existing transport failures
+propagate, and no second mutation is issued by this admission logic. Routes,
+request bodies, actor, authentication, persistence and server schemas do not
+change. `alertActionConfirmation.test.tsx` covers all four adapters and their
+real state owners; `alert-action-confirmation.cjs` covers the HTTP/overview path.
+
+### Bounded alert settings recovery
+
+Optional AbortSignal arguments on alert-policy, email/Apprise/webhook, dead-man and existing-subscriber Relay configuration GETs propagate into the ordinary API client. The settings owners expire header/body reads after 150 seconds without removing the existing two-minute Retry-After allowance. No route, payload, authentication, entitlement or mutation contract changes.
+
+Verification: the existing adapter suites plus `alertConfigurationDeadline.test.tsx` cover propagation and retirement. `alert-configuration-deadline.cjs` exercises the actual HTTP producer/consumer boundary, including a two-minute rate limit and a single explicit normal save.
+
+### Notification test responses retain producer-specific acknowledgements
+
+`NotificationsAPI.testNotification` accepts the existing `/test` producer's
+literal `status: "success"`; `testWebhook` accepts `/webhooks/test`'s literal
+`success: true`, with an optional integer 2xx destination status. Contradictory
+markers, an error field or a non-boolean supplied `deliveryPaused` reject with
+an input-free unconfirmed-result message. Valid pause evidence survives for the
+consumer warning, and existing transport errors/details propagate unchanged.
+No endpoint, request payload, retry, producer or persistence contract changes.
+`notifications.test.ts` tests malformed/negative/affirmative
+results and one-send request preservation; the containing Notifications browser
+fixture exercises the actual email, Apprise, saved- and draft-webhook controls.
+
+### Notification evidence reads forward cancellation
+
+The notification-health, delivery-log and alert-event read adapters accept an
+optional AbortSignal and forward it through the existing authenticated client,
+including headers and JSON-body reads. The Notifications consumer uses separate
+150-second read lifetimes; its expiry cannot assert empty history or a healthy
+queue. Producer fields, query bounds, response validation and mutation APIs are
+unchanged. `notificationEvidenceDeadline.test.tsx` joins all three adapters to
+their real read owners; `notification-evidence-deadline.cjs` checks actual HTTP
+stalls and the client's existing two-minute Retry-After allowance.
+
+### Notification recovery responses require affirmative evidence
+
+`NotificationsAPI.getDeliveryLog` rejects missing/non-array `entries` as
+unavailable. Invalid row identity, time, outcome/success, alert IDs or counts
+marks the result incomplete while preserving readable rows. Explicit empty
+arrays remain empty evidence; retention fallbacks and optional diagnostics
+remain compatible. Retry/Dismiss require literal `success: true` and a
+non-negative safe-integer affected count, including zero. Malformed/rejected
+2xx bodies reject rather than invent a zero/success acknowledgement.
+`notifications.test.ts` pins complete, partial, contradictory and malformed
+responses against the existing producer fields; no backend schema changes.
+
+
+### Endpoint diagnostics do not change node HTTP responses
+
+The existing add/test request diagnostics display a validated infrastructure
+base URL or `[invalid endpoint]`, never rejected userinfo, query, fragment or
+URL-parser input. PMG construction uses the same input-free syntax diagnostic
+as PVE/PBS. Routing and stored hosts are not replaced with display labels.
+`node_endpoint_diagnostics_test.go` exercises all three ingress types, accepted
+host labels and actual saved-PMG constructor failures. The existing HTTP 400
+responses and generic saved-node error message stay byte-for-byte unchanged;
+there is no response schema, authentication, UI state or trust-policy change.
+
+### PVE archive location remains distinct from guest placement
+
+The existing PVE backup response and frontend `StorageBackup` type support
+optional `storageNode` for a node-local archive's host. The guest's current
+`node`, endpoint, auth, filters and response envelope are unchanged. Omission
+keeps shared and older rows compatible. The consuming inventory reader accepts
+only a string when this field is present; malformed location evidence remains
+an explicit source-read error, not an empty backup inventory.
+`proxmoxBackupInventory.test.ts` covers typed provenance and legacy absence.
+
+### Copied backend bootstrap commands have one portable private reader
+
+Existing setup artifact aliases and Proxmox/container command fields retain
+separate credential response fields. Their command text now selects standalone
+`stty` or, only when absent, BusyBox `stty`, with distinct fail-closed terminal,
+tool and mode diagnostics. One isolated root/sudo prefix emits the privileged
+reader once, preserving complete fetch/preflight and 0700/0600 path handoff.
+No route, payload key, issuance scope, TLS policy or install authority changes.
+`TestContract_PortablePrivateBootstrapPayloads` checks the serialized producer
+boundary; full configapi PTY/tool/privacy/caller tests exercise the commands.
+Browser acceptance must use the actual producer fields through their existing
+setup/agent consumers, not a frontend-file guard skip or fabricated commands.
+
 ### Proxmox setup guide names the command-access option by its shared label (21 October 2026)
 
 The Proxmox node setup guide's Docker-in-LXC note now points to the Pulse
@@ -89,19 +196,6 @@ query as the points endpoint, retaining point identity, repository references,
 tri-state verification and evidence provenance in real and demo modes. Tool
 pagination translates global offsets into the shared source's bounded pages.
 No route, entitlement, recovery mutation or action approval is added.
-
-### Copied backend bootstrap commands have one portable private reader
-
-Existing setup artifact aliases and Proxmox/container command fields retain
-separate credential response fields. Their command text now selects standalone
-`stty` or, only when absent, BusyBox `stty`, with distinct fail-closed terminal,
-tool and mode diagnostics. One isolated root/sudo prefix emits the privileged
-reader once, preserving complete fetch/preflight and 0700/0600 path handoff.
-No route, payload key, issuance scope, TLS policy or install authority changes.
-`TestContract_PortablePrivateBootstrapPayloads` checks the serialized producer
-boundary; full configapi PTY/tool/privacy/caller tests exercise the commands.
-Browser acceptance must use the actual producer fields through their existing
-setup/agent consumers, not a frontend-file guard skip or fabricated commands.
 
 ### Patrol setup panel reuses existing AI endpoints
 
@@ -2210,6 +2304,12 @@ payload shape change when the portal presents compact client rows.
     approvals, policy-allowed fixes, verification, and history rather than as
     generic operations workflows or a separate agent product.
 33. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+    Every generated Windows installer download uses a single request with
+    `-TimeoutSec 60 -ErrorAction Stop`, including the typed removal bootstrap
+    and installation's file download under either system or selected trust.
+    Caller Continue/Ignore error preferences cannot turn request refusal into
+    installer execution. Trust restoration, literal identity and saved-state
+    credential selection are unchanged; this adds no server API or retry.
     Generated install commands are part of the API contract because they bind
     the UI-selected Pulse URL, token source, custom CA, insecure/plain-HTTP
     behavior, and `/download/pulse-agent?arch=...` availability proof into the
@@ -2816,7 +2916,13 @@ payload shape change when the portal presents compact client rows.
     conflict response, with the reason logged rather than returned), runs the
     same readiness gate as apply against the switch target version, and
     answers with the apply started-acknowledgement shape. Neither route
-    exposes broker credentials.
+    exposes broker credentials. `frontend-modern/src/api/updates.ts` mirrors
+    the payload as `ProRuntimeSwitch` with the closed `ProRuntimeSwitchReason`
+    union, and `checkProRuntimeSwitch` / `applyProRuntimeSwitch` call only
+    those two routes. The runtime-switch apply is a single explicit POST with
+    transport retries disabled. A `started` acknowledgement is not a completed
+    installation; an unconfirmed response must not invite an immediate duplicate
+    apply. Definite pre-dispatch HTTP refusals retain the confirmation controls.
 87. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 88. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 89. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
@@ -5170,6 +5276,57 @@ auto-register mutation boundary.
     when configured.
 
 ## Current State
+
+### State-build stalls are bounded and visible to health
+
+The hub bounds each initial/requested/current-broadcast queue and getter wait
+at 30 seconds. A client whose initial or requested state cannot be built receives
+a best-effort generic retryable WebSocket close (1013), not an authentication
+failure or an invented empty state. A failed current-state broadcast retires only
+its existing recipient audience by the same close path. That entire audience
+shares one one-second control-write deadline; slow peers cannot each extend the
+shared worker or shutdown by another second. Expiry still closes their sockets
+and removes their registrations, but delivery of a close frame to a blocked
+peer is not guaranteed. The one shared build slot remains held until the original
+getter actually returns, even after timeout, disconnect or hub shutdown. A late
+abandoned result is discarded; reconnects never create parallel replacement
+getters, and shutdown does not wait for an uncancellable legacy getter.
+Successful builds retain that same slot through encoding/queueing.
+
+`/api/health` keeps its existing public response shape and content-free dependency
+booleans. An in-flight state build lasting at least 30 seconds makes `websocket`
+false and GET/HEAD return 503; idle hubs and short builds remain healthy, and
+actual build completion permits recovery. No probe starts state work or takes
+its locks. An absent optional hub remains a false dependency without independently
+making an otherwise healthy monitor fail. Individual unavailable monitored nodes
+and scheduler dead letters do not gate this process-health decision.
+
+`TestContractStateDeliveryStallReadiness` exercises the production budget through
+the real `Monitor.BuildFrontendState`, an in-memory registry projection and a
+real hub/socket and health handler, with idle/slow/stalled/recovered controls.
+Only a registry read is gated; no collector, guest or database starts. The hub
+tests cover bounded reconnect work, cancellation, shutdown, late-result discard
+and tenant-scoped recovery. Real Gorilla socket tests check identical audience
+deadlines, generic 1013 delivery to responsive peers, continued delivery to the
+other tenant and closure of five stalled transports within one write budget. This contains a stalled getter and repairs
+the health blind spot; it does not establish the lock owner or cause of #3105's
+reported outage, cancel a blocked mutex, or prove installed/released recovery.
+
+
+### Saved and entered node connection tests are distinct evidence (2026-10-14)
+
+`NodesAPI.testExistingNode` sends only the encoded saved record identity to
+`POST /api/config/nodes/{nodeId}/test`; it has no form body. It must never combine
+saved credentials with an edited endpoint, identity or TLS policy. The existing
+`testConnection` endpoint uses only the explicitly entered configuration and
+new credential. The node editor labels the scope of both the action and result,
+retires obsolete responses on connection/target/lifecycle changes (even an
+A-to-B-to-A edit), and admits no overlapping tests. A recognised success with
+warnings stays a warning; unrecognised/error outcomes do not become success.
+The available public saved config is not a revision of hidden credentials:
+this UI binding cannot detect a remote secret replacement absent from that
+config. No API/backend, credential lookup, collection or save semantics change.
+
 
 ### AI Discovery removed (2026-10-11)
 
@@ -12518,6 +12675,60 @@ reference route checks cover caller filtering and the documented authority.
 Final-source checks must retain this upstream behavior beside the reviewed
 reporting/help repairs; source proof is not installed credential recovery.
 
+### API-rejection guidance in diagnostics (14 October 2026)
+
+`GET /api/diagnostics` distinguishes `proxmox_permission_denied` (403) from
+`proxmox_auth_rejected` (401), with `proxmox_api_error` for other observed HTTP
+failures. Typed PVE/PBS statuses outrank response text. Retained scheduler text
+uses the first explicit producer status marker, not numbers in endpoint or
+token identities. Authentication guidance requires confirmed invalidity before
+replacement; permission guidance preserves both scoped ACLs and privilege
+separation. The existing `errors` array now carries these bounded diagnoses and
+recovery guidance into Errors Detected, using positional connection references
+rather than adding private identities. It does not claim to list every fault.
+PVE live-monitor reconciliation and separate PBS monitor/probe evidence remain.
+Routes, caller scope/token filtering, cache policy and probe count are unchanged.
+`TestDiagnosticsAPIStatusOutranksResponseText`,
+`TestDiagnosticsSerializedAPIStatusMarkers`,
+`TestComputeDiagnosticsAPIRejectionsPreserveCredentials` and
+`TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
+HTTP statuses, private-body controls, same-credential fixture recovery and wire
+attribution. They are not installed permission or guest-recovery acceptance.
+
+Retained PBS `LastError.message` must preserve the same HTTP classification and
+bounded guidance as a typed live failure after JSON serialization. Recognise
+legacy `API error N` / `authentication failed (status N)` markers and body-free
+`API request failed (HTTP N ...)` / `authentication failed (HTTP N ...)`, including
+wrapped failures. The first explicit producer status wins, never a number in a
+host, token or quoted payload. HTTP 401/403 retain their authentication/ACL
+meanings; 429/503 remain `proxmox_api_error`, not transport or credential claims.
+`Errors Detected` includes the positional PBS monitor guidance in all four cases.
+`TestDiagnosticsPBSRetainedHTTPFailures` joins actual pinned-TLS PBS refusals,
+monitor aggregation, connection JSON, diagnostic classification and summary JSON;
+`TestDiagnosticsPBSRetainedLegacyMarkers` preserves older retained records.
+
+### Proxmox setup output consumption
+
+The existing PVE/PBS setup URL, credential-free script and agent-install client
+payloads are unchanged. The consuming frontend serializes preparation and
+accepts output only for its current editor revision through every asynchronous
+mint, download and clipboard boundary. Endpoint/name/target, setup/authentication
+mode, installer TLS, import review and editor lifetime changes retire output,
+including reversals. Same-target health polling preserves an unexpired cache.
+A late result is not a retry, cancellation, token revocation or installed
+platform acceptance. Separate-token and least-privilege handoffs still apply.
+
+### PMG full-detail configured connection reference (15 October 2026)
+
+`GET /api/pmg/instances` preserves the optional configured `connectionId` from
+the canonical PMG read-state view, matching the resource's scoped connection
+alias. Missing legacy references remain absent; ID/name filters, runtime IDs,
+selected/missing readings, health and request/authentication semantics are
+unchanged. `TestHandleListPMGInstancesUsesUnifiedReadStateWithFullPayload`
+checks that a configured key different from both the runtime ID and display
+name survives the actual handler's JSON response. This is attribution, not a
+new endpoint, access grant or native/released monitoring claim.
+
 ### Successful extended history HTTP reads
 
 `chartapi.Service.WriteHistoryJSON` and `WriteHistoryPayload` share one
@@ -12567,22 +12778,35 @@ change. Legacy catalogs default to false. API and catalog-model tests cover
 absence and registration so staggered source upgrades do not offer unavailable
 rendering. No price or entitlement changes.
 
-### API-rejection guidance in diagnostics (14 October 2026)
 
-`GET /api/diagnostics` distinguishes `proxmox_permission_denied` (403) from
-`proxmox_auth_rejected` (401), with `proxmox_api_error` for other observed HTTP
-failures. Typed PVE/PBS statuses outrank response text. Retained scheduler text
-uses the first explicit producer status marker, not numbers in endpoint or
-token identities. Authentication guidance requires confirmed invalidity before
-replacement; permission guidance preserves both scoped ACLs and privilege
-separation. The existing `errors` array now carries these bounded diagnoses and
-recovery guidance into Errors Detected, using positional connection references
-rather than adding private identities. It does not claim to list every fault.
-PVE live-monitor reconciliation and separate PBS monitor/probe evidence remain.
-Routes, caller scope/token filtering, cache policy and probe count are unchanged.
-`TestDiagnosticsAPIStatusOutranksResponseText`,
-`TestDiagnosticsSerializedAPIStatusMarkers`,
-`TestComputeDiagnosticsAPIRejectionsPreserveCredentials` and
-`TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
-HTTP statuses, private-body controls, same-credential fixture recovery and wire
-attribution. They are not installed permission or guest-recovery acceptance.
+### PBS setup leaves existing monitoring credentials intact
+
+The existing add-node endpoint returns HTTP 409 with bounded, fixed guidance
+when PBS reports that its monitoring token already exists. It neither saves
+the supplied administrator password as a fallback, appends a connection,
+persists configuration nor reloads monitoring on that collision. The response
+contains no provider body, credential or token identity. It directs operators
+to the existing Manual Token Setup with their saved secret, not deletion or
+recreation of a working token. Other setup errors retain their existing
+behaviour; this does not change TLS trust, collection scope or authentication.
+
+`TestHandleAddNodePBSTokenCollisionPreservesConfig` joins the real TLS PBS client
+and add handler, existing-token reads, unchanged running/persisted configuration
+and manual-token recovery without another provisioning request. Its emitted
+safe HTTP responses bind consuming-editor verification to the producer. This
+source fixture does not establish installed provisioning, guest liveness or
+reporter recovery.
+
+### Workload-chart proof distinguishes an invalid measurement from recovery
+
+`internal/api/testdata/chart_latency_proof.py` keeps the strict 90 ms budget,
+exact one-test execution, executable digest and child result in its receipt.
+Only a single complete PASS or budget-only FAIL with competing capacity can
+exit 78 and describe the timing as inconclusive. A skipped/missing/duplicate
+report, wrong budget, cleanup failure or other child failure remains an error.
+A valid-capacity budget failure still fails. No API payload, route, History
+sample, incident state or operational-recovery result is changed by this CI
+classification. `TestContractChartSLOProofCLIClassifiesExecution` drives the
+real CLI and disposable child processes through all ten outcomes, verifies
+unaltered logs/result/digest/strict arguments and excludes the synthetic token
+from the child environment. Its capacity rows are synthetic, not latency proof.

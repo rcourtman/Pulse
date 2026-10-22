@@ -13,7 +13,9 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_UPSTART_SOURCE", ROOT / "scripts/install.sh"))
@@ -36,12 +38,12 @@ def definitions(source):
     return "\n".join(selected)
 
 
-MODEL = r'''#!/usr/bin/python3
+MODEL = r'''
 import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FIXTURE'])
 path = root / 'model.json'
 v = json.loads(path.read_text())
-role, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
+role, args = sys.argv[1], sys.argv[2:]
 fault = v['fault']
 remote = (root / 'events').exists() and 'remote:remove' in (root / 'events').read_text()
 conf = root / 'init/pulse-agent.conf'
@@ -140,6 +142,45 @@ except OSError:
 '''
 
 
+def write_model_tools(root, tools):
+    # These are stdlib-only closed models, not the host's init manager. Darwin's
+    # unrelated /usr/bin/python3 must not add a different interpreter and site
+    # startup to every status/config/process observation in the fixed budget.
+    model = root / "manager-model.py"
+    model.write_text(MODEL)
+    for name in ("ps", "initctl"):
+        tool = tools / name
+        tool.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable)
+                        + " -I -S " + shlex.quote(str(model)) + " " + name + ' "$@"\n')
+        tool.chmod(0o700)
+
+
+class UpstartTimingResult(unittest.TextTestResult):
+    def startTest(self, test):
+        self.started = time.monotonic()
+        if not hasattr(self, "suite_started"):
+            self.suite_started = self.started
+        self.subcases = 0
+        self.progress("start", test)
+        super().startTest(test)
+
+    def addSubTest(self, test, subtest, err):
+        self.subcases += 1
+        super().addSubTest(test, subtest, err)
+
+    def stopTest(self, test):
+        super().stopTest(test)
+        self.progress("complete", test)
+
+    def progress(self, phase, test):
+        now = time.monotonic()
+        self.stream.writeln("Upstart fixture timing: " + json.dumps(dict(
+            phase=phase, control=test._testMethodName, completed_subcases=self.subcases,
+            suite_seconds=round(now - self.suite_started, 6),
+            control_seconds=round(now - self.started, 6)), sort_keys=True))
+        self.stream.flush()
+
+
 class AgentUpstartTeardown(unittest.TestCase):
     source = SOURCE.read_text()
 
@@ -148,8 +189,7 @@ class AgentUpstartTeardown(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tools = root / "tools"; tools.mkdir()
-            for name in ("ps", "initctl"):
-                p = tools / name; p.write_text(MODEL); p.chmod(0o700)
+            write_model_tools(root, tools)
             link = tools / "fixture-link.py"; link.write_text(LINK_MODEL)
             # Native macOS ln lacks -T. No host ln implementation may determine
             # whether these closed DSM semantics or restoration controls pass.
@@ -251,7 +291,7 @@ ln() {
     printf 'file:link\n' >> "$EVENTS"
     # A portable private link model preserves the actual syscall exit, including
     # raced files/directories. Never fall back to success or weaken production -T.
-    if "$FIXTURE_PYTHON" "$FIXTURE_LINK" "$@"; then return 0; else return $?; fi
+    if "$FIXTURE_PYTHON" -I -S "$FIXTURE_LINK" "$@"; then return 0; else return $?; fi
 }
 mv() {
     local arg
@@ -295,7 +335,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
     def snapshot(root):
         result = {}
         for path in root.rglob("*"):
-            if path.name in ("model.json", "model.pending", "events", "timed-pid") or "tools" in path.parts:
+            if path.name in ("model.json", "model.pending", "manager-model.py", "events", "timed-pid") or "tools" in path.parts:
                 continue
             mode = path.lstat().st_mode
             payload = os.readlink(path) if stat.S_ISLNK(mode) else (path.read_bytes() if stat.S_ISREG(mode) else None)
@@ -317,7 +357,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
             target = root / "target"
             env = dict(os.environ, FIXTURE=str(root))
             def link(*args):
-                return subprocess.run([sys.executable, "-c", LINK_MODEL, *map(str, args)],
+                return subprocess.run([sys.executable, "-I", "-S", "-c", LINK_MODEL, *map(str, args)],
                                       env=env, capture_output=True, timeout=5).returncode
             self.assertEqual(link('-T', '--', source, target), 0)
             self.assertEqual(target.stat().st_ino, source.stat().st_ino)
@@ -512,6 +552,66 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         self.assertNotIn("remote:remove", events)
         self.assertTrue(model["timed_child_absent"])
 
+    def test_private_models_use_selected_isolated_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="upstart model ") as directory:
+            root = Path(directory)
+            tools = root / "tools"; tools.mkdir()
+            invocations = root / "arguments"
+            interpreter = root / "selected python"
+            interpreter.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> '
+                                   + shlex.quote(str(invocations)) + '\nexec '
+                                   + shlex.quote(sys.executable) + ' "$@"\n')
+            interpreter.chmod(0o700)
+            with mock.patch.object(sys, "executable", str(interpreter)):
+                write_model_tools(root, tools)
+            (root / "sitecustomize.py").write_text(
+                'from pathlib import Path\nPath(' + repr(str(root / "site-ran")) + ').touch()\n')
+            (root / "init").mkdir()
+            (root / "model.json").write_text(json.dumps(dict(
+                fault="", state="stopped", manual=False,
+                status_reads=0, process_reads=0, reloads=0)))
+            env = dict(os.environ, FIXTURE=str(root), PYTHONPATH=str(root))
+            for name, args, expected in (
+                ("ps", ["-ax", "-o", "pid=", "-o", "ppid=", "-o", "comm=", "-o", "args="],
+                 "1 0 init /sbin/init\n"),
+                ("initctl", ["status", "pulse-agent"], "pulse-agent stop/waiting\n"),
+                ("initctl", ["show-config", "pulse-agent"],
+                 "pulse-agent\n  start on syno.network.ready\n  stop on runlevel [06]\n"),
+            ):
+                result = subprocess.run([str(tools / name), *args], env=env,
+                                        capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(result.stdout, expected)
+                self.assertEqual(result.stderr, "")
+            recorded = invocations.read_text().splitlines()
+            self.assertEqual(recorded.count("-I"), 3)
+            self.assertEqual(recorded.count("-S"), 3)
+            self.assertEqual(recorded.count(str(root / "manager-model.py")), 3)
+            self.assertFalse((root / "site-ran").exists())
+            self.assertEqual((root / "events").read_text().splitlines(), [
+                "process:read", "manager:status", "manager:config"])
+
+    def test_timing_reports_control_and_cumulative_progress(self):
+        import io
+
+        class Control(unittest.TestCase):
+            def test_control(self):
+                with self.subTest():
+                    self.assertTrue(True)
+
+        stream = io.StringIO()
+        result = unittest.TextTestRunner(stream=stream, verbosity=2, resultclass=UpstartTimingResult).run(
+            unittest.defaultTestLoader.loadTestsFromTestCase(Control))
+        self.assertTrue(result.wasSuccessful())
+        records = [json.loads(line.split("timing: ", 1)[1])
+                   for line in stream.getvalue().splitlines() if line.startswith("Upstart fixture timing: ")]
+        self.assertEqual([r["phase"] for r in records], ["start", "complete"])
+        self.assertEqual([r["completed_subcases"] for r in records], [0, 1])
+        for record in records:
+            self.assertEqual(record["control"], "test_control")
+            self.assertGreaterEqual(record["suite_seconds"], record["control_seconds"])
+        self.assertGreaterEqual(records[-1]["control_seconds"], records[0]["control_seconds"])
+
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main(testRunner=unittest.TextTestRunner(verbosity=2, resultclass=UpstartTimingResult))

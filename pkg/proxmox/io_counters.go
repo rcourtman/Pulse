@@ -46,21 +46,36 @@ func jsonFieldPresent(raw map[string]json.RawMessage, key string) bool {
 	return ok && !bytes.Equal(bytes.TrimSpace(value), []byte("null"))
 }
 
-func decodeWithCounterPresence(data []byte, target any) (IOCounterPresence, error) {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return IOCounterPresence{}, err
-	}
-	if err := json.Unmarshal(data, target); err != nil {
-		return IOCounterPresence{}, err
-	}
-	return counterPresence(raw), nil
+// DiskUsagePresence keeps a measured empty filesystem distinct from an omitted
+// or null usage/capacity field. Legacy in-process producers remain compatible.
+type DiskUsagePresence struct {
+	Explicit bool
+	Used     bool
+	Total    bool
 }
 
+func (p DiskUsagePresence) Known() bool {
+	return !p.Explicit || (p.Used && p.Total)
+}
+
+func decodeWithCounterPresence(data []byte, target any) (IOCounterPresence, DiskUsagePresence, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return IOCounterPresence{}, DiskUsagePresence{}, err
+	}
+	if err := json.Unmarshal(data, target); err != nil {
+		return IOCounterPresence{}, DiskUsagePresence{}, err
+	}
+	return counterPresence(raw), DiskUsagePresence{Explicit: true, Used: jsonFieldPresent(raw, "disk"), Total: jsonFieldPresent(raw, "maxdisk")}, nil
+}
+
+// CPU uses -1 for an omitted/null observation. encoding/json leaves that
+// initial value unchanged for null; a measured zero still overwrites it.
+// Keep the same marker through node inventories, cluster listings and detail.
 func (v *VM) UnmarshalJSON(data []byte) error {
 	type alias VM
-	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
+	decoded := alias{CPU: -1}
+	presence, _, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
 	}
@@ -71,32 +86,49 @@ func (v *VM) UnmarshalJSON(data []byte) error {
 
 func (c *Container) UnmarshalJSON(data []byte) error {
 	type alias Container
-	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
+	decoded := alias{CPU: -1}
+	presence, diskPresence, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
 	}
 	*c = Container(decoded)
 	c.IOCounters = presence
+	c.DiskUsage = diskPresence
+	return nil
+}
+
+func (d *ContainerDiskUsage) UnmarshalJSON(data []byte) error {
+	type alias ContainerDiskUsage
+	var decoded alias
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*d = ContainerDiskUsage(decoded)
+	d.DiskUsage = DiskUsagePresence{Explicit: true, Used: jsonFieldPresent(raw, "used"), Total: jsonFieldPresent(raw, "total")}
 	return nil
 }
 
 func (r *ClusterResource) UnmarshalJSON(data []byte) error {
 	type alias ClusterResource
-	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
+	decoded := alias{CPU: -1}
+	presence, diskPresence, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
 	}
 	*r = ClusterResource(decoded)
 	r.IOCounters = presence
+	r.DiskUsage = diskPresence
 	return nil
 }
 
 func (s *VMStatus) UnmarshalJSON(data []byte) error {
 	type alias VMStatus
-	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
+	decoded := alias{CPU: -1}
+	presence, _, err := decodeWithCounterPresence(data, &decoded)
 	if err != nil {
 		return err
 	}

@@ -368,7 +368,9 @@ func readPrivateBearer(path string, tokenOwnerUID *uint64) (string, error) {
 		return "", errors.New("collector lifecycle token file exceeds the size limit")
 	}
 	bearer := strings.TrimSpace(string(encoded))
-	if bearer == "" || strings.ContainsAny(bearer, "\r\n") {
+	// Bash command substitution silently discards NUL bytes. Reject them here
+	// before collector-read-token can emit a different credential to its caller.
+	if bearer == "" || strings.ContainsAny(bearer, "\x00\r\n") {
 		return "", errors.New("collector lifecycle token file is empty or invalid")
 	}
 	return bearer, nil

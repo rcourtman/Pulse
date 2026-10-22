@@ -30,51 +30,130 @@ are published on the [GitHub Releases page](https://github.com/rcourtman/Pulse/r
 
 New release packets include `release-build-provenance.sigstore.json`, the
 Sigstore bundle emitted by the hosted workflow that assembled and validated
-the candidate. Verify a downloaded asset against that exact workflow and the
-release source commit with GitHub CLI 2.97.0 or newer:
+the candidate. The following **Bash** recipe verifies a public Community archive
+against that exact workflow and the release source commit with GitHub CLI
+2.97.0 or newer. Choose the exact published tag and the asset for your operating
+system and architecture; the example is Linux amd64, not the private Pro runtime.
+
+Run it on a trusted connected machine. It creates a new private directory,
+prints its location and stops on any failed preparation or verification step.
+It does not install or execute the downloaded archive:
 
 ```bash
-export PULSE_VERSION=vX.Y.Z
-export PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+(
+set -eu
+umask 077
+PULSE_VERSION=vX.Y.Z
+PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+provenance_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-provenance.XXXXXX")"
+printf 'Private verification directory: %s\n' "$provenance_dir"
+cd "$provenance_dir"
 gh release download "${PULSE_VERSION}" --repo rcourtman/Pulse \
   --pattern "${PULSE_ASSET}" \
   --pattern release-build-provenance.sigstore.json
 SOURCE_SHA="$(gh api "repos/rcourtman/Pulse/releases/tags/${PULSE_VERSION}" \
   --jq .target_commitish)"
+[ "${#SOURCE_SHA}" -eq 40 ]
+case "$SOURCE_SHA" in
+  *[!0-9a-f]*) printf 'Release source must be a full commit SHA.\n' >&2; exit 1 ;;
+esac
 printf '%s\n' "${SOURCE_SHA}" > release-source-sha.txt
+gh attestation trusted-root > trusted_root.jsonl
+[ -s trusted_root.jsonl ]
 gh attestation verify "${PULSE_ASSET}" \
   --repo rcourtman/Pulse \
   --bundle release-build-provenance.sigstore.json \
   --signer-workflow github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml \
   --source-digest "${SOURCE_SHA}" \
   --deny-self-hosted-runners \
-  --predicate-type https://slsa.dev/provenance/v1
+  --predicate-type https://slsa.dev/provenance/v1 \
+  --custom-trusted-root trusted_root.jsonl > provenance-verification.txt
+printf 'Verified build provenance; private report: %s/provenance-verification.txt\n' "$provenance_dir"
+)
 ```
 
-For an offline target, also run `gh attestation trusted-root >
-trusted_root.jsonl` on the connected trusted machine and transfer that file
-with the asset, bundle, and `release-source-sha.txt`. On the offline target,
-restore `SOURCE_SHA="$(cat release-source-sha.txt)"` and add
-`--custom-trusted-root trusted_root.jsonl` to the verification command. Refresh
-the trusted root whenever importing newly signed material; an old copy cannot
-report later key revocation or rotation.
+The directory and any partial files remain available if a step fails. Do not
+execute the archive or transfer it as verified after a failed command; a partial
+verification report is not a pass. An empty source or a moving reference such
+as `main` is refused rather than used as an unbound source digest. Keep the
+report with the exact files it checked; existing downloads elsewhere are not
+overwritten.
+For an offline target, use the [complete offline recipe](#verify-on-an-offline-target)
+below.
+
+### Verify on an offline target
+
+Only after connected verification succeeds, transfer the archive, bundle,
+`release-source-sha.txt` and `trusted_root.jsonl` together through your trusted
+transfer path into a private directory on the offline target. Keep their names
+unchanged. Use the same asset name and replace the directory below with that
+actual location. This recipe makes no acquisition request and refuses to
+overwrite an earlier offline report:
+
+```bash
+(
+set -euC
+umask 077
+PULSE_ASSET=pulse-vX.Y.Z-linux-amd64.tar.gz
+cd "/path/to/private-verification-directory"
+for file in "$PULSE_ASSET" release-build-provenance.sigstore.json \
+  release-source-sha.txt trusted_root.jsonl; do
+  [ -f "$file" ] && [ -s "$file" ] || exit 1
+done
+SOURCE_SHA="$(cat release-source-sha.txt)"
+[ "${#SOURCE_SHA}" -eq 40 ]
+case "$SOURCE_SHA" in
+  *[!0-9a-f]*) printf 'Release source must be a full commit SHA.\n' >&2; exit 1 ;;
+esac
+gh attestation verify "${PULSE_ASSET}" \
+  --repo rcourtman/Pulse \
+  --bundle release-build-provenance.sigstore.json \
+  --signer-workflow github.com/rcourtman/Pulse/.github/workflows/build-release-candidate.yml \
+  --source-digest "${SOURCE_SHA}" \
+  --deny-self-hosted-runners \
+  --predicate-type https://slsa.dev/provenance/v1 \
+  --custom-trusted-root trusted_root.jsonl > provenance-verification-offline.txt
+printf 'Verified build provenance; private report: provenance-verification-offline.txt\n'
+)
+```
+
+Refresh the trusted root on the connected machine whenever importing newly
+signed material; an old offline copy cannot report later key revocation or
+rotation. Build provenance does not replace the release's checksum and detached
+signature checks, and is not proof of a completed installation or a healthy
+service. Continue with the appropriate installation method only after the
+required checks pass.
 
 ## 🚀 Quick Start (Recommended)
 
 ### Proxmox VE (LXC installer)
 If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the official installer which creates and configures a lightweight LXC container.
 
-Replace `vX.Y.Z` with the exact release tag you want, then run this on your Proxmox host:
+Replace `vX.Y.Z` with the exact release tag you want, then run this in **Bash**
+on your Proxmox host. Both signed-installer recipes on this page ignore local
+curl configuration, allow only HTTPS (including redirects), and limit each
+download to 60 seconds, with a 10-second connection deadline. They require
+HTTP **200** for both files and a valid signature before running the installer.
+Do not remove those checks, add `--insecure` or pipe a download into a shell.
 
 ```bash
 (
-set -e
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
@@ -83,6 +162,15 @@ ssh-keygen -Y verify \
 bash install.sh --version "${PULSE_VERSION}"
 )
 ```
+
+A failed or timed-out download, unexpected HTTP status or rejected signature
+stops before installation; the private temporary directory is removed on normal
+shell exit.
+Keep `--disable` first so local curl settings cannot enable tracing, retries or
+a TLS bypass. Download deadlines do not limit the installer once it starts.
+If an installer was already started and its result is uncertain, use the
+[update recovery checks](AUTO_UPDATE.md#update-failed), not another installation
+attempt. A verified script is not proof of a completed installation.
 
 The signed server installer uses the `vX.Y.Z` Pulse release, which contains the
 Linux server archive; it does not ask for a GitHub personal access token. A
@@ -100,17 +188,22 @@ Ideal for containerized environments or testing.
 ```bash
 docker run -d \
   --name pulse \
-  -p 7655:7655 \
+  -p 127.0.0.1:7655:7655 \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
   rcourtman/pulse:vX.Y.Z
 ```
 
-For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
+For a new container, choose a [protected setup connection](#open-a-protected-setup-connection),
+then continue with [bootstrap-token setup](#step-1-get-the-token)
 in your browser; do not add an example password to the command.
 
 ### Docker Compose
+Like the `docker run` example, this publishes only on the Docker host's IPv4
+loopback. Use a [protected setup connection](#open-a-protected-setup-connection)
+before entering credentials; remote agents need a reachable HTTPS origin.
+
 Create a `docker-compose.yml` file:
 
 ```yaml
@@ -120,7 +213,7 @@ services:
     container_name: pulse
     restart: unless-stopped
     ports:
-      - "7655:7655"
+      - "127.0.0.1:7655:7655"
     volumes:
       - pulse_data:/data
     environment:
@@ -158,29 +251,39 @@ full `docker inspect` or resolved Compose output.
 ## 🛠️ Installation Methods
 
 ### 1. Kubernetes (Helm)
-Deploy to your cluster using our Helm chart.
+For a **new release**, follow the [pinned Helm installation](KUBERNETES.md#option-a-using-helm-recommended).
+Check the intended context/namespace first. The recipe uses one persistent
+server with a non-overlapping rollout and refuses to upgrade an already-used release name.
+The guide also covers static manifests and OpenShift.
 
-```bash
-helm repo add pulse https://rcourtman.github.io/Pulse
-helm repo update
-helm upgrade --install pulse pulse/pulse \
-  --namespace pulse \
-  --create-namespace
-```
-See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
+For an existing installation, use the [Helm update precautions](DEPLOYMENT_MODELS.md#kubernetes-helm)
+with its saved values, image edition and PVC; new-install defaults are not an
+upgrade recipe. A chart version and a running server image are separate facts.
 
 ### 2. Bare Metal / Systemd
-For Linux servers (VM or bare metal), use the official installer:
+For Linux servers (VM or bare metal), use the official installer in **Bash**.
+The same HTTPS, deadline, HTTP-status and signature checks from the
+[LXC recipe](#proxmox-ve-lxc-installer) apply; `sudo` runs only the verified
+script, not the downloads:
 
 ```bash
 (
-set -e
+set -eu
+umask 077
 export PULSE_VERSION=vX.Y.Z
 pulse_installer_dir="$(mktemp -d)"
 trap 'rm -rf "$pulse_installer_dir"' EXIT
 cd "$pulse_installer_dir"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
-curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh")
+[ "$status" = 200 ]
+status=$(curl --disable --fail --silent --show-error --location \
+  --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 60 \
+  --output install.sh.sshsig --write-out '%{http_code}' \
+  "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig")
+[ "$status" = 200 ]
 ssh-keygen -Y verify \
   -f <(printf '%s\n' 'pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer') \
   -I pulse-installer \
@@ -244,7 +347,53 @@ shortcut.
 
 ## 🔐 First-Time Setup
 
-Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Token** to create your admin account.
+On first launch, retrieve a **Bootstrap Token** to create your admin account.
+The token controls setup access; it does not encrypt the connection carrying
+that token, your new password or the generated API token.
+
+### Open a protected setup connection
+
+Before entering credentials, choose one of these paths:
+
+- **Remote browser:** use your Pulse HTTPS origin with a certificate trusted by
+  the browser. Follow the [reverse-proxy guide](REVERSE_PROXY.md#before-configuring-the-proxy)
+  and keep the plain-HTTP backend private. Do not bypass a certificate warning.
+- **Browser on the Pulse host:** `http://127.0.0.1:7655` is a local-only example.
+  In a browser on another machine, that address refers to the other machine,
+  not Pulse.
+- **Existing SSH access:** run the following on your trusted workstation,
+  replacing `admin@pulse-host` with your existing SSH account and host. The SSH
+  destination must be the machine where Pulse is reachable on loopback: the
+  Docker host for these examples, or the Pulse LXC itself, not its Proxmox
+  host. Use an independently verified SSH host key already in your known-hosts
+  file; an unknown or changed key must stop the connection, not be bypassed.
+
+```bash
+ssh -N -T -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes \
+  -L 127.0.0.1:17655:127.0.0.1:7655 admin@pulse-host
+```
+
+Keep that terminal open and open `http://127.0.0.1:17655` in the workstation's
+browser. SSH encrypts the remote hop; the HTTP endpoints are local to each
+machine. Stop on a tunnel error; a running SSH command alone does not prove
+Pulse is listening at the destination. If local port 17655 is already in use,
+choose another unused local port in both the command and browser address,
+never a wildcard bind. Close the tunnel with **Ctrl+C** when finished; this
+does not stop Pulse. If suitable SSH access is unavailable, use the HTTPS
+path rather than enabling remote plain HTTP or weakening authentication.
+
+**New Docker examples bind the host port to IPv4 loopback.** This is not HTTPS
+configuration and does not change the container's own listener. An existing
+deployment must keep its saved data, image edition and network configuration;
+do not recreate it just to match these examples. A reverse proxy in a separate
+container uses a shared private network and service name, not its own loopback.
+Remote agents and SSO callbacks need a routable verified HTTPS origin, not the
+workstation's setup-tunnel address.
+
+Do not enter bootstrap tokens, passwords or API tokens into a remote
+`http://<your-ip>:7655` page. A private LAN or VPN address alone does not encrypt
+HTTP; protect that browser connection first. Keep the token, setup output and
+screenshots containing credentials out of reports.
 
 ### Step 1: Get the Token
 
@@ -261,7 +410,7 @@ The Proxmox path must be absolute. `pct exec` runs with `PATH=/sbin:/bin:/usr/sb
 > **Important**: Paste the token string printed by the command above. Do not paste the raw `.bootstrap_token` file contents directly. In v6 that file may contain an encrypted JSON snapshot rather than the usable setup token.
 
 ### Step 2: Create Admin Account
-1. Open `http://<your-ip>:7655`
+1. Open the [protected setup connection](#open-a-protected-setup-connection) chosen above.
 2. Paste the **Bootstrap Token**.
 3. Complete the **Quick Security Setup** wizard.
    - Set your **Admin Username** and **Password** (or let Pulse generate one).

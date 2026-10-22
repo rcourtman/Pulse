@@ -981,6 +981,97 @@ func TestCapacityForecastAlertNamesItsPlatform(t *testing.T) {
 	}
 }
 
+func TestGuestCPUUnknownInterruptsPendingAndPreservesAcknowledgement(t *testing.T) {
+	for _, kind := range []string{"vm", "vm-pointer", "lxc", "lxc-pointer"} {
+		t.Run(kind, func(t *testing.T) {
+			m := guestObservationManager(t)
+			vm := models.VM{ID: "site:member:106", VMID: 106, Instance: "site", Node: "member", Name: "guest", Status: "running", CPU: .98, Disk: models.Disk{Usage: -1}}
+			cfg := m.GetConfig()
+			cfg.MetricTimeThresholds = map[string]map[string]int{"guest": {"cpu": 60}}
+			m.UpdateConfig(cfg)
+			check := func() { m.CheckGuest(statusObservationGuest(vm, kind), "site") }
+			check()
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("pending CPU skipped its delay")
+			}
+			m.mu.Lock()
+			m.core.ShiftPending(-2 * time.Minute)
+			m.mu.Unlock()
+			vm.CPU = -1
+			check()
+			vm.CPU = .98
+			check()
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("CPU delay completed across an observation gap")
+			}
+			m.mu.Lock()
+			m.core.ShiftPending(-2 * time.Minute)
+			m.mu.Unlock()
+			check()
+			active := m.GetActiveAlerts()
+			if len(active) != 1 {
+				t.Fatalf("fresh CPU failed to finish its delay: %+v", active)
+			}
+			if err := m.AcknowledgeAlert(active[0].ID, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			before := guestObservationBytes(t, m)
+			vm.CPU = -1
+			for i := 0; i < 3; i++ {
+				check()
+			}
+			if after := guestObservationBytes(t, m); string(before) != string(after) || len(m.GetRecentlyResolved()) != 0 {
+				t.Fatal("missing CPU changed an acknowledged incident or manufactured recovery")
+			}
+			vm.CPU = 0
+			check()
+			check()
+			if len(m.GetActiveAlerts()) != 0 || len(m.GetRecentlyResolved()) != 1 {
+				t.Fatal("measured idle CPU failed ordinary recovery")
+			}
+		})
+	}
+}
+
+func TestCanonicalGuestCPUUsesTypedIntentGrace(t *testing.T) {
+	for _, kind := range []string{"vm", "vm-pointer", "lxc", "lxc-pointer"} {
+		t.Run(kind, func(t *testing.T) {
+			m := guestObservationManager(t)
+			var tick time.Duration
+			m.intentClock = func() time.Duration { return tick }
+			document := NewAlertIntentPolicyDocument()
+			document.ResourceTypes["guest"] = map[string]AlertIntentRule{
+				MetricAlertIntentSignal("cpu"): {GraceSeconds: intPointer(60)},
+			}
+			if err := m.LoadIntentPolicies(document); err != nil {
+				t.Fatal(err)
+			}
+			vm := models.VM{ID: "site:member:106", VMID: 106, Instance: "site", Node: "member", Name: "guest", Status: "running", CPU: .98, Disk: models.Disk{Usage: -1}}
+			check := func() { m.CheckGuest(statusObservationGuest(vm, kind), "site") }
+			check()
+			tick = 59 * time.Second
+			check()
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("display label bypassed the typed guest intent grace")
+			}
+			vm.CPU = -1
+			tick = 60 * time.Second
+			check()
+			vm.CPU = .98
+			tick = 120 * time.Second
+			check()
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("explicit CPU intent grace completed across an observation gap")
+			}
+			tick = 180 * time.Second
+			check()
+			if len(m.GetActiveAlerts()) != 1 {
+				t.Fatal("fresh CPU evidence did not complete its typed intent grace")
+			}
+		})
+	}
+}
+
 // History output keeps an alert's operational record and transitions whole but
 // only its newest evidence envelope, and never changes the alert it copies
 // (#1803).

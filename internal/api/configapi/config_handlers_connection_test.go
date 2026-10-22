@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -17,8 +19,186 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
+
+// Re-adding a PBS through a different address must not rotate a token used by
+// the existing connection, or silently persist the administrator password.
+func TestHandleAddNodePBSTokenCollisionPreservesConfig(t *testing.T) {
+	testAddNodePBSTokenCollision(t, false)
+}
+
+// The credential regression is also testable without a listening socket. Both
+// modes run the real PBS setup/request decoder, add handler and persistence.
+// This mode substitutes an already-authenticated in-process HTTP transport;
+// it does not assert a TLS handshake or password authentication result.
+func TestHandleAddNodePBSTokenCollisionInProcess(t *testing.T) {
+	testAddNodePBSTokenCollision(t, true)
+}
+
+type pbsSetupRoundTrip func(*http.Request) (*http.Response, error)
+
+func (f pbsSetupRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func logPBSSetupResponse(t *testing.T, tag string, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	wire, err := json.Marshal(map[string]any{"status": rec.Code, "headers": rec.Result().Header, "body": rec.Body.String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("PBS_SETUP_%s_HTTP=%s", tag, base64.StdEncoding.EncodeToString(wire))
+	t.Logf("PBS_SETUP_%s_WIRE=%s", tag, base64.StdEncoding.EncodeToString(rec.Body.Bytes()))
+}
+
+func testAddNodePBSTokenCollision(t *testing.T, inProcess bool) {
+	t.Helper()
+	const oldToken = "fixture-existing-secret"
+	var revoked atomic.Bool
+	var creates, deletes, reloads atomic.Int32
+	provider := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api2/json/access/ticket":
+			_, _ = w.Write([]byte(`{"data":{"ticket":"fixture-ticket","CSRFPreventionToken":"fixture-csrf"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api2/json/version":
+			if revoked.Load() || r.Header.Get("Authorization") != "PBSAPIToken=pulse-monitor@pbs!pulse-pulse-example-test:"+oldToken {
+				http.Error(w, "fixture reader lost access", http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":{"version":"3.4","release":"1","repoid":"fixture"}}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/users":
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/acl":
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.Contains(r.URL.Path, "/token/") && r.Method == http.MethodDelete:
+			deletes.Add(1)
+			revoked.Store(true)
+			_, _ = w.Write([]byte(`{"data":null}`))
+		case strings.Contains(r.URL.Path, "/token/") && r.Method == http.MethodPost:
+			creates.Add(1)
+			if !revoked.Load() {
+				http.Error(w, "API token already exists; fixture-provider-private-marker", http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(`{"data":{"tokenid":"pulse-monitor@pbs!pulse-pulse-example-test","value":"fixture-replacement-secret"}}`))
+		default:
+			t.Errorf("unexpected PBS request: %s %s", r.Method, r.URL.Path)
+			http.Error(w, "unexpected fixture request", http.StatusNotFound)
+		}
+	})
+	host, fingerprint := "https://pbs-fixture.invalid:8007", ""
+	var attachTransport func(*pbs.Client)
+	if inProcess {
+		attachTransport = func(client *pbs.Client) {
+			setUnexportedField(t, client, "httpClient", &http.Client{Transport: pbsSetupRoundTrip(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host != "pbs-fixture.invalid:8007" {
+					t.Fatalf("unexpected fixture destination: %s", r.URL.Host)
+				}
+				if r.Body != nil {
+					defer r.Body.Close()
+				}
+				rec := httptest.NewRecorder()
+				provider.ServeHTTP(rec, r)
+				response := rec.Result()
+				response.Request = r
+				return response, nil
+			})})
+		}
+	} else {
+		server := httptest.NewTLSServer(provider)
+		t.Cleanup(server.Close)
+		host = server.URL
+		fingerprint = fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))
+		attachTransport = func(*pbs.Client) {}
+	}
+
+	cfg := &config.Config{DataPath: t.TempDir(), PublicURL: "https://pulse.example.test", PBSInstances: []config.PBSInstance{{
+		Name: "existing", Host: "https://existing-pbs.example.test:8007", TokenName: "pulse-monitor@pbs!pulse-pulse-example-test", TokenValue: oldToken, VerifySSL: true,
+	}}}
+	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
+	// Keep first-use key migration inside this fixture, never a host key path.
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	h := newTestConfigHandlers(t, cfg)
+	h.reloadFunc = func() error { reloads.Add(1); return nil }
+	if inProcess {
+		h.pbsSetupClientFactory = func(clientConfig pbs.ClientConfig) (*pbs.Client, error) {
+			if clientConfig.Host != host || clientConfig.User != "root@pam" || clientConfig.Password != "fixture-administrator-password" {
+				t.Fatal("setup did not forward the submitted credentials/endpoint")
+			}
+			client, err := pbs.NewClient(pbs.ClientConfig{Host: host, TokenName: "root@pam!fixture-admin", TokenValue: "fixture-admin-secret"})
+			if err == nil {
+				attachTransport(client)
+			}
+			return client, err
+		}
+	}
+	if err := h.defaultPersistence.SaveNodesConfig(nil, cfg.PBSInstances, nil); err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := pbs.NewClient(pbs.ClientConfig{Host: host, TokenName: cfg.PBSInstances[0].TokenName, TokenValue: oldToken,
+		VerifySSL: true, Fingerprint: fingerprint})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attachTransport(reader)
+	checkReader := func() {
+		t.Helper()
+		if version, err := reader.GetVersion(context.Background()); err != nil || version == nil || version.Version != "3.4" {
+			t.Errorf("existing saved-token reader did not survive setup: %v", err)
+		}
+	}
+	checkReader()
+	body, _ := json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": host,
+		"user": "root@pam", "password": "fixture-administrator-password", "verifySSL": true})
+	rec := httptest.NewRecorder()
+	h.HandleAddNode(rec, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Use Manual Token Setup") {
+		t.Fatalf("collision status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "fixture-") || strings.Contains(rec.Body.String(), "root@pam") {
+		t.Fatal("collision response disclosed provider output or credentials")
+	}
+	after, err := json.Marshal(cfg)
+	if err != nil || !bytes.Equal(before, after) || reloads.Load() != 0 {
+		t.Fatal("collision saved administrator credentials or changed the running configuration")
+	}
+	saved, err := h.defaultPersistence.LoadNodesConfig()
+	if err != nil || len(saved.PBSInstances) != 1 || saved.PBSInstances[0].TokenValue != oldToken || saved.PBSInstances[0].Password != "" {
+		t.Fatal("collision changed persisted connection credentials")
+	}
+	checkReader()
+	if revoked.Load() || creates.Load() != 1 || deletes.Load() != 0 {
+		t.Fatalf("collision mutated existing token: creates=%d deletes=%d", creates.Load(), deletes.Load())
+	}
+	logPBSSetupResponse(t, "COLLISION", rec)
+
+	// The suggested existing manual-token route remains usable, without an
+	// extra provisioning attempt or retaining the administrator password.
+	body, _ = json.Marshal(map[string]any{"type": "pbs", "name": "new-address", "host": host,
+		"tokenName": cfg.PBSInstances[0].TokenName, "tokenValue": oldToken, "verifySSL": true})
+	manual := httptest.NewRecorder()
+	h.HandleAddNode(manual, httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewReader(body)))
+	if manual.Code != http.StatusCreated || len(cfg.PBSInstances) != 2 || reloads.Load() != 1 {
+		t.Fatalf("manual saved-token setup failed: status=%d body=%s", manual.Code, manual.Body.String())
+	}
+	added := cfg.PBSInstances[1]
+	if added.Password != "" || added.User != "" || added.TokenValue != oldToken || !added.VerifySSL || creates.Load() != 1 || deletes.Load() != 0 {
+		t.Fatal("manual setup changed access, TLS, or administrator credential persistence")
+	}
+	saved, err = h.defaultPersistence.LoadNodesConfig()
+	if err != nil || len(saved.PBSInstances) != 2 || saved.PBSInstances[1].TokenValue != oldToken || saved.PBSInstances[1].Password != "" || !saved.PBSInstances[1].VerifySSL {
+		t.Fatal("manual setup did not persist the deliberate token/verification configuration")
+	}
+	checkReader()
+	logPBSSetupResponse(t, "MANUAL", manual)
+}
 
 func TestHandleTestConnection(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "pulse-conn-test")
@@ -306,5 +486,90 @@ func TestNodeMutationEventsStayWithRequestOrganization(t *testing.T) {
 			}
 			assertTenantEvents(t, owner, other, "nodes_updated", "node_deleted")
 		})
+	}
+}
+
+// The existing Settings test endpoint already returns a generic response, but
+// its real error log must also keep provider echoes private. Use only an owned
+// pinned-TLS loopback fixture: no saved node, persistence or runtime is touched.
+func TestPBSConnectionFailureDiagnostics(t *testing.T) {
+	priorLogger, priorLevel := log.Logger, zerolog.GlobalLevel()
+	defer func() { log.Logger = priorLogger; zerolog.SetGlobalLevel(priorLevel) }()
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	for _, mode := range []string{"api", "auth"} {
+		for _, status := range []int{401, 403, 429, 503} {
+			t.Run(fmt.Sprintf("%s-%d", mode, status), func(t *testing.T) {
+				const marker = "synthetic-private-response-"
+				var recovered atomic.Bool
+				var calls atomic.Int32
+				server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					calls.Add(1)
+					if !(r.Method == http.MethodPost && r.URL.Path == "/api2/json/access/ticket") && !(r.Method == http.MethodGet && r.URL.Path == "/api2/json/admin/datastore") {
+						t.Error("test performed an unexpected provider operation")
+						http.Error(w, "unexpected", 500)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					if !recovered.Load() {
+						w.WriteHeader(status)
+						_, _ = w.Write([]byte(`{"errors":{"message":"` + marker + strings.Repeat("x", 1<<20) + `"}}`))
+						return
+					}
+					if r.URL.Path == "/api2/json/access/ticket" {
+						_, _ = w.Write([]byte(`{"data":{"ticket":"fixture-ticket","CSRFPreventionToken":"fixture-csrf"}}`))
+						return
+					}
+					_, _ = w.Write([]byte(`{"data":[]}`))
+				}))
+				defer server.Close()
+				reqBody := map[string]any{"type": "pbs", "name": "fixture-backup", "host": server.URL, "verifySSL": true, "fingerprint": fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))}
+				if mode == "api" {
+					reqBody["tokenName"] = "fixture@pbs!pulse"
+					reqBody["tokenValue"] = "fixture-token"
+				} else {
+					reqBody["user"] = "fixture@pbs"
+					reqBody["password"] = "fixture-password"
+				}
+				body, err := json.Marshal(reqBody)
+				if err != nil {
+					t.Fatal(err)
+				}
+				h := &ConfigHandlers{}
+				var captured bytes.Buffer
+				log.Logger = zerolog.New(&captured).Level(zerolog.ErrorLevel)
+				rec := httptest.NewRecorder()
+				h.HandleTestConnection(rec, httptest.NewRequest(http.MethodPost, "/api/config/connection/test", bytes.NewReader(body)))
+				if rec.Code != 400 || !strings.Contains(rec.Body.String(), "Failed to initialize connection") && !strings.Contains(rec.Body.String(), "Connection failed. Please check your credentials and network settings") {
+					t.Fatal("failed provider became a successful Settings test")
+				}
+				if strings.Contains(captured.String(), marker) || strings.Contains(rec.Body.String(), marker) {
+					t.Error("provider echo crossed the Settings/log boundary")
+				}
+				if captured.Len() > 1024 {
+					t.Error("provider payload inflated the real operation log")
+				}
+				lines := strings.Split(strings.TrimSpace(captured.String()), "\n")
+				if len(lines) != 1 || !strings.Contains(lines[0], fmt.Sprint(status)) {
+					t.Error("safe real operation diagnostic lost status or attribution")
+				}
+				recovered.Store(true)
+				next := httptest.NewRecorder()
+				h.HandleTestConnection(next, httptest.NewRequest(http.MethodPost, "/api/config/connection/test", bytes.NewReader(body)))
+				if next.Code != 200 || !strings.Contains(next.Body.String(), `"datastoreCount":0`) {
+					t.Error("same credentials did not resume ordinary read-only discovery")
+				}
+				want := int32(2)
+				if mode == "auth" {
+					want = 3
+				}
+				if calls.Load() != want {
+					t.Error("error formatting added provider work")
+				}
+				if !t.Failed() {
+					frame, _ := json.Marshal(map[string]any{"case": fmt.Sprintf("%s-%d", mode, status), "providerStatus": status, "lines": lines, "httpStatus": rec.Code, "body": rec.Body.String(), "recoveryStatus": next.Code, "recoveryBody": next.Body.String(), "requests": calls.Load(), "verifySSL": true})
+					t.Logf("PBS_ERROR_CONSUMER %s", base64.StdEncoding.EncodeToString(frame))
+				}
+			})
+		}
 	}
 }

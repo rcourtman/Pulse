@@ -222,6 +222,7 @@ docs/release-control/v6/internal/*
 scripts/release_control/
 !scripts/release_control/
 scripts/release_control/*
+!scripts/release_control/check_source_contracts.py
 !scripts/release_control/canonical_completion_guard.py
 !scripts/release_control/canonical_completion_guard_test.py
 !scripts/release_control/canonical_completion_history.json

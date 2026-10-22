@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -175,25 +177,46 @@ func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
 }
 
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+	if ctx.Err() != nil {
+		return
+	}
 
 	var allBackups []models.StorageBackup
 	var pbsConfirmations []models.PBSGuestConfirmation
 	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
-	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
-	hadSuccessfulNode := false          // Track if at least one node responded successfully
-	successfulNodeQueries := 0          // Number of nodes whose storage list was enumerated
-	storagesWithBackup := 0             // Number of storages that should contain backups
-	contentSuccess := 0                 // Number of successful storage content fetches
-	contentFailures := 0                // Number of failed storage content fetches
-	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
-	hadPermissionError := false         // Track if any permission errors occurred this cycle
-	permissionFailureCount := 0         // Number of node/storage reads rejected by authorization
+	seenBackups := make(map[string]bool) // Deduplicate shared views, not independent local copies
+	hadSuccessfulNode := false           // Track if at least one node responded successfully
+	successfulNodeQueries := 0           // Number of nodes whose storage list was enumerated
+	storagesWithBackup := 0              // Number of storages that should contain backups
+	contentSuccess := 0                  // Number of successful storage content fetches
+	contentFailures := 0                 // Number of failed storage content fetches
+	storageQueryErrors := 0              // Number of nodes where storage list could not be queried
+	hadPermissionError := false          // Track if any permission errors occurred this cycle
+	permissionFailureCount := 0          // Number of node/storage reads rejected by authorization
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
+	backupPreserveNeeded := map[pveBackupStorageScope]struct{}{}
+	backupStorageSuccess := map[pveBackupStorageScope]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
-	// Build guest lookup map to find actual node for each VMID
-	snapshot := m.state.GetSnapshot()
+	// Tasks and held archives must share one detached primary-state read.
+	// No resource inventory is consumed here; guest placement comes from the
+	// canonical read view below. Avoid cloning the rest of the estate.
+	snapshot := models.StateSnapshot{PVEBackups: m.state.GetPVEBackups()}
+	// A failed/offline node cannot remove archives it previously supplied.
+	// Shared (and legacy unscoped) rows remain held unless another view really
+	// succeeded. In particular a same-named local store is not that view.
+	preserveNodeBackups := func(node string) {
+		for _, backup := range snapshot.PVEBackups.StorageBackups {
+			if backup.Instance != instanceName || (backup.StorageNode != "" && backup.StorageNode != node) {
+				continue
+			}
+			scope := pveBackupStorageScope{storage: backup.Storage, node: backup.StorageNode}
+			if _, succeeded := backupStorageSuccess[scope]; !succeeded {
+				backupPreserveNeeded[scope] = struct{}{}
+			}
+		}
+	}
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
 
@@ -219,9 +242,15 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
+		if pveBackupPollWithdrawn(ctx) {
+			return
+		}
 		if nodeEffectiveStatus[node.Node] != "online" {
+			preserveNodeBackups(node.Node)
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
-				storagePreserveNeeded[storageName] = struct{}{}
+				if _, succeeded := storageSuccess[storageName]; !succeeded {
+					storagePreserveNeeded[storageName] = struct{}{}
+				}
 			}
 			continue
 		}
@@ -230,10 +259,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		var storages []proxmox.Storage
 		var err error
 
+	storageAttempts:
 		for attempt := 1; attempt <= 2; attempt++ {
 			storages, err = client.GetStorage(ctx, node.Node)
-			if err == nil {
-				break // Success
+			if err == nil || ctx.Err() != nil {
+				break
 			}
 
 			// Check if it's a timeout error
@@ -245,7 +275,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 						Str("instance", instanceName).
 						Msg("Storage query timed out, retrying with extended timeout...")
 					// Give it a bit more time on retry
-					time.Sleep(2 * time.Second)
+					select {
+					case <-time.After(2 * time.Second):
+					case <-ctx.Done():
+						break storageAttempts
+					}
 					continue
 				}
 			}
@@ -257,12 +291,17 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if isPVEBackupPermissionError(err) {
 				hadPermissionError = true
 				permissionFailureCount++
-				m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
+				m.applyPVEBackupEffect(ctx, instanceName, func() {
+					m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage", node.Node), err)
+				})
 			}
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
+			preserveNodeBackups(node.Node)
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
-				storagePreserveNeeded[storageName] = struct{}{}
+				if _, succeeded := storageSuccess[storageName]; !succeeded {
+					storagePreserveNeeded[storageName] = struct{}{}
+				}
 			}
 			storageQueryErrors++
 			continue
@@ -273,15 +312,29 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
+			if pveBackupPollWithdrawn(ctx) {
+				return
+			}
 			// Check if storage supports backup content
 			if !strings.Contains(storage.Content, "backup") {
 				continue
 			}
+			storagesWithBackup++
+			backupScope := pveStorageBackupScope(storage, node.Node)
 			if !storageContentQueryable(storage) {
+				// Disabled/unconfirmed-enabled storage is deliberately not
+				// queried. That is unavailable content, not an empty archive
+				// list or an authorization refusal. Preserve this location
+				// unless another readable view of the same scope succeeded.
+				if _, ok := storageSuccess[storage.Storage]; !ok {
+					storagePreserveNeeded[storage.Storage] = struct{}{}
+				}
+				if _, ok := backupStorageSuccess[backupScope]; !ok {
+					backupPreserveNeeded[backupScope] = struct{}{}
+				}
+				contentFailures++
 				continue
 			}
-
-			storagesWithBackup++
 
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
@@ -291,7 +344,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if isPVEBackupPermissionError(err) {
 					hadPermissionError = true
 					permissionFailureCount++
-					m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
+					m.applyPVEBackupEffect(ctx, instanceName, func() {
+						m.recordPVEBackupAccessWarning(instanceName, fmt.Sprintf("/nodes/%s/storage/%s/content", node.Node, storage.Storage), err)
+					})
 				} else {
 					log.Debug().Err(monErr).
 						Str("node", node.Node).
@@ -301,26 +356,32 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				if _, ok := storageSuccess[storage.Storage]; !ok {
 					storagePreserveNeeded[storage.Storage] = struct{}{}
 				}
+				if _, ok := backupStorageSuccess[backupScope]; !ok {
+					backupPreserveNeeded[backupScope] = struct{}{}
+				}
 				contentFailures++
 				continue
 			}
 
 			contentSuccess++
+			backupStorageSuccess[backupScope] = struct{}{}
+			delete(backupPreserveNeeded, backupScope)
 			storageSuccess[storage.Storage] = struct{}{}
 			delete(storagePreserveNeeded, storage.Storage)
 
 			// Convert to models
 			for _, content := range contents {
+				// Content enumeration is shared with live-disk and snapshot
+				// readers. Only backup archives establish backup success.
+				if content.Content != "backup" {
+					continue
+				}
 				// Skip if we've already seen this item (shared storage duplicate)
-				if seenVolids[content.Volid] {
+				backupID := pveStorageBackupID(instanceName, backupScope, content.Volid)
+				if seenBackups[backupID] {
 					continue
 				}
-				seenVolids[content.Volid] = true
-
-				// Skip templates and ISOs - they're not backups
-				if content.Content == "vztmpl" || content.Content == "iso" {
-					continue
-				}
+				seenBackups[backupID] = true
 
 				// Determine type from content type and VMID
 				backupType := "unknown"
@@ -412,8 +473,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				}
 
 				backup := models.StorageBackup{
-					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
+					ID:           backupID,
 					Storage:      storage.Storage,
+					StorageNode:  backupScope.node,
 					Node:         backupNode,
 					Instance:     instanceName,
 					Type:         backupType,
@@ -436,7 +498,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, backupPreserveNeeded, allBackups)
 	if len(preservedStorages) > 0 {
 		log.Warn().
 			Str("instance", instanceName).
@@ -476,9 +538,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Decide whether to keep existing backups when every query failed
 	if shouldPreserveBackups(len(nodes), hadSuccessfulNode, storagesWithBackup, contentSuccess) {
 		if protectionObservationErr == nil {
-			m.ingestProtectionProviderObservationsAsync(
-				[]recovery.ProtectionProviderObservation{protectionObservation},
-			)
+			m.applyPVEBackupEffect(ctx, instanceName, func() {
+				m.ingestProtectionProviderObservationsAsync(
+					[]recovery.ProtectionProviderObservation{protectionObservation},
+				)
+			})
 		}
 		if len(nodes) > 0 && !hadSuccessfulNode {
 			log.Warn().
@@ -496,62 +560,71 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		return
 	}
 
-	// Update state with storage backups for this instance
-	m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
-	m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, pbsConfirmations)
+	m.applyPVEBackupEffect(ctx, instanceName, func() {
+		// Update state with storage backups for this instance
+		// Held local archives follow the guest for attribution without moving the
+		// storage location that owns their identity and failure-preservation scope.
+		for index := range allBackups {
+			if node, ok := guestNodeMap[allBackups[index].VMID]; ok && allBackups[index].VMID > 0 {
+				allBackups[index].Node = node
+			}
+		}
+		m.state.UpdateStorageBackupsForInstance(instanceName, allBackups)
+		m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, pbsConfirmations)
 
-	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	guestInfo := buildProxmoxGuestInfoIndex(readState)
-	points, evidenceErr := proxmoxrecoverymapper.FromPVEStorageBackupsWithEvidence(
-		allBackups,
-		guestInfo,
-		protectionObservedAt,
-	)
-	if evidenceErr != nil {
-		log.Warn().
-			Err(evidenceErr).
-			Str("instance", instanceName).
-			Msg("Failed to attach PVE recovery evidence; preserving existing points")
-		if protectionObservationErr == nil {
-			m.ingestProtectionProviderObservationsAsync(
-				[]recovery.ProtectionProviderObservation{protectionObservation},
+		// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+		guestInfo := buildProxmoxGuestInfoIndex(readState)
+		points, evidenceErr := proxmoxrecoverymapper.FromPVEStorageBackupsWithEvidence(
+			allBackups,
+			guestInfo,
+			protectionObservedAt,
+		)
+		if evidenceErr != nil {
+			log.Warn().
+				Err(evidenceErr).
+				Str("instance", instanceName).
+				Msg("Failed to attach PVE recovery evidence; preserving existing points")
+			if protectionObservationErr == nil {
+				m.ingestProtectionProviderObservationsAsync(
+					[]recovery.ProtectionProviderObservation{protectionObservation},
+				)
+			}
+		} else {
+			observations := []recovery.ProtectionProviderObservation{}
+			if protectionObservationErr == nil {
+				observations = append(observations, protectionObservation)
+			}
+			m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
+				points,
+				observations,
+				recoveryReconcileScope{
+					provider: string(recovery.ProviderProxmoxPVE),
+					idPrefix: "pve-backup:",
+					instance: instanceName,
+				},
 			)
 		}
-	} else {
-		observations := []recovery.ProtectionProviderObservation{}
-		if protectionObservationErr == nil {
-			observations = append(observations, protectionObservation)
+
+		// Sync backup times to VMs/Containers and republish them to canonical resources.
+		m.syncGuestBackupTimesAndResourceStore()
+
+		m.checkBackupAlerts(ctx)
+
+		// Clear permission warning if no permission errors occurred this cycle
+		if !hadPermissionError {
+			m.mu.Lock()
+			delete(m.backupPermissionWarnings, instanceName)
+			m.mu.Unlock()
 		}
-		m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
-			points,
-			observations,
-			recoveryReconcileScope{
-				provider: string(recovery.ProviderProxmoxPVE),
-				idPrefix: "pve-backup:",
-				instance: instanceName,
-			},
-		)
-	}
 
-	// Sync backup times to VMs/Containers and republish them to canonical resources.
-	m.syncGuestBackupTimesAndResourceStore()
+		log.Debug().
+			Str("instance", instanceName).
+			Int("count", len(allBackups)).
+			Msg("Storage backups polled")
 
-	m.checkBackupAlerts(ctx)
-
-	// Clear permission warning if no permission errors occurred this cycle
-	if !hadPermissionError {
-		m.mu.Lock()
-		delete(m.backupPermissionWarnings, instanceName)
-		m.mu.Unlock()
-	}
-
-	log.Debug().
-		Str("instance", instanceName).
-		Int("count", len(allBackups)).
-		Msg("Storage backups polled")
-
-	// Immediately broadcast the updated state so frontend sees new backups
-	m.broadcastStateUpdate()
+		// Immediately broadcast the updated state so frontend sees new backups
+		m.broadcastStateUpdate()
+	})
 }
 
 // pbsGuestConfirmationType maps a PVE storage-content backup type to PBS
@@ -714,7 +787,7 @@ func preserveFailedPBSGuestConfirmations(previous []models.PBSGuestConfirmation,
 	return current, storages
 }
 
-func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[string]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
+func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[pveBackupStorageScope]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
 	if len(storagesToPreserve) == 0 {
 		return current, nil
 	}
@@ -729,7 +802,8 @@ func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnap
 		if backup.Instance != instanceName {
 			continue
 		}
-		if _, ok := storagesToPreserve[backup.Storage]; !ok {
+		scope := pveBackupStorageScope{storage: backup.Storage, node: backup.StorageNode}
+		if _, ok := storagesToPreserve[scope]; !ok {
 			continue
 		}
 		if _, duplicate := existing[backup.ID]; duplicate {
@@ -942,11 +1016,24 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 
 	backupCtx, cancel := context.WithTimeout(parentCtx, timeout)
 
-	// Poll backup tasks
-	m.pollBackupTasks(backupCtx, instanceName, client)
+	// Archive files appear under their final names while vzdump is still
+	// writing them. This scan's live task read is a prerequisite for the
+	// partial-output correlation below; retained tasks or a history backfill
+	// cannot establish that no new backup is running.
+	tasksCurrent := m.pollBackupTasks(backupCtx, instanceName, client)
 
 	// Poll storage backups - pass nodes to avoid duplicate API calls
-	m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes, nodeEffectiveStatus)
+	if parentCtx.Err() != nil {
+		cancel()
+		return
+	}
+	if tasksCurrent {
+		m.pollStorageBackupsWithNodes(backupCtx, instanceName, client, nodes, nodeEffectiveStatus)
+	} else if backupCtx.Err() == nil {
+		log.Warn().
+			Str("instance", instanceName).
+			Msg("Backup tasks cannot safely qualify new archive output; keeping previous archive observations until task visibility and writer scope are confirmed. Guest snapshot collection continues.")
+	}
 
 	backupErr := backupCtx.Err()
 	cancel()
@@ -961,35 +1048,46 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 	// Snapshots are independent backup inventory. Passing parentCtx (no deadline)
 	// lets pollGuestSnapshots establish its own bounded budget instead of
 	// inheriting an already-exhausted backup deadline and skipping entirely.
-	m.pollGuestSnapshots(parentCtx, instanceName, client)
+	if parentCtx.Err() == nil {
+		m.pollGuestSnapshots(parentCtx, instanceName, client)
+	}
 }
 
 // pollGuestSnapshots polls snapshots for all VMs and containers
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
+	if ctx.Err() != nil {
+		return
+	}
+
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
+	// Snapshot inputs need identity, names, tags and template state only.
+	// Keep typed views rather than cloning complete guest models (including
+	// disks/interfaces/metrics) that this inventory scan never consumes.
 	// The guest inventory comes from the fixture read view in mock mode.
 	scope := m.mockModeFence.begin()
 	readState := m.backupReadStateForInstance(instanceName)
-	var vms []models.VM
+	var vms []*unifiedresources.VMView
 	for _, vm := range readState.VMs() {
 		if vm == nil || vm.Instance() != instanceName {
 			continue
 		}
-		vms = append(vms, vmFromReadStateView(vm))
+		vms = append(vms, vm)
 	}
-	var containers []models.Container
+	var containers []*unifiedresources.ContainerView
 	for _, ct := range readState.Containers() {
 		if ct == nil || ct.Instance() != instanceName {
 			continue
 		}
-		containers = append(containers, containerFromReadStateView(ct))
+		containers = append(containers, ct)
 	}
 
+	// Prior snapshot evidence needs only the existing PVE backup branch,
+	// not another deep copy of the entire monitored estate.
 	previousSnapshots := make([]models.GuestSnapshot, 0)
 	if m.state != nil {
-		snapshot := m.state.GetSnapshot()
-		for _, snap := range snapshot.PVEBackups.GuestSnapshots {
+		snapshot := m.state.GetPVEBackups()
+		for _, snap := range snapshot.GuestSnapshots {
 			if snap.Instance == instanceName {
 				previousSnapshots = append(previousSnapshots, snap)
 			}
@@ -1005,38 +1103,38 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	guestLookups := make(map[string]alerts.GuestLookup, len(vms)+len(containers))
 	for _, vm := range vms {
-		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
+		key := alerts.BuildGuestKey(vm.Instance(), vm.Node(), vm.VMID())
 		guestLookups[key] = alerts.GuestLookup{
 			ResourceID: key,
-			Name:       vm.Name,
-			Instance:   vm.Instance,
-			Node:       vm.Node,
+			Name:       vm.Name(),
+			Instance:   vm.Instance(),
+			Node:       vm.Node(),
 			Type:       "qemu",
-			VMID:       vm.VMID,
-			Tags:       append([]string(nil), vm.Tags...),
+			VMID:       vm.VMID(),
+			Tags:       append([]string(nil), vm.Tags()...),
 		}
 	}
 	for _, ct := range containers {
-		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
+		key := alerts.BuildGuestKey(ct.Instance(), ct.Node(), ct.VMID())
 		guestLookups[key] = alerts.GuestLookup{
 			ResourceID: key,
-			Name:       ct.Name,
-			Instance:   ct.Instance,
-			Node:       ct.Node,
-			Type:       firstNonEmptyString(ct.Type, "lxc"),
-			VMID:       ct.VMID,
-			Tags:       append([]string(nil), ct.Tags...),
+			Name:       ct.Name(),
+			Instance:   ct.Instance(),
+			Node:       ct.Node(),
+			Type:       firstNonEmptyString(ct.ContainerType(), "lxc"),
+			VMID:       ct.VMID(),
+			Tags:       append([]string(nil), ct.Tags()...),
 		}
 	}
 
 	activeGuests := 0
 	for _, vm := range vms {
-		if !vm.Template {
+		if !vm.Template() {
 			activeGuests++
 		}
 	}
 	for _, ct := range containers {
-		if !ct.Template {
+		if !ct.Template() {
 			activeGuests++
 		}
 	}
@@ -1096,27 +1194,27 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	targets := make([]guestSnapshotPollTarget, 0, activeGuests)
 
 	for _, vm := range vms {
-		if vm.Template {
+		if vm.Template() {
 			continue
 		}
 		targets = append(targets, guestSnapshotPollTarget{
-			key:       guestKey(instanceName, vm.Node, vm.VMID),
-			node:      vm.Node,
+			key:       guestKey(instanceName, vm.Node(), vm.VMID()),
+			node:      vm.Node(),
 			guestType: "qemu",
-			vmid:      vm.VMID,
+			vmid:      vm.VMID(),
 			vmState:   true,
 		})
 	}
 
 	for _, ct := range containers {
-		if ct.Template {
+		if ct.Template() {
 			continue
 		}
 		targets = append(targets, guestSnapshotPollTarget{
-			key:       guestKey(instanceName, ct.Node, ct.VMID),
-			node:      ct.Node,
+			key:       guestKey(instanceName, ct.Node(), ct.VMID()),
+			node:      ct.Node(),
 			guestType: "lxc",
-			vmid:      ct.VMID,
+			vmid:      ct.VMID(),
 			vmState:   false,
 		})
 	}
@@ -1151,44 +1249,55 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	}
 
 	results := make(chan guestSnapshotPollResult, len(targets))
+	jobs := make(chan guestSnapshotPollTarget)
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxConcurrentGuestSnapshotPolls)
 
-	for _, target := range targets {
-		target := target
+	// Bound the workers as well as the requests. A goroutine per guest leaves
+	// an entire large fleet's stacks waiting behind an eight-request semaphore.
+	// Reuse the same workers and stop admitting queued reads after cancellation.
+	for i := 0; i < min(maxConcurrentGuestSnapshotPolls, len(targets)); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			select {
-			case sem <- struct{}{}:
-			case <-snapshotCtx.Done():
-				results <- guestSnapshotPollResult{target: target, err: snapshotCtx.Err()}
-				return
-			}
-			defer func() { <-sem }()
-
-			snapshots, err := fetchSnapshots(target)
-			result := guestSnapshotPollResult{target: target, err: err}
-			if err == nil {
-				result.polled = true
-				result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
-				for _, snap := range snapshots {
-					result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+			for target := range jobs {
+				if snapshotCtx.Err() != nil {
+					return
 				}
-			} else if target.guestType == "lxc" {
-				errStr := err.Error()
-				if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
+
+				snapshots, err := fetchSnapshots(target)
+				result := guestSnapshotPollResult{target: target, err: err}
+				if err == nil {
 					result.polled = true
+					result.snapshots = make([]models.GuestSnapshot, 0, len(snapshots))
+					for _, snap := range snapshots {
+						result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
+					}
 				}
-			}
+				// A failed or undispatched read is not an empty inventory. Keep
+				// that guest's known snapshots until a successful enumeration.
 
-			results <- result
+				results <- result
+			}
 		}()
 	}
 
+dispatch:
+	for _, target := range targets {
+		if snapshotCtx.Err() != nil {
+			break
+		}
+		select {
+		case jobs <- target:
+		case <-snapshotCtx.Done():
+			break dispatch
+		}
+	}
+	close(jobs)
+	// Cancellation withdraws queued work, not occupancy of active readers.
 	wg.Wait()
 	close(results)
+	deadlineExceeded = snapshotCtx.Err() != nil
 
 	for result := range results {
 		if result.polled {
@@ -1252,6 +1361,12 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			Msg("Guest snapshot polling completed; carried forward previous snapshots for guests with per-call errors")
 	}
 
+	// Inventory retention is not a fresh measurement of a snapshot's size.
+	// Unavailable sizing must reach the existing alert evidence holder as
+	// unknown, not renew an old positive value or publish a partial sum.
+	for i := range allSnapshots {
+		allSnapshots[i].SizeBytes = 0
+	}
 	if len(allSnapshots) > 0 && !deadlineExceeded {
 		sizeMap := m.collectSnapshotSizes(snapshotCtx, instanceName, client, allSnapshots)
 		if len(sizeMap) > 0 {
@@ -1263,43 +1378,45 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		}
 	}
 
-	// Update state with guest snapshots for this instance
-	m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
+	m.applyPVEBackupEffect(ctx, instanceName, func() {
+		// Update state with guest snapshots for this instance
+		m.state.UpdateGuestSnapshotsForInstance(instanceName, allSnapshots)
 
-	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	guestInfo := buildProxmoxGuestInfoIndex(readState)
-	points, evidenceErr := proxmoxrecoverymapper.FromPVEGuestSnapshotsWithEvidence(
-		allSnapshots,
-		guestInfo,
-		time.Now().UTC(),
-	)
-	if evidenceErr != nil {
-		log.Warn().
-			Err(evidenceErr).
-			Str("instance", instanceName).
-			Msg("Failed to attach PVE snapshot recovery evidence; preserving existing points")
-	} else {
-		m.ingestAndReconcileRecoveryPointsAsync(
-			points,
-			recoveryReconcileScope{
-				provider: string(recovery.ProviderProxmoxPVE),
-				idPrefix: "pve-snapshot:",
-				instance: instanceName,
-			},
+		// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+		guestInfo := buildProxmoxGuestInfoIndex(readState)
+		points, evidenceErr := proxmoxrecoverymapper.FromPVEGuestSnapshotsWithEvidence(
+			allSnapshots,
+			guestInfo,
+			time.Now().UTC(),
 		)
-	}
+		if evidenceErr != nil {
+			log.Warn().
+				Err(evidenceErr).
+				Str("instance", instanceName).
+				Msg("Failed to attach PVE snapshot recovery evidence; preserving existing points")
+		} else {
+			m.ingestAndReconcileRecoveryPointsAsync(
+				points,
+				recoveryReconcileScope{
+					provider: string(recovery.ProviderProxmoxPVE),
+					idPrefix: "pve-snapshot:",
+					instance: instanceName,
+				},
+			)
+		}
 
-	if m.alertManager != nil {
-		scope.run(func() { m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups) })
-	}
+		if m.alertManager != nil {
+			scope.run(func() { m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups) })
+		}
 
-	log.Debug().
-		Str("instance", instanceName).
-		Int("count", len(allSnapshots)).
-		Msg("Guest snapshots polled")
+		log.Debug().
+			Str("instance", instanceName).
+			Int("count", len(allSnapshots)).
+			Msg("Guest snapshots polled")
 
-	// Immediately broadcast the updated state so frontend sees new snapshots
-	m.broadcastStateUpdate()
+		// Immediately broadcast the updated state so frontend sees new snapshots
+		m.broadcastStateUpdate()
+	})
 }
 
 func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string, client PVEClientInterface, snapshots []models.GuestSnapshot) map[string]int64 {
@@ -1322,79 +1439,141 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 		return sizes
 	}
 
-	seenVolids := make(map[string]struct{})
-
-	for nodeName := range nodes {
+	// Sizing follows inventory polling, but must not serialize independent
+	// nodes behind one slow storage read. Bound both workers and requests;
+	// storage reads within a node remain serial and totals remain atomic.
+	const maxSnapshotSizePollWorkers = 8
+	nodeNames := make([]string, 0, len(nodes))
+	for node := range nodes {
+		nodeNames = append(nodeNames, node)
+	}
+	sort.Strings(nodeNames)
+	jobs := make(chan string)
+	results := make(chan map[string]int64, len(nodeNames))
+	var wg sync.WaitGroup
+	for i := 0; i < min(maxSnapshotSizePollWorkers, len(nodeNames)); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for node := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				if totals := collectSnapshotSizesForNode(ctx, instanceName, node, client, validSnapshots); len(totals) > 0 {
+					// A complete node remains useful even if a different
+					// reader exhausts the budget while the scan joins it.
+					results <- totals
+				}
+			}
+		}()
+	}
+dispatch:
+	for _, node := range nodeNames {
 		if ctx.Err() != nil {
 			break
 		}
+		select {
+		case jobs <- node:
+		case <-ctx.Done():
+			break dispatch
+		}
+	}
+	close(jobs)
+	// Cancellation withdraws queued work, not ownership of active reads.
+	wg.Wait()
+	close(results)
+	for totals := range results {
+		for key, size := range totals {
+			sizes[key] = size
+		}
+	}
+	return sizes
+}
 
-		storages, err := client.GetStorage(ctx, nodeName)
+func collectSnapshotSizesForNode(ctx context.Context, instanceName, nodeName string, client PVEClientInterface, validSnapshots map[string]struct{}) map[string]int64 {
+	storages, err := client.GetStorage(ctx, nodeName)
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("node", nodeName).
+			Str("instance", instanceName).
+			Msg("Failed to get storage list for snapshot sizing")
+		return nil
+	}
+
+	// A snapshot can span several storages. Stage this node's totals
+	// until all eligible storage reads complete; a missing disk cannot
+	// turn a large snapshot into a small, apparently recovered one.
+	nodeSizes := make(map[string]int64)
+	unknownSizes := make(map[string]bool)
+	seenVolids := make(map[string]struct{})
+	complete := true
+	for _, storage := range storages {
+		if ctx.Err() != nil {
+			complete = false
+			break
+		}
+
+		contentTypes := strings.ToLower(storage.Content)
+		if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+			continue
+		}
+		if !storageContentQueryable(storage) {
+			complete = false
+			continue
+		}
+
+		contents, err := client.GetStorageContent(ctx, nodeName, storage.Storage)
 		if err != nil {
 			log.Debug().
 				Err(err).
 				Str("node", nodeName).
+				Str("storage", storage.Storage).
 				Str("instance", instanceName).
-				Msg("Failed to get storage list for snapshot sizing")
+				Msg("Failed to get storage content for snapshot sizing")
+			complete = false
 			continue
 		}
 
-		for _, storage := range storages {
-			if ctx.Err() != nil {
-				break
-			}
-
-			contentTypes := strings.ToLower(storage.Content)
-			if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+		for _, item := range contents {
+			if item.Content != "images" && item.Content != "rootdir" {
 				continue
 			}
-			if !storageContentQueryable(storage) {
+			if item.VMID <= 0 {
 				continue
 			}
 
-			contents, err := client.GetStorageContent(ctx, nodeName, storage.Storage)
-			if err != nil {
-				log.Debug().
-					Err(err).
-					Str("node", nodeName).
-					Str("storage", storage.Storage).
-					Str("instance", instanceName).
-					Msg("Failed to get storage content for snapshot sizing")
+			if _, seen := seenVolids[item.Volid]; seen {
 				continue
 			}
 
-			for _, item := range contents {
-				if item.VMID <= 0 {
-					continue
-				}
-
-				if _, seen := seenVolids[item.Volid]; seen {
-					continue
-				}
-
-				snapName := extractSnapshotName(item.Volid)
-				if snapName == "" {
-					continue
-				}
-
-				key := fmt.Sprintf("%s-%s-%d-%s", instanceName, nodeName, item.VMID, snapName)
-				if _, ok := validSnapshots[key]; !ok {
-					continue
-				}
-
-				seenVolids[item.Volid] = struct{}{}
-
-				size := int64(item.Size)
-				if size < 0 {
-					size = 0
-				}
-
-				sizes[key] += size
+			snapName := extractSnapshotName(item.Volid)
+			if snapName == "" {
+				continue
 			}
+
+			key := fmt.Sprintf("%s-%s-%d-%s", instanceName, nodeName, item.VMID, snapName)
+			if _, ok := validSnapshots[key]; !ok {
+				continue
+			}
+
+			seenVolids[item.Volid] = struct{}{}
+
+			if item.Size == 0 || item.Size > uint64(math.MaxInt64-nodeSizes[key]) {
+				unknownSizes[key] = true
+				continue
+			}
+
+			nodeSizes[key] += int64(item.Size)
 		}
 	}
-
-	return sizes
+	if !complete || ctx.Err() != nil {
+		return nil
+	}
+	for key := range unknownSizes {
+		delete(nodeSizes, key)
+	}
+	return nodeSizes
 }
 
 func (m *Monitor) recordAuthFailure(instanceName string, nodeType string) {
@@ -1511,8 +1690,14 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 
 // removeFailedPBSNode removes a PBS node and all its resources from state
 func (m *Monitor) removeFailedPBSNode(instanceName string) {
+	m.pbsBackupPublicationMu.Lock()
+	defer m.pbsBackupPublicationMu.Unlock()
+	m.mu.Lock()
+	m.cancelPBSBackupPollLocked(instanceName)
+	delete(m.pbsBackupCacheTime, instanceName)
+	m.mu.Unlock()
 	// Remove PBS instance by passing empty array
-	currentInstances := m.state.PBSInstances
+	currentInstances := m.state.GetSnapshot().PBSInstances
 	var updatedInstances []models.PBSInstance
 	for _, inst := range currentInstances {
 		if inst.Name != instanceName {
@@ -1565,11 +1750,17 @@ type pbsBackupFetchRequest struct {
 	namespace string
 	group     pbs.BackupGroup
 	cached    cachedPBSGroup
+	reuse     bool
+	limit     int // Reserved live-state slots, including cache hits, in group order.
 }
 
-// pollPBSBackups fetches all backups from PBS datastores
-func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
+func (m *Monitor) pollPBSBackupInventory(ctx context.Context, instanceName string, client *pbs.Client, inventory pbsBackupInventory) {
 	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
+	if inventory.datastoreDiscoveryErr != nil {
+		m.publishPBSBackupDiscoveryFailure(ctx, instanceName, inventory.datastoreDiscoveryErr)
+		return
+	}
+	datastores := inventory.datastores
 
 	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
 	existingGroups := m.buildPBSBackupCache(instanceName)
@@ -1580,7 +1771,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
 	datastoreErrors := 0              // Datastores with incomplete history
-	datastoreTerminalFailures := 0    // Number of datastores that failed only with terminal errors
 	collectionTerminalFailures := 0   // Datastores with any rejected namespace or snapshot request
 
 	// Process each datastore
@@ -1592,7 +1782,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			return
 		}
 
-		namespacePaths := namespacePathsForDatastore(ds)
+		namespacePaths := namespacePathsForDatastore(ds.PBSDatastore)
 
 		log.Info().
 			Str("instance", instanceName).
@@ -1606,6 +1796,15 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		datastoreTerminalNamespaceErrors := 0
 		groupsReused := 0
 		groupsRequested := 0
+		if ds.namespaceDiscoveryErr != nil {
+			// A readable root does not establish which nested namespaces exist.
+			// Do not probe cached paths after failed/denied discovery, or let
+			// root-only success certify complete history and reconcile it away.
+			datastoreNamespaceErrors++
+			if !shouldReuseCachedPBSBackups(ds.namespaceDiscoveryErr) {
+				datastoreTerminalNamespaceErrors++
+			}
+		}
 
 		for _, namespace := range namespacePaths {
 			if ctx.Err() != nil {
@@ -1620,6 +1819,18 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				datastoreNamespaceErrors++
 				if !shouldReuseCachedPBSBackups(err) {
 					datastoreTerminalNamespaceErrors++
+				} else {
+					// An unreadable namespace is not an empty inventory, even
+					// when a sibling succeeded. Preserve only this exact scope;
+					// a parent/child, other store or access-rejected namespace
+					// must keep its independent replacement/withdrawal result.
+					for key, entry := range existingGroups {
+						if key.datastore != ds.Name || key.namespace != namespace {
+							continue
+						}
+						allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
+						retainedGroups[key] = struct{}{}
+					}
 				}
 				log.Error().
 					Err(err).
@@ -1636,6 +1847,10 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			projectedBackups := len(allBackups)
 
 			for _, group := range groups {
+				// Deleted groups do not consume any live-state capacity.
+				if group.BackupCount == 0 {
+					continue
+				}
 				if projectedBackups >= pbsBackupLiveStateLimit {
 					log.Warn().
 						Str("instance", instanceName).
@@ -1657,11 +1872,20 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				}
 				cached := existingGroups[key]
 
-				// Group deleted (no backups left) - ensure cached data is dropped.
-				if group.BackupCount == 0 {
-					continue
-				}
 				retainedGroups[key] = struct{}{}
+				reserved := retainedPBSSnapshotCount(group.BackupCount)
+				// A transient count-decreasing refresh still owns its known
+				// cached rows. Reserve room for them without relaxing either cap.
+				if len(cached.snapshots) > reserved {
+					reserved = len(cached.snapshots)
+				}
+				if remaining := pbsBackupLiveStateLimit - projectedBackups; reserved > remaining {
+					reserved = remaining
+					// Even the final group can cross the live-state boundary.
+					// Truncation is not a complete, reconcilable inventory.
+					datastoreNamespaceErrors++
+				}
+				projectedBackups += reserved
 
 				lastBackupTime := time.Unix(group.LastBackup, 0)
 				hasCachedData := len(cached.snapshots) > 0
@@ -1684,34 +1908,38 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					}
 				}
 
-				// Only re-fetch when the backup count changes, the most recent backup
-				// is newer, or the cache TTL has expired (to pick up verification changes).
-				if hasCachedData &&
+				// Reuse only an unchanged group. A count-preserving prune/import
+				// can move last-backup backwards; the previously newest point
+				// may no longer exist. TTL still bounds verification-only changes.
+				reuse := hasCachedData &&
 					cacheStillFresh &&
 					cacheCountMatches &&
 					!cachedHasInProgress &&
-					!lastBackupTime.After(cached.latest) {
+					lastBackupTime.Equal(cached.latest)
 
-					allBackups = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
+				if reuse {
 					groupsReused++
-					projectedBackups = len(allBackups)
-					continue
+				} else {
+					groupsRequested++
 				}
 
+				// Cache and HTTP results share one ordered selection. Publishing
+				// cache hits first would let older rows consume the slots reserved
+				// for newer groups still being read by the worker pool.
 				requests = append(requests, pbsBackupFetchRequest{
 					datastore: ds.Name,
 					namespace: namespace,
 					group:     group,
 					cached:    cached,
+					reuse:     reuse,
+					limit:     reserved,
 				})
-				projectedBackups += retainedPBSSnapshotCount(group.BackupCount)
 			}
 
 			if len(requests) == 0 {
 				continue
 			}
 
-			groupsRequested += len(requests)
 			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
 			allBackups = appendPBSBackupsWithinLimit(allBackups, fetched.backups)
 			datastoreNamespaceErrors += fetched.errors
@@ -1723,6 +1951,24 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			fetchedAt := time.Now()
 			for _, key := range fetched.refreshed {
 				refreshedGroups[key] = fetchedAt
+			}
+			for _, key := range fetched.truncated {
+				// Do not let a clipped payload masquerade as an unchanged,
+				// complete group on the next poll, even if count is still stale.
+				refreshedGroups[key] = time.Time{}
+			}
+		}
+
+		if ds.namespaceDiscoveryErr != nil && shouldReuseCachedPBSBackups(ds.namespaceDiscoveryErr) {
+			// Transient discovery loss retains unread nested rows at their
+			// original cache age. Successfully read root rows still replace
+			// their own scope; access rejection does not retain raw rows.
+			for key, entry := range existingGroups {
+				if key.datastore != ds.Name || key.namespace == "" {
+					continue
+				}
+				allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
+				retainedGroups[key] = struct{}{}
 			}
 		}
 
@@ -1744,29 +1990,12 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				Int("groups_refreshed", groupsRequested).
 				Msg("PBS datastore processed")
 		} else {
-			allNamespaceErrorsTerminal := datastoreNamespaceErrors > 0 &&
-				datastoreTerminalNamespaceErrors == datastoreNamespaceErrors
-			if allNamespaceErrorsTerminal {
-				datastoreTerminalFailures++
-				log.Warn().
-					Str("instance", instanceName).
-					Str("datastore", ds.Name).
-					Int("namespace_errors", datastoreNamespaceErrors).
-					Msg("No namespaces succeeded for PBS datastore due to terminal errors; clearing cached backups")
-			} else {
-				// Preserve cached data for this datastore when failures are transient.
-				log.Warn().
-					Str("instance", instanceName).
-					Str("datastore", ds.Name).
-					Msg("No namespaces succeeded for PBS datastore; using cached backups")
-				for key, entry := range existingGroups {
-					if key.datastore != ds.Name || len(entry.snapshots) == 0 {
-						continue
-					}
-					allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
-					retainedGroups[key] = struct{}{}
-				}
-			}
+			log.Warn().
+				Str("instance", instanceName).
+				Str("datastore", ds.Name).
+				Int("namespace_errors", datastoreNamespaceErrors).
+				Int("terminal_errors", datastoreTerminalNamespaceErrors).
+				Msg("No namespaces succeeded for PBS datastore; cache retention follows each namespace read")
 		}
 	}
 
@@ -1795,22 +2024,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Err(protectionObservationErr).
 			Str("instance", instanceName).
 			Msg("Failed to build PBS protection provider observation")
-	}
-
-	// Decide whether to keep existing backups when all queries failed
-	if shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
-		if protectionObservationErr == nil {
-			m.ingestProtectionProviderObservationsAsync(
-				[]recovery.ProtectionProviderObservation{protectionObservation},
-			)
-		}
-		log.Warn().
-			Str("instance", instanceName).
-			Int("datastores", datastoreCount).
-			Int("errors", datastoreErrors).
-			Int("terminal_failures", datastoreTerminalFailures).
-			Msg("All PBS datastore queries failed; keeping previous backup list")
-		return
 	}
 
 	// A manifestless snapshot is incomplete, but it is not necessarily still
@@ -1843,60 +2056,62 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		return
 	}
 
-	// Publication is the commit boundary: no cancellation return may split a
-	// successful read time from its matching payload. Per-instance poller
-	// admission serializes this publication with the next ordinary poll.
-	m.state.UpdatePBSBackups(instanceName, allBackups)
-	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
-	for key, fetchedAt := range refreshedGroups {
-		m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
-	}
+	m.applyPBSBackupEffect(ctx, instanceName, func() {
+		// Publication is the commit boundary: no cancellation return may split a
+		// successful read time from its matching payload or cross a runtime/client
+		// withdrawal. Per-instance ownership lasts until the reader really returns.
+		m.state.UpdatePBSBackups(instanceName, allBackups)
+		m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
+		for key, fetchedAt := range refreshedGroups {
+			m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
+		}
 
-	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
-	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
-		allBackups,
-		candidates,
-		protectionObservedAt,
-	)
-	if evidenceErr != nil {
-		log.Warn().
-			Err(evidenceErr).
-			Str("instance", instanceName).
-			Msg("Failed to attach PBS recovery evidence; preserving existing points")
+		// Best-effort ingestion into recovery store (for rollups / unified backups UX).
+		candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
+		points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
+			allBackups,
+			candidates,
+			protectionObservedAt,
+		)
+		if evidenceErr != nil {
+			log.Warn().
+				Err(evidenceErr).
+				Str("instance", instanceName).
+				Msg("Failed to attach PBS recovery evidence; preserving existing points")
+			if protectionObservationErr == nil {
+				m.ingestProtectionProviderObservationsAsync(
+					[]recovery.ProtectionProviderObservation{protectionObservation},
+				)
+			}
+			return
+		}
+		observations := []recovery.ProtectionProviderObservation{}
 		if protectionObservationErr == nil {
-			m.ingestProtectionProviderObservationsAsync(
-				[]recovery.ProtectionProviderObservation{protectionObservation},
-			)
+			observations = append(observations, protectionObservation)
 		}
-		return
-	}
-	observations := []recovery.ProtectionProviderObservation{}
-	if protectionObservationErr == nil {
-		observations = append(observations, protectionObservation)
-	}
-	batch := recoveryIngestBatch{points: points, observations: observations}
-	// Only an authoritative complete enumeration can delete absent points.
-	// Unreadable history remains historical evidence, qualified by this poll's
-	// partial/unavailable provider observation, until an ordinary complete poll
-	// recovers or confirms deletion. Never infer absence from a failed request.
-	if protectionObservationErr == nil &&
-		protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
-		batch.reconcile = &recoveryReconcileScope{
-			provider: string(recovery.ProviderProxmoxPBS),
-			idPrefix: "pbs-backup:",
-			instance: instanceName,
+		batch := recoveryIngestBatch{points: points, observations: observations}
+		// Only an authoritative complete enumeration can delete absent points.
+		// Unreadable history remains historical evidence, qualified by this poll's
+		// partial/unavailable provider observation, until an ordinary complete poll
+		// recovers or confirms deletion. Never infer absence from a failed request.
+		if protectionObservationErr == nil &&
+			protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
+			batch.reconcile = &recoveryReconcileScope{
+				provider: string(recovery.ProviderProxmoxPBS),
+				idPrefix: "pbs-backup:",
+				instance: instanceName,
+			}
 		}
-	}
-	m.enqueueRecoveryIngest(batch)
+		m.enqueueRecoveryIngest(batch)
 
-	// Sync backup times to VMs/Containers and republish them to canonical resources.
-	m.syncGuestBackupTimesAndResourceStore()
+		// Sync backup times to VMs/Containers and republish them to canonical resources.
+		m.syncGuestBackupTimesAndResourceStore()
 
-	m.checkBackupAlerts(context.Background())
+		m.checkBackupAlerts(ctx)
 
-	// Immediately broadcast the updated state so frontend sees new backups
-	m.broadcastStateUpdate()
+		// Immediately broadcast the updated state so frontend sees new backups
+		m.broadcastStateUpdate()
+	})
 }
 
 func hasIncompletePBSBackup(backups []models.PBSBackup) bool {
@@ -1958,9 +2173,10 @@ func runningPBSTaskMatchesBackup(tasks []pbs.RunningDataTask, backup models.PBSB
 }
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
-	snapshot := m.state.GetSnapshot()
 	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
-	for _, backup := range snapshot.PBSBackups {
+	// The primary PBS projection owns the same detached files/verification
+	// fields as a full snapshot, without copying unrelated estate branches.
+	for _, backup := range m.state.GetPBSBackups() {
 		if backup.Instance != instanceName {
 			continue
 		}
@@ -2064,6 +2280,7 @@ type pbsBackupSnapshotFetchResult struct {
 	errors         int
 	terminalErrors int
 	refreshed      []pbsBackupGroupKey
+	truncated      []pbsBackupGroupKey
 }
 
 func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) pbsBackupSnapshotFetchResult {
@@ -2076,8 +2293,12 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		workerCount = len(requests)
 	}
 
-	jobs := make(chan pbsBackupFetchRequest)
-	results := make(chan pbsBackupSnapshotFetchResult, workerCount)
+	type indexedResult struct {
+		index int
+		pbsBackupSnapshotFetchResult
+	}
+	jobs := make(chan int)
+	results := make(chan indexedResult, workerCount)
 	var wg sync.WaitGroup
 
 	for i := 0; i < workerCount; i++ {
@@ -2085,7 +2306,33 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		go func() {
 			defer wg.Done()
 
-			for req := range jobs {
+			for index := range jobs {
+				req := requests[index]
+				key := pbsBackupGroupKey{datastore: req.datastore, namespace: req.namespace, backupType: req.group.BackupType, backupID: req.group.BackupID}
+				result := pbsBackupSnapshotFetchResult{}
+				publish := func() bool {
+					if len(result.backups) > req.limit {
+						// A group can grow between listing and snapshot reads. It
+						// cannot consume another group's reserved live-state slots
+						// or certify that the truncated inventory was complete.
+						result.backups = append([]models.PBSBackup(nil), result.backups[:req.limit]...)
+						result.errors++
+						result.truncated = []pbsBackupGroupKey{key}
+					}
+					select {
+					case results <- indexedResult{index, result}:
+						return true
+					case <-ctx.Done():
+						return false
+					}
+				}
+				if req.reuse {
+					result.backups = req.cached.snapshots
+					if !publish() {
+						return
+					}
+					continue
+				}
 				log.Debug().
 					Str("instance", instanceName).
 					Str("datastore", req.datastore).
@@ -2105,27 +2352,22 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 						Str("id", req.group.BackupID).
 						Msg("Failed to list PBS backup snapshots")
 
-					result := pbsBackupSnapshotFetchResult{errors: 1}
+					result.errors = 1
 					if shouldReuseCachedPBSBackups(err) {
 						result.backups = req.cached.snapshots
 					} else {
 						// Access rejection cannot renew a cached raw row.
 						result.terminalErrors = 1
 					}
-					results <- result
+					if !publish() {
+						return
+					}
 					continue
 				}
 
-				backups := convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
-				select {
-				case results <- pbsBackupSnapshotFetchResult{
-					backups: backups,
-					refreshed: []pbsBackupGroupKey{{
-						datastore: req.datastore, namespace: req.namespace,
-						backupType: req.group.BackupType, backupID: req.group.BackupID,
-					}},
-				}:
-				case <-ctx.Done():
+				result.backups = convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
+				result.refreshed = []pbsBackupGroupKey{key}
+				if !publish() {
 					return
 				}
 			}
@@ -2134,9 +2376,9 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 
 	go func() {
 		defer close(jobs)
-		for _, req := range requests {
+		for index := range requests {
 			select {
-			case jobs <- req:
+			case jobs <- index:
 			case <-ctx.Done():
 				return
 			}
@@ -2149,11 +2391,18 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 	}()
 
 	var combined pbsBackupSnapshotFetchResult
+	// Reservations keep the staged payload bounded by the same live-state
+	// limit. Preserve group priority regardless of cache or response timing.
+	ordered := make([][]models.PBSBackup, len(requests))
 	for result := range results {
-		combined.backups = appendPBSBackupsWithinLimit(combined.backups, result.backups)
+		ordered[result.index] = result.backups
 		combined.errors += result.errors
 		combined.terminalErrors += result.terminalErrors
 		combined.refreshed = append(combined.refreshed, result.refreshed...)
+		combined.truncated = append(combined.truncated, result.truncated...)
+	}
+	for _, backups := range ordered {
+		combined.backups = appendPBSBackupsWithinLimit(combined.backups, backups)
 	}
 
 	return combined
@@ -2287,16 +2536,105 @@ func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.
 	return append(backups, additions...)
 }
 
-// pollBackupTasks polls backup tasks from a PVE instance
-func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) {
+// pollBackupTasks polls backup tasks from a PVE instance. Its result describes
+// whether this scan can rule out unseen running writers before reading archive
+// output, not retained rows or history-store success. Positive task observations
+// can still progress when visibility of other users' tasks is unconfirmed.
+func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, client PVEClientInterface) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+
 	log.Debug().Str("instance", instanceName).Msg("polling backup tasks")
 
-	tasks, collection, err := m.readBackupTaskHistory(ctx, instanceName, client)
-	if err != nil {
-		m.persistBackupTaskHistory(ctx, nil, collection)
-		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, err, 0)
+	// Live replacement and durable report backfill have separate admission.
+	// Offline nodes were not read: keep their original live observations while
+	// allowing complete healthy-node reads (including empty ones) to progress.
+	var tasks []proxmox.Task
+	var liveErr error
+	var unreadNodes map[string]bool
+	taskVisibilityConfirmed := true
+	if source, ok := client.(interface {
+		GetBackupTaskInventory(context.Context) (proxmox.BackupTaskInventory, error)
+	}); ok {
+		var inventory proxmox.BackupTaskInventory
+		inventory, liveErr = source.GetBackupTaskInventory(ctx)
+		tasks = inventory.Tasks
+		if len(inventory.OfflineNodes) > 0 {
+			unreadNodes = make(map[string]bool, len(inventory.OfflineNodes)+1)
+			for _, node := range inventory.OfflineNodes {
+				unreadNodes[node] = true
+			}
+			// Older observations without node provenance cannot safely be
+			// assigned to a readable node during a partial collection.
+			unreadNodes[""] = true
+		}
+		taskVisibilityConfirmed = len(inventory.UnconfirmedNodes) == 0
+	} else {
+		// Legacy adapters expose only all-or-nothing collection semantics.
+		tasks, liveErr = client.GetBackupTasks(ctx)
+	}
+	if liveErr != nil {
+		monErr := errors.WrapAPIError("get_backup_tasks", instanceName, liveErr, 0)
 		log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get backup tasks")
-		return
+	}
+	liveIDs := make(map[string]bool, len(tasks))
+	unscopedWriter := false
+	for _, task := range tasks {
+		liveIDs[task.UPID] = true
+		// A scheduled vzdump parent has no guest ID. Its bounded log may be
+		// unavailable, deferred, or only a prefix (even after a guest finishes),
+		// so synthesized guest rows cannot rule out another growing archive.
+		// Retain archives until the live parent ends rather than inventing a
+		// completed restore point or guessing which file it is still writing.
+		// Evaluate the actual live read before history can replace its verdict.
+		if task.Type == "vzdump" && task.EndTime <= 0 {
+			status := strings.ToLower(strings.TrimSpace(task.Status))
+			vmid, err := strconv.Atoi(task.ID)
+			if (status == "" || status == "running") && (err != nil || vmid <= 0) {
+				unscopedWriter = true
+			}
+		}
+	}
+	m.mu.RLock()
+	hasHistoryStore := m.recoveryManager != nil
+	m.mu.RUnlock()
+	var collection recoverymodel.BackupHistoryCollection
+	if hasHistoryStore {
+		history, observation, historyErr := m.readBackupTaskHistory(ctx, instanceName, client)
+		collection = observation
+		if historyErr != nil {
+			log.Error().Err(historyErr).Str("instance", instanceName).Msg("failed to collect backup task history")
+		}
+		// The later history read may update a live task's outcome, but only
+		// membership of the complete live read permits live publication. Each
+		// parent is expanded once, sharing the existing bounded log-read budget.
+		indices := make(map[string]int, len(tasks))
+		for i, task := range tasks {
+			indices[task.UPID] = i
+		}
+		for _, task := range history {
+			if i, ok := indices[task.UPID]; ok {
+				if !tasks[i].SameExecutionIdentity(task) {
+					// History may finish a live execution, not move it to a
+					// different guest/parent, process, start time or owner.
+					// Preserve the actual live observation and independent
+					// backfill, but do not certify history coverage or new
+					// archive output from contradictory execution evidence.
+					taskVisibilityConfirmed = false
+					collection.Complete = false
+					collection.Reason = "collection_failed"
+					continue
+				}
+				tasks[i] = task
+			} else {
+				indices[task.UPID] = len(tasks)
+				tasks = append(tasks, task)
+			}
+		}
+	}
+	if liveErr != nil && !hasHistoryStore {
+		return false
 	}
 
 	var backupTasks []models.BackupTask
@@ -2335,7 +2673,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		// Durable reports backfill more history than the live API historically
 		// exposed. Preserve its 200 provider tasks per node rather than inflating
 		// every state/WebSocket payload with the entire retained task history.
-		if liveByNode[task.Node] < 200 {
+		if liveIDs[task.UPID] && liveByNode[task.Node] < 200 {
 			liveTasks = append(liveTasks, backupTask)
 			liveByNode[task.Node]++
 			liveJobIDs[taskID] = true
@@ -2350,7 +2688,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs)
+	guestTasks := m.synthesizeVzdumpJobGuestTasks(ctx, instanceName, client, jobTasks, jobUPIDs, liveErr == nil, unreadNodes)
 	backupTasks = append(backupTasks, guestTasks...)
 	for _, guest := range guestTasks {
 		parentID := strings.TrimSuffix(guest.ID, fmt.Sprintf("-vm%d", guest.VMID))
@@ -2359,34 +2697,44 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 		}
 	}
 
-	// Update state with new backup tasks for this instance
-	m.state.UpdateBackupTasksForInstance(instanceName, liveTasks)
+	m.applyPVEBackupEffect(ctx, instanceName, func() {
+		// Update state with new backup tasks for this instance
+		if liveErr == nil {
+			m.state.UpdateBackupTasksForInstanceWithUnreadNodes(instanceName, liveTasks, unreadNodes)
+		}
+		if !hasHistoryStore {
+			return
+		}
 
-	// Retain execution history before qualifying collection coverage. Task rows
-	// are not reconciled against the provider's shrinking inventory window.
-	guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
-	points, evidenceErr := proxmoxrecoverymapper.FromPVEBackupTasksWithEvidence(
-		backupTasks,
-		guestInfo,
-		time.Now().UTC(),
-	)
-	if evidenceErr != nil {
-		log.Warn().
-			Err(evidenceErr).
-			Str("instance", instanceName).
-			Msg("Failed to attach PVE backup-task recovery evidence; preserving existing points")
-		return
-	}
-	m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
-	m.persistBackupTaskHistory(ctx, points, collection)
+		// Retain execution history before qualifying collection coverage. Task rows
+		// are not reconciled against the provider's shrinking inventory window.
+		guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
+		points, evidenceErr := proxmoxrecoverymapper.FromPVEBackupTasksWithEvidence(
+			backupTasks,
+			guestInfo,
+			time.Now().UTC(),
+		)
+		if evidenceErr != nil {
+			log.Warn().
+				Err(evidenceErr).
+				Str("instance", instanceName).
+				Msg("Failed to attach PVE backup-task recovery evidence; preserving existing points")
+			return
+		}
+		m.qualifyBackupGuestTaskDetails(instanceName, jobTasks, jobUPIDs, points)
+		m.persistBackupTaskHistory(ctx, points, collection)
+	})
+	return liveErr == nil && taskVisibilityConfirmed && !unscopedWriter && ctx.Err() == nil
 }
 
 // vzdumpJobTaskCacheEntry caches the per-guest tasks synthesized from one
 // vzdump job run's log so finished jobs are fetched at most once.
 type vzdumpJobTaskCacheEntry struct {
+	node            string
 	tasks           []models.BackupTask
 	final           bool
 	historyComplete bool
+	lastAttempt     time.Time // Scheduling only; never renews task ObservedAt.
 }
 
 // maxVzdumpJobLogFetchesPerPoll bounds task-log requests per poll cycle so a
@@ -2397,81 +2745,107 @@ const maxVzdumpJobLogFetchesPerPoll = 25
 // synthesizeVzdumpJobGuestTasks expands multi-guest vzdump job runs into one
 // synthetic per-guest task each by parsing the job's task log. Results are
 // cached by instance|UPID; logs of finished jobs are immutable, so those are
-// fetched only once. Running jobs are re-parsed every cycle to pick up guests
-// as the job progresses.
-func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string) []models.BackupTask {
+// fetched only once after complete attribution. Unfinished jobs share the
+// bounded read budget fairly across cycles as their logs progress.
+func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceName string, client PVEClientInterface, jobTasks []models.BackupTask, jobUPIDs map[string]string, prune bool, unreadNodes map[string]bool) []models.BackupTask {
 	if len(jobTasks) == 0 {
-		m.pruneVzdumpJobTaskCache(instanceName, nil)
+		if prune {
+			m.applyPVEBackupEffect(ctx, instanceName, func() { m.pruneVzdumpJobTaskCache(instanceName, nil, unreadNodes) })
+		}
 		return nil
 	}
 
 	now := time.Now().UTC()
 	seen := make(map[string]struct{}, len(jobTasks))
-	var synthesized []models.BackupTask
-	fetches := 0
+	type pendingJob struct {
+		job   models.BackupTask
+		upid  string
+		key   string
+		entry vzdumpJobTaskCacheEntry
+	}
+	jobs := make([]pendingJob, 0, len(jobTasks))
+	var pending []int
 
+	m.mu.RLock()
 	for _, jobTask := range jobTasks {
+		if unreadNodes[jobTask.Node] {
+			continue // Report backfill cannot renew an unread node's live cache.
+		}
 		upid := jobUPIDs[jobTask.ID]
 		key := instanceName + "|" + upid
 		seen[key] = struct{}{}
 
-		m.mu.RLock()
-		entry, cached := m.vzdumpJobTaskCache[key]
-		m.mu.RUnlock()
-
-		if cached && entry.final {
-			synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
-			continue
+		entry := m.vzdumpJobTaskCache[key]
+		if !entry.final {
+			pending = append(pending, len(jobs))
 		}
+		jobs = append(jobs, pendingJob{job: jobTask, upid: upid, key: key, entry: entry})
+	}
+	m.mu.RUnlock()
 
+	// Provider order is newest-first. Always retrying its first 25 unfinished
+	// logs can permanently hide later guests when those logs remain incomplete
+	// or unreadable. Read never/least-recently attempted jobs first, including
+	// failed requests and reads that consume the remaining context budget.
+	// Keep publication in provider order, independently of this read schedule.
+	sort.SliceStable(pending, func(i, j int) bool {
+		return jobs[pending[i]].entry.lastAttempt.Before(jobs[pending[j]].entry.lastAttempt)
+	})
+	for fetches, index := range pending {
 		if fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
-			// Serve a stale non-final entry if we have one; the next cycle
-			// will catch up.
-			if cached {
-				synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
-			}
-			continue
+			break
 		}
-		fetches++
-
-		logLines, err := client.GetTaskLog(ctx, jobTask.Node, upid)
+		job := &jobs[index]
+		job.entry.node = job.job.Node
+		job.entry.lastAttempt = time.Now().UTC()
+		logLines, err := client.GetTaskLog(ctx, job.job.Node, job.upid)
 		if err != nil {
 			log.Debug().Err(err).
 				Str("instance", instanceName).
-				Str("upid", upid).
+				Str("upid", job.upid).
 				Msg("failed to fetch vzdump job task log; per-guest status unavailable this cycle")
-			if cached {
-				synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+		} else {
+			// A successful read renews the observation; a failed attempt only
+			// changes scheduling metadata, never the prior guest evidence.
+			guestTasks, attributed := parseVzdumpJobLog(job.job, job.upid, logLines)
+			job.entry.tasks = refreshObservedAt(guestTasks, now)
+			historyComplete := attributed && backupGuestLogComplete(job.job, logLines, guestTasks)
+			job.entry.final = historyComplete
+			job.entry.historyComplete = historyComplete
+		}
+		m.applyPVEBackupEffect(ctx, instanceName, func() {
+			m.mu.Lock()
+			if m.vzdumpJobTaskCache == nil {
+				m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
 			}
-			continue
-		}
-
-		guestTasks := parseVzdumpJobLog(jobTask, upid, logLines)
-		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
-		m.mu.Lock()
-		if m.vzdumpJobTaskCache == nil {
-			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
-		}
-		m.vzdumpJobTaskCache[key] = vzdumpJobTaskCacheEntry{
-			tasks:           guestTasks,
-			final:           historyComplete,
-			historyComplete: historyComplete,
-		}
-		m.mu.Unlock()
-		synthesized = append(synthesized, refreshObservedAt(guestTasks, now)...)
+			m.vzdumpJobTaskCache[job.key] = job.entry
+			m.mu.Unlock()
+		})
 	}
 
-	m.pruneVzdumpJobTaskCache(instanceName, seen)
+	var synthesized []models.BackupTask
+	for _, job := range jobs {
+		if job.entry.final {
+			synthesized = append(synthesized, refreshObservedAt(job.entry.tasks, now)...)
+		} else {
+			// Failed or deferred reads preserve the original observation time.
+			synthesized = append(synthesized, job.entry.tasks...)
+		}
+	}
+
+	if prune {
+		m.applyPVEBackupEffect(ctx, instanceName, func() { m.pruneVzdumpJobTaskCache(instanceName, seen, unreadNodes) })
+	}
 	return synthesized
 }
 
 // pruneVzdumpJobTaskCache drops cached job entries for this instance whose
 // UPIDs are no longer present in the task list (fell out of the window).
-func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}) {
+func (m *Monitor) pruneVzdumpJobTaskCache(instanceName string, seen map[string]struct{}, unreadNodes map[string]bool) {
 	prefix := instanceName + "|"
 	m.mu.Lock()
-	for key := range m.vzdumpJobTaskCache {
-		if !strings.HasPrefix(key, prefix) {
+	for key, entry := range m.vzdumpJobTaskCache {
+		if !strings.HasPrefix(key, prefix) || unreadNodes[entry.node] {
 			continue
 		}
 		if _, ok := seen[key]; !ok {
@@ -2495,7 +2869,7 @@ func refreshObservedAt(tasks []models.BackupTask, now time.Time) []models.Backup
 
 // vzdump job logs mark each guest's section with these lines.
 var (
-	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)`)
+	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)(?:\s|$)`)
 	vzdumpLogGuestFinishRe = regexp.MustCompile(`^INFO: Finished Backup of VM (\d+) \((\d+):(\d{2}):(\d{2})\)$`)
 	vzdumpLogGuestFailRe   = regexp.MustCompile(`^ERROR: Backup of VM (\d+) failed -\s*(.*)$`)
 )
@@ -2505,18 +2879,26 @@ var (
 // times are reconstructed from the job start plus the durations vzdump prints
 // on each "Finished Backup" line. Task IDs embed the parent UPID, keeping them
 // stable across polls and distinct from individually-run guest backups.
-func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmox.TaskLogLine) []models.BackupTask {
+// The second result qualifies section attribution, not transport completeness:
+// unmatched/repeated markers must not supply success or seal an immutable cache.
+func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmox.TaskLogLine) ([]models.BackupTask, bool) {
 	type guestSection struct {
-		vmid   int
-		start  time.Time
-		end    time.Time
-		status string
-		errMsg string
+		vmid      int
+		start     time.Time
+		end       time.Time
+		status    string
+		errMsg    string
+		warned    bool
+		logError  bool
+		started   bool
+		ambiguous bool
 	}
 
 	var order []int
 	sections := make(map[int]*guestSection)
 	cursor := jobTask.StartTime
+	activeVMID := 0
+	attributed := true
 
 	ensureSection := func(vmid int) *guestSection {
 		if sec, ok := sections[vmid]; ok {
@@ -2528,6 +2910,17 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		return sec
 	}
 
+	markAmbiguous := func(sec *guestSection) {
+		attributed = false
+		sec.ambiguous = true
+		// An explicit guest failure remains useful adverse evidence, even
+		// when another marker contradicts its execution sequence.
+		if sec.status != "error" {
+			sec.status = "unknown"
+			sec.errMsg = "Guest backup result is unknown because task log markers do not match; review the original Proxmox task log."
+		}
+	}
+
 	for _, line := range logLines {
 		text := strings.TrimSpace(line.Text)
 		if match := vzdumpLogGuestStartRe.FindStringSubmatch(text); match != nil {
@@ -2536,14 +2929,31 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 				continue
 			}
 			sec := ensureSection(vmid)
-			sec.start = cursor
-			sec.status = "running"
+			if activeVMID != 0 {
+				markAmbiguous(sections[activeVMID])
+			}
+			if sec.started || sec.status != "running" {
+				// One synthetic task cannot safely collapse several attempts.
+				markAmbiguous(sec)
+			}
+			if !sec.started {
+				sec.start = cursor
+				sec.started = true
+			}
+			activeVMID = vmid
 		} else if match := vzdumpLogGuestFinishRe.FindStringSubmatch(text); match != nil {
 			vmid, err := strconv.Atoi(match[1])
 			if err != nil || vmid <= 0 {
 				continue
 			}
 			sec := ensureSection(vmid)
+			if !sec.started || activeVMID != vmid || sec.ambiguous {
+				markAmbiguous(sec)
+				if activeVMID == vmid {
+					activeVMID = 0
+				}
+				continue
+			}
 			if sec.status == "running" {
 				sec.status = "OK"
 			}
@@ -2553,28 +2963,55 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			duration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 			sec.end = sec.start.Add(duration)
 			cursor = sec.end
+			if activeVMID == vmid {
+				activeVMID = 0
+			}
 		} else if match := vzdumpLogGuestFailRe.FindStringSubmatch(text); match != nil {
 			vmid, err := strconv.Atoi(match[1])
 			if err != nil || vmid <= 0 {
 				continue
 			}
 			sec := ensureSection(vmid)
+			if !sec.started || activeVMID != vmid {
+				markAmbiguous(sec)
+			}
 			sec.status = "error"
 			sec.errMsg = strings.TrimSpace(match[2])
 			if sec.errMsg == "" {
 				sec.errMsg = "backup failed"
 			}
+			if activeVMID == vmid {
+				activeVMID = 0
+			}
+		} else if activeVMID > 0 && strings.HasPrefix(text, "ERROR:") {
+			// An unqualified log error is not a terminal guest verdict, but
+			// a later finish marker cannot establish clean success either.
+			// Keep its scope and private detail inside the original task log.
+			sections[activeVMID].logError = true
+		} else if activeVMID > 0 && (strings.HasPrefix(text, "WARN:") || strings.HasPrefix(text, "WARNING:")) {
+			// A finished backup can still have guest-scoped warnings. Do not
+			// let its finish marker turn those into clean success, attribute
+			// job-wide warnings to an arbitrary guest, or copy private log text.
+			// Keep running/failure precedence until a guest actually finishes.
+			sections[activeVMID].warned = true
 		}
 	}
 
 	if len(order) == 0 {
-		return nil
+		return nil, attributed
 	}
 
 	jobFinished := !jobTask.EndTime.IsZero()
 	tasks := make([]models.BackupTask, 0, len(order))
 	for _, vmid := range order {
 		sec := sections[vmid]
+		if sec.status == "OK" && sec.logError {
+			sec.status = "warning"
+			sec.errMsg = "Backup completed with logged errors; review the original Proxmox task log."
+		} else if sec.status == "OK" && sec.warned {
+			sec.status = "warning"
+			sec.errMsg = "Backup completed with warnings; review the original Proxmox task log."
+		}
 		if jobFinished {
 			if sec.status == "running" {
 				// The job ended without a per-guest verdict; treat as failed
@@ -2601,7 +3038,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		})
 	}
 
-	return tasks
+	return tasks, attributed
 }
 
 func (m *Monitor) pollPVEBackupsAsync(
@@ -2625,12 +3062,8 @@ func (m *Monitor) pollPVEBackupsAsync(
 
 	now := time.Now()
 
-	m.mu.RLock()
-	lastPoll := m.lastPVEBackupPoll[instanceName]
-	m.mu.RUnlock()
-
-	shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-	if !shouldPoll {
+	owner, reason := m.beginPVEBackupPoll(instanceName, now, client)
+	if owner == nil {
 		if reason != "" {
 			log.Debug().
 				Str("instance", instanceName).
@@ -2640,16 +3073,9 @@ func (m *Monitor) pollPVEBackupsAsync(
 		return
 	}
 
-	// Set initial timestamp before starting goroutine (prevents concurrent starts).
-	// This optional work owns a runtime-scoped timeout below; the completed core
-	// PVE generation must not be reclassified as unreachable merely because its
-	// per-cycle context expired before background scheduling.
-	m.mu.Lock()
-	m.lastPVEBackupPoll[instanceName] = newLast
-	m.mu.Unlock()
-
 	// Run backup polling in a separate goroutine to avoid blocking real-time stats
 	go func(startTime time.Time, inst string, pveClient PVEClientInterface) {
+		defer m.finishPVEBackupPoll(inst, owner)
 		defer recoverFromPanic(fmt.Sprintf("pollPVEBackups-%s", inst))
 		timeout := m.calculateBackupOperationTimeout(inst)
 		log.Info().
@@ -2657,25 +3083,18 @@ func (m *Monitor) pollPVEBackupsAsync(
 			Dur("timeout", timeout).
 			Msg("Starting background backup/snapshot polling")
 
-		// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-		// so derive the backup poll context from the long-lived runtime context instead.
-		parentCtx := m.getRuntimeContext()
-		if parentCtx == nil {
-			parentCtx = context.Background()
-		}
-
+		// Independent of the short foreground cycle, but still owned by the
+		// registered connection and runtime that admitted this scan.
+		parentCtx := context.WithValue(owner.ctx, pveBackupPollContextKey{}, owner)
 		m.pollPVEBackupsAndSnapshots(parentCtx, inst, pveClient, nodes, nodeEffectiveStatus, timeout)
 
 		duration := time.Since(startTime)
 		log.Info().
 			Str("instance", inst).
 			Dur("duration", duration).
-			Msg("Completed background backup/snapshot polling")
+			Bool("withdrawn", owner.ctx.Err() != nil).
+			Msg("Background backup/snapshot polling returned")
 
-		// Update timestamp after completion for accurate interval scheduling
-		m.mu.Lock()
-		m.lastPVEBackupPoll[inst] = time.Now()
-		m.mu.Unlock()
 	}(now, instanceName, client)
 
 }

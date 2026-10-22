@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2121,6 +2122,59 @@ func TestProviderURLHostnamePreservesIPv6(t *testing.T) {
 	} {
 		if got := extractHostname(test.endpoint); got != test.want {
 			t.Errorf("extractHostname(%q) = %q, want %q", test.endpoint, got, test.want)
+		}
+	}
+}
+
+// Explicit configured references must survive projection without conflating
+// connections that share a display name and hostname. They are aliases only:
+// existing resource IDs and metrics/source targets must not change.
+func TestPMGConfiguredConnectionIdentity(t *testing.T) {
+	now := time.Now().UTC()
+	registry := NewRegistry(NewMemoryStore())
+	instances := []models.PMGInstance{
+		{ID: "pmg-generated-a", ConnectionID: "pmg:configured-a", Name: "shared", Host: "https://shared.example.invalid:8006", Status: "degraded", ConnectionHealth: "degraded", LastSeen: now},
+		{ID: "pmg-generated-b", ConnectionID: "pmg:configured-b", Name: "shared", Host: "https://shared.example.invalid:8006", Status: "online", ConnectionHealth: "healthy", LastSeen: now},
+	}
+	registry.IngestSnapshot(models.StateSnapshot{PMGInstances: instances})
+	resources := registry.List()
+	if len(resources) != 2 {
+		t.Fatalf("colliding presentation merged connections: %+v", resources)
+	}
+	ids := map[string]string{}
+	for _, instance := range instances {
+		resource, id, ok := registry.GetByReference(instance.ConnectionID)
+		if !ok || resource.PMG == nil || resource.PMG.InstanceID != instance.ID || resource.PMG.ConnectionID != instance.ConnectionID {
+			t.Fatalf("wrong configured connection match for %s: %+v", instance.ConnectionID, resource)
+		}
+		if !slices.Contains(resource.Canonical.Aliases, instance.ConnectionID) {
+			t.Fatalf("missing explicit alias: %+v", resource.Canonical)
+		}
+		if resource.Canonical.PrimaryID == instance.ConnectionID {
+			t.Fatal("connection alias replaced primary identity")
+		}
+		ids[instance.ID] = id
+		wantStatus := StatusOnline
+		if instance.Status == "degraded" {
+			wantStatus = StatusWarning
+		}
+		if resource.Status != wantStatus {
+			t.Fatalf("collection health lost: %+v", resource)
+		}
+	}
+	// A normal successful replacement clears adverse collection state without
+	// moving either identity or leaking the sibling's alias.
+	instances[0].Status, instances[0].ConnectionHealth = "online", "healthy"
+	registry.IngestSnapshot(models.StateSnapshot{PMGInstances: instances})
+	for _, instance := range instances {
+		resource, id, ok := registry.GetByReference(instance.ConnectionID)
+		if !ok || id != ids[instance.ID] || resource.Status != StatusOnline {
+			t.Fatalf("recovery changed identity/health: %+v", resource)
+		}
+		for _, sibling := range instances {
+			if sibling.ID != instance.ID && slices.Contains(resource.Canonical.Aliases, sibling.ConnectionID) {
+				t.Fatalf("sibling alert identity leaked: %+v", resource.Canonical)
+			}
 		}
 	}
 }

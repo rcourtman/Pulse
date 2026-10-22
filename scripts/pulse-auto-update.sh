@@ -116,11 +116,28 @@ check_auto_updates_enabled() {
         fi
     fi
     
-    # Also check if timer is enabled (belt and suspenders)
-    if ! systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT" 2>/dev/null; then
-        log info "Auto-update timer is disabled"
-        exit 0
-    fi
+    # A failed is-enabled --quiet read conflates an intentional stop with an
+    # unavailable manager. Read one bounded state/exit tuple, preserving blank
+    # records and diagnostics so a partial "enabled" cannot grant an update.
+    local timer_state="" timer_status=0
+    timer_state=$(LC_ALL=C timeout -k 1 5 systemctl is-enabled "$UPDATE_TIMER_UNIT" 2>&1;
+        result=$?; printf '.'; exit "$result") || timer_status=$?
+    timer_state="${timer_state%.}"
+    case "$timer_status:$timer_state" in
+        0:enabled$'\n'|0:enabled-runtime$'\n'|0:alias$'\n'|0:static$'\n'|0:indirect$'\n'|0:generated$'\n'|0:transient$'\n')
+            # Preserve systemd's existing successful is-enabled states.
+            ;;
+        1:disabled$'\n'|1:masked$'\n'|1:masked-runtime$'\n'|1:linked$'\n'|1:linked-runtime$'\n')
+            log info "Auto-update timer is not enabled"
+            exit 0
+            ;;
+        *)
+            # Do not expose raw manager diagnostics or call a failed read an
+            # opt-out. A missing unit or timeout needs explicit reconciliation.
+            log error "Cannot verify auto-update timer state; no unattended update attempted"
+            exit 1
+            ;;
+    esac
 }
 
 # Read version identity from the executable, never installation metadata. This
@@ -228,8 +245,9 @@ pick_highest_stable_tag() {
 get_latest_stable_version() {
     local endpoint="" release_json="" stable_tags="" latest_version=""
     if ! command -v jq >/dev/null 2>&1; then
-        log error "jq is required to verify release metadata; no unattended update attempted"
-        echo ""
+        # This helper's stdout is the selected tag. The ordinary logger also
+        # writes stdout; keep a missing-parser diagnostic out of that value.
+        log error "jq is required to verify release metadata; no unattended update attempted" >&2
         return 0
     fi
 
@@ -405,12 +423,14 @@ download_update_asset() {
 # plausible partial result grants an update, restart or rollback.
 read_update_service_state() {
     local service_name=$1 observation="" line="" load="" state=""
+    local probe_seconds="${2:-5}"
+    [[ "$probe_seconds" =~ ^[1-5]$ ]] || return 1
     local seen_load=false seen_state=false read_completed=false
     # Keep diagnostics in the same observation and preserve trailing blank
     # records. Command substitution otherwise discards them, turning an
     # incomplete manager reply into consent for update/restart/rollback.
     # The completion marker also requires the last property to end normally.
-    if ! observation=$(LC_ALL=C timeout -k 1 5 systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
+    if ! observation=$(LC_ALL=C timeout -k 1 "$probe_seconds" systemctl show "$service_name" --no-pager --property=LoadState --property=ActiveState 2>&1 &&
         printf '%s' '__pulse_state_read_completed__'); then
         log error "Cannot read Pulse service state ($service_name); reconcile service state before retrying" >&2
         return 1
@@ -533,15 +553,20 @@ stop_update_service_for_rollback() {
 wait_for_service_active() {
     local service_name=$1
     local timeout_seconds="${2:-20}"
-    local elapsed=0 state=""
+    [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 2
+    local deadline=$((SECONDS + timeout_seconds)) remaining=0 probe_seconds=0 state=""
 
-    while (( elapsed < timeout_seconds )); do
-        state=$(read_update_service_state "$service_name") || return 2
+    # Include manager latency in the same budget as the sleeps. An uncertain
+    # or late observation keeps return 2: it must not become rollback consent.
+    while (( (remaining = deadline - SECONDS) > 0 )); do
+        probe_seconds=$remaining
+        (( probe_seconds <= 5 )) || probe_seconds=5
+        state=$(read_update_service_state "$service_name" "$probe_seconds") || return 2
+        (( SECONDS < deadline )) || return 2
         if [[ "$state" == active ]]; then
             return 0
         fi
         sleep 1
-        ((elapsed += 1))
     done
 
     return 1
@@ -869,9 +894,12 @@ main() {
     fi
     
     # Get latest stable version
-    local latest_version=$(get_latest_stable_version)
-    
-    if [[ -z "$latest_version" ]]; then
+    local latest_version=""
+    # A local declaration masks a failed substitution. Admit a successful,
+    # stable tag before arithmetic/completion, never diagnostic text or output
+    # left by a failed selector. Unknown discovery is not "already latest".
+    if ! latest_version=$(get_latest_stable_version) ||
+       [[ -z "$latest_version" ]] || is_prerelease_tag "$latest_version"; then
         log error "Could not determine latest version from GitHub"
         exit 1
     fi
@@ -885,15 +913,6 @@ main() {
         # Perform update
         if perform_update "$latest_version"; then
             log info "Update completed successfully to $latest_version"
-            
-            # Send notification if webhooks are configured
-            if [[ -f "$CONFIG_DIR/webhooks.enc" ]] || [[ -f "$CONFIG_DIR/webhooks.json" ]]; then
-                # Create a simple notification via the Pulse API
-                curl -s -X POST "http://localhost:7655/api/internal/notification" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"type\":\"update\",\"message\":\"Pulse automatically updated from $current_version to $latest_version\"}" \
-                    2>/dev/null || true
-            fi
         else
             log error "Update failed"
             exit 1

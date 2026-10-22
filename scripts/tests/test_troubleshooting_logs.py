@@ -66,12 +66,13 @@ sys.exit(int(os.environ.get('READER_EXIT', '0')))
 
 def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: str = "",
                         exit_code: int = 0, hang: str = "", missing_timeout: bool = False,
-                        missing_tool: str = "", unavailable_temp: bool = False):
+                        missing_tool: str = "", unavailable_temp: bool = False,
+                        reader_source: str = READER):
     """Own and clean up only this synthetic shell's process group on failure."""
     with tempfile.TemporaryDirectory() as temporary:
         directory = Path(temporary)
         command = directory / reader
-        command.write_text(READER, encoding="utf-8")
+        command.write_text(reader_source, encoding="utf-8")
         command.chmod(0o700)
         argv = directory / "argv.json"
         pid_file = directory / "reader.pid"
@@ -102,6 +103,8 @@ os.execv({real_rm!r}, [{real_rm!r}] + sys.argv[1:])
                     (directory / tool).symlink_to(shutil.which(tool))
             if missing_tool == "rm":
                 (directory / "rm").unlink()
+            if missing_tool == reader:
+                command.unlink()
         path = (str(directory) if missing_timeout or missing_tool
                 else f"{directory}:{os.environ['PATH']}")
         env = dict(os.environ, PATH=path, READER_ARGV=str(argv), READER_PID=str(pid_file),

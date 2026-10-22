@@ -55,22 +55,23 @@ func (c *Client) GetReplicationStatus(ctx context.Context) ([]ReplicationJob, er
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var raw struct {
-		Data *[]map[string]json.RawMessage `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	data, err := readReplicationData(resp)
+	if err != nil {
 		return nil, err
 	}
-
-	if raw.Data == nil {
-		return nil, fmt.Errorf("replication inventory response is missing a data array")
+	entries, err := decodeReplicationRows(data)
+	if err != nil {
+		return nil, err
 	}
-	jobs := make([]ReplicationJob, 0, len(*raw.Data))
-	for _, entry := range *raw.Data {
-		jobs = append(jobs, parseReplicationJob(entry))
+	jobs := make([]ReplicationJob, 0, len(entries))
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		job := parseReplicationJob(entry)
+		if job.ID == "" || seen[job.ID] {
+			return nil, errInvalidReplicationResponse
+		}
+		seen[job.ID] = true
+		jobs = append(jobs, job)
 	}
 
 	// Enrich jobs with status data from the per-node status endpoint
@@ -118,73 +119,37 @@ func (c *Client) enrichReplicationJobStatus(ctx context.Context, job *Replicatio
 			Msg("Failed to fetch replication job status")
 		return
 	}
-	defer resp.Body.Close()
-
-	// Read body for debugging/parsing
-	bodyBytes, err := readResponseBodyLimited(resp.Body)
+	data, err := readReplicationData(resp)
 	if err != nil {
 		log.Debug().
 			Str("jobID", jobID).
 			Str("endpoint", endpoint).
 			Err(err).
-			Msg("Failed to read replication status response body")
+			Msg("Failed to read a complete replication status response")
 		return
 	}
 
-	log.Debug().
-		Str("jobID", jobID).
-		Str("endpoint", endpoint).
-		Str("responseBody", string(bodyBytes)).
-		Msg("Received replication status response")
-
-	// Try to parse as array first (common case)
-	var statusResp struct {
-		Data []map[string]json.RawMessage `json:"data"`
-	}
+	// Native per-job replies may be an object or an array. Both pass the
+	// same integrity checks before any fields can merge. Never log raw bodies:
+	// even a malformed successful response may carry private provider details.
 	var status map[string]json.RawMessage
-
-	if err := json.Unmarshal(bodyBytes, &statusResp); err != nil {
-		log.Debug().
-			Str("jobID", jobID).
-			Str("endpoint", endpoint).
-			Err(err).
-			Msg("Failed to decode replication status response as array, trying single object")
-
-		// Try parsing as single object { "data": { ... } }
-		var singleResp struct {
-			Data map[string]json.RawMessage `json:"data"`
-		}
-		if err := json.Unmarshal(bodyBytes, &singleResp); err != nil {
-			log.Debug().
-				Str("jobID", jobID).
-				Str("endpoint", endpoint).
-				Err(err).
-				Msg("Failed to decode replication status response as single object")
+	if data[0] == '{' {
+		var valid bool
+		status, valid = decodeReplicationRow(data)
+		if !valid {
 			return
 		}
-		if len(singleResp.Data) == 0 {
-			log.Debug().
-				Str("jobID", jobID).
-				Str("endpoint", endpoint).
-				Msg("Replication status response has empty data object")
-			return
-		}
-		status = singleResp.Data
 	} else {
-		// Successfully parsed as array
-		if len(statusResp.Data) == 0 {
-			log.Debug().
-				Str("jobID", jobID).
-				Str("endpoint", endpoint).
-				Msg("Replication status response has empty data array")
+		rows, err := decodeReplicationRows(data)
+		if err != nil {
 			return
 		}
 		// Per-job endpoints normally return one row without an ID. If a
 		// provider returns several rows, bind by job identity rather than
 		// silently taking the first job's health.
-		for _, candidate := range statusResp.Data {
+		for _, candidate := range rows {
 			candidateID := stringFromAny(firstNonNilRaw(candidate, "id", "jobid"))
-			if candidateID == jobID || (len(statusResp.Data) == 1 && candidateID == "") {
+			if candidateID == jobID || (len(rows) == 1 && candidateID == "") {
 				if status != nil {
 					return
 				} // Ambiguous duplicate identity.

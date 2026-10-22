@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,154 @@ func TestContainerAgentCompatibilityWrapperDefaultsToUnifiedHostAndDockerMonitor
 	if !strings.Contains(wrapper, `--enable-host=false for an intentional`) {
 		t.Fatal("container-agent compatibility wrapper must document the explicit workload-only path")
 	}
+}
+
+func TestContainerAgentCompatibilityWrapperAuthenticatesBeforeExecuting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_container_agent_wrapper.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("container-agent bootstrap controls: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Ran 25 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete container-agent bootstrap controls:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
+// Exercise the shipped parser, not an extracted guard, so rejection must occur
+// before credential ingress, installed-state recovery or any platform action.
+func TestInstallSHValueArgumentsRejectMissingValues(t *testing.T) {
+	options := []string{
+		"--url", "--token", "--interval", "--kubeconfig", "--proxmox-type",
+		"--cacert", "--server-fingerprint", "--observers-file", "--command-authority",
+		"--action-token-file", "--health-addr", "--agent-id", "--hostname",
+		"--report-ip", "--state-dir", "--disk-exclude", "--disk-include",
+		"--token-file", "--pulse-url", "--output",
+	}
+	for _, option := range options {
+		for _, format := range []string{"text", "json"} {
+			for _, following := range []string{"", "--uninstall", "-h"} {
+				t.Run(option+"/"+format+"/"+following, func(t *testing.T) {
+					args := []string{"--output", format, "--token", "fixture-private-token", option}
+					if following != "" {
+						args = append(args, following)
+					}
+					out, exit := runInstallSHArgumentFixture(t, args...)
+					if exit != 16 {
+						t.Fatalf("expected missing-argument exit 16, got %d:\n%s", exit, out)
+					}
+					message := "Missing value for " + option + ". Use --help for usage information."
+					if format == "json" {
+						var event struct {
+							Phase    string `json:"phase"`
+							Code     string `json:"code"`
+							Message  string `json:"message"`
+							ExitCode int    `json:"exitCode"`
+						}
+						if err := json.Unmarshal([]byte(out), &event); err != nil {
+							t.Fatalf("expected one complete JSON error: %v\n%s", err, out)
+						}
+						if event.Phase != "error" || event.Code != "install_failed" ||
+							event.ExitCode != 16 || event.Message != message {
+							t.Fatalf("wrong missing-value event: %+v", event)
+						}
+					} else if strings.TrimSpace(out) != "[ERROR] "+message {
+						t.Fatalf("wrong missing-value diagnostic:\n%s", out)
+					}
+					if strings.Contains(out, "fixture-private-token") || strings.Contains(out, "unbound variable") {
+						t.Fatal("argument diagnostic leaked a value or escaped into the shell error path")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestInstallSHValueArgumentsPreserveExplicitValues(t *testing.T) {
+	// Empty values are deliberate for optional token/TLS/listener settings.
+	// Parsing still leaves semantic validation to the existing post-parser path.
+	options := []string{
+		"--url", "--token", "--interval", "--kubeconfig", "--proxmox-type",
+		"--cacert", "--server-fingerprint", "--observers-file", "--command-authority",
+		"--action-token-file", "--health-addr", "--agent-id", "--hostname",
+		"--report-ip", "--state-dir", "--disk-exclude", "--disk-include",
+		"--token-file", "--pulse-url", "--output",
+	}
+	for _, option := range options {
+		for _, value := range []string{"", "fixture value with spaces", "-"} {
+			t.Run(option+"/"+value, func(t *testing.T) {
+				out, exit := runInstallSHArgumentFixture(t, option, value, "--help")
+				if exit != 0 || !strings.Contains(out, "Usage:") || strings.Contains(out, "Missing value") {
+					t.Fatalf("explicit value was not preserved before help: exit=%d\n%s", exit, out)
+				}
+				if strings.Contains(out, "fixture value with spaces") {
+					t.Fatal("help exposed the supplied option value")
+				}
+			})
+		}
+	}
+}
+
+func TestInstallSHUnknownArgumentsRemainPrivateAndNonInteractive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_argument_errors.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent argument error controls: %v\n%s", err, out)
+	}
+	for _, required := range []string{
+		"test_unknown_input_is_private_in_every_output_and_flag_order",
+		"test_unknown_input_never_waits_on_a_terminal",
+		"test_supported_help_still_exits_without_reading_option_values",
+		"Ran 3 tests", "\nOK\n", "agent argument errors: 76 closed scenarios observed",
+	} {
+		if !strings.Contains(string(out), required) {
+			t.Fatalf("incomplete argument error controls (missing %q):\n%s", required, out)
+		}
+	}
+	if strings.Contains(string(out), "skipped") {
+		t.Fatalf("argument error controls were skipped:\n%s", out)
+	}
+	t.Logf("%s", out)
+}
+
+func runInstallSHArgumentFixture(t *testing.T, args ...string) (string, int) {
+	t.Helper()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	if err := os.Mkdir(bin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(dir, "activity")
+	for _, name := range []string{"curl", "systemctl", "launchctl", "service", "rc-service", "sudo", "uname"} {
+		stub := "#!/bin/sh\nprintf attempted > \"$ACTIVITY_MARKER\"\nexit 125\n"
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(stub), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", append([]string{repoFile("scripts", "install.sh")}, args...)...)
+	cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "HOME=" + dir, "TMPDIR=" + dir,
+		"LC_ALL=C", "TERM=dumb", "ACTIVITY_MARKER=" + marker}
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatalf("argument handling waited for input or hung: %v\n%s", ctx.Err(), out)
+	}
+	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
+		t.Fatal("argument handling reached a transport or platform operation")
+	}
+	if err == nil {
+		return string(out), 0
+	}
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		t.Fatalf("execute installer argument fixture: %v", err)
+	}
+	return string(out), exit.ExitCode()
 }
 
 func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
@@ -83,6 +232,14 @@ func TestInstallSHPersistsAndVerifiesServerFingerprint(t *testing.T) {
 		`--server-fingerprint <sha256>`,
 		`verify_pinned_server_certificate() {`,
 		`openssl s_client -connect "$target" -servername "$host"`,
+		`SERVER_CERTIFICATE_PROBE_PID=$!`,
+		`trap 'probe_interruption=130' INT`,
+		`trap 'probe_interruption=143' TERM`,
+		`[[ "$probe_interruption" -eq 0 ]] || exit "$probe_interruption"`,
+		`for ((probe_second=0; probe_second<10; probe_second++)); do`,
+		`kill -KILL "$SERVER_CERTIFICATE_PROBE_PID"`,
+		`wait "$SERVER_CERTIFICATE_PROBE_PID"`,
+		`Timed out verifying Pulse server certificate after 10 seconds`,
 		`EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT")`,
 		`write_connection_state_value "$conn_tmp" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"`,
 		`SERVER_FINGERPRINT=$(read_connection_state_value "$file" "PULSE_SERVER_FINGERPRINT")`,
@@ -245,7 +402,7 @@ func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
 		`if [[ -n "${PULSE_HEALTH_ADDR+x}" ]]; then`,
 		`--health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)`,
 		`if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi`,
-		`--health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;`,
+		`--health-addr) require_option_value "$@"; HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;`,
 		`UMask=0077`,
 		`local no_new_privileges="true"`,
 		`NoNewPrivileges=${no_new_privileges}`,
@@ -411,6 +568,210 @@ func TestInstallSHPreflightChecksAgentDownloadArtifact(t *testing.T) {
 	}
 	if requestedDownloadArch == "" {
 		t.Fatalf("download arch query was empty")
+	}
+}
+
+func TestInstallSHPreflightHealthDeadline(t *testing.T) {
+	for _, mode := range []string{"silent_headers", "stalled_body"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := t.TempDir()
+			state := filepath.Join(dir, "state")
+			if err := os.Mkdir(state, 0700); err != nil {
+				t.Fatal(err)
+			}
+			preserved := filepath.Join(state, "operator-state.json")
+			const originalState = "{\"preserve\":true}\n"
+			if err := os.WriteFile(preserved, []byte(originalState), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var mu sync.Mutex
+			var requests []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests = append(requests, r.Method+" "+r.URL.Path)
+				mu.Unlock()
+				if r.URL.Path == "/api/health" {
+					if mode == "stalled_body" {
+						w.Header().Set("Content-Length", "2")
+						_, _ = w.Write([]byte("a"))
+						w.(http.Flusher).Flush()
+					}
+					// Even the old installer completes after 12 seconds: the
+					// negative case cannot strand a curl child or HTTP handler.
+					timer := time.NewTimer(12 * time.Second)
+					defer timer.Stop()
+					select {
+					case <-r.Context().Done():
+						return
+					case <-timer.C:
+						if mode == "stalled_body" {
+							_, _ = w.Write([]byte("b"))
+						}
+						return
+					}
+				}
+				if r.URL.Path != "/download/pulse-agent" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", repoFile("scripts", "install.sh"),
+				"--url", server.URL, "--preflight-only", "--output", "json", "--non-interactive",
+				"--disable-docker", "--disable-kubernetes", "--disable-proxmox", "--state-dir", state)
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dir, "CURL_HOME=" + dir,
+				"TMPDIR=" + dir, "LC_ALL=C", "NO_PROXY=*", "no_proxy=*"}
+			cmd.WaitDelay = time.Second
+			started := time.Now()
+			out, err := cmd.CombinedOutput()
+			elapsed := time.Since(started)
+			if ctx.Err() != nil {
+				t.Fatalf("preflight exceeded fixture deadline: %v\n%s", ctx.Err(), out)
+			}
+			if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 14 {
+				t.Fatalf("connected but stalled health read must fail preflight (14), got %v after %s:\n%s", err, elapsed, out)
+			}
+			text := string(out)
+			for _, event := range []string{`"code":"pulse_unreachable"`, `"code":"agent_download_available"`, `"code":"failed"`} {
+				if !strings.Contains(text, event) {
+					t.Fatalf("preflight omitted %s:\n%s", event, out)
+				}
+			}
+			if strings.Contains(text, `"code":"ok"`) || strings.Contains(text, `"code":"pulse_reachable"`) {
+				t.Fatalf("timeout was reported as successful preflight:\n%s", out)
+			}
+			mu.Lock()
+			gotRequests := strings.Join(requests, ", ")
+			mu.Unlock()
+			if gotRequests != "GET /api/health, HEAD /download/pulse-agent" {
+				t.Fatalf("preflight changed its read-only request set: %s", gotRequests)
+			}
+			bytes, err := os.ReadFile(preserved)
+			if err != nil || string(bytes) != originalState {
+				t.Fatalf("preflight changed operator state: %v, %q", err, bytes)
+			}
+			entries, err := os.ReadDir(state)
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("preflight added installed state: %v, %v", err, entries)
+			}
+			t.Logf("real curl %s: exit 14 after %s; artifact inspected, state preserved", mode, elapsed)
+		})
+	}
+}
+
+// Exercise the complete read-only installer with real curl. Ambient defaults
+// must not turn an untrusted TLS peer into a success or turn GET/HEAD into a
+// mutation, extra request or trace. Explicit CA/insecure choices still work.
+func TestInstallSHPreflightIgnoresAmbientCurlConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		tls      bool
+		trust    string
+		ambient  bool
+		wantExit int
+	}{
+		{"untrusted_tls_clean", true, "", false, 11},
+		{"untrusted_tls_ambient_insecure", true, "", true, 11},
+		{"explicit_ca", true, "ca", true, 0},
+		{"explicit_insecure", true, "insecure", true, 0},
+		{"plain_http", false, "", true, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			var mu sync.Mutex
+			var requests []string
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests = append(requests, r.Method+" "+r.URL.Path)
+				mu.Unlock()
+				w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+				w.WriteHeader(http.StatusOK)
+			}))
+			if tc.tls {
+				server.StartTLS()
+			} else {
+				server.Start()
+			}
+			defer server.Close()
+			trace := filepath.Join(dir, "ambient-trace")
+			if tc.ambient {
+				config := "insecure\nrequest = DELETE\ntrace-ascii = " + trace + "\nurl = " + server.URL + "/ambient-extra\n"
+				if err := os.WriteFile(filepath.Join(dir, ".curlrc"), []byte(config), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{repoFile("scripts", "install.sh"), "--url", server.URL,
+				"--preflight-only", "--output", "json", "--non-interactive",
+				"--disable-docker", "--disable-kubernetes", "--disable-proxmox",
+				"--state-dir", filepath.Join(dir, "state")}
+			if tc.trust == "ca" {
+				ca := filepath.Join(dir, "fixture-ca.pem")
+				if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0600); err != nil {
+					t.Fatal(err)
+				}
+				args = append(args, "--cacert", ca)
+			} else if tc.trust == "insecure" {
+				args = append(args, "--insecure")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", args...)
+			cmd.Env = append(os.Environ(), "HOME="+dir, "CURL_HOME="+dir, "XDG_CONFIG_HOME="+dir,
+				"TMPDIR="+dir, "NO_PROXY=*", "no_proxy=*")
+			out, err := cmd.CombinedOutput()
+			exit := 0
+			if err != nil {
+				if ee, ok := err.(*exec.ExitError); ok {
+					exit = ee.ExitCode()
+				} else {
+					t.Fatalf("preflight did not complete: %v\n%s", err, out)
+				}
+			}
+			if ctx.Err() != nil || exit != tc.wantExit {
+				t.Fatalf("preflight exit=%d, want %d; deadline=%v\n%s", exit, tc.wantExit, ctx.Err(), out)
+			}
+			mu.Lock()
+			got := strings.Join(requests, ", ")
+			mu.Unlock()
+			if tc.wantExit == 0 {
+				if got != "GET /api/health, HEAD /download/pulse-agent" || !strings.Contains(string(out), `"code":"ok"`) {
+					t.Fatalf("preflight did not preserve explicit read-only requests: %q\n%s", got, out)
+				}
+			} else if got != "" || strings.Contains(string(out), `"code":"ok"`) {
+				t.Fatalf("untrusted peer received a request or preflight claimed success: %q\n%s", got, out)
+			}
+			if _, err := os.Stat(trace); !os.IsNotExist(err) {
+				t.Fatalf("ambient curl tracing was used: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "state")); !os.IsNotExist(err) {
+				t.Fatalf("read-only preflight changed agent state: %v", err)
+			}
+		})
+	}
+}
+
+func TestInstallSHAllCurlInvocationsDisableAmbientConfiguration(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invocation := regexp.MustCompile(`\bcurl\s+(?:["\'-]|https?://)`)
+	count := 0
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") || !invocation.MatchString(line) {
+			continue
+		}
+		count++
+		if !strings.Contains(line, "curl --disable ") {
+			t.Fatalf("curl must ignore ambient defaults before all other arguments: %s", line)
+		}
+	}
+	if count != 14 {
+		t.Fatalf("review installer curl invocation inventory: got %d, want 14", count)
 	}
 }
 
@@ -1806,7 +2167,7 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 	required := []string{
 		`detect_qnap_data_volume() {`,
 		`find_qnap_state_dir() {`,
-		`remove_qnap_autorun_block() {`,
+		`register_nas_agent_boot_file() {`,
 		`write_qnap_wrapper_script() {`,
 		`append_qnap_autorun_block() {`,
 		`select_platform_state_dir "${QNAP_VOL}/.pulse-agent"`,
@@ -1990,7 +2351,9 @@ func TestInstallSHSetsAgentBinaryModeExplicitly(t *testing.T) {
 	script := string(content)
 	for _, want := range []string{
 		`chmod 0755 "$TMP_BIN"`,
-		`chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"`,
+		// Pin the mode before publication, rather than repairing a live file
+		// after replacement. A mode-setting failure must refuse preparation.
+		`chmod 0755 "$staging_dir/$name" || return 1`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("install.sh does not pin executable mode with %q", want)
@@ -2514,6 +2877,7 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 ` + extractInstallShellFunction(t, "xml_escape") + `
 ` + extractInstallShellFunction(t, "service_env_has_key") + `
 ` + extractInstallShellFunction(t, "shell_export_value") + `
+` + extractInstallShellFunction(t, "systemd_environment_value") + `
 ` + extractInstallShellFunction(t, "append_service_env") + `
 ` + extractInstallShellFunction(t, "finalize_plist_env_block") + `
 		append_service_env "DOCKER_HOST" "unix:///run/user/1000/docker.sock"
@@ -2551,6 +2915,19 @@ func TestInstallSHServiceEnvAccumulatorRendersRootlessSocketVariables(t *testing
 	if strings.Contains(got, "unix:///run/user/2000/docker.sock") {
 		t.Fatalf("service env accumulator did not ignore duplicate key:\n%s", got)
 	}
+}
+
+func TestInstallSHServiceEnvironmentPreservesLiteralValues(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("systemd's native unit parser is Linux-specific")
+	}
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_systemd_environment.py"), "AgentSystemdEnvironment", []string{
+		"test_literal_ca_paths_survive_the_native_parser",
+		"test_embedded_directives_remain_one_environment_value",
+		"test_multiple_values_and_first_key_ownership_are_preserved",
+		"test_other_service_formats_keep_their_literal_contract",
+		"test_plist_metacharacters_remain_literal_across_bash_replacement_modes",
+	}, 30*time.Second)
 }
 
 // TestInstallSHIssue1647RootfulDockerOutranksRootlessPodmanSocket pins the fix
@@ -2858,108 +3235,23 @@ func TestInstallSHUsesCanonicalSysVEnablementHelper(t *testing.T) {
 	}
 }
 
-// TestUnraidGoScriptCleanup verifies the sed commands that remove pulse entries
-// from /boot/config/go without disturbing other entries.
-func TestUnraidGoScriptCleanup(t *testing.T) {
-	cases := []struct {
-		name   string
-		before string
-		after  string
-	}{
-		{
-			name: "pulse entry with trailing blank line",
-			before: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-
-# Other stuff
-echo hello
-`,
-			// The comment and command lines are removed; the trailing blank line remains.
-			// This is harmless in /boot/config/go.
-			after: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-
-# Other stuff
-echo hello
-`,
-		},
-		{
-			name: "pulse entry without trailing blank line",
-			before: `#!/bin/bash
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-# Other stuff
-echo hello
-`,
-			after: `#!/bin/bash
-# Other stuff
-echo hello
-`,
-		},
-		{
-			name: "no pulse entries - unchanged",
-			before: `#!/bin/bash
-echo hello
-echo world
-`,
-			after: `#!/bin/bash
-echo hello
-echo world
-`,
-		},
-		{
-			name: "telegraf line containing pulse is kept",
-			before: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-
-echo done
-`,
-			// The telegraf line is NOT removed (no "pulse-agent" in it).
-			// Comment and command lines are deleted individually.
-			after: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-echo done
-`,
-		},
+// The production installer must preserve unrelated commands in shared NAS boot
+// scripts, and refuse unknown content rather than deleting substring matches.
+func TestInstallSHNASBootRegistrationPreservesUnrelatedCommands(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			goScript := filepath.Join(dir, "go")
-			if err := os.WriteFile(goScript, []byte(tc.before), 0755); err != nil {
-				t.Fatal(err)
-			}
-
-			// Run the exact same sed commands from install.sh (line-by-line, not range-based)
-			script := `
-				GO_SCRIPT="` + goScript + `"
-				# Remove unified agent entries
-				sed -i '' '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-				sed -i '' '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-				`
-			out, err := exec.Command("bash", "-c", script).CombinedOutput()
-			if err != nil {
-				t.Fatalf("bash: %v\n%s", err, out)
-			}
-
-			got, err := os.ReadFile(goScript)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if string(got) != tc.after {
-				t.Errorf("go script mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, tc.after)
-			}
-		})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "nas_boot_registration.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("NAS boot registration and production caller controls: %v\n%s", err, output)
 	}
+	if !strings.Contains(string(output), "Ran 8 tests") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete NAS boot registration verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
 }
 
 // TestAPIDeregistrationCurl verifies the curl command sends the correct
@@ -3199,12 +3491,13 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 // install_auto_update_assets delegates its writability probe, its staged-helper
 // sanity check and the sandbox-escape migration to sibling functions, so every
 // harness that executes it has to pull those in alongside it. These isolated
-// asset-rendering tests admit an unmasked inventory; the whole-installer Python
-// controls below exercise the actual effective-mask guard and all its callers.
+// asset-rendering tests admit an unmasked inventory and a confirmed manager
+// reload; the connected Python controls exercise the real guard and reload.
 func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 	t.Helper()
 
 	return "auto_update_units_refreshable() { return 0; }\n" +
+		"reload_auto_update_manager() { return 0; }\n" +
 		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
@@ -4323,6 +4616,9 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.HasPrefix(string(args), "--disable\n--config\n") {
+		t.Fatalf("private credential config must not re-enable ambient curl defaults:\n%s", args)
+	}
 	if strings.Contains(string(args), "feedface") || strings.Contains(string(args), "X-API-Token") {
 		t.Fatalf("curl argv leaked token material:\n%s", args)
 	}
@@ -4332,6 +4628,31 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	}
 	if !strings.Contains(string(config), "X-API-Token: feedface") {
 		t.Fatalf("private curl config did not carry auth header:\n%s", config)
+	}
+}
+
+// Exercise the generated command, real curl HTTPS/protocol/time limits and SSH
+// verification against an inert private listener, never an installed service.
+func TestManualUpdateTransportRemainsBoundedAndAuthenticated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "manual_update_transport.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated manual update transport controls: %v\n%s", err, out)
+	}
+	for _, name := range []string{
+		"test_real_https_ignores_ambient_curl_config",
+		"test_http_failures_never_execute_the_installer",
+		"test_partial_transfers_never_execute_the_installer",
+		"test_http_downgrades_never_reach_the_destination",
+		"test_stalled_tls_handshakes_obey_each_connect_budget",
+		"test_real_signature_verification_still_refuses_unknown_content",
+		"test_allocation_failures_leave_no_download_or_staged_file",
+	} {
+		if !strings.Contains(string(out), name+" (__main__.ManualUpdateTransport."+name+")") {
+			t.Fatalf("missing manual update transport control %s:\n%s", name, out)
+		}
 	}
 }
 
@@ -4585,6 +4906,15 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
 		"test_only_silent_exit_one_is_admitted_as_absence",
 		"test_blank_line_output_is_not_a_silent_failed_inventory",
+		"test_replacement_manager_deadlines_kill_term_resistant_reads_and_stop",
+		"test_every_installer_systemctl_timeout_has_a_kill_backstop",
+		"test_existing_installation_uses_complete_settled_state_before_version",
+		"test_existing_detection_without_systemd_does_not_invent_inactivity",
+		"test_existing_state_failure_or_transition_stops_main_before_mutation",
+		"test_existing_state_deadline_refuses_plausible_partial_output",
+		"test_failed_or_empty_version_is_unknown_without_losing_repair_detection",
+		"test_version_deadline_does_not_accept_plausible_failed_bytes",
+		"test_missing_binary_distinguishes_inactive_fresh_host_from_running_install",
 	} {
 		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
 			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)
@@ -6409,6 +6739,162 @@ func TestInstallSHRegistrationRetryWindowOutlastsFirstReportCycle(t *testing.T) 
 	}
 }
 
+// Run the production waiter, completion helper and JSON emitter. The only
+// readiness/process/registration operations are closed shell functions: no
+// listener, service manager, real credential, installer main or host install.
+func TestInstallSHCompletionRequiresObservedStartup(t *testing.T) {
+	functions := extractInstallShellFunction(t, "verify_agent_started") + "\n" +
+		extractInstallShellFunction(t, "complete_installation_flow") + "\n" +
+		extractInstallShellFunction(t, "json_event")
+	tests := []struct {
+		name         string
+		healthURL    string
+		readyAfter   int
+		processRC    int
+		registration int
+		wantExit     int
+		wantHealth   int
+		wantProcess  int
+		wantRegister int
+	}{
+		{"missing-process", "http://127.0.0.1:9191/readyz", 0, 1, 0, 13, 4, 4, 0},
+		{"alive-not-ready", "http://127.0.0.1:9191/readyz", 0, 0, 0, 13, 8, 8, 0},
+		{"disabled-health-missing-process", "", 0, 1, 0, 13, 0, 8, 0},
+		{"ready", "http://127.0.0.1:9191/readyz", 1, 1, 0, 0, 1, 0, 1},
+		{"delayed-ready", "http://127.0.0.1:9191/readyz", 3, 0, 0, 0, 3, 2, 1},
+		{"registration-pending", "http://127.0.0.1:9191/readyz", 1, 0, 1, 0, 1, 0, 1},
+		{"disabled-health-running", "", 0, 0, 0, 0, 0, 1, 1},
+		{"disabled-health-registration-pending", "", 0, 0, 1, 0, 0, 1, 1},
+		{"credential-rejected", "http://127.0.0.1:9191/readyz", 1, 0, 2, 18, 1, 0, 1},
+		{"disabled-health-credential-rejected", "", 0, 0, 2, 18, 0, 1, 1},
+	}
+	for _, tc := range tests {
+		for _, upgrade := range []bool{false, true} {
+			for _, persisted := range []bool{false, true} {
+				name := fmt.Sprintf("%s/upgrade=%t/persisted=%t", tc.name, upgrade, persisted)
+				t.Run(name, func(t *testing.T) {
+					fixture := t.TempDir()
+					eventsFile := filepath.Join(fixture, "events")
+					// A failed completion must leave existing recovery material alone.
+					stateFile := filepath.Join(fixture, "saved-connection")
+					state := []byte("non-secret-fixture-state\n")
+					if err := os.WriteFile(stateFile, state, 0o600); err != nil {
+						t.Fatal(err)
+					}
+					script := fmt.Sprintf(`
+set -euo pipefail
+EXIT_SERVICE_START_FAILED=13
+EXIT_AUTH_REJECTED=18
+OUTPUT_FORMAT=json
+UPGRADE_MODE=%t
+CONNECTION_INFO_PERSISTED=%t
+SAVED_INSTALL_SCRIPT=''
+LOG_FILE="$FIXTURE/absent-log"
+health_calls=0
+record() { printf '%%s\n' "$1" >> "$FIXTURE/events"; }
+log_info() { printf 'INFO: %%s\n' "$*" >&2; }
+log_warn() { printf 'WARN: %%s\n' "$*" >&2; }
+log_error() { printf 'ERROR: %%s\n' "$*" >&2; }
+save_connection_info() { [[ "$1" == "$FIXTURE" ]]; record save; }
+resolve_agent_health_url() { printf '%%s' '%s'; }
+sleep() { [[ "$1" == 2 ]]; }
+curl() {
+    [[ "$*" == '--disable -sf --max-time 2 http://127.0.0.1:9191/readyz' ]] || return 97
+    record health
+    health_calls=$((health_calls + 1))
+    [[ %d -gt 0 && $health_calls -ge %d ]]
+}
+agent_process_running() { record process; return %d; }
+verify_agent_server_registration_with_retry() { record registration; return %d; }
+warn_agent_token_rejected() { log_warn 'credential rejected'; }
+report_proxmox_registration_outcome() { [[ "$1" == "$FIXTURE" ]]; record proxmox; }
+trap 'record cleanup' EXIT
+%s
+# Match every platform's unconditional exit 0 after the completion call. The
+# OR-list also proves we do not accidentally rely on Bash implicit errexit.
+complete_installation_flow "$FIXTURE" INSTALL-SUCCESS UPGRADE-SUCCESS 'fixture-log-command' || record returned-failure
+record caller-success
+exit 0
+`, upgrade, persisted, tc.healthURL, tc.readyAfter, tc.readyAfter,
+						tc.processRC, tc.registration, functions)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					cmd := exec.CommandContext(ctx, "bash", "-c", script)
+					cmd.Env = append(os.Environ(), "FIXTURE="+fixture)
+					var stdout, stderr strings.Builder
+					cmd.Stdout, cmd.Stderr = &stdout, &stderr
+					err := cmd.Run()
+					exit := 0
+					if err != nil {
+						var exitErr *exec.ExitError
+						if !errors.As(err, &exitErr) {
+							t.Fatalf("completion: %v", err)
+						}
+						exit = exitErr.ExitCode()
+					}
+					if exit != tc.wantExit {
+						t.Fatalf("completion exit=%d, want %d\n%s%s", exit, tc.wantExit, stdout.String(), stderr.String())
+					}
+					var event struct {
+						Phase    string `json:"phase"`
+						Code     string `json:"code"`
+						Message  string `json:"message"`
+						ExitCode int    `json:"exitCode"`
+					}
+					if err := json.Unmarshal([]byte(stdout.String()), &event); err != nil {
+						t.Fatalf("want one actual JSON completion: %v\n%s", err, stdout.String())
+					}
+					wantCode := "installed"
+					if upgrade {
+						wantCode = "updated"
+					}
+					if tc.wantExit == 13 {
+						wantCode += "_unhealthy"
+					}
+					if tc.wantExit == 18 {
+						wantCode = "auth_rejected"
+					}
+					if event.Phase != "complete" || event.Code != wantCode || event.ExitCode != tc.wantExit {
+						t.Fatalf("completion disagrees with process result: %+v", event)
+					}
+					if tc.wantExit == 13 {
+						if !strings.Contains(stderr.String(), "incomplete") ||
+							!strings.Contains(stderr.String(), "fixture-log-command") ||
+							strings.Contains(stderr.String(), "complete, but") {
+							t.Fatalf("unconfirmed startup lacks truthful diagnosis: %s", stderr.String())
+						}
+					}
+					events, err := os.ReadFile(eventsFile)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for marker, want := range map[string]int{
+						"health": tc.wantHealth, "process": tc.wantProcess,
+						"registration": tc.wantRegister, "cleanup": 1,
+					} {
+						if got := strings.Count(string(events), marker+"\n"); got != want {
+							t.Fatalf("%s calls=%d, want %d\n%s", marker, got, want, events)
+						}
+					}
+					if strings.Contains(string(events), "save\n") == persisted ||
+						strings.Contains(string(events), "caller-success\n") != (tc.wantExit == 0) ||
+						strings.Contains(string(events), "proxmox\n") != (tc.wantExit == 0) ||
+						strings.Contains(string(events), "returned-failure\n") {
+						t.Fatalf("completion reached the wrong caller/side effects:\n%s", events)
+					}
+					if tc.wantExit != 0 && (strings.Contains(stderr.String(), "INSTALL-SUCCESS") ||
+						strings.Contains(stderr.String(), "UPGRADE-SUCCESS")) {
+						t.Fatalf("failure printed success: %s", stderr.String())
+					}
+					if actual, err := os.ReadFile(stateFile); err != nil || string(actual) != string(state) {
+						t.Fatalf("recovery state changed: %q, %v", actual, err)
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
 	completeFlow := extractInstallShellFunction(t, "complete_installation_flow")
 	script := `
@@ -6434,7 +6920,7 @@ func TestInstallSHRejectedCredentialPreventsSuccessfulCompletion(t *testing.T) {
 	if !strings.Contains(output, "JSON:complete:auth_rejected") || !strings.Contains(output, "authentication failed") {
 		t.Fatalf("rejected credential did not produce actionable non-success completion:\n%s", output)
 	}
-	for _, forbidden := range []string{"INSTALL-SUCCESS", "UPGRADE-SUCCESS", "unreachable", "unexpected-proxmox-report"} {
+	for _, forbidden := range []string{"INSTALL-SUCCESS", "UPGRADE-SUCCESS", "unreachable", "unexpected-proxmox-report", "Generate a fresh"} {
 		if strings.Contains(output, forbidden) {
 			t.Fatalf("rejected credential emitted forbidden success output %q:\n%s", forbidden, output)
 		}
@@ -6619,32 +7105,38 @@ func writeMarker(t *testing.T, stateDir, name, contents string) {
 	}
 }
 
-// TestInstallSHWarnAgentTokenRejectedIsActionable pins the actionable recovery
-// copy the installer prints when the server rejects the agent's token.
+// Exercise the actual waiter, warning and completion together: the final
+// error must not undo safe guidance by prescribing another installation.
+// Readiness/registration/persistence are closed peers, not native recovery.
 func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
-	logWarn := extractInstallShellFunction(t, "log_warn")
-	warnFn := extractInstallShellFunction(t, "warn_agent_token_rejected")
-
-	script := `
-		NON_INTERACTIVE="false"
-		redact_token() { printf '%s' "$1"; }
-` + logWarn + `
-` + warnFn + `
-		warn_agent_token_rejected
-	`
-	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_agent_auth_completion.py"), "-v")
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("bash: %v\n%s", err, out)
+		t.Fatalf("agent authentication completion controls: %v\n%s", err, out)
 	}
-	for _, needle := range []string{
-		"rejected this agent's API token",
-		"Re-run the full agent install command",
-		"mint a fresh token",
-	} {
-		if !strings.Contains(string(out), needle) {
-			t.Fatalf("warn_agent_token_rejected missing %q:\n%s", needle, out)
-		}
+	if !strings.Contains(string(out), "Ran 3 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete agent authentication completion controls:\n%s", out)
 	}
+	t.Logf("%s", out)
+}
+
+// Execute the production token selection, lifecycle scope and outer cleanup
+// against closed peers. Signals target only the disposable shell fixture;
+// no installed service, host identity, listener or real credential is used.
+func TestInstallSHLifecycleTemporaryTokenCleanup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_agent_lifecycle_token_cleanup.py"), "-v")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent lifecycle temporary-token cleanup controls: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "Ran 5 tests") || !strings.Contains(string(out), "\nOK\n") || strings.Contains(string(out), "skipped") {
+		t.Fatalf("incomplete agent lifecycle temporary-token cleanup controls:\n%s", out)
+	}
+	t.Logf("%s", out)
 }
 
 // TestInstallSHAgentKillPatternsExcludeSiblingAgents guards a real incident:
@@ -7518,6 +8010,40 @@ if grep -q 'PULSE_AGENT_RUNNER_AGENT_ID_FILE' "$ACTION_RUNNER_ENV_FILE"; then ex
 	out, err := exec.Command("bash", "-c", script).CombinedOutput()
 	if err != nil {
 		t.Fatalf("persist action-runner identity: %v\n%s", err, out)
+	}
+}
+
+func TestInstallSHOrdinaryBinaryPreparationPrecedesServiceStop(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	previous := -1
+	for _, step := range []string{
+		`verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"`,
+		`stage_verified_agent_executable "$TMP_BIN" "$INSTALL_DIR" "$BINARY_NAME"`,
+		`stage_verified_agent_executable "$TMP_HELPER_BIN" "$PRIVILEGE_HELPER_DIR" "$PRIVILEGED_HELPER_BINARY_NAME"`,
+		`# --- Upgrade Detection ---`,
+		`stop_existing_agent_service || true`,
+		`mv -f "$STAGED_COLLECTOR" "${INSTALL_DIR}/"`,
+		`mv -f "$STAGED_HELPER" "${PRIVILEGE_HELPER_DIR}/"`,
+	} {
+		// Earlier stop calls belong to separate lifecycle actions/functions.
+		tail := source[previous+1:]
+		position := strings.Index(tail, step)
+		if position < 0 {
+			t.Fatalf("ordinary publication ordering missing %q", step)
+		}
+		previous += position + 1
+	}
+	for _, forbidden := range []string{
+		`mv "$TMP_BIN" "${INSTALL_DIR}/${BINARY_NAME}"`,
+		`mv "$TMP_HELPER_BIN" "$PRIVILEGED_HELPER_BINARY_PATH"`,
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("ordinary publication still permits a destructive cross-filesystem move: %s", forbidden)
+		}
 	}
 }
 
@@ -8430,12 +8956,16 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 		"test_confirmed_removal_deletes_runtime_token_only_with_authorised_state",
 		"test_noninteractive_input_token_survives_root_refusal",
 		"test_interactive_input_token_is_read_only_at_ingress",
+		"test_malformed_token_files_stop_both_ingress_paths_before_host_work",
+		"test_valid_token_files_preserve_the_complete_value_and_caller_file",
+		"test_saved_legacy_token_recovery_never_recovers_a_truncated_prefix",
+		"test_unreadable_and_nonregular_token_files_stop_before_host_work",
 	} {
 		if !strings.Contains(string(output), name+" (__main__.UnixUninstallState."+name+") ... ok") {
 			t.Fatalf("Unix removal control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 16 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete Unix removal state verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
@@ -8555,6 +9085,25 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 	t.Logf("%s", output)
 }
 
+// Exercise the production registration and CLI completion caller together. A
+// running collector must not turn unknown boot persistence into install success.
+func TestInstallSHTrueNASBootRegistrationRequiresReadback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TrueNAS shell contracts; Windows has its own native SCM gate")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "truenas_boot_registration.py"), "-v")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("TrueNAS boot registration and completion controls: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "Ran 7 tests") || !strings.Contains(string(output), "\nOK\n") || strings.Contains(string(output), "skipped") {
+		t.Fatalf("incomplete TrueNAS boot registration controls:\n%s", output)
+	}
+	t.Logf("%s", output)
+}
+
 func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
@@ -8584,12 +9133,14 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_absent_stopped_and_repeated_removal_require_observed_manager_absence",
 		"test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure",
 		"test_real_status_timeout_stops_owned_child_without_erasure",
+		"test_private_models_use_selected_isolated_interpreter",
+		"test_timing_reports_control_and_cumulative_progress",
 	} {
 		if !strings.Contains(string(output), name+" (__main__.AgentUpstartTeardown."+name+") ... ok") {
 			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
 		}
 	}
-	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+	if !strings.Contains(string(output), "\nRan 19 tests in ") || !strings.Contains(string(output), "\nOK\n") {
 		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
 	}
 	t.Logf("%s", output)
@@ -8599,7 +9150,14 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	if runtime.GOOS == "windows" {
 		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_truenas_teardown.py"), "AgentTrueNASTeardown", []string{
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_truenas_teardown.py"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("TrueNAS SCALE boot-task ownership/retirement controls: %v\n%s", err, output)
+	}
+	for _, name := range []string{
 		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
 		"test_foreign_or_indirect_bootstrap_is_not_mutated",
 		"test_missing_activation_target_cannot_hide_an_owned_task",
@@ -8616,14 +9174,25 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 		"test_disabled_absent_missing_bootstrap_and_repeated_removal_are_observed",
 		"test_ordinary_linux_state_is_not_appliance_evidence",
 		"test_process_read_exposes_only_roles_and_real_timeout_child_is_stopped",
-	}, 2*time.Minute)
+		"test_private_models_use_selected_isolated_interpreter",
+		"test_timeout_child_absence_requires_observed_exit",
+		"test_timing_reports_control_and_cumulative_progress",
+	} {
+		if !strings.Contains(string(output), name+" (__main__.AgentTrueNASTeardown."+name+") ... ok") {
+			t.Fatalf("TrueNAS SCALE control %s did not pass:\n%s", name, output)
+		}
+	}
+	if !strings.Contains(string(output), "\nRan 19 tests in ") || !strings.Contains(string(output), "\nOK\n") {
+		t.Fatalf("incomplete TrueNAS SCALE verdict:\n%s", output)
+	}
+	t.Logf("%s", output)
 }
 
 func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix NAS shell controls; Windows retains its separate native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_nas_teardown.py"), "AgentNASTeardown", []string{
+	names := []string{
 		"test_complete_process_evidence_is_required_before_boot_or_remote_mutation",
 		"test_unknown_relative_foreign_or_deferred_boot_owners_are_not_signalled",
 		"test_non_regular_foreign_wrapper_and_unselected_state_preserve_recovery",
@@ -8647,5 +9216,50 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 		"test_private_process_reader_requests_native_basename_and_full_argv",
 		"test_generated_collector_observation_keeps_exact_identity_on_both_unix_formats",
 		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
-	}, 2*time.Minute)
+	}
+	fixture := repoFile("scripts", "installtests", "agent_nas_teardown.py")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	cmd := exec.CommandContext(ctx, "python3", fixture, "--list-controls")
+	output, err := cmd.CombinedOutput()
+	cancel()
+	if err != nil {
+		t.Fatalf("discover NAS removal controls: %v\n%s", err, output)
+	}
+	if err := validateNASControlInventory(names, output); err != nil {
+		t.Fatalf("NAS removal inventory: %v", err)
+	}
+	// The hosted Intel runner exhausted the cumulative two-minute deadline
+	// after completing multiple controls, before later controls could report.
+	// Give each disjoint control the same bounded invocation; retain the outer
+	// native runner's ten-minute package alarm and every production/child
+	// deadline. No retry, parallel execution or successful partial suite.
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "python3", fixture, "AgentNASTeardown."+name)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("NAS boot-owner/watchdog control: %v\n%s", err, output)
+			}
+			if !strings.Contains(string(output), name+" (__main__.AgentNASTeardown."+name+") ... ok") ||
+				!strings.Contains(string(output), "\nRan 1 test in ") || !strings.Contains(string(output), "\nOK\n") {
+				t.Fatalf("incomplete NAS removal control verdict:\n%s", output)
+			}
+			t.Logf("%s", output)
+		})
+	}
+}
+
+func validateNASControlInventory(expected []string, output []byte) error {
+	var actual []string
+	if err := json.Unmarshal(output, &actual); err != nil {
+		return fmt.Errorf("invalid control inventory: %w", err)
+	}
+	want := slices.Clone(expected)
+	slices.Sort(want)
+	if !slices.Equal(actual, want) {
+		return fmt.Errorf("discovered controls differ from the complete required inventory")
+	}
+	return nil
 }

@@ -650,7 +650,7 @@ func TestMonitor_PollVMsAndContainersEfficient_Extra(t *testing.T) {
 	}
 
 	nodeStatus := map[string]string{"node1": "online"}
-	success := m.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, nodeStatus)
+	success := m.pollVMsAndContainersEfficient(context.Background(), "pve1", "", false, client, []proxmox.Node{{Node: "node1", Status: "online"}}, nodeStatus)
 
 	if !success {
 		t.Error("pollVMsAndContainersEfficient failed")
@@ -1458,6 +1458,7 @@ func TestPollVMsAndContainersEfficient_ContinuesGuestAgentQueriesAfterTransientS
 		"",
 		false,
 		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
 		map[string]string{"node1": "online"},
 	); !ok {
 		t.Fatal("expected efficient polling path to succeed")
@@ -2240,14 +2241,22 @@ func TestMonitor_PruneDockerAlerts_Extra(t *testing.T) {
 	}
 	defer m.alertManager.Stop()
 
-	// Add an active alert for a non-existent docker host
+	// No report in this process is not proof that a saved host was removed.
 	host := models.DockerHost{ID: "stale-host", DisplayName: "Stale Host"}
 	m.alertManager.HandleDockerHostOffline(host)
 	m.alertManager.HandleDockerHostOffline(host)
 	m.alertManager.HandleDockerHostOffline(host)
 
-	if !m.pruneStaleDockerAlerts() {
-		t.Error("Expected stale alert to be pruned")
+	if m.pruneStaleDockerAlerts() || len(m.alertManager.GetActiveAlerts()) != 1 {
+		t.Fatal("empty live inventory cleared an unobserved host's alert")
+	}
+
+	// Explicit removal remains authoritative, even before that host reports.
+	if _, err := m.RemoveDockerHost(host.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.alertManager.GetActiveAlerts()) != 0 {
+		t.Fatal("explicit host removal retained its alert")
 	}
 }
 

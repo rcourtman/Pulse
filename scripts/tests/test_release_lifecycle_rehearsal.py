@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -186,6 +188,235 @@ class HostedWorkflowCommandFilesTest(unittest.TestCase):
         node_setup = source.split('uses: actions/setup-node@', 1)[1].split('      - name:', 1)[0]
         self.assertNotRegex(node_setup, r'(?m)^\s*cache:')
         self.assertIn('package-manager-cache: false', source)
+
+
+def harness_functions(*names):
+    source = HARNESS_PATH.read_text()
+    return '\n'.join(name + '() {' + source.split(name + '() {', 1)[1].split('\n}\n', 1)[0]
+                     + '\n}' for name in names) + '\n'
+
+
+class SelectedInstallerControlTest(unittest.TestCase):
+    """Execute the actual controller with synthetic installers, never systemd.
+
+    Command selection/failure propagation are proved here. Published native
+    install, state and timer acceptance still need the hosted matrix's receipts.
+    """
+
+    def test_changed_staged_installer_cannot_execute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'assets/v6.6.0-rc.4').mkdir(parents=True)
+            (root / 'assets/v6.6.0-rc.4/install.sh').write_text('changed after signature admission')
+            (root / 'packet.json').write_text(json.dumps({'releases': [
+                {'tag': 'v6.6.0-rc.4', 'installer_sha256': '0' * 64}]}))
+            script = f'WORK_DIR={shlex.quote(tmp)}\nPULSE_REHEARSAL_PACKET_MANIFEST="$WORK_DIR/packet.json"\n'
+            script += harness_functions('execute_hosted_installer')
+            script += 'cexec() { echo unexpected-execution; exit 91; }\n'
+            script += 'execute_hosted_installer v6.6.0-rc.4 v6.6.0-rc.4 upgrade\n'
+            result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+            self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+            self.assertEqual('', result.stdout)
+
+    def test_installed_and_running_executables_must_both_match_the_signed_archive(self):
+        for running in ('a' * 64, 'b' * 64, 'unreadable'):
+            with self.subTest(running=running), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / 'state').mkdir()
+                (root / 'packet.json').write_text(json.dumps({'releases': [
+                    {'tag': 'v6.6.0-rc.4', 'binary_sha256': 'a' * 64}]}))
+                script = 'set -euo pipefail\n'
+                script += f'WORK_DIR={shlex.quote(tmp)}; RUNNING={running}\n'
+                script += 'HOSTED_RUNNER=true; PULSE_REHEARSAL_PACKET_MANIFEST="$WORK_DIR/packet.json"\n'
+                script += 'BASELINE_FAILED_UNITS=""; CONTAINER_TOLERATED_UNITS=""; CURRENT_FAILURE=""; API=synthetic\n'
+                script += harness_functions('note_failure', 'assert_runtime')
+                script += '''
+cexec() {
+    case "$1" in
+        'systemctl is-active pulse') echo active ;;
+        *'/api/health'*) echo '{"status":"healthy"}' ;;
+        *'/api/version'*) echo '{"version":"6.6.0-rc.4"}' ;;
+        *'/opt/pulse/bin/pulse --version'*) echo v6.6.0-rc.4 ;;
+        *'sha256sum /opt/pulse/bin/pulse'*) printf '%064d\n' 0 | tr 0 a ;;
+        *'MainPID'*) [[ "$RUNNING" != unreadable ]] && echo "$RUNNING" ;;
+        'systemctl is-enabled pulse') echo enabled ;;
+        *'list-units --state=failed'*) : ;;
+        *'PULSE_TELEMETRY=false'*) : ;;
+        *'ExecMainStartTimestampMonotonic'*) echo 0 ;;
+        *) echo unexpected-command >&2; return 95 ;;
+    esac
+}
+assert_runtime v6.6.0-rc.4 upgrade
+[[ -z "$CURRENT_FAILURE" ]]
+'''
+                result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+                self.assertEqual(0 if running == 'a' * 64 else 1, result.returncode, result.stdout + result.stderr)
+                identity = root / 'state/installed-upgrade.json'
+                self.assertEqual(running != 'unreadable', identity.exists())
+                if identity.exists():
+                    self.assertEqual(running, json.loads(identity.read_text())['running_binary_sha256'])
+
+    def test_selected_rc_installer_runs_both_directions_and_retains_failure(self):
+        for forward_exit in (0, 23):
+            with self.subTest(forward_exit=forward_exit), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / 'state').mkdir()
+                for tag in ('v6.5.0', 'v6.6.0-rc.4'):
+                    folder = root / 'assets' / tag
+                    folder.mkdir(parents=True)
+                    (folder / 'install.sh').write_text(
+                        '#!/bin/bash\nset -eu\n'
+                        'printf "%s %s %s\\n" "$INSTALLER_TAG" "$1" "$2" >> "$FIXTURE_CALLS"\n'
+                        '[[ "$1" == --version ]]\n'
+                        f'if [[ "$2" == v6.6.0-rc.4 ]]; then exit {forward_exit}; fi\n')
+                manifest = root / 'packet.json'
+                manifest.write_text(json.dumps({'releases': [{'tag': tag, 'installer_sha256':
+                    hashlib.sha256((root / f'assets/{tag}/install.sh').read_bytes()).hexdigest()}
+                    for tag in ('v6.5.0', 'v6.6.0-rc.4')]}))
+                script = 'set -euo pipefail\n'
+                script += f'WORK_DIR={shlex.quote(tmp)}; FIXTURE_CALLS="$WORK_DIR/calls"\n'
+                script += 'PULSE_REHEARSAL_PACKET_MANIFEST="$WORK_DIR/packet.json"\n'
+                script += 'FROM_TAG=v6.5.0; TO_TAG=v6.6.0-rc.4; HOSTED_NATIVE=true; HOSTED_BROWSER=false\n'
+                script += 'CURRENT_FAILURE=""; OVERALL_STATUS=0; FAILURES=(); PHASE_ROWS=()\n'
+                script += harness_functions('note_failure', 'reset_phase_cells', 'record_phase',
+                                            'execute_hosted_installer', 'run_selected_installer',
+                                            'phase_upgrade', 'phase_rollback')
+                # Substitute only the root execution boundary. The actual
+                # command and selected file run in an ordinary temporary dir.
+                script += r'''
+cexec() {
+    local program="$1"; shift
+    program="${program//\/rehearsal/$WORK_DIR/assets}"
+    env -i PATH=/usr/bin:/bin "FIXTURE_CALLS=$FIXTURE_CALLS" "$@" bash -c "$program"
+}
+run_updater() { echo unexpected-stable-bootstrap; exit 99; }
+run_browser_journey() { echo unexpected-browser; exit 98; }
+assert_runtime() { printf 'runtime %s %s\n' "$1" "$2" >> "$WORK_DIR/checks"; }
+check_auto_update_intent() { echo "timer $1" >> "$WORK_DIR/checks"; }
+check_settings() { echo "settings $1" >> "$WORK_DIR/checks"; }
+check_datadir() { echo "data $1" >> "$WORK_DIR/checks"; }
+phase_upgrade || true
+phase_rollback || true
+exit "$OVERALL_STATUS"
+'''
+                result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+                self.assertEqual(1 if forward_exit else 0, result.returncode, result.stdout + result.stderr)
+                self.assertEqual('v6.6.0-rc.4 --version v6.6.0-rc.4\n'
+                                 'v6.6.0-rc.4 --version v6.5.0\n', (root / 'calls').read_text())
+                self.assertEqual(['runtime v6.6.0-rc.4 upgrade', 'timer upgrade', 'settings upgrade', 'data upgrade',
+                                  'runtime v6.5.0 rollback', 'timer rollback', 'settings rollback', 'data rollback'],
+                                 (root / 'checks').read_text().splitlines())
+                digest = hashlib.sha256((root / 'assets/v6.6.0-rc.4/install.sh').read_bytes()).hexdigest()
+                for label, target, observed in (('upgrade', 'v6.6.0-rc.4', forward_exit), ('rollback', 'v6.5.0', 0)):
+                    self.assertEqual({'installer_tag': 'v6.6.0-rc.4', 'target': target,
+                                      'installer_sha256': digest, 'command_exit': observed},
+                                     json.loads((root / f'state/installer-{label}.json').read_text()))
+
+    def test_native_and_browser_are_independent_first_level_vms(self):
+        workflow = (REPO_ROOT / '.github/workflows/qualify-browser-update-release.yml').read_text()
+        self.assertIn('mode: [native, browser]', workflow)
+        self.assertIn('fail-fast: false', workflow)
+        self.assertNotIn('needs:', workflow)
+        steps = workflow.split('      - name: ')[1:]
+        native = next(step for step in steps if step.startswith('Exercise signed selected-installer'))
+        self.assertIn("if: matrix.mode == 'native'", native)
+        self.assertIn('sudo env -i', native)
+        self.assertIn('--hosted-native --from "$FROM" --to "$TAG"', native)
+        for excluded in ('secrets.', 'TS_', 'ORIGIN', 'Docker', '--hosted-browser'):
+            self.assertNotIn(excluded, native)
+        for step in steps:
+            if any(marker in step for marker in ('secrets.', 'tailscale status', 'uses: tailscale/',
+                                                 'actions/setup-node@', '--hosted-browser')):
+                self.assertIn("if: matrix.mode == 'browser'", step, step.splitlines()[0])
+        artifact = next(step for step in steps if step.startswith('Retain bounded'))
+        self.assertIn('name: ${{ matrix.mode }}-release-${{ github.run_id }}', artifact)
+        self.assertIn('native-cleanup.json', artifact)
+        self.assertIn('installer-*.json', artifact)
+        self.assertNotIn('private-', artifact)
+
+    def test_both_recovery_legs_prepare_package_sources_before_installing(self):
+        workflow = (REPO_ROOT / '.github/workflows/qualify-browser-update-release.yml').read_text()
+        steps = workflow.split('      - name: ')[1:]
+        prepare = next(step for step in steps if step.startswith('Prepare native tools\n'))
+        cleanup = "sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true"
+        self.assertIn(cleanup, prepare)
+        self.assertNotIn('if:', prepare)
+        self.assertLess(prepare.index(cleanup), prepare.index('sudo apt-get update'))
+        for name in ('Exercise signed selected-installer', 'Prepare Chromium and native tools'):
+            consumer = next(step for step in steps if step.startswith(name))
+            self.assertLess(steps.index(prepare), steps.index(consumer))
+
+
+class SignedInstallerStagingTest(unittest.TestCase):
+    def test_both_exact_installers_verify_before_first_mutation_with_no_network_fallback(self):
+        variants = ('valid', 'changed-size', 'changed-bytes', 'bad-signature',
+                    'missing-identity', 'symlink', 'signed-agent')
+        for variant in variants:
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                key = root / 'synthetic-key'
+                subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', 'pulse-installer',
+                                '-f', str(key)], check=True, capture_output=True)
+                readme = root / 'README.md'
+                readme.write_text(key.with_suffix('.pub').read_text())
+                packet_root = root / 'packet'
+                packet_root.mkdir()
+                releases = []
+                for tag in ('v6.5.0', 'v6.6.0-rc.4'):
+                    folder = packet_root / tag
+                    folder.mkdir()
+                    installer = folder / 'install.sh'
+                    installer.write_text('# Pulse Installer Script\ncase "$1" in\n'
+                                         '  --version) : ;;\nesac\n')
+                    if variant == 'signed-agent' and '-rc.' in tag:
+                        installer.write_text(installer.read_text() + '# Pulse Unified Agent Installer\n')
+                    subprocess.run(['ssh-keygen', '-Y', 'sign', '-f', str(key), '-n', 'pulse-install', str(installer)],
+                                   check=True, capture_output=True)
+                    # OpenSSH writes .sig; Pulse publishes that as .sshsig.
+                    (folder / 'install.sh.sig').rename(folder / 'install.sh.sshsig')
+                    if variant == 'bad-signature' and '-rc.' in tag:
+                        installer.with_suffix('.sh.sshsig').write_text('invalid signature')
+                    assets = [{'name': p.name, 'size': p.stat().st_size,
+                               'digest': 'sha256:' + hashlib.sha256(p.read_bytes()).hexdigest()}
+                              for p in (installer, folder / 'install.sh.sshsig')]
+                    releases.append({'tag': tag, 'assets': assets})
+                target = packet_root / 'v6.6.0-rc.4/install.sh'
+                if variant == 'changed-size':
+                    target.write_text(target.read_text() + '# mutation\n')
+                if variant == 'changed-bytes':
+                    target.write_text(target.read_text().replace('Script', 'ScripX'))
+                if variant == 'missing-identity':
+                    releases[1]['assets'] = []
+                if variant == 'symlink':
+                    real = target.with_name('other-file')
+                    target.rename(real)
+                    target.symlink_to(real)
+                manifest = packet_root / 'packet.json'
+                manifest.write_text(json.dumps({'releases': releases}))
+                work = root / 'work'
+                (work / 'assets').mkdir(parents=True)
+                (work / 'state').mkdir()
+                script = 'set -euo pipefail\n'
+                for name, value in {'WORK_DIR': str(work), 'README_PATH': str(readme),
+                                    'PULSE_REHEARSAL_PACKET_MANIFEST': str(manifest)}.items():
+                    script += f'{name}={shlex.quote(value)}\n'
+                script += 'HOSTED_RUNNER=true; HOSTED_MODE=native; FROM_TAG=v6.5.0; TO_TAG=v6.6.0-rc.4; REPO=rcourtman/Pulse\n'
+                script += harness_functions('fetch_and_verify_installer', 'main')
+                script += '''
+log() { :; }
+record_phase() { return 1; }
+abort_run() { exit 2; }
+curl() { echo forbidden-network-fallback; exit 90; }
+start_container() { echo first-mutation-boundary > "$WORK_DIR/started"; exit 0; }
+main
+'''
+                result = subprocess.run(['bash', '-c', script], capture_output=True, text=True)
+                self.assertEqual(0 if variant == 'valid' else 2, result.returncode, result.stdout + result.stderr)
+                self.assertEqual(variant == 'valid', (work / 'started').exists())
+                self.assertNotIn('forbidden-network-fallback', result.stdout)
+                if variant == 'valid':
+                    for tag in ('v6.5.0', 'v6.6.0-rc.4'):
+                        self.assertTrue(json.loads((work / f'state/installer-{tag}.json').read_text())['signature_verified'])
 
 
 class BrowserRecoveryAccessStopTest(unittest.TestCase):

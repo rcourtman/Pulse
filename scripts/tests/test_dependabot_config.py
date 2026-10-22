@@ -2,7 +2,9 @@
 """Guard the low-noise dependency update policy and its covered manifests."""
 
 import json
+from fnmatch import fnmatchcase
 from pathlib import Path
+import re
 import unittest
 
 import yaml
@@ -96,18 +98,77 @@ class DependabotConfigTest(unittest.TestCase):
             ("npm", "npm-minor-patch", "npm-security"),
         ):
             groups = self.updates[ecosystem]["groups"]
-            self.assertEqual(
-                groups[version_group],
-                {
-                    "applies-to": "version-updates",
-                    "patterns": ["*"],
-                    "update-types": ["minor", "patch"],
-                },
-            )
+            expected_version_group = {
+                "applies-to": "version-updates",
+                "patterns": ["*"],
+                "update-types": ["minor", "patch"],
+            }
+            if ecosystem == "gomod":
+                expected_version_group["exclude-patterns"] = ["modernc.org/*"]
+            self.assertEqual(groups[version_group], expected_version_group)
             self.assertEqual(
                 groups[security_group],
                 {"applies-to": "security-updates", "patterns": ["*"]},
             )
+
+    def test_go_storage_version_updates_have_a_disjoint_review_group(self) -> None:
+        go = self.updates["gomod"]
+        self.assertEqual(
+            go["groups"]["go-storage-minor-patch"],
+            {
+                "applies-to": "version-updates",
+                "patterns": ["modernc.org/*"],
+                "update-types": ["minor", "patch"],
+            },
+        )
+        # Grouping is not a deferral: keep every dependency eligible, including
+        # security updates. The resolver and containing CI still own transitive
+        # graph compatibility; this only separates the named update roots.
+        self.assertNotIn("ignore", go)
+        self.assertNotIn("allow", go)
+
+        def matching_groups(name, kind, update_type):
+            return [
+                group_name
+                for group_name, group in go["groups"].items()
+                if group["applies-to"] == kind
+                and update_type in group.get("update-types", ["major", "minor", "patch"])
+                and any(fnmatchcase(name, pattern) for pattern in group["patterns"])
+                and not any(fnmatchcase(name, pattern) for pattern in group.get("exclude-patterns", []))
+            ]
+
+        # These are the eleven update roots in mixed proposal #3056, not an
+        # invented happy-path graph. SQLite must no longer share a version
+        # proposal with the independent compression/metrics/agent updates.
+        proposed = {
+            "github.com/klauspost/compress", "github.com/moby/moby/api",
+            "github.com/moby/moby/client", "github.com/prometheus/client_golang",
+            "github.com/prometheus/common", "github.com/shirou/gopsutil/v4",
+            "golang.org/x/crypto", "golang.org/x/sync", "golang.org/x/sys",
+            "golang.org/x/term", "modernc.org/sqlite",
+        }
+        # Include every currently required module (direct and indirect) in
+        # both manifests. The whole modernc family needs the same boundary.
+        required = {
+            match[1]
+            for directory in go["directories"]
+            for match in re.finditer(
+                r"(?m)^\s*([^\s()]+)\s+v[0-9][^\s]*",
+                (ROOT / directory.lstrip("/") / "go.mod").read_text(),
+            )
+        }
+        self.assertTrue(proposed <= required)
+        self.assertIn("modernc.org/libc", required)
+        for name in sorted(required | proposed):
+            expected = "go-storage-minor-patch" if name.startswith("modernc.org/") else "go-minor-patch"
+            for update_type in ("minor", "patch"):
+                with self.subTest(name=name, update_type=update_type):
+                    self.assertEqual(matching_groups(name, "version-updates", update_type), [expected])
+            with self.subTest(name=name, update_type="major"):
+                self.assertEqual(matching_groups(name, "version-updates", "major"), [])
+            for update_type in ("major", "minor", "patch"):
+                with self.subTest(name=name, security_type=update_type):
+                    self.assertEqual(matching_groups(name, "security-updates", update_type), ["go-security"])
 
     def test_docker_updates_preserve_governed_tags(self) -> None:
         docker = self.updates["docker"]
@@ -156,21 +217,27 @@ class DependabotConfigTest(unittest.TestCase):
                 "@playwright/test",
                 "typescript",
                 "eslint",
+                "@eslint/js",
                 "lucide-solid",
                 "vitest",
                 "@vitest/coverage-v8",
+                "jsdom",
+                "vite",
             },
         )
         for browser_runtime in ("playwright", "playwright-core", "@playwright/test"):
             self.assertEqual(ignored[browser_runtime], all_semver)
-        # These majors require an explicit toolchain or icon-import migration.
+        # These majors require an explicit toolchain, DOM or import migration.
         # Minor and patch version updates must remain eligible for Dependabot.
         for dependency in (
             "typescript",
             "eslint",
+            "@eslint/js",
             "lucide-solid",
             "vitest",
             "@vitest/coverage-v8",
+            "jsdom",
+            "vite",
         ):
             self.assertEqual(
                 ignored[dependency],

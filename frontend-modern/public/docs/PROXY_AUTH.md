@@ -56,7 +56,7 @@ change needs recreation/redeployment; a restart alone does not apply it. Follow
 | `PROXY_AUTH_ROLE_HEADER` | Header containing user groups/roles. | - |
 | `PROXY_AUTH_ROLE_SEPARATOR` | Separator for multiple roles in the header. | `\|` |
 | `PROXY_AUTH_ADMIN_ROLE` | Role name that grants admin access. | `admin` |
-| `PROXY_AUTH_LOGOUT_URL` | URL to redirect to after logout. | - |
+| `PROXY_AUTH_LOGOUT_URL` | Browser destination for **Logout**; not an access-revocation operation. See [sign-out](#sign-out-and-access-removal). | - |
 
 Setting `PROXY_AUTH_ROLE_HEADER` turns on role gating. From then on admin access fails closed unless the role header is present and contains the admin role — `PROXY_AUTH_ADMIN_ROLE` if you set it, otherwise the `admin` default. A missing or blank role header still authenticates the user, but the user is treated as non-admin.
 
@@ -120,7 +120,47 @@ fall back to all-users-admin access.
 | :--- | :--- |
 | **401 Unauthorized** | Verify `X-Proxy-Secret` matches `PROXY_AUTH_SECRET`. Check if headers are being stripped by intermediate proxies. |
 | **Not Admin** | Check the role header actually reaches Pulse and contains the admin role **exactly** — matching is case-sensitive and compares whole roles, so `Admins` and `authentik Admins` do not match the `admin` default. Set `PROXY_AUTH_ADMIN_ROLE` to your IdP's admin group name. Pulse logs a warning at startup when it falls back to the default. |
-| **Logout Fails** | Ensure `PROXY_AUTH_LOGOUT_URL` is set to your IdP's logout endpoint. |
+| **Logout returns straight to Pulse** | Check the authenticator's actual sign-out behaviour and [sign-out boundary](#sign-out-and-access-removal); setting a redirect URL alone does not revoke access. |
+
+### Sign-out and access removal
+
+**A logout redirect is not proof that access ended.** Pulse's **Logout** button
+has two different paths:
+
+- With `PROXY_AUTH_LOGOUT_URL` set, the browser navigates to that URL **instead
+  of calling Pulse's `/api/logout`**. Pulse does not first clear its own session
+  through that endpoint, or perform a server-side IdP logout. Use the existing
+  authenticator's supported logout destination, not a Pulse home page or an
+  arbitrary redirect. That destination's behaviour depends on your provider
+  and its installed configuration.
+- Without that URL, Pulse requests its normal logout and clears local UI auth
+  state. This does **not** sign out of the authenticating proxy or IdP. If the
+  proxy still supplies valid identity headers, it can admit the next request
+  immediately, without showing Pulse's login form.
+
+Neither path is a universal **sign out all sessions** operation or revocation
+of API tokens and agent credentials. Closing a tab, seeing a logged-out page
+or reaching the configured destination does not establish that another Pulse
+tab, browser session or device lost access.
+
+For a planned sign-out check, keep an independent administrator recovery
+session. Use the authenticator's normal sign-out flow, then revisit the
+protected Pulse URL in the **same browser session** without signing in again:
+it should require authentication or refuse access. A new private window tests
+a different session and cannot prove the old one ended. If Pulse immediately
+opens again, do not hand that browser or device to another person on the
+assumption that it is signed out. Use your established device lock and
+authenticator recovery procedure; do not repeatedly log out just to diagnose it.
+
+To remove a person's access, use the existing proxy/IdP assignment and session
+revocation controls, preserving unrelated users and administrator recovery.
+Verify the affected session through the protected route where safely available;
+blocking only future IdP logins does not prove that existing proxy sessions
+were revoked. Keep the [backend isolation](#-header-trust-boundary) intact.
+Do not disable Pulse authentication, expose its backend, delete configuration
+or rotate the shared proxy secret as a substitute for removing one identity.
+Keep cookies, shared secrets and complete logout URLs with query strings out
+of commands and reports; use only a redacted observation when requesting help.
 
 ### Verify Headers
 First use a normal signed-in browser through your proxy. Check that the intended

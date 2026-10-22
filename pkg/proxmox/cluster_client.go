@@ -1364,16 +1364,10 @@ func (cc *ClusterClient) GetVMs(ctx context.Context, node string) ([]VM, error) 
 		return nil
 	})
 
-	// Don't return error for transient connectivity issues - preserve UI state
-	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
-		log.Debug().
-			Str("cluster", cc.name).
-			Str("node", node).
-			Err(err).
-			Msg("No healthy nodes for GetVMs - returning empty list to preserve UI state")
-		return []VM{}, nil
-	}
-
+	// An unavailable enumeration is not an authoritative empty inventory.
+	// The collector retains accepted guests on error; a successful empty list
+	// instead removes them. Preserve every failure, including provider errors
+	// that merely quote the cluster-unavailable diagnostic.
 	return result, err
 }
 
@@ -1388,16 +1382,7 @@ func (cc *ClusterClient) GetContainers(ctx context.Context, node string) ([]Cont
 		return nil
 	})
 
-	// Don't return error for transient connectivity issues - preserve UI state
-	if err != nil && strings.Contains(err.Error(), "no healthy nodes available") {
-		log.Debug().
-			Str("cluster", cc.name).
-			Str("node", node).
-			Err(err).
-			Msg("No healthy nodes for GetContainers - returning empty list to preserve UI state")
-		return []Container{}, nil
-	}
-
+	// As for VMs, only a successful enumeration can establish removal.
 	return result, err
 }
 

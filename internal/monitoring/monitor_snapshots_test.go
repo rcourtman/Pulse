@@ -129,9 +129,9 @@ func TestCollectSnapshotSizes(t *testing.T) {
 		contents: map[string]map[string][]proxmox.StorageContent{
 			"node1": {
 				"local-zfs": {
-					{Volid: "local-zfs:vm-100-disk-0@pre", VMID: 100, Size: 20 << 30},
+					{Volid: "local-zfs:vm-100-disk-0@pre", Content: "images", VMID: 100, Size: 20 << 30},
 					// Duplicate entry should be deduped via volid tracking
-					{Volid: "local-zfs:vm-100-disk-0@pre", VMID: 100, Size: 20 << 30},
+					{Volid: "local-zfs:vm-100-disk-0@pre", Content: "images", VMID: 100, Size: 20 << 30},
 				},
 			},
 		},

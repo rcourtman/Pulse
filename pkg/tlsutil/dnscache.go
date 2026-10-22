@@ -113,8 +113,9 @@ func DialContextWithCache(ctx context.Context, network, address string) (net.Con
 		return nil, err
 	}
 
-	// Look up the IP address using the cached resolver
-	ips, err := GetDNSResolver().LookupHost(ctx, host)
+	// Numeric destinations already name their interface as well as their IP.
+	// DNS resolution must not discard an IPv6 zone before socket selection.
+	ips, err := lookupDialAddresses(ctx, host)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,21 @@ func DialContextWithCache(ctx context.Context, network, address string) (net.Con
 	return dialCachedAddresses(ctx, network, host, port, ips, dialResolvedAddress)
 }
 
-// Retry only socket establishment, using this one cached DNS answer. A failed
+// lookupDialAddresses preserves scoped literal destinations without consulting
+// DNS. In particular, the cache's default LookupIP adapter returns net.IP values
+// and loses zones. Named destinations still use the exact shared cache view
+// used by discovery policy; this is not a new resolver or fallback.
+func lookupDialAddresses(ctx context.Context, host string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if address, err := netip.ParseAddr(host); err == nil {
+		return []string{address.String()}, nil
+	}
+	return GetDNSResolver().LookupHost(ctx, host)
+}
+
+// Retry only socket establishment, using this one resolved address set. A failed
 // first address must not conceal a reachable alternative or start another DNS
 // lookup. Keep the resolver's order and divide the remaining dial budget so a
 // stalled address cannot consume the time reserved for later candidates.

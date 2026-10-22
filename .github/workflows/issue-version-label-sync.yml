@@ -45,10 +45,15 @@ jobs:
 
       - name: Mint triage bot token
         id: triage-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: 2484142
           private-key: ${{ secrets.PULSE_TRIAGE_APP_PRIVATE_KEY }}
+          # The helper reads issues/events and changes labels, not source or
+          # Actions. Never inherit the App installation's full permissions.
+          owner: rcourtman
+          repositories: Pulse
+          permission-issues: write
 
       - name: Sync issue version metadata
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

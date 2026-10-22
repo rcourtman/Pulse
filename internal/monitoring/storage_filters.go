@@ -41,7 +41,8 @@ func isInherentlySharedStorageType(storageType string) bool {
 // Proxmox returns storages that exist in the datacenter config even when the current node
 // cannot access them. When Active==0 or the entry is disabled, querying /storage/<name>/content
 // yields 500 errors that make Pulse think the node is unreachable. Guard calls so we only
-// touch storages that are enabled, active on this node, and have a usable name.
+// touch enabled storages with usable names. Backup-capable inactive stores
+// remain queryable as explained below; skipped content is not an empty list.
 func storageContentQueryable(storage proxmox.Storage) bool {
 	if strings.TrimSpace(storage.Storage) == "" {
 		return false

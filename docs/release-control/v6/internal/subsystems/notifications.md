@@ -17,6 +17,67 @@
 
 ## Purpose
 
+### Apprise's output wait cannot outlive its delivery indefinitely
+
+The fixed CLI sender allows at most one additional second to drain inherited
+stdout/stderr after its main process exits or its delivery context expires.
+A helper holding a stream open cannot indefinitely occupy a notification
+worker or test-send request. An incomplete drain is a failure, not confirmed
+delivery; a nonzero process exit keeps its typed error. Normally closed streams
+retain success. Argument, timeout configuration, output confidentiality and
+retry policy are unchanged. This is not process-tree termination or recipient
+acceptance.
+
+`apprise_pipe_wait_test.go` uses only the test executable and owned release
+files to cover inherited stdout/stderr, failed/expired parents and ordinary
+draining. `apprise_pipe_verdict_test.go` joins the real test-send producer to
+the bounded verdict and emits synthetic diagnostics for consuming browser proof.
+
+### Bounded alert settings recovery
+
+A stalled email, Apprise or webhook configuration read expires after 150 seconds and enters the existing unavailable-settings state. Partial readable settings do not admit policy Save. Explicit Retry reloads saved configuration without automatically sending tests or writes. Read transports are aborted on retirement; sender/configuration wire formats and queue semantics are unchanged.
+
+Verification: `alertConfigurationDeadline.test.tsx` and `alert-configuration-deadline.cjs` join the actual adapters, settings/save consumer, late-read protection and explicit recovery.
+
+### Test-send success requires a confirmed result
+
+Email, Apprise and saved-webhook tests require the existing literal
+`status: "success"` response; an unsaved-webhook test requires literal
+`success: true`. Missing, malformed or contradictory acknowledgements cannot
+announce a sent test. A supplied webhook HTTP status must be an integer 2xx;
+error fields and non-boolean delivery-pause fields make the result unconfirmed.
+The user is told to check the destination before sending again, without echoing
+an unconfirmed body or automatically replaying the send. An affirmative result
+with `deliveryPaused: true` retains the existing warning, never a plain success.
+`notifications.test.ts` covers the adapters and the full-tab
+`notification-test-acknowledgement.cjs` joins them to all four actual controls.
+This is synthetic UI acceptance, not recipient or ordinary-alert delivery.
+Sender, saved configuration, authentication and queue policy do not change.
+
+### Stalled evidence does not imply a healthy queue
+
+Notification health, attempt and held-event consumers expire independent reads
+after 150 seconds, including unanswered headers and partial bodies. They enter
+existing unavailable states without a timeout retry or mutation. Replacements
+and unmount abort read transports; obsolete results cannot overwrite a refresh.
+Accepted Retry/Dismiss acknowledgements remain accepted when their readbacks
+expire, with no reissued mutation. Sender, queue and retention are unchanged.
+`notificationEvidenceDeadline.test.tsx` and the full-tab
+`notification-evidence-deadline.cjs` cover independent failure/recovery.
+
+### Unreadable delivery evidence is not empty or accepted recovery
+
+The existing activity consumer names partial attempt-read failure and preserves
+readable rows, or reports an unreadable collection as unavailable. It cannot
+claim no attempts from malformed evidence. Retry/Dismiss success requires an
+explicit true acknowledgement and an exact non-negative safe count. Otherwise
+the recovery feedback remains unconfirmed and directs an activity refresh before
+another attempt; it does not claim an issued mutation was undone. No sender,
+queue policy, retention, authentication or producer response changes.
+`notifications.test.ts` and `notification-recovery-boundary` browser acceptance
+join the real adapter and recovery surface with safe local response fixtures.
+
+
 ### Approved addresses share a bounded connection budget
 
 Webhook and HTTP Apprise transports pass their validated numeric destinations
@@ -472,7 +533,16 @@ configuration reads/edits and private admitted queue configuration are unchanged
 `errors.Is`/`errors.As`, but formats only fixed safe reasons or a numeric CLI exit.
 HTTP status remains the authoritative retry verdict; response bodies are drained
 only to the existing size limit and discarded. CLI diagnostics retain byte and
-target counts, not output or target values. Shared URL validation and redirect
+target counts, not output or target values. The CLI executor drains stdout and
+stderr directly into a count-only writer rather than buffering their contents.
+Memory retained for output is constant, independent of provider verbosity; both
+streams still drain through process completion. The original fixed executable,
+arguments, context deadline, typed exit errors and delivery/retry verdicts remain
+unchanged. `apprise_exec_test.go` exercises the actual process pipes with 16 MiB
+of synthetic output on success and failure, silent completion, active deadline,
+pre-start cancellation and missing executable, plus concurrent allocation-free
+byte counting. It does not contact a provider or prove installed delivery.
+Shared URL validation and redirect
 checks use an opaque Apprise diagnostic label, including allowlist debug logs;
 ordinary webhook diagnostics retain their existing redaction. Endpoint, mounted
 path, escaped configuration key, target arguments, authentication headers,
@@ -566,7 +636,9 @@ resolution timestamp intact. The fixture does not change production deadlines,
 rate limits, or retries. It checks unseen-destination and
 unannounced-alert suppression, per-occurrence resolution metadata, eleven
 recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
-rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and
+retained rate-limited retries and subsequent-window recovery. That burst control
+drives existing limiter window state without waiting a minute or changing
+production limits; the ordinary retry-horizon control uses real due times. The HTTP adapter is in-process; queue and
 receipt persistence are real. Focused and race runs establish this synthetic
 boundary, not a full notification-suite result, installed monitor recovery,
 provider acceptance, reporter confirmation or release qualification. The existing
@@ -1576,3 +1648,31 @@ SMTP, rate-limit and routing preservation through edits and reloads with email
 on or off. Backend configuration, transport, retry policy, TLS, queue recovery
 and notification delivery are unchanged. Browser controls are synthetic, not
 native SMTP acceptance or a containing release.
+
+
+### Ordinary delivery inherits the queue's transient-recovery horizon
+
+New ordinary email, webhook and Apprise queue rows, firing or recovery, use the
+shared eight-attempt queue default. The manager must not override it with the
+old three-attempt budget. Immediate, grouped and quiet-hours-held admission
+share that rule; a hold or group merge is not a provider attempt. Existing
+admitted rows keep their original budgets, attempt counts, destination snapshots
+and deadlines. No retained failed or dead-letter work is replayed by this change.
+
+The existing 2/4/8/16/32/60/60-second retry delays remain: only transient failure
+classes can consume the longer horizon. Authentication, configuration and other
+non-retryable failures still stop immediately. Disable and occurrence-resolution
+cancellation, finite exhaustion, receipt ownership and all audit outcomes remain
+unchanged. Recoverable failures remain `retry`, never an accepted send; only a
+real successful delivery creates or consumes its occurrence/destination receipt.
+
+`ordinary_retry_budget_test.go` exercises manager admission across all three
+channels, both events, grouping and quiet holds, then actual due-row selection,
+HTTP rejection and fourth-attempt acceptance for generic and ntfy firing and
+recovery. It retains the third-failure retry log and subsequent delivered log,
+telemetry and exact receipt checks. Controlled claims separately check the
+finite eighth-attempt boundary, every recorded backoff, terminal classification
+and cancellation without
+changing production clocks or backoff. Old rows are not upgraded or replayed.
+This is synthetic loopback source acceptance, not native recipient recovery or
+attribution of fleet notification failures.

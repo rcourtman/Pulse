@@ -20,6 +20,69 @@
 
 ## Purpose
 
+### Missing workload backup time is scoped evidence, not universal absence
+
+The existing Proxmox row badge says **Not found** when its completion-time
+scalar is absent. The badge, name-cell indicator, hover and keyboard/touch
+disclosures name **No completed backup found**, never **None**, **Never** or
+an invented first backup. Their explanation says that Pulse has no matched
+completed-backup time and backups may still exist outside the collected or
+matched inventory. A running task remains separate activity, not completion.
+Invalid/future times remain uncertainty; measured completed times retain their
+age/threshold rules. Internal status tokens and alert policy do not change.
+
+`workloadGuestPresentation.test.ts`, `BackupStatusAccess.test.tsx` and the
+source-bound `browser-tests/backup-completion-time.cjs` cover that distinction.
+No collector, attribution, guest operation, restore or native recovery changes.
+
+
+
+### Shipped Docs tables admit keyboard scrolling
+
+Every sanitized documentation table has one viewer-owned horizontal scroll
+region, named `Scrollable table`, with a native `tabindex="0"` stop and a
+visible light/dark outline whenever focused, including mixed keyboard/touch
+WebKit where `:focus-visible` need not match. The stop is stable across viewport changes
+without observers or key handlers; native arrow scrolling and links/Tab remain
+unchanged. Column headers retain trusted `scope="col"` and native table semantics.
+Document-supplied focus, ARIA and data markers cannot bypass or hide this wrapper;
+repeated wrapping preserves its identity and markup.
+
+`docMarkdown.test.ts` covers admission, sanitization, idempotence and links.
+`browser-tests/docs-table-keyboard.cjs` exercises the real Docs/router/CSS at
+1360px and 320px in Chromium and WebKit, plus Chromium native touch pan and
+WebKit touch link activation. It verifies visible security columns, focus/escape,
+semantic headers and consuming links, not screen-reader or installed recovery.
+
+
+### Existing backup Node filter names source scope
+
+The shared filter bar receives distinct connection/native-node options from
+`proxmoxBackupNodeScope.ts`. Its Node chip shows the resolved label or an explicit
+ambiguous/unavailable saved selection, never an encoded key. Coverage, By date
+and the activity chart apply the same identity, while a unique legacy name URL
+still works. No filter primitive, route or navigation is added. The source-bound
+`backup-node-scope.cjs` fixture checks keyboard and narrow touch use, visible
+scope notices, rename/navigation continuity and recovery by clearing Node.
+
+The existing backup activity chart uses a local lazy/Suspense/error boundary:
+loading or failure never replaces the surrounding filter bar, inventory or
+backup evidence with an app-level blank screen. No new route is added. The
+source-bound node-scope browser fixture exercises delayed chunk completion,
+interactive day filtering and a failed chunk at desktop and narrow widths.
+
+### Root disk availability is visible without hover
+
+The existing machine detail's Root Disk card renders a wrapping, neutral
+`Usage unavailable` status instead of synthetic zero bytes or a usage bar when
+its aggregate lacks valid capacity/used bytes or carries an unavailable sentinel.
+Known capacity remains visible; explicitly measured zero usage keeps its normal
+bar. Measured byte ratios reach the shared aggregate bar in percentage units,
+including sub-1% and high-pressure readings; 93/100 must not become 1%.
+First, partial and removed reports update the mounted card. No new surface,
+collection, health or alert rule is introduced. `RootDiskCard.test.tsx`, the real
+bar lifecycle in `SharedPrimitives.guardrails.test.ts` and the full-drawer
+`browser-tests/root-disk-observation.cjs` fixture cover this contract.
 ### Locked update pill names the command-access option by its shared label (21 October 2026)
 
 For a host whose agent was installed without command access, the locked pill
@@ -38,6 +101,567 @@ host's agent facet reports no command access, the explanation names the host
 and the install option that grants access. The locked pill reads `Update` so
 it fits the Updates column at its narrowest; Local joins Pinned as a neutral
 uncheckable state rather than Check failed.
+
+The read-only refusal explanation remains available on deliberate tap, focus,
+Enter or Space, with Escape/blur dismissal, including coarse-pointer devices.
+Only these deliberate activations opt into the singleton tooltip. Default
+hover calls, including synthesized touch mouseenter, remain suppressed on coarse
+pointers. Neither the locked status nor its explanation plans or executes an
+update, and all server capability/refusal gates remain intact.
+`ContainerUpdateBadge.test.tsx` exercises the actual tooltip consumer and
+`Tooltip.test.tsx` retains both the passive-hover negative control and the
+explicit-intent case. `resource-composition-observation.cjs` uses the normal
+application tooltip root and inspects real keyboard/touch consuming surfaces.
+
+### Infrastructure agent cards honour native guest power
+
+The existing canonical detail drawer qualifies its selected in-guest agent report
+when Proxmox reports a VM paused, suspended or stopped, or an LXC stopped. A
+healthy carrier, recent Last seen or unexpired agent lease cannot make retained
+filesystem usage, RAID/rebuild, network, thermals, custom values or in-guest SMART
+current. Wrapping visible explanations reach touch and keyboard users; values,
+reported failures and identities remain intact without live health colour or
+rebuild speed. The shared filesystem and interface cards accept a first report
+and removal without requiring the drawer to reopen.
+
+Only positively identified Proxmox guests and the native runtime field confer
+this power qualification. Unknown power, other platforms, host configuration,
+independent physical disk collection and API readings keep their own evidence.
+Normal running reports and expired-host-agent qualification remain separate.
+No collector, alert policy, resource status, observation timestamp, stored History,
+guest operation, thaw or liveness verdict changes.
+
+`resourceAgentObservation.test.ts`, `ResourceDetailDrawer.agent-observation.test.tsx`,
+shared-card tests and `browser-tests/resource-agent-observation.cjs` cover native
+power-only canonical deltas, still-leased/online carriers, VM/LXC, provenance
+controls, recovery and open-drawer lifecycle at desktop and 320px touch widths.
+These are synthetic presentation proofs, not installed guest recovery.
+
+
+### Overview action state follows canonical alert identity
+
+The existing windowed overview receives stable group keys and related-alert IDs,
+not fresh projection object identities. Observation resampling and optimistic
+snooze/rollback preserve the mounted card, open dialog and pending controls. A
+changed primary alert ID or a removed group/member retires the old local dialog
+instead of retargeting it or retaining a ghost. Group ordering, membership,
+severity, disclosure and window bounds do not change.
+`OverviewTab.actionidentity.test.tsx` covers primary and supporting cards,
+resampling, rejection/retry, primary replacement and removal. The actual HTTP
+browser fixture keeps the same pending dialog node across ordinary resampling.
+
+### Unconfirmed alert actions retain truthful feedback
+
+The existing overview's acknowledge/restore and snooze/resume error paths keep
+state unchanged or roll back the provisional state when a response cannot be
+confirmed. The existing translated toast explains uncertainty and asks for a
+refresh before another attempt. A failed snooze keeps its dialog open, restores
+the previous record and releases its controls; a confirmed action retains the
+ordinary success/close interaction. No new dialog, route or primitive is added.
+`alertActionConfirmation.test.tsx`, existing presentation/localization tests and
+`alert-action-confirmation.cjs` cover actual English/German/Spanish feedback and
+target-only changes at desktop and 320px touch widths.
+
+### Bounded alert settings recovery
+
+Unavailable notification settings retain a usable explicit Retry and the whole-policy save lock, rather than an indefinite loading indicator. The error copy states the actual lock instead of warning that the blocked save can overwrite defaults. Late retired reads cannot install state in a replacement editor.
+
+Verification: `alertConfigurationDeadline.test.tsx`, the copy assertions and the actual complete settings consumer in `alert-configuration-deadline.cjs` cover deadline/retry/save admission and desktop/narrow presentation.
+
+### Alert evidence remains recoverable after a stalled read
+
+The existing notification cards leave loading after a 150-second evidence-read
+deadline, exposing their unavailable explanations and usable Refresh controls.
+Missing attempts or held events never produce the empty-history claim; readable
+independent attempts remain visible. No new card, route or visual primitive is
+added. `notification-evidence-deadline.cjs` exercises the actual Notifications
+tab at desktop/320px widths with real header/body stalls and explicit recovery;
+`notificationEvidenceDeadline.test.tsx` pins lifecycle and independent read state.
+
+### Notification activity preserves readable partial evidence
+
+The existing Notifications tab's activity card uses a visible wrapping status
+for incomplete attempts, alongside any readable rows, never its empty claim.
+Recovery feedback stays in its existing polite region and clears to its focus
+anchor; unconfirmed actions direct a refresh rather than claim success.
+`AlertDeliveryLogCard.test.tsx` and `AlertDeliveryHealthCard.test.tsx` cover the
+partial/empty and feedback states. The full-tab browser fixture covers desktop
+keyboard and narrow touch with real cards, state owners and API adapters.
+
+
+### Retained custom metrics do not claim current service or backup health
+
+The existing machine detail carries the linked agent's expired reporting lease
+into every custom sensor row, even when an independent platform keeps the machine
+online. Boolean and numeric evidence remains visibly last known; unavailable
+values stay unavailable. A retained timestamp is its age **when observed**, not
+an age relative to now. Sensor-specific failures remain stale after the parent
+reports again, and reported statuses/errors are preserved as historical evidence.
+A wrapping, visible explanation reaches keyboard and touch users without hover.
+The shared sensor card reacts to first reports and removal without remounting the
+machine or losing its open disclosure. Provider state, readings, alert evaluation,
+collection and independently sourced disk temperature rules are unchanged.
+
+`resourceDetailMappers.test.ts`, `ResourceDetailDrawer.machine-history.test.tsx`
+and `browser-tests/custom-sensor-observation.cjs` cover current, parent-retained,
+sensor-retained, missing, zero, replacement and removal states through the actual
+canonical merger and machine drawer at desktop and 320px touch widths. This is
+synthetic consumer proof, not a service, backup, thaw or installed recovery check.
+
+
+### Pro registry guidance keeps activation keys out of shell commands
+
+Both Docker Updates guides share `proRegistryLogin.ts`. They rebuild recognised
+legacy placeholder templates and plain password-prompt logins as an interactive
+`docker login` with the image's matching registry and non-secret username only.
+The operator enters the key at Docker's hidden Password prompt, never in a shell
+command. Unknown, secret-bearing or mismatched login text is withheld without
+echoing it into the page or clipboard; existing Private Release Access guidance
+remains the fallback. Digest-pinned pull/recreate commands, Compose identity,
+data-volume guidance and binary-switch confirmation/uncertainty stay unchanged.
+`proRegistryLogin.test.ts`, the two guide/model tests and
+`browser-tests/pro-registry-guidance.cjs` cover legacy, prompt-format, missing and
+withheld inputs through the production consumers and actual clipboard actions at
+desktop/narrow widths. Synthetic prompt fixtures are a consumer contract, not
+evidence of a repaired private producer, registry authentication or a release.
+
+### Related-alert disclosure preserves attention and access
+
+Collapsed Alerts overview groups retain their designated primary while exposing
+the unacknowledged supporting alerts' severity counts through the shared severity
+labels and badges. Counts do not borrow an independent group's alerts or include
+acknowledged evidence as current attention. Native keyboard/touch buttons expose
+expanded state and uniquely bound related-card content, with wrapping and phone
+target sizes. Expanded acknowledged evidence uses the existing neutral surface,
+edge, badge and icon without opacity that reduces its text contrast.
+
+`OverviewTab.emptystate.test.tsx`, the alert presentation tests and
+`alert-group-severity.cjs` exercise the real grouping/card/CSS consumers, including
+both correlation types, independent groups, live observation changes and baseline
+versus repaired desktop/narrow pixels. Alert correlation, order, monitoring and
+acknowledgement operations are unchanged.
+
+### Unraid assessment alerts keep their exact producer identity
+
+The storage adapter carries a separate `refs.alertResourceId` for an agent-backed
+Unraid array with a concrete storage metrics target. CheckHost's `agent:` alert
+namespace must not replace the registry or metrics identity: chart/history
+routing is unchanged. Row severity, count, acknowledgement and headline all
+match this explicit key through the existing exact matcher. Array/host display
+names, node labels, parent IDs and API-only lookalikes cannot borrow an agent
+assessment. Legacy resource IDs and absorbed Ceph alert IDs still work.
+The existing expanded detail exposes the full current unacknowledged alert reason
+without a hover-only tooltip; compact row text may truncate. That explanation
+withdraws when acknowledgement, detection-off or ordinary replacement removes
+the headline, without changing provider posture. `StoragePoolDetail.test.tsx`
+checks reactive replacement and withdrawal.
+
+`storageAgentAlerts.test.ts` consumes unmodified synthetic producer frames and
+checks genuine critical/warning failures, healthy/recovered states, detection-off,
+acknowledgement, deduplication and same-name/host/component isolation.
+`browser-tests/unraid-storage-alerts.cjs` exercises the production adapter, alert
+hook, table and expandable detail with those frames at desktop and narrow touch
+widths. This is consumer correctness, not installed Unraid recovery or release
+availability; no provider data, alerts or protection verdicts are rewritten.
+
+### Global backup counts reveal their complete target set
+
+The Backups health strip keeps estate-wide warnings visible, independent of
+list scope. Its actions clear all backup search/scope/date facets atomically
+and open canonical Coverage for the chosen posture; unrelated URL state stays.
+Pressed means the whole counted set is selected, not a posture hidden behind
+other filters. An active zero count remains a reachable button until cleared.
+Regular inline/sheet filters retain scoped selection. Focus and scroll stay
+with the count, and persistent wrapping copy explains the global action even
+before policy arrives. No verdict or inventory/protection read is added.
+`ProxmoxBackupsTable.test.tsx` and `backup-health-counts.cjs` cover the real
+consumer's URL, keyboard, touch, zero-count and unmatched-evidence boundaries.
+
+Backup workload presentation preserves the backend's exact configured connection
+identity, including case, when mapping files, snapshots and jobs to live or
+unmatched rows. Native hostname aliases remain case-insensitive; they do not
+override a known different connection. PBS connection-name hints follow the same
+exact comparison. Both Backups consumers expose the resulting independent
+ownership without changing server posture or adding provider/guest operations.
+Coverage ties have deterministic full-identity order, independent of observation
+order, preserving the focused disclosure through otherwise unchanged refreshes.
+
+### PBS count disclosure shares its table presentation
+
+The existing datastore disclosure keeps backup-entry counts inspectable when
+the compact projection hides the count column. Both compose the same
+`PlatformTableNumberValue` / `formatPlatformTableIntegerValue` presentation,
+including measured zero. Loading, Unavailable and ambiguous-source Unknown are
+not numeric zero. Same-row inventory replacement retains the open disclosure
+and its focused toggle. Counts are collected entries, not a restore or guest
+health claim. `ProxmoxBackupServersTable.capacity.test.tsx` and
+`pbs-count-sources.cjs` cover desktop keyboard and 320px touch consumers.
+
+
+### Backup activity keyboard focus follows calendar identity
+
+`BackupActivityChart` exposes a labelled, described group with one day Tab stop
+rather than up to 365. Left/Right and Home/End move focus only; Enter/Space keep
+native button activation and Tab exits. Modified browser shortcuts are not
+intercepted. Calendar-day keyed buttons survive live metric/window updates for
+remaining days; totals and tooltip contents remain reactive. Escape dismisses
+the tooltip without changing focus or the existing day selection. Visible
+keyboard help wraps at narrow widths. Mouse/touch day toggling, source scope,
+empty/unmeasured states and server-owned protection verdicts are unchanged.
+
+`BackupActivityChart.keyboard.test.tsx`, the containing backup-table test and
+`backup-activity-keyboard.cjs` cover these interactions using the existing
+Backups consumer, including a yearly range, live replacement and 320px touch.
+
+### Patrol manual-rule controls recover from a stalled request
+
+The existing Patrol Activity rule list and exact-rule removal confirmation bound
+their whole operation to 30 seconds. Timeout returns an explicit unavailable or
+unconfirmed state, closes the blocked dialog, and re-enables explicit Reload.
+Late responses cannot revive stale controls or announce success. Removal is never
+replayed automatically; existing organisation, manual-origin, fresh-scope and
+absence-readback checks remain intact. Desktop keyboard and narrow touch proof
+uses the real Patrol Activity/router, HTTP clients and shipped CSS with synthetic
+rules, not an installed/customer deletion. See `PatrolSuppressionRules.test.tsx`
+and `patrol-rule-deadline.cjs`.
+
+### Backup chart and list share non-day filter ownership
+
+`ProxmoxBackupsTable` derives one non-day artifact scope for the existing By date
+chart, list and unknown-date notice. Sorting and day selection operate on a copy
+for the list and cannot change the timeline's source collection. The visible
+scope explanation states the day exception. Empty filtered scopes retain metric
+and range controls. Reactive search, saved URLs and ordinary refresh must update
+both consumers without another fetch or a new route. Desktop keyboard and 320px
+touch browser proof checks scoped counts, reported sizes, day selection, clear,
+and wrapping with the shipped chart/table/CSS; protection summaries stay global.
+
+### Backup chart controls survive an empty metric
+
+The existing backup activity chart keeps its native metric and range controls
+mounted when the selected value/window has no positive readings. Missing or zero
+reported sizes are qualified unavailable value observations, not proof of no
+completed activity or a zero-byte backup. Count remains reachable by keyboard
+and touch; partial daily volume has the same qualification in accessible names
+and tooltips. Empty windows retain range navigation. Ordinary HTTP replacement
+updates the existing chart without resetting its selected controls. The production
+table/presentation regressions and `backup-activity-volume.cjs` exercise desktop
+and 320px touch CSS/interaction. No route or backup/guest action is introduced.
+
+### Contradictory PBS capacity stays unknown in the existing disclosure
+
+A reported percentage cannot override contradictory used/total bytes in the
+Backups table. The same byte ratio drives display and warning thresholds;
+whole-number percentage rounding is accepted within 0.5 percentage points.
+Larger disagreements read Unknown and the named datastore disclosure explains
+why, without choosing a healthy or full reading or displaying provider errors.
+Its existing keyboard/touch action, open context and same-identity updates
+remain intact. Corrected and measured-zero values recover normally.
+`ProxmoxBackupServersTable.capacityConsistency.test.tsx` and the source-bound
+`pbs-capacity-consistency.cjs` cover these states through the production page,
+row producer, canonical adapter, table and CSS at desktop and 320px touch widths.
+No new surface, data collection, threshold or guest-health claim is added.
+
+### PBS datastore capacity explanations are not hover-only
+
+Unavailable and Unknown capacity cells open the existing full-width resource
+row disclosure using a named native button with expanded/controls semantics.
+Its accessible name includes the visible Unavailable/Unknown state. The control
+contains its click so the summary row cannot toggle the disclosure again.
+The disclosure names the backup server and datastore, explains that a failed or
+unknown capacity read is not an empty datastore, and does not confuse server
+reachability with a successful datastore read. Fixed copy does not expose raw
+provider errors; reported names remain escaped, wrapping text. Ordinary same-row
+updates replace the explanation with measured capacity, including a genuine
+zero, without closing the disclosure. Other datastores remain independently
+attributed. No probe, backup, guest action or new route is added.
+
+`ProxmoxBackupServersTable.capacity.test.tsx` and `pbs-capacity-details.cjs`
+exercise the production table, canonical adapter and row-specific context at
+desktop and 320px touch widths. Synthetic observations are not native datastore
+recovery or guest-safety acceptance.
+
+The shared `PlatformResourceDetailTableRow` accepts optional `beforeDetails`
+content inside its existing disclosure. Closed rows mount neither that content
+nor the resource drawer; same-open evidence changes retain the drawer instance.
+Callers that omit the slot retain their existing composition. The mounted
+`PlatformResourceDetailTableRow.test.tsx` verifies this additive contract.
+
+### Platform sort actions are native keyboard controls
+
+Every sortable `PlatformSortableTableHead` contains one native `type="button"`
+control, with visible inset focus and inherited column alignment. Enter, Space,
+pointer and touch activation use the same existing cell click path once. The
+column header retains `scope="col"` and the active `aria-sort`; direction glyphs
+are decorative, so the button name stays stable as the direction changes.
+Headers without a sort key stay static, and hidden columns add no Tab stop.
+
+The existing per-table storage keys, three-step direction/default cycle,
+descending-first metric/date choices and missing-last ordering are unchanged.
+Mounted `PlatformSortableTableHead` regressions exercise native semantics,
+focus identity, persistence, ordering and a sortable-to-static transition;
+platform layout guardrails protect the shared structure. The
+`platform-sort-access.cjs` browser protocol checks actual Tab/Enter/Space and
+narrow touch in production Protection and Docker tables/CSS, through the real
+HTTP recovery reader for Protection. This changes access to existing sorting,
+not provider reads, backup status, guest recovery or a new product surface.
+
+### TrueNAS activity does not claim completion from a last-run timestamp
+
+The existing Protection table calls its sortable date column Reported time
+(Time on phones). Its disclosure distinguishes replication Last run from
+snapshot Created or collection-only Observed time, without repeating a mirrored
+timestamp as separate start and completion evidence. Missing/invalid dates stay
+unknown. Nonblank replication errors render as labelled, escaped, multiline
+text with unbroken-string wrapping, not hover-only detail or executable markup.
+Accepted replacements update/remove that evidence in the same open disclosure;
+the supplied outcome, existing filters/search and saved sort key are unchanged.
+`TrueNASProtectionTable.test.tsx` and `truenas-protection-evidence.cjs` cover
+these source/consumer transitions at desktop and narrow touch widths. This
+changes no shared primitive API, provider operation or recovery verdict.
+
+### TrueNAS Protection keeps read failures visible beside retained records
+
+The existing Protection consumer composes a wrapping status notice and labelled
+native Refresh button above its table when a refresh fails with retained records.
+The notice survives filtering, pending retries and cached remounts; it qualifies
+historical counts/outcomes without discarding accessible disclosures. Without
+records, the existing error panel remains visible and its Refresh control is
+disabled during an explicit retry rather than reverting to a spinner or an
+empty result. Cached remounts keep the query's existing background refresh and
+an available manual Refresh while the notice remains visible. No raw diagnostic
+text is rendered. TrueNASProtectionTable and connected reader
+regressions plus desktop/narrow HTTP/browser checks cover this composition; shared
+primitive APIs and provider/recovery operations are unchanged.
+
+### Bounded notification evidence is accessible on keyboard and touch
+
+Notification activity retains list semantics and a stable accessible name while
+explicitly admitting keyboard focus for its bounded scroll area. Full identities,
+held explanations and unbroken diagnostic strings stay within the card width.
+Grouped IDs use native `details`/`summary` with visible keyboard focus and a
+narrow-screen touch target; missing/empty/unavailable data does not leave a
+focusable empty list or earlier expanded identities behind. This changes only
+inspection of existing evidence, not delivery controls, read bounds or health.
+
+Component and mounted state/consumer regressions accompany the alert contract.
+`browser-tests/delivery-activity.cjs` binds the production Notifications-tab build
+and API adapters, checks desktop/320px focus, scrolling, wrapping, disclosures
+and unavailable/empty/recovered reads, and retains before/after captures for
+native image inspection. Synthetic reads are not installed delivery recovery.
+
+### Unconfirmed VM power does not make filesystem values current
+
+The shared filesystem presenter qualifies platform-owned VM values as last
+known when running state is unknown, transitional, missing or unrecognised
+and no explicit read outcome is available. It uses fixed explanatory copy,
+not the raw state. Explicit read errors/deferrals keep their own explanations;
+stopped/paused semantics are unchanged. Live linked-agent filesystem readings
+remain independent, and host-reported LXC storage is not downgraded by guest
+power. Legacy online/healthy aliases retain their running meaning.
+
+Rows (bars/sparklines), filesystem details, stored-History carriers, canonical
+History and guest-filesystem alert settings consume this one rule. Capacity
+alone does not invent a retained zero; fresh measured zero remains current and
+saved thresholds and stored series remain untouched. The corresponding
+presenter, row, Overview, History, canonical and threshold tests and
+`native-guest-filesystem-power.cjs` cover source/consumer transitions on desktop and
+narrow touch layouts. This is read-only presentation, not a power/guest command,
+backup thaw, workload recovery, alert evaluation change or new route.
+
+
+### Backup job errors are readable in Coverage details
+
+The existing workload disclosure exposes its selected latest backup job's
+result, start time and nonblank reported error as labelled, wrapping text.
+Provider text is escaped, not HTML; multiline/long errors remain readable
+without hover on phones. Unorderable or conflicting latest jobs retain the
+existing Unknown explanation rather than exposing a misleading earlier job.
+The same disclosure keeps all matched collected jobs readable in a separately
+labelled region, without claiming list order is chronology. Each observation
+retains its job ID, raw outcome/error, recorded location and observation time;
+invalid or future starts stay Unknown with literal reported text. Ordinary
+replacement removes stale evidence without closing the workload or losing focus.
+Protection posture and restore evidence remain separate.
+`ProxmoxCoverageTable.taskDetail.test.tsx`, `backup-job-detail.cjs` and
+`backup-job-uncertainty.cjs` cover this read-only presentation; no provider action,
+new route, backup completion or guest recovery is established.
+
+### Backup diagnostics are not completed restore points
+
+The existing backup views keep running/failed inventory entries visible but
+exclude them from completed-point count and volume charts and restore-point
+totals. An incomplete-entry count and wrapping status notice explain why a
+non-empty table can have zero restore points. Day groups and row counters say
+entries, so diagnostic rows cannot read as completed backups. Keyboard/touch,
+chart count/volume selection and ordinary same-open replacement are exercised
+by `backup-completion-totals.cjs`; model and consuming-table tests cover the
+shared completion predicate. No new route or guest operation is introduced.
+
+
+### Unknown backup-job chronology is not a successful latest job
+
+Coverage shows an explicit unknown job indicator when a matched job's start
+time is absent, invalid or in the future. Its existing disclosure explains why
+Pulse cannot choose a latest outcome and points to Proxmox job history. The
+indicator stays accessible at desktop and narrow widths, clears on ordinary
+inventory replacement and must not turn into a green success dot or an absent
+job column. The consuming table tests and `backup-task-chronology.cjs` cover
+these states and same-open read-only refresh. Conflicting normalized outcomes
+at the same newest start time use that unknown indicator, with a distinct
+explanation that names the conflict instead of claiming a bad date. Agreeing
+outcomes and strictly newer results remain usable. `backup-job-outcomes.cjs`
+connects synthetic HTTP through the real reader/model and open Coverage detail
+at desktop and narrow widths, including response-order reversal and ordinary
+replacement; provider posture and independent restore evidence stay separate.
+
+
+### Expandable backup Coverage uses per-workload geometry
+
+The opt-in platform window geometry maps native scroll positions to cumulative
+logical-item offsets. Coverage measures each summary plus its own expanded
+panel, keyed by workload identity rather than sorted index. A tall open detail
+must remain mounted while its evidence is being read; a fleet-wide average must
+not evict it. Scroll, element resize and accepted row/layout changes remeasure
+mounted blocks. Other platform consumers retain their uniform-height path.
+`PlatformWindowedRows.test.tsx` checks offsets, tall-item positions, collapse,
+row bounds and listener disposal. `ProxmoxCoverageTable.test.tsx` checks the
+consuming expanded row and focus. `backup-coverage-windowing.cjs` exercises the
+real HTTP readers and Coverage at desktop/320px, requiring actual provider-label
+and workload-summary viewport reachability in both directions.
+
+
+### Backup provider evidence remains readable and attributable
+
+Expanded Coverage renders observation scope/source as labelled text that wraps
+inside the existing detail panel, not hover-only or clipped identifiers. Each
+observation retains its own result/history/access facts on desktop and narrow
+screens; missing identifiers stay Unknown. Existing text search can find these
+observations even without current artifacts. `coverageProviderEvidence.test.tsx`
+and `ProxmoxCoverageTable.test.tsx` check the consuming markup and refresh;
+`backup-provider-evidence.cjs` requires desktop/320px interactions and pixel
+review. No new route, navigation item or provider action is introduced.
+
+### Windowed backup provenance measures logical blocks
+
+The existing platform window controller permits a consumer-supplied item-height
+measurement and layout/inventory remeasurement key. Unchanged consumers retain
+the existing estimate and sampling behaviour. The By date backup feed measures
+its rendered body minus runway spacers per logical point/day header, including
+wrapped source paths and the compact provenance row. Native scroll/wheel samples
+refresh that measurement; container-layout and accepted-inventory changes also
+remeasure. Mounted-but-off-screen points do not establish scroll acceptance.
+`ProxmoxBackupsTable.test.tsx` protects spacer exclusion and logical counts;
+`backup-location-access.cjs` requires every complete label in a 166-point feed
+to enter the desktop and narrow viewport. Existing row bounds and filter keys
+are unchanged; this adds no provider or recovery operation.
+
+
+### Existing backup-location filter consumes storage provenance
+
+PVE local archives append their explicit storage host to the existing location
+label and give that dimension its own filter key. Shared/legacy rows keep the
+old labels and keys, and saved store-wide selections retain their original
+aggregate scope. No route, control or navigation entry is added. The same
+production table, responsive layout and native filter select remain the
+desktop and touch consumers. Connected table and model tests protect distinct
+copied locations, selection and ordinary inventory refresh without changing
+the guest's current placement or granting recovery execution.
+
+### Workload backup evidence applicability (15 October 2026)
+
+`supportsWorkloadBackupEvidence` is shared by workload rows and the full guest
+drawer. The completed-backup scalar is Proxmox vzdump/PBS evidence, not a
+cross-provider backup inventory. VM/system-container rows with Proxmox scope
+and legacy VM/LXC shapes without platform metadata retain their existing age
+policy. Other integrations and app containers/pods cannot infer missing or
+healthy backups from that scalar. `workloadGuestPresentation.test.ts` verifies
+the shared scope rule, including Docker nested under Proxmox. This changes no
+collector, access, alert evaluation or wire contract.
+
+
+
+### PMG same-open stored-detail lifecycle (15 October 2026)
+
+The existing Mail Gateway drawer refreshes stored full detail for a changed
+accepted PMG collection observation or health state; legacy rows use lastSeen
+when the collection timestamp is absent. Equal observations, unrelated alerts,
+object replacements and shared-clock ticks add no reads. Cached adverse detail
+cannot become healthy just because a newer slim row arrived: the accepted
+replacement must complete, and obsolete successful or rejected responses cannot
+replace it. These GETs read stored observations, not the appliance.
+
+A detail-read failure stays inside the drawer's existing error/Retry UI, with a
+resource-derived heading and independently open alerts preserved. Retry admits
+one pending request, exposes its busy/disabled state and becomes available again
+after failure. A later accepted observation may recover the same drawer without
+manual Retry. No diagnostic response text, fabricated queue value, timer,
+collection operation, new route or inferred identity is introduced.
+
+`ProxmoxMailGatewayTable.test.ts` covers the production drawer's
+observation changes, missing/zero readings, initial/repeated failures, bounded
+Retry and completed obsolete-response handling. Existing readings, alert-clock,
+table and presentation controls remain. Consuming acceptance still requires
+exact-source same-open desktop/narrow browser proof using the retained actual
+producer HTTP phases and native inspection of captures; component proof alone
+is not browser, native-appliance, protected-source or release acceptance.
+
+### Retained guest network details are not a current connection
+
+The Workloads row, read-only Network disclosure, hover evidence and guest drawer
+share `getGuestNetworkLastKnownReason`. Native Proxmox paused, suspended or
+stopped VM state qualifies retained interface addresses and cumulative counters
+as last known, even when the resource stays online or its linked agent lease has
+not expired. The primary-IP fact carries the same qualification. Interface
+identity, addresses and counter values are preserved, not erased or renewed.
+
+A silent linked agent qualifies only its selected interface list; an explicit
+platform list remains independent. Host-derived LXC configuration, unrelated
+platforms and unknown native states do not acquire invented power diagnoses.
+Stopped/offline Proxmox LXC guests also qualify explicitly agent-selected
+interface details, even with an unexpired agent lease. This does not qualify
+host-derived or unspecified-provenance LXC configuration; paused/suspended LXC
+states are not borrowed from VM semantics. Positive workload and platform
+identity are required, including the legacy `lxc` shape without platform metadata.
+No collection, network-rate metric, stored History, agent action, backup action
+or wire contract changes. Clearing a presentation cue is not proof of a live
+connection, thaw or filesystem recovery. `guestNetworkObservation`,
+`GuestNetworkObservation`, `GuestRow` and `GuestRowCells.network` regressions and
+`guest-network-observation.cjs` cover live source changes, preservation,
+keyboard/touch access, dismissal and desktop/narrow pixels through the real
+canonical merger, Workloads mapper and production consumers.
+
+### Paused VM filesystem readings are not current
+
+The shared `getWorkloadGuestDiskRead` rule downgrades otherwise-current VM
+filesystem readings to last known while the native state is paused or suspended,
+including a linked agent whose last-report lease has not expired. Existing
+read failures and stale-agent reasons remain authoritative. This does not change
+host-reported LXC storage, stored History, alert settings, collection or guest
+operations, and establishes neither thaw nor recovery.
+
+Workload rows, expanded filesystem details, History's current-value carrier and
+alert-threshold subtitles consume that same rule. Verification covers both
+power states, linked and platform sources, missing readings, retained zero,
+stored History preservation and subsequent running reports in the
+`workloadGuestPresentation`, `GuestRow`, `GuestDrawerOverview.filesystems`,
+`GuestDrawerHistory.disk-provenance`, canonical linked-filesystem History and
+`useThresholdsGuestData` tests. The existing History chart's deferred reading
+explanation must explicitly wrap inside its own shrinkable column, even in a
+no-wrap table cell. The `paused-filesystem` consuming fixture covers the shared
+surfaces; desktop/narrow browser and native pixel proof are required. This
+fixture provides no native guest recovery evidence.
+
+### Backup activity calendar-day presentation
+
+Backups renders one activity column per local calendar date, including
+seasonal clock changes, rather than stepping through fixed 24-hour durations.
+Counts, byte volumes and the existing clickable date filter use the same
+keys. Exact-now observations remain eligible and future activity remains
+excluded. The calendar matrix and production-table desktop/narrow browser
+proof cover date order, both boundaries, range changes, volume and clearing
+the day filter. This changes no route, posture, provider completion judgment
+or native recovery authority.
 
 
 ### Aggregate disk bars preserve percentage-only evidence (14 October 2026)
@@ -352,11 +976,6 @@ the chart's native hover title and assistive text.
 An independent qualified memory reading is not paused by a disk deferral.
 Neither Last seen, backup completion nor running power state renews memory.
 Unannotated unrelated platforms and actual zero readings retain their meaning.
-Selected agent memory freshness is independent of VM/LXC classification. A stale
-agent retains its original observation as last known, while an independent
-current Proxmox observation remains current. Guest kind still determines the
-provider's cache interpretation.
-
 A current reading from a cache-inclusive Proxmox source (`status-mem`,
 `status-freemem`, `cluster-resources`, `derived-total-minus-used`, the same
 sources and guest kinds the backend marks `MayIncludeCache`) keeps its numbers,
@@ -1630,6 +2249,7 @@ removal/failure retention and containing publication remain separate evidence.
 50. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
 51. `frontend-modern/src/utils/reportingPresentation.ts`
 52. `frontend-modern/src/utils/updatesPresentation.ts`
+    52a. `frontend-modern/src/utils/proRegistryLogin.ts` and `frontend-modern/src/utils/proRuntimeSwitchPresentation.ts`
 53. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 54. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
 55. `frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`
@@ -1744,6 +2364,23 @@ removal/failure retention and containing publication remain separate evidence.
 143. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
 ## Shared Boundaries
+
+### Apprise API transport warnings describe form settings, not delivery proof
+
+Notifications names `skipTlsVerify` as skipping TLS certificate verification,
+not merely allowing self-signed certificates. For a configured HTTPS API with
+that flag, the notice explains missing certificate/hostname checks and the risk
+to API keys, destination URLs and alert content. Plain HTTP has its own warning
+regardless of the checkbox: it has no TLS and the checkbox cannot protect it.
+The policy is only Pulse-to-API; CLI mode and Apprise's delivery targets are not
+qualified by it. Unknown/incomplete addresses do not invent transport evidence.
+Warnings are accessibly associated with the URL and checkbox and update in the
+same open form without changing credentials, configuration or sending a test.
+The normal settings loader/payload and mounted section tests cover preservation;
+`apprise-transport.cjs` exercises synthetic HTTP through the production reader,
+normalizer and Notifications tab at desktop and 320px, with writes refused.
+No TLS-client, saved-policy, real delivery or installed-recovery change is implied.
+
 
 ### Transport-independent operator rows
 
@@ -1912,10 +2549,16 @@ catalog proof must advance together so this reliability distinction cannot
 silently fall back to English or collapse into ordinary empty-state wording.
 The active-alert card's delivery-status row remains an alerts-owned compact
 presentation composed inside the shared responsive card shell. It consumes one
-bulk diagnosis snapshot per overview refresh, wraps beside started-at and
-threshold metadata at narrow widths, and does not create a second card or
-page-level banner. Acknowledged cards omit the redundant row, and unavailable
-diagnosis data leaves the existing alert card intact.
+bulk diagnosis snapshot per overview refresh and wraps beside started-at and
+threshold metadata at narrow widths. Acknowledged cards omit the redundant
+row. A failed latest read withdraws old reasons without unmounting the alert
+cards or their controls. One shared `InlineNotice` in a persistent, named,
+polite status region explains the unavailable observation; it does not claim
+a delivery failure. Ordinary successful refresh or an empty active set clears
+the notice. Its region name, title and explanation follow the alert-owned
+presentation helper and all three catalogs. The overview consumer and i18n
+regressions cover that distinction; the read-only browser fixture covers
+keyboard focus, phone wrapping, first failure and ordinary next-read recovery.
 The Destinations delivery-activity surface follows the same ownership split:
 alerts own the `AlertDeliveryLogCard` composition inside the shared `Card`,
 button, badge, list, and responsive wrapping primitives. Its single
@@ -4729,6 +5372,53 @@ resolves late` in
 
 ## Current State
 
+The backup inventory Refresh button remains focusable while it announces its
+pending read with `aria-disabled`; its existing single-flight handler refuses
+repeated activations until both inventories and posture settle. This avoids
+native disabled-button focus loss without enabling duplicate reads. Connected
+controlled-response tests and the browser fixture cover pending and completed
+focus plus a second keyboard activation. No pending read is cancelled or replayed.
+
+
+### Independent backup point evidence (15 October 2026)
+
+The Proxmox Coverage and By date State consumers render completion/verification
+and pruning protection as separate shared MetadataBadge instances. The existing
+`wrap` affordance contains both in narrow cells. No badge primitive, resource
+identity, row action, table shell or collection authority changes. Shared render
+controls and `ProxmoxBackupsTable.test.tsx` cover replacement through both real
+consumer tables, with source-bound desktop/narrow browser proof. A prune flag is
+not successful verification, restore evidence or a workload protection verdict.
+
+
+### Recovery backup-record polling controls
+
+`RecoverySettingsPanel.tsx` presents backup-record polling as a saved setting,
+not a guest-agent pause or a backup/restore action. Its on/off selection and
+loss-of-freshness consequence remain visible when interval controls are hidden.
+The selection is not proof of running monitor state; editable drafts explicitly
+require saving, while environment-locked selections do not offer a save.
+
+The existing checkbox retains its visible name, with descriptions bound to the
+selection, backup-only scope, non-dismissable guest-safety notice and any
+environment override. The notice must not disappear when polling is off or
+locked. It links the existing shipped backup-safety procedure, without claiming
+that polling off stops PVE/QGA reads, cancels issued requests or backup jobs, or
+establishes thaw/recovery. Environment-change advice must not prescribe an
+incident restart. The switch owns a visible keyboard-focus indicator, a themed
+off-state track and a minimum 44px interaction target. Backend scheduling,
+payloads, environment precedence and export/import authority are unchanged.
+
+Verification: `Settings/__tests__/RecoverySettingsPanel.test.tsx`,
+`Settings/__tests__/SettingsSwitchLabels.test.tsx` and
+`Settings/__tests__/settingsArchitecture.test.ts` cover the consuming control
+and its persistent safety boundary. `browser-tests/recovery-backup-polling.cjs`
+exercises the real settings loader/draft/save API through this panel, saved
+readback, auto/custom cadence, environment locks and the shipped Docs viewer
+on desktop and narrow viewports. Synthetic source/browser proof is not native
+guest, thaw, filesystem-write or installed-recovery evidence.
+
+
 ### Retained monitoring status remains reactive (11 October 2026)
 
 The existing Machines status dot subscribes to the shared relative-time clock
@@ -5594,8 +6284,12 @@ disclosure rather than an inert hidden-count row. Aggregate drawers that include
 alerts from child resources must also preserve the affected resource identity
 and alert metric beside that text rather than collapsing them into generic VM
 or host labels. The Mail Gateway drawer receives its row's open alerts, matched
-across the gateway's identity aliases, and its header status follows them, so
-it never shows "Healthy" beside an active warning; its inline detail row sets
+by explicit instance/canonical IDs and typed `pmg:`/`agent:` aliases, never
+by display name, hostname or guessed ID-prefix removal. Its header retains the
+most adverse resource/detail/connection status and open-alert severity: a
+successful version or detail read cannot clear a stale/degraded resource.
+Absent cluster-node queues render an unknown dash, not zero; measured zero
+remains zero and missing queue subfields remain dashes. Its inline detail row sets
 `whitespace-normal` because platform table cells do not wrap. The row itself
 marks the metric an alert is about instead of stacking a reason under the
 name, so it keeps the shared single-line rhythm. Drawers for unified resources
@@ -9920,41 +10614,6 @@ existing table evidence. No route, guest check, backup, threshold, collector or
 permission changes. This presentation result does not establish thaw, covered
 filesystem writes, native restart recovery or containing released software.
 
-### Client backup report scheduling and data-quality states
-
-Reports adds Client backup health to the existing schedule editor. PDF/CSV,
-weekly/monthly cadence, current workload/tag scope and existing email/disk
-delivery controls reuse the schedule workflow. Empty selection and tags mean
-all current VMs and system containers. The picker restricts this kind to those
-workload types and has no performance-report selection cap. Its existing default
-cap remains unchanged for other consumers. Switching kinds retains only valid
-workload selections and preserves the existing digest/inventory constraints.
-
-The schedule card presents last report data quality separately from delivery
-acceptance. Missing/incomplete history never reads as zero failures or completed
-delivery failure. The browser payload cannot supply server-owned quality fields.
-Copy states the PVE task scope, PBS destinations and unsupported-provider state.
-Pricing and current advanced-reporting/branding entitlement behavior are intact.
-
-Proofs: `ReportingPanel.test.tsx`, `ResourcePicker.test.tsx` and
-`reportingSchedulesModel.backupHealth.test.ts` under Settings tests cover report
-kinds, quality/delivery coexistence, unrestricted workload selection, payloads
-and kind switching. Final-source browser proof covers the actual editor, client
-scope, reload, delivery/recovery states and narrow/desktop layouts.
-
-The shared picker uses semantic theme colours for workload names, selection,
-tags and chips. Large selections remain in a bounded scrollable summary so
-client filters and delivery controls stay reachable. Toggle rows expose pressed
-state, and keyboard removal scrolls selected chips into view. The browser matrix
-covers light and dark themes at all three widths.
-
-The additive reporting-catalog `backupHealthAvailable` flag describes runtime
-renderer presence independently of entitlement. New backup schedules are offered
-only when it is present, while existing schedules remain editable after a runtime
-change. Legacy catalogs default to false. API and catalog-model tests cover
-absence and registration so staggered source upgrades do not offer unavailable
-rendering. No price or entitlement changes.
-
 ### One explicit guest backup completion time (12 October 2026)
 
 The Workloads backup badge and name-cell indicator disclose the same UTC
@@ -10065,3 +10724,392 @@ table nested in a drawer row). A value that must wrap sets the wrap on its own
 element inside the cell, as `DetailSectionTable` does with
 `block whitespace-normal`; the Coverage drawer's restore evidence Location and
 Details values now follow that pattern.
+### Configuration transfer submission ownership (15 October 2026)
+
+Recovery's existing configuration import/export dialogs and their Settings
+composition share one submission owner through authentication, file reading,
+HTTP completion and the successful-import reload. Each action captures its
+file/passphrase before yielding. Pending controls and close paths cannot replace
+that submission or start another transfer. Cancelling an API-token prompt drops
+its captured intent rather than resuming a later draft. The prompt remains an
+existing credential entry point, not a grant of additional server authority.
+
+Transfer requests opt out of automatic transport retries. Leaving Settings
+prevents pending local reads from dispatching, aborts further client preparation,
+suppresses late downloads/feedback and clears the reload timer. An already-sent
+import cannot be recalled or described as rolled back; unconfirmed results say
+settings may already have changed without echoing response text or retrying via
+an authentication prompt. UI/legacy/CLI encrypted archive formats, export's
+12-character minimum, server authorization and the migration scope warnings stay
+in force. Browser/component proof does not establish installed restore recovery.
+
+Import preflight bounds the selected file to 1 MiB before reading it or asking
+for an API token. After extracting the existing UI/legacy/CLI archive format,
+it checks the complete serialized request's UTF-8 bytes against the server's
+unchanged 1 MiB body limit, including password and JSON escaping. Exactly-at-limit
+requests remain admissible. These local rejections preserve inputs, send no
+import, schedule no reload/replay and explicitly say that no request was sent,
+unlike an uncertain response after dispatch. The file control describes both
+limits; no advice truncates an encrypted archive or weakens its passphrase.
+`useBackupTransferFlow.limits.test.tsx`, `BackupTransferDialogs.test.tsx` and
+`configuration-import-limits.cjs` cover boundaries, encoding, token gating,
+correction and desktop/narrow feedback. This is bounded client consumption,
+not decryption, full Settings/auth acceptance or native recovery proof.
+
+### Readable operator overrides inside table drawers (15 October 2026)
+
+`ResourceOperatorStateSection` restores normal wrapping at its own boundary,
+including unbroken saved attribution, rather than inheriting a table cell's
+no-wrap rule. Its header can stack. Control descriptions, maintenance scope and
+remediation confirmations must remain within their own column at desktop and
+narrow widths, not merely be present in the DOM. No global table scan layout,
+policy text, saved state, request or confirmation semantics change.
+
+`ResourceOperatorStateSection.render.test.tsx` pins that boundary and the
+accessible descriptions/unchanged retirement-discard behaviour. The
+`operator-overrides-readability.cjs` browser checks actual text-line geometry
+and controls through the production workload drawer and API client. This is
+presentation proof, not native guest thaw, filesystem writes or recovery.
+
+### Measured table geometry does not write during observer delivery
+
+The opt-in cumulative windowed-item geometry path schedules ResizeObserver
+synchronization in one animation frame. Multiple observer notifications coalesce;
+disposal disconnects observation and cancels pending work. Initial, native-scroll,
+wheel and window-resize synchronization retain their existing behaviour and row
+bounds. This prevents measuring a wrapped Coverage block from synchronously
+resizing its own observed runway. `PlatformWindowedRows.test.tsx` checks deferred
+measurement, coalescing and cancellation; the Coverage identity browser protocol
+checks both scroll directions at desktop and narrow widths without page errors.
+
+### By date backup points use keyed wrapped-block geometry
+
+The existing `usePlatformWindowedItems.itemGeometry` extension also serves the
+By date backup feed. A logical point measures its summary and optional phone
+provenance row together; day headers are separately keyed items. Cumulative
+per-key heights, invalidated when width changes, prevent wrapped workload
+identity or source paths from shifting another point's geometry. The shared
+controller, observer scheduling, native scrolling, 140/36 item budgets and
+table primitives remain unchanged. The Workload cell folds hidden type/ID and
+wraps observed connection/native-node facts, without conflating a PBS namespace
+with a workload node. `ProxmoxBackupsTable.test.tsx` measures unequal logical
+blocks; `recoverableWorkloadIdentity.test.tsx` and the desktop/320px consuming
+browser protocol verify readable identity and complete fleet traversal.
+### Client backup report scheduling and data-quality states
+
+Reports adds Client backup health to the existing schedule editor. PDF/CSV,
+weekly/monthly cadence, current workload/tag scope and existing email/disk
+delivery controls reuse the schedule workflow. Empty selection and tags mean
+all current VMs and system containers. The picker restricts this kind to those
+workload types and has no performance-report selection cap. Its existing default
+cap remains unchanged for other consumers. Switching kinds retains only valid
+workload selections and preserves the existing digest/inventory constraints.
+
+The schedule card presents last report data quality separately from delivery
+acceptance. Missing/incomplete history never reads as zero failures or completed
+delivery failure. The browser payload cannot supply server-owned quality fields.
+Copy states the PVE task scope, PBS destinations and unsupported-provider state.
+Pricing and current advanced-reporting/branding entitlement behavior are intact.
+
+Proofs: `ReportingPanel.test.tsx`, `ResourcePicker.test.tsx` and
+`reportingSchedulesModel.backupHealth.test.ts` under Settings tests cover report
+kinds, quality/delivery coexistence, unrestricted workload selection, payloads
+and kind switching. Final-source browser proof covers the actual editor, client
+scope, reload, delivery/recovery states and narrow/desktop layouts.
+
+The shared picker uses semantic theme colours for workload names, selection,
+tags and chips. Large selections remain in a bounded scrollable summary so
+client filters and delivery controls stay reachable. Toggle rows expose pressed
+state, and keyboard removal scrolls selected chips into view. The browser matrix
+covers light and dark themes at all three widths.
+
+The additive reporting-catalog `backupHealthAvailable` flag describes runtime
+renderer presence independently of entitlement. New backup schedules are offered
+only when it is present, while existing schedules remain editable after a runtime
+change. Legacy catalogs default to false. API and catalog-model tests cover
+absence and registration so staggered source upgrades do not offer unavailable
+rendering. No price or entitlement changes.
+
+### Native power qualifies in-guest memory without renewing its observation
+
+A Proxmox native pause or suspend makes an otherwise current in-guest memory
+reading last known; a reported stop makes it unavailable. This applies only to
+Pulse Agent and QEMU meminfo sources, across the Workloads table's bars and
+sparklines, guest memory details, memory sort/search and both drawers' current
+History fallbacks and canonical memory facts. Canonical online health or a still-valid agent lease cannot
+promote the earlier reading over the native power state. Source, timestamp and
+wire state are retained unchanged; no client collection lease is introduced.
+
+Host-reported Proxmox memory, other integrations and independently reporting
+agents under unknown native power keep their existing qualification. Explicit
+unavailable/invalid readings stay unavailable; missing provenance stays unknown.
+Stored History paths, measured zero, saved alert policy, guest operations and
+backup monitoring are unchanged. Running-state replacement may display a new
+current zero; that is not proof of thaw, writes or recovery.
+
+`memoryObservation.test.ts`, `GuestRow.test.tsx`,
+`GuestDrawerHistory.memory-provenance.test.tsx` and
+`resourceDetailDrawerMetricsHistoryModel.linked-filesystems.test.ts` and
+`ResourceDetailDrawer.machine-history.test.tsx` exercise
+source/power boundaries and mounted transitions. The source-bound
+`guest-memory-native-power.cjs` browser protocol drives the production canonical
+delta merger and Workloads mapper through row disclosures, guest details and both
+History surfaces at desktop and 320px, preserving stored paths. These synthetic
+read-only fixtures establish presentation, not native or installed recovery.
+
+### Backup job failure words retain the complete provider status
+
+Coverage's existing job summary and decorative status dot use Failed/danger
+for the PVE poller's explicit `ERROR:` status prefix, including compact layouts
+where the textual label remains available to assistive technology. The existing
+job disclosure renders the complete raw status as wrapping plain text, not
+hover-only text or HTML, separately from any reported error. Search accepts
+both the normalised Failed verdict and the source message. Unknown lookalikes
+remain literal; a successful status with a separate error stays Unknown.
+`ProxmoxCoverageTable.taskDetail.test.tsx` and `backup-failure-status.cjs` cover
+full status visibility, narrow wrapping, keyboard/touch refresh and stale-error
+withdrawal. No shared primitive, mutation control or provider operation is added.
+
+
+### Backup artifact evidence reuses the shared modal boundary
+
+`ArtifactStateBadge` keeps MetadataBadge tones and adds one labelled native
+read-only disclosure per mounted artifact in By date and expanded Coverage.
+The shared Dialog owns focus containment, Escape/backdrop dismissal, background
+inertness and scroll locking; the trigger restores focus without activating an
+enclosing row. The phone target is at least 44px tall and the modal's complete
+provider identifiers wrap inside its scrollable body, not the narrow state cell.
+There is no new route, mutation, inventory fetch or global listener while closed.
+Unit and desktop/320px browser checks cover state/prune separation, live
+replacement, native activation, literal text, focus and nested-table retention.
+
+### Backup job interval uses existing read-only disclosure primitives
+
+Proxmox Coverage's existing native disclosure and wrapping definition list now
+include the literal collected job ID, reported end and recorded duration. The
+identifier stays byte-for-byte as supplied, including any instance/guest scope;
+it is not labelled as an extracted raw Proxmox UPID. Timestamp text
+includes seconds and timezone; invalid values remain escaped plain text, never
+markup or a made-up running timer. The existing platform date/duration formatters
+are reused without changing their contracts. `ProxmoxCoverageTable.taskDetail.test.tsx`
+and `backup-job-interval.cjs` check readable responsive fields and same-open
+replacement using the real reader/model/table. No shared primitive, action,
+route or collection contract changes; these are collected facts, not recovery.
+
+### Shared disk presenters keep canonical source expiry
+
+The Storage and guest SMART presenters carry `getResourceStaleness` through
+health, temperature, endurance and attribute cards instead of promoting a retained
+report when its inventory GET succeeds. Whole-source expiry is distinct from
+per-field unavailability. Compact health vocabulary remains short enough for
+phone tracks, while expanded detail states that current disk health is unconfirmed
+and preserves recorded adverse evidence. No new frontend route, collection policy
+or browser-side freshness threshold is introduced. Source-bound desktop/320px
+HTTP journeys live in `disk-source-freshness.cjs`; component and presentation
+regressions cover replacement, retained risk and recovery in existing details.
+
+`StorageDetailMetricCard` owns its label wrapping rather than inheriting a parent
+table's nowrap setting. Long safety qualifiers remain inside the card at narrow
+widths; this leaves ordinary table rows dense without clipping expanded evidence.
+
+
+### Abandoned polled reads retain their failure across remount
+
+A polled read abandoned by the existing stall fallback records its failed result
+in the same bounded cache as a settled read, before its replacement starts. This
+retention uses the abandoned read's original key and access generation; it cannot
+repopulate a generation invalidated by a denied read or organisation change.
+Late abort-ignoring responses remain fenced. Cadence, stall threshold, LRU/expiry,
+foreground replacement and successful-query retention are unchanged.
+
+`createNonSuspendingQuery.test.tsx` covers loaded and never-loaded remounts,
+late settlement and access-generation invalidation. `useProtectionPostures.test.ts`
+checks the actual protection consumer: an abandoned evaluation stays unavailable,
+with no current verdict or policy, through remount and pending retry. Only a
+successful current evaluation restores them. Independent restore evidence is not
+withdrawn. The read-only `protection-posture-remount.cjs` HTTP/browser protocol
+exercises the production Backups reader, Coverage and shipped CSS at desktop and
+320px, including keyboard/touch retry and organisation fencing. This is truthful
+monitoring presentation, not guest thaw, filesystem liveness or backup recovery.
+
+
+### Group acknowledgements retain per-alert outcomes (20 October 2026)
+
+The existing Alerts overview counts only unacknowledged group members in its
+acknowledgement action. Group, individual-card and all-alert writes share the
+per-alert processing lock, so overlapping controls cannot submit duplicate
+writes while an acknowledgement is pending. Independent groups remain usable.
+The existing short processing release delay is unchanged; rejected members
+become actionable again when it completes.
+
+Group and all-alert replies use the same exact-request reconciliation. Only
+unique, explicit successful confirmations for requested canonical alert IDs
+update the shared store. Rejected, omitted or conflicting results stay active
+and produce the existing failure-count notification, alongside a success count
+when appropriate. A result for an unrequested same-name neighbour cannot change
+its acknowledgement. Already acknowledged or removed group members are not
+submitted. Acknowledgement is not resolution, deletion or proof of monitoring
+recovery; no collection, notification routing or API contract changes.
+
+`useAlertAcknowledgementState.test.tsx` checks partial/all/request failure,
+retry, missing/conflicting/duplicate replies, current membership and overlapping
+requests. `OverviewTab.groupacknowledgement.test.tsx` exercises rendered counts,
+busy/disabled controls and retained failed members. The presentation regression
+and `browser-tests/alert-group-acknowledgement.cjs` bind the same existing flow
+to desktop keyboard and narrow touch interactions through the real HTTP adapter
+and toast consumer with synthetic local responses only.
+
+Pending acknowledgement dims only disabled actions, not the whole alert card.
+The first pending-state browser audit found twelve contrast failures from
+whole-card processing opacity. Removing that opacity preserves readable current
+conditions and timestamps until a reply arrives; busy/disabled controls and the
+processing lock remain explicit. Presentation regressions cover active and
+acknowledged cards at every severity while processing.
+
+Each completed acknowledgement request releases its reservations with one
+1500ms timer and one Set copy for the entire requested batch. Reserving all
+alerts must not introduce a timer and full Set copy per alert during an alert
+flood. The shared-owner regression covers a500-member batch and cleanup.
+
+
+### Invalid threshold drafts never masquerade as saved limits (20 October 2026)
+
+The existing shared numeric threshold editor labels out-of-range, incomplete
+numeric and blank enabled-default drafts inline and exposes their errors to
+assistive technology. Invalid text never replaces the last accepted value.
+A genuinely empty override still inherits, an inherited default may remain blank,
+and the explicit Off control remains the only numeric editor action for disabling
+a limit. Existing fractional metric limits remain accepted: the spinner step
+is not a new persistence restriction. Backend policy and API shapes are unchanged.
+
+Policy Save checks every mounted numeric threshold before any configuration or
+destination write. A rejected save retains the draft, reports that no settings
+were saved, reveals a folded group if needed and focuses its first invalid
+field. Desktop row blur and the narrow card's row-save action apply the same
+validation before accepting an override, so closing a row cannot discard a
+visible invalid limit and silently stage the previous one. Correction and Off
+withdraw the corresponding error; cancellation still discards a row edit.
+
+`alertThresholdValidation.test.tsx` covers bounds, blank/default/inherit/Off,
+fractional recovery, bad-number versus empty input, scoped validation and
+folded-group focus. ResourceTable regression tests and
+`browser-tests/alert-threshold-validation.cjs` exercise the actual configuration
+surface, HTTP adapter, responsive tables and toast consumer with local synthetic
+responses. The baseline reproduces success with a visible150 limit or blank
+default while80 is sent; repaired saves must send nothing until correction,
+then persist the exact corrected limit. No production policy or notification
+operation is part of that proof.
+
+The consuming browser audit also rejects reduced-opacity informational text
+for Off limits and disabled group headings. Off remains explicit in text and
+muted/italic styling; disabled controls remain disabled. Removing whole-label
+opacity restores readable contrast without enabling alerts or altering policy.
+
+The desktop row editor's existing slider thumbs use theme-aware dark text in
+light mode and light text in dark mode, rather than low-contrast mid-tone
+colours. Fill colours and interaction are unchanged. Slider presentation and
+component regressions preserve the text/fill distinction; the browser audits
+all four metric colours, including the temperature consumer, in both themes.
+
+An unrelated parent or focus update must not overwrite the rejected native
+draft with the last accepted value or withdraw its error. The shared numeric
+editor memoizes accepted value/state boundaries. Implicit desktop row blur
+checks validity without forcing focus back during the blur event; explicit
+policy/card Save still reveals and focuses the first invalid field. The
+browser checks both the rejected value and visible error before and after its
+light/dark captures, following the pixel review that caught the earlier reset.
+
+Threshold resource snapshots are temporary objects, not editor identities.
+Desktop rows use the existing bounded renderer's logical key extractor; narrow
+cards reconcile their existing keyed items before windowing. Resampling a
+resource or changing another default must preserve the mounted numeric editor,
+its rejected native draft and its labelled error. This does not pin removed
+resources or change the existing window size, runway or source identity.
+
+The ResourceTable resampling regression covers both layouts and the browser
+changes another real global limit while a row is invalid, checks whole-policy
+Save sends nothing, and verifies that the invalid value and visible reason
+survive the capture and accessibility scan.
+
+Retaining a row must not freeze its accepted policy display. Numeric value text,
+Off styling and backup/snapshot badges read reactive props rather than taking a
+construction-time snapshot. ResourceTable controls cover accepted override,
+Off, inheritance, protection badges and connectivity after resampling in both
+layouts. The browser also compares the visible rate text and accessible name
+with the actual saved override and its removal; an HTTP-only inheritance pass
+is insufficient when the consumer still displays the previous override.
+
+### Updates panel offers the Pulse Pro runtime switch (14 October 2026)
+
+`UpdatesSettingsPanel.tsx` mounts `ProRuntimeSwitchCard` above the version box,
+and asks `GET /api/updates/pro-runtime` only when the runtime identity reports
+the community build and the install is not a source build. The card composes
+the shared `CalloutCard`, `Button` and `CopyCommandBlock` primitives; its copy
+lives in `getProRuntimeSwitchPresentation` in `utils/proRuntimeSwitchPresentation.ts`
+beside the shared Updates copy in `utils/updatesPresentation.ts`. Only `in_place`, `docker`,
+`older_release`, `prerelease_only` and `unavailable` render; every other reason
+stays hidden, and the License panel keeps its own runtime notice.
+`prerelease_only` is an info callout without a switch button: the only Pro
+build on offer is a preview and a stable-channel install never installs one,
+so the card names that preview version and says the switch appears once a
+stable Pulse Pro release is published. The in-place switch needs an
+explicit confirm step, and progress comes from the existing update progress
+modal rather than card-local state. Command blocks pad clear of the copy
+button so long digest-pinned commands stay readable when they wrap.
+
+The switch card is a lazy leaf, mounted only after a known community release
+identity is available; source, Pro and unknown builds do not load its controls
+or request a switch check. Withdrawing eligibility also withdraws a retained
+offer. A failed check shows the quiet unavailable notice, not a silent absence.
+Confirmation moves keyboard focus to Switch now, and Cancel returns it to the
+offer. Pending submission owns both confirmation controls. Accepted and unknown
+request states replace the action with a focused status notice, without claiming
+completion or offering a duplicate write. The existing global update-progress
+watcher and Update history remain the sources of progress and final results.
+
+`ProRuntimeSwitchCard.test.tsx`, `UpdatesSettingsPanel.switch.test.tsx`, the API
+client tests and `browser-tests/pro-runtime-switch.cjs` exercise those boundaries
+through the actual panel and synthetic HTTP responses at desktop and 320px,
+including command copying, both command-block themes, preview-only/older-build
+explanations and definite/uncertain writes. This is consuming-surface proof, not
+an installed community-to-Pro switch, rollback or entitlement-availability claim.
+
+Switch actions use the shared primary button rather than white-on-amber small
+text; the long offer wraps inside the narrow callout. A definite refusal returns
+focus to the confirmation control when it is enabled again. Card-scoped contrast
+and keyboard checks cover the offer and confirmation as well as the notices and
+commands, without claiming a whole-Settings accessibility pass.
+The Docker note owns arbitrary-word wrapping as well as the command blocks:
+the download URL and literal compose-variable guidance stay within the callout's
+content track at 320px. The browser checks actual text-line rectangles, not only
+document scroll width, following the nominal pass rejected by pixel review.
+
+Card-only presentation and request copy live in that lazy leaf as well as the
+controls. Keeping them in the shared Updates helper retained the new strings in
+the constrained Updates chunk despite a dynamic component import. The extraction
+preserves the function/constant bytes and existing presentation controls, rather
+than increasing the budget or changing any offer, reason or command contract.
+
+### Quoted registry compatibility (20 October 2026)
+
+The two existing paid Docker guides accept the current paired-single-quoted
+registry host as well as the recognised legacy placeholder template. Both are
+rebuilt as a non-secret interactive Docker login after registry/image identity
+validation. Malformed quoting, injected suffixes, secrets and unrelated registry
+identities stay withheld without echo or a login copy action. The password note
+explains hidden input and Ctrl+C cancellation. Pull/up commands remain untouched.
+
+### Retained guest hardware is visibly qualified
+
+The shared RAID card exposes its last-known reason in visible wrapping status
+text, not only hover titles. In the guest Overview, the native Proxmox VM power
+state (paused, suspended, stopped/offline) overrides an unexpired in-guest agent
+lease for RAID and agent-supplied physical-disk views. Stopped/offline Proxmox
+LXC guests apply the same retention boundary to their own agent hardware reports,
+without imposing it on independent API-only disks. Unknown power, paused LXC
+states and unrelated platforms do not acquire invented Proxmox power semantics.
+Array/member state and adverse evidence remain readable, without current state
+colours, rebuild speed or progress claims. GuestHardwareObservation and RaidCard
+regressions cover the live retained presentation; guest-hardware-observation.cjs
+covers actual canonical deltas, the mapper, full drawer and desktop/phone pixels.
+This is not independent thaw, filesystem liveness or installed recovery.

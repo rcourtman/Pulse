@@ -3,6 +3,8 @@ package hostagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -31,12 +33,13 @@ type pveshClusterStatus struct {
 const (
 	clusterSensorsPerPeerTimeout = 8 * time.Second
 	clusterSensorsTotalBudget    = 15 * time.Second
+	clusterSensorWarningInterval = 5 * time.Minute
 )
 
 // collectClusterSensors discovers Proxmox cluster siblings and collects temperature
 // data from each via SSH. Returns nil if not in a cluster or no peers are reachable.
 func (a *Agent) collectClusterSensors(ctx context.Context) []agentshost.ClusterNodeSensors {
-	if !a.cfg.EnableProxmox || a.cfg.DisableClusterPeerSensors {
+	if !a.cfg.EnableProxmox || a.cfg.DisableClusterPeerSensors || ctx.Err() != nil {
 		return nil
 	}
 
@@ -63,22 +66,26 @@ func (a *Agent) collectClusterSensors(ctx context.Context) []agentshost.ClusterN
 		}
 	}
 
+	a.pruneClusterSensorFailures(remotePeers)
 	if len(remotePeers) == 0 {
 		return nil
 	}
 
-	// Find SSH key for inter-node communication
-	sshKeyPath := a.findClusterSSHKey()
-	if sshKeyPath == "" {
-		a.logger.Debug().Msg("No Proxmox cluster SSH key found, skipping cluster sensor collection")
+	// Offer only the existing supported cluster identities, preferring PVE's
+	// usual RSA identity without excluding a working Ed25519 identity.
+	sshKeyPaths := a.findClusterSSHKeys()
+	if len(sshKeyPaths) == 0 {
+		for _, peer := range remotePeers {
+			a.logClusterSensorResult(peer, errors.New("no supported cluster SSH key found"), time.Now())
+		}
 		return nil
 	}
 
 	// Collect from all peers in parallel
 	type peerResult struct {
-		NodeName string
-		Sensors  agentshost.Sensors
-		OK       bool
+		Peer    clusterPeer
+		Sensors agentshost.Sensors
+		Err     error
 	}
 
 	var wg sync.WaitGroup
@@ -92,21 +99,11 @@ func (a *Agent) collectClusterSensors(ctx context.Context) []agentshost.ClusterN
 			peerCtx, peerCancel := context.WithTimeout(budgetCtx, clusterSensorsPerPeerTimeout)
 			defer peerCancel()
 
-			sensors, err := a.collectPeerSensors(peerCtx, p, sshKeyPath)
-			if err != nil {
-				a.logger.Debug().
-					Err(err).
-					Str("peer", p.Name).
-					Str("ip", p.IP).
-					Msg("Failed to collect sensors from cluster peer")
-				return
+			sensorData, err := a.collectPeerSensors(peerCtx, p, sshKeyPaths)
+			if err == nil && len(sensorData.TemperatureCelsius) == 0 {
+				err = errors.New("peer returned no usable temperature readings")
 			}
-
-			results[idx] = peerResult{
-				NodeName: strings.ToLower(p.Name),
-				Sensors:  sensors,
-				OK:       true,
-			}
+			results[idx] = peerResult{Peer: p, Sensors: sensorData, Err: err}
 		}(i, peer)
 	}
 
@@ -116,9 +113,15 @@ func (a *Agent) collectClusterSensors(ctx context.Context) []agentshost.ClusterN
 	now := time.Now().UTC().Format(time.RFC3339)
 	var clusterSensors []agentshost.ClusterNodeSensors
 	for _, r := range results {
-		if r.OK && len(r.Sensors.TemperatureCelsius) > 0 {
+		// Shutdown/caller cancellation is not an SSH incident or a recovery.
+		if ctx.Err() == nil {
+			a.logClusterSensorResult(r.Peer, r.Err, time.Now())
+		}
+		// Valid readings from a partial sensor command remain useful, but
+		// its non-zero exit is still warned and never called recovery.
+		if len(r.Sensors.TemperatureCelsius) > 0 {
 			clusterSensors = append(clusterSensors, agentshost.ClusterNodeSensors{
-				NodeName:    r.NodeName,
+				NodeName:    strings.ToLower(r.Peer.Name),
 				Sensors:     r.Sensors,
 				CollectedAt: now,
 			})
@@ -168,61 +171,104 @@ func parseClusterStatus(jsonOutput string) ([]clusterPeer, error) {
 	return peers, nil
 }
 
-// findClusterSSHKey returns the path to the Proxmox inter-node SSH key.
-// Proxmox clusters set up mutual root SSH trust during `pvecm add`.
-func (a *Agent) findClusterSSHKey() string {
-	// Check keys in priority order: ed25519 first (modern), then RSA (legacy)
-	candidates := []string{
-		"/root/.ssh/id_ed25519",
-		"/root/.ssh/id_rsa",
-	}
-
-	for _, path := range candidates {
+// findClusterSSHKeys returns existing supported identities, not their contents.
+// pvecm commonly authorises RSA; an unrelated Ed25519 key must not hide it.
+func (a *Agent) findClusterSSHKeys() []string {
+	var paths []string
+	for _, path := range []string{"/root/.ssh/id_rsa", "/root/.ssh/id_ed25519"} {
 		if _, err := a.collector.Stat(path); err == nil {
-			return path
+			paths = append(paths, path)
 		}
 	}
+	return paths
+}
 
-	return ""
+func (a *Agent) pruneClusterSensorFailures(peers []clusterPeer) {
+	active := make(map[clusterPeer]bool, len(peers))
+	for _, peer := range peers {
+		active[peer] = true
+	}
+	a.clusterSensorLogMu.Lock()
+	defer a.clusterSensorLogMu.Unlock()
+	for peer := range a.clusterSensorFailures {
+		if !active[peer] {
+			delete(a.clusterSensorFailures, peer)
+		}
+	}
+}
+
+func (a *Agent) logClusterSensorResult(peer clusterPeer, err error, now time.Time) {
+	a.clusterSensorLogMu.Lock()
+	defer a.clusterSensorLogMu.Unlock()
+	last, failed := a.clusterSensorFailures[peer]
+	if err == nil {
+		if failed {
+			delete(a.clusterSensorFailures, peer)
+			a.logger.Info().Str("peer", peer.Name).Msg("Cluster peer sensor collection recovered")
+		}
+		return
+	}
+	if failed && now.Sub(last) < clusterSensorWarningInterval {
+		return
+	}
+	if a.clusterSensorFailures == nil {
+		a.clusterSensorFailures = make(map[clusterPeer]time.Time)
+	}
+	a.clusterSensorFailures[peer] = now
+	// Do not log SSH/sensor output: it can contain private hardware details.
+	a.logger.Warn().Err(err).Str("peer", peer.Name).
+		Msg("Cluster peer sensors incomplete or unavailable; check root SSH authorisation and sensors -j on that peer. To use only local agent sensors, set --disable-cluster-peer-sensors (warnings limited to once per peer every 5 minutes)")
 }
 
 // collectPeerSensors SSHes to a peer node and runs `sensors -j` to collect temperature data.
-func (a *Agent) collectPeerSensors(ctx context.Context, peer clusterPeer, sshKeyPath string) (agentshost.Sensors, error) {
+func (a *Agent) collectPeerSensors(ctx context.Context, peer clusterPeer, sshKeyPaths []string) (agentshost.Sensors, error) {
 	// StrictHostKeyChecking=no is intentional here: Proxmox cluster nodes have
 	// mutual root SSH trust set up by `pvecm add`, but the local known_hosts
 	// may not include all peer IPs (e.g., after adding a new node). Since the
 	// agent already runs as root inside the trusted cluster network and only
 	// reads temperature data, the MITM risk is acceptable. This differs from
 	// the Pulse server SSH path which manages its own known_hosts file.
-	output, err := a.collector.CommandCombinedOutput(ctx, "ssh",
-		"-i", sshKeyPath,
+	args := make([]string, 0, 2*len(sshKeyPaths)+16)
+	for _, path := range sshKeyPaths {
+		args = append(args, "-i", path)
+	}
+	args = append(args,
+		"-o", "IdentitiesOnly=yes",
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=5",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "LogLevel=ERROR",
 		"root@"+peer.IP,
-		"sensors -j 2>/dev/null || true",
+		"sensors -j 2>/dev/null",
 	)
-	if err != nil {
-		return agentshost.Sensors{}, err
+	output, commandErr := a.collector.CommandCombinedOutput(ctx, "ssh", args...)
+	if commandErr != nil {
+		// lm-sensors can return 1 alongside usable readings when one chip
+		// fails. Preserve those known readings, without masking the failure.
+		// SSH auth/transport errors (255), missing commands (127), cancellation
+		// and other exits must not turn arbitrary output into live readings.
+		var exitErr *exec.ExitError
+		if !errors.As(commandErr, &exitErr) || exitErr.ExitCode() != 1 {
+			return agentshost.Sensors{}, commandErr
+		}
 	}
 
 	output = strings.TrimSpace(output)
 	if output == "" || output == "{}" {
-		return agentshost.Sensors{}, nil
+		return agentshost.Sensors{}, commandErr
 	}
 
 	// Parse using the shared sensors parser
 	tempData, err := a.collector.SensorsParse(output)
 	if err != nil {
-		return agentshost.Sensors{}, err
+		return agentshost.Sensors{}, errors.Join(commandErr, err)
 	}
 
 	if !tempData.Available {
-		return agentshost.Sensors{}, nil
+		return agentshost.Sensors{}, commandErr
 	}
 
 	// Convert to flat sensor format using the shared helper
-	return convertTemperatureDataToSensors(tempData), nil
+	return convertTemperatureDataToSensors(tempData), commandErr
 }

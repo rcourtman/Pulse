@@ -21,6 +21,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   journey:
+    # Each leg gets its own first-level VM. An absent browser registration
+    # must not cancel or prevent the selected-installer native result.
+    name: Published RC ${{ matrix.mode }} recovery
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [native, browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -72,7 +79,7 @@ jobs:
           python3 scripts/write_github_output.py from "$from"
           python3 scripts/write_github_output.py from_commit "$from_commit"
           python3 scripts/write_github_output.py to_commit "$to_commit"
-      - name: Authenticate both release archives before execution
+      - name: Authenticate both release archives and installers before execution
         env:
           FROM: ${{ steps.pair.outputs.from }}
           TAG: ${{ inputs.tag }}
@@ -87,22 +94,50 @@ jobs:
           for tag in "$FROM" "$TAG"; do
             mkdir -m 0700 "$root/$tag"
             name="pulse-$tag-linux-amd64.tar.gz"
-            for file in "$name" "$name.sshsig"; do
-              curl --fail --silent --show-error --location --retry 0 --max-time 120 --max-filesize 536870912 \
+            for file in "$name" "$name.sshsig" install.sh install.sh.sshsig; do
+              limit=536870912
+              if [[ "$file" == install.sh ]]; then limit=2097152; fi
+              if [[ "$file" == *.sshsig ]]; then limit=16384; fi
+              curl --fail --silent --show-error --location --retry 0 --max-time 120 --max-filesize "$limit" \
                 "https://github.com/rcourtman/Pulse/releases/download/$tag/$file" --output "$root/$tag/$file"
             done
             ssh-keygen -Y verify -f "$root/allowed_signers" -I pulse-installer -n pulse-install \
               -s "$root/$tag/$name.sshsig" < "$root/$tag/$name"
+            ssh-keygen -Y verify -f "$root/allowed_signers" -I pulse-installer -n pulse-install \
+              -s "$root/$tag/install.sh.sshsig" < "$root/$tag/install.sh"
           done
           python3 scripts/release_browser_packet.py --baseline "$root/baseline.json" --candidate "$root/candidate.json" \
             --from-commit "$FROM_COMMIT" --to-commit "$TO_COMMIT" --tag "$TAG" \
             --archives "$root" --output "$root/packet.json"
+      - name: Prepare native tools
+        run: |
+          set -euo pipefail
+          # Ubuntu packages only: the runner image's Microsoft source is not needed and
+          # its outage (403 on 22 October 2026) failed v6.6.0-rc.6's required audit.
+          # An image without that source is fine, so a missing match never fails.
+          sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends jq curl openssh-client
+      - name: Exercise signed selected-installer forward and reverse recovery
+        if: matrix.mode == 'native'
+        env:
+          FROM: ${{ steps.pair.outputs.from }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          sudo env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 \
+            GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted GITHUB_REPOSITORY=rcourtman/Pulse GITHUB_REF=refs/heads/main \
+            PULSE_REHEARSAL_WORKDIR="$RUNNER_TEMP/browser-release/journey" \
+            PULSE_REHEARSAL_PACKET_MANIFEST="$RUNNER_TEMP/browser-release/packet.json" \
+            bash scripts/release_lifecycle_rehearsal.sh --hosted-native --from "$FROM" --to "$TAG"
       - name: Prepare pinned browser without lifecycle hooks
+        if: matrix.mode == 'browser'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           package-manager-cache: false
       - name: Prepare Chromium and native tools
+        if: matrix.mode == 'browser'
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/browser-release/browsers
         run: |
@@ -114,9 +149,8 @@ jobs:
           # An image without that source is fine, so a missing match never fails.
           sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true
           npx --no-install playwright install --with-deps chromium
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends jq curl openssh-client
       - name: Require the dedicated narrow CI registration binding
+        if: matrix.mode == 'browser'
         env:
           CI_CLIENT_ID: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}
           CI_CLIENT_SECRET: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}
@@ -128,6 +162,7 @@ jobs:
           fi
       - name: Register a fresh ephemeral narrow CI node
         id: tailnet
+        if: matrix.mode == 'browser'
         uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
           oauth-client-id: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}
@@ -136,6 +171,7 @@ jobs:
           version: '1.94.2'
       - name: Serve only this disposable install
         id: serve
+        if: matrix.mode == 'browser'
         run: |
           set -euo pipefail
           # Validate the actual Self tag before Serve. Never select a peer or
@@ -144,6 +180,7 @@ jobs:
           tailscale serve --bg --https=443 http://127.0.0.1:7655
           python3 scripts/write_github_output.py origin "$origin"
       - name: Exercise native browser update and documented recovery
+        if: matrix.mode == 'browser'
         env:
           FROM: ${{ steps.pair.outputs.from }}
           TAG: ${{ inputs.tag }}
@@ -164,15 +201,16 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: browser-release-${{ github.run_id }}
+          name: ${{ matrix.mode }}-release-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/browser-release/control.json
             ${{ runner.temp }}/browser-release/packet.json
             ${{ runner.temp }}/browser-release/journey/state/browser-upgrade.json
             ${{ runner.temp }}/browser-release/journey/state/browser-recovery.json
             ${{ runner.temp }}/browser-release/journey/state/browser-cleanup.json
+            ${{ runner.temp }}/browser-release/journey/state/native-cleanup.json
             ${{ runner.temp }}/browser-release/journey/state/lifecycle-result.json
-            ${{ runner.temp }}/browser-release/journey/state/installer.json
+            ${{ runner.temp }}/browser-release/journey/state/installer-*.json
             ${{ runner.temp }}/browser-release/journey/state/browser-*.png
             ${{ runner.temp }}/browser-release/journey/state/installed-*.json
             ${{ runner.temp }}/browser-release/journey/state/settings.*.json

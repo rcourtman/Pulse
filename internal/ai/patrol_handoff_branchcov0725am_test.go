@@ -179,7 +179,7 @@ func TestBranchcov0725amPatrolRunScopeSummary(t *testing.T) {
 			run: PatrolRunRecord{
 				EffectiveScopeResourceIDs: []string{"vm-1"},
 			},
-			want: "Scoped to 1 resource",
+			want: "Scoped",
 		},
 		{
 			// Multi-item effective scope (suffix "s").
@@ -187,7 +187,7 @@ func TestBranchcov0725amPatrolRunScopeSummary(t *testing.T) {
 			run: PatrolRunRecord{
 				EffectiveScopeResourceIDs: []string{"vm-1", "vm-2", "vm-3"},
 			},
-			want: "Scoped to 3 resources",
+			want: "Scoped",
 		},
 		{
 			// Effective nil -> falls back to ScopeResourceIDs (single).
@@ -195,7 +195,7 @@ func TestBranchcov0725amPatrolRunScopeSummary(t *testing.T) {
 			run: PatrolRunRecord{
 				ScopeResourceIDs: []string{"node-1"},
 			},
-			want: "Scoped to 1 resource",
+			want: "Scoped",
 		},
 		{
 			// Effective non-nil empty slice takes precedence over a populated
@@ -232,7 +232,7 @@ func TestBranchcov0725amPatrolRunScopeSummary(t *testing.T) {
 				EffectiveScopeResourceIDs: []string{"vm-1"},
 				ScopeResourceTypes:        []string{"vm"},
 			},
-			want: "Scoped to 1 resource",
+			want: "Scoped",
 		},
 		{
 			// Scoped-only arm: Type == "scoped", no ids/types.
@@ -292,7 +292,7 @@ func TestBranchcov0725amPatrolRunCoverageSummary(t *testing.T) {
 				EffectiveScopeResourceIDs: []string{"a", "b", "c"},
 				ResourcesChecked:          1,
 			},
-			want: "Checked 1 of 3 scoped resources",
+			want: "Checked 1 scoped resource",
 		},
 		{
 			// Full scoped arm, singular: checked == scope == 1.
@@ -319,7 +319,7 @@ func TestBranchcov0725amPatrolRunCoverageSummary(t *testing.T) {
 				ScopeResourceIDs: []string{"a", "b", "c"},
 				ResourcesChecked: 1,
 			},
-			want: "Checked 1 of 3 scoped resources",
+			want: "Checked 1 scoped resource",
 		},
 		{
 			// Effective non-nil empty overrides a populated ScopeResourceIDs:
@@ -369,20 +369,17 @@ func TestBranchcov0725amPatrolRunCoverageSummary(t *testing.T) {
 				TrueNASChecked:    1,
 				KubernetesChecked: 6,
 			},
-			want: "2 nodes; 3 VMs; 1 containers; 4 storage resources; 5 agents; 1 TrueNAS systems; 6 Kubernetes resources",
+			want: "2 nodes; 3 VMs; 1 Docker host; 4 storage resources; 5 agents; 1 TrueNAS systems; 6 Kubernetes resources",
 		},
 		{
-			// Subtle fall-through: scope is populated but resourcesChecked
-			// is 0, so neither scoped inner-if fires and the breakdown join
-			// is returned instead. Scoped zero-checked runs do NOT report
-			// "Checked 0 of N"; see report for the source observation.
-			name: "scoped_zero_checked_falls_through_to_breakdown",
+			// Preserve a zero checked count, without using scope aliases as a denominator.
+			name: "scoped_zero_checked_stays_explicit",
 			run: PatrolRunRecord{
 				EffectiveScopeResourceIDs: []string{"a", "b"},
 				ResourcesChecked:          0,
 				NodesChecked:              1,
 			},
-			want: "1 nodes",
+			want: "Checked 0 scoped resources",
 		},
 		{
 			// Negative ResourcesChecked is clamped to 0 via max(); with no

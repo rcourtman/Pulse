@@ -2133,7 +2133,23 @@ header .logout-btn:hover,
   .main {
     padding: 0 12px 40px;
   }
+  .header-controls,
+  .header-controls .user-info {
+    min-width: 0;
+  }
+  .header-account-chip {
+    display: flex;
+    min-width: 0;
+  }
+  header .theme-toggle,
+  header .logout-btn {
+    flex-shrink: 0;
+  }
+  header .logout-btn {
+    white-space: nowrap;
+  }
   .header-account-email {
+    min-width: 0;
     max-width: 120px;
     overflow: hidden;
     text-overflow: ellipsis;

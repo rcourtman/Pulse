@@ -35,4 +35,7 @@ regexes = [
     '''admin:admin''',
     # E2E test bootstrap token (deterministic, not a real secret)
     '''0123456789abcdef''',
+    # The published installer-signing public key (README, INSTALL.md); tests
+    # pin its exact value so a swapped key fails.
+    '''AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH\+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm''',
 ]
