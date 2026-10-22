@@ -8316,6 +8316,7 @@
       "owned_files": [
         "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
         "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
+        "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts",
         "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
         "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
@@ -8334,8 +8335,7 @@
         "frontend-modern/src/utils/recoveryTimelineChartPresentation.ts",
         "frontend-modern/src/utils/recoveryTimelinePresentation.ts",
         "internal/api/configapi/setup_script_render.go",
-        "internal/proxmoxidentity/backup_identity.go",
-        "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts"
+        "internal/proxmoxidentity/backup_identity.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -8428,6 +8428,7 @@
             "match_files": [
               "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
               "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
+              "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts",
               "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
               "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
@@ -8437,12 +8438,13 @@
               "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
-              "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts",
-              "frontend-modern/src/features/proxmox/proxmoxBackupNodeScope.ts"
+              "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/features/proxmox/__tests__/backup-node-scope.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupNodeScope.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.branchcov.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupServersTable.capacity.test.tsx",
@@ -8452,9 +8454,7 @@
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.taskDetail.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxPageSurface.contract.test.tsx",
-              "tests/integration/tests/90-operational-trust-protection-posture.spec.ts",
-              "frontend-modern/src/features/proxmox/__tests__/backup-node-scope.test.tsx",
-              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupNodeScope.test.ts"
+              "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
             ]
           },
           {
