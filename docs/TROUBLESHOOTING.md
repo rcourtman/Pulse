@@ -24,6 +24,11 @@ Jump to a group:
 
 ### Sign-in, access and updates
 
+- **Dashboard stays on "Connecting to Pulse" or stops updating:** distinguish
+  [connection from delivered monitoring state](REVERSE_PROXY.md#dashboard-stays-on-connecting-to-pulse-or-stops-updating).
+  Accepted login, a socket welcome and a green healthcheck do not establish a
+  usable dashboard. Keep working sessions and existing evidence; no repeat
+  outage, restart or raw network dump is needed to report it.
 - **Not sure which version is affected:** distinguish the
   [running server, reported agent and update target](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions).
   A helper's selected release or an agent's target is not its running version.

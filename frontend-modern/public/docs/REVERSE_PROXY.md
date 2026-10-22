@@ -154,9 +154,46 @@ trust. Do not disable authentication, certificate verification or origin checks,
 or expose the backend, to test this. Share only redacted configuration and
 HTTP/error status, not cookies, proxy secrets or a full network export.
 
+### Dashboard stays on "Connecting to Pulse" or stops updating
+
+A successful login, `/api/health` returning `200`, or Docker reporting `healthy`
+does not prove that the dashboard received fresh monitoring state. A WebSocket
+`101` upgrade or `welcome` message establishes a connection, not state delivery.
+
+Use observations you already have; there is no need to recreate the outage or
+collect a full network export:
+
+- **The page or connection failed before the WebSocket upgrade:** retain the
+  existing HTTP status or redacted error. A rejected upgrade may involve the
+  proxy, session or origin checks; it is not automatically a proxy-header fault.
+  Compare the relevant configuration above without weakening authentication,
+  certificate verification or origin restrictions.
+- **The upgrade succeeds, but only `welcome` arrives or readings stop changing:**
+  retain that distinction and the original time and timezone. A green healthcheck
+  does not clear it. More proxy timeout or header changes do not establish a
+  repair for a connection that already upgraded.
+- **It already happened in several browsers or through an existing private
+  direct connection:** include that comparison; do not ask someone to repeat it.
+  Do not publish Pulse's backend port or bypass HTTPS to create a comparison.
+  If a restart already restored the UI, keep that result and its time separate
+  from the failure; recovery after restart does not establish its cause.
+
+For [Getting Help](TROUBLESHOOTING.md#-getting-help), use the affected Pulse
+version/image, observed duration, whether login and the upgrade succeeded, and
+whether monitoring state arrived, where already known. Unknown is valid. Keep
+cookies, tokens, full WebSocket payloads, HAR files, profiles and goroutine dumps
+private; use only a locally reviewed, redacted error or summary. A stack showing
+one waiting goroutine does not identify the lock holder or prove a deadlock.
+
+Keep any working administrator session. Do not repeatedly reload, sign out,
+restart Pulse, enable Debug, reset configuration or run Diagnostics just to
+complete a report. If a guest is unresponsive or backup freeze/thaw is uncertain,
+follow [Backup safety](VM_DISK_MONITORING.md#backup-safety) first; a healthy
+container does not establish guest or filesystem recovery.
+
 ### Other Issues
 
-- **"Connection lost" (Workloads) or "Disconnected", "Reconnecting...", "Sync reconnecting" or "Backend healthy" in the header status badge**: the live data stream is not connected, which can happen when the WebSocket upgrade fails. Check the proxy's `Upgrade` and `Connection` headers.
+- **"Connection lost" (Workloads) or "Disconnected", "Reconnecting...", "Sync reconnecting" or "Backend healthy" in the header status badge**: the live data stream is not connected, which can happen when the WebSocket upgrade fails. Distinguish a rejected upgrade from [a connection without fresh state](#dashboard-stays-on-connecting-to-pulse-or-stops-updating) before changing proxy headers.
 - **502 Bad Gateway**: Check Pulse's actual listener and the proxy's upstream address, port and network reachability; this does not by itself prove Pulse is stopped. Container `localhost` refers to that container, not another service.
 - **CORS Errors**: Do not add CORS headers in the proxy; Pulse handles them. Set **Settings → System → Network → Allowed Origins** or use `ALLOWED_ORIGINS` if needed.
 - **OIDC redirects fail**: Ensure `X-Forwarded-Proto` is set (see above).

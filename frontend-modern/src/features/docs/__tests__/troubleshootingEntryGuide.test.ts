@@ -54,6 +54,10 @@ const workflowDestinations = [
     ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
   ],
   [
+    'Dashboard stays on "Connecting to Pulse" or stops updating:',
+    ['/docs/REVERSE_PROXY#dashboard-stays-on-connecting-to-pulse-or-stops-updating'],
+  ],
+  [
     'Not sure which version is affected:',
     ['/docs/TROUBLESHOOTING#find-the-running-server-and-agent-versions'],
   ],
