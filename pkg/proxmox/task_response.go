@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -76,6 +77,7 @@ func readTasks(resp *http.Response) ([]Task, error) {
 		status := strings.TrimSpace(task.Status)
 		active := status == "" || strings.EqualFold(status, "running")
 		if task.StartTime <= 0 || task.EndTime < 0 ||
+			!taskTimestampFitsJSON(task.StartTime) || !taskTimestampFitsJSON(task.EndTime) ||
 			(active && task.EndTime != 0) || (!active && task.EndTime < task.StartTime) {
 			return nil, errInvalidTaskResponse
 		}
@@ -85,6 +87,16 @@ func readTasks(resp *http.Response) ([]Task, error) {
 		seen[task.UPID] = struct{}{}
 	}
 	return tasks, nil
+}
+
+// Polling converts task seconds to time.Time in served state. A positive int64
+// (for example, milliseconds accidentally supplied as seconds) can exceed
+// time.Time's JSON year range and prevent the entire response from encoding.
+// Validate the same local-time conversion used by consumers; do not guess units,
+// clamp the date or drop just the bad row from replacement inventory.
+func taskTimestampFitsJSON(seconds int64) bool {
+	year := time.Unix(seconds, 0).Year()
+	return year >= 0 && year <= 9999
 }
 
 // This reader always requests start=0. Numbered, present text is necessary

@@ -172,6 +172,13 @@ func TestTaskLifecycleAdmission(t *testing.T) {
 		valid  bool
 	}{
 		{"completed", func(map[string]any) {}, true},
+		{"last-json-year", func(r map[string]any) { r["starttime"] = int64(253402300798); r["endtime"] = int64(253402300799) }, true},
+		{"year-ten-thousand-start", func(r map[string]any) { r["starttime"] = int64(253402300800); r["endtime"] = int64(253402300860) }, false},
+		{"year-ten-thousand-end", func(r map[string]any) { r["endtime"] = int64(253402300800) }, false},
+		{"millisecond-start", func(r map[string]any) { r["starttime"] = int64(1700000000000); r["endtime"] = int64(1700000060000) }, false},
+		{"millisecond-end", func(r map[string]any) { r["endtime"] = int64(1700000060000) }, false},
+		{"max-int64-start", func(r map[string]any) { r["starttime"] = int64(1<<63 - 1); r["endtime"] = int64(1<<63 - 1) }, false},
+		{"max-int64-end", func(r map[string]any) { r["endtime"] = int64(1<<63 - 1) }, false},
 		{"zero-duration", func(r map[string]any) { r["endtime"] = r["starttime"] }, true},
 		{"failed", func(r map[string]any) { r["status"] = "ERROR: fixture failure" }, true},
 		{"warnings", func(r map[string]any) { r["status"] = "WARNINGS: 1" }, true},

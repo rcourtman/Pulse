@@ -65,6 +65,18 @@ func TestPVETaskLifecycleCannotQualifyArchiveOutput(t *testing.T) {
 						case "missing-start":
 							row["status"], row["endtime"] = "OK", at.Add(time.Minute).Unix()
 							delete(row, "starttime")
+						case "json-range-start":
+							row["status"], row["starttime"], row["endtime"] = "OK", int64(253402300800), int64(253402300860)
+						case "json-range-end":
+							row["status"], row["endtime"] = "OK", int64(253402300800)
+						case "millisecond-start":
+							row["status"], row["starttime"], row["endtime"] = "OK", at.UnixMilli(), at.Add(time.Minute).UnixMilli()
+						case "millisecond-end":
+							row["status"], row["endtime"] = "OK", at.Add(time.Minute).UnixMilli()
+						case "max-int64-start":
+							row["status"], row["starttime"], row["endtime"] = "OK", int64(1<<63-1), int64(1<<63-1)
+						case "max-int64-end":
+							row["status"], row["endtime"] = "OK", int64(1<<63-1)
 						}
 					}
 					if data == nil {
@@ -108,7 +120,10 @@ func TestPVETaskLifecycleCannotQualifyArchiveOutput(t *testing.T) {
 			m.state.UpdateStorageBackupsForInstance("other", []models.StorageBackup{peer})
 			peerJob := models.BackupTask{ID: "other-job", Instance: "other", Node: "node", Type: "vzdump", VMID: 100, Status: "OK", StartTime: at.Add(-time.Hour), EndTime: at.Add(-time.Minute), ObservedAt: at}
 			m.state.UpdateBackupTasksForInstance("other", []models.BackupTask{peerJob})
-			phases := []string{"initial", "live-running-end", "live-success-no-end", "live-end-before-start", "live-missing-start", "running", "history-running-end", "history-success-no-end", "history-end-before-start", "history-missing-start", "finished", "empty"}
+			phases := []string{"initial", "live-running-end", "live-success-no-end", "live-end-before-start", "live-missing-start",
+				"live-json-range-start", "live-json-range-end", "live-millisecond-start", "live-millisecond-end", "live-max-int64-start", "live-max-int64-end",
+				"running", "history-running-end", "history-success-no-end", "history-end-before-start", "history-missing-start",
+				"history-json-range-start", "history-json-range-end", "history-millisecond-start", "history-millisecond-end", "history-max-int64-start", "history-max-int64-end", "finished", "empty"}
 			frames := map[string]models.PVEBackups{}
 			var held models.StorageBackup
 			var heldTasks []models.BackupTask
@@ -185,6 +200,8 @@ func TestPVETaskLifecycleCannotQualifyArchiveOutput(t *testing.T) {
 					}
 					assert.True(t, age.Equal(m.state.GetSnapshot().VMs[0].LastBackup), phase+": incomplete task cannot renew backup age")
 				}
+				_, wireErr := json.Marshal(got)
+				assert.NoError(t, wireErr, phase+": a malformed provider date must not poison the served backup response")
 				frames[phase] = got
 			}
 			b, err := json.Marshal(map[string]any{"client": name, "frames": frames})
