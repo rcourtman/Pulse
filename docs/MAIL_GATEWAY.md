@@ -98,6 +98,11 @@ badge or one populated panel does not prove that every dataset was read. Compare
 the affected value and observation window with PMG's own existing view before
 acting on an apparent empty queue or quarantine.
 
+If the service's **State** contradicts a failed read, use the shared
+[connection-state guidance](TROUBLESHOOTING.md#pbs-or-mail-gateway-state-disagrees-with-a-failed-read).
+A green State or a working agent is not proof that the failed mail dataset
+recovered; keep the original error and do not generate mail to test the label.
+
 Current development source records downstream read failures as incomplete
 collection while retaining the successful version connection. Missing readings
 do not become observed zero totals or resolve their metric alerts. Partial

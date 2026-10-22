@@ -73,6 +73,10 @@ Jump to a group:
 - **TrueNAS readings are stale or absent:** use
   [TrueNAS data checks](TRUENAS.md#stale-truenas-data), keeping the platform API
   and Pulse Agent paths separate.
+- **PBS or Mail Gateway State disagrees with a failed read:** distinguish
+  [connection state from complete collection](TROUBLESHOOTING.md#pbs-or-mail-gateway-state-disagrees-with-a-failed-read).
+  A green State does not clear a collection error or prove that retained readings
+  are current. Keep the existing credentials and certificate verification.
 - **PBS is Active but missing from monitoring:** distinguish the
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
@@ -532,6 +536,40 @@ restore, not by overwriting today's history. Follow
 [safe audit recovery](AUDIT_LOGGING.md#verification-failures-and-safe-recovery).
 
 ### Monitoring Data
+
+#### PBS or Mail Gateway State disagrees with a failed read
+
+The **State** in a PBS or PMG service's details describes Pulse's connection
+observation. It is not a backup result, a guest-liveness check or a mail-delivery
+receipt. Compare the same service and connection; an agent on that machine or
+a similarly named server is a different observation.
+
+| State in service details | What it establishes — and what it does not |
+| --- | --- |
+| **Healthy** | A positive connection observation, not successful collection of every datastore, job, queue or quarantine dataset. Read each affected value and its observation time separately. |
+| **Degraded** | A warning or degraded connection observation. It does not identify the failing dataset or establish that other readings are current. |
+| **Unhealthy** or **Offline** | An adverse connection observation, not proof that the server is powered off, a backup failed or mail delivery stopped. Use the original error to distinguish transport, trust, authentication and collection failures. |
+| **Unknown**, a blank State or an unfamiliar label | Missing or unrecognised connection evidence, not a healthy or zero-valued result. Do not infer recovery from a neutral colour. |
+
+**A retained green State does not overrule a failed read.** Labels vary by
+version, and a State row that has not updated can contradict newer errors.
+Keep the original error, time, affected dataset and running Pulse version;
+do not restart Pulse or repeat Test to make the display agree. One successful
+version request or a fresh sibling dataset does not clear the failed read.
+
+Use the existing [PBS connection checks](PBS.md#connection-failed-error) or
+[PMG read-failure checks](MAIL_GATEWAY.md#troubleshooting-without-changing-the-gateway)
+for that error. Keep saved credentials, least-privilege access and certificate
+verification intact; do not rotate secrets, re-add the connection or install
+an agent just to change State. Use the provider's existing view for the affected
+backup or mail dataset while its Pulse reading is uncertain. Recovery means the
+same failed dataset resumes ordinary collection, not merely a green badge.
+
+Share only the relevant redacted error and comparison, not credentials, full
+API responses, private hostnames or mail contents. Do not run a backup, release
+quarantine or generate mail to test a State label. If a guest is frozen or an
+earlier guest request is uncertain, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety)
+instead; a healthy connection does not establish thaw or filesystem liveness.
 
 #### Unraid reports missing disks in empty slots
 

@@ -222,6 +222,11 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 
 ## Troubleshooting
 
+If the service's **State** looks Healthy despite a collection error, distinguish
+[connection state from complete collection](TROUBLESHOOTING.md#pbs-or-mail-gateway-state-disagrees-with-a-failed-read)
+before changing the connection. A green State is not current datastore, job or
+guest-recovery evidence.
+
 ### Datastore capacity is Unknown or disagrees with an alert
 
 In **Proxmox → Backups → Backup servers**, read **Usage** for the affected
