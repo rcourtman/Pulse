@@ -9481,3 +9481,34 @@ Overview at desktop and narrow widths. History remains the independent listing
 rollup; no per-mount History capability is claimed. These GET-only fixtures do
 not establish guest thaw/liveness, incident cause, installed recovery or release
 availability.
+
+
+### Serializable Proxmox task timestamps (22 October 2026)
+
+Node, live/recent, active and History task readers admit timestamp seconds only
+when the consumers' `time.Unix` conversion fits JSON's years 0–9999. A positive
+`int64` alone is insufficient: epoch milliseconds interpreted as seconds, year
+10000 or extreme integer dates otherwise reach `models.BackupTask` as
+`time.Time` and prevent encoding the entire served backup response. Existing
+positive-start/coherent-terminal requirements remain unchanged. This is a
+serialization bound, not a new freshness, clock-skew or unit-conversion policy.
+
+An unrepresentable date fails the complete page, not just its offending row.
+Prior live evidence and its observation times remain intact; failed active
+census cannot confirm writer visibility; History records incomplete collection
+without replacing a live failed/running execution. Independently readable
+snapshots/connections still progress, and a later valid result or complete empty
+read retains normal reconciliation authority. Do not clamp or divide timestamps
+to invent a plausible observation. This changes no guest/QGA/backup operation.
+
+`pkg/proxmox/task_response_test.go::TestTaskLifecycleAdmission` exercises both
+boundaries, millisecond mistakes and max-int64 dates through all four readers,
+with a valid prefix and retained optional/additive fields. The GET-only
+`internal/monitoring/pve_task_lifecycle_test.go` drives direct/cluster HTTP,
+ordinary polling, archives, last-backup age, recovery mapping and JSON encoding
+without opening a database. `scripts/check-pve-task-lifecycle.cjs` consumes its
+actual emitted frames in the existing desktop/narrow Backups table, Coverage
+and expandable task details, preserving original failures and independent
+connections until ordinary completion. These source/consumer checks do not
+establish a reported incident's cause, native backup usability, guest thaw,
+installed recovery, declared-compiler security acceptance or released availability.

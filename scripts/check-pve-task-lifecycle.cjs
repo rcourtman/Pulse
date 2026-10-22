@@ -14,7 +14,10 @@ const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 const producerBytes = fs.readFileSync(path.join(out, 'producer.json'));
 const producer = JSON.parse(producerBytes);
 const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
-const phases = ['initial', 'live-running-end', 'live-success-no-end', 'live-end-before-start', 'live-missing-start', 'running', 'history-running-end', 'history-success-no-end', 'history-end-before-start', 'history-missing-start', 'finished', 'empty'];
+const phases = ['initial', 'live-running-end', 'live-success-no-end', 'live-end-before-start', 'live-missing-start',
+  'live-json-range-start', 'live-json-range-end', 'live-millisecond-start', 'live-millisecond-end', 'live-max-int64-start', 'live-max-int64-end',
+  'running', 'history-running-end', 'history-success-no-end', 'history-end-before-start', 'history-missing-start',
+  'history-json-range-start', 'history-json-range-end', 'history-millisecond-start', 'history-millisecond-end', 'history-max-int64-start', 'history-max-int64-end', 'finished', 'empty'];
 const result = {
   producer: producer.binding, producerSHA256: hash(producerBytes),
   compilerBinding: binding, protocolSHA256: hash(fs.readFileSync(__filename)),
@@ -138,7 +141,7 @@ let payload, server, browser;
           if (phase.startsWith('live-')) assert.equal(await field('Reported status'), 'ERROR: fixture failure', 'the original adverse provider status remains visible');
           assert.equal(await detail.locator('dt').filter({ hasText: /^Result$/ }).evaluate((dt) => dt.nextElementSibling.textContent.trim()), phase === 'finished' ? 'OK' : phase.startsWith('live-') ? 'Failed' : 'Running');
           assert.equal(await detail.locator('dt').filter({ hasText: /^Started$/ }).locator('xpath=following-sibling::dd[1]').locator('time').getAttribute('datetime'), ownTasks[0].startTime);
-          if (['live-missing-start', 'history-missing-start', 'finished'].includes(phase)) {
+          if (['live-millisecond-end', 'history-max-int64-start', 'finished'].includes(phase)) {
             await detail.scrollIntoViewIfNeeded(); await page.evaluate(() => document.fonts.ready);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
             const file = path.join(out, `${client}-${name}-${phase}-coverage.png`);
@@ -153,7 +156,7 @@ let payload, server, browser;
           await page.waitForFunction((count) => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]').length === count, count);
         }
         checks.push(`${phase}: ${count} rows/${completed} restore points, exact snapshot, scoped lifecycle/job detail and independent connection`);
-        if (['live-missing-start', 'history-missing-start'].includes(phase)) {
+        if (['live-millisecond-end', 'history-max-int64-start'].includes(phase)) {
           if (partial) await current.scrollIntoViewIfNeeded(); else await rows.first().scrollIntoViewIfNeeded();
           await page.evaluate(() => document.fonts.ready);
           const geometry = await page.evaluate(() => ({ pageOverflow: document.documentElement.scrollWidth > innerWidth }));
