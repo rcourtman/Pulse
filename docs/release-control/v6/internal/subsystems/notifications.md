@@ -17,6 +17,22 @@
 
 ## Purpose
 
+### Apprise's output wait cannot outlive its delivery indefinitely
+
+The fixed CLI sender allows at most one additional second to drain inherited
+stdout/stderr after its main process exits or its delivery context expires.
+A helper holding a stream open cannot indefinitely occupy a notification
+worker or test-send request. An incomplete drain is a failure, not confirmed
+delivery; a nonzero process exit keeps its typed error. Normally closed streams
+retain success. Argument, timeout configuration, output confidentiality and
+retry policy are unchanged. This is not process-tree termination or recipient
+acceptance.
+
+`apprise_pipe_wait_test.go` uses only the test executable and owned release
+files to cover inherited stdout/stderr, failed/expired parents and ordinary
+draining. `apprise_pipe_verdict_test.go` joins the real test-send producer to
+the bounded verdict and emits synthetic diagnostics for consuming browser proof.
+
 ### Bounded alert settings recovery
 
 A stalled email, Apprise or webhook configuration read expires after 150 seconds and enters the existing unavailable-settings state. Partial readable settings do not admit policy Save. Explicit Retry reloads saved configuration without automatically sending tests or writes. Read transports are aborted on retirement; sender/configuration wire formats and queue semantics are unchanged.
