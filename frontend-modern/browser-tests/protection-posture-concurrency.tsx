@@ -8,7 +8,7 @@ import '../src/index.css';
 
 const workloads: Resource[] = Array.from({ length: 2001 }, (_, index) => ({
   id: `vm:${String(index).padStart(4, '0')}`,
-  name: index === 0 ? 'edge-backup-reader' : `fleet-${index}`,
+  name: index === 0 || index === 2000 ? `edge-backup-reader-${index}` : `fleet-${index}`,
   type: 'vm',
   platformId: 'synthetic-pve',
   status: 'online',

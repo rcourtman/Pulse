@@ -203,8 +203,12 @@ const activate = async (page, locator, touch) => {
       });
       if (spec.touch) await page.evaluate(() => document.documentElement.classList.add('dark'));
       const row = () => page.locator('[data-proxmox-backup-row="coverage"]').first();
-      const expectPosture = (label) =>
-        expect(row().getByText(label, { exact: true })).toBeVisible();
+      const expectPosture = async (label) => {
+        const rows = page.locator('[data-proxmox-backup-row="coverage"]');
+        await expect(rows).toHaveCount(2);
+        for (const target of await rows.all())
+          await expect(target.getByText(label, { exact: true })).toBeVisible();
+      };
       const capture = async (state) => {
         await page.evaluate(() => document.fonts.ready);
         assert(
@@ -294,7 +298,7 @@ const activate = async (page, locator, touch) => {
       await expectPosture('Unknown');
       release(retry.entries[0], 'attention');
       await expect(notice).toHaveCount(0);
-      await expectPosture(spec.touch ? 'Attn.' : 'Attention');
+      await expectPosture(spec.touch ? 'Attn.' : 'Needs attention');
       assert.equal(current.inventoryRequests.length, inventoriesBefore);
       await capture('retry-attention');
       current.checks.push(
@@ -318,9 +322,10 @@ const activate = async (page, locator, touch) => {
         spec.touch,
       );
       await awaitFour(remount);
-      await completeExceptFirst(remount, 'attention');
-      release(remount.entries[0], 'attention');
-      await expectPosture(spec.touch ? 'Attn.' : 'Attention');
+      await completeExceptFirst(remount, 'unprotected');
+      await expectPosture(spec.touch ? 'Attn.' : 'Needs attention');
+      release(remount.entries[0], 'unprotected');
+      await expectPosture(spec.touch ? 'Unprot.' : 'Unprotected');
       assert.equal(disposed.entries.length, 4);
       assert(page.url().includes('retained=1'));
       current.checks.push(
