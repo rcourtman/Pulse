@@ -20,6 +20,24 @@
 
 ## Purpose
 
+
+### Shipped Docs tables admit keyboard scrolling
+
+Every sanitized documentation table has one viewer-owned horizontal scroll
+region, named `Scrollable table`, with a native `tabindex="0"` stop and a
+visible light/dark keyboard outline. The stop is stable across viewport changes
+without observers or key handlers; native arrow scrolling and links/Tab remain
+unchanged. Column headers retain trusted `scope="col"` and native table semantics.
+Document-supplied focus, ARIA and data markers cannot bypass or hide this wrapper;
+repeated wrapping preserves its identity and markup.
+
+`docMarkdown.test.ts` covers admission, sanitization, idempotence and links.
+`browser-tests/docs-table-keyboard.cjs` exercises the real Docs/router/CSS at
+1360px and 320px in Chromium and WebKit, plus Chromium native touch pan and
+WebKit touch link activation. It verifies visible security columns, focus/escape,
+semantic headers and consuming links, not screen-reader or installed recovery.
+
+
 ### Existing backup Node filter names source scope
 
 The shared filter bar receives distinct connection/native-node options from
