@@ -25,7 +25,7 @@ Pushover y abre Pulse en el navegador de tu teléfono.
 
 Los assets de GitHub Releases y la imagen pública de Docker `rcourtman/pulse`
 son builds Community. Activa tu licencia en
-**Settings → Plans → Existing purchases** para desbloquear funciones Pro.
+**Settings → Plans & Billing → License recovery** para desbloquear funciones Pro.
 
 Estos builds Community no incluyen los hooks privados de runtime de Pulse Pro
 para Audit Log, Audit Webhooks, RBAC y governed remediation. Para esa runtime,

@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -1032,6 +1033,39 @@ func TestSupplementalRefreshCadenceTracksFreshnessBudget(t *testing.T) {
 	}
 }
 
+func TestProxmoxRefreshCadenceTracksSightingBudget(t *testing.T) {
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	cases := []struct {
+		name         string
+		interval     time.Duration
+		wantCohorts  int
+		wantInterval time.Duration
+	}{
+		{"default rotation keeps every cohort", 2 * time.Second, mockMetricCohortCount, 20 * time.Second},
+		{"rotation at the budget keeps every cohort", 3 * time.Second, mockMetricCohortCount, 30 * time.Second},
+		{"rotation past the budget drops to a divisor", 4 * time.Second, 5, 20 * time.Second},
+		{"public demo interval rotates two cohorts", 15 * time.Second, 2, 30 * time.Second},
+		{"tick past half the budget sights every node per tick", 16 * time.Second, 1, 16 * time.Second},
+		{"tick past the budget sights every node per tick", 60 * time.Second, 1, 60 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := proxmoxCohortCount(tc.interval, mockMetricCohortCount)
+			if got != tc.wantCohorts {
+				t.Fatalf("proxmoxCohortCount(%s, %d) = %d, want %d", tc.interval, mockMetricCohortCount, got, tc.wantCohorts)
+			}
+			if mockMetricCohortCount%got != 0 {
+				t.Fatalf("proxmoxCohortCount(%s) = %d does not divide %d", tc.interval, got, mockMetricCohortCount)
+			}
+			setMockUpdateInterval(tc.interval)
+			if got := ProxmoxRefreshInterval(); got != tc.wantInterval {
+				t.Fatalf("ProxmoxRefreshInterval() = %s at %s ticks, want %s", got, tc.interval, tc.wantInterval)
+			}
+		})
+	}
+}
+
 func TestFixtureGraphSlowTicksKeepSupplementalFixturesFresh(t *testing.T) {
 	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
 
@@ -1068,6 +1102,132 @@ func TestFixtureGraphSlowTicksKeepSupplementalFixturesFresh(t *testing.T) {
 	}
 	if got := availabilityFixturesFreshness(graph.AvailabilityFixtures); !got.Equal(tick) {
 		t.Fatalf("slow ticks left availability fixtures at %s, want rebase to %s", got, tick)
+	}
+}
+
+// The public demo runs PULSE_MOCK_UPDATE_INTERVAL=15s. A fixed ten-cohort
+// rotation sighted each PVE node's guests only every 150s there, while the
+// registry judges Proxmox sightings stale after 60s, so most running guests
+// drifted into Attention as telemetry_stale within minutes of startup.
+func TestFixtureGraphSlowTicksKeepProxmoxGuestSightingsFresh(t *testing.T) {
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	for _, interval := range []time.Duration{2 * time.Second, 7 * time.Second, 15 * time.Second, 60 * time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			cfg := DefaultConfig
+			cfg.NodeCount = 8
+			cfg.VMsPerNode = 6
+			cfg.LXCsPerNode = 4
+			cfg.DockerHostCount = 0
+			cfg.GenericHostCount = 0
+			cfg.K8sClusterCount = 0
+			cfg.UpdateInterval = interval
+
+			base := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+			graph := buildFixtureGraph(cfg, base)
+			online := make(map[string]struct{}, len(graph.State.Nodes))
+			for _, node := range graph.State.Nodes {
+				if node.Status == "online" && node.ConnectionHealth != "offline" && node.Uptime > 0 {
+					online[node.Name] = struct{}{}
+				}
+			}
+			if len(online) == 0 {
+				t.Fatal("fixture estate has no online PVE node")
+			}
+
+			bound := proxmoxSightingBudget
+			if interval > bound {
+				bound = interval
+			}
+			// Drive the update loop's own cohort sequence through two full
+			// rotations and measure every online guest's sighting age just
+			// before each tick lands, when it is oldest.
+			for tick := 1; tick <= 2*mockMetricCohortCount; tick++ {
+				now := base.Add(time.Duration(tick) * interval)
+				for _, vm := range graph.State.VMs {
+					if _, ok := online[vm.Node]; ok && now.Sub(vm.LastSeen) > bound {
+						t.Fatalf("tick %d: VM %s on %s last sighted %s ago, want within %s", tick, vm.ID, vm.Node, now.Sub(vm.LastSeen), bound)
+					}
+				}
+				for _, container := range graph.State.Containers {
+					if _, ok := online[container.Node]; ok && now.Sub(container.LastSeen) > bound {
+						t.Fatalf("tick %d: container %s on %s last sighted %s ago, want within %s", tick, container.ID, container.Node, now.Sub(container.LastSeen), bound)
+					}
+				}
+				graph.UpdateMetricCohort(cfg, now, (tick-1)%mockMetricCohortCount, mockMetricCohortCount)
+			}
+		})
+	}
+}
+
+// Shared storage (ceph-rbd, cephfs-data, the cluster PBS stores) and the
+// Ceph cluster belong to no single PVE node, so the node-keyed cohort
+// selection never re-sighted them: they kept their startup stamp and read as
+// stale Proxmox sources on every mock tick rate, including the default.
+func TestFixtureGraphSlowTicksKeepProxmoxClusterSightingsFresh(t *testing.T) {
+	t.Cleanup(func() { setMockUpdateInterval(DefaultConfig.UpdateInterval) })
+
+	for _, interval := range []time.Duration{2 * time.Second, 7 * time.Second, 15 * time.Second, 60 * time.Second} {
+		t.Run(interval.String(), func(t *testing.T) {
+			cfg := DefaultConfig
+			cfg.NodeCount = 8
+			cfg.VMsPerNode = 6
+			cfg.LXCsPerNode = 4
+			cfg.DockerHostCount = 0
+			cfg.GenericHostCount = 0
+			cfg.K8sClusterCount = 0
+			cfg.UpdateInterval = interval
+
+			base := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+			graph := buildFixtureGraph(cfg, base)
+			nodeNames := make(map[string]struct{}, len(graph.State.Nodes))
+			for _, node := range graph.State.Nodes {
+				nodeNames[node.Name] = struct{}{}
+			}
+			var shared []string
+			for _, storage := range graph.State.Storage {
+				if _, owned := nodeNames[storage.Node]; !owned && storage.Status == "available" {
+					shared = append(shared, storage.ID)
+				}
+			}
+			if !slices.ContainsFunc(shared, func(id string) bool { return strings.HasSuffix(id, "-ceph-rbd") }) {
+				t.Fatalf("fixture estate has no available shared ceph-rbd storage: %v", shared)
+			}
+			if len(graph.State.CephClusters) == 0 {
+				t.Fatal("fixture estate has no Ceph cluster")
+			}
+
+			bound := proxmoxSightingBudget
+			if interval > bound {
+				bound = interval
+			}
+			// Measure just before each tick lands, when sightings are oldest,
+			// and keep each resource's worst age over two full rotations.
+			oldest := make(map[string]time.Duration)
+			observe := func(key string, age time.Duration) {
+				if age > oldest[key] {
+					oldest[key] = age
+				}
+			}
+			for tick := 1; tick <= 2*mockMetricCohortCount; tick++ {
+				now := base.Add(time.Duration(tick) * interval)
+				for _, storage := range graph.State.Storage {
+					if slices.Contains(shared, storage.ID) {
+						observe("shared storage "+storage.ID+" (node "+storage.Node+")", now.Sub(storage.LastSeen))
+					}
+				}
+				for _, cluster := range graph.State.CephClusters {
+					observe("Ceph cluster "+cluster.ID, now.Sub(cluster.LastUpdated))
+				}
+				graph.UpdateMetricCohort(cfg, now, (tick-1)%mockMetricCohortCount, mockMetricCohortCount)
+			}
+			keys := slices.Sorted(maps.Keys(oldest))
+			for _, key := range keys {
+				if oldest[key] > bound {
+					t.Errorf("%s last sighted up to %s ago, want within %s", key, oldest[key], bound)
+				}
+			}
+		})
 	}
 }
 

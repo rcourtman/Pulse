@@ -6044,8 +6044,10 @@ func TestMockUnifiedViewAppliesOperatorManualLinks(t *testing.T) {
 		if len(thresholds) != 0 {
 			t.Fatalf("mock seed borrowed live thresholds: %v", thresholds)
 		}
-		if got := adapter.StaleThresholds()[unifiedresources.SourceProxmox]; got != 4*time.Minute {
-			t.Fatalf("live adapter threshold = %v, want configured four minutes", got)
+		// The held five-minute mock tick sights every PVE node once per tick,
+		// so that cadence widens the configured four minutes to ten.
+		if got := adapter.StaleThresholds()[unifiedresources.SourceProxmox]; got != 10*time.Minute {
+			t.Fatalf("live adapter threshold = %v, want ten minutes from the mock PVE cadence", got)
 		}
 		rest := unifiedresources.NewRegistryWithStaleThresholds(store, thresholds)
 		rest.IngestResources(seed)

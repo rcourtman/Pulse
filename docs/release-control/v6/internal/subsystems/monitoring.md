@@ -4747,6 +4747,14 @@ service-history reads plus denial/recovery without fabricated samples.
    resource timestamps between cohorts, cover every node within twenty seconds,
    and refresh provider-backed fixtures only once per full rotation so one demo
    tick cannot manufacture an estate-wide WebSocket delta.
+   The twenty-second coverage is a sighting budget, not a side effect of the
+   two-second tick: at a slower `PULSE_MOCK_UPDATE_INTERVAL` the PVE estate
+   rotates through the largest divisor of the ten cohorts that still sights
+   every node and its guests within thirty seconds (`proxmoxCohortCount`), down
+   to every node per tick. A tick slower than that budget derives the mock
+   Proxmox stale threshold from `mock.ProxmoxRefreshInterval`, never below the
+   configured PVE derivation, so healthy running guests on a long-running
+   mock stack never read as `telemetry_stale`.
    Mock replication timing follows that same refresh instead of staying at its
    startup stamp: each job keeps a stable phase inside its schedule window and
    is rewritten only when that phase passes, so a healthy job always last
@@ -4758,6 +4766,12 @@ service-history reads plus denial/recovery without fabricated samples.
    not the per-node shape the PVE API returns: a shared PBS storage is one
    cluster-scoped row listing its reporting nodes (issue 1049), never one row
    per node with a different usage figure on each.
+   Cluster-scoped PVE inventory that no single node owns (shared storage under
+   a `cluster` or `shared` owner, and Ceph clusters) is sighted once per PVE
+   cohort rotation while any reporting node is online, the cadence
+   `mock.ProxmoxRefreshInterval` reports, because the node-keyed cohort
+   selection never matches its owner; real PVE polls stamp these rows on every
+   poll.
    Demo Docker container names are unique per host, as Docker itself enforces:
    a container profile reused for a second round on one host takes a numbered
    suffix instead of producing two rows with one name.

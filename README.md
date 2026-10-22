@@ -12,57 +12,55 @@
   [Live demo](https://demo.pulserelay.pro) · [Documentation](docs/README.md) · [Releases](https://github.com/rcourtman/Pulse/releases) · [Discussions](https://github.com/rcourtman/Pulse/discussions)
 </div>
 
-Pulse is a self-hosted monitoring workspace for Proxmox, Docker, Kubernetes,
-TrueNAS, physical and virtual machines, and early-access VMware vSphere
-environments. It combines live infrastructure state, history, alerts, recovery
-visibility, and scheduled health checks without requiring a conventional
-enterprise monitoring stack.
+Pulse is a self-hosted dashboard and alerting tool for your homelab or
+infrastructure. Point it at Proxmox, Docker, Kubernetes, TrueNAS, vSphere or
+your own Linux, Windows and macOS machines, and it shows their health in one
+place, keeps the history, and tells you when something needs attention: a
+failed backup, a filling disk, an unhealthy container, a node that dropped
+offline.
 
-![Pulse Proxmox workspace](docs/images/pulse-workspace.png)
+![Pulse Proxmox overview](docs/images/pulse-workspace.png)
 
-## Why Pulse
+Want to look around first? The [live demo](https://demo.pulserelay.pro) runs on
+sample data and signs you in automatically.
 
-- **It watches between visits.** Alerts and Pulse Patrol find failed backups,
-  capacity pressure, restart loops, unhealthy containers, clock drift, and
-  other problems that dashboards cannot surface when nobody is looking.
-- **It keeps each platform familiar.** Proxmox, Docker, Kubernetes, TrueNAS,
-  vSphere, and machines have dedicated views, backed by one shared resource
-  model for search, alerts, history, and investigation.
-- **It stays operator-controlled.** Credentials are encrypted at rest, API
-  tokens are scoped, agent commands are disabled by default, and governed fixes
-  require the configured policy and approval path.
+## What Pulse does
 
-## Platform coverage
+- **Gives each platform its own page.** Proxmox, Docker, Kubernetes, TrueNAS,
+  vSphere and machines each get a view that matches how you already think
+  about them, with storage and backups beside the systems they belong to.
+- **Alerts you when it matters.** Set thresholds for CPU, memory, disk,
+  temperature and more, and get notified by email or through Discord, Slack,
+  Teams, Telegram, ntfy, Gotify, Pushover, PagerDuty or any webhook.
+- **Checks the things that can't run an agent.** Ping, TCP, UDP and HTTP(S)
+  availability checks cover routers, printers and web services, with
+  certificate-expiry warnings.
+- **Keeps history.** Every guest, container and host has charts: seven days in
+  Community, ninety in Pro.
+- **Optional AI checks.** Connect your own AI provider or a local model and
+  Pulse Patrol runs scheduled checks for problems a dashboard only shows if
+  someone is looking. An MCP adapter lets clients such as Claude Code and
+  OpenCode query Pulse.
+- **Stays hands-off by default.** Proxmox is read through a read-only API
+  token, credentials are encrypted at rest, and agent commands stay off unless
+  you turn them on.
 
-| Platform | Coverage |
+## Supported platforms
+
+| Platform | What Pulse shows |
 |---|---|
-| Proxmox VE, PBS, and PMG | Nodes, guests, storage, backups, replication, Ceph, mail gateways, and alerts |
-| Docker and Podman | Hosts, containers, Compose projects, Swarm services, health, images, and updates |
-| Kubernetes | Clusters, nodes, workloads, pods, services, storage, and events through the unified agent |
-| TrueNAS SCALE and CORE | Pools, datasets, disks, snapshots, replication tasks, apps, VMs, and alerts |
-| Linux, Windows, and macOS machines | Host health, filesystems, networking, temperatures, RAID, and availability through the unified agent |
-| VMware vSphere | Early-access inventory, hosts, clusters, VMs, datastores, networks, snapshots, and recovery context; validate against your own vCenter before production use |
+| Proxmox VE, PBS and PMG | Nodes, VMs and containers, storage, backups, replication, Ceph and mail gateways |
+| Docker and Podman | Hosts, containers, Compose projects, Swarm services, health, images and updates |
+| Kubernetes | Clusters, nodes, workloads, pods, services, storage and events |
+| TrueNAS SCALE and CORE | Pools, datasets, disks, snapshots, replication tasks, apps and VMs |
+| Linux, Windows and macOS | Host health, filesystems, networking, temperatures, RAID and availability |
+| VMware vSphere (early access) | Hosts, clusters, VMs, datastores, networks and snapshots; validate against your own vCenter before relying on it |
 
-Platform pages keep storage and recovery information beside the infrastructure
-it belongs to. Alerts, Actions, and Patrol remain cross-platform views.
+## Install
 
-## Patrol: monitoring that does rounds
-
-Pulse Patrol runs scheduled checks across the current state and recent history
-of your infrastructure. Community installations can use a local model or their
-own AI provider for watch-only analysis. Pulse Pro adds investigation and
-policy-bound fixes with approval, verification, and an audit trail.
-
-![Pulse Patrol attention queue](docs/images/pulse-patrol.png)
-
-Pulse also includes an interactive Assistant and an MCP adapter for external
-clients such as Claude Code and OpenCode. Both sit on top of the same scoped
-inventory, metrics, alert, storage, and governed-action contracts.
-
-## Quick start
-
-Choose an exact version from the [latest release](https://github.com/rcourtman/Pulse/releases/latest)
-and keep that version pinned during installation.
+Pulse is one container or service listening on port 7655. Pick an exact
+version from the [latest release](https://github.com/rcourtman/Pulse/releases/latest)
+and use it in place of `vX.Y.Z` below.
 
 ### Docker
 
@@ -84,7 +82,7 @@ Do not send setup credentials to a remote plain-HTTP address. Docker host
 monitoring is provided by the unified agent; the Pulse server container does
 not need the Docker socket.
 
-### Proxmox LXC, Linux, and Kubernetes
+### Proxmox LXC or Linux
 
 - [Signed Proxmox LXC and Linux installation](docs/INSTALL.md#quick-start-recommended)
 - [Docker Compose](docs/INSTALL.md#docker-compose)
@@ -98,75 +96,95 @@ within 60 seconds for each file before verifying the pinned `pulse-installer`
 signature. Keep the whole recipe intact; do not run its final command separately
 to bypass a failed download or signature check.
 
-The GitHub installer installs the Pulse server. Install and upgrade agents
-(including v5-to-v6 agent upgrades) with the per-host command generated under
-**Settings → Infrastructure → Install on a host**.
+Also available: [Docker Compose](docs/INSTALL.md#docker-compose),
+[Kubernetes with Helm](docs/KUBERNETES.md) and the [full install guide](docs/INSTALL.md).
+
+### First run
+
+Open Pulse through the [protected setup connection](docs/INSTALL.md#open-a-protected-setup-connection)
+(verified HTTPS, a browser on the Docker host, or an SSH tunnel), then paste
+the one-time setup token. Get it with
+`docker exec pulse /app/pulse bootstrap-token` on Docker, or
+`sudo pulse bootstrap-token` on Linux (the LXC installer prints the exact
+command). Create your admin account, then add your first system with
+**Add infrastructure** under **Settings → Infrastructure**.
 
 ### Do you need an agent?
 
-Often not. Proxmox VE, PBS, and PMG are monitored through the Proxmox API
-with a read-only token, so no Pulse host agent is required. The generated setup
-script creates a privilege-separated monitoring user. Install the unified
-agent only where you want data the platform API cannot provide, such as host
-SMART health, temperatures, Docker hosts, or standalone machines.
+Often not. Proxmox VE, PBS and PMG are monitored through their API with a
+read-only token, so no Pulse host agent is required; the generated setup script
+creates a privilege-separated monitoring user. Install the unified agent where
+an API can't give Pulse what you want: Docker and Podman hosts, Kubernetes,
+standalone machines, or host SMART health and temperatures.
 
-**API-only does not mean guest-agent-free.** VM filesystem and memory requests through QEMU Guest Agent can share the channel used by freeze-enabled backups.
-Read-only permissions do not prove backup safety. Do not add permissions, enable or restart an agent, or send manual guest-agent probes during a backup, freeze or thaw.
-Use the existing [backup safety precaution](docs/VM_DISK_MONITORING.md#backup-safety). Stopping Pulse also stops its monitoring and alerts.
-An OK backup task does not prove successful thaw.
+Agents, including v5-to-v6 agent upgrades, are installed with the per-host
+command under **Settings → Infrastructure → Install on a host**. The GitHub
+installer above is for the Pulse server only. Command execution is off by
+default, the agent's local listener binds to localhost, and on Linux
+`--least-privilege` runs it as a dedicated non-root user. The
+[agent security model](docs/AGENT_SECURITY.md) lists what it can and cannot do
+at each privilege level.
 
-The agent is operator-controlled by design. Command execution is off by
-default, the local listener binds to localhost, and generated systemd units
-ship hardened. On Linux, the installer's `--least-privilege` profile runs the
-service as a dedicated non-root user, with optional scoped sudo grants for
-the few collectors that need elevation. The
-[agent security model](docs/AGENT_SECURITY.md) documents exactly what the
-agent can and cannot do at each privilege level.
-
-> [!IMPORTANT]
-> GitHub release assets and `rcourtman/pulse` images are Community builds.
-> Relay, Pro, and eligible legacy customers should use the private image or
-> Linux archive provided by the [Pulse download portal](https://pulserelay.pro/download.html).
-> Replacing a private Pro runtime with a public Community build removes its
-> private runtime hooks.
+> [!WARNING]
+> **API-only does not mean guest-agent-free.** VM filesystem and memory
+> requests through QEMU Guest Agent can share the channel used by
+> freeze-enabled backups. Read-only permissions do not prove backup
+> safety. Do not add permissions, enable or restart an agent, or send manual
+> guest-agent probes during a backup, freeze or thaw. An OK backup task does
+> not prove successful thaw. Stopping Pulse also stops its monitoring and
+> alerts. Read the [backup safety precaution](docs/VM_DISK_MONITORING.md#backup-safety)
+> before you need it.
 
 ## Editions
 
-- **Community** — self-hosted monitoring, seven days of metric history, core
-  SSO, update alerts, and Patrol with your own provider or local model.
-- **Pro** — Community plus Patrol investigation, governed fixes, ninety days of
-  history, centralized agent profiles, RBAC, audit logging, and reporting.
-- **MSP** — for managed service providers: one Pulse Account running many
-  client workspaces, each with an isolated Pulse runtime — separate
-  dashboards, alerts, users, audit history, and reports. Free sixty-day
-  two-client evaluation at [Pulse for MSPs](https://pulserelay.pro/msp).
+- **Community** (free, this repository): self-hosted monitoring, seven days
+  of metric history, core SSO, update alerts, and Patrol with your own AI
+  provider or a local model.
+- **Pro**: Community plus Patrol investigation and fixes, ninety days
+  of history, centralized agent profiles, RBAC, audit logging and reporting.
+- **MSP**: one Pulse Account running isolated workspaces for each client, with
+  separate dashboards, alerts, users, audit history and reports. Try it free
+  for sixty days with two clients at [Pulse for MSPs](https://pulserelay.pro/msp).
 
-Relay is no longer sold. Existing Relay subscribers receive Pro features at their
-current price for as long as their subscription continues. Existing paired phones
-keep working until **31 March 2027**. Relay connects the app, not the web UI. Use
-your own VPN or tunnel for remote web access. For phone alerts, add an
-ntfy, Gotify or Pushover destination and open Pulse in your phone's browser.
+Core self-hosted monitoring is not gated by how many systems or child
+resources you monitor. See the [capability reference](docs/PULSE_PRO.md) and
+[current plans](https://pulserelay.pro).
 
-Core self-hosted monitoring is not gated by monitored-system or child-resource
-volume. See the [runtime-aligned capability reference](docs/PULSE_PRO.md) and
-[current plans](https://pulserelay.pro) for details.
+> [!IMPORTANT]
+> GitHub release assets and `rcourtman/pulse` images are Community builds.
+> Pro, Relay and eligible legacy customers should install the private image or
+> Linux archive from the [Pulse download portal](https://pulserelay.pro/download.html).
+> Replacing a private Pro runtime with a Community build removes its private
+> runtime hooks.
+
+Relay is no longer sold. Existing subscribers keep Pro features at their
+current price for as long as their subscription continues, and paired phones
+keep working until **31 March 2027**. Relay connects the app, not the web UI:
+use your own VPN or tunnel for remote access, and add an ntfy, Gotify or
+Pushover destination for phone alerts.
 
 ## Documentation
 
-- [Install and deployment](docs/INSTALL.md)
-- [Production deployment and security](docs/PRODUCTION_SECURITY.md)
-- [Upgrade from Pulse v5](docs/UPGRADE_v6.md)
-- [Releases and update channels](docs/RELEASE_PROCESS.md)
-- [Configuration](docs/CONFIGURATION.md)
-- [Platform and agent guides](docs/README.md#platforms-and-agents)
-- [Pulse Intelligence](docs/AI.md)
-- [Security](SECURITY.md) and [privacy](docs/PRIVACY.md)
-- [Code signing policy](docs/CODE_SIGNING_POLICY.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [API reference](docs/API.md) and [architecture](ARCHITECTURE.md)
+- [Install](docs/INSTALL.md) · [Production security](docs/PRODUCTION_SECURITY.md) · [Upgrading from v5](docs/UPGRADE_v6.md) · [Configuration](docs/CONFIGURATION.md)
+- [Platform and agent guides](docs/README.md#platforms-and-agents) · [Pulse Intelligence](docs/AI.md) · [Releases and update channels](docs/RELEASE_PROCESS.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](docs/API.md) · [Architecture](ARCHITECTURE.md) · [Security](SECURITY.md) · [Privacy](docs/PRIVACY.md) · [Code signing](docs/CODE_SIGNING_POLICY.md)
 
-Localized getting started guides:
+Getting started in other languages:
 [Deutsch](docs/i18n/de/README.md) · [Español](docs/i18n/es/README.md)
+
+## Community and support
+
+- Questions and ideas: [GitHub Discussions](https://github.com/rcourtman/Pulse/discussions)
+- Bugs and unexpected behaviour: [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
+- Home Assistant: community-maintained [Pulse add-ons](https://github.com/Kosztyk/homeassistant-addons)
+- Support development: [GitHub Sponsors](https://github.com/sponsors/rcourtman) or [Ko-fi](https://ko-fi.com/rcourtman)
+
+Before filing a bug, read the
+[safe reporting guidance](docs/TROUBLESHOOTING.md#-getting-help). Your original
+evidence is enough. A second reproduction or diagnostics export is not
+required, so please don't repeat anything that could interrupt workloads or
+send duplicate notifications. GitHub reports and attachments are public:
+review them locally and keep credentials and private details out.
 
 ## Development
 
@@ -183,34 +201,12 @@ unused ones. It also covers local environment files and the development
 authentication bypass; keep that bypass off untrusted networks. Use the browser
 entrypoint reported by the owned development runtime, not a production Pulse URL.
 
-Useful checks:
-
-```bash
-go test ./...
-npm --prefix frontend-modern test
-npm --prefix frontend-modern run type-check
-python3 scripts/check_public_docs.py
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) before investing in a code change. Pulse
-uses an issue-first contribution process and does not normally accept
-unsolicited pull requests.
-
-## Community and support
-
-- Ask questions in [GitHub Discussions](https://github.com/rcourtman/Pulse/discussions).
-- Report bugs and unexpected outcomes through [GitHub Issues](https://github.com/rcourtman/Pulse/issues).
-- Home Assistant users can use the community-maintained [Pulse add-ons](https://github.com/Kosztyk/homeassistant-addons).
-- If Pulse is useful to you, support its development through [GitHub Sponsors](https://github.com/sponsors/rcourtman) or [Ko-fi](https://ko-fi.com/rcourtman).
-
-Read the [safe reporting guidance](docs/TROUBLESHOOTING.md#-getting-help) before sharing original evidence. A second reproduction or diagnostics export is not required; do not repeat an attempt that could interrupt workloads or send duplicate notifications. GitHub reports and attachments are public: review them locally and keep credentials and private details out.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting on a change: Pulse
+works issue-first and does not normally accept unsolicited pull requests.
 
 ## License
 
-Everything in this repository is licensed under the [MIT License](LICENSE).
-There is no dual licensing and no commercial or source-available code here.
-
-Pulse Pro is a separate commercial product, built from private sources and
-distributed through [pulserelay.pro](https://pulserelay.pro). Its use is
-governed by the [Terms of Service](TERMS.md), which apply to that product
-only, not to anything in this repository.
+Everything in this repository is [MIT licensed](LICENSE), with no dual
+licensing and no source-available code. Pulse Pro is a separate commercial
+product built from private sources, sold through [pulserelay.pro](https://pulserelay.pro)
+under [Terms of Service](TERMS.md) that apply to that product only.

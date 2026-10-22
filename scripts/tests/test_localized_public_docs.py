@@ -41,7 +41,7 @@ MACHINE_FACING_STRINGS = (
     "kubectl exec -it <pod> -- /app/pulse bootstrap-token",
     "sudo pulse bootstrap-token",
     "Settings → Infrastructure → Install on a host",
-    "Settings → Plans → Existing purchases",
+    "Settings → Plans & Billing → License recovery",
     "ppk_live_",
     "127.0.0.1:7655:7655",
     "../../INSTALL.md#open-a-protected-setup-connection",
