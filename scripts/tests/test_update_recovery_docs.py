@@ -342,7 +342,7 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         self.assertIn("commands ${authority}", model)
         self.assertIn("'credential grants exec' : 'monitoring credential'", model)
         doctor = (ROOT / "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx").read_text()
-        self.assertIn("· Privilege: {target.privilegeLabel}", doctor)
+        self.assertIn("makeDetailRow('Privilege', target.privilegeLabel", doctor)
 
     def test_legacy_monitoring_help_does_not_require_runner_migration_or_more_logs(self):
         docker = " ".join(section("DOCKER", "Command agent is not connected", "####").split())

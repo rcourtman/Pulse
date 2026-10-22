@@ -123,7 +123,12 @@ class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
         for label in ("Guest", "Job", "Route", "Last sync", "Next sync", "Duration", "Failures"):
             with self.subTest(label=label):
                 self.assertIn(f"**{label}**", section)
-                self.assertRegex(table, rf">{label}</(?:dt|TableHead)>")
+                # The expansion is a record drawer of shared detail rows; its
+                # sections and rows carry the labels the help names.
+                self.assertRegex(
+                    table,
+                    rf"(?:>{label}</(?:dt|TableHead)>|makeDetailRow\(\s*'{label}'|label: '{label}')",
+                )
         for phrase in ("not PBS backups", "unknown, not an empty healthy result",
                        "does not establish lifecycle or polling recovery",
                        "do not repeat a restart, reboot or update", "widen token permissions",
