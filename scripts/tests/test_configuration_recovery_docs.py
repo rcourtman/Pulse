@@ -90,11 +90,29 @@ class ConfigurationRecoveryDocsTest(unittest.TestCase):
         self.assertIn("working administrator session", text)
         self.assertIn("not a repair for that sign-in defect", text)
 
+    def test_uncertain_import_guidance_is_not_a_rejection_or_rollback_recipe(self):
+        text = read("docs/MIGRATION.md")
+        self.assertIn("[unconfirmed-import checks](#import-was-not-confirmed)", text)
+        uncertain = " ".join(text.split("### Import was not confirmed\n", 1)[1]
+                             .split("\n### ", 1)[0].split())
+        for boundary in ("timeout, lost connection or incomplete response",
+                         "does not prove the archive was rejected",
+                         "working administrator session", "without saving",
+                         "Do not sign out, repeat the import",
+                         "does not undo an import that reached the server",
+                         "stop the cutover", "not a second attempt"):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, uncertain)
+        # Bind the advice to the real producer's uncertain-write message, not
+        # an invented rejection state. This is not execution or restore proof.
+        self.assertIn("Could not confirm the import. Settings may already have changed.",
+                      read("frontend-modern/src/components/Settings/useBackupTransferFlow.ts"))
+
     def test_deployment_inventory_links_to_the_same_recovery_checklist(self):
         self.assertIn("CONFIGURATION.md#back-up-recoverable-state", read("docs/DEPLOYMENT_MODELS.md"))
 
     def test_shipped_guides_match_canonical_bytes(self):
-        for name in ("CONFIGURATION", "DEPLOYMENT_MODELS"):
+        for name in ("CONFIGURATION", "DEPLOYMENT_MODELS", "MIGRATION"):
             self.assertEqual(read(f"docs/{name}.md"), read(f"frontend-modern/public/docs/{name}.md"))
 
 
