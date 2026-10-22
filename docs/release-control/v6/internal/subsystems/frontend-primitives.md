@@ -10056,3 +10056,12 @@ Services and Protection tables now do this for `?q=`, as the Kubernetes tables
 already did, so `RecordOwnerLink` can land on a narrowed tab whose own search
 box shows and clears the filter. `ArtifactSourceBadge` takes the opt-in
 `MetadataBadge` `wrap` for drawer use; table rows keep the one-line badge.
+
+`.table-fixed td` and `th` (index.css, `@layer utilities`) set nowrap,
+hidden overflow and an ellipsis, and the class-plus-element selector outranks
+a single utility class such as `whitespace-normal` on the cell itself, so that
+class on a fixed-table cell does nothing (the rule also reaches cells of a
+table nested in a drawer row). A value that must wrap sets the wrap on its own
+element inside the cell, as `DetailSectionTable` does with
+`block whitespace-normal`; the Coverage drawer's restore evidence Location and
+Details values now follow that pattern.

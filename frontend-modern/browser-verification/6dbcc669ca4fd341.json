@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "863bdbfbeccd4ea302f2bbd6bf5d7f77b8cdce3b",
+  "verified_at": "2026-10-22T19:47:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "d34d14641fcb826d43d269fb11ba8ddf6b882964c30c378793f209dd7ecfd60f"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this change on the full mock estate, signed in through the real login",
+    "Coverage drawer for checkout-web-02 (VM 101): the restore evidence Details value \"checkout-web-02 local rollback snapshot\" wraps onto a second line inside its cell instead of running past the drawer edge",
+    "Coverage drawers for backup-vault and checkout-web-02 report no clipped values at 1440 and 390; on the phone the Details and Location columns stay hidden by the layout",
+    "No console or page errors at either width"
+  ],
+  "interactions": [
+    "Expanding a Coverage row opens its drawer; the drawer header's collapse button closes it"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "chromium-1234 headless"
+  },
+  "scope": "Full authenticated application on a mock estate; mock data, not live provider connections."
+}

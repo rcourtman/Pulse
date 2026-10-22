@@ -7147,3 +7147,9 @@ The Coverage drawer's restore evidence wraps long source labels (snapshot and
 archive names) instead of cutting them with an ellipsis: `ArtifactSourceBadge`
 takes an opt-in `wrap` that the drawer passes, while table rows keep the label
 on one line. Coverage, restore evidence and recovery rules are unchanged.
+
+The Coverage drawer's restore evidence Location and Details values wrap: the
+wrap is set on each value's span, because the global `.table-fixed td` rule
+forces nowrap on table cells and outranks a utility class on the cell itself,
+which left a long snapshot description cut off at the drawer edge. Coverage,
+restore evidence and recovery rules are unchanged.
