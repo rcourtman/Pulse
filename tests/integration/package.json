@@ -29,7 +29,7 @@
   "author": "rcourtman",
   "license": "MIT",
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "1.56.1",
     "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
