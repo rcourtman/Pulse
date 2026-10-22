@@ -139,7 +139,7 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 		`tar --no-same-owner --no-overwrite-dir -xzf`,
 		`validate_pulse_binary_architecture "$pulse_binary_path"`,
 		`cp "$pulse_binary_path" "$binary_stage/pulse"`,
-		`timeout 5 "$binary_stage/pulse" --version`,
+		`timeout -k 1 5 "$binary_stage/pulse" --version`,
 		`stop_pulse_for_replacement "$service_name"`,
 		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
 	} {
@@ -160,7 +160,7 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 		`cp pulse "$binary_stage/pulse"`,
 		`chmod 755 "$binary_stage/pulse"`,
 		`chown pulse:pulse "$binary_stage/pulse"`,
-		`timeout 5 "$binary_stage/pulse" --version`,
+		`timeout -k 1 5 "$binary_stage/pulse" --version`,
 		`source_revision=$(git rev-parse --short HEAD)`,
 		`stop_pulse_for_replacement "$service_name"`,
 		`mv -fT "$binary_stage/pulse" "$INSTALL_DIR/bin/pulse"`,
