@@ -41,6 +41,18 @@ same copy. That case is mandatory in the existing required native CI suite.
 These are failure-admission and local-backend checks, not cloud upload integrity,
 provider acceptance, application consistency or native guest recovery proof.
 
+Helper-owned upload progress messages identify the generated backup basename,
+not the configured remote destination. Opaque destination configuration can
+contain private storage names or connection settings; it must not be echoed
+merely to identify the file being uploaded or confirmed. Both encryption modes
+cover successful copies and failures at each of the three upload positions,
+using a synthetic destination canary through the real helper. The closed adapter
+asserts the destination argument is forwarded unchanged, and failure controls
+preserve previous recovery copies and stop retention. These checks establish
+helper log formatting, not native rclone parsing or client-output redaction.
+Client diagnostics remain captured unchanged for the operator and can still be
+private; arbitrary external-client output is not covered by this guarantee.
+
 Every configured remote `copyto` also uses `--error-on-no-transfer`. A zero-exit
 skip of an existing destination is not evidence of
 a replacement recovery copy. Each of the two archives and metadata must actually
