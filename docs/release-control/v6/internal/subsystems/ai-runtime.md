@@ -9086,3 +9086,13 @@ diagnostics (`journalctl -u ... --since`, `dmesg -T`, `ss -tlnp`, `ip addr`,
 read-only. Proof: `TestExecutionIntent_ArgumentAwareReadCommands` and
 `TestExecutionIntent_RouteOperationBoundary` in
 `internal/ai/tools/tools_query_readonly_test.go`.
+
+### Shell monitoring-delivery warning is not an Assistant action
+
+The shared AppLayout may show a persistent data-wait warning while a live
+connection has no current resource snapshot. Socket welcome, alert hydration
+and a retained estate cannot establish monitoring delivery. This must not
+replace the navigation or Assistant launcher, change session capabilities or
+trigger an Assistant investigation, resource action or new backend probe.
+`App.architecture.test.ts` and `AppLayout.test.tsx` protect shell ownership,
+existing controls and focus through pending/received transitions.

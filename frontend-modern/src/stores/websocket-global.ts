@@ -64,6 +64,7 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     reconnecting,
     initialDataReceived,
     resourceSnapshotReceived: () => false,
+    connectionResourceSnapshotReceived: () => false,
     activeAlertsHydrationStatus,
     updateProgress,
     resourceChange,

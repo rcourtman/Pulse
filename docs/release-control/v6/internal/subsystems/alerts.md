@@ -5622,3 +5622,11 @@ Off, inheritance, protection badges and connectivity after resampling in both
 layouts. The browser also compares the visible rate text and accessible name
 with the actual saved override and its removal; an HTTP-only inheritance pass
 is insufficient when the consumer still displays the previous override.
+
+### Monitoring delivery is separate from alert hydration
+
+The app shell's connection-owned resource-snapshot flag is not alert readiness.
+Welcome/pong, alert-only REST recovery and alert-only state frames cannot turn
+monitoring delivery green. Alert ownership, notification and detection semantics
+are unchanged. `websocket-unified.test.ts` exercises that separation, including
+baseline-less deltas and retained state on reconnect.

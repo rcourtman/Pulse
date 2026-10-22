@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import useAppRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
@@ -77,6 +77,8 @@ describe('useAppRuntimeState', () => {
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
   let websocketInitialDataReceived: boolean;
+  let connectionResourceSnapshotReceived: () => boolean;
+  let setConnectionResourceSnapshotReceived: (value: boolean) => boolean;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -148,6 +150,8 @@ describe('useAppRuntimeState', () => {
     websocketConnected = false;
     websocketReconnecting = false;
     websocketInitialDataReceived = false;
+    [connectionResourceSnapshotReceived, setConnectionResourceSnapshotReceived] =
+      createSignal(false);
 
     vi.doMock('@/stores/websocket-global', () => ({
       getGlobalWebSocketStore: () => ({
@@ -156,6 +160,7 @@ describe('useAppRuntimeState', () => {
         reconnecting: () => websocketReconnecting,
         initialDataReceived: () => websocketInitialDataReceived,
         resourceSnapshotReceived: () => websocketInitialDataReceived,
+        connectionResourceSnapshotReceived,
         reconnect: vi.fn(),
         switchUrl: vi.fn(),
       }),
@@ -694,6 +699,36 @@ describe('useAppRuntimeState', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
 
     dispose();
+  });
+
+  it('does not turn an open connection, retained estate or alert recovery into delivered monitoring', async () => {
+    websocketConnected = true;
+    websocketInitialDataReceived = true;
+    websocketState = makeWebSocketState({
+      resources: [makeTrueNASResource()],
+      lastUpdate: Date.now(),
+    });
+    const { hookState, dispose } = mountHook();
+    try {
+      await waitFor(() => expect(hookState.enhancedStore()).not.toBeNull());
+      expect(hookState.runtimeStateResolved()).toBe(true);
+      expect(hookState.connectionStatus()).toMatchObject({
+        kind: 'awaiting-data',
+        tone: 'warning',
+      });
+      expect(hookState.state().resources).toHaveLength(1);
+      setConnectionResourceSnapshotReceived(true);
+      expect(hookState.connectionStatus()).toMatchObject({ kind: 'connected', tone: 'healthy' });
+      expect(hookState.connectionStatus().detail).toContain('may still be stale or unavailable');
+      setConnectionResourceSnapshotReceived(false);
+      expect(hookState.connectionStatus()).toMatchObject({
+        kind: 'awaiting-data',
+        tone: 'warning',
+      });
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/state')).toHaveLength(0);
+    } finally {
+      dispose();
+    }
   });
 
   it('does not mistake alert-only reconnect recovery for an empty resource snapshot', async () => {

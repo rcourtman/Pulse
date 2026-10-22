@@ -68,7 +68,13 @@ import {
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
 
 export type AppConnectionStatus = {
-  kind: 'connected' | 'sync-reconnecting' | 'backend-healthy' | 'reconnecting' | 'disconnected';
+  kind:
+    | 'connected'
+    | 'awaiting-data'
+    | 'sync-reconnecting'
+    | 'backend-healthy'
+    | 'reconnecting'
+    | 'disconnected';
   label: string;
   detail: string;
   tone: 'healthy' | 'warning' | 'offline';
@@ -218,10 +224,20 @@ export const useAppRuntimeState = () => {
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const connectionStatus = createMemo<AppConnectionStatus>(() => {
     if (connected()) {
+      if (!wsStore()?.connectionResourceSnapshotReceived()) {
+        return {
+          kind: 'awaiting-data',
+          label: 'Waiting for data',
+          detail:
+            'The live connection is open, but monitoring data has not arrived on this connection. Any retained readings may be out of date. Keep working sessions open.',
+          tone: 'warning',
+        };
+      }
       return {
         kind: 'connected',
         label: 'Connected',
-        detail: 'Backend and live data stream are connected.',
+        detail:
+          'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
         tone: 'healthy',
       };
     }

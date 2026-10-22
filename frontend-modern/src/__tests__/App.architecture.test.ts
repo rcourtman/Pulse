@@ -856,6 +856,10 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       'const connectionStatus = createMemo<AppConnectionStatus>(() => {',
     );
+    // Presentation must consume connection-owned delivery evidence, never
+    // the retained admission facet or an extra estate-sized bootstrap read.
+    expect(appRuntimeStateSource).toContain('wsStore()?.connectionResourceSnapshotReceived()');
+    expect(appLayoutSource).toContain("props.connectionStatus().kind === 'awaiting-data'");
     expect(appRuntimeStateSource).toContain('const showOrgSwitcher = createMemo(() => {');
     expect(appRuntimeStateSource).toContain(
       'const loadAuthenticatedBootstrapState = async (): Promise<boolean> => {',

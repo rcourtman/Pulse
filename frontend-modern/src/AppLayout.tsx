@@ -971,6 +971,18 @@ export function AppLayout(props: AppLayoutProps) {
         class="tab-content mb-1 block rounded-b rounded-tl rounded-tr bg-surface shadow-sm sm:mb-2"
       >
         <div class="pulse-panel">
+          <Show when={props.connectionStatus().kind === 'awaiting-data'}>
+            <aside
+              class="m-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 sm:m-4"
+              role="status"
+              aria-labelledby="monitoring-data-status-title"
+            >
+              <h2 id="monitoring-data-status-title" class="font-semibold">
+                Waiting for monitoring data
+              </h2>
+              <p class="mt-1 leading-6">{props.connectionStatus().detail}</p>
+            </aside>
+          </Show>
           <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
             {props.children}
           </Suspense>

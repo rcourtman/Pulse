@@ -77,7 +77,8 @@ const renderLayout = (
   connectionStatus: Accessor<AppConnectionStatus> = () => ({
     kind: 'connected',
     label: 'Connected',
-    detail: 'Backend and live data stream are connected.',
+    detail:
+      'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
     tone: 'healthy',
   }),
   stateOverrides: Accessor<Partial<State>> = () => ({}),
@@ -311,6 +312,40 @@ describe('AppLayout navigation icons', () => {
       });
       expect(proxmox).toHaveFocus();
     }
+  });
+
+  it('keeps the data-wait warning readable without hover and removes it without replacing navigation', async () => {
+    const pending: AppConnectionStatus = {
+      kind: 'awaiting-data',
+      label: 'Waiting for data',
+      tone: 'warning',
+      detail:
+        'The live connection is open, but monitoring data has not arrived on this connection. Any retained readings may be out of date. Keep working sessions open.',
+    };
+    const [status, setStatus] = createSignal(pending);
+    renderLayout(platformResources(), '/proxmox/overview', undefined, ['monitoring:read'], status);
+    const warning = screen.getByRole('status', { name: 'Waiting for monitoring data' });
+    expect(warning).toHaveTextContent('Any retained readings may be out of date');
+    expect(warning).toHaveTextContent('Keep working sessions open');
+    expect(warning.querySelector('button')).toBeNull();
+    const proxmox = getInfrastructureLink('Proxmox');
+    proxmox.focus();
+    setStatus({
+      kind: 'connected',
+      label: 'Connected',
+      detail: 'Monitoring state received.',
+      tone: 'healthy',
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('status', { name: 'Waiting for monitoring data' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(getInfrastructureLink('Proxmox')).toBe(proxmox);
+    expect(proxmox).toHaveFocus();
+    setStatus(pending);
+    expect(screen.getByRole('status', { name: 'Waiting for monitoring data' })).toBeInTheDocument();
+    expect(proxmox).toHaveFocus();
   });
 
   it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {

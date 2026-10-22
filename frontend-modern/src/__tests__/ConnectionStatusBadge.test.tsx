@@ -13,7 +13,8 @@ describe('ConnectionStatusBadge', () => {
         connectionStatus={() => ({
           kind: 'connected',
           label: 'Connected',
-          detail: 'Backend and live data stream are connected.',
+          detail:
+            'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
           tone: 'healthy',
         })}
       />
@@ -21,7 +22,9 @@ describe('ConnectionStatusBadge', () => {
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
     expect(
-      screen.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      screen.getByRole('status', {
+        name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.',
+      }),
     ).toBeInTheDocument();
   });
 

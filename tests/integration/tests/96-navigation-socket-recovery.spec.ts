@@ -5,7 +5,7 @@ import { apiRequest, ensureAuthenticated } from './helpers';
 // a shared runtime or substitutes the application's websocket store.
 const enabled = process.env.PULSE_E2E_NAVIGATION_RECOVERY === '1' &&
   process.env.PULSE_E2E_USE_LOCAL_BACKEND === '1';
-const healthy = 'Backend and live data stream are connected.';
+const healthy = 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.';
 
 async function navigation(page: Page) {
   return page.locator('[aria-label="Primary navigation"]').evaluateAll(nodes =>

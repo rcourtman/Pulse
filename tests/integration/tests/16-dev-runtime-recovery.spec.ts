@@ -99,7 +99,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     const mainContent = page.locator('main, [role="main"], #root > div').first();
     await expect(mainContent).toBeVisible();
     await expect(
-      page.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      page.getByRole('status', { name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.' }),
     ).toBeVisible({ timeout: 20_000 });
 
     blockNextSocket = true;
@@ -136,7 +136,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     });
 
     await expect(
-      page.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      page.getByRole('status', { name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.' }),
     ).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(async () => (await page.request.get('/api/health')).status(), {
@@ -159,7 +159,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     const mainContent = page.locator('main, [role="main"], #root > div').first();
     await expect(mainContent).toBeVisible();
     await expect(
-      page.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      page.getByRole('status', { name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.' }),
     ).toBeVisible({ timeout: 20_000 });
 
     const restartResult = await restartManagedDevRuntimeBackend();
@@ -170,7 +170,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     ).not.toBe(restartResult.beforePid);
 
     await expect(
-      page.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      page.getByRole('status', { name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.' }),
     ).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(async () => (await page.request.get('/api/health')).status(), {
@@ -210,7 +210,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     const mainContent = page.locator('main, [role="main"], #root > div').first();
     await expect(mainContent).toBeVisible();
     await expect(
-      page.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      page.getByRole('status', { name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.' }),
     ).toBeVisible({ timeout: 20_000 });
 
     const restartResult = await killManagedDevRuntimeOwnerProcess();
@@ -221,7 +221,7 @@ test.describe.serial('Managed dev runtime recovery', () => {
     ).not.toBe(restartResult.beforeOwnerPid);
 
     await expect(
-      page.getByRole('status', { name: 'Backend and live data stream are connected.' }),
+      page.getByRole('status', { name: 'Live connection open and monitoring state received. Individual readings may still be stale or unavailable.' }),
     ).toBeVisible({ timeout: 60_000 });
     await expect
       .poll(async () => (await page.request.get('/api/health')).status(), {
