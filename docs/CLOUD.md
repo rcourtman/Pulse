@@ -1,16 +1,30 @@
 # Pulse Cloud (Hosted)
 
-Pulse Cloud is the hosted version of Pulse. It is a fully managed monitoring instance that runs in the cloud so you don't have to self-host.
+**Pulse Cloud is not generally available.** This guide is for an existing
+hosted instance arranged with its operator, not a public sign-up or checkout
+procedure. A Cloud capability in the plan reference does not establish that a
+hosted instance can be purchased or provisioned.
+
+For a new self-hosted installation, use the [Install Guide](INSTALL.md).
+Self-hosted Pro is a separate plan for that installation; buying Pro does not
+create a hosted server. See [Plans & Entitlements](PULSE_PRO.md).
 
 Pulse Cloud is for a hosted Pulse instance. Pulse MSP is a separate provider path: the MSP normally runs a Stripe-free provider-hosted control plane with one isolated Pulse runtime per client. Pulse-hosted MSP is available only as a request-assisted option where Pulse operates that provider stack for the MSP.
 
 ## How It Works
 
-1. **Sign up** at the Pulse Cloud portal.
-2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — open your Cloud instance's HTTPS address in a desktop or phone browser.
+For an existing hosted service:
 
-Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
+1. Use the instance address and access method supplied by its hosting operator.
+   Do not invent a Cloud hostname from your account name or activation key.
+2. **Connect your agents** only after you can access that instance, following
+   the [existing-instance setup](#getting-started) below.
+3. **Monitor** through the instance's usual HTTPS address in a desktop or phone
+   browser. Keep certificate verification enabled.
+
+The sections below describe the hosted model and existing-instance workflows,
+not an offer of new hosted access. Confirm the installed service and applicable
+terms with its operator before relying on a capability.
 
 ## Features
 
@@ -41,9 +55,16 @@ Cloud Enterprise shared-process organizations are for one owner separating inter
 
 ## Getting Started
 
-### 1. Create Your Account
+<span id="1-create-your-account"></span>
 
-Sign up via the Pulse Cloud portal. Your instance is provisioned automatically after checkout.
+### 1. Confirm Existing Hosted Access
+
+Continue only if your hosting operator has supplied an instance and an access
+method. There is no public Cloud sign-up flow described here, and a self-hosted
+Pro activation key is not a Cloud account or instance address. If access is
+unavailable, contact that operator through your existing support route rather
+than purchasing again, creating a replacement account or moving monitoring.
+Keep any working source installation intact.
 
 ### 2. Connect Agents
 
@@ -108,7 +129,8 @@ the state you need. These checks do not change your service or entitlement.
 
 ## Billing
 
-Pulse Cloud billing is handled by Stripe. You can manage your subscription from the Cloud portal:
+For an existing hosted subscription, use the billing route supplied by its
+operator. Where the Cloud portal provides subscription management, it can show:
 
 - View current plan and usage
 - Update payment method
