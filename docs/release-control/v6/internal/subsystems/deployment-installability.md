@@ -47,6 +47,19 @@ for each source and checks actual member names and fixture bytes, not just exit
 status. It also checks failure-preserving resolver errors. These are disposable
 file proofs, not application consistency or native restore acceptance.
 
+Both tar invocations clear inherited `TAR_OPTIONS` for that command only. The
+helper's fixed archive policy, not an interactive shell or scheduler default,
+determines coverage, member paths, nested-link handling and failure reporting.
+In particular, an inherited `--exclude=*` must not create empty successful
+archives and permit expiry of earlier copies; transformations and dereferencing
+must not rename recovery paths or copy unrelated link targets into backups.
+Malformed inherited options also cannot break an otherwise valid job. The
+environment is not logged or changed in the caller. Real tar/gzip fixture cases
+inspect both sources in plain and encrypted mode, including member bytes and
+symlink targets, before accepting the ordinary upload/retention path. This does
+not protect against an arbitrary replacement executable or other hostile job
+configuration, and it is not application-consistent or installed recovery proof.
+
 The staging directory must be outside both source trees. Before staging
 creation, permission changes or any archive, GNU coreutils `realpath` resolves
 physical source paths and the staging path (including missing descendants).

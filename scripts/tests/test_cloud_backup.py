@@ -542,6 +542,59 @@ class CloudBackupTest(unittest.TestCase):
     def test_whitespace_and_embedded_newline_source_names_remain_literal(self):
         self.check_literal_source("literal source\nwith spaces", relative=True)
 
+    def check_fixed_tar_policy(self, options):
+        # The adapter passes the environment to real GNU tar. Do not emulate
+        # exclusions, transformations or dereferencing in the closed fake.
+        outside = self.root / "outside-data"
+        outside.mkdir()
+        canary = outside / "not-part-of-source.txt"
+        canary.write_bytes(b"synthetic out-of-tree data\n")
+        for directory in ("tenants", "control-plane"):
+            (self.root / directory / "outside-link").symlink_to(outside, target_is_directory=True)
+        for encrypted in ("false", "true"):
+            with self.subTest(encrypted=encrypted):
+                result = self.invoke(TAR_OPTIONS=options, PULSE_BACKUP_ENCRYPT=encrypted)
+                self.assertEqual(result.returncode, 0, self.output)
+                suffix = ".tar.gz.age" if encrypted == "true" else ".tar.gz"
+                for label, directory in (("tenants", "tenants"), ("cp", "control-plane")):
+                    with self.subTest(source=directory):
+                        files = [p for p in self.backups.glob(f"pulse-backup-{label}-*{suffix}")
+                                 if p not in self.old]
+                        content = max(files, key=lambda p: p.name).read_bytes()
+                        if encrypted == "true":
+                            self.assertTrue(content.startswith(b"FAKE-AGE\n"))
+                            content = content.removeprefix(b"FAKE-AGE\n")
+                        with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+                            self.assertEqual(set(archive.getnames()),
+                                             {directory, f"{directory}/fixture.txt", f"{directory}/outside-link"})
+                            self.assertEqual(archive.extractfile(f"{directory}/fixture.txt").read(),
+                                             f"synthetic {directory} data\n".encode())
+                            link = archive.getmember(f"{directory}/outside-link")
+                            self.assertTrue(link.issym())
+                            self.assertEqual(link.linkname, str(outside))
+                self.assertIn("=== tarball backup finished ===", self.output)
+                self.assertEqual(len([call for call in self.calls if call[:2] == ["rclone", "copyto"]]), 3)
+                self.assertEqual(len([call for call in self.calls if call[0] == "find"]), 1)
+                self.assert_remote_retention_scope()
+                self.assertTrue(all(not p.exists() for p in self.old))
+                self.assertEqual(canary.read_bytes(), b"synthetic out-of-tree data\n")
+                for directory in ("tenants", "control-plane"):
+                    self.assertEqual((self.root / directory / "fixture.txt").read_bytes(),
+                                     f"synthetic {directory} data\n".encode())
+                    self.assertTrue((self.root / directory / "outside-link").is_symlink())
+
+    def test_inherited_tar_exclusions_cannot_make_empty_successful_backups(self):
+        self.check_fixed_tar_policy("--exclude=*")
+
+    def test_inherited_tar_transforms_cannot_change_recovery_paths(self):
+        self.check_fixed_tar_policy("--transform=s/fixture.txt/renamed.txt/")
+
+    def test_inherited_tar_dereferencing_cannot_copy_out_of_tree_data(self):
+        self.check_fixed_tar_policy("--dereference")
+
+    def test_invalid_inherited_tar_options_do_not_break_backup_jobs(self):
+        self.check_fixed_tar_policy("--pulse-invalid-option")
+
     def test_failed_member_or_parent_resolution_stops_without_upload_or_retention(self):
         for name, message in (("dirname", "parent directory"), ("basename", "archive member")):
             with self.subTest(tool=name):
@@ -1032,7 +1085,8 @@ class CloudBackupTest(unittest.TestCase):
         self.assertEqual(public.returncode, 0, "fixture age recipient derivation failed")
         (self.bin / "age").unlink()
         (self.bin / "age").symlink_to(REAL_AGE)
-        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", PULSE_BACKUP_AGE_RECIPIENT=public.stdout.decode().strip())
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", PULSE_BACKUP_AGE_RECIPIENT=public.stdout.decode().strip(),
+                             TAR_OPTIONS="--exclude=*")
         self.assertEqual(result.returncode, 0, self.output)
         self.assertEqual(list(self.backups.glob("*.txt")), [])
         self.assertEqual(list(self.backups.glob("*.tar.gz")), [])
