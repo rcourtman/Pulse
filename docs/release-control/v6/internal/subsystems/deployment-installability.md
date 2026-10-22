@@ -43,26 +43,34 @@ remove the first job's reservation. Reservations are released on normal completi
 ordinary failures and handled HUP/INT/TERM; a forced kill may leave one for that
 timestamp, which does not prevent later timestamps. Collision messages direct an
 operator to preserve existing files and retry later, rather than delete backups.
-Filenames stay second-resolution and unchanged. This protects cooperating helpers
+Archive filenames stay second-resolution and unchanged. This protects cooperating helpers
 in the same staging directory, not arbitrary concurrent filesystem mutation or
 independent staging directories uploading into the same remote namespace.
 
-All archive/metadata encryption steps and every configured upload must succeed before
-either retention pass. Local or remote cleanup errors return failure rather
-than a finished message; retention itself can partially progress before an
-error. Existing archive paths, filenames, contents, encryption opt-in, remote
-prefix and retention ages stay unchanged. This is orchestration safety, not
-application-consistent snapshots, restore verification or native guest recovery.
+Metadata must not collect Docker's default `COMMAND` column: inline command
+arguments can contain credentials. The optional inventory selects only container
+ID, image, name and status. In encrypted mode, metadata is private backup data
+and uses the same configured age recipient as both archives; its completed
+sidecar is `pulse-backup-meta-<timestamp>.txt.age`, not a plaintext `.txt` upload.
+The name reservation includes both metadata forms. Local-only encrypted jobs
+follow the same rule. Unencrypted mode deliberately keeps its existing `.txt`
+sidecar; omitting commands does not make a plaintext backup secret-free.
 
-Encryption also covers the newly generated metadata inventory: full Docker
-commands can contain private arguments. With `PULSE_BACKUP_ENCRYPT=true`, all
-three outputs use the same age recipient, local metadata is `.txt.age`, and no
-plaintext metadata is uploaded or left by a completed job. Metadata encryption
-must finish before any upload or retention; a failure retains private partial
-files (0600 under the 0700 staging directory), returns nonzero and preserves
-older backups. The reserved output set includes both `.txt` and `.txt.age` in
-both modes. Unencrypted mode retains its existing filenames and contents.
-This does not encrypt, remove or repair plaintext metadata from earlier jobs.
+Both archives, all three selected encryption steps and every configured upload
+must succeed before either retention pass. Metadata encryption failure permits
+no upload or retention, retains the previous backups and leaves private local
+failure evidence without claiming completion. Unavailable Docker inventory is
+still explicitly marked unavailable and does not skip metadata encryption.
+Plaintext inputs are removed only after successful encryption. Existing artifacts
+are not rewritten or retrospectively protected; prior plaintext metadata may
+remain in local or remote history. No migration or privacy clean-up is performed;
+normal configured retention is unchanged.
+
+Local or remote cleanup errors return failure rather than a finished message;
+retention itself can partially progress before an error. Existing data paths,
+archive names/contents, encryption opt-in, remote prefix and retention ages stay
+unchanged. This is orchestration safety, not real-age encryption qualification,
+application-consistent snapshots, restore verification or native guest recovery.
 
 `scripts/tests/test_cloud_backup.py` executes the full shell entrypoint with
 real tar/gzip and local retention on synthetic non-database files. It checks
@@ -72,13 +80,15 @@ archive/encryption/upload failures, retention errors, actual archive bytes and
 private modes, plus successful local/remote ordering. A deterministic fixture
 clock and bounded two-process archive barrier verify existing-output preservation,
 same-second failure/concurrency, dangling links and reservation ownership/cleanup.
-The metadata encryption/upload/failure controls use a closed age recorder;
-when real age/age-keygen are installed or explicitly supplied, a separate
-full-entrypoint case generates an isolated fixture key and decrypts both real
-tarballs and private metadata. The fixture identity is never printed or retained.
-rclone, Docker and host identity remain closed recording fakes; neither the
-orchestration controls nor the real local round-trip establish cloud delivery,
-application consistency or installed recovery.
+Synthetic command canaries check inventory minimisation, encrypted metadata
+selection/private modes, all three encryption/upload failures and all six output
+reservations (also directories and dangling links). The metadata controls use a
+closed age recorder; when real age/age-keygen are installed or explicitly supplied,
+a separate full-entrypoint case generates an isolated fixture key and decrypts
+both real tarballs and selected metadata. The fixture identity is never printed
+or retained. rclone, Docker and host identity remain closed recording fakes;
+neither orchestration controls nor the real local round-trip establish cloud
+delivery, application consistency or installed recovery.
 
 ### Retired mock-alert cleanup preserves history and monitoring
 
