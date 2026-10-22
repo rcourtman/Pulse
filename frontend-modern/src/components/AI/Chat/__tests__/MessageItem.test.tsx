@@ -546,6 +546,25 @@ describe('MessageItem', () => {
       expect(rendered!.innerHTML).toContain('<p>Some **bold** text</p>');
     });
 
+    it('keeps inline-code decoration off dark fenced code in both themes', () => {
+      const { container } = render(() => (
+        <MessageItem message={makeMessage()} {...makeHandlers()} />
+      ));
+      const classes = container.querySelector('.prose')!.className.split(/\s+/);
+      expect(classes).toContain('prose-pre:bg-slate-900');
+      expect(classes).toContain('[&_:not(pre)>code]:bg-blue-50');
+      expect(classes).toContain('dark:[&_:not(pre)>code]:bg-blue-900/25');
+      expect(classes).toContain('[&_:not(pre)>code]:text-blue-700');
+      expect(classes).toContain('dark:[&_:not(pre)>code]:text-blue-300');
+      // jsdom cannot check Tailwind's computed colours. Native browser proof
+      // also checks highlighted tokens and WCAG contrast on the actual fence.
+      expect(
+        classes.filter((name) =>
+          /^(?:dark:)?prose-code:(?:bg-|text-|px-|py-|border|rounded)/.test(name),
+        ),
+      ).toEqual([]);
+    });
+
     it('shows model name when message is not streaming', () => {
       render(() => (
         <MessageItem
