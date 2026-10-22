@@ -7112,6 +7112,21 @@ an explicit non-empty `--ssh-known-hosts` file isolated from global trust; it
 must set `UpdateHostKeys=no` rather than mutate trust during uninstall, never
 enroll an unknown key, and missing, unreadable, empty, or mismatched
 trust must make the remote portion fail after local cleanup completes.
+Cluster-wide key cleanup must admit one complete, successful `pvesh get /nodes`
+JSON inventory and resolve every validated node before attempting any SSH.
+The parser reads the command's stdout, not a heredoc used as Python source.
+Failed, partial, empty, malformed or ambiguous inventories, missing discovery
+dependencies and unresolved/invalid addresses leave the remote portion
+unconfirmed and return nonzero; none may silently select local-only success or
+fall back to a human-readable membership table. Inventory and resolver reads
+are time-bounded. The local portion runs once even when discovery fails or the
+inventory omits this host; duplicate targets do not repeat remote cleanup.
+`--local-only` remains the explicit dependency-free-of-discovery route to run
+separately on each node. It does not make guest/container recovery a proven
+outcome. `scripts/tests/test_sensor_proxy_cluster_cleanup.py` exercises the
+actual shell discovery, trust selection and main completion path with closed
+cluster/DNS/SSH fakes, synthetic local keys and real timeout controls; ordinary
+smoke CI discovers it alongside the existing native installer tests.
 `scripts/installtests/root_install_sh_test.go` is the owned proof surface for
 the root installer's local sensor-proxy cleanup;
 `scripts/installtests/uninstall_sensor_proxy_test.go` and
