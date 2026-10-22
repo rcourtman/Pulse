@@ -95,9 +95,14 @@ func (g *FixtureGraph) UpdateMetricCohort(
 	}
 
 	setMockUpdateInterval(cfg.UpdateInterval)
-	selectedNodes := make(map[string]struct{}, (len(g.State.Nodes)+cohortCount-1)/cohortCount)
+	// PVE sightings rotate through a divisor of cohortCount, so a slow tick
+	// still sights every node and its guests inside the Proxmox freshness
+	// budget instead of once per full (tick x cohortCount) rotation.
+	proxmoxCohorts := proxmoxCohortCount(currentMockUpdateInterval(), cohortCount)
+	proxmoxCohortIndex := cohortIndex % proxmoxCohorts
+	selectedNodes := make(map[string]struct{}, (len(g.State.Nodes)+proxmoxCohorts-1)/proxmoxCohorts)
 	for index := range g.State.Nodes {
-		if index%cohortCount != cohortIndex {
+		if index%proxmoxCohorts != proxmoxCohortIndex {
 			continue
 		}
 		selectedNodes[g.State.Nodes[index].Name] = struct{}{}
@@ -119,7 +124,7 @@ func (g *FixtureGraph) UpdateMetricCohort(
 	updateFixtureStateMetricsSelectedAt(&g.State, cfg, now, fixtureMetricSelection{
 		proxmoxNodeNames:       selectedNodes,
 		includeSupplemental:    includeSupplemental,
-		uptimeStep:             currentMockUpdateStepInt64() * int64(cohortCount),
+		uptimeStep:             currentMockUpdateStepInt64() * int64(proxmoxCohorts),
 		supplementalUptimeStep: currentMockUpdateStepInt64() * supplementalTicks,
 	})
 	if includeSupplemental {

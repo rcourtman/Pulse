@@ -43,6 +43,8 @@ var (
 // seconds while bounding each realtime delta to roughly one tenth of a large
 // demo estate. The WebSocket publisher may coalesce several sampler ticks into
 // one broadcast, so this leaves enough headroom for that union to remain small.
+// Slower ticks rotate the PVE estate through fewer of them; see
+// proxmoxCohortCount.
 const mockMetricCohortCount = 10
 
 func init() {
@@ -94,6 +96,39 @@ func currentMockUpdateStepInt64() int64 {
 // those sources own to a degraded status. The cohort rotation must therefore
 // never let supplemental fixtures age beyond this budget between rebases.
 const supplementalFreshnessBudget = 120 * time.Second
+
+// proxmoxSightingBudget bounds how long a PVE node and its guests go between
+// mock sightings. It is half the unified registry's minimum Proxmox stale
+// threshold, so a rotation inside it never brushes against that threshold.
+const proxmoxSightingBudget = 30 * time.Second
+
+// proxmoxCohortCount returns how many of the update loop's cohorts the PVE
+// estate rotates through at a tick interval. The ten two-second cohorts sight
+// every node within twenty seconds, but the count is fixed, so a slower tick
+// stretches the rotation (150s at the public demo's 15s interval) past the
+// 60s Proxmox stale threshold and running guests read as stale sources for
+// most of it. The PVE rotation therefore uses the largest divisor of
+// cohortCount whose rotation fits proxmoxSightingBudget, down to sighting
+// every node each tick. A divisor keeps the loop's cohort index mapping each
+// node to exactly one tick of every PVE rotation, and the per-second delta
+// stays no larger than the default configuration's.
+func proxmoxCohortCount(interval time.Duration, cohortCount int) int {
+	for count := cohortCount; count > 1; count-- {
+		if cohortCount%count == 0 && interval*time.Duration(count) <= proxmoxSightingBudget {
+			return count
+		}
+	}
+	return 1
+}
+
+// ProxmoxRefreshInterval returns the wall-clock cadence at which the mock
+// update loop sights each PVE node and its guests. Stale-threshold derivation
+// uses it the same way the Proxmox poller's interval is used, which matters
+// once a tick alone is slower than proxmoxSightingBudget.
+func ProxmoxRefreshInterval() time.Duration {
+	interval := currentMockUpdateInterval()
+	return interval * time.Duration(proxmoxCohortCount(interval, mockMetricCohortCount))
+}
 
 // supplementalRefreshEveryTick reports whether the update loop must rebase
 // provider-backed fixtures on every tick. At fast tick rates one rebase per
