@@ -121,6 +121,10 @@ const workflowDestinations = [
     ],
   ],
   [
+    'PBS datastore Usage is Unknown, Unavailable or differs from an alert:',
+    ['/docs/PBS#datastore-capacity-is-unknown-or-disagrees-with-an-alert'],
+  ],
+  [
     'A PBS job says Healthy despite an error, warning or running status:',
     ['/docs/PBS#a-pbs-job-looks-healthy-but-its-status-disagrees'],
   ],
