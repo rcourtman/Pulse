@@ -28,10 +28,14 @@ describe('shipped development import safety guidance', () => {
 
   it('keeps staged files private without promising full or atomic recovery', () => {
     const text = prose();
-    expect(text).toContain('leaves development sessions, CSRF state, OIDC, local .env, history and alerts alone');
+    expect(text).toContain(
+      'leaves development sessions, CSRF state, OIDC, local .env, history and alerts alone',
+    );
     expect(text).toContain('stages reads before per-file replacement');
     expect(text).toContain('keeps overwritten files privately in .config-import.*/previous');
-    expect(text).toContain('not a full-state backup or a consistent snapshot of a running installation');
+    expect(text).toContain(
+      'not a full-state backup or a consistent snapshot of a running installation',
+    );
     expect(text).toContain('keep the snapshot and remaining staged files');
     expect(text).toContain('inspect the partial import privately before starting anything');
     expect(text).toContain('The helper starts no service');
@@ -45,7 +49,9 @@ describe('shipped development import safety guidance', () => {
     expect(text).toContain('Neither command resets Pulse');
     expect(text).toContain('cleanup stops before removing anything');
     expect(text).toContain('Removal failures are reported without using sudo');
-    expect(text).toContain('Cleanup does not stop processes or restore anything an earlier cleanup deleted');
+    expect(text).toContain(
+      'Cleanup does not stop processes or restore anything an earlier cleanup deleted',
+    );
     expect(article().querySelector('#cleaning-development-build-output')).not.toBeNull();
     expect(article().querySelector('a[href="#hot-reload-dev-loop"]')).not.toBeNull();
   });
