@@ -53,7 +53,9 @@ try {
     'package.json',
     'package-lock.json',
     'browser-tests/configuration-transfer-response.cjs',
+    'browser-tests/configuration-import-limits.cjs',
     'browser-tests/build-configuration-transfer-response.mjs',
+    '../internal/api/configapi/config_export_import_handlers.go',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));
   const walk = (dir) => {

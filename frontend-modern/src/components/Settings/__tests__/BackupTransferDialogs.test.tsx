@@ -73,6 +73,13 @@ describe('BackupTransferDialogs', () => {
     expect(guide).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
+  it('describes the file and encoded request limits on the file control', () => {
+    renderTransfer('import');
+    expect(screen.getByLabelText('Configuration File')).toHaveAccessibleDescription(
+      "Maximum file size: 1 MiB. The backup and password together must also fit the server's 1 MiB request limit.",
+    );
+  });
+
   it('keeps import controls locked and explains that dispatch cannot be cancelled', () => {
     renderTransfer('import', { transferStatus: () => ({ kind: 'import', phase: 'request' }) });
     expect(screen.getByLabelText('Configuration File')).toBeDisabled();

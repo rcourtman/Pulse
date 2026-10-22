@@ -6,11 +6,15 @@ import { Router, Route } from '@solidjs/router';
 import { BackupTransferDialogs } from '../src/components/Settings/BackupTransferDialogs';
 import { useBackupTransferFlow } from '../src/components/Settings/useBackupTransferFlow';
 import { ToastContainer } from '../src/components/Toast/Toast';
+import type { SecurityStatus } from '../src/types/config';
 import Docs from '../src/pages/Docs';
 import '../src/index.css';
 
 function Transfer() {
-  const securityStatus = () => null;
+  const securityStatus = () =>
+    new URLSearchParams(window.location.search).has('require-token')
+      ? ({ hasAuthentication: false, apiTokenConfigured: true } as SecurityStatus)
+      : null;
   const flow = useBackupTransferFlow({ securityStatus });
   return (
     <main class="p-6">

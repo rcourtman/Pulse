@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "d486121fa7a847e32285f9663f8357d1f8920227",
+  "verified_at": "2026-10-22T04:39:18.618846Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "b902e70723d262446bd84d69996694406a1d1f0997dc4ce797a711f4c6f620d3",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "30a35f949424e33455ecd03014d7d5cabaeb2b84e7b662bf556efc36dd738be5"
+  },
+  "routes": [
+    "/browser-tests/configuration-migration.html (production transfer flow, dialogs, API client and toast consumer; synthetic local HTTP only)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "File >1 MiB is refused before File.text or a token prompt; file/password are preserved and no import is sent.",
+    "The complete serialized import body is measured in UTF-8, including Unicode password and JSON escaping. Over-budget bodies stay local and are distinguished from uncertain post-dispatch failures.",
+    "Exactly 1048575/1048576-byte bodies each send once and follow the synthetic acknowledged reload; explicit corrected requests can receive the ordinary uncertain HTTP rejection."
+  ],
+  "interactions": [
+    "Desktop keyboard and 320px touch WebKit: twelve local refusals, two explicit corrected/rejected requests and four acknowledged boundary requests. File selection, preserved inputs, no automatic replay, Cancel and ordinary successful reload exercised.",
+    "All eight retained captures opened natively with view_image at original detail; both-limit help, scope warnings, complete error text and controls remain within desktop/narrow panels. Both retained palettes are light."
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "d486121fa7a847e32285f9663f8357d1f8920227",
+  "producer_receipt": "source-bygwgjtp",
+  "browser_report_sha256": "b75b1dfc18fb9172309797a5fd86aeb03765950c52bb081a47fe604381d1b1c4",
+  "limits": "Synthetic archive strings/HTTP acknowledgements prove bounded client consumption, not actual decryption/import, installed/native recovery or complete Settings/auth navigation. The existing server budget is source-bound and unchanged; original 320x960 WebKit Docs Back/history proof remains adverse and is not cleared."
+}

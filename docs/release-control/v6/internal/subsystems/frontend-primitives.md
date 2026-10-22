@@ -10643,6 +10643,19 @@ an authentication prompt. UI/legacy/CLI encrypted archive formats, export's
 12-character minimum, server authorization and the migration scope warnings stay
 in force. Browser/component proof does not establish installed restore recovery.
 
+Import preflight bounds the selected file to 1 MiB before reading it or asking
+for an API token. After extracting the existing UI/legacy/CLI archive format,
+it checks the complete serialized request's UTF-8 bytes against the server's
+unchanged 1 MiB body limit, including password and JSON escaping. Exactly-at-limit
+requests remain admissible. These local rejections preserve inputs, send no
+import, schedule no reload/replay and explicitly say that no request was sent,
+unlike an uncertain response after dispatch. The file control describes both
+limits; no advice truncates an encrypted archive or weakens its passphrase.
+`useBackupTransferFlow.limits.test.tsx`, `BackupTransferDialogs.test.tsx` and
+`configuration-import-limits.cjs` cover boundaries, encoding, token gating,
+correction and desktop/narrow feedback. This is bounded client consumption,
+not decryption, full Settings/auth acceptance or native recovery proof.
+
 ### Readable operator overrides inside table drawers (15 October 2026)
 
 `ResourceOperatorStateSection` restores normal wrapping at its own boundary,
