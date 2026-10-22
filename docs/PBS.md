@@ -222,6 +222,49 @@ If you have multiple PBS servers, add each one separately in Settings. Pulse wil
 
 ## Troubleshooting
 
+### Datastore capacity is Unknown or disagrees with an alert
+
+In **Proxmox → Backups → Backup servers**, read **Usage** for the affected
+server and datastore, not just the server's connection status. A reachable
+PBS server does not establish a successful datastore capacity read.
+
+- **Unavailable:** the server is offline or the datastore read reports a
+  failure. Retained zero-valued counters do not mean an empty datastore.
+- **Unknown:** the capacity evidence is missing, invalid or inconsistent.
+  For example, the reported percentage can disagree with the used and total
+  bytes. Pulse does not choose the more reassuring value; this is not 0% use,
+  proof of free space or proof that the datastore is full.
+- **No datastore data:** Pulse has a server row without datastore evidence.
+  This does not establish that PBS has no datastores or backups.
+
+Where available, activate **Unknown** or **Unavailable**, or expand the row,
+to read **Datastore capacity** and its explanation. The control works by
+keyboard or touch; it does not require hovering over a tooltip. Older
+versions may omit this explanation; use the observations already available.
+Backup-entry counts and deduplication are separate readings, not evidence of
+free capacity or usable backups.
+
+When capacity is available, **Usage** uses used bytes divided by total bytes.
+Its warning starts at **75%** and danger at **90%**, independently of configured
+alert thresholds. Changing an alert threshold does not change these Usage
+colours or repair a missing reading. Conversely, an active alert can remain
+below its trigger until its separate clear condition is met; see
+[usage-alert recovery](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
+
+Compare only the same PBS server and datastore with its existing native PBS
+usage record, including the observation time and units where known. A newer
+reading, another datastore or an identically named store on another server
+is not a like-for-like comparison. For help, retain the Pulse version, displayed
+state or explanation and only the relevant locally reviewed, redacted readings.
+Keep full API responses, private paths, hostnames and tokens private; unknown
+details can stay unknown.
+
+Do not delete backups, run prune or garbage collection, change retention,
+recreate the connection, widen permissions, restart or run Diagnostics to make
+the display agree. Capacity is not proof of successful backup, guest thaw or
+filesystem writes. For a frozen or unresponsive guest, keep affected Pulse
+monitoring stopped and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
+
 ### PBS is Active but missing from monitoring
 
 **Active** in **Settings → Infrastructure** describes the configured

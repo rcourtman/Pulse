@@ -135,6 +135,41 @@ class PBSExistingCredentialGuideTest(unittest.TestCase):
         self.assertIn("[below](#method-1-api-only-connection-recommended)", guidance)
         self.assertEqual(DOC.read_bytes(), (ROOT / "frontend-modern/public/docs/PBS.md").read_bytes())
 
+    def test_capacity_help_preserves_uncertainty_and_separates_alert_policy(self):
+        text = DOC.read_text()
+        heading = "### Datastore capacity is Unknown or disagrees with an alert\n"
+        self.assertEqual(text.count(heading), 1)
+        guidance = " ".join(text.split(heading, 1)[1].split("\n### ", 1)[0].split())
+        for distinction in (
+            "reachable PBS server does not establish a successful datastore capacity read",
+            "Retained zero-valued counters do not mean an empty datastore",
+            "reported percentage can disagree with the used and total bytes",
+            "not 0% use", "No datastore data", "keyboard or touch",
+            "Older versions may omit this explanation", "used bytes divided by total bytes",
+            "independently of configured alert thresholds", "separate clear condition",
+            "same PBS server and datastore", "observation time and units",
+            "unknown details can stay unknown", "Do not delete backups",
+            "run prune or garbage collection", "widen permissions",
+            "not proof of successful backup, guest thaw or filesystem writes",
+            "keep affected Pulse monitoring stopped",
+        ):
+            with self.subTest(distinction=distinction):
+                self.assertIn(distinction, guidance)
+        # Keep the guide's fixed visual bands coupled to the consuming table,
+        # rather than confusing them with configurable alert policy.
+        source = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx").read_text()
+        bands = source.split("function usageVariant(", 1)[1].split("\n}", 1)[0]
+        for threshold in re.findall(r"pct >= (\d+)", bands):
+            self.assertIn(f"**{threshold}%**", guidance)
+        self.assertIn("Math.abs(reportedPercent - percent) > 0.5", source)
+        self.assertNotIn("```", guidance, "Interpret existing evidence without new provider calls")
+        trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
+        self.assertIn("[datastore capacity and alert distinctions](PBS.md#datastore-capacity-is-unknown-or-disagrees-with-an-alert)", trouble)
+        self.assertIn("[usage-alert recovery](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops)", guidance)
+        for name in ("PBS", "TROUBLESHOOTING"):
+            self.assertEqual((ROOT / f"docs/{name}.md").read_bytes(),
+                             (ROOT / f"frontend-modern/public/docs/{name}.md").read_bytes())
+
 
 class PBSDocsTest(unittest.TestCase):
     @classmethod

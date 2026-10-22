@@ -87,6 +87,10 @@ Jump to a group:
 
 ### Backups and storage
 
+- **PBS datastore Usage is Unknown, Unavailable or differs from an alert:** read
+  [datastore capacity and alert distinctions](PBS.md#datastore-capacity-is-unknown-or-disagrees-with-an-alert).
+  A reachable server is not a successful capacity read; changing alert thresholds
+  does not change Usage colours. Do not delete backups to make the display agree.
 - **A PBS job says Healthy despite an error, warning or running status:** compare
   [the same task's status evidence](PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees).
   An `OK` or `success` word inside a longer message is not completed success.
