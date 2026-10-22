@@ -25,7 +25,12 @@ counter. Provider output, which may contain credentials or private alert text,
 is neither accumulated for diagnostics nor retained in an `exec.ExitError`.
 Only the total byte count reaches existing structured logs. Executable choice,
 exact target/payload arguments, context cancellation, typed failures, retry
-policy and delivery verdicts are unchanged. `apprise_exec_test.go` exercises
+policy and ordinary delivery verdicts are unchanged. A one-second additional
+pipe-drain limit prevents inherited stdout/stderr from retaining a sender after
+the main process exits or its context expires; incomplete drain fails without
+retaining output. It does not terminate or sandbox a provider's descendants.
+`apprise_pipe_wait_test.go` covers inherited streams and typed failures, and
+`apprise_exec_test.go` exercises
 real synthetic process pipes and exit/cancellation paths; existing CLI
 confidentiality and firing/recovery/Test controls preserve their assertions.
 This is output-memory isolation, not a provider sandbox or installed-delivery
