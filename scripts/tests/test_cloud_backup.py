@@ -97,8 +97,19 @@ if tool == "date":
 if tool == "hostname" and not args:
     print("fixture-host")
     sys.exit(0)
-if tool == "docker" and args == ["ps", "-a", "--no-trunc"]:
-    print("CONTAINER ID  IMAGE  NAMES")
+if tool == "docker":
+    assert args[:3] == ["ps", "-a", "--no-trunc"], args
+    if len(args) == 3:
+        # Default Docker output includes command arguments. This synthetic
+        # canary makes an unrestricted inventory observable without a daemon.
+        print("CONTAINER ID IMAGE COMMAND NAMES")
+        print("fixture-id fixture-image --password=SYNTHETIC-COMMAND-CANARY fixture-container")
+        sys.exit(0)
+    assert args[3:] == ["--format", 'table {{.ID}}\\t{{.Image}}\\t{{.Names}}\\t{{.Status}}'], args
+    if scenario.get("docker_fail"):
+        sys.exit(12)
+    print("CONTAINER ID IMAGE NAMES STATUS")
+    print("fixture-id fixture-image fixture-container Up 1 minute")
     sys.exit(0)
 sys.exit(90)
 '''
@@ -205,12 +216,12 @@ class CloudBackupTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_each_existing_output_is_preserved_before_archives_or_retention(self):
-        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted"), 1):
+        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted", "meta-encrypted"), 1):
             with self.subTest(label=label):
                 timestamp = f"20261022-02{index:04d}"
                 encrypted = label.endswith("-encrypted")
-                suffix = ".txt" if label == "meta" else ".tar.gz" + (".age" if encrypted else "")
                 name = label.removesuffix("-encrypted")
+                suffix = (".txt" if name == "meta" else ".tar.gz") + (".age" if encrypted else "")
                 existing = self.backups / f"pulse-backup-{name}-{timestamp}{suffix}"
                 existing.write_bytes(b"previous completed fixture")
                 result = self.invoke(FIXTURE_TIMESTAMP=timestamp,
@@ -221,12 +232,12 @@ class CloudBackupTest(unittest.TestCase):
                 self.assertEqual(list(self.backups.glob(".pulse-backup-*.lock")), [])
 
     def test_output_symlinks_cannot_overwrite_an_existing_file(self):
-        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted"), 1):
+        for index, label in enumerate(("tenants", "cp", "meta", "tenants-encrypted", "cp-encrypted", "meta-encrypted"), 1):
             with self.subTest(label=label):
                 timestamp = f"20261022-03{index:04d}"
                 encrypted = label.endswith("-encrypted")
-                suffix = ".txt" if label == "meta" else ".tar.gz" + (".age" if encrypted else "")
                 name = label.removesuffix("-encrypted")
+                suffix = (".txt" if name == "meta" else ".tar.gz") + (".age" if encrypted else "")
                 target = self.backups / f"preserved-{index}.txt"
                 target.write_bytes(b"synthetic unrelated file")
                 existing = self.backups / f"pulse-backup-{name}-{timestamp}{suffix}"
@@ -402,7 +413,7 @@ class CloudBackupTest(unittest.TestCase):
                 self.assert_no_uploads()
 
     def test_encryption_failures_preserve_last_archives_and_skip_uploads(self):
-        for number in (1, 2):
+        for number in (1, 2, 3):
             with self.subTest(number=number):
                 self.assert_stopped_before_retention(self.invoke({"age_fail": number}, PULSE_BACKUP_ENCRYPT="true"))
                 self.assert_no_uploads()
@@ -462,7 +473,85 @@ class CloudBackupTest(unittest.TestCase):
         copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
         self.assertEqual(len(copies), 3)
         self.assertTrue(all(call[1] == "copyto" and call[2].endswith(".age") for call in copies[:2]))
-        self.assertTrue(copies[2][2].endswith(".txt"))
+        self.assertTrue(all(call[2].endswith(".age") for call in copies), copies)
+        metadata = list(self.backups.glob("pulse-backup-meta-*.txt.age"))
+        self.assertEqual(len(metadata), 1)
+        self.assertEqual(list(self.backups.glob("*.txt")), [])
+        self.assertEqual(metadata[0].stat().st_mode & 0o777, 0o600)
+        self.assertTrue(metadata[0].read_bytes().startswith(b"FAKE-AGE\n"))
+        self.assertIn(b"hostname: fixture-host", metadata[0].read_bytes())
+        self.assertNotIn(b"SYNTHETIC-COMMAND-CANARY", metadata[0].read_bytes())
+        self.assertEqual(len([call for call in self.calls if call[0] == "age"]), 3)
+
+    def test_metadata_contains_only_selected_inventory_not_container_commands(self):
+        result = self.invoke()
+        self.assertEqual(result.returncode, 0, self.output)
+        metadata = next(self.backups.glob("pulse-backup-meta-*.txt"))
+        text = metadata.read_text()
+        self.assertIn("hostname: fixture-host", text)
+        self.assertIn("encrypted: false", text)
+        self.assertIn("fixture-id fixture-image fixture-container Up 1 minute", text)
+        self.assertNotIn("SYNTHETIC-COMMAND-CANARY", text)
+        self.assertNotIn("COMMAND", text)
+        self.assertEqual(metadata.stat().st_mode & 0o777, 0o600)
+
+    def test_local_only_encryption_also_protects_metadata(self):
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", PULSE_RCLONE_REMOTE="")
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_no_uploads()
+        metadata = list(self.backups.glob("pulse-backup-meta-*.txt.age"))
+        self.assertEqual(len(metadata), 1)
+        self.assertTrue(metadata[0].read_bytes().startswith(b"FAKE-AGE\n"))
+        self.assertEqual(list(self.backups.glob("*.txt")), [])
+
+    def test_missing_optional_docker_inventory_does_not_skip_metadata_encryption(self):
+        result = self.invoke({"docker_fail": True}, PULSE_BACKUP_ENCRYPT="true")
+        self.assertEqual(result.returncode, 0, self.output)
+        metadata = next(self.backups.glob("pulse-backup-meta-*.txt.age"))
+        self.assertIn(b"docker ps: unavailable", metadata.read_bytes())
+        self.assertEqual(list(self.backups.glob("*.txt")), [])
+
+    def test_metadata_encryption_failure_stops_before_every_upload_and_retention(self):
+        result = self.invoke({"age_fail": 3}, PULSE_BACKUP_ENCRYPT="true")
+        self.assert_stopped_before_retention(result)
+        self.assert_no_uploads()
+        self.assertEqual(len([call for call in self.calls if call[0] == "age"]), 3)
+        # Preserve failed-job evidence locally under private modes, without
+        # pretending a partial fake-age output is a complete encrypted backup.
+        metadata = next(self.backups.glob("pulse-backup-meta-*.txt"))
+        self.assertEqual(metadata.stat().st_mode & 0o777, 0o600)
+
+    def test_each_encrypted_upload_preserves_prior_backups_on_failure(self):
+        for number in (1, 2, 3):
+            with self.subTest(number=number):
+                result = self.invoke({"upload_fail": number}, PULSE_BACKUP_ENCRYPT="true")
+                self.assert_stopped_before_retention(result)
+                copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+                self.assertEqual(len(copies), number)
+                self.assertTrue(all(call[2].endswith(".age") for call in copies), copies)
+                self.assertEqual(list(self.backups.glob("*.txt")), [])
+
+    def test_existing_encrypted_metadata_directory_is_preserved_before_work(self):
+        timestamp = "20261022-070001"
+        existing = self.backups / f"pulse-backup-meta-{timestamp}.txt.age"
+        existing.mkdir()
+        marker = existing / "preserved.txt"
+        marker.write_bytes(b"synthetic retained directory")
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", FIXTURE_TIMESTAMP=timestamp)
+        self.assert_stopped_before_retention(result)
+        self.assertEqual(marker.read_bytes(), b"synthetic retained directory")
+        self.assertEqual(self.calls, [])
+
+    def test_encrypted_metadata_dangling_link_is_preserved_before_work(self):
+        timestamp = "20261022-080001"
+        target = self.backups / "must-not-be-created.txt"
+        existing = self.backups / f"pulse-backup-meta-{timestamp}.txt.age"
+        existing.symlink_to(target)
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", FIXTURE_TIMESTAMP=timestamp)
+        self.assert_stopped_before_retention(result)
+        self.assertTrue(existing.is_symlink())
+        self.assertFalse(target.exists())
+        self.assertEqual(self.calls, [])
 
 
 if __name__ == "__main__":

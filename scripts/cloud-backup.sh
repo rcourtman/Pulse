@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pulse Cloud — Tarball Backup with DO Spaces Upload
 # Creates optionally encrypted tarballs of CP data + tenant directories.
+# Encryption also covers metadata; container inventory never includes commands.
 # Both source directories are required, even when remote upload is disabled.
 # Configure physical source directories: tar would store a root symlink alone.
 # Helpers sharing a staging directory reserve names before writing any output.
@@ -16,7 +17,7 @@
 #   PULSE_CONTROL_PLANE_DIR  — CP data directory (default: $PULSE_DATA_DIR/control-plane)
 #   PULSE_BACKUP_DIR         — Local backup staging directory (default: /data/backups/tarballs)
 #   PULSE_BACKUP_RETENTION   — Retention in days (default: 30)
-#   PULSE_BACKUP_ENCRYPT     — Enable age encryption (default: false, set to "true")
+#   PULSE_BACKUP_ENCRYPT     — Encrypt archives and metadata with age (default: false, set to "true")
 #   PULSE_BACKUP_AGE_RECIPIENT — age recipient public key for encryption
 #   PULSE_RCLONE_REMOTE      — rclone remote for DO Spaces (e.g. "do-spaces:pulse-backups")
 #   PULSE_BACKUP_LOG_FILE    — Log file path (default: /var/log/pulse-cloud-backup-tarball.log)
@@ -211,7 +212,7 @@ main() {
   local cp_tarball="${BACKUP_DIR}/pulse-backup-cp-${timestamp}.tar.gz"
   local meta_file="${BACKUP_DIR}/pulse-backup-meta-${timestamp}.txt"
   reserve_backup_names "${timestamp}" "${tenants_tarball}" "${tenants_tarball}.age" \
-    "${cp_tarball}" "${cp_tarball}.age" "${meta_file}"
+    "${cp_tarball}" "${cp_tarball}.age" "${meta_file}" "${meta_file}.age"
 
   # Backup tenants
   create_tarball "${TENANTS_DIR}" "${tenants_tarball}" "tenants"
@@ -226,8 +227,17 @@ main() {
     echo "timestamp: ${timestamp}"
     echo "hostname: $(hostname)"
     echo "encrypted: ${ENCRYPT}"
-    docker ps -a --no-trunc 2>/dev/null || echo "docker ps: unavailable"
+    # Docker's default COMMAND column may contain inline credentials. Keep an
+    # explicit inventory rather than collecting commands, even without encryption.
+    docker ps -a --no-trunc --format 'table {{.ID}}\t{{.Image}}\t{{.Names}}\t{{.Status}}' 2>/dev/null || echo "docker ps: unavailable"
   } > "${meta_file}"
+  # Host/container identity is private backup data too. Complete its encryption
+  # before the first upload or retention; never send a plaintext sidecar alongside
+  # encrypted archives. Plaintext is removed only after age succeeds.
+  encrypt_file "${meta_file}"
+  if [[ "${ENCRYPT}" == "true" ]]; then
+    meta_file="${meta_file}.age"
+  fi
 
   # Upload to remote
   local remote_prefix="pulse-cloud-tarballs"
