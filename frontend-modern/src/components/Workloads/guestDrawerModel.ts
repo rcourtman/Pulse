@@ -23,6 +23,7 @@ import {
   getWorkloadGuestDiskRead,
   getWorkloadGuestDiskStatusMessage,
   getWorkloadsGuestBackupStatusPresentation,
+  WORKLOAD_BACKUP_NOT_FOUND_DETAIL,
 } from '@/utils/workloadGuestPresentation';
 import { getWorkloadCPUPercent, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadMetricHistoryTarget } from '@/utils/workloadMetricHistoryTarget';
@@ -101,6 +102,7 @@ export interface GuestDrawerBackupPresentation {
   ageLabel: string;
   dateLabel: string;
   completedAt?: string;
+  absenceDetail?: string;
 }
 
 export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
@@ -705,7 +707,8 @@ export const getGuestDrawerBackupPresentation = (
   if (info.ageMs === null) {
     return {
       ageClass: statusPresentation.color,
-      ageLabel: info.status === 'never' ? 'No completed backup found' : info.ageFormatted,
+      ageLabel: info.ageFormatted,
+      absenceDetail: info.status === 'never' ? WORKLOAD_BACKUP_NOT_FOUND_DETAIL : undefined,
       dateLabel: 'Unknown',
     };
   }

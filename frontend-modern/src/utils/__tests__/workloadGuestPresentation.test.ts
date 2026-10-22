@@ -197,7 +197,7 @@ describe('workloadGuestPresentation', () => {
   });
 
   it('returns canonical guest backup tooltip copy', () => {
-    expect(getWorkloadsGuestBackupTooltip('never')).toBe('No backup found');
+    expect(getWorkloadsGuestBackupTooltip('never')).toBe('No completed backup found');
     expect(getWorkloadsGuestBackupTooltip('stale', '3d')).toBe('Last backup: 3d');
   });
 

@@ -242,16 +242,21 @@ const hash = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).diges
       await dialog.getByText(/invalid timestamp/).waitFor();
       await page.evaluate(() => window.__backupDetails.update({ timestamp: '', running: false }));
       await dialog
-        .getByText('No backup has ever been recorded for this guest.', { exact: true })
+        .getByText(
+          'Pulse has no completed-backup time matched to this guest. Backups may still exist outside the collected or matched inventory.',
+          { exact: true },
+        )
         .waitFor();
       assert(!(await dialog.innerText()).includes('Invalid Date'));
       assert(!(await dialog.innerText()).includes('NaN'));
       checks.push('malformed then absence retain distinct truthful states');
       await activate(close);
-      await checkClosed(row.getByRole('button', { name: 'No backup found', exact: true }));
+      await checkClosed(
+        row.getByRole('button', { name: 'No completed backup found', exact: true }),
+      );
       const ct = page
         .getByRole('region', { name: 'backup-ct row' })
-        .getByRole('button', { name: 'No backup found', exact: true });
+        .getByRole('button', { name: 'No completed backup found', exact: true });
       await activate(ct);
       await checkOpen(ct);
       assert((await dialog.innerText()).includes('backup-ct'));

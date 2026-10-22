@@ -443,6 +443,36 @@ describe('GuestDrawer', () => {
     expect(details.getByText('No completed backup found')).toBeVisible();
   });
 
+  it.each(['qemu', 'lxc'])(
+    'keeps missing %s backup evidence scoped through activity and replacement in the full drawer',
+    (type) => {
+      const [guest, setGuest] = createSignal(makeGuest({ type, lastBackup: 0 }));
+      render(() => <GuestDrawer guest={guest()} onClose={vi.fn()} />);
+      const details = technicalDetails();
+      const scope = 'Backups may still exist outside the collected or matched inventory.';
+      const lastBackupRow = () => details.getByText('Last completed backup').closest('tr')!;
+      expect(details.getByText('No completed backup found')).toBeVisible();
+      expect(lastBackupRow()).toHaveTextContent(scope);
+      expect(lastBackupRow().querySelector('time')).toBeNull();
+      setGuest({ ...guest(), backupInProgress: true });
+      expect(details.getByText('Running · not completed yet')).toBeVisible();
+      expect(lastBackupRow()).toHaveTextContent(scope);
+      expect(lastBackupRow()).not.toHaveTextContent(/first|never/i);
+      setGuest({ ...guest(), lastBackup: Date.now() - 3600_000, backupInProgress: false });
+      expect(lastBackupRow().querySelector('time')).not.toBeNull();
+      expect(lastBackupRow()).not.toHaveTextContent(scope);
+      setGuest({ ...guest(), lastBackup: NaN });
+      expect(lastBackupRow()).toHaveTextContent('invalid timestamp');
+      expect(lastBackupRow()).not.toHaveTextContent(scope);
+      setGuest({ ...guest(), lastBackup: 0 });
+      expect(lastBackupRow()).toHaveTextContent(scope);
+      setGuest({ ...guest(), platformScopes: ['vmware-vsphere'] });
+      expect(details.queryByText(scope, { exact: false })).not.toBeInTheDocument();
+      expect(details.queryByText('Last completed backup')).not.toBeInTheDocument();
+      expect(details.getByText('Not reported by this integration')).toBeVisible();
+    },
+  );
+
   it.each([
     { type: 'qemu', platformScopes: ['vmware-vsphere'] },
     { type: 'lxc', platformScopes: ['incus'] },

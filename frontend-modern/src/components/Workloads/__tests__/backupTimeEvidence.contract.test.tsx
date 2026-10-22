@@ -39,6 +39,7 @@ describe('backup time evidence', () => {
       expect(drawer.ageClass).not.toContain('green');
       expect(drawer.ageClass).not.toContain('red');
       expect(drawer.dateLabel).toBe('Unknown');
+      expect(drawer.absenceDetail).toBeUndefined();
     },
   );
 
@@ -57,8 +58,12 @@ describe('backup time evidence', () => {
     expect(getBackupInfo(value, undefined, now)).toEqual({
       status: 'never',
       ageMs: null,
-      ageFormatted: 'Never',
+      ageFormatted: 'No completed backup found',
     });
+    const drawer = getGuestDrawerBackupPresentation(value, undefined, now);
+    expect(drawer.ageLabel).toBe('No completed backup found');
+    expect(drawer.absenceDetail).toContain('Backups may still exist');
+    expect(drawer.completedAt).toBeUndefined();
   });
 
   it.each([
@@ -107,7 +112,7 @@ describe('backup time evidence', () => {
       expect(badge).not.toHaveAccessibleName(/unavailable/);
       expect(badge.className).toContain(running ? 'blue' : 'green');
       setTimestamp(0);
-      expect(badge).toHaveTextContent(running ? 'Running' : 'None');
+      expect(badge).toHaveTextContent(running ? 'Running' : 'Not found');
       expect(badge).toHaveAccessibleName(/no (completed )?backup/);
     },
   );

@@ -53,6 +53,49 @@ describe('backup evidence access', () => {
     },
   );
 
+  it.each([null, undefined, '', 0])(
+    'scopes absence sentinel %s to the collected/matched evidence for both row disclosures',
+    async (value) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
+      const [running, setRunning] = createSignal(false);
+      render(() => (
+        <>
+          <BackupStatusCell lastBackup={value} backupRunning={running()} />
+          <BackupIndicator lastBackup={value} backupRunning={running()} isTemplate={false} />
+        </>
+      ));
+      const badge = screen.getByRole('button', { name: /^Backup status:/ });
+      expect(badge).toHaveTextContent('Not found');
+      const indicator = screen.getByRole('button', { name: 'No completed backup found' });
+      for (const trigger of [badge, indicator]) {
+        fireEvent.click(trigger);
+        const dialog = screen.getByRole('dialog');
+        const assertAbsenceScope = () => {
+          expect(dialog).toHaveTextContent('No completed backup found');
+          expect(dialog).toHaveTextContent(
+            'Pulse has no completed-backup time matched to this guest.',
+          );
+          expect(dialog).toHaveTextContent(
+            'Backups may still exist outside the collected or matched inventory.',
+          );
+          expect(dialog).not.toHaveTextContent(/never|first backup|no completed backup yet/i);
+          expect(dialog.querySelector('time')).toBeNull();
+        };
+        assertAbsenceScope();
+        setRunning(true);
+        assertAbsenceScope();
+        expect(dialog).toHaveTextContent('Backup running now');
+        setRunning(false);
+        assertAbsenceScope();
+        expect(dialog).not.toHaveTextContent('Backup running now');
+        await Promise.resolve();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        expect(trigger).toHaveFocus();
+      }
+    },
+  );
+
   it('keeps open details reactive without interpreting running or uncertainty as completion', () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -72,9 +115,9 @@ describe('backup evidence access', () => {
     expect(dialog).toHaveTextContent('timestamp is in the future');
     expect(dialog).not.toHaveTextContent('Invalid Date');
     setValue(0);
-    expect(dialog).toHaveTextContent('No completed backup yet');
+    expect(dialog).toHaveTextContent('No completed backup found');
     setRunning(false);
-    expect(dialog).toHaveTextContent('No backup has ever been recorded');
+    expect(dialog).toHaveTextContent('Pulse has no completed-backup time matched to this guest');
     expect(dialog).not.toHaveTextContent('Backup running now');
     setValue(completed);
     expect(dialog).toHaveTextContent('2 hours ago');
@@ -97,7 +140,9 @@ describe('backup evidence access', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close backup details' }));
     fireEvent.click(triggers[1]);
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(screen.getByRole('dialog')).toHaveTextContent('No backup has ever been recorded');
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Pulse has no completed-backup time matched to this guest',
+    );
     expect(screen.getByRole('dialog')).not.toHaveTextContent('2 hours ago');
     expect(screen.queryByRole('button', { name: /^Last backup:/ })).toBeNull();
   });

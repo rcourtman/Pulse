@@ -54,13 +54,13 @@ describe('BackupStatusCell', () => {
     expect(badge.className).not.toContain('border-red-200');
   });
 
-  it('labels a guest that has never been backed up in red', () => {
+  it('labels a guest with no matched completion time without asserting backup absence', () => {
     const badge = renderCell(null);
 
-    expect(badge.textContent?.trim()).toBe('None');
+    expect(badge.textContent?.trim()).toBe('Not found');
     expect(badge.className).toContain('rounded-full');
     expect(badge.className).toContain('border-red-200');
-    expect(badge.getAttribute('aria-label')).toBe('Backup status: no backup found');
+    expect(badge.getAttribute('aria-label')).toBe('Backup status: no completed backup found');
   });
 
   // A backup that merely STARTED must never wear the green shield - the
@@ -78,14 +78,14 @@ describe('BackupStatusCell', () => {
     );
   });
 
-  it('shows Running rather than red None while a first backup runs', () => {
+  it('shows Running rather than Not found without claiming this is the first backup', () => {
     const badge = renderCell(null, true);
 
     expect(badge.textContent?.trim()).toBe('Running');
     expect(badge.className).toContain('border-blue-200');
     expect(badge.className).not.toContain('border-red-200');
     expect(badge.getAttribute('aria-label')).toBe(
-      'Backup status: backup running now, no completed backup yet',
+      'Backup status: backup running now, no completed backup found',
     );
   });
 

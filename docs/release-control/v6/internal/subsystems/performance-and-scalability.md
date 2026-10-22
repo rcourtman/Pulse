@@ -15,6 +15,23 @@
 
 ## Purpose
 
+### Workload backup absence explanations stay on the presentation path
+
+An absent Proxmox completion-time scalar establishes only that Pulse has no
+matched completed backup, not that none ever existed or that a running backup
+is the first. The existing row disclosures and full drawer share that scope
+explanation. It appears only for absent evidence and withdraws on completed,
+unusable-time or unsupported-integration replacement without closing the
+consumer. There are no extra requests, timers, scans or policy evaluations.
+
+`GuestDrawer.test.tsx`, the backup-time/access controls and
+`browser-tests/backup-completion-time.cjs` exercise VM/LXC, running/stopped
+activity, same-open replacement, keyboard/touch disclosure and focus return.
+Production build and unchanged bundle budgets remain size checks. Synthetic
+presentation proof establishes neither provider backup absence nor native
+restore, thaw or filesystem liveness.
+
+
 ### Root aggregate availability uses the existing projection only
 
 The detail mapper and Root Disk card preserve unavailable byte readings through

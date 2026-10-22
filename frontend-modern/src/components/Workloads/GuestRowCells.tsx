@@ -32,6 +32,7 @@ import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
   getWorkloadsGuestNetworkEmptyState,
+  WORKLOAD_BACKUP_NOT_FOUND_DETAIL,
   type WorkloadsGuestBackupDisplayStatus,
 } from '@/utils/workloadGuestPresentation';
 
@@ -90,7 +91,7 @@ function getBackupAgeBadgeLabel(
   info: BackupInfo,
   now: number,
 ): string {
-  if (info.status === 'never') return 'None';
+  if (info.status === 'never') return 'Not found';
   if (info.status === 'unknown') return 'Unknown';
   const compact = formatRelativeTime(lastBackup ?? undefined, {
     compact: true,
@@ -106,7 +107,7 @@ function getBackupAgeBadgeClass(status: WorkloadsGuestBackupDisplayStatus): stri
     'inline-flex h-5 min-w-13 items-center justify-center gap-1 px-1.5 text-[10px] font-semibold leading-none tabular-nums cursor-help';
   // A healthy backup only needs its shield. Existing backups that cross an age
   // threshold remain amber because age is a policy-relative caution, while red
-  // is reserved for the materially different state where no backup exists.
+  // is reserved for a missing matched completion, not proven backup absence.
   // The exact age stays visible for every non-fresh state.
   const pill = `${layout} rounded-full border`;
 
@@ -385,9 +386,9 @@ function BackupStatusCell(props: {
     if (props.backupRunning) {
       return hasCompletedBackup()
         ? `Backup status: backup running now, last completed backup ${currentInfo.ageFormatted}`
-        : 'Backup status: backup running now, no completed backup yet';
+        : 'Backup status: backup running now, no completed backup found';
     }
-    if (currentInfo.status === 'never') return 'Backup status: no backup found';
+    if (currentInfo.status === 'never') return 'Backup status: no completed backup found';
     return `Backup status: ${currentInfo.status}, last backup ${currentInfo.ageFormatted}`;
   });
 
@@ -443,11 +444,12 @@ function BackupStatusCell(props: {
         <p class="text-amber-700 dark:text-amber-300">{info().ageFormatted}</p>
       </Show>
       <Show when={info().status === 'never'}>
-        <p class="text-red-600 dark:text-red-400">
-          {props.backupRunning
-            ? 'No completed backup yet - the first backup is running now.'
-            : 'No backup has ever been recorded for this guest.'}
-        </p>
+        <div class="space-y-1">
+          <p class="text-red-600 dark:text-red-400">{info().ageFormatted}</p>
+          <p class="whitespace-normal wrap-break-word leading-relaxed text-base-content">
+            {WORKLOAD_BACKUP_NOT_FOUND_DETAIL}
+          </p>
+        </div>
       </Show>
       <Show when={guestReadPresentation()}>
         {(reading) => (

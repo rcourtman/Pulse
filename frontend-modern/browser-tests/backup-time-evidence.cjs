@@ -237,7 +237,7 @@ const sha256 = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).dig
             '0001-01-01T00:00:00.000000000Z',
           ]) {
             await observe(timestamp);
-            assert.equal((await badge.innerText()).trim(), 'None');
+            assert.equal((await badge.innerText()).trim(), 'Not found');
             assert((await badge.getAttribute('class')).includes('red'));
             await details.getByText('No completed backup found', { exact: true }).waitFor();
             checks.push(`explicit absence ${timestamp}: missing, not unknown`);

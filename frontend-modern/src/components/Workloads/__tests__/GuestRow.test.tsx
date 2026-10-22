@@ -3326,7 +3326,9 @@ describe('backup column', () => {
       visibleColumnIds: ['name', 'backup'],
     });
     expect(screen.getByText('None')).toBeTruthy();
-    const badge = container.querySelector('[aria-label="Backup status: no backup found"]');
+    const badge = container.querySelector(
+      '[aria-label="Backup status: no completed backup found"]',
+    );
     expect(badge).toBeTruthy();
     expect(badge?.classList.contains('text-red-700')).toBe(true);
   });
@@ -3379,7 +3381,7 @@ describe('backup column', () => {
       visibleColumnIds: ['name'],
     });
 
-    expect(container.querySelector('[title="No backup found"]')).toBeNull();
+    expect(container.querySelector('[title="No completed backup found"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Backup status:"]')).toBeNull();
   });
 
