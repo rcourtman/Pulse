@@ -2,6 +2,7 @@
 # Pulse Cloud — Tarball Backup with DO Spaces Upload
 # Creates optionally encrypted tarballs of CP data + tenant directories.
 # Encryption also covers metadata; container inventory never includes commands.
+# Encrypted jobs stream into age without writing new plaintext staging files.
 # Both source directories are required, even when remote upload is disabled.
 # Configure physical source directories: tar would store a root symlink alone.
 # Helpers sharing a staging directory reserve names before writing any output.
@@ -141,24 +142,30 @@ create_tarball() {
   fi
   reject_linked_source "${src_dir}" "${label}"
 
+  if [[ "${ENCRYPT}" == "true" ]]; then
+    log "creating encrypted tarball: ${label} -> ${output_path}.age"
+    # Keep plaintext in the pipe, not in the backup directory. pipefail must
+    # reject a failed tar even when age successfully encrypts its partial stream.
+    tar -czf - -C "$(dirname "${src_dir}")" "$(basename "${src_dir}")" |
+      age -r "${AGE_RECIPIENT}" -o "${output_path}.age"
+    log "encrypted tarball created: ${output_path}.age ($(du -sh "${output_path}.age" | cut -f1))"
+    return 0
+  fi
+
   log "creating tarball: ${label} -> ${output_path}"
   tar -czf "${output_path}" -C "$(dirname "${src_dir}")" "$(basename "${src_dir}")"
   log "tarball created: ${output_path} ($(du -sh "${output_path}" | cut -f1))"
 }
 
-# Encrypt a file with age
-encrypt_file() {
-  local input_path="$1"
-  local output_path="${input_path}.age"
-
-  if [[ "${ENCRYPT}" != "true" ]]; then
-    return 0
-  fi
-
-  log "encrypting: ${input_path}"
-  age -r "${AGE_RECIPIENT}" -o "${output_path}" "${input_path}"
-  rm -f "${input_path}"
-  log "encrypted: ${output_path}"
+# Emit metadata to the selected plaintext file or encryption pipe.
+write_metadata() {
+  local timestamp="$1"
+  echo "timestamp: ${timestamp}"
+  echo "hostname: $(hostname)"
+  echo "encrypted: ${ENCRYPT}"
+  # Docker's default COMMAND column may contain inline credentials. Keep an
+  # explicit inventory rather than collecting commands, even without encryption.
+  docker ps -a --no-trunc --format 'table {{.ID}}\t{{.Image}}\t{{.Names}}\t{{.Status}}' 2>/dev/null || echo "docker ps: unavailable"
 }
 
 # Upload to DO Spaces via rclone
@@ -245,27 +252,18 @@ main() {
 
   # Backup tenants
   create_tarball "${TENANTS_DIR}" "${tenants_tarball}" "tenants"
-  encrypt_file "${tenants_tarball}"
 
   # Backup control plane
   create_tarball "${CONTROL_PLANE_DIR}" "${cp_tarball}" "control-plane"
-  encrypt_file "${cp_tarball}"
 
-  # Record metadata
-  {
-    echo "timestamp: ${timestamp}"
-    echo "hostname: $(hostname)"
-    echo "encrypted: ${ENCRYPT}"
-    # Docker's default COMMAND column may contain inline credentials. Keep an
-    # explicit inventory rather than collecting commands, even without encryption.
-    docker ps -a --no-trunc --format 'table {{.ID}}\t{{.Image}}\t{{.Names}}\t{{.Status}}' 2>/dev/null || echo "docker ps: unavailable"
-  } > "${meta_file}"
-  # Host/container identity is private backup data too. Complete its encryption
-  # before the first upload or retention; never send a plaintext sidecar alongside
-  # encrypted archives. Plaintext is removed only after age succeeds.
-  encrypt_file "${meta_file}"
+  # Host/container identity is private backup data too. Stream it directly to
+  # age, so encryption failure cannot leave a new plaintext inventory on disk.
+  # Complete every encryption before the first upload or retention.
   if [[ "${ENCRYPT}" == "true" ]]; then
     meta_file="${meta_file}.age"
+    write_metadata "${timestamp}" | age -r "${AGE_RECIPIENT}" -o "${meta_file}"
+  else
+    write_metadata "${timestamp}" > "${meta_file}"
   fi
 
   # Upload to remote

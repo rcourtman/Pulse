@@ -50,14 +50,17 @@ if tool != "date":
 
 if tool == "tar":
     assert len(args) == 5 and args[0] == "-czf" and args[2] == "-C", args
-    output = Path(args[1]).resolve()
+    output = Path(args[1]).resolve() if args[1] != "-" else None
     source = Path(args[3]) / args[4]
-    assert output.is_relative_to(root / "backups"), output
+    assert output is None or output.is_relative_to(root / "backups"), output
     assert source.resolve().is_relative_to(root), source
     assert source.name in ("tenants", "control-plane"), source
     number = 1 + sum(call[0] == tool for call in previous)
     if number == scenario.get("tar_fail"):
-        output.write_bytes(b"incomplete fixture archive")
+        if output is None:
+            sys.stdout.buffer.write(b"incomplete fixture archive")
+        else:
+            output.write_bytes(b"incomplete fixture archive")
         sys.exit(7)
     if number == 1 and scenario.get("block_first_tar"):
         import time
@@ -87,12 +90,27 @@ if tool == "find":
         sys.exit(9)
     sys.exit(subprocess.run([os.environ["REAL_FIND"], *args], check=False).returncode)
 if tool == "age":
-    assert len(args) == 5 and args[:3] == ["-r", "fixture-recipient", "-o"], args
-    output, source = Path(args[3]), Path(args[4])
+    # Admit the old file-input path for explicit exact-parent controls too.
+    assert len(args) in (4, 5) and args[:3] == ["-r", "fixture-recipient", "-o"], args
+    output = Path(args[3])
     assert output.resolve().is_relative_to(root / "backups"), output
-    assert source.resolve().is_relative_to(root / "backups"), source
-    output.write_bytes(b"FAKE-AGE\n" + source.read_bytes())
     number = 1 + sum(call[0] == tool for call in previous)
+    def observe_plaintext(phase):
+        names = sorted(p.name for p in (root / "backups").glob("*" + os.environ["FIXTURE_TIMESTAMP"] + "*")
+                       if p.name.endswith((".txt", ".tar.gz")))
+        with (root / "plaintext-observations.jsonl").open("a") as observations:
+            observations.write(json.dumps({"number": number, "phase": phase, "names": names}) + "\n")
+    observe_plaintext("before-input")
+    if number == scenario.get("age_reject"):
+        sys.exit(8)
+    if len(args) == 5:
+        source = Path(args[4])
+        assert source.resolve().is_relative_to(root / "backups"), source
+        content = source.read_bytes()
+    else:
+        content = sys.stdin.buffer.read()
+    observe_plaintext("after-input")
+    output.write_bytes(b"FAKE-AGE\n" + content)
     sys.exit(8 if number == scenario.get("age_fail") else 0)
 if tool == "rclone":
     remote = root / "remote"
@@ -573,6 +591,49 @@ class CloudBackupTest(unittest.TestCase):
                 self.assert_stopped_before_retention(self.invoke({"age_fail": number}, PULSE_BACKUP_ENCRYPT="true"))
                 self.assert_no_uploads()
 
+    def assert_no_new_plaintext(self):
+        self.assertEqual([path.name for path in self.backups.iterdir()
+                          if path not in self.old and path.name.endswith((".tar.gz", ".txt"))], [])
+
+    def test_encryption_never_stages_plaintext_even_while_age_reads(self):
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true")
+        self.assertEqual(result.returncode, 0, self.output)
+        observations = [json.loads(line) for line in
+                        (self.root / "plaintext-observations.jsonl").read_text().splitlines()]
+        self.assertEqual({(item["number"], item["phase"]) for item in observations},
+                         {(number, phase) for number in (1, 2, 3) for phase in ("before-input", "after-input")})
+        self.assertTrue(all(not item["names"] for item in observations), observations)
+        self.assert_no_new_plaintext()
+        self.assertTrue(all(len(call) == 5 for call in self.calls if call[0] == "age"), self.calls)
+
+    def test_encryption_failures_never_leave_new_plaintext(self):
+        for number in (1, 2, 3):
+            with self.subTest(number=number):
+                result = self.invoke({"age_fail": number}, PULSE_BACKUP_ENCRYPT="true")
+                self.assert_stopped_before_retention(result)
+                self.assert_no_uploads()
+                self.assert_no_new_plaintext()
+
+    def test_encryption_rejects_input_before_reading_without_plaintext_fallback(self):
+        for number in (1, 2, 3):
+            with self.subTest(number=number):
+                result = self.invoke({"age_reject": number}, PULSE_BACKUP_ENCRYPT="true")
+                self.assert_stopped_before_retention(result)
+                self.assert_no_uploads()
+                self.assert_no_new_plaintext()
+
+    def test_failed_tar_stream_is_not_an_encrypted_success(self):
+        for number in (1, 2):
+            with self.subTest(number=number):
+                result = self.invoke({"tar_fail": number}, PULSE_BACKUP_ENCRYPT="true")
+                self.assert_stopped_before_retention(result)
+                self.assert_no_uploads()
+                self.assert_no_new_plaintext()
+                # The fake encryptor succeeds with the partial producer output.
+                # The job must still fail through Bash's pipefail.
+                self.assertIn(b"FAKE-AGE\nincomplete fixture archive",
+                              [path.read_bytes() for path in self.backups.glob("*.age") if path not in self.old])
+
     def test_each_upload_must_succeed_before_either_retention(self):
         for mode in ("false", "true"):
             for number in (1, 2, 3):
@@ -683,9 +744,10 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_stopped_before_retention(result)
         self.assert_no_uploads()
         self.assertEqual(len([call for call in self.calls if call[0] == "age"]), 3)
-        # Preserve failed-job evidence locally under private modes, without
-        # pretending a partial fake-age output is a complete encrypted backup.
-        metadata = next(path for path in self.backups.glob("pulse-backup-meta-*.txt") if path not in self.old)
+        # Only the partial encrypted stream is retained, never a new plaintext
+        # inventory. A failed job does not claim that stream is a usable backup.
+        self.assert_no_new_plaintext()
+        metadata = next(path for path in self.backups.glob("pulse-backup-meta-*.txt.age") if path not in self.old)
         self.assertEqual(metadata.stat().st_mode & 0o777, 0o600)
 
     def test_each_encrypted_upload_preserves_prior_backups_on_failure(self):
@@ -734,12 +796,13 @@ class CloudBackupTest(unittest.TestCase):
         result = self.invoke({"age_fail": 3}, PULSE_BACKUP_ENCRYPT="true")
         self.assert_stopped_before_retention(result)
         self.assert_no_uploads()
-        # The failed run is not an encrypted success. Keep its partial files
-        # private for diagnosis, just as for an archive encryption failure.
+        # The failed run is not an encrypted success. Keep partial encrypted
+        # files private for diagnosis; do not retain new plaintext inputs.
         # The expanded fixture includes an older plaintext inventory, which
         # assert_stopped_before_retention already checks is preserved intact.
         metadata = [path for path in self.backups.glob("*.txt") if path not in self.old]
-        self.assertEqual(len(metadata), 1)
+        self.assertEqual(len(metadata), 0)
+        self.assert_no_new_plaintext()
         for path in self.backups.glob("pulse-backup-*-20261022-*"):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.backups.stat().st_mode & 0o777, 0o700)
@@ -806,6 +869,15 @@ class CloudBackupTest(unittest.TestCase):
         copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
         self.assertEqual(len(copies), 3)
         self.assertTrue(all(call[2].endswith(".age") for call in copies))
+
+    @unittest.skipUnless(REAL_AGE, "real age is not supplied or installed")
+    def test_real_age_invalid_recipient_leaves_no_plaintext(self):
+        (self.bin / "age").unlink()
+        (self.bin / "age").symlink_to(REAL_AGE)
+        result = self.invoke(PULSE_BACKUP_ENCRYPT="true", PULSE_BACKUP_AGE_RECIPIENT="invalid-fixture-recipient")
+        self.assert_stopped_before_retention(result)
+        self.assert_no_uploads()
+        self.assert_no_new_plaintext()
 
 
 if __name__ == "__main__":
