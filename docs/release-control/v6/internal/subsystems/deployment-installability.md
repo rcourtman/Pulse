@@ -34,6 +34,19 @@ Symlinked parent paths still work, and nested symlinks remain links. The helper
 does not enable recursive link dereferencing or claim to prevent concurrent
 source mutation between its checks and tar.
 
+Before opening any output, helpers sharing a staging directory exclusively
+reserve the timestamp's whole name set with an atomic private directory creation.
+An existing archive (plain or encrypted), metadata file, directory or symbolic
+link, including a dangling link, stops the job without opening outputs, uploading
+or applying retention. A simultaneous same-timestamp job also stops; it must not
+remove the first job's reservation. Reservations are released on normal completion,
+ordinary failures and handled HUP/INT/TERM; a forced kill may leave one for that
+timestamp, which does not prevent later timestamps. Collision messages direct an
+operator to preserve existing files and retry later, rather than delete backups.
+Filenames stay second-resolution and unchanged. This protects cooperating helpers
+in the same staging directory, not arbitrary concurrent filesystem mutation or
+independent staging directories uploading into the same remote namespace.
+
 Both archive/encryption steps and every configured upload must succeed before
 either retention pass. Local or remote cleanup errors return failure rather
 than a finished message; retention itself can partially progress before an
@@ -46,7 +59,9 @@ real tar/gzip and local retention on synthetic non-database files. It checks
 missing/disappearing/linked sources (also a link substituted after admission),
 unchanged parent/nested-link semantics, invalid configuration, missing selected tools,
 archive/encryption/upload failures, retention errors, actual archive bytes and
-private modes, plus successful local/remote ordering. age, rclone, Docker and
+private modes, plus successful local/remote ordering. A deterministic fixture
+clock and bounded two-process archive barrier verify existing-output preservation,
+same-second failure/concurrency, dangling links and reservation ownership/cleanup. age, rclone, Docker and
 host identity are closed recording fakes, not encryption or cloud acceptance.
 
 ### Retired mock-alert cleanup preserves history and monitoring

@@ -3,6 +3,7 @@
 # Creates optionally encrypted tarballs of CP data + tenant directories.
 # Both source directories are required, even when remote upload is disabled.
 # Configure physical source directories: tar would store a root symlink alone.
+# Helpers sharing a staging directory reserve names before writing any output.
 # Archive, encryption and configured uploads must succeed before retention.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
@@ -32,6 +33,7 @@ RETENTION_DAYS="${PULSE_BACKUP_RETENTION:-30}"
 LOG_FILE="${PULSE_BACKUP_LOG_FILE:-/var/log/pulse-cloud-backup-tarball.log}"
 ENCRYPT="${PULSE_BACKUP_ENCRYPT:-false}"
 AGE_RECIPIENT="${PULSE_BACKUP_AGE_RECIPIENT:-}"
+BACKUP_NAME_RESERVATION=""
 
 log() {
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"
@@ -70,6 +72,7 @@ preflight() {
 
   have tar || die "tar is required"
   have find || die "find is required for local retention"
+  have rmdir || die "rmdir is required to release backup name reservations"
   [[ -d "${TENANTS_DIR}" ]] || die "Required tenants directory not found; no backup or retention performed"
   [[ -d "${CONTROL_PLANE_DIR}" ]] || die "Required control-plane directory not found; no backup or retention performed"
   reject_linked_source "${TENANTS_DIR}" "tenants"
@@ -82,6 +85,34 @@ preflight() {
   if [[ -n "${PULSE_RCLONE_REMOTE:-}" ]]; then
     have rclone || die "PULSE_RCLONE_REMOTE set but rclone is not installed"
   fi
+}
+
+# A timestamp is only second-resolution. Reserve its whole output set before
+# opening any file, so overlapping helpers cannot both pass an existence check.
+# Keep the flat archive names and refuse existing files, directories and links.
+release_backup_names() {
+  [[ -n "${BACKUP_NAME_RESERVATION}" ]] || return 0
+  rmdir -- "${BACKUP_NAME_RESERVATION}" || return 1
+  BACKUP_NAME_RESERVATION=""
+}
+
+reserve_backup_names() {
+  local timestamp="$1"
+  shift
+  local reservation="${BACKUP_DIR}/.pulse-backup-${timestamp}.lock"
+  mkdir -- "${reservation}" 2>/dev/null ||
+    die "Backup timestamp already reserved or reservation cannot be created; no archives or retention performed; retry at a later time; preserve existing files and check staging permissions"
+  BACKUP_NAME_RESERVATION="${reservation}"
+  trap 'release_backup_names || log "ERROR: backup name reservation could not be released"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  local output
+  for output in "$@"; do
+    [[ ! -e "${output}" && ! -L "${output}" ]] ||
+      die "Backup output already exists; refusing to overwrite it; no archives or retention performed; retry at a later time; preserve existing files and check staging permissions"
+  done
 }
 
 # Create tarball of a directory
@@ -176,18 +207,21 @@ main() {
   mkdir -p "${BACKUP_DIR}"
   chmod 0700 "${BACKUP_DIR}"
 
-  # Backup tenants
   local tenants_tarball="${BACKUP_DIR}/pulse-backup-tenants-${timestamp}.tar.gz"
+  local cp_tarball="${BACKUP_DIR}/pulse-backup-cp-${timestamp}.tar.gz"
+  local meta_file="${BACKUP_DIR}/pulse-backup-meta-${timestamp}.txt"
+  reserve_backup_names "${timestamp}" "${tenants_tarball}" "${tenants_tarball}.age" \
+    "${cp_tarball}" "${cp_tarball}.age" "${meta_file}"
+
+  # Backup tenants
   create_tarball "${TENANTS_DIR}" "${tenants_tarball}" "tenants"
   encrypt_file "${tenants_tarball}"
 
   # Backup control plane
-  local cp_tarball="${BACKUP_DIR}/pulse-backup-cp-${timestamp}.tar.gz"
   create_tarball "${CONTROL_PLANE_DIR}" "${cp_tarball}" "control-plane"
   encrypt_file "${cp_tarball}"
 
   # Record metadata
-  local meta_file="${BACKUP_DIR}/pulse-backup-meta-${timestamp}.txt"
   {
     echo "timestamp: ${timestamp}"
     echo "hostname: $(hostname)"
@@ -210,6 +244,7 @@ main() {
   rotate_local
   rotate_remote
 
+  release_backup_names || die "Backup artifacts retained, but name reservation cleanup failed"
   log "=== tarball backup finished ==="
 }
 
