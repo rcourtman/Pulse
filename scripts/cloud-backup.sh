@@ -11,6 +11,7 @@
 # Helpers sharing a staging directory reserve names before writing any output.
 # Failed producers retain .partial evidence, not ordinary backup filenames.
 # Archive, encryption and configured uploads must succeed before retention.
+# Remote jobs reject rclone dry-run/interactive settings, never override them.
 # Local retention also ages out this helper's old top-level partial evidence.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
@@ -99,6 +100,21 @@ reject_staging_in_source() {
   fi
 }
 
+# A successful dry-run or declined interactive copy does not upload anything,
+# but local find retention is independent of rclone. Refuse these modes before
+# producing any artifacts rather than forcing a real mutation the operator did
+# not request. Accept only unset/empty or Go's explicit false boolean spellings;
+# invalid values fail closed without logging potentially private environment data.
+reject_unconfirmed_remote_uploads() {
+  local setting
+  for setting in RCLONE_DRY_RUN RCLONE_INTERACTIVE; do
+    case "${!setting:-false}" in
+      false|False|FALSE|0|f|F) ;;
+      *) die "${setting} must be unset or false for remote backups; this helper does not support dry-run or interactive operation; no archives, uploads or retention performed" ;;
+    esac
+  done
+}
+
 # Admit the whole configured job before creating any new archives. Otherwise a
 # missing source can become a successful empty run that ages out good backups.
 preflight() {
@@ -123,6 +139,7 @@ preflight() {
     [[ -n "${AGE_RECIPIENT}" ]] || die "PULSE_BACKUP_ENCRYPT=true but PULSE_BACKUP_AGE_RECIPIENT is not set"
   fi
   if [[ -n "${PULSE_RCLONE_REMOTE:-}" ]]; then
+    reject_unconfirmed_remote_uploads
     have rclone || die "PULSE_RCLONE_REMOTE set but rclone is not installed"
   fi
 }

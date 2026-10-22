@@ -129,7 +129,8 @@ class NativeBackupAdmissionTest(unittest.TestCase):
 
     def test_native_cases_cannot_disappear_from_full_suite(self):
         for missing in ("test_real_age_recovers_archives_and_private_metadata",
-                        "test_real_rclone_local_backend_preserves_unowned_objects"):
+                        "test_real_rclone_local_backend_preserves_unowned_objects",
+                        "test_real_rclone_dry_run_success_is_not_an_upload"):
             names = unittest.TestLoader().getTestCaseNames(backup.CloudBackupTest)
             with self.subTest(case=missing), patch.object(backup.unittest.TestLoader, "getTestCaseNames",
                                                         return_value=[name for name in names if name != missing]):
