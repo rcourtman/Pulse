@@ -1024,18 +1024,22 @@ export const ProxmoxBackupsTable: Component<{
                 hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
                 emptyIcon={props.emptyIcon}
                 emptyTitle={
-                  locationUnavailable()
-                    ? 'Choose a backup location'
-                    : inventoryIncomplete()
-                      ? 'Backup inventory is incomplete'
-                      : 'No backups yet'
+                  nodeUnavailable()
+                    ? 'Choose a node'
+                    : locationUnavailable()
+                      ? 'Choose a backup location'
+                      : inventoryIncomplete()
+                        ? 'Backup inventory is incomplete'
+                        : 'No backups yet'
                 }
                 emptyDescription={
-                  locationUnavailable()
-                    ? 'The saved location cannot be matched to one current source. Choose an exact location or clear filters to inspect the collected inventory.'
-                    : inventoryIncomplete()
-                      ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                      : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+                  nodeUnavailable()
+                    ? 'The saved node cannot be matched to one current source. Choose a node or clear filters to inspect the collected inventory.'
+                    : locationUnavailable()
+                      ? 'The saved location cannot be matched to one current source. Choose an exact location or clear filters to inspect the collected inventory.'
+                      : inventoryIncomplete()
+                        ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
+                        : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
                 }
                 sortKey={recoverableSortKey}
                 sortDirection={recoverableSortDirection}
@@ -1050,8 +1054,12 @@ export const ProxmoxBackupsTable: Component<{
                 rows={liveCoverageRows()}
                 hasAnyRows={liveTotalCount() > 0}
                 emptyIcon={props.emptyIcon}
-                emptyTitle="No backup target coverage"
-                emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
+                emptyTitle={nodeUnavailable() ? 'Choose a node' : 'No backup target coverage'}
+                emptyDescription={
+                  nodeUnavailable()
+                    ? 'The saved node cannot be matched to one current source. Choose a node or clear filters to inspect the collected inventory.'
+                    : 'VM, container, and host restore posture will appear here once backup data exists.'
+                }
                 sortKey={coverageSortKey}
                 sortDirection={coverageSortDirection}
                 onSort={handleCoverageSort}

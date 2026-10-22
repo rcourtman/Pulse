@@ -139,6 +139,27 @@ describe('source-scoped backup Node filter', () => {
     );
     expect(new URLSearchParams(window.location.search).get('keep')).toBe('node-proof');
   });
+  it.each(['coverage', 'date'])(
+    'does not call an unavailable saved node an empty backup estate in %s',
+    async (view) => {
+      api.fetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: { storageBackups: [], guestSnapshots: [], backupTasks: [], backups: [] },
+          }),
+          { status: 200 },
+        ),
+      );
+      url(view, nodeKey('gone', 'pve-1'));
+      mount([]);
+      await screen.findByText('Choose a node');
+      expect(
+        screen.getByText(/The saved node is not in the current inventory/),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    },
+  );
+
   it('leaves all guests and points visible with no Node filter', async () => {
     url('date');
     mount();

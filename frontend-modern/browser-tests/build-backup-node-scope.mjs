@@ -47,15 +47,15 @@ try {
       outDir: output,
       emptyOutDir: true,
       rollupOptions: {
-        input: path.join(root, 'browser-tests/protection-backup-node-scope.html'),
+        input: path.join(root, 'browser-tests/backup-node-scope.html'),
       },
     },
   });
   for (const file of [
     'package.json',
     'package-lock.json',
-    'browser-tests/protection-backup-node-scope.cjs',
-    'browser-tests/build-protection-backup-node-scope.mjs',
+    'browser-tests/backup-node-scope.cjs',
+    'browser-tests/build-backup-node-scope.mjs',
   ])
     sources[file] = hash(fs.readFileSync(path.join(root, file)));
   const walk = (dir) => {
