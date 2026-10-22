@@ -34,6 +34,16 @@ Symlinked parent paths still work, and nested symlinks remain links. The helper
 does not enable recursive link dereferencing or claim to prevent concurrent
 source mutation between its checks and tar.
 
+The staging directory must be outside both source trees. Before staging
+creation, permission changes or any archive, GNU coreutils `realpath` resolves
+physical source paths and the staging path (including missing descendants).
+Equality or containment fails with a separate-staging-directory message, without
+creating archives, uploading or expiring existing copies. Relative paths, dot/
+parent components and symlinked parents cannot conceal overlap; similarly named
+siblings and safe aliases remain valid. This prevents recursively copying older
+backups and including an encrypted output while age is still writing it. It
+does not defend against arbitrary concurrent replacement of configured paths.
+
 Before opening any output, helpers sharing a staging directory exclusively
 reserve the timestamp's whole name set with an atomic private directory creation.
 An existing archive (plain or encrypted), metadata file, directory or symbolic
@@ -103,8 +113,12 @@ real tar/gzip and local retention on synthetic non-database files. It checks
 missing/disappearing/linked sources (also a link substituted after admission),
 unchanged parent/nested-link semantics, invalid configuration, missing selected tools,
 archive/encryption/upload failures, retention errors, actual archive bytes and
-private modes, plus successful local/remote ordering. A deterministic fixture
-clock and bounded two-process archive barrier verify existing-output preservation,
+private modes, plus successful local/remote ordering. Layout admission
+checks equal/nested staging under both sources and encryption modes before any
+source/staging permission or content change, physical aliases and relative/dot/
+parent/newline paths, resolver failure and valid similarly prefixed siblings.
+The native path resolver runs on disposable directories, not a lexical model.
+A deterministic fixture clock and bounded two-process archive barrier verify existing-output preservation,
 same-second failure/concurrency, dangling links and reservation ownership/cleanup.
 Synthetic command canaries check inventory minimisation, encrypted metadata
 selection/private modes, all three encryption/upload failures and all six output
