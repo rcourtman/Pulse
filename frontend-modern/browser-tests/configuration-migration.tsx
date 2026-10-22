@@ -5,6 +5,7 @@ import { render } from 'solid-js/web';
 import { Router, Route } from '@solidjs/router';
 import { BackupTransferDialogs } from '../src/components/Settings/BackupTransferDialogs';
 import { useBackupTransferFlow } from '../src/components/Settings/useBackupTransferFlow';
+import { ToastContainer } from '../src/components/Toast/Toast';
 import Docs from '../src/pages/Docs';
 import '../src/index.css';
 
@@ -17,6 +18,7 @@ function Transfer() {
       <button onClick={() => flow.setShowExportDialog(true)}>Create Backup</button>
       <button onClick={() => flow.setShowImportDialog(true)}>Restore Configuration</button>
       <BackupTransferDialogs {...flow} securityStatus={securityStatus} />
+      <ToastContainer />
     </main>
   );
 }

@@ -37,6 +37,17 @@ const encryptedArchive = (content: string): string | null => {
   return null;
 };
 
+// HTTP success alone cannot acknowledge a settings replacement or supply an
+// archive. Treat incomplete/contradictory replies as uncertain, without exposing
+// their contents or replaying the operation. Extra success metadata is allowed.
+const acknowledgedTransfer = (result: unknown): result is { status: 'success'; data?: unknown } =>
+  result !== null &&
+  typeof result === 'object' &&
+  !Array.isArray(result) &&
+  'status' in result &&
+  result.status === 'success' &&
+  (!('error' in result) || result.error == null || result.error === '');
+
 export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowParams) {
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
@@ -110,19 +121,23 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       // Never replay configuration replacement on an auth/CSRF/rate-limit error.
       // Abort stops dispatch if CSRF preparation yields while the view leaves;
       // it cannot roll back a request already sent.
-      const result = await apiFetchJSON<{ status: string; data?: string }>(
-        `/api/config/${current.kind}`,
-        {
-          method: 'POST',
-          retry: false,
-          signal: current.controller.signal,
-          body: JSON.stringify({ passphrase: current.passphrase, ...(data ? { data } : {}) }),
-        },
-      );
+      const result = await apiFetchJSON<unknown>(`/api/config/${current.kind}`, {
+        method: 'POST',
+        retry: false,
+        signal: current.controller.signal,
+        body: JSON.stringify({ passphrase: current.passphrase, ...(data ? { data } : {}) }),
+      });
       if (!active(current)) return;
+      if (!acknowledgedTransfer(result)) throw new Error('Unconfirmed configuration transfer');
 
       if (current.kind === 'export') {
-        const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' });
+        if (typeof result.data !== 'string' || !result.data.trim())
+          throw new Error('Missing configuration archive');
+        // Save only the archive contract, never unrelated response fields.
+        // This validates the envelope, not decryption or restore integrity.
+        const blob = new Blob([JSON.stringify({ status: 'success', data: result.data }, null, 2)], {
+          type: 'application/json',
+        });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
