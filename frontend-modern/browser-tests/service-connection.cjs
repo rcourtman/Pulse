@@ -168,7 +168,10 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           if (transport !== 'canonical') return;
           await noOverflow();
           const file = path.join(output, `${name}-${suffix}.png`);
-          await page.locator('main').screenshot({ path: file, animations: 'disabled' });
+          await (suffix.startsWith('jobs-') ? scopes.pbs : page.locator('main')).screenshot({
+            path: file,
+            animations: 'disabled',
+          });
           report.captures.push({
             file: path.relative(root, file),
             sha256: hash(file),
@@ -222,6 +225,88 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           await expectState(kind, 'Healthy', 'text-green-700', false);
         }
         await noOverflow();
+        // The full PBS evidence must be readable/selectable, not just present
+        // in DOM text or a hover title. Exercise both normalizer transports.
+        const f = await page.evaluate(() => window.__serviceConnection.fixture);
+        const active = scopes.pbs.getByTestId('pbs-active-tasks');
+        const evidence = scopes.pbs.getByTestId('pbs-job-health-evidence');
+        await activate(scopes.pbs.getByRole('button', { name: 'Show jobs', exact: true }));
+        const jobText = [];
+        const readable = async (scope, text) => {
+          const locator = scope.getByText(text, { exact: true });
+          await expect(locator).toBeVisible();
+          const measurement = await locator.evaluate((node) => {
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            const style = getComputedStyle(node);
+            const boundary = node
+              .closest('[data-testid="resource-service-details-section"]')
+              .getBoundingClientRect();
+            return {
+              text: node.textContent,
+              selection: range.toString(),
+              whiteSpace: style.whiteSpace,
+              textOverflow: style.textOverflow,
+              boundary: { left: boundary.left, right: boundary.right },
+              rects: [...range.getClientRects()]
+                .filter((r) => r.width > 0 && r.height > 0)
+                .map((r) => ({ left: r.left, right: r.right })),
+            };
+          });
+          assert.equal(measurement.text, text);
+          assert.equal(measurement.selection, text);
+          assert.notEqual(measurement.whiteSpace, 'nowrap');
+          assert.notEqual(measurement.textOverflow, 'ellipsis');
+          assert(measurement.rects.length > 0);
+          for (const rect of measurement.rects) {
+            assert(
+              rect.left >= measurement.boundary.left - 1 &&
+                rect.right <= measurement.boundary.right + 1,
+              JSON.stringify(measurement),
+            );
+            assert(rect.left >= -1 && rect.right <= width + 1, JSON.stringify(measurement));
+          }
+          jobText.push(measurement);
+        };
+        await readable(active, `Backup ${f.taskId}`);
+        await readable(active, `${f.store} · VM 100`);
+        await readable(active, f.error);
+        await readable(active, 'Running');
+        await readable(evidence, `Backup ${f.evidenceId}`);
+        await readable(evidence, 'Partial PBS read');
+        await readable(
+          evidence,
+          `${f.store} · Remote ${f.remote} · Namespace ${f.namespace} · Worker ${f.workerId}`,
+        );
+        await readable(evidence, f.state);
+        await readable(evidence, `Observed ${f.observedAt}`);
+        await readable(evidence, f.reason);
+        await readable(evidence, f.error);
+        const unknownBadge = `Unclassified ${'C' + 'c'.repeat(71)}`;
+        await readable(evidence, unknownBadge);
+        await expect(evidence.getByText('Permission gap', { exact: true })).toBeVisible();
+        await expect(evidence.getByText('Partial read', { exact: true })).toBeVisible();
+        assert.equal(await scopes.pbs.locator('em').count(), 0);
+        assert.equal(await active.locator('.truncate').count(), 0);
+        assert.equal(await evidence.locator('.truncate').count(), 0);
+        await capture('jobs-complete-evidence');
+        await evidence.evaluate((node) => (node.dataset.retainedJobs = 'original'));
+        const jobsToggle = scopes.pbs.getByRole('button', { name: 'Hide jobs', exact: true });
+        if (name === 'desktop') await jobsToggle.focus();
+        const updatedError =
+          'A subsequent synthetic read still has no result.\nIts complete final line is retained.';
+        await page.evaluate((error) => window.__serviceConnection.jobs(error), updatedError);
+        await readable(active, updatedError);
+        await readable(evidence, updatedError);
+        await expect(evidence).toHaveAttribute('data-retained-jobs', 'original');
+        if (name === 'desktop') await expect(jobsToggle).toBeFocused();
+        await capture('jobs-updated-evidence');
+        await activate(jobsToggle);
+        await expect(evidence).toHaveCount(0);
+        await activate(scopes.pbs.getByRole('button', { name: 'Show jobs', exact: true }));
+        await readable(active, updatedError);
+        await readable(evidence, updatedError);
+        await noOverflow();
         assert.deepEqual(errors, []);
         assert.deepEqual(external, []);
         report.journeys.push({
@@ -230,6 +315,8 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           viewport: { width, height },
           browserVersion: browser.version(),
           transitions,
+          jobText,
+          evidence_same_open_update: true,
           errors,
           external,
           same_open_state_nodes: true,

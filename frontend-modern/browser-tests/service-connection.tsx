@@ -6,6 +6,10 @@ import { ResourceDetailDrawer } from '../src/components/Infrastructure/ResourceD
 import { DarkModeContext, WebSocketContext } from '../src/contexts/appRuntime';
 import { canonicalizeRealtimeResource } from '../src/utils/resourceStateAdapters';
 import type { Resource } from '../src/types/resource';
+import {
+  PBS_JOB_EVIDENCE_FIXTURE,
+  pbsJobEvidenceFixture,
+} from '../src/components/Infrastructure/__fixtures__/pbsJobEvidence';
 import '../src/index.css';
 
 type Service = 'pbs' | 'pmg';
@@ -15,7 +19,11 @@ function observation(
   status: Resource['status'],
   connectionHealth: string,
 ): Resource {
-  const facet = { hostname: `${kind}.example.invalid`, connectionHealth };
+  const facet = {
+    ...(kind === 'pbs' ? pbsJobEvidenceFixture() : {}),
+    hostname: `${kind}.example.invalid`,
+    connectionHealth,
+  };
   const canonical = new URLSearchParams(location.search).get('transport') === 'canonical';
   return canonicalizeRealtimeResource({
     id: `${kind}-connection`,
@@ -39,9 +47,19 @@ function Fixture() {
   });
   Object.assign(window, {
     __serviceConnection: {
+      fixture: PBS_JOB_EVIDENCE_FIXTURE,
       replace: (kind: Service, status: Resource['status'], health: string) =>
         setResources(kind, reconcile(observation(kind, status, health))),
       status: (kind: Service, status: Resource['status']) => setResources(kind, 'status', status),
+      jobs: (error: string) =>
+        setResources(
+          'pbs',
+          produce((resource) => {
+            const pbs = resource.platformData!.pbs!;
+            pbs.backupJobs![0].error = error;
+            pbs.jobHealthEvidence![0].error = error;
+          }),
+        ),
       health: (kind: Service, health: string) =>
         setResources(
           kind,
