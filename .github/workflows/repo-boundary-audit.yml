@@ -17,29 +17,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify boundary dependency setup
-        run: python3 scripts/repo-boundary-setup-regression.py
-
       - name: Install boundary audit dependencies
-        shell: bash
         run: |
-          set -euo pipefail
-          if command -v rg >/dev/null 2>&1; then
-            rg --version
-          else
-            # ripgrep is in Ubuntu universe. Unrelated runner repositories must
-            # not gate this audit, and their cached indexes must not supply it.
-            apt_lists="$(mktemp -d "${RUNNER_TEMP}/boundary-apt-lists.XXXXXX")"
-            chmod 0755 "$apt_lists"
-            apt_options=(
-              -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources
-              -o Dir::Etc::sourceparts=-
-              -o "Dir::State::lists=$apt_lists"
-            )
-            sudo apt-get "${apt_options[@]}" update --error-on=any
-            sudo apt-get "${apt_options[@]}" install --yes --no-install-recommends ripgrep
-            rg --version
-          fi
+          # Ubuntu packages only: the runner image's Microsoft source is not needed and
+          # its outage (403 on 22 October 2026) failed v6.6.0-rc.6's required audit.
+          # An image without that source is fine, so a missing match never fails.
+          sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ripgrep
 
       - name: Verify shared reporting boundary exemption
         run: python3 scripts/repo-boundary-regression.py

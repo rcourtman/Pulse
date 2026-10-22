@@ -334,6 +334,18 @@ exit "$OVERALL_STATUS"
         self.assertIn('installer-*.json', artifact)
         self.assertNotIn('private-', artifact)
 
+    def test_both_recovery_legs_prepare_package_sources_before_installing(self):
+        workflow = (REPO_ROOT / '.github/workflows/qualify-browser-update-release.yml').read_text()
+        steps = workflow.split('      - name: ')[1:]
+        prepare = next(step for step in steps if step.startswith('Prepare native tools\n'))
+        cleanup = "sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true"
+        self.assertIn(cleanup, prepare)
+        self.assertNotIn('if:', prepare)
+        self.assertLess(prepare.index(cleanup), prepare.index('sudo apt-get update'))
+        for name in ('Exercise signed selected-installer', 'Prepare Chromium and native tools'):
+            consumer = next(step for step in steps if step.startswith(name))
+            self.assertLess(steps.index(prepare), steps.index(consumer))
+
 
 class SignedInstallerStagingTest(unittest.TestCase):
     def test_both_exact_installers_verify_before_first_mutation_with_no_network_fallback(self):
