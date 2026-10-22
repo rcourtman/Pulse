@@ -269,9 +269,13 @@ const deferred = () => {
         await page.goto(origin + target, { waitUntil: 'domcontentloaded' });
         const retry = page.getByRole('button', { name: 'Try again', exact: true });
         await retry.waitFor();
-        await activate(retry);
+        // Exercise keyboard focus even in the touch viewport; the matrix above
+        // separately covers native tap activation for every failure class.
+        await retry.focus();
+        await page.keyboard.press('Enter');
         await page.getByRole('status').waitFor();
-        assert(await retry.isDisabled());
+        assert.equal(await retry.getAttribute('aria-disabled'), 'true');
+        assert(await retry.evaluate((button) => document.activeElement === button));
         const beforeDuplicate = faqRequests;
         await retry.evaluate((button) => button.click());
         assert.equal(faqRequests, beforeDuplicate, 'duplicate read blocked');
@@ -282,7 +286,7 @@ const deferred = () => {
             .querySelector('[role="alert"]')
             ?.textContent.startsWith('This guide could not be loaded.'),
         );
-        assert(await retry.isEnabled());
+        assert.equal(await retry.getAttribute('aria-disabled'), 'false');
         record.retry_focus_after_failure = await retry.evaluate(
           (button) => document.activeElement === button,
         );

@@ -176,7 +176,16 @@ export default function Docs() {
               <p role="alert" class="text-sm text-muted">
                 {loadError()?.message}
               </p>
-              <Button size="sm" disabled={document.loading} onClick={() => void refetch()}>
+              <Button
+                size="sm"
+                // Native disabled blurs the keyboard reader's control. Keep it
+                // focusable, announce its state and reject duplicate reads here.
+                aria-disabled={document.loading}
+                class="aria-disabled:cursor-wait aria-disabled:opacity-50"
+                onClick={() => {
+                  if (!document.loading) void refetch();
+                }}
+              >
                 Try again
               </Button>
               <Show when={document.loading}>

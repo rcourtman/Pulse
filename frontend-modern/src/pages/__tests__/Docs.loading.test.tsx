@@ -126,7 +126,8 @@ describe('Docs load failures and explicit same-guide retry', () => {
     const historyLength = window.history.length;
     button.focus();
     fireEvent.click(button);
-    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toBeDisabled();
     expect(document.activeElement).toBe(button);
     expect(screen.getByRole('status')).toHaveTextContent('Loading documentation');
     button.click();
@@ -153,7 +154,7 @@ describe('Docs load failures and explicit same-guide retry', () => {
     fireEvent.click(button);
     pending.resolve(new Response(privateBody, { status: 503 }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(temporary));
-    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('aria-disabled', 'false');
     expect(document.activeElement).toBe(button);
     expect(screen.queryByRole('status')).toBeNull();
     expect(document.body).not.toHaveTextContent('private-upstream-detail');
