@@ -224,11 +224,16 @@ export const TrueNASServicesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.services,
     initialStatus: 'all' as TrueNASServiceStatusFilter,
     filter: filterTrueNASServices,
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-service-detail' });
   const sort = createPlatformTableSortState({

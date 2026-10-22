@@ -617,7 +617,7 @@ export function ProxmoxCoverageTable(props: {
                                           <TableCell
                                             class={getPlatformTableCellClassForKind('name')}
                                           >
-                                            <ArtifactSourceBadge artifact={artifact} />
+                                            <ArtifactSourceBadge artifact={artifact} wrap />
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(

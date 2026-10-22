@@ -52,6 +52,7 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 
 const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
   [
@@ -340,6 +341,15 @@ const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => vo
       label: getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome)),
     }}
     summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} on ${hostLabel(props.point)}`}
+    actions={
+      <RecordOwnerLink
+        subject={{
+          id: asTrimmedString(props.point.itemRef?.id) || datasetLabel(props.point),
+          name: datasetLabel(props.point),
+          type: 'truenas-dataset',
+        }}
+      />
+    }
     sections={buildProtectionDetailSections(props.point)}
     detailAttributes={{ 'data-truenas-protection-detail-for': props.point.id }}
     onClose={props.onClose}
@@ -355,6 +365,9 @@ export const TrueNASProtectionTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
   const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
@@ -363,6 +376,8 @@ export const TrueNASProtectionTable: Component<{
     resources: rows,
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
     filter: filterTrueNASProtectionPoints,
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const statusOptions = createMemo(() =>
     withPlatformStatusCounts(TRUENAS_PROTECTION_STATUS_OPTIONS, tableState.countForStatus, {

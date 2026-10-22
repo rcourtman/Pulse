@@ -55,7 +55,7 @@ describe('buildResourcePagePath', () => {
         type: 'truenas-dataset',
         resource: resource({ id: 'storage-23a2', type: 'storage', sources: ['truenas'] }),
       }),
-    ).toBe('/truenas/storage');
+    ).toBe('/truenas/storage?q=res-1');
   });
 
   it('filters a physical disk by the registry name and a machine by its own name', () => {
@@ -108,7 +108,14 @@ describe('buildResourcePagePath', () => {
       '/kubernetes/workloads?q=api-7f',
     );
     expect(buildResourcePagePath({ id: 'ds-1', type: 'truenas-dataset' })).toBe('/truenas/storage');
+    // TrueNAS tabs filter to a named pool, dataset, app, VM or share.
+    expect(buildResourcePagePath({ id: 'ds-1', name: 'tank/apps', type: 'truenas-dataset' })).toBe(
+      '/truenas/storage?q=tank%2Fapps',
+    );
     // A disk name from an alert is not known to match the disk table.
+    expect(buildResourcePagePath({ id: 'sdc', name: 'sdc', type: 'truenas-disk' })).toBe(
+      '/truenas/storage',
+    );
     expect(
       buildResourcePagePath({
         id: 'pve5:disk:nvme0',
@@ -126,7 +133,7 @@ describe('buildResourcePagePath', () => {
         id: 'app-1',
         resource: resource({ id: 'app-1', type: 'app-container', sources: ['truenas'] }),
       }),
-    ).toBe('/truenas/apps');
+    ).toBe('/truenas/apps?q=res-1');
     expect(
       buildResourcePagePath({
         id: 'disk-1',
@@ -137,7 +144,7 @@ describe('buildResourcePagePath', () => {
           sources: ['truenas'],
         }),
       }),
-    ).toBe('/truenas/storage');
+    ).toBe('/truenas/storage?q=res-1');
   });
 
   it('opens the Docker or Kubernetes tab that lists the resource kind', () => {
@@ -205,7 +212,7 @@ describe('buildResourcePagePath', () => {
           sources: ['truenas'],
         }),
       }),
-    ).toBe('/truenas/shares');
+    ).toBe('/truenas/shares?q=res-1');
   });
   it('opens the storage a ZFS pool or device record belongs to', () => {
     expect(

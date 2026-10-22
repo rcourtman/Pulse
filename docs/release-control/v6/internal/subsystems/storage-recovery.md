@@ -7142,3 +7142,8 @@ Storage tab, and the old disk detail, its local history range catalogue,
 metric cards, key/value rows and the storage detail presentation classes that
 only it used are removed. Storage group and spacer rows span the table's
 visible columns, so pool rows and drawers fill the table on phones.
+
+The Coverage drawer's restore evidence wraps long source labels (snapshot and
+archive names) instead of cutting them with an ellipsis: `ArtifactSourceBadge`
+takes an opt-in `wrap` that the drawer passes, while table rows keep the label
+on one line. Coverage, restore evidence and recovery rules are unchanged.

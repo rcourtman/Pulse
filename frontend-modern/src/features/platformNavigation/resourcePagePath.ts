@@ -12,6 +12,7 @@ import {
   DOCKER_QUERY_PARAMS,
   KUBERNETES_QUERY_PARAMS,
   STANDALONE_QUERY_PARAMS,
+  TRUENAS_QUERY_PARAMS,
   type AlertThresholdsTab,
 } from '@/routing/resourceLinks';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -218,8 +219,9 @@ export function buildResourceThresholdsPath(subject: ResourcePageSubject): strin
 /**
  * The page that shows a resource, selecting or filtering to it where that
  * page can: `?resource=` on workload and Proxmox storage tables (resolved
- * through the registry), a name filter on Docker containers, Kubernetes and
- * Machines, and the owning tab elsewhere. Returns null when nothing names a
+ * through the registry), a name filter on Docker containers, Kubernetes,
+ * TrueNAS storage, apps, VMs and shares, and Machines, and the owning tab
+ * elsewhere. Returns null when nothing names a
  * platform.
  */
 export function buildResourcePagePath(subject: ResourcePageSubject): string | null {
@@ -264,10 +266,20 @@ export function buildResourcePagePath(subject: ResourcePageSubject): string | nu
       if (isNetwork) return buildVmwarePath('networks');
       return buildVmwarePath();
     case 'truenas':
-      if (isStorage || isDisk) return buildTrueNASPath('storage');
-      if (type === 'app-container') return buildTrueNASPath('apps');
-      if (isGuest) return buildTrueNASPath('vms');
-      if (type === 'network-share') return buildTrueNASPath('shares');
+      // Each tab's table reads the name filter; the systems table on Overview
+      // has no search box, so a system opens the tab unfiltered. As on
+      // Proxmox, a disk name from an alert alone is not known to match a row.
+      if (isStorage || isDisk)
+        return withQuery(
+          buildTrueNASPath('storage'),
+          TRUENAS_QUERY_PARAMS.query,
+          isDisk && !resource ? undefined : name,
+        );
+      if (type === 'app-container')
+        return withQuery(buildTrueNASPath('apps'), TRUENAS_QUERY_PARAMS.query, name);
+      if (isGuest) return withQuery(buildTrueNASPath('vms'), TRUENAS_QUERY_PARAMS.query, name);
+      if (type === 'network-share')
+        return withQuery(buildTrueNASPath('shares'), TRUENAS_QUERY_PARAMS.query, name);
       return buildTrueNASPath();
     case 'docker': {
       const tab = DOCKER_TAB_BY_TYPE[type];

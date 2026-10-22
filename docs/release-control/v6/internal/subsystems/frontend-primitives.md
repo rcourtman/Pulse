@@ -10048,3 +10048,11 @@ attention card's subject wraps instead of truncating.
 `features/platformPage/platformDetailTimestampRow.ts` is the one drawer row for
 a reported timestamp (absolute time and age, wrapping, an optional sentinel
 year), replacing three copies.
+
+Platform tables that a page drives from the URL pass the page's search through
+`createPlatformTableFilterState`'s `externalSearch`/`onExternalSearchChange`
+rather than a table-local signal: the TrueNAS Storage, Apps, VMs, Shares,
+Services and Protection tables now do this for `?q=`, as the Kubernetes tables
+already did, so `RecordOwnerLink` can land on a narrowed tab whose own search
+box shows and clears the filter. `ArtifactSourceBadge` takes the opt-in
+`MetadataBadge` `wrap` for drawer use; table rows keep the one-line badge.

@@ -106,14 +106,20 @@ vi.mock('../TrueNASStorageTopologyTable', () => ({
     resources: Resource[];
     kindFilter: string;
     onKindFilterChange: (value: string) => void;
+    search?: () => string;
+    onSearchChange?: (value: string) => void;
   }) => (
     <div
       data-testid="storage-table"
       data-rows={props.resources.length}
       data-kind-filter={props.kindFilter}
+      data-search={props.search?.() ?? ''}
     >
       <button type="button" onClick={() => props.onKindFilterChange('disks')}>
         Show physical disks
+      </button>
+      <button type="button" onClick={() => props.onSearchChange?.('')}>
+        Clear search
       </button>
     </div>
   ),
@@ -246,5 +252,25 @@ describe('TrueNASPageSurface contract', () => {
     expect(screen.getByTestId('storage-table')).toHaveAttribute('data-kind-filter', 'volumes');
     screen.getByRole('button', { name: 'Show physical disks' }).click();
     expect(mockSetSearchParams).toHaveBeenCalledWith({ kind: 'disks' }, { replace: true });
+  });
+
+  // A drawer's "Open <name>" link lands on a tab already narrowed to the
+  // pool or dataset it names; the table's own search box shows and clears it.
+  it('round-trips the tab table search through the route query', () => {
+    mockPathname.mockReturnValue('/truenas/storage');
+    mockSearchParams.value = { q: 'tank/apps' };
+    setResources([
+      makeResource({
+        id: 'pool:tank',
+        type: 'storage',
+        storage: { topology: 'pool', platform: 'truenas' },
+      }),
+    ]);
+
+    render(() => <TrueNASPageSurface />);
+
+    expect(screen.getByTestId('storage-table')).toHaveAttribute('data-search', 'tank/apps');
+    screen.getByRole('button', { name: 'Clear search' }).click();
+    expect(mockSetSearchParams).toHaveBeenCalledWith({ q: null }, { replace: true });
   });
 });

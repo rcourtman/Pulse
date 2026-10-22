@@ -326,7 +326,9 @@ export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label
   );
 }
 
-export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
+// Table rows keep the label on one line; a drawer passes `wrap` so a long
+// snapshot or archive name stays readable on a phone, which cannot hover.
+export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact; wrap?: boolean }) {
   const presentation = () => getProxmoxBackupSourcePresentation(props.artifact.sourceKind);
   const title = () => props.artifact.sourceTitle ?? presentation().sourceTitle;
 
@@ -335,6 +337,7 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
       {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
       tone={presentation().badgeTone}
       title={title()}
+      wrap={props.wrap}
     >
       {props.artifact.sourceLabel}
     </MetadataBadge>

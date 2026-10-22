@@ -390,6 +390,9 @@ export const TrueNASStorageTopologyTable: Component<{
   showToolbar?: boolean;
   kindFilter?: TrueNASStorageKindFilter;
   onKindFilterChange?: (value: TrueNASStorageKindFilter) => void;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   // Disk heat follows the thresholds each disk's temperature alert fires at:
   // its own override, the TrueNAS-wide value, then its type's policy.
@@ -412,6 +415,8 @@ export const TrueNASStorageTopologyTable: Component<{
     initialStatus: 'all' as TrueNASStorageStatusFilter,
     filter: (rows, search, status) =>
       filterTrueNASStorageTopologyRows(rows, search, status, getTrueNASDiskTemperatureThresholds),
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const kindFilters = createMemo<FilterDef[]>(() => [
     {

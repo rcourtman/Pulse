@@ -1,8 +1,18 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { TrueNASProtectionTable } from '@/features/truenas/TrueNASProtectionTable';
 import type { RecoveryPoint } from '@/types/recovery';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const makeRecoveryPoint = (
   point: Partial<RecoveryPoint> & Pick<RecoveryPoint, 'id' | 'kind' | 'mode'>,
@@ -20,7 +30,7 @@ afterEach(() => {
 
 describe('TrueNASProtectionTable', () => {
   it('keeps the issue count in the filters and filters directly to attention outcomes', async () => {
-    render(() => (
+    renderInRouter(() => (
       <TrueNASProtectionTable
         points={[
           makeRecoveryPoint({ id: 'healthy', kind: 'snapshot', mode: 'snapshot' }),
@@ -90,7 +100,7 @@ describe('TrueNASProtectionTable', () => {
       },
     });
 
-    render(() => (
+    renderInRouter(() => (
       <TrueNASProtectionTable
         points={[replication]}
         emptyIcon={<span />}

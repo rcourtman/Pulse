@@ -26,12 +26,15 @@ describe('buildRecordOwnerPath', () => {
     expect(buildRecordOwnerPath({ id: 'ctr-1', name: 'redis', type: 'app-container' })).toBe(
       '/docker/overview?q=redis',
     );
+    expect(buildRecordOwnerPath({ id: 'ds-1', name: 'tank/apps', type: 'truenas-dataset' })).toBe(
+      '/truenas/storage?q=tank%2Fapps',
+    );
   });
 
   it('omits the link where the owning page can only show a whole tab', () => {
-    expect(buildRecordOwnerPath({ id: 'ds-1', name: 'tank/apps', type: 'truenas-dataset' })).toBe(
-      null,
-    );
+    expect(
+      buildRecordOwnerPath({ id: 'nas-1', name: 'truenas-main', type: 'truenas-system' }),
+    ).toBe(null);
     expect(buildRecordOwnerPath({ id: 'host-1', name: 'esxi-01', type: 'vmware-host' })).toBe(null);
     expect(buildRecordOwnerPath({ id: 'img-1', name: 'nginx', type: 'docker-image' })).toBe(null);
     expect(buildRecordOwnerPath({ id: 'pbs-1', name: 'pbs', type: 'pbs' })).toBe(null);
@@ -66,7 +69,7 @@ describe('RecordOwnerLink', () => {
         <Route
           path="/*"
           component={() => (
-            <RecordOwnerLink subject={{ id: 'ds-1', name: 'tank', type: 'truenas-dataset' }} />
+            <RecordOwnerLink subject={{ id: 'host-1', name: 'esxi-01', type: 'vmware-host' }} />
           )}
         />
       </Router>
