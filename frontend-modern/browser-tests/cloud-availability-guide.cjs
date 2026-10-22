@@ -133,19 +133,25 @@ const slugSection = async (page, id) => page.locator(`[id="${id}"]`).evaluate(he
       const legacy = await context.newPage();
       await legacy.goto(`${origin}/docs/CLOUD#1-create-your-account`);
       await legacy.waitForFunction(() => document.activeElement?.id === '1-create-your-account');
-      record.legacy_bounds = await legacy.locator('[id="1-confirm-existing-hosted-access"]').evaluate(el => {
-        const box = el.getBoundingClientRect();
-        return { top: box.top, bottom: box.bottom, height: box.height, viewport: innerHeight };
+      record.legacy_bounds = await legacy.evaluate(() => {
+        const bounds = id => {
+          const box = document.getElementById(id).getBoundingClientRect();
+          return { top: box.top, bottom: box.bottom, height: box.height, width: box.width };
+        };
+        return { heading: bounds('1-confirm-existing-hosted-access'),
+          target: bounds('1-create-your-account'), viewport: innerHeight };
       });
-      // WebKit rounds scroll offsets to whole CSS pixels. Preserve the actual
-      // subpixel bounds instead of treating a -0.16px heading box as clipping.
-      assert(Math.round(record.legacy_bounds.top) >= 0 && record.legacy_bounds.height > 0 &&
-        record.legacy_bounds.bottom <= record.legacy_bounds.viewport);
       assert.equal(await legacy.locator('[id="1-create-your-account"]').innerText(),
         '1. Confirm Existing Hosted Access');
       const legacyFile = `${state.name}-legacy-access.png`;
       await legacy.screenshot({path:path.join(output, legacyFile)});
       result.captures.push({file:legacyFile, sha256:hash(fs.readFileSync(path.join(output,legacyFile)))});
+      // The fragment targets the visible text span, not its larger parent
+      // line box. Retain both; check all of the actual target is on screen.
+      // WebKit rounds scroll offsets to whole CSS pixels.
+      const target = record.legacy_bounds.target;
+      assert(Math.round(target.top) >= 0 && target.height > 0 && target.width > 0 &&
+        target.bottom <= record.legacy_bounds.viewport);
       await legacy.close();
       record.checks.push('old account fragment still focuses and reveals replacement access section');
       await activate(page.locator('article a[href="/docs/INSTALL"]').first());
