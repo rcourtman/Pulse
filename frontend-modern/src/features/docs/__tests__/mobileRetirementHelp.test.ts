@@ -24,6 +24,33 @@ function section(name: string, fragment: string, level: number): HTMLElement {
 }
 
 describe('existing phone recovery and retirement help', () => {
+  it('routes Cloud phone setup to existing web access, not a new Relay pairing', () => {
+    const guide = render('CLOUD');
+    const text = prose(guide);
+    const setup = prose(section('CLOUD', '4-set-up-mobile-access', 3));
+    expect(setup).toContain("usual HTTPS address in your phone's browser");
+    expect(setup).toContain('Relay is not needed and does not provide web access');
+    expect(setup).toContain('Alerts → Notifications');
+    expect(setup).toContain('ntfy, Gotify or Pushover');
+    expect(setup).toContain('A successful Test is not proof of ordinary alert delivery');
+    expect(text).not.toMatch(/Relay is (?:enabled by default|pre-configured)/i);
+    expect(text).not.toContain('to pair a phone');
+    expect(text).not.toContain('supported Pulse Mobile client');
+    expect(text).not.toContain('pre-configured on Cloud');
+  });
+
+  it('preserves existing Cloud phone connections and continuing subscriber terms', () => {
+    const text = prose(section('CLOUD', '4-set-up-mobile-access', 3));
+    expect(text).toContain('31 March 2027');
+    expect(text).toContain('Existing paired phones keep working until then');
+    expect(text).toContain('do not remove or re-pair them just to follow this guide');
+    expect(text).toContain('Relay is no longer sold');
+    expect(text).toContain('Existing Relay subscribers receive Pro features');
+    expect(text).toContain('current price for as long as their subscription continues');
+    expect(text).toContain('including after the app retires');
+    expect(text).toContain('do not change your subscription or require a new purchase');
+  });
+
   it('keeps retirement, continuing paid terms and app/web access distinct', () => {
     const text = prose(section('TROUBLESHOOTING', 'relay-showing-disconnected', 4));
     expect(text).toContain('31 March 2027');
@@ -61,17 +88,18 @@ describe('existing phone recovery and retirement help', () => {
     const sections = [
       section('TROUBLESHOOTING', 'relay-showing-disconnected', 4),
       section('RELAY', 'troubleshooting', 2),
+      section('CLOUD', '4-set-up-mobile-access', 3),
     ];
     for (const element of sections) {
       for (const link of element.querySelectorAll('a[href]')) {
         const href = link.getAttribute('href')!;
         const same = /^#(.+)$/.exec(href);
-        const cross = /^\/docs\/([^#]+)#(.+)$/.exec(href);
+        const cross = /^\/docs\/([^#]+)(?:#(.+))?$/.exec(href);
         expect(same || cross, href).not.toBeNull();
-        expect(
-          render(cross ? cross[1] : 'RELAY').querySelector(`[id="${cross ? cross[2] : same![1]}"]`),
-          href,
-        ).not.toBeNull();
+        const destination = render(cross ? cross[1] : 'RELAY');
+        const fragment = cross ? cross[2] : same![1];
+        if (fragment) expect(destination.querySelector(`[id="${fragment}"]`), href).not.toBeNull();
+        else expect(prose(destination), href).not.toBe('');
         // Both link forms use shared explicit activation. Bare fragments keep
         // their native href so modified/new-tab clicks still work.
         expect(link.hasAttribute('data-doc-link'), href).toBe(true);
@@ -87,7 +115,7 @@ describe('existing phone recovery and retirement help', () => {
   });
 
   it('ships the same guidance as the canonical repository pages', () => {
-    for (const name of ['TROUBLESHOOTING', 'RELAY']) {
+    for (const name of ['TROUBLESHOOTING', 'RELAY', 'CLOUD']) {
       expect(shipped(name)).toBe(readFileSync(path.join(root, 'docs', `${name}.md`), 'utf8'));
     }
   });
