@@ -772,6 +772,28 @@ jobs:
         with:
           persist-credentials: false
 
+      # The smoke shards can run without these optional local tools. The
+      # required verdict must also exercise real encryption and deletion
+      # filters, never report their skipped fixtures as native evidence.
+      - name: Install native backup fixture clients
+        run: |
+          set -euo pipefail
+          sudo -n apt-get update
+          sudo -n apt-get install -y --no-install-recommends age rclone
+          dpkg-query -W age rclone
+
+      - name: Require native backup encryption and retention proof
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+          PULSE_CLOUD_BACKUP_TEST_REAL_AGE: /usr/bin/age
+          PULSE_CLOUD_BACKUP_TEST_REAL_AGE_KEYGEN: /usr/bin/age-keygen
+          PULSE_CLOUD_BACKUP_TEST_REAL_RCLONE: /usr/bin/rclone
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          printf 'Native backup source: %s\n' "$EXPECTED_SOURCE_SHA"
+          python3 scripts/tests/test_cloud_backup.py --require-native
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

@@ -1671,10 +1671,10 @@
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/availability_test.go",
-          "internal/hostagent/cluster_sensors_regression_test.go",
-          "internal/hostagent/cluster_sensors_ssh_test.go",
+              "internal/hostagent/cluster_sensors_regression_test.go",
+              "internal/hostagent/cluster_sensors_ssh_test.go",
               "internal/hostagent/cluster_sensors_test.go",
-          "internal/hostagent/command_client_test.go",
+              "internal/hostagent/command_client_test.go",
               "internal/hostagent/commands_deploy_test.go",
               "internal/hostagent/commands_host_update_test.go",
               "internal/hostagent/commands_storage_cleanup_test.go",
@@ -5235,6 +5235,21 @@
             ]
           },
           {
+            "id": "build-test-workflow",
+            "label": "required CI build, dependency security and native backup proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/build-and-test.yml"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/security/__tests__/dependencySecurity.test.ts",
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/tests/test_cloud_backup_ci.py"
+            ]
+          },
+          {
             "id": "frontend-dependency-security",
             "label": "frontend dependency security proof",
             "match_prefixes": [],
@@ -5243,7 +5258,6 @@
               ".github/scripts/record-internal-api-test-seconds.py",
               ".github/scripts/refresh-internal-api-test-seconds.py",
               ".github/scripts/select-internal-api-shard.sh",
-              ".github/workflows/build-and-test.yml",
               "frontend-modern/package-lock.json",
               "frontend-modern/package.json"
             ],
@@ -6772,7 +6786,7 @@
               "internal/monitoring/pbs_protection_observation_test.go",
               "internal/monitoring/pve_backup_guest_warning_test.go",
               "internal/monitoring/pve_backup_log_attribution_test.go",
-        "internal/monitoring/pve_backup_log_budget_test.go",
+              "internal/monitoring/pve_backup_log_budget_test.go",
               "internal/monitoring/pve_backup_task_barrier_test.go",
               "internal/monitoring/pve_disabled_storage_test.go",
               "internal/monitoring/pve_protection_observation_test.go",

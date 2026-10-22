@@ -123,6 +123,16 @@ and independently checks the exact rooted filter set and traversal bound. An
 optional real-rclone local-backend case exercises that filter engine with an
 empty configuration and only disposable local paths; absence is an explicit
 skip, not native filter proof. Docker and host identity remain closed fakes.
+The required `Script smoke tests & backend build` CI check installs the signed
+Ubuntu archive's age and rclone packages once, then runs the complete backup
+suite with `--require-native`. That mode requires all three executables, records
+their versions and SHA256 identities plus helper/test source hashes, and fails
+on a missing native case, failed client identity check, test failure, incomplete
+test execution or any skip. The workflow verifies its checkout against the event
+SHA. Ordinary developer runs remain explicitly optional when clients are absent;
+a green smoke shard with skips is not this native proof. The clients use only
+the existing disposable fixtures and rclone's empty configuration, not a cloud
+account. Containing hosted execution still has to return a terminal result.
 Neither the orchestration controls nor real local-client cases establish cloud
 delivery, application consistency or installed recovery.
 

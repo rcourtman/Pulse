@@ -7,6 +7,7 @@ real age and local-backend rclone cases run when supplied or installed; no test
 establishes application consistency, cloud delivery or native restore readiness.
 """
 
+import hashlib
 import io
 import json
 import os
@@ -880,5 +881,46 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_no_new_plaintext()
 
 
+def run_native_suite():
+    """CI must execute the full suite, including both real-client cases."""
+    tools = (("age", REAL_AGE, "--version"),
+             ("age-keygen", REAL_AGE_KEYGEN, "--version"),
+             ("rclone", REAL_RCLONE, "version"))
+    for name, executable, option in tools:
+        if not executable or not Path(executable).is_file() or not os.access(executable, os.X_OK):
+            print(f"Native backup proof requires executable {name}; no tests started", file=sys.stderr)
+            return 2
+    for name, executable, option in tools:
+        try:
+            version = subprocess.run([executable, option], capture_output=True, text=True, timeout=10)
+            version_text = (version.stdout + version.stderr).strip()
+            if version.returncode != 0 or not version_text or len(version_text) > 4096:
+                raise ValueError("version command failed")
+            print(json.dumps({"native_tool": name, "version": version_text,
+                              "sha256": hashlib.sha256(Path(executable).read_bytes()).hexdigest()}), flush=True)
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            print(f"Native backup proof cannot identify {name}; no tests started", file=sys.stderr)
+            return 2
+    for path in (SCRIPT, Path(__file__)):
+        print(json.dumps({"source_file": path.name,
+                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}), flush=True)
+    loader = unittest.TestLoader()
+    required = {"test_real_age_recovers_archives_and_private_metadata",
+                "test_real_rclone_local_backend_preserves_unowned_objects"}
+    if not required.issubset(loader.getTestCaseNames(CloudBackupTest)):
+        print("Native backup cases are missing; no tests started", file=sys.stderr)
+        return 2
+    suite = loader.loadTestsFromTestCase(CloudBackupTest)
+    expected = suite.countTestCases()
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    complete = result.wasSuccessful() and not result.skipped and result.testsRun == expected
+    print(json.dumps({"native_backup_summary": {"expected": expected, "ran": result.testsRun,
+                      "failures": len(result.failures), "errors": len(result.errors),
+                      "skipped": len(result.skipped), "complete": complete}}), flush=True)
+    return 0 if complete else 1
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--require-native"]:
+        sys.exit(run_native_suite())
     unittest.main()
