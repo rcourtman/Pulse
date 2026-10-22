@@ -6,7 +6,9 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const frontend = new URL('../frontend-modern/', import.meta.url);
-const floor = [4, 1, 11]; // GHSA-82fw-gwwq-j7x9: redirect-mock file reads.
+// GHSA-qxg6-89mg-rqv8: unauthenticated manual-mock registration;
+// GHSA-xp26-3454-mjgp: Windows traversal bypass of the redirect-mock fix.
+const floor = [4, 1, 12];
 const stableVersion = /^(4)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const companions = ['vitest', '@vitest/mocker', '@vitest/coverage-v8'];
 
@@ -35,7 +37,7 @@ export function vitestGraphErrors(manifest, lock) {
     const range = manifest?.devDependencies?.[name];
     const declared = typeof range === 'string' && range.startsWith('^') && versionParts(range.slice(1));
     if (!declared || !atLeast(declared, floor)) {
-      errors.push(`${name} must declare a stable reviewed ^4.x floor at or above ^4.1.11.`);
+      errors.push(`${name} must declare a stable reviewed ^4.x floor at or above ^${floor.join('.')}.`);
     } else if (runnerParts && !atLeast(runnerParts, declared)) {
       errors.push(`The locked runner is below the declared ${name} floor.`);
     }
@@ -54,7 +56,7 @@ export function vitestGraphErrors(manifest, lock) {
     for (const [, entry] of entries) {
       const parts = versionParts(entry?.version);
       if (!parts || !atLeast(parts, floor)) {
-        errors.push(`${name} must lock a stable reviewed 4.x version at or above 4.1.11.`);
+        errors.push(`${name} must lock a stable reviewed 4.x version at or above ${floor.join('.')}.`);
       } else if (entry.version !== runner) {
         errors.push(`${name} must exactly match the locked runner.`);
       }
