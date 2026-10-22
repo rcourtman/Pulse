@@ -10,6 +10,9 @@ import { apiFetchJSON } from '@/utils/apiClient';
 
 const PROTECTION_POSTURES_URL = '/api/recovery/postures';
 export const MAX_PROTECTION_POSTURE_BATCH_SIZE = 200;
+// Bound each evaluation's fan-out as well as its per-request subject count.
+// Small fleets retain parallel reads; larger fleets refill only freed slots.
+const PROTECTION_POSTURE_READ_CONCURRENCY = 4;
 const REFRESH_MS = 30_000;
 // One budget for the entire evaluation, including every batch and its body.
 // Preserve the API client's existing two-minute Retry-After allowance.
@@ -190,8 +193,30 @@ async function readProtectionPostureBatches(
   for (let offset = 0; offset < resourceIDs.length; offset += MAX_PROTECTION_POSTURE_BATCH_SIZE) {
     batches.push(resourceIDs.slice(offset, offset + MAX_PROTECTION_POSTURE_BATCH_SIZE));
   }
-  const responses = await Promise.all(
-    batches.map((batch) => fetchProtectionPostures(batch, signal)),
+  const responses: ProtectionPosturesResponse[] = new Array(batches.length);
+  let nextBatch = 0;
+  let failed = false;
+  const readNextBatch = async () => {
+    while (!failed && nextBatch < batches.length) {
+      // A cancelled transport can still resolve. It must not start queued
+      // subjects for an abandoned owner, even when it ignored abort itself.
+      signal.throwIfAborted();
+      const index = nextBatch++;
+      try {
+        responses[index] = await fetchProtectionPostures(batches[index], signal);
+      } catch (error) {
+        // Stop the queue before the containing evaluation cancels siblings.
+        // Never publish a partial fleet or use completion order as row order.
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(PROTECTION_POSTURE_READ_CONCURRENCY, batches.length) },
+      readNextBatch,
+    ),
   );
   const policy = responses[0]?.policy ?? EMPTY_POLICY;
   if (

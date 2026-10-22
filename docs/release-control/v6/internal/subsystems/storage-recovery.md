@@ -3754,6 +3754,28 @@ only its own metric; no storage, backup or guest action is added. Registry,
 clone and collector lifecycle controls retain this shared-type boundary.
 
 
+### Protection evaluation fan-out stays bounded
+
+The collected-backup consumer admits at most four concurrent 200-subject
+posture reads per evaluation. A completed batch frees one slot, without changing
+the total subjects, API batch size, request-order result join, policy agreement,
+30-second polling cadence or the single 150-second evaluation deadline. Queued
+batches share that original budget, not a fresh timeout per wave. No partial
+fleet verdict is published. Failure stops queued work and cancels active
+siblings; cancellation and late transport success cannot start retired work.
+The bound is per evaluation, not a global server or multi-tab rate limit.
+
+`useProtectionPostures.concurrency.test.ts` checks a 2,001-subject, eleven-batch
+read, out-of-order completions, slot refill, denial/format failures, cancellation,
+queued deadline and small/empty compatibility. Existing hook/query/consumer
+checks retain atomic withdrawal, scoped retry and independent artifact evidence.
+`browser-tests/protection-posture-concurrency.cjs` consumes held synthetic HTTP
+through the production hook, query owner, Coverage, evidence dialogs and CSS at
+desktop keyboard and 320px touch widths. It checks pending/complete verdicts,
+failure, retry and disposal without admitting queued old-source work. These
+are bounded read and presentation proofs, not installed load relief, guest
+operations, thaw, filesystem liveness, native recovery or release availability.
+
 ### Protection evaluations settle or release their owner
 
 One 150-second read budget covers every 200-subject batch, including API-client
