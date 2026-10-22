@@ -4751,6 +4751,7 @@
         "scripts/run_demo_public_browser_smoke.sh",
         "scripts/run_hosted_staging_smoke.sh",
         "scripts/shard_go_tests.py",
+        "scripts/sync-production-config.sh",
         "scripts/toggle-mock.sh",
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
@@ -5337,6 +5338,7 @@
               "scripts/lib/hot-dev-auth.sh",
               "scripts/lib/hot-dev-config.sh",
               "scripts/lib/hot-dev-runtime.sh",
+              "scripts/sync-production-config.sh",
               "scripts/toggle-mock.sh",
               "tests/integration/playwright.config.ts",
               "tests/integration/QUICK_START.md",
@@ -5355,6 +5357,7 @@
               "scripts/tests/test-hot-dev-runtime.sh",
               "scripts/tests/test-toggle-mock.sh",
               "scripts/tests/test_cleanup.py",
+              "scripts/tests/test_dev_config_import.py",
               "scripts/tests/test_hot_dev_config.py",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"

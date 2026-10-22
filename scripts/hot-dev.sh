@@ -438,27 +438,9 @@ fi
 
 show_startup_banner
 
-# Auto-restore encryption key from backup if missing
-if [[ ! -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
-    BACKUP_KEY=$(find "${PULSE_DATA_DIR}" -maxdepth 1 -name '.encryption.key.bak*' -type f 2>/dev/null | head -1)
-    if [[ -n "${BACKUP_KEY}" ]] && [[ -f "${BACKUP_KEY}" ]]; then
-        echo ""
-        log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        log_error "!! ENCRYPTION KEY WAS MISSING - AUTO-RESTORING FROM BACKUP !!"
-        log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        log_error "!! Backup used: ${BACKUP_KEY}"
-        log_error "!! "
-        log_error "!! To find out what deleted the key:"
-        log_error "!!   Linux: sudo journalctl -u encryption-key-watcher -n 100"
-        log_error "!!   macOS: check /tmp/pulse-debug.log"
-        log_error "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-        echo ""
-        cp -f "${BACKUP_KEY}" "${PULSE_DATA_DIR}/.encryption.key"
-        chmod 600 "${PULSE_DATA_DIR}/.encryption.key"
-        log_info "Restored encryption key from backup"
-    fi
-fi
-
+# Never select a recovery key by backup filename or directory enumeration order.
+# A missing key with retained ciphertext must use the existing refusal below.
+# Identify its matching key independently; leave every backup untouched.
 if [[ -z ${PULSE_ENCRYPTION_KEY:-} ]]; then
     if [[ -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
         export PULSE_ENCRYPTION_KEY="$(<"${PULSE_DATA_DIR}/.encryption.key")"
