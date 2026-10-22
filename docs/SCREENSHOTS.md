@@ -1,8 +1,9 @@
 # Pulse screenshots
 
-These captures come from the public read-only demo and show the current
-platform-shaped Pulse interface. Explore the same mock environment at
-[demo.pulserelay.pro](https://demo.pulserelay.pro) with `demo` / `demo`.
+These captures use the same generated mock environment as the public
+read-only demo and show the current platform-shaped Pulse interface. Explore
+it at [demo.pulserelay.pro](https://demo.pulserelay.pro); the demo signs you in
+automatically.
 
 ## Proxmox workspace
 
@@ -16,8 +17,9 @@ vSphere, and Machines use the same platform-page pattern.
 
 ![Pulse Patrol attention queue](images/pulse-patrol.png)
 
-Patrol turns cross-platform checks into a plain operational queue. Watch-only
-mode reports findings without starting changes; higher-autonomy modes remain
+Patrol turns cross-platform checks into an inbox of decisions, with protection
+coverage and an activity record beside it. Watch-only mode reports findings
+without starting changes; higher-autonomy modes remain
 subject to the configured plan, policy, approval, and verification boundaries.
 
 Screenshots use generated demo data. Names, metrics, alerts, and infrastructure
