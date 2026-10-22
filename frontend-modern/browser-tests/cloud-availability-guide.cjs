@@ -133,8 +133,19 @@ const slugSection = async (page, id) => page.locator(`[id="${id}"]`).evaluate(he
       const legacy = await context.newPage();
       await legacy.goto(`${origin}/docs/CLOUD#1-create-your-account`);
       await legacy.waitForFunction(() => document.activeElement?.id === '1-create-your-account');
-      assert(await legacy.locator('[id="1-confirm-existing-hosted-access"]').evaluate(el =>
-        el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().top < innerHeight));
+      record.legacy_bounds = await legacy.locator('[id="1-confirm-existing-hosted-access"]').evaluate(el => {
+        const box = el.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, height: box.height, viewport: innerHeight };
+      });
+      // WebKit rounds scroll offsets to whole CSS pixels. Preserve the actual
+      // subpixel bounds instead of treating a -0.16px heading box as clipping.
+      assert(Math.round(record.legacy_bounds.top) >= 0 && record.legacy_bounds.height > 0 &&
+        record.legacy_bounds.bottom <= record.legacy_bounds.viewport);
+      assert.equal(await legacy.locator('[id="1-create-your-account"]').innerText(),
+        '1. Confirm Existing Hosted Access');
+      const legacyFile = `${state.name}-legacy-access.png`;
+      await legacy.screenshot({path:path.join(output, legacyFile)});
+      result.captures.push({file:legacyFile, sha256:hash(fs.readFileSync(path.join(output,legacyFile)))});
       await legacy.close();
       record.checks.push('old account fragment still focuses and reveals replacement access section');
       await activate(page.locator('article a[href="/docs/INSTALL"]').first());

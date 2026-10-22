@@ -83,6 +83,8 @@ describe('shipped Cloud availability guidance', () => {
       article.querySelector('[id="1-create-your-account"]') ??
       article.querySelector('[id="user-content-1-create-your-account"]');
     expect(target).not.toBeNull();
+    expect(target!.textContent).toBe('1. Confirm Existing Hosted Access');
+    expect(target!.closest('h3')?.id).toBe('1-confirm-existing-hosted-access');
     const scroll = vi.fn();
     target!.scrollIntoView = scroll;
     document.body.append(article);

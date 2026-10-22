@@ -55,9 +55,7 @@ Cloud Enterprise shared-process organizations are for one owner separating inter
 
 ## Getting Started
 
-<span id="1-create-your-account"></span>
-
-### 1. Confirm Existing Hosted Access
+### <span id="1-create-your-account">1. Confirm Existing Hosted Access</span>
 
 Continue only if your hosting operator has supplied an instance and an access
 method. There is no public Cloud sign-up flow described here, and a self-hosted
