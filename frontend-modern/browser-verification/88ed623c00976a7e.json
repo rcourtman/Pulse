@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "ebb6c85298713f8610f28e5b0ba4c50d8e5f361e",
+  "verified_at": "2026-10-22T06:45:59.834803Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "e45d7f7495cf4b3904fc67fa95c3652cc3fdceccf427c7944af5335b3e840d88"
+  },
+  "routes": [
+    "/browser-tests/service-connection.html?transport=direct|canonical (synthetic PBS job evidence through production normalizer, shared state producer, service model, full resource drawer and shipped CSS)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Complete task/evidence identifiers, store/remote/namespace/worker context, multiline error, unknown result, observed timestamp, partial-read and permission caution, full posture reason and unfamiliar confidence label remain readable without hover.",
+    "Literal markup stays escaped text. Unbroken values wrap without horizontal overflow. Modest badge corners do not cross multiline labels. Existing PBS/PMG connection-state controls remain independent."
+  ],
+  "interactions": [
+    "Desktop Chromium and 320px dark touch WebKit each cover direct and canonical resources: 64 full-text/selection/line-bounds checks total, with 104 connection-state controls.",
+    "Native Enter/tap Show jobs, same-open error updates, retained desktop Hide jobs focus, and close/reopen all pass; no page errors or off-origin requests. Browser and local preview server close.",
+    "All four final captures opened using native view_image at original detail. Complete evidence/final error lines, timestamps, caution, badge borders, focus and narrow fit inspected. The initial automated pass with a pixel-identified tall-pill defect remains retained; no assertions were weakened."
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "ebb6c85298713f8610f28e5b0ba4c50d8e5f361e",
+  "source_suite_and_consumer_receipt": "source-9mgkqkqm",
+  "browser_report_sha256": "fb43e39641f690b61e43d7f55609f1661c74ee11362b66e597af6b6254093360",
+  "static_binding_sha256": "80d9b8980329a9d100bbf28dfd7f9d6cbbcdbecbb07bb2ce15313583714f2237",
+  "limits": "Synthetic existing-evidence access only. No job classification/freshness, native PBS poll, guest thaw, every-filesystem liveness, restore, installed recovery or release availability. Original Docs history/reload runtime gap is not cleared."
+}
