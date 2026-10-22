@@ -5,6 +5,7 @@
 # Encrypted jobs stream into age without writing new plaintext staging files.
 # Both source directories are required, even when remote upload is disabled.
 # Configure physical source directories: tar would store a root symlink alone.
+# Staging must be outside both source trees, including through path aliases.
 # Helpers sharing a staging directory reserve names before writing any output.
 # Archive, encryption and configured uploads must succeed before retention.
 # Retention only removes this helper's top-level archives and metadata.
@@ -76,6 +77,25 @@ reject_linked_source() {
     die "Required ${label} directory is a symbolic link; configure its physical directory; no backup or retention performed"
 }
 
+# Never archive the staging area itself. Besides growing every successive
+# backup, a streamed archive can include the file age is still writing. Resolve
+# physical paths before mkdir/chmod so aliases and not-yet-created descendants
+# cannot hide this mistake. NUL delimiters preserve newlines in configured paths.
+reject_staging_in_source() {
+  local staging tenants control_plane
+  IFS= read -r -d '' staging < <(realpath -m -z -- "${BACKUP_DIR}") ||
+    die "Cannot resolve PULSE_BACKUP_DIR; no archives or retention performed"
+  IFS= read -r -d '' tenants < <(realpath -e -z -- "${TENANTS_DIR}") ||
+    die "Cannot resolve required tenants directory; no archives or retention performed"
+  IFS= read -r -d '' control_plane < <(realpath -e -z -- "${CONTROL_PLANE_DIR}") ||
+    die "Cannot resolve required control-plane directory; no archives or retention performed"
+
+  # Removing the root's trailing slash also handles a source configured as /.
+  if [[ "${staging}/" == "${tenants%/}/"* || "${staging}/" == "${control_plane%/}/"* ]]; then
+    die "PULSE_BACKUP_DIR must be outside both source directories; no archives or retention performed; choose a separate staging directory"
+  fi
+}
+
 # Admit the whole configured job before creating any new archives. Otherwise a
 # missing source can become a successful empty run that ages out good backups.
 preflight() {
@@ -87,10 +107,12 @@ preflight() {
   have tar || die "tar is required"
   have find || die "find is required for local retention"
   have rmdir || die "rmdir is required to release backup name reservations"
+  have realpath || die "realpath (GNU coreutils) is required to validate the backup staging location"
   [[ -d "${TENANTS_DIR}" ]] || die "Required tenants directory not found; no backup or retention performed"
   [[ -d "${CONTROL_PLANE_DIR}" ]] || die "Required control-plane directory not found; no backup or retention performed"
   reject_linked_source "${TENANTS_DIR}" "tenants"
   reject_linked_source "${CONTROL_PLANE_DIR}" "control-plane"
+  reject_staging_in_source
 
   if [[ "${ENCRYPT}" == "true" ]]; then
     have age || die "PULSE_BACKUP_ENCRYPT=true but 'age' is not installed. Install: https://github.com/FiloSottile/age"

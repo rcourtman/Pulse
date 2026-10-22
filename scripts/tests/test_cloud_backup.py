@@ -44,6 +44,8 @@ tool, args = Path(sys.argv[0]).name, sys.argv[1:]
 scenario = json.loads((root / "scenario.json").read_text())
 calls_file = root / "calls.jsonl"
 previous = [json.loads(line) for line in calls_file.read_text().splitlines()] if calls_file.exists() else []
+backups = Path(os.environ["PULSE_BACKUP_DIR"]).resolve()
+assert backups.is_relative_to(root), backups
 if tool != "date":
     with calls_file.open("a") as output:
         output.write(json.dumps([tool, *args]) + "\n")
@@ -52,7 +54,7 @@ if tool == "tar":
     assert len(args) == 5 and args[0] == "-czf" and args[2] == "-C", args
     output = Path(args[1]).resolve() if args[1] != "-" else None
     source = Path(args[3]) / args[4]
-    assert output is None or output.is_relative_to(root / "backups"), output
+    assert output is None or output.is_relative_to(backups), output
     assert source.resolve().is_relative_to(root), source
     assert source.name in ("tenants", "control-plane"), source
     number = 1 + sum(call[0] == tool for call in previous)
@@ -78,7 +80,7 @@ if tool == "tar":
         (root / "control-plane").symlink_to(root / "moved-control-plane", target_is_directory=True)
     sys.exit(result.returncode)
 if tool == "find":
-    assert Path(args[0]).resolve() == root / "backups", args
+    assert Path(args[0]).resolve() == backups, args
     # Admit the unchanged parent as well for explicit regression controls.
     if args[1] == "-name":
         assert args[1:4] == ["-name", "pulse-backup-*.tar.gz*", "-mtime"], args
@@ -93,10 +95,10 @@ if tool == "age":
     # Admit the old file-input path for explicit exact-parent controls too.
     assert len(args) in (4, 5) and args[:3] == ["-r", "fixture-recipient", "-o"], args
     output = Path(args[3])
-    assert output.resolve().is_relative_to(root / "backups"), output
+    assert output.resolve().is_relative_to(backups), output
     number = 1 + sum(call[0] == tool for call in previous)
     def observe_plaintext(phase):
-        names = sorted(p.name for p in (root / "backups").glob("*" + os.environ["FIXTURE_TIMESTAMP"] + "*")
+        names = sorted(p.name for p in backups.glob("*" + os.environ["FIXTURE_TIMESTAMP"] + "*")
                        if p.name.endswith((".txt", ".tar.gz")))
         with (root / "plaintext-observations.jsonl").open("a") as observations:
             observations.write(json.dumps({"number": number, "phase": phase, "names": names}) + "\n")
@@ -105,7 +107,7 @@ if tool == "age":
         sys.exit(8)
     if len(args) == 5:
         source = Path(args[4])
-        assert source.resolve().is_relative_to(root / "backups"), source
+        assert source.resolve().is_relative_to(backups), source
         content = source.read_bytes()
     else:
         content = sys.stdin.buffer.read()
@@ -116,7 +118,7 @@ if tool == "rclone":
     remote = root / "remote"
     if args[0] == "copyto":
         assert len(args) == 3, args
-        assert Path(args[1]).resolve().is_relative_to(root / "backups"), args
+        assert Path(args[1]).resolve().is_relative_to(backups), args
         assert Path(args[1]).is_file(), args
         assert args[2] == "fixture-remote:bucket/pulse-cloud-tarballs/" + Path(args[1]).name, args
         number = 1 + sum(call[:2] == [tool, "copyto"] for call in previous)
@@ -219,7 +221,7 @@ class CloudBackupTest(unittest.TestCase):
                 self.old.append(archive)
         # PATH admits only these local utilities and closed fakes. No real
         # Docker, encryption client or cloud client can be reached.
-        for name in ("mkdir", "touch", "chmod", "dirname", "basename", "du", "cut", "rm", "rmdir", "gzip"):
+        for name in ("mkdir", "touch", "chmod", "dirname", "basename", "du", "cut", "rm", "rmdir", "gzip", "realpath"):
             executable = shutil.which(name)
             self.assertIsNotNone(executable, f"required fixture dependency missing: {name}")
             (self.bin / name).symlink_to(executable)
@@ -375,6 +377,107 @@ class CloudBackupTest(unittest.TestCase):
         target = self.root / ("physical-" + name)
         (self.root / name).rename(target)
         (self.root / name).symlink_to(target, target_is_directory=True)
+
+    def assert_layout_rejected(self, staging, **env):
+        # Snapshot source bytes and permissions, not just the exit code. Layout
+        # admission must precede staging mkdir/chmod, archives and all expiry.
+        sources = [self.root / name for name in ("tenants", "control-plane")]
+        before = {source: (source.stat().st_mode, sorted(p.relative_to(source) for p in source.rglob("*")),
+                           (source / "fixture.txt").read_bytes()) for source in sources}
+        result = self.invoke(PULSE_BACKUP_DIR=staging, **env)
+        self.assert_stopped_before_retention(result, before_archives=True)
+        self.assert_no_uploads()
+        self.assertIn("PULSE_BACKUP_DIR must be outside both source directories", self.output)
+        after = {source: (source.stat().st_mode, sorted(p.relative_to(source) for p in source.rglob("*")),
+                          (source / "fixture.txt").read_bytes()) for source in sources}
+        self.assertEqual(after, before)
+
+    def test_staging_equal_to_source_is_rejected_before_chmod(self):
+        source = self.root / "tenants"
+        source.chmod(0o750)
+        self.assert_layout_rejected(str(source))
+
+    def test_staging_inside_control_plane_is_rejected_before_creation(self):
+        staging = self.root / "control-plane/not-created/backups"
+        self.assert_layout_rejected(str(staging))
+        self.assertFalse(staging.parent.exists())
+
+    def test_staging_symlink_into_source_is_rejected(self):
+        alias = self.root / "backup-alias"
+        alias.symlink_to(self.root / "tenants", target_is_directory=True)
+        self.assert_layout_rejected(str(alias))
+        self.assertTrue(alias.is_symlink())
+
+    def test_staging_layout_is_checked_for_both_sources_and_encryption_modes(self):
+        for name in ("tenants", "control-plane"):
+            for encrypted in ("true", "false"):
+                for suffix in ("", "/not-created/nested"):
+                    with self.subTest(source=name, encrypted=encrypted, suffix=suffix):
+                        self.assert_layout_rejected(str(self.root / name) + suffix,
+                                                    PULSE_BACKUP_ENCRYPT=encrypted)
+
+    def test_relative_dot_and_parent_components_cannot_hide_staging_overlap(self):
+        self.assert_layout_rejected("tenants/./not-created/../backups///", PULSE_RCLONE_REMOTE="")
+        self.assertFalse((self.root / "tenants/not-created").exists())
+
+    def test_symlinked_source_parent_cannot_hide_staging_overlap(self):
+        (self.root / "data-alias").symlink_to(self.root, target_is_directory=True)
+        self.assert_layout_rejected(str(self.root / "tenants/backups"),
+                                    PULSE_TENANTS_DIR=str(self.root / "data-alias/tenants"))
+
+    def test_symlink_and_parent_component_use_physical_not_lexical_location(self):
+        (self.root / "tenants/subdir").mkdir()
+        alias = self.root / "backup-alias"
+        alias.symlink_to(self.root / "tenants/subdir", target_is_directory=True)
+        self.assert_layout_rejected(str(alias) + "/../not-created/backups")
+
+    def test_newlines_in_paths_do_not_weaken_staging_admission(self):
+        self.assert_layout_rejected(str(self.root / "tenants/not-created\n"))
+        # A physical source ending in a newline must not be truncated by shell
+        # command substitution before comparison. Keep the original fixture
+        # path as an alias solely for the unchanged-data snapshot assertion.
+        physical = self.root / "tenants\n"
+        (self.root / "tenants").rename(physical)
+        (self.root / "tenants").symlink_to(physical, target_is_directory=True)
+        self.assert_layout_rejected(str(physical / "not-created\n"),
+                                    PULSE_TENANTS_DIR=str(physical))
+
+    def test_missing_realpath_stops_before_archiving(self):
+        (self.bin / "realpath").unlink()
+        self.assert_stopped_before_retention(self.invoke(), before_archives=True)
+        self.assertIn("realpath (GNU coreutils) is required", self.output)
+
+    def test_failed_staging_resolution_stops_before_chmod(self):
+        # A resolver failure must not silently become an empty, admitted path.
+        (self.bin / "realpath").unlink()
+        (self.bin / "realpath").write_text("#!/bin/sh\nexit 1\n")
+        (self.bin / "realpath").chmod(0o700)
+        self.assert_stopped_before_retention(self.invoke(), before_archives=True)
+        self.assertIn("Cannot resolve PULSE_BACKUP_DIR", self.output)
+
+    def test_failed_source_resolution_stops_before_archiving(self):
+        (self.bin / "realpath").unlink()
+        (self.bin / "realpath").write_text(
+            '#!/bin/sh\nif [ "$1" = "-m" ]; then printf "%s\\0" "$PULSE_BACKUP_DIR"; else exit 1; fi\n')
+        (self.bin / "realpath").chmod(0o700)
+        self.assert_stopped_before_retention(self.invoke(), before_archives=True)
+        self.assertIn("Cannot resolve required tenants directory", self.output)
+
+    def test_similarly_prefixed_sibling_staging_is_valid(self):
+        sibling = self.root / "tenants-backups"
+        self.backups.rename(sibling)
+        self.backups = sibling
+        self.old = [sibling / path.name for path in self.old]
+        result = self.invoke(PULSE_BACKUP_DIR=str(sibling))
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_archive_contents()
+
+    def test_safe_staging_alias_and_relative_paths_preserve_archive_layout(self):
+        (self.root / "data-alias").symlink_to(self.root, target_is_directory=True)
+        result = self.invoke(PULSE_BACKUP_DIR="./data-alias/backups/../backups///",
+                             PULSE_TENANTS_DIR="./data-alias/tenants")
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assert_archive_contents()
 
     def test_same_second_failure_does_not_destroy_a_completed_backup(self):
         timestamp = "20261022-010001"
