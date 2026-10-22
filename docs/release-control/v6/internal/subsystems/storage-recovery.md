@@ -145,6 +145,24 @@ details, live resource replacement and keyboard/narrow-touch interactions.
 This is backup-evidence attribution, not collection, native recovery,
 guest thaw or filesystem-liveness proof.
 
+### PBS offline state cannot be overridden by retained connection health
+
+The Backups server table honours an explicit canonical `offline` status even
+when its PBS facet still says `healthy` or `ok`. It shows Offline and qualifies
+retained datastore capacity and host CPU/memory/uptime/deduplication as
+unavailable rather than current healthy readings. Recorded resource fields,
+backup inventory, identity and server-owned status are not rewritten.
+A reachable server with storage warning/degraded status keeps its measured
+capacity risk; a failed connection still vetoes an online carrier.
+
+`ProxmoxBackupServersTable.connection.test.tsx` covers direct and canonical
+resource projections, mounted offline/recovery transitions, preserved row,
+open datastore and focus, and the reachable-storage-warning control.
+`browser-tests/pbs-capacity-details.cjs` uses the existing capacity fixture and
+production Backups reader/row producer/table/router/CSS at desktop and 320px
+touch widths. These are synthetic consuming proofs, not a native PBS poll,
+installed recovery, guest thaw, filesystem liveness or successful restore.
+
 ### PBS server counts retain one source owner
 
 The Backups server/datastore table selects the whole PBS inventory source before
