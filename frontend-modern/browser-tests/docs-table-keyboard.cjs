@@ -86,8 +86,17 @@ fs.mkdirSync(output, { recursive: true });
         scrollLeft: e.scrollLeft, focused: document.activeElement === e, tabindex: e.tabIndex,
         role: e.getAttribute('role'), name: e.getAttribute('aria-label'),
         outlineWidth: getComputedStyle(e).outlineWidth, outlineStyle: getComputedStyle(e).outlineStyle,
-        outlineColor: getComputedStyle(e).outlineColor }));
+        outlineColor: getComputedStyle(e).outlineColor, pseudoFocus: e.matches(':focus'),
+        pseudoFocusVisible: e.matches(':focus-visible'), documentFocused: document.hasFocus() }));
       await previous.focus(); await page.keyboard.press('Tab');
+      record.immediateFocus = await geometry();
+      // Require the real visible state; an immediate style read after Tab may
+      // precede its settled focus styling. Never replace this with a sleep/pass.
+      await page.waitForFunction(() => {
+        const e = document.querySelector('[data-doc-table-scroll]');
+        return document.activeElement === e && e.matches(':focus') &&
+          parseFloat(getComputedStyle(e).outlineWidth) >= 2 && getComputedStyle(e).outlineStyle === 'solid';
+      });
       record.before = await geometry();
       assert(record.before.focused); assert.equal(record.before.tabindex, 0);
       assert.equal(record.before.role, 'region'); assert.equal(record.before.name, 'Scrollable table');
