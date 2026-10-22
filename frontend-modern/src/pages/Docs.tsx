@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useParams } from '@solidjs/router';
 import { Show, createEffect, createMemo, createResource, onCleanup } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { PageHeader } from '@/components/shared/PageHeader';
 import {
   docAssetUrlForPath,
@@ -13,21 +14,49 @@ import {
 
 const DOCS_INDEX_PATH = 'README';
 
+const LOAD_FAILURE_MESSAGES = {
+  missing: "That document is not part of this installation's shipped documentation set.",
+  access:
+    'Access to this guide was refused. Check that you are still signed in and have access, then try again.',
+  unavailable:
+    'This guide could not be loaded. There may be a temporary connection or server problem. Try again.',
+};
+
+class DocLoadError extends Error {
+  constructor(
+    readonly kind: keyof typeof LOAD_FAILURE_MESSAGES,
+    readonly docPath: string,
+  ) {
+    // Keep response bodies and transport details out of the reading surface.
+    super(LOAD_FAILURE_MESSAGES[kind]);
+  }
+}
+
 async function fetchDoc(docPath: string): Promise<string> {
-  const response = await fetch(docAssetUrlForPath(docPath), {
-    headers: { Accept: 'text/markdown, text/plain' },
-  });
-  if (!response.ok) {
-    throw new Error(String(response.status));
+  try {
+    const response = await fetch(docAssetUrlForPath(docPath), {
+      headers: { Accept: 'text/markdown, text/plain' },
+    });
+    if (!response.ok) {
+      const kind =
+        response.status === 404 || response.status === 410
+          ? 'missing'
+          : response.status === 401 || response.status === 403
+            ? 'access'
+            : 'unavailable';
+      throw new DocLoadError(kind, docPath);
+    }
+    // Both static handlers can return the SPA's HTML for a missing .md asset.
+    // Check status first: an HTML access/error page is not evidence of absence.
+    if (isHtmlResponse(response)) {
+      throw new DocLoadError('missing', docPath);
+    }
+    return await response.text();
+  } catch (error) {
+    if (error instanceof DocLoadError) throw error;
+    // A connection failure or interrupted response body can both be retried.
+    throw new DocLoadError('unavailable', docPath);
   }
-  // A document that is not shipped does not 404. Both the Go static handler
-  // and the dev server fall back to index.html for any unmatched non-API
-  // path, including one ending in .md, so the only reliable signal that the
-  // asset is missing is getting HTML back instead of markdown.
-  if (isHtmlResponse(response)) {
-    throw new Error('not-shipped');
-  }
-  return response.text();
 }
 
 export function isHtmlResponse(response: Pick<Response, 'headers'>): boolean {
@@ -42,7 +71,14 @@ export default function Docs() {
   let article: HTMLElement | undefined;
 
   const docPath = createMemo(() => normalizeDocPath(params.docPath ?? '') || DOCS_INDEX_PATH);
-  const [document] = createResource(docPath, fetchDoc);
+  const [document, { refetch }] = createResource(docPath, fetchDoc);
+
+  // Keep a failed guide's retry control mounted while that same read is in
+  // flight, but never present its error as a different guide loads.
+  const loadError = createMemo(() => {
+    const error: unknown = document.error;
+    return error instanceof DocLoadError && error.docPath === docPath() ? error : undefined;
+  });
 
   // Reading a resource that rejected re-throws, so the error has to be checked
   // before the accessor is touched or the failure escapes the memo instead of
@@ -126,21 +162,33 @@ export default function Docs() {
       </Show>
 
       <Show
-        when={!document.loading}
-        fallback={<p class="text-sm text-muted">Loading documentation&hellip;</p>}
+        when={!document.loading || loadError()}
+        fallback={
+          <p role="status" class="text-sm text-muted">
+            Loading documentation&hellip;
+          </p>
+        }
       >
         <Show
-          when={!document.error}
+          when={!loadError()}
           fallback={
             <div class="space-y-2">
-              <p class="text-sm text-muted">
-                That document is not part of this installation's shipped documentation set.
+              <p role="alert" class="text-sm text-muted">
+                {loadError()?.message}
               </p>
+              <Button size="sm" disabled={document.loading} onClick={() => void refetch()}>
+                Try again
+              </Button>
+              <Show when={document.loading}>
+                <p role="status" class="text-sm text-muted">
+                  Loading documentation&hellip;
+                </p>
+              </Show>
               <a
                 href={docRouteForPath(DOCS_INDEX_PATH)}
                 data-doc-link=""
                 onClick={handleClick}
-                class="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                class="block text-sm text-blue-600 hover:underline dark:text-blue-400"
               >
                 Back to the documentation index
               </a>
