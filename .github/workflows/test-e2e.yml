@@ -208,7 +208,11 @@ jobs:
           npm ci --prefix internal/cloudcp/portal/frontend
 
       - name: Install Playwright browser and OS dependencies
-        timeout-minutes: 10
+        # Chromium's 25.9 MB OS graph was still downloading through the
+        # provider's mirror fallback when the ten-minute setup cap expired.
+        # Allow that bounded acquisition to finish, without extending this
+        # job's 25-minute limit or relaxing apt authentication/error handling.
+        timeout-minutes: 20
         working-directory: tests/integration
         run: npx playwright install --with-deps chromium
       - name: Validate offline issuer boundaries
