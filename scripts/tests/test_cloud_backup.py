@@ -685,7 +685,7 @@ class CloudBackupTest(unittest.TestCase):
         self.assertEqual(len([call for call in self.calls if call[0] == "age"]), 3)
         # Preserve failed-job evidence locally under private modes, without
         # pretending a partial fake-age output is a complete encrypted backup.
-        metadata = next(self.backups.glob("pulse-backup-meta-*.txt"))
+        metadata = next(path for path in self.backups.glob("pulse-backup-meta-*.txt") if path not in self.old)
         self.assertEqual(metadata.stat().st_mode & 0o777, 0o600)
 
     def test_each_encrypted_upload_preserves_prior_backups_on_failure(self):
@@ -696,7 +696,7 @@ class CloudBackupTest(unittest.TestCase):
                 copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
                 self.assertEqual(len(copies), number)
                 self.assertTrue(all(call[2].endswith(".age") for call in copies), copies)
-                self.assertEqual(list(self.backups.glob("*.txt")), [])
+                self.assertEqual([path for path in self.backups.glob("*.txt") if path not in self.old], [])
 
     def test_existing_encrypted_metadata_directory_is_preserved_before_work(self):
         timestamp = "20261022-070001"
