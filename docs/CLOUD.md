@@ -8,7 +8,7 @@ Pulse Cloud is for a hosted Pulse instance. Pulse MSP is a separate provider pat
 
 1. **Sign up** at the Pulse Cloud portal.
 2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — access your dashboard from any browser or supported Pulse Mobile client.
+3. **Monitor** — open your Cloud instance's HTTPS address in a desktop or phone browser.
 
 Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
 
@@ -23,7 +23,7 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 | **Automatic backups** | Confirm your instance's schedule and recovery coverage with its hosting operator; see [backup assurances](#data--privacy) |
 | **Dedicated instance** | Your data runs in an isolated container — not shared with other tenants |
 | **Wildcard TLS** | HTTPS with auto-renewing certificates |
-| **Mobile ready** | Relay is pre-configured for secure Pulse Mobile remote access |
+| **Phone access** | Use the Pulse web UI in your phone's browser; see [phone setup](#4-set-up-mobile-access) |
 
 ### Cloud Enterprise (Add-On)
 
@@ -68,7 +68,22 @@ Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastruct
 
 ### 4. Set Up Mobile Access
 
-Relay is enabled by default on Cloud instances. Open **Settings → Pulse Mobile** to pair a phone. Pulse Mobile is being retired on 31 March 2027.
+Open your Cloud instance's usual HTTPS address in your phone's browser. This is
+the same Pulse web UI; Relay is not needed and does not provide web access.
+
+For alerts on your phone, add an [ntfy, Gotify or Pushover destination](WEBHOOKS.md#-quick-setup)
+under **Alerts → Notifications**. A successful Test is not proof of ordinary
+alert delivery; see [notification delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+
+**Pulse Mobile is being retired on 31 March 2027. Existing paired phones keep
+working until then.** Keep existing pairings; do not remove or re-pair them just
+to follow this guide. Use [existing phone connection help](RELAY.md#troubleshooting)
+if a paired phone cannot connect.
+
+Relay is no longer sold. Existing Relay subscribers receive Pro features at
+their current price for as long as their subscription continues, including
+after the app retires. These instructions do not change your subscription or
+require a new purchase; see [Plans & Entitlements](PULSE_PRO.md).
 
 ## Data & Privacy
 
@@ -209,5 +224,5 @@ state need separate handling. Verify the destination before retiring the source.
 
 - [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Relay, Pro, legacy Pro+, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
-- [Relay / Mobile Access](RELAY.md) — relay setup and mobile rollout status (pre-configured on Cloud)
+- [Existing Pulse Mobile pairings](RELAY.md) — retirement date and help for existing app connections, not web access
 - [Multi-Tenant](MULTI_TENANT.md), Enterprise/internal multi-organization mode
