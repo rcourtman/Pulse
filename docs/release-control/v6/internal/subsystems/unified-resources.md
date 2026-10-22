@@ -8668,3 +8668,8 @@ whole fleet; the fleet list is reconciled by resource id so a live snapshot
 updates the open drawer in place rather than remounting it, and closing it from
 its header returns focus to the tile. No resource identity, status or
 availability rule changes.
+
+The Proxmox Coverage drawer's restore evidence values (location and details)
+wrap on their own spans rather than through the table cell, so a long snapshot
+description no longer runs past the drawer edge. No resource identity, status
+or recovery rule changes.

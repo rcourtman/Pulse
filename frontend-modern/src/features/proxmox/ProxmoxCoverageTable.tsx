@@ -625,11 +625,13 @@ export function ProxmoxCoverageTable(props: {
                                               'location',
                                             )}
                                           >
+                                            {/* Wrapping is set on the span: `.table-fixed td`
+                                                forces nowrap on the cell and outranks a class there. */}
                                             <TableCell
-                                              class={`${getPlatformTableCellClassForKind('text')} whitespace-normal text-base-content`}
+                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                             >
                                               <span
-                                                class="block wrap-anywhere"
+                                                class="block whitespace-normal wrap-anywhere"
                                                 data-coverage-evidence-location
                                               >
                                                 {artifact.location}
@@ -673,10 +675,10 @@ export function ProxmoxCoverageTable(props: {
                                             )}
                                           >
                                             <TableCell
-                                              class={`${getPlatformTableCellClassForKind('text')} whitespace-normal text-base-content`}
+                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                             >
                                               <span
-                                                class="block wrap-anywhere"
+                                                class="block whitespace-normal wrap-anywhere"
                                                 title={artifact.detailTitle}
                                                 data-coverage-evidence-detail
                                               >

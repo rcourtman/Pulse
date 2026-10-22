@@ -221,9 +221,14 @@ describe('ProxmoxCoverageTable column visibility', () => {
     );
     // Restore evidence leads; provider quality is a section, not a grid.
     expect(within(panel).getByText('Restore evidence')).toBeInTheDocument();
+    // `.table-fixed td` forces nowrap on cells, so the wrap lives on the span.
     const location = panel.querySelector('[data-coverage-evidence-location]');
-    expect(location).toHaveClass('wrap-anywhere');
+    expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
     expect(location).not.toHaveClass('truncate');
+    expect(panel.querySelector('[data-coverage-evidence-detail]')).toHaveClass(
+      'whitespace-normal',
+      'wrap-anywhere',
+    );
     // The source label wraps in the drawer too; a long snapshot name is not cut.
     expect(within(panel).getByText('PBS', { selector: 'td span' })).toHaveClass(
       'whitespace-normal',
