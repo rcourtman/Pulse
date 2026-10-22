@@ -838,7 +838,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                   </div>
                                                 </Show>
                                               </div>
-                                              <span class="max-w-full whitespace-normal wrap-anywhere rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                              <span class="max-w-full whitespace-normal wrap-anywhere rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                                 {task.statusLabel}
                                               </span>
                                             </div>
@@ -883,7 +883,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                   <For each={entry.badges}>
                                                     {(badge) => (
                                                       <span
-                                                        class={`min-w-0 max-w-full whitespace-normal wrap-anywhere rounded-full border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
+                                                        class={`min-w-0 max-w-full whitespace-normal wrap-anywhere rounded-md border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
                                                           badge.tone,
                                                         )}`}
                                                       >

@@ -165,7 +165,7 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
           }
         };
         const capture = async (suffix) => {
-          if (transport !== 'canonical') return;
+          if (transport !== 'canonical' || !suffix.startsWith('jobs-')) return;
           await noOverflow();
           const file = path.join(output, `${name}-${suffix}.png`);
           await (suffix.startsWith('jobs-') ? scopes.pbs : page.locator('main')).screenshot({
@@ -284,6 +284,13 @@ const hash = (file) => crypto.createHash('sha256').update(fs.readFileSync(file))
         await readable(evidence, f.error);
         const unknownBadge = `Unclassified ${'C' + 'c'.repeat(71)}`;
         await readable(evidence, unknownBadge);
+        // Full pills become ellipses around multiline text: corners must not
+        // cross the first/last label lines on narrow screens.
+        assert(
+          await evidence
+            .getByText(unknownBadge, { exact: true })
+            .evaluate((node) => Number.parseFloat(getComputedStyle(node).borderTopLeftRadius) <= 8),
+        );
         await expect(evidence.getByText('Permission gap', { exact: true })).toBeVisible();
         await expect(evidence.getByText('Partial read', { exact: true })).toBeVisible();
         assert.equal(await scopes.pbs.locator('em').count(), 0);

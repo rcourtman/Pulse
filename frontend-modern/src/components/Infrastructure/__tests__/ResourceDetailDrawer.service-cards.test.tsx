@@ -345,6 +345,7 @@ describe('ResourceDetailDrawer service cards', () => {
         });
         expect(error).toHaveClass('whitespace-pre-wrap', 'wrap-anywhere');
         expect(section.querySelector('.truncate')).toBeNull();
+        expect(section.querySelector('.rounded-full')).toBeNull();
         expect(section.querySelector('em')).toBeNull();
       }
       expect(within(active).getByText(`Backup ${evidenceFixture.taskId}`)).toHaveClass(
@@ -369,6 +370,7 @@ describe('ResourceDetailDrawer service cards', () => {
           ).toBeInTheDocument(),
         );
         expect(section.querySelector('.truncate')).toBeNull();
+        expect(section.querySelector('.rounded-full')).toBeNull();
       }
       expect(getByRole('button', { name: 'Hide jobs' })).toBe(toggle);
       expect(toggle).toHaveFocus();
