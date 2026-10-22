@@ -177,6 +177,20 @@ empty development directory instead of opting in to make the error disappear.
 These selectors prevent accidental installed-data use; they do not sandbox local
 environment files or establish host isolation.
 
+The explicit copy helper requires GNU `realpath` and reads installed files only;
+it does not repair an installation or choose an encryption key from backups.
+Missing keys with retained encrypted files, or different installed/development
+keys, stop the import. Preserve both data sets and identify the matching key
+independently; do not delete ciphertext or pick the newest backup to bypass the
+refusal. Use a separate empty development copy when the existing copy has a
+different key. The helper leaves development sessions, CSRF state, OIDC, local
+`.env`, history and alerts alone. It stages reads before per-file replacement
+and keeps overwritten files privately in `.config-import.*/previous` within the
+development directory. Preserve that snapshot with the matching key; it is not
+a full-state backup or a consistent snapshot of a running installation. If
+publication fails, keep the snapshot and remaining staged files and inspect the
+partial import privately before starting anything. The helper starts no service.
+
 ```bash
 ./scripts/hot-dev-bg.sh logs
 ./scripts/hot-dev-bg.sh stop
