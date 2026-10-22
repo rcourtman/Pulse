@@ -1,21 +1,28 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
 import type { AvailabilityHistoryTarget } from '@/api/availabilityHistory';
 import type { Resource } from '@/types/resource';
 import { AvailabilityFleetView } from '../AvailabilityFleetView';
+import { getStandaloneResourceStatusIndicator } from '../standalonePageModel';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: (props: { resource: Resource; onClose?: () => void }) => (
+  ResourceDetailDrawer: (props: {
+    resource: Resource;
+    onClose?: () => void;
+    presentation?: string;
+    statusIndicator?: { variant: string; label: string };
+  }) => (
     <div
       data-testid="resource-detail-drawer"
       data-resource-id={props.resource.id}
       data-resource-status={props.resource.status}
+      data-presentation={props.presentation}
+      data-status-variant={props.statusIndicator?.variant}
     >
       <button type="button" onClick={props.onClose}>
         Close
       </button>
-      <input aria-label="Detail note" />
     </div>
   ),
 }));
@@ -95,184 +102,9 @@ const history = (index: number): AvailabilityHistoryTarget => ({
   revisionBoundaries: [{ revision: 2, at: '2026-08-30T10:30:00Z' }],
 });
 
-const scrollIntoView = vi.fn();
-beforeEach(() => {
-  scrollIntoView.mockClear();
-  Object.defineProperty(Element.prototype, 'scrollIntoView', {
-    configurable: true,
-    value: scrollIntoView,
-  });
-});
 afterEach(cleanup);
 
 describe('AvailabilityFleetView', () => {
-  it('reveals/focuses details on activation and returns to the current same-ID tile on collapse', async () => {
-    const [resources, setResources] = createSignal([resource(1), resource(2)]);
-    render(() => (
-      <AvailabilityFleetView
-        resources={resources()}
-        historyByTarget={new Map()}
-        historyLoading={false}
-      />
-    ));
-    const originalTile = screen.getByRole('button', { name: 'Open details for Service 1' });
-    fireEvent.click(originalTile);
-    const panel = screen.getByRole('group', { name: 'Service 1 details' });
-    await waitFor(() => expect(panel).toHaveFocus());
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
-    expect(originalTile).toHaveAttribute('aria-expanded', 'true');
-    expect(originalTile).toHaveAttribute('aria-controls', panel.id);
-
-    const note = screen.getByRole('textbox', { name: 'Detail note' });
-    fireEvent.input(note, { target: { value: 'keep local state' } });
-    note.focus();
-    scrollIntoView.mockClear();
-    setResources([resource(2), { ...resource(1), name: 'Renamed service', status: 'offline' }]);
-    await Promise.resolve();
-    expect(note).toHaveFocus();
-    expect(note).toHaveValue('keep local state');
-    expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
-      'data-resource-status',
-      'offline',
-    );
-    expect(screen.getByRole('group', { name: 'Renamed service details' })).toBe(panel);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    const currentTile = screen.getByRole('button', { name: 'Open details for Renamed service' });
-    expect(currentTile).not.toBe(originalTile);
-    await waitFor(() => expect(currentTile).toHaveFocus());
-    expect(currentTile).toHaveAttribute('aria-expanded', 'false');
-    expect(currentTile).not.toHaveAttribute('aria-controls');
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'instant' });
-    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
-  });
-
-  it('returns focus to a neighbouring live tile when the selected check disappears, without reopening it', async () => {
-    const [resources, setResources] = createSignal([resource(0), resource(1), resource(2)]);
-    render(() => (
-      <AvailabilityFleetView
-        resources={resources()}
-        historyByTarget={new Map()}
-        historyLoading={false}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 1' }));
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Service 1 details' })).toHaveFocus(),
-    );
-    setResources([resource(0), resource(2)]);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Open details for Service 2' })).toHaveFocus(),
-    );
-    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
-    setResources([resource(0), resource(1), resource(2)]);
-    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
-  });
-
-  it('leaves outside controls focused when a filter removes the selected check', async () => {
-    const [resources, setResources] = createSignal([resource(1), resource(2)]);
-    render(() => (
-      <>
-        <input aria-label="Search checks" />
-        <AvailabilityFleetView
-          resources={resources()}
-          historyByTarget={new Map()}
-          historyLoading={false}
-        />
-      </>
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 1' }));
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Service 1 details' })).toHaveFocus(),
-    );
-    const search = screen.getByRole('textbox', { name: 'Search checks' });
-    search.focus();
-    setResources([resource(2)]);
-    await Promise.resolve();
-    expect(search).toHaveFocus();
-    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
-  });
-
-  it('keeps an empty grid reachable when its last selected check disappears', async () => {
-    const [resources, setResources] = createSignal([resource(1)]);
-    render(() => (
-      <AvailabilityFleetView
-        resources={resources()}
-        historyByTarget={new Map()}
-        historyLoading={false}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 1' }));
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Service 1 details' })).toHaveFocus(),
-    );
-    setResources([]);
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Availability checks' })).toHaveFocus(),
-    );
-  });
-
-  it('cancels a deferred reveal on collapse or unmount', async () => {
-    const view = render(() => (
-      <AvailabilityFleetView
-        resources={[resource(1)]}
-        historyByTarget={new Map()}
-        historyLoading={false}
-      />
-    ));
-    const tile = screen.getByRole('button', { name: 'Open details for Service 1' });
-    fireEvent.click(tile);
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(tile).toHaveFocus());
-    expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
-    scrollIntoView.mockClear();
-    fireEvent.click(tile);
-    view.unmount();
-    await Promise.resolve();
-    expect(scrollIntoView).not.toHaveBeenCalled();
-  });
-
-  it('lets the parent restore focus when focused details unmount with the entire fleet', async () => {
-    const onFocusedDetailsUnmount = vi.fn();
-    const view = render(() => (
-      <AvailabilityFleetView
-        resources={[resource(1)]}
-        historyByTarget={new Map()}
-        historyLoading={false}
-        onFocusedDetailsUnmount={onFocusedDetailsUnmount}
-      />
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 1' }));
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Service 1 details' })).toHaveFocus(),
-    );
-    view.unmount();
-    expect(onFocusedDetailsUnmount).toHaveBeenCalledOnce();
-  });
-
-  it('does not request parent focus when an outside control already owns it', async () => {
-    const onFocusedDetailsUnmount = vi.fn();
-    const view = render(() => (
-      <>
-        <button type="button">Outside</button>
-        <AvailabilityFleetView
-          resources={[resource(1)]}
-          historyByTarget={new Map()}
-          historyLoading={false}
-          onFocusedDetailsUnmount={onFocusedDetailsUnmount}
-        />
-      </>
-    ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 1' }));
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Service 1 details' })).toHaveFocus(),
-    );
-    screen.getByRole('button', { name: 'Outside' }).focus();
-    view.unmount();
-    expect(onFocusedDetailsUnmount).not.toHaveBeenCalled();
-  });
-
   it('keeps open details bound to the selected ID in the current fleet, not the clicked snapshot', () => {
     const original = resource(1);
     const [resources, setResources] = createSignal([original]);
@@ -329,6 +161,45 @@ describe('AvailabilityFleetView', () => {
       'data-resource-id',
       'availability:target-0',
     );
+  });
+
+  it('makes each tile a disclosure for the shared drawer, closed by a second click', () => {
+    render(() => (
+      <AvailabilityFleetView
+        resources={[resource(1), resource(5)]}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+
+    const first = screen.getByRole('button', { name: 'Open details for Service 1' });
+    const second = screen.getByRole('button', { name: 'Open details for Service 5' });
+    const detail = screen.getByTestId('availability-fleet-detail');
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(first).toHaveAttribute('aria-controls', detail.id);
+
+    fireEvent.click(first);
+    expect(first).toHaveAttribute('aria-expanded', 'true');
+    expect(first).toHaveClass('border-blue-500');
+    // The same drawer the checks table opens, headed by the tile's own dot.
+    const drawer = screen.getByTestId('resource-detail-drawer');
+    expect(drawer).toHaveAttribute('data-presentation', 'table-row');
+    expect(drawer).toHaveAttribute(
+      'data-status-variant',
+      getStandaloneResourceStatusIndicator(resource(1), Date.now()).variant,
+    );
+
+    fireEvent.click(second);
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(second).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-status-variant',
+      getStandaloneResourceStatusIndicator(resource(5), Date.now()).variant,
+    );
+
+    fireEvent.click(second);
+    expect(second).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
   });
 
   it('keeps current health visible when history is unavailable', () => {

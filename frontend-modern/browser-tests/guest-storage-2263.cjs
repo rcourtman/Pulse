@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
+const OVERVIEW_MODULE = '/src/components/Storage/DiskDrawerOverview.tsx';
+
 (async () => {
   const root = '/workspace/frontend-modern';
   const artifacts = path.join(root, 'browser-tests');
@@ -23,6 +25,7 @@ const { chromium } = require('playwright');
       args: ['--no-sandbox'],
     });
     const requests = [];
+    // Requests for the disk Overview module, which loads only on expansion.
     const detailRequests = [];
     const historyReads = [];
     const pageErrors = [];
@@ -56,7 +59,7 @@ const { chromium } = require('playwright');
         console.error('requestfailed', request.url(), request.failure()),
       );
       page.on('request', (request) => {
-        if (new URL(request.url()).pathname === '/src/components/Storage/DiskDetail.tsx') {
+        if (new URL(request.url()).pathname === OVERVIEW_MODULE) {
           detailRequests.push({ width, url: request.url() });
         }
       });
@@ -84,24 +87,35 @@ const { chromium } = require('playwright');
         }
         if (url.pathname === '/api/metrics-store/history') {
           const q = url.searchParams;
-          historyReads.push({ width, metric: q.get('metric'), range: q.get('range') });
+          historyReads.push({
+            width,
+            resourceId: q.get('resourceId'),
+            metric: q.get('metric'),
+            range: q.get('range'),
+          });
           const end = Date.now();
+          // Disk reads spike inside their buckets; every other series is flat.
+          const series = (metric) =>
+            [0, 1, 2].map((i) => ({
+              timestamp: end - (2 - i) * 300_000,
+              value: 40 + i,
+              min: metric === 'diskread' ? 10 + i : 40 + i,
+              max: metric === 'diskread' ? 90 + i : 40 + i,
+            }));
+          // The disk Overview reads every series of its one disk in one request.
           return route.fulfill({
             json: {
               resourceType: q.get('resourceType'),
               resourceId: q.get('resourceId'),
-              metric: q.get('metric'),
               range: q.get('range'),
               start: end - 600_000,
               end,
               source: 'store',
-              // Disk reads spike inside their buckets; every other series is flat.
-              points: [0, 1, 2].map((i) => ({
-                timestamp: end - (2 - i) * 300_000,
-                value: 40 + i,
-                min: q.get('metric') === 'diskread' ? 10 + i : 40 + i,
-                max: q.get('metric') === 'diskread' ? 90 + i : 40 + i,
-              })),
+              metrics: Object.fromEntries(
+                ['smart_temp', 'smart_reallocated_sectors', 'diskread', 'diskwrite', 'disk'].map(
+                  (metric) => [metric, series(metric)],
+                ),
+              ),
             },
           });
         }
@@ -109,7 +123,7 @@ const { chromium } = require('playwright');
         return route.continue();
       });
       let releaseDetail;
-      await page.route('**/src/components/Storage/DiskDetail.tsx*', async (route) => {
+      await page.route(`**${OVERVIEW_MODULE}*`, async (route) => {
         await new Promise((resolve) => {
           releaseDetail = resolve;
         });
@@ -117,32 +131,6 @@ const { chromium } = require('playwright');
       });
       // Disk charts poll every 10-30 seconds; the clock drives that here.
       await page.clock.install();
-      // Canvas text is not in the DOM: record each chart's drawn labels since
-      // its last clear, so the time axis can be checked for overlap.
-      await page.addInitScript(() => {
-        const proto = CanvasRenderingContext2D.prototype;
-        const clear = proto.clearRect;
-        const fill = proto.fillText;
-        const fillShape = proto.fill;
-        proto.clearRect = function (...args) {
-          this.canvas.__labels = [];
-          this.canvas.__fills = [];
-          return clear.apply(this, args);
-        };
-        proto.fill = function (...args) {
-          (this.canvas.__fills ||= []).push(String(this.fillStyle));
-          return fillShape.apply(this, args);
-        };
-        proto.fillText = function (text, x, y, ...rest) {
-          (this.canvas.__labels ||= []).push({
-            text: String(text),
-            x,
-            width: this.measureText(String(text)).width,
-            time: this.textAlign === 'center' && this.textBaseline === 'bottom',
-          });
-          return fill.call(this, text, x, y, ...rest);
-        };
-      });
       await page.goto('http://127.0.0.1:5199/browser-tests/guest-storage-2263.html', {
         waitUntil: 'domcontentloaded',
         timeout: 120_000,
@@ -155,22 +143,22 @@ const { chromium } = require('playwright');
       assert.equal(
         detailRequests.filter((request) => request.width === width).length,
         0,
-        'SMART history module must not load before disk expansion',
+        'the disk Overview module must not load before disk expansion',
       );
       await page.screenshot({
         path: path.join(artifacts, `guest-storage-2263-collapsed-${width}.png`),
         fullPage: true,
       });
-      await page.locator('[data-testid="guest-physical-disk"] summary').focus();
+      await page.locator('[data-testid="guest-physical-disk"] > summary').focus();
       const detailRequest = page.waitForRequest(
-        (request) => new URL(request.url()).pathname === '/src/components/Storage/DiskDetail.tsx',
+        (request) => new URL(request.url()).pathname === OVERVIEW_MODULE,
       );
       await page.keyboard.press('Enter');
       await detailRequest;
       assert.equal(
-        await page.getByText('Reallocated Sectors').first().count(),
+        await page.getByTestId('disk-drawer-overview').count(),
         0,
-        'SMART detail must remain suspended while its module is loading',
+        'the disk Overview must remain suspended while its module is loading',
       );
       assert.equal(
         await page.getByRole('status').filter({ hasText: 'Loading SMART details…' }).count(),
@@ -179,7 +167,7 @@ const { chromium } = require('playwright');
       );
       assert.equal(
         await page
-          .locator('[data-testid="guest-physical-disk"] summary')
+          .locator('[data-testid="guest-physical-disk"] > summary')
           .evaluate((summary) => summary === document.activeElement),
         true,
         'keyboard focus remains on disk summary',
@@ -189,11 +177,14 @@ const { chromium } = require('playwright');
         fullPage: true,
       });
       releaseDetail();
-      await page.getByText('Reallocated Sectors').first().waitFor();
+      const overview = page.getByTestId('disk-drawer-overview');
+      await overview.waitFor();
+      // An out-of-range SMART counter is lifted into Worth checking.
+      await page.getByTestId('disk-drawer-exceptions').getByText('CRC Errors').waitFor();
       assert.equal(
         detailRequests.filter((request) => request.width === width).length,
         1,
-        'SMART history module loads once after disk expansion',
+        'the disk Overview module loads once after disk expansion',
       );
       await page.screenshot({
         path: path.join(artifacts, `guest-storage-2263-expanded-${width}.png`),
@@ -202,78 +193,79 @@ const { chromium } = require('playwright');
       // The expanded disk shows its SMART evidence and History in one view,
       // with no Overview/History tabs to switch between.
       assert.equal(await page.getByRole('tab').count(), 0);
-      assert.equal(await page.getByTestId('disk-detail-history').isVisible(), true);
+      const region = page.getByTestId('guest-history-region');
+      await region.waitFor();
+      await page.waitForFunction(
+        () => document.querySelectorAll('[data-history-series="smart_temp"]').length > 0,
+      );
       const visibleCharts = () =>
         page.evaluate(() =>
-          Array.from(document.querySelectorAll('canvas'))
-            .filter((canvas) => canvas.clientWidth > 0)
-            .map((canvas) => canvas.getAttribute('aria-label')),
+          Array.from(document.querySelectorAll('[data-testid="guest-history-plot"]'))
+            .filter((plot) => plot.getBoundingClientRect().width > 0)
+            .map((plot) => plot.getAttribute('aria-label')),
         );
-      const phoneToggle = page.getByTestId('disk-detail-phone-toggle');
-      if (width === 390) {
-        // A phone shows the first chart; the rest fold behind one button and
-        // read nothing until it is pressed.
-        assert.deepEqual(await visibleCharts(), ['Temperature chart']);
-        assert.equal(
-          await phoneToggle.innerText(),
-          'Show Reallocated Sectors, Read, Write, Busy',
-        );
+      const phoneToggle = page.getByTestId('history-phone-toggle');
+      const ownReads = () => historyReads.filter((r) => r.width === width);
+      // One read covers every chart of the disk, for its own target only.
+      assert.ok(ownReads().length >= 1);
+      for (const read of ownReads()) {
         assert.deepEqual(
-          [...new Set(historyReads.filter((r) => r.width === width).map((r) => r.metric))],
-          ['smart_temp'],
+          { resourceId: read.resourceId, metric: read.metric, range: read.range },
+          { resourceId: 'disk-guest-101', metric: null, range: '24h' },
         );
+      }
+      if (width === 390) {
+        // A phone shows the first chart; the rest fold behind one button.
+        assert.deepEqual(await visibleCharts(), ['Temperature history']);
+        assert.equal(await phoneToggle.innerText(), 'Show Disk I/O, Busy, Reallocated sectors');
         await page.screenshot({
           path: path.join(artifacts, `guest-storage-2263-phone-folded-${width}.png`),
           fullPage: true,
         });
-        const unfolded = page.waitForRequest((request) =>
-          request.url().includes('metric=diskread'),
-        );
+        const before = ownReads().length;
         await phoneToggle.click();
-        await unfolded;
         assert.equal(await phoneToggle.getAttribute('aria-expanded'), 'true');
         assert.equal(await phoneToggle.innerText(), 'Show fewer charts');
-        await page.getByRole('img', { name: 'Read chart' }).waitFor();
+        await page.getByRole('img', { name: 'Disk I/O history' }).waitFor();
         await page.waitForTimeout(300);
+        // The folded charts were already read with the first one.
+        assert.equal(ownReads().length, before, 'unfolding starts no read of its own');
       } else {
         assert.equal(await phoneToggle.isVisible(), false, 'no fold above the phone breakpoint');
       }
-      assert.equal((await visibleCharts()).length, 5);
+      assert.deepEqual(await visibleCharts(), [
+        'Temperature history',
+        'Disk I/O history',
+        'Busy history',
+        'Reallocated sectors history',
+      ]);
       // Spiky disk reads draw a min-max band behind their line; flat series do not.
-      // The canvas reports the band's 20%-alpha fill back as rgba(..., 0.2).
-      const fills = await page.evaluate(() =>
-        Object.fromEntries(
-          Array.from(document.querySelectorAll('canvas'), (canvas) => [
-            canvas.getAttribute('aria-label'),
-            canvas.__fills || [],
-          ]),
+      assert.deepEqual(
+        await page.evaluate(() =>
+          Array.from(document.querySelectorAll('[data-history-band]'), (band) =>
+            band.getAttribute('data-history-band'),
+          ),
         ),
+        ['diskread'],
       );
-      assert.ok(
-        fills['Read chart'].some((fill) => /, 0\.2\)$/.test(fill)),
-        `Read chart band: ${JSON.stringify(fills['Read chart'])}`,
-      );
-      for (const flat of ['Temperature chart', 'Write chart', 'Busy chart']) {
-        assert.ok(
-          !fills[flat].some((fill) => /, 0\.2\)$/.test(fill)),
-          `${flat} must not draw a band: ${JSON.stringify(fills[flat])}`,
-        );
-      }
-      // Each chart's time labels stand apart, however narrow its card.
+      // Each chart's window times stand apart, however narrow its panel.
       const timeLabels = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('canvas'), (canvas) => ({
-          chart: canvas.getAttribute('aria-label'),
-          width: canvas.clientWidth,
-          labels: (canvas.__labels || []).filter((label) => label.time),
-        })),
+        Array.from(document.querySelectorAll('[data-testid="guest-history-group-chart"]'), (panel) => {
+          const times = Array.from(
+            panel.querySelectorAll('[data-testid="guest-history-time-window"] time'),
+            (time) => time.getBoundingClientRect(),
+          );
+          return {
+            chart: panel.querySelector('[data-testid="guest-history-plot"]').getAttribute('aria-label'),
+            width: panel.clientWidth,
+            labels: times.map((rect) => ({ left: rect.left, right: rect.right })),
+          };
+        }),
       );
       for (const chart of timeLabels) {
-        assert.ok(chart.labels.length >= 2, `${chart.chart} has its first and last time`);
-        const sorted = [...chart.labels].sort((a, b) => a.x - b.x);
-        for (let i = 1; i < sorted.length; i++) {
-          const gap = sorted[i].x - sorted[i - 1].x - (sorted[i].width + sorted[i - 1].width) / 2;
-          assert.ok(gap >= 4, `${chart.chart} time labels touch: ${JSON.stringify(sorted)}`);
-        }
+        assert.equal(chart.labels.length, 2, `${chart.chart} has its first and last time`);
+        const [first, last] = chart.labels;
+        assert.ok(last.left - first.right >= 4, `${chart.chart} time labels touch: ${JSON.stringify(chart)}`);
       }
       console.log(
         JSON.stringify({
@@ -281,19 +273,23 @@ const { chromium } = require('playwright');
           timeLabels: timeLabels.map((chart) => [chart.chart, chart.width, chart.labels.length]),
         }),
       );
-      await page.locator('[data-testid="guest-physical-disk"] summary').click();
-      await page.getByText('Reallocated Sectors').first().waitFor({ state: 'hidden' });
+      await page.screenshot({
+        path: path.join(artifacts, `guest-storage-2263-expanded-charts-${width}.png`),
+        fullPage: true,
+      });
+      await page.locator('[data-testid="guest-physical-disk"] > summary').click();
+      await overview.waitFor({ state: 'hidden' });
       assert.equal(
-        await page.getByText('Reallocated Sectors').first().isVisible(),
+        await overview.isVisible(),
         false,
-        'pointer closes the expanded SMART detail',
+        'pointer closes the expanded disk Overview',
       );
-      await page.locator('[data-testid="guest-physical-disk"] summary').click();
-      await page.getByText('Reallocated Sectors').first().waitFor();
+      await page.locator('[data-testid="guest-physical-disk"] > summary').click();
+      await overview.waitFor();
       assert.equal(
         detailRequests.filter((request) => request.width === width).length,
         1,
-        'reopening a disk does not reload the SMART module',
+        'reopening a disk does not reload the disk Overview module',
       );
       // A hidden Overview (another drawer tab) must stop the open disk's reads.
       const reads = () => historyReads.filter((read) => read.width === width).length;
@@ -314,24 +310,23 @@ const { chromium } = require('playwright');
       );
       await page.getByRole('button', { name: 'Show overview' }).click();
       await resumed;
-      await page.getByText('Reallocated Sectors').first().waitFor();
+      await overview.waitFor();
       assert.ok(
-        await page.locator('[data-testid="disk-detail-history"] canvas').first().isVisible(),
+        await page.locator('[data-history-series="smart_temp"]').first().isVisible(),
         'charts return with their readings',
       );
-      // A resize asks for the same series at a new point cap: the charts keep
-      // their readings and show no loading state while it is read.
-      const spinners = () => page.getByLabel('Loading history').count();
+      // The drawer history reads a fixed point cap, so a resize keeps the
+      // charts and their readings on screen without another read.
+      const spinners = () => page.getByText('Loading history', { exact: true }).count();
       const resizedReads = reads();
-      const resizedRead = page.waitForRequest((request) =>
-        request.url().includes('/api/metrics-store/history'),
-      );
       await page.setViewportSize({ width: width - 200, height: width === 390 ? 844 : 900 });
-      await resizedRead;
-      assert.equal(await spinners(), 0, 'a resize keeps the charts on screen');
       await page.waitForTimeout(300);
-      assert.ok(reads() > resizedReads, 'the resized charts read at their new cap');
-      assert.equal(await spinners(), 0, 'no spinner after the resized read');
+      assert.equal(await spinners(), 0, 'a resize keeps the charts on screen');
+      assert.equal(reads(), resizedReads, 'a resize starts no read');
+      assert.ok(
+        await page.locator('[data-history-series="smart_temp"]').first().isVisible(),
+        'the resized charts keep their readings',
+      );
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
       await page.waitForTimeout(300);
       await page.screenshot({

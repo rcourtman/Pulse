@@ -1,5 +1,6 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
@@ -19,9 +20,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
-  createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
@@ -32,17 +31,15 @@ import {
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import {
+  KubernetesEventDetailPanel,
+  kubernetesEventInvolvedObject,
+  kubernetesEventName,
+} from './KubernetesRecordDetail';
 import { KubernetesScopeText } from './KubernetesScopeText';
 
-const eventName = (resource: Resource): string =>
-  asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
-
 const involvedObject = (resource: Resource): string =>
-  formatPlatformTableTextValue(
-    [resource.kubernetes?.involvedKind, resource.kubernetes?.involvedName]
-      .filter(Boolean)
-      .join('/'),
-  );
+  formatPlatformTableTextValue(kubernetesEventInvolvedObject(resource));
 
 const observedTimestamp = (resource: Resource): string =>
   asTrimmedString(
@@ -67,7 +64,6 @@ export const KubernetesEventsTable: Component<{
     filter: filterKubernetesResources,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-event-drawer' });
-  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -162,7 +158,7 @@ export const KubernetesEventsTable: Component<{
                   {(resource) => {
                     const indicator = () =>
                       mapKubernetesEventSeverity(resource.kubernetes?.eventType);
-                    const name = () => eventName(resource);
+                    const name = () => kubernetesEventName(resource);
                     const observed = () => observedTimestamp(resource);
                     const message = () =>
                       formatPlatformTableTextValue(resource.kubernetes?.message);
@@ -246,14 +242,19 @@ export const KubernetesEventsTable: Component<{
                             </span>
                           </TableCell>
                         </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={8}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
-                        />
+                        <Show when={isExpanded()}>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={8}
+                            data-inline-kubernetes-event-detail-for={resource.id}
+                          >
+                            <KubernetesEventDetailPanel
+                              resource={resource}
+                              status={indicator()}
+                              onClose={() => drawer.close(resource)}
+                            />
+                          </InlineDetailTableRow>
+                        </Show>
                       </>
                     );
                   }}

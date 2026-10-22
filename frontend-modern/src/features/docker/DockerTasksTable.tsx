@@ -24,8 +24,17 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  dockerDetailTimestampRow,
+  dockerDetailToneForVariant,
+  dockerLabelsSection,
+  dockerReportedBySection,
   dockerNumberValue,
   dockerResourceName,
   dockerStateTextToneClass,
@@ -77,15 +86,61 @@ const getDockerTaskSortValue = (
   }
 };
 
-// Why a task failed or what Docker last said about it, for a phone that
-// cannot hover the Current cell.
-const taskReasonFields = (resource: Resource): (readonly [string, string])[] => {
-  const fields: (readonly [string, string])[] = [];
-  const error = asTrimmedString(resource.docker?.error);
-  const message = asTrimmedString(resource.docker?.message);
-  if (error) fields.push(['Error', error]);
-  if (message) fields.push(['Message', message]);
-  return fields;
+// The drawer leads with why a task failed or what Docker last said about it,
+// for a phone that cannot hover the Current cell; otherwise where it runs.
+const taskReason = (resource: Resource): string =>
+  asTrimmedString(resource.docker?.error) || asTrimmedString(resource.docker?.message) || '';
+
+const taskSummary = (resource: Resource): string => {
+  const reason = taskReason(resource);
+  if (reason) return reason;
+  const node = asTrimmedString(resource.docker?.nodeName || resource.docker?.nodeId);
+  const service = asTrimmedString(resource.docker?.serviceName);
+  return [service ? `Task of ${service}` : '', node ? `on ${node}` : ''].filter(Boolean).join(' ');
+};
+
+const buildTaskDetailSections = (resource: Resource, now: number): Array<DetailSection | null> => {
+  const status = mapDockerTaskStatus(resource);
+  return [
+    {
+      label: 'Task',
+      rows: compactDetailRows([
+        makeDetailRow('Service', asTrimmedString(resource.docker?.serviceName), { wrap: true }),
+        typeof resource.docker?.slot === 'number'
+          ? makeDetailRow('Slot', String(resource.docker.slot))
+          : null,
+        makeDetailRow(
+          'Node',
+          asTrimmedString(resource.docker?.nodeName || resource.docker?.nodeId),
+          { wrap: true },
+        ),
+        makeDetailRow('Image', asTrimmedString(resource.docker?.image), { wrap: true }),
+        makeDetailRow('Task ID', asTrimmedString(resource.docker?.taskId), { wrap: true }),
+      ]),
+    },
+    {
+      label: 'State',
+      rows: compactDetailRows([
+        makeDetailRow(
+          'Desired',
+          titleCaseDelimitedLabel(resource.docker?.desiredState, { fallback: '' }),
+        ),
+        makeDetailRow('Current', status.label, {
+          title: asTrimmedString(resource.docker?.currentState) || undefined,
+          tone: dockerDetailToneForVariant(status.variant),
+        }),
+        // The summary already reads the error, or the message when there is
+        // none; the other one, if Docker sent both, stays here.
+        asTrimmedString(resource.docker?.error)
+          ? makeDetailRow('Message', asTrimmedString(resource.docker?.message), { wrap: true })
+          : null,
+        dockerDetailTimestampRow('Started', resource.docker?.startedAt, now),
+        dockerDetailTimestampRow('Finished', resource.docker?.completedAt, now),
+      ]),
+    },
+    dockerReportedBySection(resource),
+    dockerLabelsSection('Labels', resource.docker?.labels),
+  ];
 };
 
 export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
@@ -293,21 +348,12 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                             data-inline-docker-task-detail-for={resource.id}
                           >
                             <DockerNativeDetailPanel
-                              title={dockerResourceName(resource)}
-                              fields={[
-                                ['Service', dockerTextValue(resource.docker?.serviceName)],
-                                ['Slot', String(resource.docker?.slot ?? '—')],
-                                ['Desired', dockerTextValue(resource.docker?.desiredState)],
-                                ['Current', dockerTextValue(resource.docker?.currentState)],
-                                [
-                                  'Node',
-                                  dockerTextValue(
-                                    resource.docker?.nodeName || resource.docker?.nodeId,
-                                  ),
-                                ],
-                                ['Started', dockerTextValue(resource.docker?.startedAt)],
-                                ...taskReasonFields(resource),
-                              ]}
+                              testId="docker-task-detail"
+                              resource={resource}
+                              status={mapDockerTaskStatus(resource)}
+                              summary={taskSummary(resource)}
+                              sections={(now) => buildTaskDetailSections(resource, now)}
+                              onClose={() => drawer.close(resource)}
                             />
                           </InlineDetailTableRow>
                         </Show>

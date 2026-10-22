@@ -221,6 +221,7 @@ import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorag
 import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
+import proxmoxCephClusterDrawerModelSource from '@/features/proxmox/proxmoxCephClusterDrawerModel.ts?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
@@ -234,8 +235,6 @@ import availabilityChecksTableSource from '@/features/standalone/AvailabilityChe
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
-import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
-import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
 import k8sNamespacesDrawerSource from '@/components/Kubernetes/K8sNamespacesDrawer.tsx?raw';
 import nodeGroupHeaderSource from '@/components/shared/NodeGroupHeader.tsx?raw';
 import proxmoxVersionSource from '@/utils/proxmoxVersion.ts?raw';
@@ -245,7 +244,7 @@ import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
 import storagePoolDetailSource from '@/components/Storage/StoragePoolDetail.tsx?raw';
-import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
+import diskDrawerOverviewSource from '@/components/Storage/DiskDrawerOverview.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import alertOverviewStatsCardsSource from '@/features/alerts/AlertOverviewStatsCards.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
@@ -774,7 +773,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/EmailProviderSelect.tsx',
       'src/components/Alerts/WebhookConfigForm.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
-      'src/components/Kubernetes/K8sDeploymentsDrawer.tsx',
       'src/components/OrgSwitcher.tsx',
       'src/components/Settings/AIChatMaintenanceSection.tsx',
       'src/components/Settings/AIModelSelectionSection.tsx',
@@ -791,9 +789,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/RecoverySettingsPanel.tsx',
       'src/components/Settings/RolesEditorDialog.tsx',
       'src/components/Settings/SystemLogsPanel.tsx',
-      'src/components/Storage/DiskDetail.tsx',
       'src/components/Storage/StoragePageControls.tsx',
-      'src/components/Storage/StoragePoolDetail.tsx',
       'src/components/Workloads/GuestDrawerHistory.tsx',
       'src/components/shared/FilterBar/AddFilterMenu.tsx',
       'src/components/shared/FilterToolbar.tsx',
@@ -836,7 +832,6 @@ describe('shared primitive guardrails', () => {
       addFilterMenuSource,
       filterToolbarSource,
       guestDrawerHistorySource,
-      k8sDeploymentsDrawerSource,
       orgSwitcherSource,
       resourceDetailDrawerOverviewTabSource,
       storagePageControlsSource,
@@ -1261,7 +1256,6 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/cards/TemperaturesCard.tsx',
       'src/components/Workloads/DrawerDiskListCard.tsx',
       'src/features/docker/DockerHostDrawerOverview.tsx',
-      'src/features/storageBackups/detailPresentation.ts',
     ];
     const retiredFrameClass = 'rounded-sm border border-border bg-surface p-3 shadow-xs';
     const registeredRule = registry.rules?.find(
@@ -1305,12 +1299,8 @@ describe('shared primitive guardrails', () => {
     expect(readFrontendSource('src/components/shared/WebInterfaceUrlField.tsx')).toContain(
       'getInfoCardFrameClass',
     );
-    expect(readFrontendSource('src/features/storageBackups/detailPresentation.ts')).toContain(
-      'INFO_CARD_FRAME_CLASS',
-    );
 
     for (const consumerPath of [
-      'src/components/Storage/StorageDetailKeyValueRow.tsx',
       'src/components/shared/cards/DisksCard.tsx',
       'src/components/shared/cards/HardwareCard.tsx',
       'src/components/shared/cards/RootDiskCard.tsx',
@@ -1334,10 +1324,7 @@ describe('shared primitive guardrails', () => {
       );
     }
 
-    for (const consumerPath of [
-      'src/components/Infrastructure/ResourceActionHistory.tsx',
-      'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
-    ]) {
+    for (const consumerPath of ['src/components/Infrastructure/ResourceActionHistory.tsx']) {
       const source = readFrontendSource(consumerPath);
       expect(source).toContain('InfoCardKeyValueRow');
       expect(source).not.toMatch(
@@ -1360,7 +1347,7 @@ describe('shared primitive guardrails', () => {
   it('charts object detail history in the detail itself, not behind a History tab', () => {
     // Storage disk and pool details had only Overview and History, so with the
     // charts in the one view they need no tab strip at all.
-    for (const source of [diskDetailSource, storagePoolDetailSource]) {
+    for (const source of [diskDrawerOverviewSource, storagePoolDetailSource]) {
       expect(source).not.toContain('@/components/shared/Subtabs');
       expect(source).not.toContain("value: 'history', label: 'History'");
     }
@@ -1386,8 +1373,11 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');
     expect(resourceDetailDrawerSource).toContain('tabs={drawer.tabs().map');
 
-    for (const storageDetailSource of [diskDetailSource, storagePoolDetailSource]) {
-      expect(storageDetailSource).toContain('filterSelectClass');
+    // Pool and disk drawers chart with the shared drawer history, whose range
+    // picker sits in its toolbar; neither keeps a storage-local picker.
+    expect(storagePoolDetailSource).toContain('GuestDrawerHistory');
+    expect(diskDrawerOverviewSource).toContain('GuestDrawerHistory');
+    for (const storageDetailSource of [diskDrawerOverviewSource, storagePoolDetailSource]) {
       expect(storageDetailSource).not.toContain('activeTab()');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
       expect(storageDetailSource).not.toContain('STORAGE_DETAIL_HEADER_SELECT_CLASS');
@@ -1559,8 +1549,6 @@ describe('shared primitive guardrails', () => {
       aiCostDashboardSource,
       proxmoxMailGatewayDrawerSource,
       pulseDataGridSource,
-      swarmServicesDrawerSource,
-      k8sDeploymentsDrawerSource,
       k8sNamespacesDrawerSource,
     ]) {
       expect(source).toContain('<Table');
@@ -4335,7 +4323,6 @@ describe('shared primitive guardrails', () => {
       resourceDetailDrawerSource,
       dockerHostDrawerSource,
       proxmoxCephClusterDrawerSource,
-      proxmoxMailGatewayDrawerSource,
     ]) {
       expect(drawerSource).toContain('@/components/shared/ObjectDrawerHeader');
       expect(drawerSource).toContain('ObjectDrawerHeader');
@@ -6535,9 +6522,12 @@ describe('shared primitive guardrails', () => {
     const platformIntegerConsumers: Array<[string, string]> = [
       ['src/components/Kubernetes/K8sNamespacesDrawer.tsx', k8sNamespacesDrawerSource],
       ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
-      ['src/features/proxmox/ProxmoxCephClusterDrawer.tsx', proxmoxCephClusterDrawerSource],
       ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+      [
+        'src/features/proxmox/proxmoxCephClusterDrawerModel.ts',
+        proxmoxCephClusterDrawerModelSource,
+      ],
     ];
     const platformIntegerConsumerPaths = platformIntegerConsumers.map(([path]) => path);
 
@@ -6558,16 +6548,16 @@ describe('shared primitive guardrails', () => {
         patterns: ['row.backupCount.toLocaleString()'],
       },
       {
-        path: 'src/features/proxmox/ProxmoxCephClusterDrawer.tsx',
-        patterns: ['pool.objects.toLocaleString()'],
-      },
-      {
         path: 'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
         patterns: ['function formatNumber', 'Math.round(value).toLocaleString()'],
       },
       {
         path: 'src/features/proxmox/ProxmoxMailGatewayTable.tsx',
         patterns: ['const formatLocaleCount', 'value.toLocaleString()'],
+      },
+      {
+        path: 'src/features/proxmox/proxmoxCephClusterDrawerModel.ts',
+        patterns: ['pool.objects.toLocaleString()'],
       },
     ]);
     expect(localHelperGuard?.canonical?.path).toBe(
@@ -6603,7 +6593,6 @@ describe('shared primitive guardrails', () => {
     }
     for (const source of [
       proxmoxBackupServersTableSource,
-      proxmoxCephClusterDrawerSource,
       proxmoxMailGatewayDrawerSource,
       proxmoxMailGatewayTableSource,
     ]) {
@@ -6725,7 +6714,6 @@ describe('shared primitive guardrails', () => {
     const platformNumberValueConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
       ['src/features/docker/DockerServicesTable.tsx', dockerServicesTableSource],
-      ['src/components/Docker/SwarmServicesDrawer.tsx', swarmServicesDrawerSource],
       ['src/features/kubernetes/KubernetesAutoscalingTable.tsx', kubernetesAutoscalingTableSource],
       ['src/features/kubernetes/KubernetesControllersTable.tsx', kubernetesControllersTableSource],
       ['src/features/kubernetes/KubernetesDeploymentsTable.tsx', kubernetesDeploymentsTableSource],
@@ -6754,13 +6742,6 @@ describe('shared primitive guardrails', () => {
       {
         path: 'src/features/docker/DockerServicesTable.tsx',
         patterns: ['const replicaCount', '<span class="tabular-nums">{value ?? 0}</span>'],
-      },
-      {
-        path: 'src/components/Docker/SwarmServicesDrawer.tsx',
-        patterns: [
-          '<span class="tabular-nums">{desired()}</span>',
-          '<span class="tabular-nums">{running()}</span>',
-        ],
       },
       {
         path: 'src/features/kubernetes/KubernetesAutoscalingTable.tsx',
@@ -6840,7 +6821,7 @@ describe('shared primitive guardrails', () => {
       'runningTasks',
       'class="tabular-nums"',
     ]);
-    expect(localSwarmCountGuard?.scopes).toEqual(['src/components/Docker']);
+    expect(localSwarmCountGuard?.scopes).toEqual(['src/features/docker']);
     expect(localSwarmCountGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localSwarmCountGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(localTrueNASCountGuard?.canonical?.path).toBe(
@@ -7027,11 +7008,14 @@ describe('shared primitive guardrails', () => {
     );
     const percentConsumers: Array<[string, string]> = [
       ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
-      ['src/features/proxmox/ProxmoxCephClusterDrawer.tsx', proxmoxCephClusterDrawerSource],
       ['src/features/proxmox/ProxmoxCephTable.tsx', proxmoxCephTableSource],
       ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
       ['src/features/proxmox/ProxmoxNodesTable.tsx', proxmoxNodesTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+      [
+        'src/features/proxmox/proxmoxCephClusterDrawerModel.ts',
+        proxmoxCephClusterDrawerModelSource,
+      ],
     ];
     const temperatureConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
@@ -7062,8 +7046,8 @@ describe('shared primitive guardrails', () => {
         ],
       },
       {
-        path: 'src/features/proxmox/ProxmoxCephClusterDrawer.tsx',
-        patterns: ['clamped.toFixed(1)}%'],
+        path: 'src/features/proxmox/proxmoxCephClusterDrawerModel.ts',
+        patterns: ['clamped.toFixed(1)}%', 'percentUsed.toFixed(1)}%'],
       },
       {
         path: 'src/features/proxmox/ProxmoxCephTable.tsx',
@@ -7712,6 +7696,10 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('whitespace-normal');
     expect(inlineDetailTableRowSource).toContain('min-w-0');
     expect(inlineDetailTableRowSource).toContain('lg:overflow-x-visible');
+    // A per-table content or cell class replaced the shell and dropped the
+    // phone width cap on five tables; the shell is no longer overridable.
+    expect(inlineDetailTableRowSource).not.toContain('contentClass');
+    expect(inlineDetailTableRowSource).not.toContain('cellClass');
     expect(inlineDetailTableRowSource).toContain('event.stopPropagation()');
     expect(inlineDetailTableRowSource).toContain('.focus({ preventScroll: true })');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
@@ -8023,9 +8011,9 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerVmwareModelSource).not.toContain('const formatCount');
 
     expect(resourceDetailDrawerOverviewTabSource).toContain('DetailSectionTable');
-    expect(resourceDetailDrawerOverviewTabSource).toContain(
-      '<DetailSectionTable sections={props.drawer.vmwareDetailSections()} />',
-    );
+    // vSphere sections join the one Overview split (lifted rows, cards,
+    // Details) instead of a nested vSphere disclosure of their own.
+    expect(resourceDetailDrawerOverviewTabSource).toContain('...drawer.vmwareDetailSections(),');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain('TrueNASDetailSectionTable');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain('vmwareRowToneClass');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain(
@@ -8256,8 +8244,6 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/SearchInput.tsx');
     expect(registeredRule?.canonical?.export).toBe('SearchInput');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Docker/SwarmServicesDrawer.tsx',
-      'src/components/Kubernetes/K8sDeploymentsDrawer.tsx',
       'src/components/Kubernetes/K8sNamespacesDrawer.tsx',
       'src/components/Settings/SettingsPageShell.tsx',
       'src/components/shared/FilterBar/FilterBar.tsx',
@@ -8301,13 +8287,7 @@ describe('shared primitive guardrails', () => {
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
 
-    for (const source of [
-      swarmServicesDrawerSource,
-      k8sDeploymentsDrawerSource,
-      k8sNamespacesDrawerSource,
-      settingsPageShellSource,
-      filterBarSource,
-    ]) {
+    for (const source of [k8sNamespacesDrawerSource, settingsPageShellSource, filterBarSource]) {
       expect(source).toContain('SearchInput');
     }
   });
@@ -8758,7 +8738,7 @@ describe('shared primitive guardrails', () => {
     expect(drawerAttentionSectionSource).toContain('item.title ?? item.message');
     for (const liveAlertConsumer of [
       'src/components/Workloads/NodeDrawerOverview.tsx',
-      'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+      'src/features/proxmox/ProxmoxCephClusterDrawer.tsx',
     ]) {
       const source = readFrontendSource(liveAlertConsumer);
       expect(source).toContain('...getAlertAttentionCopy(alert, now)');

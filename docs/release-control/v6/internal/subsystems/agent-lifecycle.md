@@ -10549,6 +10549,17 @@ path. Failure to retain a tally cannot stop delivery. The real scheduler retry,
 handler recreation and unreadable-tally cases in `reporting_activity_test.go`
 verify that measurement remains subordinate to the existing report lifecycle.
 
+Agent Doctor's inline target rows are record drawers like every other inline
+detail: one target open at a time (a lone target still opens by itself), the
+row's disclosure names its detail cell through `aria-controls` so focus
+returns to it on close, and the detail is an `InlineDetailPanel` headed by the
+target name with the same status the row badge shows and a one-line verdict.
+Reasons, repair and re-enrol guidance, uninstall and safe-profile guidance and
+the credential reveal render as shared `InlineNotice`s; agent and security
+facts as a `DetailSectionTable`; the connection id and identity evidence sit
+in a closed Details disclosure. No diagnosis, repair or credential flow
+changes: this is presentation only.
+
 ### Agent installer option-value admission (17 October 2026)
 
 Every value-taking Unix agent installer option rejects a missing value or a

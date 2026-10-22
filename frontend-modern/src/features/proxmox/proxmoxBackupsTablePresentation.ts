@@ -265,11 +265,10 @@ export const RECOVERABLE_COLUMNS: readonly BackupTableColumn<RecoverableColumnId
 const RECOVERABLE_VISIBLE: Record<ProxmoxBackupsTableLayoutMode, readonly RecoverableColumnId[]> = {
   // A recovery-point feed starts with identity, source, location, age, and
   // verification. Size and verbose details progressively return with usable
-  // room; hidden details wrap on the same full-width continuation as provenance.
+  // room; the full values remain available through their title affordance.
   // The phone projection keeps the source and state badges and the age whole;
-  // repository provenance wraps on a full-width line beneath each point.
-  // The location column returns with the first wider layout, with the same
-  // complete text, rather than hiding the connection or namespace behind hover.
+  // the repository location returns with the first wider layout and stays in
+  // the row's hover title meanwhile.
   compact: ['workload', 'source', 'created', 'state'],
   basic: ['workload', 'source', 'location', 'created', 'state'],
   operational: ['workload', 'type', 'source', 'location', 'created', 'size', 'state'],

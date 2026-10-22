@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -109,5 +109,43 @@ describe('KubernetesPolicyTable', () => {
     expect(screen.getByText(/pods 34\/80/)).toBeInTheDocument();
     expect(screen.getByText('LimitRange')).toBeInTheDocument();
     expect(screen.getByText('Container, Pod')).toBeInTheDocument();
+  });
+  it('opens a ResourceQuota as a record with every limit in full', () => {
+    render(() => (
+      <KubernetesPolicyTable
+        resources={[
+          makeResource({
+            id: 'apps-quota',
+            type: 'k8s-resource-quota',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              resourceKind: 'ResourceQuota',
+              hard: { pods: '80', 'requests.cpu': '24', 'requests.memory': '96Gi' },
+              used: { pods: '34', 'requests.cpu': '11', 'requests.memory': '42Gi' },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No policy"
+        emptyDescription="No policy"
+        showToolbar={false}
+      />
+    ));
+
+    const disclosure = screen.getByRole('button', { name: 'Expand details for apps-quota' });
+    fireEvent.click(disclosure);
+    const panel = document.querySelector<HTMLElement>('[data-testid="kubernetes-policy-detail"]')!;
+    const detail = within(panel);
+    expect(disclosure).toHaveAttribute('aria-controls', 'kubernetes-policy-drawer-apps-quota');
+    expect(detail.getByRole('heading', { name: 'apps-quota' })).toBeInTheDocument();
+    expect(detail.getByText('ResourceQuota')).toBeInTheDocument();
+    expect(detail.getByText('34 of 80')).toBeInTheDocument();
+    expect(detail.getByText('requests.memory')).toBeInTheDocument();
+    expect(detail.getByText('42Gi of 96Gi')).toBeInTheDocument();
+    expect(detail.queryByRole('tab', { name: 'Manage' })).toBeNull();
+
+    fireEvent.click(detail.getByRole('button', { name: 'Collapse apps-quota details' }));
+    expect(document.querySelector('[data-testid="kubernetes-policy-detail"]')).toBeNull();
   });
 });

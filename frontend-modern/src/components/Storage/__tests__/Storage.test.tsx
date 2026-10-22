@@ -8,6 +8,9 @@ import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
+// Pool and disk drawers load their charts lazily; warm the module so a cold
+// transform does not outlast the tests' waits.
+import '@/components/Workloads/GuestDrawerHistory';
 
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -943,7 +946,10 @@ describe('Storage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Collapse pve1' })).toBeInTheDocument();
-      const poolRow = screen.getByText('Ceph-Link-Store').closest('tr[data-summary-series-id]');
+      // The open pool's drawer names it too; the row's name comes first.
+      const poolRow = screen
+        .getAllByText('Ceph-Link-Store')[0]
+        .closest('tr[data-summary-series-id]');
       expect(
         document
           .querySelector('tr[data-inline-detail-for]')
@@ -1079,11 +1085,10 @@ describe('Storage', () => {
     const metricsHistorySpy = vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue({
       resourceType: 'storage',
       resourceId: 'pool:tank',
-      metric: 'usage',
-      range: '7d',
-      start: Date.now() - 7 * 24 * 60 * 60 * 1000,
+      range: '24h',
+      start: Date.now() - 24 * 60 * 60 * 1000,
       end: Date.now(),
-      points: [],
+      metrics: { usage: [] },
       source: 'store',
     });
 
@@ -1111,12 +1116,13 @@ describe('Storage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand tank' }));
 
+    // The pool drawer charts its capacity at the drawer's 24h default.
     await waitFor(() => {
       expect(metricsHistorySpy).toHaveBeenCalledWith(
         expect.objectContaining({
           resourceType: 'storage',
           resourceId: 'pool:tank',
-          metric: 'usage',
+          range: '24h',
         }),
       );
     });

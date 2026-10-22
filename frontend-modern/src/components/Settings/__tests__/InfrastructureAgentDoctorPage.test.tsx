@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureAgentDoctorPage } from '../InfrastructureAgentDoctorPage';
 import type { InfrastructureAgentDoctorTarget } from '../infrastructureAgentUpdateCommandsModel';
@@ -71,7 +71,9 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
   it('reveals the host-bound secret once and keeps it out of both commands', async () => {
     render(() => <InfrastructureAgentDoctorPage targets={[targetFixture()]} />);
 
-    expect(screen.getByText('Safe collector confirmed')).toBeInTheDocument();
+    const facts = within(screen.getByTestId('agent-doctor-facts'));
+    expect(facts.getByText('Safe collector')).toBeInTheDocument();
+    expect(facts.getByText('Confirmed')).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('button', { name: 'Issue one-time action-runner credential' }),
     );
@@ -191,15 +193,70 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
     expect(screen.getByText('just now')).toBeInTheDocument();
     expect(screen.getByText(/commands are host-local/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide details for host-1' }));
-    expect(screen.getByRole('button', { name: 'Show details for host-1' })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse details for host-1' }));
+    expect(screen.getByRole('button', { name: 'Expand details for host-1' })).toHaveAttribute(
       'aria-expanded',
       'false',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Show details for host-1' }));
-    expect(screen.getByRole('button', { name: 'Hide details for host-1' })).toHaveAttribute(
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for host-1' }));
+    expect(screen.getByRole('button', { name: 'Collapse details for host-1' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
+  });
+  it('opens one target at a time under a header that names it and closes it', () => {
+    render(() => (
+      <InfrastructureAgentDoctorPage
+        targets={[
+          targetFixture({
+            status: 'warning',
+            reasons: [
+              {
+                code: 'agent_outdated',
+                severity: 'warning',
+                message: 'Agent is older than the server.',
+                evidence: ['Reported 6.3.0'],
+              },
+            ],
+            evidence: ['Hostname: host-1.local', 'Machine identity: abc123'],
+          }),
+          targetFixture({
+            key: 'agent:host-2',
+            connectionId: 'agent:host-2',
+            displayName: 'host-2',
+            actionRunnerAgentId: 'host-2',
+            actionRunnerHostname: 'host-2.local',
+          }),
+        ]}
+      />
+    ));
+
+    // Several targets start collapsed.
+    expect(screen.queryByTestId('agent-doctor-detail')).toBeNull();
+
+    const first = screen.getByRole('button', { name: 'Expand details for host-1' });
+    fireEvent.click(first);
+    const controlled = first.getAttribute('aria-controls')!;
+    expect(controlled).toBeTruthy();
+    const panel = screen.getByTestId('agent-doctor-detail');
+    expect(document.getElementById(controlled)).toContainElement(panel);
+    const detail = within(panel);
+    expect(detail.getByRole('heading', { name: 'host-1' })).toBeInTheDocument();
+    expect(detail.getByLabelText('Needs attention')).toBeInTheDocument();
+    expect(detail.getByText('1 issue to look at')).toBeInTheDocument();
+    expect(detail.getByText('Agent is older than the server.')).toBeInTheDocument();
+    // The connection ID and identity evidence wait behind Details.
+    expect(detail.getByText('Details')).toBeInTheDocument();
+    expect(detail.queryByText('agent:host-1')).toBeNull();
+
+    // Opening a second target closes the first.
+    fireEvent.click(screen.getByRole('button', { name: 'Expand details for host-2' }));
+    expect(screen.getAllByTestId('agent-doctor-detail')).toHaveLength(1);
+    expect(
+      within(screen.getByTestId('agent-doctor-detail')).getByRole('heading', { name: 'host-2' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse host-2 details' }));
+    expect(screen.queryByTestId('agent-doctor-detail')).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import {
   buildTrueNASDetailSections,
   buildTrueNASDetailsSummary,
 } from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel';
+import { isDrawerContentCard } from '@/components/Infrastructure/resourceDetailDrawerOverviewModel';
 import type { Resource } from '@/types/resource';
 
 const baseResource = (overrides: Partial<Resource>): Resource =>
@@ -51,8 +52,8 @@ describe('resourceDetailDrawerTrueNASModel', () => {
     ]);
     expect(buildTrueNASDetailSections(resource)[2]?.rows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Running', value: '2' }),
-        expect.objectContaining({ label: 'Disabled', value: '1' }),
+        expect.objectContaining({ label: 'Running', value: '2 services' }),
+        expect.objectContaining({ label: 'Disabled', value: '1 service' }),
         expect.objectContaining({ label: 'Names', value: 'SMB, NFS, SSH, SMART' }),
       ]),
     );
@@ -299,13 +300,12 @@ describe('resourceDetailDrawerTrueNASModel', () => {
       },
     });
 
-    const healthRows = buildTrueNASDetailSections(resource).find(
-      (section) => section.label === 'Health',
-    )?.rows;
+    const sections = buildTrueNASDetailSections(resource);
+    const healthRows = sections.find((section) => section.label === 'Health')?.rows;
+    // The pool's health is an Overview card: what is wrong and what to do.
     expect(healthRows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: 'Canonical state', value: 'DEGRADED' }),
-        expect.objectContaining({ label: 'Native state', value: 'DEGRADED' }),
+        expect.objectContaining({ label: 'State', value: 'DEGRADED', tone: 'warning' }),
         expect.objectContaining({
           label: 'Scan / resilver',
           value: 'Resilver Scanning (33.3%)',
@@ -322,13 +322,16 @@ describe('resourceDetailDrawerTrueNASModel', () => {
           label: 'Recommended',
           value: 'Confirm the affected mirror member in TrueNAS before replacement.',
         }),
-        expect.objectContaining({
-          label: 'Evidence',
-          value: 'zfs_pool_state, zfs_device_missing',
-        }),
-        expect.objectContaining({ label: 'Evidence source', value: 'pool.query' }),
       ]),
     );
+    // The canonical state repeats the pool state, so it is not shown twice.
+    expect(healthRows?.find((row) => row.label === 'Pool health')).toBeUndefined();
+    // Evidence codes and native state stay under Details.
+    expect(sections.find((section) => section.label === 'Health evidence')?.rows).toEqual([
+      expect.objectContaining({ label: 'Native state', value: 'DEGRADED' }),
+      expect.objectContaining({ label: 'Evidence', value: 'zfs_pool_state, zfs_device_missing' }),
+      expect.objectContaining({ label: 'Evidence source', value: 'pool.query' }),
+    ]);
   });
 
   it('summarizes native TrueNAS physical disk metadata for the detail drawer', () => {
@@ -428,5 +431,70 @@ describe('resourceDetailDrawerTrueNASModel', () => {
     } as Partial<Resource>);
 
     expect(buildTrueNASDetailsSummary(withoutLayout)).toContain('Pool');
+  });
+
+  it('keeps pool health and disk health and SMART as Overview content cards', () => {
+    const cards = (resource: Resource) =>
+      buildTrueNASDetailSections(resource)
+        .filter(isDrawerContentCard)
+        .map((section) => section.label);
+    const pool = baseResource({
+      type: 'storage',
+      platformScopes: ['truenas'],
+      storage: { type: 'zfs-pool', topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    expect(cards(pool)).toEqual(['Health']);
+    // A dataset has no pool health of its own: its state stays in Storage.
+    const dataset = baseResource({
+      type: 'storage',
+      platformScopes: ['truenas'],
+      storage: { type: 'zfs-dataset', topology: 'dataset', platform: 'truenas' },
+    });
+    expect(cards(dataset)).toEqual([]);
+    expect(
+      buildTrueNASDetailSections(dataset)
+        .find((section) => section.label === 'Storage')
+        ?.rows.map((row) => row.label),
+    ).toContain('State');
+    const disk = baseResource({
+      type: 'physical_disk',
+      platformScopes: ['truenas'],
+      physicalDisk: { devPath: '/dev/sdc', health: 'PASSED', smart: { powerOnHours: 10 } },
+    });
+    expect(cards(disk)).toEqual(['Health', 'SMART']);
+  });
+
+  it('states one storage summary once when several fields repeat it', () => {
+    const resource = baseResource({
+      type: 'agent',
+      truenas: {
+        storageRisk: { level: 'warning' },
+        storageRiskSummary: 'ZFS pool archive is DEGRADED',
+        storagePostureSummary: 'ZFS pool archive is DEGRADED',
+        protectionSummary: 'ZFS pool archive is DEGRADED',
+      },
+    });
+    const health = buildTrueNASDetailSections(resource).find(
+      (section) => section.label === 'Storage Health',
+    );
+    expect(
+      health?.rows
+        .filter((row) => row.value === 'ZFS pool archive is DEGRADED')
+        .map((row) => row.label),
+    ).toEqual(['Storage summary']);
+  });
+
+  it('wraps disk identifiers an operator copies', () => {
+    const disk = baseResource({
+      type: 'physical_disk',
+      platformScopes: ['truenas'],
+      physicalDisk: { devPath: '/dev/sdc', serial: 'WD-WX12A3456', wwn: '0x5000c500a1b2c3d4' },
+    });
+    const identity = buildTrueNASDetailSections(disk).find((section) => section.label === 'Disk');
+    expect(identity?.rows.filter((row) => row.wrap).map((row) => row.label)).toEqual([
+      'Device',
+      'Serial',
+      'WWN',
+    ]);
   });
 });

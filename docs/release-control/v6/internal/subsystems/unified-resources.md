@@ -1343,7 +1343,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
 30. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`
 31. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerSupportDisclosure.tsx`
-32. `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`
 33. `frontend-modern/src/features/docker/DockerConfigsTable.tsx`
 34. `frontend-modern/src/features/docker/DockerContainersTable.tsx`
     34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
@@ -1359,7 +1358,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 41. `frontend-modern/src/features/docker/DockerTasksTable.tsx`
 42. `frontend-modern/src/features/docker/DockerVolumesTable.tsx`
 43. `frontend-modern/src/features/docker/dockerPageModel.ts`
-44. `frontend-modern/src/components/Kubernetes/K8sDeploymentsDrawer.tsx`
 45. `frontend-modern/src/components/Kubernetes/K8sNamespacesDrawer.tsx`
 46. `frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx`
 47. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
@@ -8963,6 +8961,80 @@ retained/unavailable source classifications preserve their existing semantics.
 The connected stacked-model controls retain explicit aggregate fallback tests;
 the browser fixture checks mixed and all-unknown lists in the actual summaries
 as well as both drawers, including live replacement at narrow widths.
+
+Platform drawers repeat their row's status verdict. Every table that opens a
+`ResourceDetailDrawer` through `PlatformResourceDetailTableRow` passes the same
+`StatusIndicator` its row dot renders (`statusIndicator`), so staleness,
+impaired sources, a hot TrueNAS disk or a Kubernetes state the raw status does
+not carry (a succeeded pod, a scaled-to-zero deployment, a suspended CronJob)
+read the same in the row and in the drawer heading. The drawer's own
+`statusIndicator` remains only the fallback for callers without a row, such as
+the availability fleet view. This is presentation, not a new status source:
+no table changes how it judges a resource. The drawer heading is the shared
+`DrawerSubjectHeading` with the source and identity badges beside the name, and
+a saved web interface URL opens from the header the way it does in the Proxmox
+guest drawer. The health-issue chip left the heading because the same issue
+already leads the Overview's "Worth checking" list.
+
+Platform drawer content follows the guest and node Overview. The TrueNAS,
+Kubernetes and vSphere sections join the summary sections in one split
+(`buildResourceDrawerOverviewInventory`): warning and danger rows not already
+stated by an open alert lift into "Worth checking", sections whose test id
+marks them as content cards (pod containers, TrueNAS pool health and disk
+SMART) render in view, and every other section sits in the one closed Details
+as a plain `DetailSectionTable`; the nested "Show TrueNAS / Kubernetes /
+vSphere" disclosures are gone. Kubernetes Deployments, autoscalers, Services,
+Ingresses, volume claims, persistent volumes and storage classes gain their own
+sections from fields the resource already carries, a replica shortfall or a
+Pending/Lost/Failed phase lifts, and a pod's namespace, owner and node join its
+facts line. Docker image and volume drawers describe the image or volume (update
+check, consumers, size, tags, digests; driver, scope, mountpoint, labels), with
+an available or failed update check lifted. Copyable identifiers wrap. This
+changes presentation only: no status, alert or ownership rule moves.
+
+Platform record drawers (alerts, events, tasks, services, configs, secrets,
+networks, replication jobs, storage usage, vSphere activity) are
+`InlineDetailPanel`s headed by their subject with the row's own status, a
+plain one-line summary, wrapping sections and, where the app has a route that
+focuses the owning object, an "Open <name>" link (`RecordOwnerLink`, built on
+`buildResourcePagePath`; it is omitted rather than shown when the target page
+cannot focus that object). The five Swarm tables share one record panel in
+`DockerNativeTableShared.tsx` (human dates, every label, the reporting host).
+Kubernetes Events, ConfigMaps, Secrets and RBAC objects open record drawers
+instead of the full object drawer, so an event shows its message, reason,
+count and involved object and no longer offers maintenance windows; a
+Secret's key names and values are never shown. Namespaces keep the object
+drawer because they carry alerts. No resource identity, status or alert rule
+changes.
+
+The remaining bespoke object drawers follow the guest drawer. The Proxmox Mail
+Gateway row opens the shared resource drawer (row status, Overview, Manage)
+with mail flow as its headless Mail tab, so a PMG has one drawer instead of
+two; the Ceph cluster drawer has the canonical header, Overview (alerts, Worth
+checking for health checks, down OSDs and full pools, capacity history, facts,
+pool and service cards, closed Details) and Manage. The Kubernetes cluster
+drawer's Deployments tab, which repeated the Workloads table with dead-end
+rows, is removed; its Namespaces tab opens the Workloads tab scoped to the
+cluster and namespace. The unreachable Docker Swarm tab and the drawer state
+nothing read any more are removed. PBS and PMG alerts are matched on their
+instance id too, so the drawer finds them without a metrics target. The
+Proxmox node and Docker host drawers gain the guest drawer's Open action,
+Docker host readings are withheld while it is offline or stale, its Manage
+lists operator state first and shows its action history, and a guest's own
+agent reports its physical disks' temperature alerts inside the guest drawer.
+
+TrueNAS tabs keep their table search in the URL (`TRUENAS_QUERY_PARAMS.query`,
+`?q=`), read and written by the Storage, Apps, VMs, Shares, Services and
+Protection tables through the shared filter state's external search, so a link
+can open a tab already narrowed to one object and the table's own search box
+shows and clears it. `buildResourcePagePath` emits that filter for TrueNAS
+pools, datasets, disks, apps, VMs and shares (a disk named only by an alert,
+with no registry resource, gets none, as on Proxmox), which gives the TrueNAS
+alert and protection record drawers the same "Open <name>" owner link as the
+other platforms. A TrueNAS system still opens the Overview tab unfiltered,
+because its table has no search box, so service drawers keep no owner link.
+The Overview alerts table keeps its own search. No resource identity, status
+or alert rule changes.
 
 ### PMG explicit connection-alert reference (15 October 2026)
 

@@ -347,6 +347,7 @@ export const KubernetesDeploymentsTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={deployment}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={8}

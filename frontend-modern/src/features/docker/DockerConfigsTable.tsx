@@ -23,8 +23,17 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { getSimpleStatusIndicator } from '@/utils/status';
+import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  dockerDetailTimestampRow,
+  dockerLabelsSection,
+  dockerReportedBySection,
   dockerHostName,
   dockerLabelsSummary,
   dockerResourceName,
@@ -58,6 +67,26 @@ const getDockerConfigSortValue = (
       return null;
   }
 };
+
+// Pulse reads a config's metadata from the Swarm manager, never its contents.
+const CONFIG_SUMMARY = "Pulse sees this config's metadata only, not its contents.";
+
+const buildConfigDetailSections = (
+  resource: Resource,
+  now: number,
+): Array<DetailSection | null> => [
+  {
+    label: 'Config',
+    rows: compactDetailRows([
+      makeDetailRow('Template', asTrimmedString(resource.docker?.templatingDriver)),
+      makeDetailRow('Config ID', asTrimmedString(resource.docker?.configId), { wrap: true }),
+      dockerDetailTimestampRow('Created', resource.docker?.objectCreatedAt, now),
+      dockerDetailTimestampRow('Updated', resource.docker?.objectUpdatedAt, now),
+    ]),
+  },
+  dockerReportedBySection(resource),
+  dockerLabelsSection('Labels', resource.docker?.labels),
+];
 
 export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -225,13 +254,12 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                             data-inline-docker-config-detail-for={resource.id}
                           >
                             <DockerNativeDetailPanel
-                              title={dockerResourceName(resource)}
-                              fields={[
-                                ['Template', dockerTextValue(resource.docker?.templatingDriver)],
-                                ['Created', dockerTextValue(resource.docker?.objectCreatedAt)],
-                                ['Labels', dockerLabelsSummary(resource.docker?.labels)],
-                                ['Host', dockerHostName(resource)],
-                              ]}
+                              testId="docker-config-detail"
+                              resource={resource}
+                              status={getSimpleStatusIndicator(resource.status)}
+                              summary={CONFIG_SUMMARY}
+                              sections={(now) => buildConfigDetailSections(resource, now)}
+                              onClose={() => drawer.close(resource)}
                             />
                           </InlineDetailTableRow>
                         </Show>

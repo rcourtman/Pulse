@@ -10,11 +10,9 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/detailSectionModel';
-import {
-  formatPlatformTableDateTimeValue,
-  formatPlatformTableDurationValue,
-  formatPlatformTableRelativeTimeValue,
-} from '@/features/platformPage/sharedPlatformPage';
+import { formatPlatformTableDurationValue } from '@/features/platformPage/sharedPlatformPage';
+import { drawerContentCardTestId } from './resourceDetailDrawerOverviewModel';
+import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
 
 export type ResourceDetailDrawerKubernetesSection = DetailSection;
 
@@ -36,7 +34,38 @@ const formatNodeBudget = (cores?: number, memoryBytes?: number, pods?: number): 
   return parts.length > 0 ? parts.join(' / ') : null;
 };
 
-const containerRow = (container: ResourceKubernetesPodContainerStatus, index: number) => {
+// The drawer is where a phone reaches values the table truncates or hides, so
+// identifiers an operator copies (images, addresses, names) wrap in full.
+const wrapRow = (label: string, value?: string | null) => makeRow(label, value, { wrap: true });
+
+const joinValues = (values?: readonly (string | null | undefined)[]): string | null => {
+  const visible = (values ?? []).map((value) => asString(value)).filter(Boolean);
+  return visible.length > 0 ? visible.join(', ') : null;
+};
+
+const formatKeyValues = (values?: Record<string, string>): string | null =>
+  joinValues(
+    Object.entries(values ?? {}).map(([key, value]) => (asString(value) ? `${key}=${value}` : key)),
+  );
+
+// A container of a finished pod (a Job's pod that ran to completion) is
+// terminated and not ready by design: that is not something to check.
+const containerNeedsAttention = (
+  container: ResourceKubernetesPodContainerStatus,
+  podPhase?: string,
+): boolean => {
+  if (container.ready === true) return false;
+  if (asString(podPhase)?.toLowerCase() === 'succeeded') return false;
+  const state = asString(container.state)?.toLowerCase();
+  const reason = asString(container.reason)?.toLowerCase();
+  return !(state === 'terminated' && reason === 'completed');
+};
+
+const containerRow = (
+  container: ResourceKubernetesPodContainerStatus,
+  index: number,
+  podPhase?: string,
+) => {
   const state = asString(container.state) ?? 'unknown';
   const reason = asString(container.reason);
   const stateLabel =
@@ -51,7 +80,8 @@ const containerRow = (container: ResourceKubernetesPodContainerStatus, index: nu
   const message = asString(container.message);
   return makeRow(asString(container.name) ?? `container ${index + 1}`, value, {
     title: message ? `${value}: ${message}` : value,
-    tone: container.ready === true ? 'default' : 'warning',
+    tone: containerNeedsAttention(container, podPhase) ? 'warning' : 'default',
+    wrap: true,
   });
 };
 
@@ -68,6 +98,8 @@ const isKubernetesNodeResource = (resource: Resource): boolean => {
 // vs allocatable budget for nodes, and the API server endpoint for clusters.
 // For nodes without a linked Pulse host agent this is the only place the OS
 // identity surfaces at all; the generic host section reads agent data only.
+// A pod's containers are its content, so they stay in view on the Overview
+// as a card, the way a guest's filesystems do.
 export const buildKubernetesDetailSections = (
   resource: Resource,
 ): ResourceDetailDrawerKubernetesSection[] => {
@@ -85,7 +117,10 @@ export const buildKubernetesDetailSections = (
     if (containers.length > 0) {
       sections.push({
         label: `Containers (${containers.length})`,
-        rows: compactRows(containers.map((container, index) => containerRow(container, index))),
+        testId: drawerContentCardTestId('kubernetes-containers'),
+        rows: compactRows(
+          containers.map((container, index) => containerRow(container, index, k.podPhase)),
+        ),
       });
     }
   }
@@ -94,8 +129,8 @@ export const buildKubernetesDetailSections = (
     sections.push({
       label: 'Kubernetes node',
       rows: compactRows([
-        makeRow('OS image', k.osImage),
-        makeRow('Kernel', k.kernelVersion),
+        wrapRow('OS image', k.osImage),
+        wrapRow('Kernel', k.kernelVersion),
         makeRow('Architecture', k.architecture),
         makeRow(
           'Capacity',
@@ -116,8 +151,8 @@ export const buildKubernetesDetailSections = (
     sections.push({
       label: 'Cluster',
       rows: compactRows([
-        makeRow('API server', k.server),
-        makeRow('Context', k.context),
+        wrapRow('API server', k.server),
+        wrapRow('Context', k.context),
         makeRow('Agent version', k.agentVersion),
         makeRow('Pending uninstall', k.pendingUninstall === true ? 'Yes' : null, {
           tone: 'warning',
@@ -142,29 +177,75 @@ const countRow = (
 };
 
 const warnWhenPositive = (count: number): DetailValueTone => (count > 0 ? 'warning' : 'default');
+
+// Kubernetes omits zero counts, so once a target is set a missing count means
+// none. A count short of the target reads "2 of 3" and is lifted to Worth
+// checking; one that meets it reads as a plain number.
+const shortfallRow = (
+  label: string,
+  value: number | undefined,
+  desired: number | undefined,
+): DetailRow | null => {
+  const target = typeof desired === 'number' && Number.isFinite(desired) ? desired : 0;
+  const count = typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  if (target <= 0) return countRow(label, count);
+  const actual = count ?? 0;
+  if (actual >= target) return countRow(label, actual);
+  return makeRow(
+    label,
+    `${formatDetailIntegerValue(actual)} of ${formatDetailIntegerValue(target)}`,
+    { tone: 'warning' },
+  );
+};
+
+const servicePortLabel = (
+  port: NonNullable<NonNullable<Resource['kubernetes']>['servicePorts']>[number],
+): string | null => {
+  if (typeof port.port !== 'number' || !Number.isFinite(port.port)) return null;
+  const protocol = asString(port.protocol);
+  const target = asString(port.targetPort);
+  const name = asString(port.name);
+  const nodePort =
+    typeof port.nodePort === 'number' && port.nodePort > 0 ? ` (node ${port.nodePort})` : '';
+  const mapping =
+    target && target !== String(port.port) ? `${port.port}→${target}` : `${port.port}`;
+  return `${name ? `${name} ` : ''}${mapping}${protocol ? `/${protocol}` : ''}${nodePort}`;
+};
+
+// A claim that cannot bind, or a volume that failed, needs a look; Bound and
+// Available are the settled states.
+const volumePhaseTone = (phase?: string): DetailValueTone => {
+  const normalized = asString(phase)?.toLowerCase();
+  if (normalized === 'lost' || normalized === 'failed') return 'danger';
+  if (normalized === 'pending') return 'warning';
+  return 'default';
+};
+
+const volumeSizeValue = (bytes?: number): string | null =>
+  formatDetailBytesValue(bytes, { precision: 'compact', trimWhole: true });
+
+const autoscalerRangeValue = (min?: number, max?: number): string | null => {
+  const hasMax = typeof max === 'number' && max > 0;
+  if (!hasMax) return null;
+  // Kubernetes defaults minReplicas to 1 and omits it from the status.
+  const floor = typeof min === 'number' && min > 0 ? min : 1;
+  return `${formatDetailIntegerValue(floor)} to ${formatDetailCountValue(max, 'pod')}`;
+};
+
+// An autoscaler held at its ceiling cannot add pods however busy the target
+// gets, which is worth a look.
+const autoscalerAtLimitRow = (current?: number, max?: number): DetailRow | null => {
+  if (typeof max !== 'number' || max <= 0) return null;
+  if (typeof current !== 'number' || current < max) return null;
+  return makeRow('Scaling', `At its maximum of ${formatDetailCountValue(max, 'pod')}`, {
+    tone: 'warning',
+  });
+};
 const dangerWhenPositive = (count: number): DetailValueTone => (count > 0 ? 'danger' : 'default');
 
-// Kubernetes reports controller timestamps as RFC 3339 strings. The table row
-// only has room for an age, so the expansion carries the absolute time first
-// and the age after it: "Oct 2, 2026, 09:13 PM (1h ago)". The value wraps
-// because a phone-width detail cell is too narrow for both on one line. The
-// age is measured from `now`, which an open drawer passes from the shared
-// relative-time clock so the age keeps moving while the drawer stays open.
-const timestampRow = (
-  label: string,
-  timestamp: string | null | undefined,
-  now: number | undefined,
-): DetailRow | null => {
-  const raw = asString(timestamp);
-  if (!raw) return null;
-  const absolute = formatPlatformTableDateTimeValue(raw, {
-    emptyText: '',
-    dateTimeFormat: { year: 'numeric' },
-  });
-  if (!absolute) return makeRow(label, raw, { wrap: true });
-  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '', now });
-  return makeRow(label, relative ? `${absolute} (${relative})` : absolute, { wrap: true });
-};
+// Kubernetes reports controller timestamps as RFC 3339 strings; the drawer
+// shows the absolute time and its age (see makeDetailTimestampRow).
+const timestampRow = makeDetailTimestampRow;
 
 const elapsedSeconds = (start?: string | null, end?: string | null): number | undefined => {
   const startedAt = Date.parse(asString(start) ?? '');
@@ -183,6 +264,103 @@ const controllerRows = (resource: Resource, now: number | undefined): Controller
   const k = resource.kubernetes;
   if (!k) return null;
   switch (resource.type) {
+    case 'k8s-deployment':
+      return {
+        label: 'Deployment',
+        rows: [
+          countRow('Target', k.desiredReplicas, { noun: 'pod' }),
+          shortfallRow('Updated', k.updatedReplicas, k.desiredReplicas),
+          shortfallRow('Ready', k.readyReplicas, k.desiredReplicas),
+          shortfallRow('Available', k.availableReplicas, k.desiredReplicas),
+          countRow('Observed generation', k.observedGeneration),
+        ],
+      };
+    case 'k8s-horizontal-pod-autoscaler':
+      return {
+        label: 'Autoscaler',
+        rows: [
+          wrapRow(
+            'Target',
+            [asString(k.targetKind), asString(k.targetName)].filter(Boolean).join(' '),
+          ),
+          makeRow('Range', autoscalerRangeValue(k.minReplicas, k.maxReplicas)),
+          countRow('Current', k.currentReplicas ?? (k.maxReplicas ? 0 : undefined), {
+            noun: 'pod',
+          }),
+          countRow('Desired', k.desiredReplicas ?? (k.maxReplicas ? 0 : undefined), {
+            noun: 'pod',
+          }),
+          autoscalerAtLimitRow(k.currentReplicas, k.maxReplicas),
+          wrapRow('Metrics', joinValues(k.metricTypes)),
+        ],
+      };
+    case 'k8s-service':
+      return {
+        label: 'Service',
+        rows: [
+          makeRow('Type', k.serviceType),
+          wrapRow('Cluster IP', k.clusterIp),
+          wrapRow('External IPs', joinValues(k.externalIps)),
+          wrapRow('Ports', joinValues((k.servicePorts ?? []).map(servicePortLabel))),
+          wrapRow('Selector', formatKeyValues(k.selector)),
+        ],
+      };
+    case 'k8s-ingress':
+      return {
+        label: 'Ingress',
+        rows: [
+          makeRow('Class', k.className),
+          wrapRow('Hosts', joinValues(k.hosts)),
+          wrapRow('Addresses', joinValues(k.addresses)),
+        ],
+      };
+    case 'k8s-persistent-volume-claim':
+      return {
+        label: 'Volume claim',
+        rows: [
+          makeRow('Phase', k.phase, { tone: volumePhaseTone(k.phase) }),
+          wrapRow('Volume', k.volumeName),
+          makeRow('Storage class', k.storageClass),
+          makeRow('Requested', volumeSizeValue(k.requestedBytes)),
+          makeRow('Capacity', volumeSizeValue(k.capacityBytes)),
+          makeRow('Access modes', joinValues(k.accessModes)),
+        ],
+      };
+    case 'k8s-persistent-volume':
+      return {
+        label: 'Persistent volume',
+        rows: [
+          makeRow('Phase', k.phase, { tone: volumePhaseTone(k.phase) }),
+          wrapRow(
+            'Claim',
+            asString(k.claimName)
+              ? [asString(k.claimNamespace), asString(k.claimName)].filter(Boolean).join('/')
+              : null,
+          ),
+          makeRow('Capacity', volumeSizeValue(k.capacityBytes)),
+          makeRow('Storage class', k.storageClass),
+          makeRow('Access modes', joinValues(k.accessModes)),
+          makeRow('Reclaim policy', k.reclaimPolicy),
+        ],
+      };
+    case 'k8s-storage-class':
+      return {
+        label: 'Storage class',
+        rows: [
+          wrapRow('Provisioner', k.provisioner),
+          makeRow('Reclaim policy', k.reclaimPolicy),
+          makeRow('Binding mode', k.volumeBindingMode),
+          makeRow(
+            'Volume expansion',
+            k.allowVolumeExpansion === undefined
+              ? null
+              : k.allowVolumeExpansion
+                ? 'Allowed'
+                : 'Not allowed',
+          ),
+          wrapRow('Parameters', joinValues(k.parameterKeys)),
+        ],
+      };
     case 'k8s-replicaset':
       return {
         label: 'ReplicaSet',
@@ -199,10 +377,10 @@ const controllerRows = (resource: Resource, now: number | undefined): Controller
       return {
         label: 'StatefulSet',
         rows: [
-          makeRow('Service', k.serviceName),
+          wrapRow('Service', k.serviceName),
           countRow('Target', k.desiredReplicas, { noun: 'pod' }),
           countRow('Current', k.currentReplicas),
-          countRow('Ready', k.readyReplicas),
+          shortfallRow('Ready', k.readyReplicas, k.desiredReplicas),
           countRow('Available', k.availableReplicas),
           countRow('Updated', k.updatedReplicas),
         ],
@@ -254,11 +432,12 @@ const controllerRows = (resource: Resource, now: number | undefined): Controller
   }
 };
 
-// Workload-controller facts for the always-visible summary of the resource
-// drawer, the same slot Docker containers use for their timestamps. The
-// controllers table hides Scope and Detail below its large layout and Target
-// on a phone, so without this a Job's completion time or a CronJob's last
-// success is unreachable from a narrow row.
+// Workload-controller, network and storage facts for the resource drawer's
+// inventory, the same slot Docker containers use for their timestamps. The
+// Kubernetes tables hide Scope and Detail below their large layout and Target
+// on a phone, so without this a Job's completion time, a Service's address or
+// a claim's volume is unreachable from a narrow row. A shortfall (fewer ready
+// pods than the target) is warning-toned, so the Overview lifts it.
 export const buildKubernetesControllerSection = (
   resource: Resource,
   now?: number,
@@ -267,8 +446,8 @@ export const buildKubernetesControllerSection = (
   if (!controller) return null;
   const rows = compactRows([
     ...controller.rows,
-    makeRow('Namespace', resource.kubernetes?.namespace),
-    makeRow('Cluster', resource.kubernetes?.clusterName),
+    wrapRow('Namespace', resource.kubernetes?.namespace),
+    wrapRow('Cluster', resource.kubernetes?.clusterName),
   ]);
   if (rows.length === 0) return null;
   return {
@@ -303,3 +482,17 @@ export const buildKubernetesDetailsSummary = (resource: Resource): string | null
 
 export const hasKubernetesDetailSections = (resource: Resource): boolean =>
   buildKubernetesDetailSections(resource).length > 0;
+
+// The facts line for a pod: where it runs and what owns it. The pods table
+// hides Namespace, Owner and Node on a phone, so the drawer states them.
+export const getKubernetesPodFacts = (resource: Resource): string[] => {
+  if (resource.type !== 'pod') return [];
+  const k = resource.kubernetes;
+  if (!k) return [];
+  const ownerName = asString(k.ownerName);
+  return [
+    asString(k.namespace) ? `Namespace ${asString(k.namespace)}` : '',
+    ownerName ? [asString(k.ownerKind), ownerName].filter(Boolean).join(' ') : '',
+    asString(k.nodeName) ? `Node ${asString(k.nodeName)}` : '',
+  ].filter(Boolean);
+};

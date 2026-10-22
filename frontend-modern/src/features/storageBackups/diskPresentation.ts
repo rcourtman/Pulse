@@ -20,6 +20,7 @@ import {
   type MetricDisplayThresholds,
 } from '@/utils/metricThresholds';
 import { normalizeStorageSourceKey, storageSourceMatchesFilter } from '@/utils/storageSources';
+import type { StatusIndicator } from '@/utils/status';
 import {
   getPhysicalDiskHeatSummary,
   isPhysicalDiskRunningHot,
@@ -130,8 +131,6 @@ export const PHYSICAL_DISK_TABLE_ROW_CLASS = 'cursor-pointer transition-colors';
 export const PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS = 'bg-blue-50 dark:bg-blue-900/25';
 export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
 export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '32px' } as const;
-export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =
-  'border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner';
 export type PhysicalDiskTableLayoutMode =
   'narrow' | 'compact' | 'basic' | 'operational' | 'expanded' | 'full';
 
@@ -869,6 +868,24 @@ function getReportedPhysicalDiskHealthStatus(
     summary: isHealthy ? 'No active disk-health issues.' : 'Health state is not reported.',
     tone: isHealthy ? 'text-emerald-700 dark:text-emerald-300' : 'text-base-content',
   };
+}
+
+/**
+ * The disk drawer's status dot: the Health cell's verdict word, judged by the
+ * same verdict that colours that cell.
+ */
+export function getPhysicalDiskHealthIndicator(
+  disk: PhysicalDiskPresentationData,
+): StatusIndicator {
+  const status = getPhysicalDiskHealthStatus(disk);
+  if (status.tone === PHYSICAL_DISK_CRITICAL_TONE)
+    return { variant: 'danger', label: status.label };
+  if (status.tone === PHYSICAL_DISK_WARNING_TONE)
+    return { variant: 'warning', label: status.label };
+  if (status.label === 'Healthy' || status.label === 'Online') {
+    return { variant: 'success', label: status.label };
+  }
+  return { variant: 'muted', label: status.label };
 }
 
 export function getPhysicalDiskNormalizedHealth(

@@ -24,6 +24,7 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
 import {
   formatPlatformAlertCode,
@@ -36,6 +37,7 @@ import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
   getAlertSeverityDetailTone,
+  getAlertSeverityIndicator,
 } from '@/utils/alertSeverityPresentation';
 import {
   filterDockerIncidents,
@@ -59,7 +61,6 @@ const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSecti
         detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
-        detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),
         detailRow('Code', formatPlatformAlertCode(incident.code, 'docker'), {
           title: incident.code,
@@ -95,11 +96,19 @@ const AlertDetail: Component<{ incident: DockerIncidentRow; onClose: () => void 
   <InlineDetailPanel
     testId="docker-alert-detail"
     detailFor={props.incident.id}
-    title="Docker alert detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
-      props.incident.code,
-      'docker',
-    )}`}
+    title={props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'docker')}
+    status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
+    summary={props.incident.summary || props.incident.label}
+    actions={
+      <RecordOwnerLink
+        subject={{
+          id: props.incident.resourceId,
+          name: props.incident.resourceName,
+          type: props.incident.resourceType,
+          resource: props.incident.resource,
+        }}
+      />
+    }
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-docker-alert-detail-for': props.incident.id }}
     onClose={props.onClose}

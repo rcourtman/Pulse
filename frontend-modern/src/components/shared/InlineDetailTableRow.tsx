@@ -8,36 +8,30 @@ export const INLINE_DETAIL_TABLE_CELL_CLASS = 'p-0 border-b border-border bg-sur
 // container the way overflow-hidden would. Below lg the sticky content is as
 // wide as the table's visible area: 100cqi resolves against the table scroll
 // shell (a size container), so a guess at the page chrome cannot leave an
-// empty strip beside the drawer or push it past the visible edge.
+// empty strip beside the drawer or push it past the visible edge. Every
+// drawer shares this wrapper (no per-table override): a table that replaced
+// it silently lost the phone width cap. Layout belongs inside the children.
 export const INLINE_DETAIL_TABLE_CONTENT_CLASS =
   'sticky left-0 min-w-0 max-w-[100cqi] whitespace-normal overflow-x-clip px-2 py-3 sm:px-4 sm:py-4 lg:static lg:max-w-none lg:overflow-x-visible';
 
 export interface InlineDetailTableRowProps extends TableRowProps {
   cellId?: string;
-  cellClass?: string;
   colSpan?: number;
   colspan?: number;
-  contentClass?: string;
   containClicks?: boolean;
   children?: JSX.Element;
 }
 
-const joinClasses = (...classes: Array<string | undefined>): string =>
-  classes.filter(Boolean).join(' ');
-
 export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
   const [local, rest] = splitProps(props, [
     'cellId',
-    'cellClass',
     'children',
     'class',
     'colSpan',
     'colspan',
     'containClicks',
-    'contentClass',
   ]);
   const containClicks = () => local.containClicks ?? true;
-  const contentClass = () => local.contentClass ?? INLINE_DETAIL_TABLE_CONTENT_CLASS;
   const requestedColspan = () => local.colspan ?? local.colSpan ?? 1;
   const [effectiveColspan, setEffectiveColspan] = createSignal(requestedColspan());
   let detailRow: HTMLTableRowElement | undefined;
@@ -147,10 +141,10 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
       <TableCell
         id={local.cellId}
         colspan={effectiveColspan()}
-        class={joinClasses(INLINE_DETAIL_TABLE_CELL_CLASS, local.cellClass)}
+        class={INLINE_DETAIL_TABLE_CELL_CLASS}
       >
         <div
-          class={contentClass()}
+          class={INLINE_DETAIL_TABLE_CONTENT_CLASS}
           onClick={(event) => {
             if (containClicks()) {
               event.stopPropagation();

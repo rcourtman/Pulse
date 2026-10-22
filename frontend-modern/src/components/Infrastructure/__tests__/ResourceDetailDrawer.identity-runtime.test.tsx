@@ -213,8 +213,6 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
   it('uses terse availability notices for specialized tabs', () => {
     expect(getSpecializedTabAvailabilityMessage('mail')).toBe('PMG resources only.');
     expect(getSpecializedTabAvailabilityMessage('namespaces')).toBe('Kubernetes clusters only.');
-    expect(getSpecializedTabAvailabilityMessage('deployments')).toBe('Kubernetes clusters only.');
-    expect(getSpecializedTabAvailabilityMessage('swarm')).toBe('Docker runtimes with Swarm only.');
   });
 
   it('keeps host detail cards behind a secondary overview disclosure', async () => {
@@ -362,7 +360,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('2001:db8::10/64')).toBeInTheDocument();
   });
 
-  it('surfaces VMware read-only placement and signal context on the shared drawer path', async () => {
+  it('surfaces VMware read-only placement and signal context on the shared drawer path', () => {
     const resource = baseResource({
       type: 'vm',
       name: 'app-01',
@@ -589,62 +587,51 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       },
     });
 
-    const { getByRole, getByText, getByTestId, queryByText } = render(() => (
-      <ResourceDetailDrawer resource={resource} />
-    ));
+    const { getByTestId, queryByRole } = render(() => <ResourceDetailDrawer resource={resource} />);
 
-    expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
-    expect(
-      getByText(
-        'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Hardware pending · Tools reboot requested · 1 alarm · 1 task',
-      ),
-    ).toBeInTheDocument();
-    expect(queryByText('Compute Cluster')).toBeNull();
-    expect(queryByText('Create snapshot (success)')).toBeNull();
-
-    fireEvent.click(getByRole('button', { name: 'Show vSphere' }));
-
-    await waitFor(() => {
-      expect(getByText('Placement')).toBeInTheDocument();
-    });
-
-    const section = getByTestId('resource-vmware-details-section');
-    expect(within(section).getByText('State')).toBeInTheDocument();
+    // vSphere sections are plain tables in the one Details disclosure, and
+    // what needs a look (pending hardware upgrade, Tools reboot, an alarm) is
+    // lifted to Worth checking rather than buried two toggles deep.
+    expect(queryByRole('button', { name: 'Show vSphere' })).toBeNull();
+    const lifted = within(getByTestId('resource-drawer-exceptions'));
+    expect(lifted.getByText('Upgrade status')).toBeInTheDocument();
+    expect(lifted.getByText('Pending')).toBeInTheDocument();
+    expect(lifted.getByText('Guest reboot')).toBeInTheDocument();
+    expect(lifted.getByText('Requested')).toBeInTheDocument();
+    expect(lifted.getByText(/Host fan degraded/)).toBeInTheDocument();
+    const section = getByTestId('resource-technical-details');
     expect(within(section).getByText('Placement')).toBeInTheDocument();
     expect(within(section).getByText('Guest')).toBeInTheDocument();
     expect(within(section).getByText('Virtual hardware')).toBeInTheDocument();
     expect(within(section).getByText('VMware Tools')).toBeInTheDocument();
     expect(within(section).getByText('Virtual disks')).toBeInTheDocument();
-    expect(within(section).getByText('Network')).toBeInTheDocument();
     expect(within(section).getByText('Signals')).toBeInTheDocument();
     expect(within(section).getByText('Snapshot tree')).toBeInTheDocument();
     expect(within(section).getByText('vc.lab.local')).toBeInTheDocument();
-    expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
+    expect(within(section).getAllByText('Compute Cluster').length).toBeGreaterThan(0);
     expect(within(section).getByText('Cluster services')).toBeInTheDocument();
     expect(within(section).getByText('HA enabled · DRS disabled')).toBeInTheDocument();
     expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
     expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
     expect(within(section).getByText('Hardware version')).toBeInTheDocument();
     expect(within(section).getByText('VMX 20')).toBeInTheDocument();
-    expect(within(section).getByText('Upgrade status')).toBeInTheDocument();
-    expect(within(section).getByText('Pending')).toBeInTheDocument();
     expect(within(section).getByText('CPU topology')).toBeInTheDocument();
     expect(within(section).getByText('4 vCPU · 2 cores/socket')).toBeInTheDocument();
+    expect(within(section).getByText('OK (green)')).toBeInTheDocument();
     // Boot order, install type, and the default-case Version status row no
     // longer render: they live in the raw API payload and the drawer keeps
     // hardware/tools sections focused on actionable operator state.
     expect(within(section).queryByText('Boot order')).toBeNull();
     expect(within(section).queryByText('Open VM Tools')).toBeNull();
     expect(within(section).getByText('Run state')).toBeInTheDocument();
-    expect(within(section).getByText('Running')).toBeInTheDocument();
-    expect(within(section).getByText('Guest reboot')).toBeInTheDocument();
-    expect(within(section).getByText('Requested')).toBeInTheDocument();
+    // Lifted rows move rather than repeat.
+    expect(within(section).queryByText('Upgrade status')).toBeNull();
+    expect(within(section).queryByText('Guest reboot')).toBeNull();
     expect(within(section).getByText('Hard disk 1')).toBeInTheDocument();
     expect(within(section).getByText(/SCSI 0:1 · 100 GB · shared-vsan/)).toBeInTheDocument();
     expect(within(section).getByText('Network adapter 1')).toBeInTheDocument();
     expect(within(section).getByText(/VMXNET3 · VM Network/)).toBeInTheDocument();
     expect(within(section).getByText(/Create snapshot \(success\)/)).toBeInTheDocument();
-    expect(within(section).getByText(/Host fan degraded/)).toBeInTheDocument();
     expect(within(section).getByText('2 snapshots')).toBeInTheDocument();
     expect(within(section).getByText('pre-upgrade')).toBeInTheDocument();
     expect(within(section).getByText('- post-migration-checkpoint')).toBeInTheDocument();

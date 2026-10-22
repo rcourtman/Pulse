@@ -1,14 +1,14 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createSignal,
-  createUniqueId,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
+import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -19,6 +19,7 @@ import {
   PlatformTableToolbar,
   PlatformErrorState,
   PlatformTableDurationValue,
+  formatPlatformTableDurationValue,
   formatPlatformTableRelativeTimeValue,
   PlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
@@ -37,10 +38,12 @@ import {
   getPlatformResourceDetailRowInteractionProps,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
-import type { ReplicationJob } from '@/types/api';
+import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
+import { buildProxmoxGuestNativeId } from '@/utils/workloads';
 
 // Replication is a Proxmox-specific concept (zfs send/receive scheduled
 // between PVE nodes), so this table is bespoke rather than a filtered
@@ -49,7 +52,7 @@ import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQue
 // ReplicationJobsSnapshot without going through the unified-resource
 // pipeline.
 
-type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'unknown' | 'disabled';
+type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disabled';
 
 type ReplicationColumn =
   | 'status'
@@ -154,7 +157,7 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[
   { value: 'all', label: 'All' },
   {
     value: 'healthy',
-    label: 'OK',
+    label: 'Healthy',
     tone: 'success',
     leading: filterChipStatusDot('bg-emerald-500'),
   },
@@ -162,12 +165,6 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[
   {
     value: 'pending',
     label: 'Pending',
-    tone: 'warning',
-    leading: filterChipStatusDot('bg-amber-500'),
-  },
-  {
-    value: 'unknown',
-    label: 'Unknown',
     tone: 'warning',
     leading: filterChipStatusDot('bg-amber-500'),
   },
@@ -187,32 +184,11 @@ interface ReplicationStatusIndicator {
 
 function classifyJob(job: ReplicationJob): ReplicationStatusFilter {
   if (!job.enabled) return 'disabled';
-  // Match the producer's precedence: an error remains failure evidence even
-  // with a zero failure count or an older successful result beside it.
-  if ((job.failCount ?? 0) > 0 || job.error?.trim()) return 'failed';
-  const last = (job.lastSyncStatus ?? '').trim().toLowerCase();
+  if ((job.failCount ?? 0) > 0) return 'failed';
+  const last = (job.lastSyncStatus ?? '').toLowerCase();
   if (last === 'ok' || last === 'success' || last === 'completed') return 'healthy';
   if (last === 'failed' || last === 'error') return 'failed';
-  // The producer leaves this empty when status collection is unavailable or
-  // unrecognised. Neither a configured job nor an old timestamp proves queued
-  // work. Only an explicit pending result belongs in that filter.
-  if (last === 'pending') return 'pending';
-  return 'unknown';
-}
-
-function resultExplanation(classification: ReplicationStatusFilter): string {
-  switch (classification) {
-    case 'healthy':
-      return 'The last reported sync succeeded. This does not confirm a restore or current guest health.';
-    case 'failed':
-      return 'A failed result, error or failed attempt is reported for this job. A previous successful sync does not override it.';
-    case 'pending':
-      return 'The reported last sync result is pending. No successful completion is established.';
-    case 'disabled':
-      return 'This job is disabled. Any last result remains historical.';
-    default:
-      return 'No recognised last sync result was reported. This does not mean a sync is pending.';
-  }
+  return 'pending';
 }
 
 function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatusIndicator {
@@ -220,15 +196,13 @@ function indicatorFor(classification: ReplicationStatusFilter): ReplicationStatu
     case 'healthy':
       return {
         variant: 'success',
-        label: 'OK',
+        label: 'Healthy',
         tone: 'text-emerald-600 dark:text-emerald-300',
       };
     case 'failed':
       return { variant: 'danger', label: 'Failed', tone: 'text-red-600 dark:text-red-300' };
     case 'pending':
       return { variant: 'warning', label: 'Pending', tone: 'text-amber-600 dark:text-amber-300' };
-    case 'unknown':
-      return { variant: 'warning', label: 'Unknown', tone: 'text-amber-600 dark:text-amber-300' };
     case 'disabled':
       return { variant: 'muted', label: 'Disabled', tone: 'text-muted' };
     default:
@@ -301,65 +275,149 @@ export const compactReplicationNextSyncText = (text: string, tone: NextSyncTone)
   return text.replace(/^in /, '');
 };
 
-const replicationFormatError = () =>
-  new Error(
-    'The replication response format is invalid. Job availability is unknown. Missing rows do not mean no jobs exist.',
-  );
+const NEXT_SYNC_DETAIL_TONE: Record<NextSyncTone, DetailValueTone | undefined> = {
+  overdue: 'danger',
+  imminent: 'warning',
+  normal: undefined,
+  muted: 'muted',
+};
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
+// The detail row id follows the job, not its place in the filtered list, so a
+// refresh that reorders rows keeps the disclosure pointing at the same job.
+const replicationJobDetailRowId = (job: ReplicationJob): string =>
+  `replication-job-detail-${(job.id || job.jobId).replace(/[^A-Za-z0-9_-]/g, '-')}`;
 
-// Check the fields the table consumes, without coercing enabled/failure state,
-// dropping malformed rows, guessing dates or rejecting new provider fields.
-const isReplicationJob = (value: unknown): value is ReplicationJob => {
-  if (!isRecord(value)) return false;
-  if (
-    typeof value.id !== 'string' ||
-    !value.id.trim() ||
-    typeof value.instance !== 'string' ||
-    typeof value.jobId !== 'string' ||
-    typeof value.enabled !== 'boolean'
-  ) {
-    return false;
-  }
-  const strings = [
-    'guest',
-    'guestName',
-    'sourceNode',
-    'targetNode',
-    'schedule',
-    'lastSyncStatus',
-    'lastSyncDurationHuman',
-    'error',
-    'comment',
-  ];
-  if (strings.some((key) => value[key] !== undefined && typeof value[key] !== 'string'))
-    return false;
-  for (const key of [
-    'guestId',
-    'failCount',
-    'lastSyncDurationSeconds',
-    'lastSyncUnix',
-    'nextSyncUnix',
-  ]) {
-    const field = value[key];
-    if (field !== undefined && (typeof field !== 'number' || !Number.isFinite(field) || field < 0))
-      return false;
-  }
-  if (
-    ['guestId', 'failCount'].some(
-      (key) => value[key] !== undefined && !Number.isSafeInteger(value[key]),
-    )
-  )
-    return false;
-  return ['lastSyncTime', 'nextSyncTime'].every((key) => {
-    const field = value[key];
-    return (
-      field === undefined ||
-      typeof field === 'string' ||
-      (typeof field === 'number' && Number.isFinite(field))
-    );
+// The guest the job copies, as the Proxmox workloads table knows it.
+const replicationJobGuestSubject = (job: ReplicationJob) => {
+  const id = buildProxmoxGuestNativeId({
+    instance: job.instance,
+    node: job.guestNode || job.sourceNode,
+    vmid: job.guestId,
   });
+  if (!id) return null;
+  return {
+    id,
+    name: job.guestName?.trim() || job.guest?.trim() || String(job.guestId),
+    type: (job.guestType ?? '').trim().toLowerCase() === 'lxc' ? 'lxc' : 'vm',
+  };
+};
+
+const replicationJobSummary = (job: ReplicationJob, now: number): string => {
+  const last = formatPlatformTableRelativeTimeValue(syncTimeValue(job), { now, emptyText: '' });
+  const next = nextSyncFor(job, now);
+  return [
+    last ? `Last synced ${last}` : 'Not synced yet',
+    next.tone === 'muted' ? '' : `next sync ${next.text}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
+const buildReplicationJobSections = (
+  job: ReplicationJob,
+  classification: ReplicationStatusFilter,
+  guestLabel: string,
+  now: number,
+): DetailSection[] => {
+  const errorText = (job.error ?? '').trim();
+  const next = nextSyncFor(job, now);
+  const failCount = job.failCount ?? 0;
+  return compactDetailSections([
+    // A failed job's error is the drawer summary; any other job's error
+    // still leads, because it is why the job may fail next.
+    classification === 'failed'
+      ? null
+      : {
+          label: 'Error',
+          rows: compactDetailRows([makeDetailRow('Error', errorText, { tone: 'danger' })]),
+        },
+    {
+      label: 'Job',
+      rows: compactDetailRows([
+        makeDetailRow('Guest', guestLabel === '—' ? '' : guestLabel),
+        makeDetailRow('Job ID', job.jobId || job.id),
+        makeDetailRow('Failures', String(failCount), {
+          tone: failCount > 0 ? 'danger' : undefined,
+        }),
+        makeDetailRow('Comment', job.comment),
+      ]),
+    },
+    {
+      label: 'Route',
+      rows: compactDetailRows([
+        makeDetailRow('Source', job.sourceNode),
+        makeDetailRow('Target', job.targetNode),
+        makeDetailRow('Source storage', job.sourceStorage),
+        makeDetailRow('Target storage', job.targetStorage),
+        makeDetailRow(
+          'Rate limit',
+          job.rateLimitMbps && job.rateLimitMbps > 0 ? `${job.rateLimitMbps} MB/s` : '',
+        ),
+      ]),
+    },
+    {
+      label: 'Schedule',
+      rows: compactDetailRows([
+        makeDetailRow('Schedule', job.schedule),
+        makeDetailRow(
+          'Last sync',
+          formatPlatformTableRelativeTimeValue(syncTimeValue(job), { now, emptyText: '' }),
+        ),
+        makeDetailRow('Next sync', next.tone === 'muted' ? '' : next.text, {
+          tone: NEXT_SYNC_DETAIL_TONE[next.tone],
+        }),
+        makeDetailRow(
+          'Duration',
+          formatPlatformTableDurationValue(job.lastSyncDurationSeconds, {
+            fallbackText: job.lastSyncDurationHuman,
+            emptyText: '',
+          }),
+        ),
+      ]),
+    },
+  ]);
+};
+
+// The row truncates and narrower layouts drop columns, so the drawer is where
+// the whole job is always readable, starting with why it failed.
+const ReplicationJobDetail: Component<{
+  job: ReplicationJob;
+  classification: ReplicationStatusFilter;
+  guestLabel: string;
+  now: number;
+  onClose: () => void;
+}> = (props) => {
+  const indicator = () => indicatorFor(props.classification);
+  const errorText = () => (props.job.error ?? '').trim();
+  const guest = () => replicationJobGuestSubject(props.job);
+  return (
+    <InlineDetailPanel
+      testId="replication-job-detail"
+      detailFor={props.job.id || props.job.jobId}
+      title={
+        props.job.guestName?.trim() || props.job.guest?.trim() || props.job.jobId || props.job.id
+      }
+      status={{ variant: indicator().variant, label: indicator().label }}
+      summary={
+        <Show
+          when={props.classification === 'failed' && errorText()}
+          fallback={replicationJobSummary(props.job, props.now)}
+        >
+          <span class="text-red-600 dark:text-red-300" data-replication-job-error>
+            {errorText()}
+          </span>
+        </Show>
+      }
+      actions={<RecordOwnerLink subject={guest()} />}
+      sections={buildReplicationJobSections(
+        props.job,
+        props.classification,
+        props.guestLabel,
+        props.now,
+      )}
+      onClose={props.onClose}
+    />
+  );
 };
 
 export async function fetchReplicationJobs(signal?: AbortSignal): Promise<ReplicationJob[]> {
@@ -372,18 +430,8 @@ export async function fetchReplicationJobs(signal?: AbortSignal): Promise<Replic
       `Failed to load replication jobs (${response.status})`,
     );
   }
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    // A proxy/login response is not an empty inventory. Never render its body
-    // or the JSON parser's text, which can contain private response contents.
-    throw replicationFormatError();
-  }
-  if (!isRecord(payload) || !Array.isArray(payload.data) || !payload.data.every(isReplicationJob))
-    throw replicationFormatError();
-  return payload.data;
+  const payload = (await response.json()) as ReplicationJobsResponse;
+  return Array.isArray(payload?.data) ? payload.data : [];
 }
 
 // The jobs resource lives in ProxmoxPageSurface (it also gates the
@@ -523,10 +571,6 @@ export const ProxmoxReplicationTable: Component<{
               total={total()}
               rowNoun="jobs"
             />
-            <p class="text-xs leading-5 text-muted" data-replication-result-scope>
-              Status is the reported last sync result, not a restore check or current guest health.
-              Check Next sync for overdue jobs.
-            </p>
 
             <Show
               when={filtered().length > 0}
@@ -622,24 +666,19 @@ export const ProxmoxReplicationTable: Component<{
                 body={
                   <>
                     <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
-                      {(job) => {
-                        // Windowed rows reconcile observations into the same store.
-                        // Keep derived fields reactive without remounting the row
-                        // or discarding an operator's open details and focus.
-                        const classification = createMemo(() => classifyJob(job));
-                        const ind = createMemo(() => indicatorFor(classification()));
+                      {(job, index) => {
+                        const classification = classifyJob(job);
+                        const ind = indicatorFor(classification);
                         const next = () => nextSyncFor(job, now());
-                        const sourceNode = () => (job.sourceNode ?? '').trim() || '—';
-                        const targetNode = () => (job.targetNode ?? '').trim() || '—';
-                        const guestLabel = () => formatGuestLabel(job);
-                        // IDs belong to mounted disclosures, not changing list
-                        // positions or VMIDs shared by independent connections.
-                        const detailRowId = `replication-job-detail-${createUniqueId()}`;
-                        const errorText = () => (job.error ?? '').trim();
-                        const comment = () => (job.comment ?? '').trim();
-                        const isExpanded = () => expandedJobKey() === job.id;
+                        const sourceNode = (job.sourceNode ?? '').trim() || '—';
+                        const targetNode = (job.targetNode ?? '').trim() || '—';
+                        const guestLabel = formatGuestLabel(job);
+                        const jobKey = `${job.id}:${job.jobId}:${job.guestId ?? index()}`;
+                        const detailRowId = replicationJobDetailRowId(job);
+                        const errorText = (job.error ?? '').trim();
+                        const isExpanded = () => expandedJobKey() === jobKey;
                         const toggleDetails = () => {
-                          setExpandedJobKey(isExpanded() ? null : job.id);
+                          setExpandedJobKey(isExpanded() ? null : jobKey);
                         };
                         return (
                           <>
@@ -652,7 +691,7 @@ export const ProxmoxReplicationTable: Component<{
                             >
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('name')} text-base-content ${mobilePaddingClass()}`}
-                                title={guestLabel()}
+                                title={guestLabel}
                               >
                                 <div class="flex min-w-0 items-center gap-2">
                                   <PlatformResourceDetailToggleButton
@@ -666,7 +705,7 @@ export const ProxmoxReplicationTable: Component<{
                                   >
                                     {isCompact()
                                       ? formatMobileReplicationGuestLabel(job)
-                                      : guestLabel()}
+                                      : guestLabel}
                                   </span>
                                 </div>
                               </TableCell>
@@ -677,15 +716,15 @@ export const ProxmoxReplicationTable: Component<{
                                   <Show when={!isCompact()}>
                                     <StatusDot
                                       size="sm"
-                                      variant={ind().variant}
-                                      title={ind().label}
+                                      variant={ind.variant}
+                                      title={ind.label}
                                       ariaHidden
                                     />
                                   </Show>
                                   <span
-                                    class={`${isCompact() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind().tone}`}
+                                    class={`${isCompact() ? 'text-[10px]' : 'text-[11px]'} font-medium ${ind.tone}`}
                                   >
-                                    {ind().label}
+                                    {ind.label}
                                   </span>
                                 </div>
                               </TableCell>
@@ -703,17 +742,17 @@ export const ProxmoxReplicationTable: Component<{
                                   when={isCompact()}
                                   fallback={
                                     <span class="inline-flex items-center gap-1 font-mono text-[11px]">
-                                      <span>{sourceNode()}</span>
+                                      <span>{sourceNode}</span>
                                       <ArrowRightIcon
                                         class="h-3 w-3 text-muted"
                                         aria-hidden="true"
                                       />
-                                      <span>{targetNode()}</span>
+                                      <span>{targetNode}</span>
                                     </span>
                                   }
                                 >
                                   <span class="font-mono text-[10px]">
-                                    {sourceNode()}→{targetNode()}
+                                    {sourceNode}→{targetNode}
                                   </span>
                                 </Show>
                               </TableCell>
@@ -780,14 +819,14 @@ export const ProxmoxReplicationTable: Component<{
                                   class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                                 >
                                   <Show
-                                    when={errorText()}
+                                    when={errorText}
                                     fallback={<span class="text-muted">—</span>}
                                   >
                                     <span
                                       class="block truncate text-red-600 dark:text-red-300"
-                                      title={errorText()}
+                                      title={errorText}
                                     >
-                                      {errorText()}
+                                      {errorText}
                                     </span>
                                   </Show>
                                 </TableCell>
@@ -798,70 +837,15 @@ export const ProxmoxReplicationTable: Component<{
                                 cellId={detailRowId}
                                 colspan={visibleColumnCount()}
                                 class=""
-                                cellClass="whitespace-normal!"
-                                contentClass="px-2 py-2 sm:px-4 sm:py-3"
+                                data-inline-detail-for={job.id || job.jobId}
                               >
-                                {/* The row truncates and narrower layouts drop columns, so
-                                    the expansion is where the whole job is always readable,
-                                    starting with why it failed. */}
-                                <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[10px] leading-4 sm:text-xs sm:leading-5">
-                                  <Show when={errorText()}>
-                                    <dt class="font-semibold text-muted">Error</dt>
-                                    <dd
-                                      class="wrap-break-word text-red-600 dark:text-red-300"
-                                      data-replication-job-error
-                                    >
-                                      {errorText()}
-                                    </dd>
-                                  </Show>
-                                  <dt class="font-semibold text-muted">Reported last result</dt>
-                                  <dd class="wrap-anywhere text-base-content">
-                                    {job.lastSyncStatus?.trim() || 'Not reported'}
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Interpretation</dt>
-                                  <dd class="wrap-anywhere text-base-content">
-                                    {resultExplanation(classification())}
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Guest</dt>
-                                  <dd class="break-all text-base-content">{guestLabel()}</dd>
-                                  <dt class="font-semibold text-muted">Job</dt>
-                                  <dd class="break-all font-mono text-base-content">
-                                    {job.jobId || job.id}
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Route</dt>
-                                  <dd class="font-mono text-base-content">
-                                    {sourceNode()} → {targetNode()}
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Schedule</dt>
-                                  <dd class="font-mono text-base-content">{job.schedule || '—'}</dd>
-                                  <dt class="font-semibold text-muted">Last sync</dt>
-                                  <dd class="text-base-content">
-                                    {formatPlatformTableRelativeTimeValue(syncTimeValue(job), {
-                                      now: now(),
-                                    })}
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Next sync</dt>
-                                  <dd
-                                    class={NEXT_SYNC_TONE_CLASS[next().tone] || 'text-base-content'}
-                                  >
-                                    {next().text}
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Duration</dt>
-                                  <dd class="text-base-content">
-                                    <PlatformTableDurationValue
-                                      seconds={job.lastSyncDurationSeconds}
-                                      fallbackText={job.lastSyncDurationHuman}
-                                    />
-                                  </dd>
-                                  <dt class="font-semibold text-muted">Failures</dt>
-                                  <dd class="tabular-nums text-base-content">
-                                    {job.failCount ?? 0}
-                                  </dd>
-                                  <Show when={comment()}>
-                                    <dt class="font-semibold text-muted">Comment</dt>
-                                    <dd class="wrap-break-word text-base-content">{comment()}</dd>
-                                  </Show>
-                                </dl>
+                                <ReplicationJobDetail
+                                  job={job}
+                                  classification={classification}
+                                  guestLabel={guestLabel}
+                                  now={now()}
+                                  onClose={() => setExpandedJobKey(null)}
+                                />
                               </InlineDetailTableRow>
                             </Show>
                           </>

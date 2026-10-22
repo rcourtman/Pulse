@@ -413,7 +413,8 @@ export const ProxmoxCephTable: Component<{
               <>
                 <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
                   {(cluster) => {
-                    const ind = indicatorFor(classify(cluster));
+                    // One verdict for the row's dot and the drawer header.
+                    const ind = () => indicatorFor(classify(cluster));
                     const name = asTrimmedString(cluster.name) || cluster.id;
                     const isOpen = () => selectedId() === cluster.id;
                     const detailRowId = () => `proxmox-ceph-detail-${cluster.id}`;
@@ -443,18 +444,20 @@ export const ProxmoxCephTable: Component<{
                           </TableCell>
                           <TableCell
                             class={getPlatformTableCellClassForKind('text')}
-                            title={[ind.label, cluster.ceph?.healthStatus]
+                            title={[ind().label, cluster.ceph?.healthStatus]
                               .filter(Boolean)
                               .join(' · ')}
                           >
                             <div class="flex items-center gap-2">
                               <StatusDot
                                 size="sm"
-                                variant={ind.variant}
-                                title={ind.label}
+                                variant={ind().variant}
+                                title={ind().label}
                                 ariaHidden
                               />
-                              <span class={`text-[11px] font-medium ${ind.tone}`}>{ind.label}</span>
+                              <span class={`text-[11px] font-medium ${ind().tone}`}>
+                                {ind().label}
+                              </span>
                             </div>
                           </TableCell>
                           <Show when={showQuorum()}>
@@ -510,10 +513,13 @@ export const ProxmoxCephTable: Component<{
                           <InlineDetailTableRow
                             cellId={detailRowId()}
                             colspan={visibleColumnCount()}
-                            contentClass="px-4 py-4"
                             data-inline-detail-for={cluster.id}
                           >
-                            <ProxmoxCephClusterDrawer cluster={cluster} onClose={closeSelected} />
+                            <ProxmoxCephClusterDrawer
+                              cluster={cluster}
+                              statusIndicator={{ variant: ind().variant, label: ind().label }}
+                              onClose={closeSelected}
+                            />
                           </InlineDetailTableRow>
                         </Show>
                       </>

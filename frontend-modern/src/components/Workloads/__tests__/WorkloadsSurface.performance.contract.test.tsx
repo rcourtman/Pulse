@@ -472,7 +472,7 @@ describe('Workloads platform-page embed contract', () => {
     const proxmoxNodesSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
       .default;
     expect(proxmoxNodesSource).toContain('NodeDrawer');
-    expect(proxmoxNodesSource).toContain('data-inline-node-detail-for={node.id}');
+    expect(proxmoxNodesSource).toContain('data-inline-detail-for={node.id}');
   });
 });
 

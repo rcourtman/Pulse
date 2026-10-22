@@ -1,4 +1,6 @@
-import { For, type Component, type JSX } from 'solid-js';
+import { For, Show, type Component, type JSX } from 'solid-js';
+import type { StatusIndicator } from '@/utils/status';
+import { DrawerSubjectHeading } from './DrawerSubjectHeading';
 import { ObjectDrawerHeader } from './ObjectDrawerHeader';
 import { ProgressBar } from './ProgressBar';
 import { Table, TableBody, TableCell, TableHead, TableRow } from './Table';
@@ -65,6 +67,8 @@ export const DetailSectionTable: Component<{
   sections: DetailSection[];
   class?: string;
   dataTestId?: string;
+  /** Wrap every value instead of truncating it (record drawers: no hover on phones). */
+  wrapValues?: boolean;
 }> = (props) => (
   <div
     data-testid={props.dataTestId}
@@ -114,7 +118,7 @@ export const DetailSectionTable: Component<{
                       <span
                         title={row.title ?? row.value}
                         class={
-                          row.wrap
+                          row.wrap || props.wrapValues
                             ? 'block whitespace-normal wrap-break-word text-left leading-snug'
                             : 'block truncate'
                         }
@@ -148,34 +152,53 @@ export const DetailSectionTable: Component<{
   </div>
 );
 
+// A record drawer (an alert, an event, a job run) is headed like an object
+// drawer: the subject's name and status dot, a one-line summary, and actions
+// such as a link to the object the record is about. Its values wrap because a
+// record is mostly sentences and identifiers a phone cannot hover to read.
 export const InlineDetailPanel: Component<{
   testId: string;
   detailFor: string;
-  title: JSX.Element;
+  /** The subject: what the record is about, not the kind of panel. */
+  title: string;
+  status?: StatusIndicator;
   summary?: JSX.Element;
+  actions?: JSX.Element;
   sections: DetailSection[];
   onClose: () => void;
+  /** Content cards that matter more than the sections (attachments, restore evidence). */
+  children?: JSX.Element;
   class?: string;
   tableClass?: string;
   detailAttributes?: Record<string, string>;
 }> = (props) => (
-  <div
+  <section
     class={props.class ?? 'space-y-3'}
     {...(props.detailAttributes ?? {})}
+    aria-labelledby={`${props.testId}-heading-${props.detailFor}`}
     data-testid={props.testId}
     data-inline-detail-for={props.detailFor}
   >
     <ObjectDrawerHeader
-      collapseLabel={`Collapse ${props.detailFor} details`}
+      collapseLabel={`Collapse ${props.title} details`}
       onCollapse={props.onClose}
+      actions={props.actions}
     >
-      <div>
-        <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
-          {props.title}
-        </div>
-        {props.summary ? <div class="mt-1 text-[10px] text-muted">{props.summary}</div> : null}
+      <div class="min-w-0 space-y-1">
+        <DrawerSubjectHeading
+          headingId={`${props.testId}-heading-${props.detailFor}`}
+          title={props.title}
+          statusVariant={props.status?.variant}
+          statusLabel={props.status?.label}
+        />
+        <Show when={props.summary}>
+          <div class="text-[11px] leading-snug text-muted wrap-anywhere">{props.summary}</div>
+        </Show>
       </div>
     </ObjectDrawerHeader>
-    <DetailSectionTable sections={props.sections} class={props.tableClass} />
-  </div>
+    {props.children}
+    <Show when={props.sections.length > 0}>
+      <DetailSectionTable sections={props.sections} class={props.tableClass} wrapValues />
+    </Show>
+  </section>
 );

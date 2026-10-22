@@ -11,6 +11,6 @@ describe('Proxmox drawer placement contract', () => {
     expect(workloadPanelSource).not.toContain('NodeDrawer');
     expect(proxmoxPageSurfaceSource).not.toContain('groupNodeDrawerMode');
     expect(proxmoxNodesTableSource).toContain('NodeDrawer');
-    expect(proxmoxNodesTableSource).toContain('data-inline-node-detail-for={node.id}');
+    expect(proxmoxNodesTableSource).toContain('data-inline-detail-for={node.id}');
   });
 });

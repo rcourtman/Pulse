@@ -70,7 +70,8 @@ class PMGDocsTest(unittest.TestCase):
         drawer = frontend("features/proxmox/ProxmoxMailGatewayDrawer.tsx")
         self.assertIn(".slice(0, 8)", drawer)
         self.assertIn("top eight reported domains, not the entire domain inventory", self.guide)
-        self.assertIn("stats()?.timeframe", drawer)
+        # The mail-flow card names the window its counts cover.
+        self.assertRegex(drawer, r"stats(?:\(\))?\??\.timeframe")
         self.assertIn("compare the same window in PMG", self.guide)
         self.assertIn("Expand the intended gateway's row", self.guide)
 

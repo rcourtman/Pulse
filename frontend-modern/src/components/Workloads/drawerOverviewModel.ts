@@ -120,6 +120,8 @@ const ALERT_STATED_ROW_LABELS: Record<string, string> = {
   'docker-host-offline': 'Observed state',
   'host-offline': 'Observed state',
   offline: 'Observed state',
+  'disk-health': 'Health',
+  'disk-wearout': 'Health',
 };
 
 export const getAlertStatedRowLabels = (alerts: readonly { type: string }[]): Set<string> =>

@@ -129,11 +129,16 @@ export const TrueNASNetworkSharesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.shares,
     initialStatus: 'all' as TrueNASShareStatusFilter,
     filter: filterTrueNASShares,
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-share-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
@@ -338,6 +343,7 @@ export const TrueNASNetworkSharesTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={6}

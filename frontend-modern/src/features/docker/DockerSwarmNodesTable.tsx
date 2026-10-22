@@ -22,8 +22,17 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
+import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  dockerDetailToneForVariant,
+  dockerLabelsSection,
+  dockerReportedBySection,
   dockerByteValue,
   dockerCpuValue,
   dockerResourceName,
@@ -87,6 +96,70 @@ const getDockerSwarmNodeSortValue = (
       key satisfies never;
       return null;
   }
+};
+
+const nodeReachability = (resource: Resource): string =>
+  asTrimmedString(resource.docker?.leader ? 'leader' : resource.docker?.managerReachability) ?? '';
+
+// A node's role, whether it takes work, and for a manager whether the others
+// can reach it: the three things the row dot weighs.
+const nodeSummary = (resource: Resource): string =>
+  [
+    titleCaseDelimitedLabel(resource.docker?.nodeRole, { fallback: '' }),
+    resource.docker?.leader ? 'leader' : '',
+    asTrimmedString(resource.docker?.availability)
+      ? `availability ${asTrimmedString(resource.docker?.availability)}`
+      : '',
+    !resource.docker?.leader && asTrimmedString(resource.docker?.managerReachability)
+      ? `manager ${asTrimmedString(resource.docker?.managerReachability)}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+const buildSwarmNodeDetailSections = (resource: Resource): Array<DetailSection | null> => {
+  const verdict = mapDockerSwarmNodeStatus(resource);
+  const cpus = dockerCpuValue(resource.docker?.nanoCpus);
+  const memory = dockerByteValue(resource.docker?.memoryBytes);
+  return [
+    {
+      label: 'Node',
+      rows: compactDetailRows([
+        makeDetailRow('Role', asTrimmedString(resource.docker?.nodeRole)),
+        makeDetailRow('Availability', asTrimmedString(resource.docker?.availability), {
+          tone:
+            verdict.label === 'Drained' || verdict.label === 'Paused'
+              ? dockerDetailToneForVariant(verdict.variant)
+              : undefined,
+        }),
+        makeDetailRow('Reachability', nodeReachability(resource), {
+          tone:
+            verdict.label === 'Manager unreachable'
+              ? dockerDetailToneForVariant(verdict.variant)
+              : undefined,
+        }),
+        makeDetailRow('Address', asTrimmedString(resource.docker?.address), { wrap: true }),
+        makeDetailRow('Manager address', asTrimmedString(resource.docker?.managerAddress), {
+          wrap: true,
+        }),
+        makeDetailRow('Node ID', asTrimmedString(resource.docker?.nodeId), { wrap: true }),
+      ]),
+    },
+    {
+      label: 'Engine',
+      rows: compactDetailRows([
+        makeDetailRow(
+          'Version',
+          asTrimmedString(resource.docker?.engineVersion || resource.docker?.runtimeVersion),
+        ),
+        makeDetailRow('CPUs', cpus === '—' ? null : cpus),
+        makeDetailRow('Memory', memory === '—' ? null : memory),
+      ]),
+    },
+    dockerReportedBySection(resource),
+    dockerLabelsSection('Engine labels', resource.docker?.engineLabels),
+    dockerLabelsSection('Node labels', resource.docker?.labels),
+  ];
 };
 
 export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) => {
@@ -223,10 +296,7 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
               <>
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
-                    const managerReachability = () =>
-                      dockerTextValue(
-                        resource.docker?.leader ? 'leader' : resource.docker?.managerReachability,
-                      );
+                    const managerReachability = () => nodeReachability(resource) || '—';
                     // The cell behind the dot's verdict reads in its colour: an
                     // unreachable manager in Reachability, a drained or paused
                     // node in Availability.
@@ -311,27 +381,12 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
                             data-inline-docker-swarm-node-detail-for={resource.id}
                           >
                             <DockerNativeDetailPanel
-                              title={dockerResourceName(resource)}
-                              fields={[
-                                ['Role', dockerTextValue(resource.docker?.nodeRole)],
-                                ['Availability', dockerTextValue(resource.docker?.availability)],
-                                ['Reachability', managerReachability()],
-                                [
-                                  'Engine',
-                                  dockerTextValue(
-                                    resource.docker?.engineVersion ||
-                                      resource.docker?.runtimeVersion,
-                                  ),
-                                ],
-                                ['CPUs', dockerCpuValue(resource.docker?.nanoCpus)],
-                                ['Memory', dockerByteValue(resource.docker?.memoryBytes)],
-                                [
-                                  'Address',
-                                  dockerTextValue(
-                                    resource.docker?.address || resource.docker?.managerAddress,
-                                  ),
-                                ],
-                              ]}
+                              testId="docker-swarm-node-detail"
+                              resource={resource}
+                              status={verdict()}
+                              summary={nodeSummary(resource)}
+                              sections={() => buildSwarmNodeDetailSections(resource)}
+                              onClose={() => drawer.close(resource)}
                             />
                           </InlineDetailTableRow>
                         </Show>

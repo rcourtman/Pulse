@@ -13,14 +13,12 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
     resource: { id: string };
     presentation?: string;
-    initialShowTrueNASDetails?: boolean;
     onClose?: () => void;
   }) => (
     <div
       data-testid="resource-detail-drawer"
       data-resource-id={props.resource.id}
       data-presentation={props.presentation ?? 'full'}
-      data-initial-show-truenas-details={String(props.initialShowTrueNASDetails ?? false)}
     >
       <button type="button" aria-label="Close resource drawer" onClick={() => props.onClose?.()} />
     </div>
@@ -190,10 +188,6 @@ describe('platform resource table drawers', () => {
     expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
       'data-resource-id',
       pool.id,
-    );
-    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
-      'data-initial-show-truenas-details',
-      'false',
     );
   });
 

@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import {
   Table,
   TableBody,
@@ -22,10 +22,12 @@ import {
   isStoragePoolColumnVisible,
 } from '@/features/storageBackups/storagePagePresentation';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
+import { createVisibleTableColumnSpan } from '@/components/shared/tableVisibleColumnSpan';
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
@@ -48,6 +50,8 @@ type StoragePoolsTableProps = {
   nodeOnlineByLabel: Map<string, boolean>;
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
+  /** A pool's open alerts, for its drawer: the set that tints its row. */
+  getRecordAlerts?: (recordId: string) => Alert[];
   isLoading: boolean;
   highlightedSummarySeriesId?: string | null;
   onHoverChange?: (recordId: string | null) => void;
@@ -78,6 +82,9 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
     groups: model.groups,
     expandedPoolId: () => props.expandedPoolId,
   });
+  // Spacer rows span the visible columns only (see tableVisibleColumnSpan).
+  const [bodyEl, setBodyEl] = createSignal<HTMLTableSectionElement | null>(null);
+  const columnSpan = createVisibleTableColumnSpan(bodyEl);
 
   return (
     <Show
@@ -131,10 +138,16 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                 </For>
               </TableRow>
             </TableHeader>
-            <TableBody ref={tableWindow.setBodyRef} class={STORAGE_POOLS_BODY_CLASS}>
+            <TableBody
+              ref={(body) => {
+                tableWindow.setBodyRef(body);
+                setBodyEl(body);
+              }}
+              class={STORAGE_POOLS_BODY_CLASS}
+            >
               <Show when={tableWindow.topSpacerHeight() > 0}>
                 <TableRow aria-hidden="true" class="h-0 border-0!">
-                  <TableCell colspan={99} class="h-0 border-0! p-0! leading-0">
+                  <TableCell colspan={columnSpan()} class="h-0 border-0! p-0! leading-0">
                     <svg
                       aria-hidden="true"
                       width="1"
@@ -176,6 +189,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                       alertHeadlineClass={rowModel().alertHeadlineClass}
                       physicalDisks={props.physicalDisks}
                       getDiskAlertResourceIds={props.getDiskAlertResourceIds}
+                      alerts={props.getRecordAlerts?.(record.id)}
                       alertDataAttrs={rowModel().alertDataAttrs}
                     />
                   );
@@ -183,7 +197,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
               </For>
               <Show when={tableWindow.bottomSpacerHeight() > 0}>
                 <TableRow aria-hidden="true" class="h-0 border-0!">
-                  <TableCell colspan={99} class="h-0 border-0! p-0! leading-0">
+                  <TableCell colspan={columnSpan()} class="h-0 border-0! p-0! leading-0">
                     <svg
                       aria-hidden="true"
                       width="1"

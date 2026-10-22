@@ -44,6 +44,12 @@ export const KUBERNETES_PATH = '/kubernetes';
 export const KUBERNETES_DEFAULT_TAB = 'overview';
 export const TRUENAS_PATH = '/truenas';
 export const TRUENAS_DEFAULT_TAB = 'overview';
+// The storage tab's kind filter, and the search each tab's table reads, so a
+// link can open a tab already narrowed to one pool, app, VM or share.
+export const TRUENAS_QUERY_PARAMS = {
+  kind: 'kind',
+  query: 'q',
+} as const;
 export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const ALERT_THRESHOLDS_PATH = '/alerts/thresholds';
@@ -166,6 +172,11 @@ type WorkloadsLinkOptions = {
 
 type DockerLinkOptions = {
   host?: string | null;
+};
+
+type KubernetesLinkOptions = {
+  cluster?: string | null;
+  namespace?: string | null;
 };
 
 type StorageLinkOptions = {
@@ -320,6 +331,18 @@ export const buildDockerRouteSearch = (options: DockerLinkOptions = {}): string 
 export const buildKubernetesPath = (tab: string = KUBERNETES_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${KUBERNETES_PATH}/${normalized}` : KUBERNETES_PATH;
+};
+
+// The cluster and namespace scope the Kubernetes tabs read from the URL. The
+// cluster value is the one the page matches rows on: the cluster id, or its
+// name when no id is reported.
+export const buildKubernetesRouteSearch = (options: KubernetesLinkOptions = {}): string => {
+  const params = new URLSearchParams();
+  const cluster = normalizeQueryValue(options.cluster);
+  const namespace = normalizeQueryValue(options.namespace);
+  if (cluster) params.set(KUBERNETES_QUERY_PARAMS.cluster, cluster);
+  if (namespace) params.set(KUBERNETES_QUERY_PARAMS.namespace, namespace);
+  return serializedRouteSearch(params);
 };
 
 export const buildTrueNASPath = (tab: string = TRUENAS_DEFAULT_TAB): string => {

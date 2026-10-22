@@ -1,5 +1,4 @@
-import { Show, createSignal, type Accessor } from 'solid-js';
-import { Dialog } from '@/components/shared/Dialog';
+import { Show, type Accessor } from 'solid-js';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
@@ -15,7 +14,6 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import {
   getRecoveryAgeBand,
-  getRecoverableArtifactLocation,
   type RecoverableArtifact,
   type RecoveryAgeBand,
   type WorkloadReference,
@@ -263,8 +261,8 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; com
   );
 }
 
-// Completion and verification are independent of the provider's prune-protected
-// flag. Never let retention protection hide an unverified or unknown point.
+// Short state label for a recoverable artifact, paired with ArtifactStateBadge
+// for colour. Snapshot and protected take precedence over verification state.
 export function artifactStateLabel(artifact: RecoverableArtifact): string {
   if (artifact.sourceKind === 'snapshot') {
     return getProxmoxBackupSourcePresentation('snapshot').stateFallbackLabel;
@@ -272,206 +270,65 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
   // Runtime/terminal incompleteness outranks every completed-artifact state.
   if (artifact.running) return 'Running';
   if (artifact.failed) return 'Failed';
+  if (artifact.protected) return 'Protected';
   if (artifact.verified === true) return 'Verified';
   if (artifact.verified === false) return 'Unverified';
-  if (artifact.sourceKind === 'pbs') return 'Unknown';
   return getProxmoxBackupSourcePresentation(artifact.sourceKind).stateFallbackLabel;
 }
 
-const PRUNE_PROTECTION_DESCRIPTION =
-  "The provider marks this backup protected from pruning. This is not verification or the workload's protection assessment.";
-
-export function ArtifactStateBadge(props: { artifact: RecoverableArtifact }) {
-  const [detailsOpen, setDetailsOpen] = createSignal(false);
-  let trigger: HTMLButtonElement | undefined;
-  const workloadLabel = () => props.artifact.workload.name || props.artifact.workload.label;
-  const pruneProtected = () => props.artifact.sourceKind !== 'snapshot' && props.artifact.protected;
-  const state = () => {
-    const artifact = props.artifact;
-    if (artifact.sourceKind === 'snapshot') {
-      return { tone: 'indigo' as const, title: 'Guest snapshot, not a separate backup.' };
-    }
-    if (artifact.running) {
-      return { tone: 'info' as const, title: 'Backup running, not a completed recovery point.' };
-    }
-    if (artifact.failed) {
-      return {
-        tone: 'danger' as const,
-        title: 'Incomplete backup, not a completed recovery point.',
-      };
-    }
-    if (artifact.verified === true) {
-      return {
-        tone: 'success' as const,
-        title:
-          'Successful verification reported for this point. This does not prove a restore or guest thaw.',
-      };
-    }
-    if (artifact.verified === false) {
-      return {
-        tone: 'warning' as const,
-        title:
-          'No successful verification evidence for this point. This does not prove that the verification job failed.',
-      };
-    }
-    return {
-      tone: 'muted' as const,
-      title: 'Verification unknown: no verification result reported for this point.',
-    };
-  };
+export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
+  if (props.artifact.running) {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="info">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
+  if (props.artifact.failed) {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="danger">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
+  if (props.artifact.sourceKind === 'snapshot') {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="indigo">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
+  if (props.artifact.protected) {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
+  if (props.artifact.verified === true) {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="success">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
+  if (props.artifact.verified === false) {
+    return (
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
+        {props.label}
+      </MetadataBadge>
+    );
+  }
   return (
-    <>
-      {/* State meanings are safety evidence, not just hover help. One native
-          read-only action serves both badges without changing the row action. */}
-      <button
-        ref={trigger}
-        type="button"
-        class="inline-flex min-h-11 min-w-11 max-w-full flex-col items-start justify-center gap-1 rounded-sm text-left sm:min-h-6 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-        aria-label={`Backup evidence for ${workloadLabel()}: ${artifactStateLabel(props.artifact)}${pruneProtected() ? ', prune protected' : ''}`}
-        aria-haspopup="dialog"
-        aria-expanded={detailsOpen()}
-        onClick={(event) => {
-          event.stopPropagation();
-          setDetailsOpen(true);
-        }}
-      >
-        <MetadataBadge
-          {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
-          tone={state().tone}
-          title={state().title}
-          wrap
-          data-backup-artifact-state
-        >
-          {artifactStateLabel(props.artifact)}
-          <Show
-            when={
-              props.artifact.sourceKind === 'pbs' &&
-              artifactStateLabel(props.artifact) === 'Unknown'
-            }
-          >
-            <span class="sr-only"> verification</span>
-          </Show>
-        </MetadataBadge>
-        <Show when={pruneProtected()}>
-          <MetadataBadge
-            {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
-            tone="info"
-            title={PRUNE_PROTECTION_DESCRIPTION}
-            wrap
-            data-backup-prune-protected
-          >
-            Prune protected
-          </MetadataBadge>
-        </Show>
-        <span class="text-[10px] text-muted underline underline-offset-2">Details</span>
-      </button>
-      <Show when={detailsOpen()}>
-        <Dialog
-          isOpen
-          ariaLabel="Backup evidence details"
-          onClose={() => setDetailsOpen(false)}
-          returnFocus={() => trigger}
-        >
-          <div class="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
-            <h2 class="text-sm font-semibold text-base-content">Backup evidence</h2>
-            <button
-              type="button"
-              aria-label="Close backup evidence"
-              class="min-h-11 rounded-sm px-3 text-xs text-muted hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
-              onClick={() => setDetailsOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-          <div
-            class="space-y-4 overflow-y-auto p-4 text-xs text-base-content whitespace-normal wrap-anywhere"
-            data-backup-evidence-details
-          >
-            <dl class="space-y-2">
-              <div>
-                <dt class="text-muted">Workload</dt>
-                <dd>
-                  {workloadLabel()} · {props.artifact.workload.typeLabel}{' '}
-                  {props.artifact.workload.vmid || '—'}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-muted">Workload connection</dt>
-                <dd>{props.artifact.workload.instance?.trim() || 'Unknown'}</dd>
-              </div>
-              <div>
-                <dt class="text-muted">Source</dt>
-                <dd>{props.artifact.sourceLabel}</dd>
-              </div>
-              <div>
-                <dt class="text-muted">Location</dt>
-                <dd>{getRecoverableArtifactLocation(props.artifact)}</dd>
-              </div>
-              <div>
-                <dt class="text-muted">Reported date</dt>
-                <dd>{props.artifact.createdAt || 'Not reported'}</dd>
-              </div>
-              <div>
-                <dt class="text-muted">Record</dt>
-                <dd class="whitespace-pre-wrap">{props.artifact.nativeId}</dd>
-              </div>
-            </dl>
-            <section class="space-y-1" data-backup-verification-evidence>
-              <h3 class="font-semibold">{artifactStateLabel(props.artifact)}</h3>
-              <p>{state().title}</p>
-            </section>
-            <Show when={pruneProtected()}>
-              <section class="space-y-1" data-backup-prune-evidence>
-                <h3 class="font-semibold">Prune protected</h3>
-                <p>{PRUNE_PROTECTION_DESCRIPTION}</p>
-              </section>
-            </Show>
-            <p class="border-t border-border pt-3 text-muted">
-              Backup inventory and verification do not establish guest responsiveness or a
-              successful restore.
-            </p>
-          </div>
-        </Dialog>
-      </Show>
-    </>
+    <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="muted">
+      {props.label}
+    </MetadataBadge>
   );
 }
 
-// Restore-point provenance must be readable without hover. The repository's
-// connection is separate from workload attribution and saved location keys;
-// equal datastore/namespace names on two PBS connections are not one location.
-export function ArtifactLocationText(props: { artifact: RecoverableArtifact }) {
-  return (
-    <span
-      class="block whitespace-normal wrap-anywhere text-left leading-snug text-base-content"
-      data-backup-location
-    >
-      {getRecoverableArtifactLocation(props.artifact)}
-    </span>
-  );
-}
-
-// A format such as "zst" is not the archive identifier. Keep the full
-// provider value readable/selectable without hover, beside its short context.
-export function ArtifactDetailText(props: { artifact: RecoverableArtifact }) {
-  return (
-    <span
-      class="block min-w-0 whitespace-normal wrap-anywhere text-left leading-snug"
-      data-backup-artifact-details
-    >
-      <span>{props.artifact.detail || '—'}</span>
-      <Show
-        when={props.artifact.detailTitle && props.artifact.detailTitle !== props.artifact.detail}
-      >
-        <span class="block text-muted" data-backup-artifact-identifier>
-          {props.artifact.detailTitle}
-        </span>
-      </Show>
-    </span>
-  );
-}
-
-export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
+// Table rows keep the label on one line; a drawer passes `wrap` so a long
+// snapshot or archive name stays readable on a phone, which cannot hover.
+export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact; wrap?: boolean }) {
   const presentation = () => getProxmoxBackupSourcePresentation(props.artifact.sourceKind);
   const title = () => props.artifact.sourceTitle ?? presentation().sourceTitle;
 
@@ -480,9 +337,7 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
       {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
       tone={presentation().badgeTone}
       title={title()}
-      // These cells narrow independently of the viewport. Keep the source
-      // readable in both tables instead of clipping it behind a hover title.
-      wrap
+      wrap={props.wrap}
     >
       {props.artifact.sourceLabel}
     </MetadataBadge>

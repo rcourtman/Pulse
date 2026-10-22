@@ -1,5 +1,11 @@
 import { createMemo, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -20,9 +26,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
-  createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
@@ -31,6 +35,11 @@ import {
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import {
+  KubernetesRecordDetailPanel,
+  kubernetesLabelsSection,
+  kubernetesObjectSection,
+} from './KubernetesRecordDetail';
 import { KubernetesScopeText } from './KubernetesScopeText';
 
 // Kubernetes policy resources carry very different API fields. Keep this table
@@ -179,6 +188,86 @@ const policyState = (resource: Resource): { label: string; title: string } => {
 const labelSummary = (resource: Resource): { label: string; title: string } =>
   summarizePlatformTableValues(resource.tags);
 
+// The policy's own fields in full: the table cells summarise them and cap
+// long lists, which a phone cannot hover to read.
+const policyContentSection = (resource: Resource): DetailSection | null => {
+  const k = resource.kubernetes;
+  switch (resource.type) {
+    case 'k8s-network-policy':
+      return {
+        label: 'Network policy',
+        rows: compactDetailRows([
+          makeDetailRow('Applies to', policyTypes(resource).title || policyTypes(resource).label, {
+            wrap: true,
+          }),
+          typeof k?.ingressRuleCount === 'number'
+            ? makeDetailRow('Ingress rules', String(k.ingressRuleCount))
+            : null,
+          typeof k?.egressRuleCount === 'number'
+            ? makeDetailRow('Egress rules', String(k.egressRuleCount))
+            : null,
+        ]),
+      };
+    case 'k8s-pod-disruption-budget':
+      return {
+        label: 'Disruption budget',
+        rows: compactDetailRows([
+          makeDetailRow('Min available', asTrimmedString(k?.minAvailable)),
+          makeDetailRow('Max unavailable', asTrimmedString(k?.maxUnavailable)),
+          typeof k?.currentHealthy === 'number' || typeof k?.desiredHealthy === 'number'
+            ? makeDetailRow(
+                'Healthy',
+                `${k?.currentHealthy ?? 0} of ${k?.desiredHealthy ?? 0} wanted`,
+              )
+            : null,
+          typeof k?.disruptionsAllowed === 'number'
+            ? makeDetailRow('Disruptions allowed', String(k.disruptionsAllowed))
+            : null,
+          typeof k?.expectedPods === 'number'
+            ? makeDetailRow('Expected pods', String(k.expectedPods))
+            : null,
+        ]),
+      };
+    case 'k8s-resource-quota': {
+      const hard = k?.hard ?? {};
+      const used = k?.used ?? {};
+      return {
+        label: 'Quota (used of hard limit)',
+        rows: compactDetailRows(
+          quotaKeys(resource).map((key) =>
+            makeDetailRow(key, `${used[key] ?? '0'} of ${hard[key] ?? 'no limit'}`, {
+              wrap: true,
+            }),
+          ),
+        ),
+      };
+    }
+    case 'k8s-limit-range':
+      return {
+        label: 'Limit range',
+        rows: compactDetailRows([
+          makeDetailRow('Limits', (k?.limitTypes ?? []).join(', '), { wrap: true }),
+        ]),
+      };
+    default:
+      return null;
+  }
+};
+
+const policySummary = (resource: Resource): string =>
+  [policyShape(resource).label, policyState(resource).label]
+    .filter((part) => part && part !== '—')
+    .join(' · ');
+
+const buildPolicyDetailSections = (
+  resource: Resource,
+  now: number,
+): Array<DetailSection | null> => [
+  kubernetesObjectSection(resource, policyKind(resource), now),
+  policyContentSection(resource),
+  kubernetesLabelsSection(resource),
+];
+
 export const KubernetesPolicyTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -198,7 +287,6 @@ export const KubernetesPolicyTable: Component<{
     externalStatus: props.externalStatus,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-policy-drawer' });
-  const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
     <Show
@@ -372,14 +460,23 @@ export const KubernetesPolicyTable: Component<{
                             </span>
                           </TableCell>
                         </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={7}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
-                        />
+                        <Show when={isExpanded()}>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={7}
+                            data-inline-kubernetes-policy-detail-for={resource.id}
+                          >
+                            <KubernetesRecordDetailPanel
+                              testId="kubernetes-policy-detail"
+                              resource={resource}
+                              title={name()}
+                              status={indicator()}
+                              summary={policySummary(resource)}
+                              sections={(now) => buildPolicyDetailSections(resource, now)}
+                              onClose={() => drawer.close(resource)}
+                            />
+                          </InlineDetailTableRow>
+                        </Show>
                       </>
                     );
                   }}

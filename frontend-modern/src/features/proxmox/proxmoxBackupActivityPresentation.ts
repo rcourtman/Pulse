@@ -69,9 +69,6 @@ export interface BackupActivityPoint {
   key: string;
   total: number;
   counts: Record<BackupActivitySegmentKind, number>;
-  // Value-mode observations without a usable positive reading still establish
-  // activity. They cannot become zero-byte backups or disappear from the day.
-  unmeasuredCount?: number;
 }
 
 export interface BackupActivityTimeline {
@@ -84,8 +81,10 @@ function emptyCounts(): Record<BackupActivitySegmentKind, number> {
   return { archive: 0, pbs: 0, ok: 0, failed: 0, running: 0, snapshot: 0 };
 }
 
-function startOfLocalDayMs(date: Date, dayOffset: number): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + dayOffset).getTime();
+function startOfLocalDayMs(date: Date): number {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy.getTime();
 }
 
 export function buildBackupActivityTimeline<T>(
@@ -101,15 +100,14 @@ export function buildBackupActivityTimeline<T>(
 ): BackupActivityTimeline {
   const now = options?.now ?? new Date();
   const getValue = options?.getValue ?? (() => 1);
-  // The chart and its day filter use local calendar dates. A clock change
-  // can make a day shorter or longer than 24 hours, including half-hour shifts.
-  const windowStart = startOfLocalDayMs(now, 1 - days);
+  const todayStart = startOfLocalDayMs(now);
+  const windowStart = todayStart - (days - 1) * 24 * 60 * 60 * 1000;
 
   const buckets = new Map<string, BackupActivityPoint>();
   const orderedKeys: string[] = [];
 
   for (let i = 0; i < days; i += 1) {
-    const dayStart = startOfLocalDayMs(now, 1 - days + i);
+    const dayStart = windowStart + i * 24 * 60 * 60 * 1000;
     const key = recoveryDateKeyFromTimestamp(dayStart);
     orderedKeys.push(key);
     buckets.set(key, { key, total: 0, counts: emptyCounts() });
@@ -121,16 +119,14 @@ export function buildBackupActivityTimeline<T>(
     // A future time on today's date is still not observed past activity.
     if (ts > now.getTime()) continue;
     if (ts < windowStart) continue;
+    if (ts >= todayStart + 24 * 60 * 60 * 1000) continue;
     const kind = classify(item);
     if (!kind) continue;
+    const value = getValue(item);
+    if (!Number.isFinite(value) || value <= 0) continue;
     const key = recoveryDateKeyFromTimestamp(ts);
     const bucket = buckets.get(key);
     if (!bucket) continue;
-    const value = getValue(item);
-    if (!Number.isFinite(value) || value <= 0) {
-      bucket.unmeasuredCount = (bucket.unmeasuredCount ?? 0) + 1;
-      continue;
-    }
     bucket.counts[kind] += value;
     bucket.total += value;
   }
@@ -185,13 +181,8 @@ export function getBackupActivityPointTotalLabel(
   total: number,
   noun: BackupActivityNoun,
   mode: BackupActivityMetricMode = 'count',
-  unmeasuredCount = 0,
 ): string {
   if (mode === 'volume') {
-    if (unmeasuredCount > 0) {
-      const missing = `${unmeasuredCount} ${noun}${unmeasuredCount === 1 ? '' : 's'} without a positive size`;
-      return `${total > 0 ? `${formatBytes(total)} reported` : 'Size unavailable'}. ${missing}`;
-    }
     return formatBytes(Math.max(0, total));
   }
   const normalized = Math.max(0, Math.round(total));
@@ -205,9 +196,8 @@ export function getBackupActivityColumnAriaLabel(
   selected: boolean,
   noun: BackupActivityNoun,
   mode: BackupActivityMetricMode = 'count',
-  unmeasuredCount = 0,
 ): string {
-  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode, unmeasuredCount);
+  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode);
   return selected ? `${dateLabel}: ${countLabel}, selected` : `${dateLabel}: ${countLabel}`;
 }
 

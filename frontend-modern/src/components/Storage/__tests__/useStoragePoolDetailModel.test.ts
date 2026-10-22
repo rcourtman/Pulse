@@ -59,6 +59,13 @@ const buildDisk = (): Resource =>
   }) as Resource;
 
 describe('useStoragePoolDetailModel', () => {
+  it('falls back to the record id when the pool has no metrics target', () => {
+    const [record] = createSignal({ ...buildRecord(), metricsTarget: undefined });
+    const [physicalDisks] = createSignal<Resource[]>([]);
+    const { result } = renderHook(() => useStoragePoolDetailModel({ record, physicalDisks }));
+    expect(result.historyTarget()).toEqual({ resourceType: 'storage', resourceId: 'storage-1' });
+  });
+
   it('builds canonical pool detail model state', () => {
     const [record] = createSignal(buildRecord());
     const [physicalDisks] = createSignal<Resource[]>([buildDisk()]);
@@ -70,8 +77,8 @@ describe('useStoragePoolDetailModel', () => {
       }),
     );
 
-    expect(result.chartRange()).toBe('7d');
-    expect(result.chartTarget()).toEqual({
+    // The drawer owns its chart range; the model owns what the chart reads.
+    expect(result.historyTarget()).toEqual({
       resourceType: 'storage',
       resourceId: 'pool:tank',
     });
@@ -84,6 +91,7 @@ describe('useStoragePoolDetailModel', () => {
     expect(result.zfsSummary()).toEqual({
       state: 'ONLINE',
       scan: 'scrub in progress',
+      scanErrors: 0,
       errorSummary: null,
       devices: [{ name: 'sda', type: '', state: '', errorSummary: '', message: '' }],
       datasets: [],

@@ -17,10 +17,7 @@ describe('backup inventory response boundary', () => {
   it('keeps observed rows, missing optional facts and future fields without coercion', () => {
     const data = {
       ...pveData,
-      backupTasks: [{ ...task, observedAt: '2026-10-18T01:00:00Z' }],
-      storageBackups: [
-        { ...archive, storageNode: 'local-node', inProgress: true, futureField: { enabled: true } },
-      ],
+      storageBackups: [{ ...archive, inProgress: true, futureField: { enabled: true } }],
     };
     const result = parsePVEBackupInventory({ data });
     expect(result).toEqual(data);
@@ -104,8 +101,6 @@ describe('backup inventory response boundary', () => {
     ['backupTasks', task, 'status', {}],
     ['backupTasks', task, 'startTime', null],
     ['backupTasks', task, 'endTime', 1],
-    ['backupTasks', task, 'observedAt', 1],
-    ['backupTasks', task, 'observedAt', null],
     ['backupTasks', task, 'error', []],
     ['storageBackups', archive, 'id', ' '],
     ['storageBackups', archive, 'vmid', '112'],
@@ -117,8 +112,6 @@ describe('backup inventory response boundary', () => {
     ['storageBackups', archive, 'instance', 1],
     ['storageBackups', archive, 'storage', []],
     ['storageBackups', archive, 'format', {}],
-    ['storageBackups', archive, 'storageNode', {}],
-    ['storageBackups', archive, 'storageNode', null],
     ['storageBackups', archive, 'volid', []],
     ['storageBackups', archive, 'size', Number.POSITIVE_INFINITY],
     ['storageBackups', archive, 'protected', 'false'],

@@ -41,7 +41,7 @@
       "baselineGzip": 22627
     },
     "Kubernetes": {
-      "baselineGzip": 18267
+      "baselineGzip": 21732
     },
     "vendor-solid": {
       "baselineGzip": 17639

@@ -1,4 +1,4 @@
-// Real DiskList/DiskDetail and keyed renderer, with synthetic collector snapshots.
+// Real DiskList/DiskDrawer and keyed renderer, with synthetic collector snapshots.
 // This is browser behaviour evidence, not an installed SMART or appliance result.
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';

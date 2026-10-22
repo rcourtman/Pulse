@@ -1,5 +1,11 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -33,6 +39,11 @@ import {
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+import {
+  KubernetesRecordDetailPanel,
+  kubernetesLabelsSection,
+  kubernetesObjectSection,
+} from './KubernetesRecordDetail';
 import { KubernetesScopeText } from './KubernetesScopeText';
 
 // ConfigMaps and Secrets are intentionally rendered as API metadata. Pulse may
@@ -161,6 +172,105 @@ const serviceAccountRefs = (resource: Resource): { label: string; title: string 
 
 const labelSummary = (resource: Resource): { label: string; title: string } =>
   summarizePlatformTableValues(resource.tags);
+
+const yesNo = (value: boolean | undefined): string | null =>
+  typeof value === 'boolean' ? (value ? 'Yes' : 'No') : null;
+
+// What the object holds, without its payload: key counts for Secrets (never
+// key names or values), key names for a ConfigMap Pulse read in full, the
+// rule and subject counts RBAC objects report.
+const configContentSection = (resource: Resource): DetailSection | null => {
+  const k = resource.kubernetes;
+  const dataKeys = k?.dataKeys ?? [];
+  const binaryKeys = k?.binaryDataKeys ?? [];
+  switch (resource.type) {
+    case 'k8s-configmap':
+    case 'k8s-secret': {
+      const showNames = resource.type === 'k8s-configmap' && !k?.metadataOnly;
+      return {
+        label: resource.type === 'k8s-secret' ? 'Secret' : 'ConfigMap',
+        rows: compactDetailRows([
+          resource.type === 'k8s-secret'
+            ? makeDetailRow('Type', asTrimmedString(k?.secretType), { wrap: true })
+            : null,
+          makeDetailRow('Data', dataShape(resource).label, { wrap: true }),
+          showNames && dataKeys.length > 0
+            ? makeDetailRow('Data keys', dataKeys.join(', '), { wrap: true })
+            : null,
+          showNames && binaryKeys.length > 0
+            ? makeDetailRow('Binary keys', binaryKeys.join(', '), { wrap: true })
+            : null,
+          makeDetailRow('Immutable', yesNo(k?.immutable)),
+          k?.metadataOnly ? makeDetailRow('Collection', 'Metadata only') : null,
+        ]),
+      };
+    }
+    case 'k8s-serviceaccount':
+      return {
+        label: 'Service account',
+        rows: compactDetailRows([
+          makeDetailRow('Token', lifecycleOrTrust(resource)),
+          typeof k?.secretCount === 'number'
+            ? makeDetailRow('Secrets', plural(k.secretCount, 'secret'))
+            : null,
+          makeDetailRow('Image pull secrets', (k?.imagePullSecrets ?? []).join(', '), {
+            wrap: true,
+          }),
+        ]),
+      };
+    case 'k8s-role':
+    case 'k8s-cluster-role': {
+      const aggregation = Object.entries(k?.aggregationLabels ?? {});
+      return {
+        label: 'Rules',
+        rows: compactDetailRows([
+          makeDetailRow('Rules', plural(k?.ruleCount ?? 0, 'rule')),
+          makeDetailRow(
+            'Aggregates',
+            aggregation.map(([key, value]) => (value ? `${key}=${value}` : key)).join(', '),
+            { wrap: true },
+          ),
+        ]),
+      };
+    }
+    case 'k8s-role-binding':
+    case 'k8s-cluster-role-binding':
+      return {
+        label: 'Binding',
+        rows: compactDetailRows([
+          makeDetailRow(
+            'Role',
+            lifecycleOrTrust(resource) === '—' ? null : lifecycleOrTrust(resource),
+            {
+              wrap: true,
+            },
+          ),
+          makeDetailRow('Subjects', plural(k?.subjectCount ?? 0, 'subject')),
+          makeDetailRow('Subject kinds', (k?.subjectKinds ?? []).join(', '), { wrap: true }),
+        ]),
+      };
+    default:
+      return null;
+  }
+};
+
+const configSummary = (resource: Resource): string =>
+  [lifecycleOrTrust(resource), dataShape(resource).label, serviceAccountRefs(resource).label]
+    .filter((part) => part && part !== '—')
+    .join(' · ');
+
+const buildConfigDetailSections = (
+  resource: Resource,
+  now: number,
+): Array<DetailSection | null> => [
+  kubernetesObjectSection(resource, configKind(resource), now),
+  configContentSection(resource),
+  kubernetesLabelsSection(resource),
+];
+
+// Namespaces carry alerts of their own, so they keep the full object drawer;
+// every other row here is a record about the cluster's configuration.
+const hasObjectDrawer = (resource: Resource): boolean => resource.type === 'k8s-namespace';
 
 // Data shape, Token refs, and Labels are composite summaries with no single
 // scalar to order on, so they stay non-sortable. Lifecycle / trust is a
@@ -408,14 +518,38 @@ export const KubernetesConfigTable: Component<{
                             </span>
                           </TableCell>
                         </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={7}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
-                        />
+                        <Show
+                          when={hasObjectDrawer(resource)}
+                          fallback={
+                            <Show when={isExpanded()}>
+                              <InlineDetailTableRow
+                                cellId={detailRowId()}
+                                colspan={7}
+                                data-inline-kubernetes-config-detail-for={resource.id}
+                              >
+                                <KubernetesRecordDetailPanel
+                                  testId="kubernetes-config-detail"
+                                  resource={resource}
+                                  title={name()}
+                                  status={indicator()}
+                                  summary={configSummary(resource)}
+                                  sections={(now) => buildConfigDetailSections(resource, now)}
+                                  onClose={() => drawer.close(resource)}
+                                />
+                              </InlineDetailTableRow>
+                            </Show>
+                          }
+                        >
+                          <PlatformResourceDetailTableRow
+                            resource={resource}
+                            statusIndicator={indicator()}
+                            open={isExpanded()}
+                            detailRowId={detailRowId()}
+                            colSpan={7}
+                            resolveResourceLabel={resolveResourceLabel}
+                            onClose={() => drawer.close(resource)}
+                          />
+                        </Show>
                       </>
                     );
                   }}

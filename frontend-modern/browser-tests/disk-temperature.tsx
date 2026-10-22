@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { DiskDetail } from '../src/components/Storage/DiskDetail';
+import { DiskDrawer } from '../src/components/Storage/DiskDrawer';
 import type { Resource } from '../src/types/resource';
 import { temperatureStore } from '../src/utils/temperature';
 import '../src/index.css';
@@ -30,7 +30,7 @@ const Fixture = () => {
   return (
     <main class="min-h-screen space-y-4 bg-surface p-4 text-base-content">
       <h1>Physical disk Overview</h1>
-      <p>Synthetic disk snapshots; production detail component.</p>
+      <p>Synthetic disk snapshots; production disk drawer.</p>
       <div class="flex flex-wrap gap-2">
         <button class="min-h-11 border px-3" onClick={() => reading(65)}>
           Hot reading
@@ -49,7 +49,7 @@ const Fixture = () => {
         </button>
       </div>
       <section class="max-w-3xl">
-        <DiskDetail disk={disk()} nodes={[]} />
+        <DiskDrawer disk={disk()} onClose={() => {}} />
       </section>
     </main>
   );

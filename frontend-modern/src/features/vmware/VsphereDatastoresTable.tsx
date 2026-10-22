@@ -374,6 +374,7 @@ export const VsphereDatastoresTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={datastore}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={8}

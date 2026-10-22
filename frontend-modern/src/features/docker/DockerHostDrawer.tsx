@@ -1,9 +1,12 @@
 import { Show, createMemo, createSignal, type Component } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 
 import type { HistoryTimeRange } from '@/api/charts';
+import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
+import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
@@ -11,6 +14,7 @@ import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { Resource } from '@/types/resource';
 import { asTrimmedString } from '@/utils/stringUtils';
 
+import { DockerHostActionHistory } from './DockerHostActionHistory';
 import { DockerHostDrawerManagement, DockerHostDrawerOverview } from './DockerHostDrawerOverview';
 import {
   DOCKER_HOST_DRAWER_HISTORY_GROUPS,
@@ -41,6 +45,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   const metadataId = createMemo(
     () => asTrimmedString(props.host.docker?.hostSourceId) || asTrimmedString(props.host.id),
   );
+  const customUrl = () => props.customUrl ?? props.host.customUrl ?? '';
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="docker-host-drawer">
@@ -59,6 +64,18 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
           <ObjectDrawerHeader
             collapseLabel={`Collapse ${displayName()} details`}
             onCollapse={onClose()}
+            actions={
+              <Show when={customUrl().trim()}>
+                <WebInterfaceLink
+                  url={customUrl()}
+                  ariaLabel={`Open web interface for ${displayName()}`}
+                  class={getDrawerHeaderActionButtonClass()}
+                >
+                  <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Open</span>
+                </WebInterfaceLink>
+              </Show>
+            }
           >
             <DrawerSubjectHeading
               headingId={headingId()}
@@ -97,22 +114,24 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
 
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
+          {/* The guest drawer's Manage order: operator state first, then this
+              platform's own controls, the web interface URL and action history. */}
           <div class="space-y-3" data-testid="docker-host-manage-tab">
-            <DockerHostDrawerManagement host={props.host} />
             <ResourceOperatorStateSection
               resourceId={props.host.id}
               resourceType="docker-host"
               platformType={props.host.platformType || 'docker'}
               capabilities={props.host.capabilities}
             />
+            <DockerHostDrawerManagement host={props.host} />
             <WebInterfaceUrlField
               metadataKind="docker-host"
               metadataId={metadataId()}
               targetLabel={displayName()}
-              title="Access"
-              customUrl={props.customUrl ?? props.host.customUrl ?? ''}
+              customUrl={customUrl()}
               onCustomUrlChange={props.onCustomUrlChange}
             />
+            <DockerHostActionHistory resourceId={props.host.id} />
           </div>
         </Show>
       </div>

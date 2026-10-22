@@ -8,6 +8,7 @@ import {
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
+import { TRUENAS_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { useUnifiedResources, type UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
 import { updateStore } from '@/stores/updates';
 import type { Resource } from '@/types/resource';
@@ -140,6 +141,15 @@ export function TrueNASPageSurface() {
   };
   const setStorageKindFilter = (value: TrueNASStorageKindFilter) =>
     setSearchParams({ kind: value === 'all' ? null : value }, { replace: true });
+  // Each tab's table search lives in the URL, so a link from a drawer or an
+  // alert can open a tab already narrowed to one pool, app, VM or share.
+  const search = () => {
+    const value = searchParams[TRUENAS_QUERY_PARAMS.query];
+    return typeof value === 'string' ? value : '';
+  };
+  const setSearch = (value: string) =>
+    setSearchParams({ [TRUENAS_QUERY_PARAMS.query]: value || null }, { replace: true });
+  const tableSearch = { search, onSearchChange: setSearch };
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );
@@ -202,24 +212,25 @@ export function TrueNASPageSurface() {
             <Show when={activeTab() === 'storage'}>
               <TrueNASStorage
                 model={model}
+                {...tableSearch}
                 kindFilter={storageKindFilter()}
                 onKindFilterChange={setStorageKindFilter}
               />
             </Show>
             <Show when={activeTab() === 'services'}>
-              <TrueNASServices model={model} />
+              <TrueNASServices model={model} {...tableSearch} />
             </Show>
             <Show when={activeTab() === 'apps'}>
-              <TrueNASApps model={model} />
+              <TrueNASApps model={model} {...tableSearch} />
             </Show>
             <Show when={activeTab() === 'vms'}>
-              <TrueNASVMs model={model} />
+              <TrueNASVMs model={model} {...tableSearch} />
             </Show>
             <Show when={activeTab() === 'shares'}>
-              <TrueNASShares model={model} />
+              <TrueNASShares model={model} {...tableSearch} />
             </Show>
             <Show when={activeTab() === 'protection'}>
-              <TrueNASProtection recoveryPoints={protection} />
+              <TrueNASProtection recoveryPoints={protection} {...tableSearch} />
             </Show>
           </Show>
         </Show>
@@ -232,7 +243,14 @@ interface TrueNASOverviewProps {
   model: Accessor<TrueNASPageModel>;
 }
 
-interface TrueNASStorageProps extends TrueNASOverviewProps {
+interface TrueNASTableSearchProps {
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
+}
+
+type TrueNASTabProps = TrueNASOverviewProps & TrueNASTableSearchProps;
+
+interface TrueNASStorageProps extends TrueNASTabProps {
   kindFilter: TrueNASStorageKindFilter;
   onKindFilterChange: (value: TrueNASStorageKindFilter) => void;
 }
@@ -240,6 +258,8 @@ interface TrueNASStorageProps extends TrueNASOverviewProps {
 function TrueNASStorage(props: TrueNASStorageProps) {
   return (
     <TrueNASStorageTopologyTable
+      search={props.search}
+      onSearchChange={props.onSearchChange}
       resources={props.model().resources}
       scope={props.model().resources}
       emptyIcon={truenasIcon()}
@@ -251,9 +271,11 @@ function TrueNASStorage(props: TrueNASStorageProps) {
   );
 }
 
-function TrueNASApps(props: TrueNASOverviewProps) {
+function TrueNASApps(props: TrueNASTabProps) {
   return (
     <TrueNASAppsTable
+      search={props.search}
+      onSearchChange={props.onSearchChange}
       apps={props.model().apps}
       scope={props.model().resources}
       emptyIcon={truenasIcon()}
@@ -263,9 +285,11 @@ function TrueNASApps(props: TrueNASOverviewProps) {
   );
 }
 
-function TrueNASServices(props: TrueNASOverviewProps) {
+function TrueNASServices(props: TrueNASTabProps) {
   return (
     <TrueNASServicesTable
+      search={props.search}
+      onSearchChange={props.onSearchChange}
       services={props.model().services}
       emptyIcon={truenasIcon()}
       emptyTitle="No TrueNAS services"
@@ -274,9 +298,11 @@ function TrueNASServices(props: TrueNASOverviewProps) {
   );
 }
 
-function TrueNASVMs(props: TrueNASOverviewProps) {
+function TrueNASVMs(props: TrueNASTabProps) {
   return (
     <TrueNASVirtualMachinesTable
+      search={props.search}
+      onSearchChange={props.onSearchChange}
       vms={props.model().vms}
       scope={props.model().resources}
       emptyIcon={truenasIcon()}
@@ -286,9 +312,11 @@ function TrueNASVMs(props: TrueNASOverviewProps) {
   );
 }
 
-function TrueNASShares(props: TrueNASOverviewProps) {
+function TrueNASShares(props: TrueNASTabProps) {
   return (
     <TrueNASNetworkSharesTable
+      search={props.search}
+      onSearchChange={props.onSearchChange}
       shares={props.model().shares}
       scope={props.model().resources}
       emptyIcon={truenasIcon()}
@@ -298,9 +326,13 @@ function TrueNASShares(props: TrueNASOverviewProps) {
   );
 }
 
-function TrueNASProtection(props: { recoveryPoints: ReturnType<typeof useRecoveryPoints> }) {
+function TrueNASProtection(
+  props: { recoveryPoints: ReturnType<typeof useRecoveryPoints> } & TrueNASTableSearchProps,
+) {
   return (
     <TrueNASProtectionTable
+      search={props.search}
+      onSearchChange={props.onSearchChange}
       points={props.recoveryPoints.points()}
       loading={props.recoveryPoints.response.loading}
       error={props.recoveryPoints.response.error}

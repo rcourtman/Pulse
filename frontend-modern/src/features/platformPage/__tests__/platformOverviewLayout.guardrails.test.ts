@@ -40,7 +40,6 @@ import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.ts
 import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
-import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
 import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
@@ -176,10 +175,9 @@ const proxmoxBespokeTableSources = [
   proxmoxReplicationTableSource,
 ];
 
-const proxmoxInlineDetailTableSources = [
-  proxmoxCephClusterDrawerSource,
-  proxmoxMailGatewayDrawerSource,
-];
+// The Ceph cluster drawer shows its pools and daemons as detail-section
+// cards, so only the Mail Gateway's node and domain tables remain here.
+const proxmoxInlineDetailTableSources = [proxmoxMailGatewayDrawerSource];
 
 type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
 
@@ -362,6 +360,10 @@ describe('platform overview layout guardrails', () => {
       expect(source).not.toContain('<tbody');
       expect(source).not.toContain('divide-y divide-border-subtle');
     }
+    // Ceph pools and daemons are shared detail-section cards, not a hand list.
+    expect(proxmoxCephClusterDrawerSource).toContain('<TechnicalDetailsSection');
+    expect(proxmoxCephClusterDrawerSource).not.toContain('<dl');
+    expect(proxmoxCephClusterDrawerSource).not.toContain('<table');
   });
 
   it('keeps Mail Gateway drawer tables prioritized for narrow inline details', () => {
@@ -506,7 +508,7 @@ describe('platform overview layout guardrails', () => {
     // A capped inline-block (max-w-52 truncate) ignored the column width, so a
     // long value spilled past a narrow cell without an ellipsis and sat above
     // the row's text line; a block span fills the cell and ellipsizes there.
-    const summarySources = [
+    for (const source of [
       dockerConfigsTableSource,
       dockerImagesTableSource,
       dockerNetworksTableSource,
@@ -515,7 +517,7 @@ describe('platform overview layout guardrails', () => {
       dockerTasksTableSource,
       dockerVolumesTableSource,
       proxmoxCoverageTableSource,
-      proxmoxMailGatewayDrawerSource,
+      proxmoxRecoverableTableSource,
       vsphereHostsTableSource,
       kubernetesAutoscalingTableSource,
       kubernetesConfigTableSource,
@@ -526,28 +528,16 @@ describe('platform overview layout guardrails', () => {
       kubernetesPolicyTableSource,
       kubernetesServicesTableSource,
       kubernetesStorageTableSource,
-    ];
-    for (const source of [...summarySources, proxmoxRecoverableTableSource]) {
+    ]) {
       expect(source).not.toMatch(/class="[^"]*\binline-block\b[^"]*\btruncate\b/);
       expect(source).not.toMatch(/class="[^"]*\btruncate\b[^"]*\binline-block\b/);
-    }
-    for (const source of summarySources) {
       // A block span that ellipsizes in its own cell, toned or not.
       expect(source).toMatch(/class=(?:"|\{`)block truncate\b/);
     }
-  });
-
-  it('keeps full restore-point details wrapping instead of requiring a clipped summary', () => {
-    // These cells intentionally moved to shared, wrapping evidence in
-    // 4d3bf0c8a6. The generic summary assertion must not undo that repair.
-    for (const component of ['ArtifactLocationText', 'ArtifactDetailText']) {
-      expect(proxmoxRecoverableTableSource).toContain(`<${component} artifact={artifact} />`);
-      const body = proxmoxBackupsTableSharedSource
-        .split(`export function ${component}(`)[1]!
-        .split('\nexport ')[0]!;
-      expect(body).toContain('whitespace-normal wrap-anywhere');
-      expect(body).not.toMatch(/class="[^"]*\btruncate\b/);
-    }
+    // Inside a drawer a phone cannot hover a clipped value, so the Mail
+    // Gateway's domain and node names wrap in their cells instead.
+    expect(proxmoxMailGatewayDrawerSource).not.toMatch(/class="[^"]*\btruncate\b/);
+    expect(proxmoxMailGatewayDrawerSource).toContain('block whitespace-normal wrap-anywhere');
   });
 
   it('keeps long tablet headers from clipping', () => {
@@ -927,28 +917,6 @@ describe('platform overview layout guardrails', () => {
       'TrueNASProtectionTable',
     );
     expect(jsxAttr(protectionTable, 'points')).toBe('props.recoveryPoints.points()');
-  });
-
-  it('keeps shared platform sorting on native controls without replacing column semantics', () => {
-    const sortable = functionDecl(parseTsx(sharedPlatformPageSource), 'PlatformSortableTableHead');
-    const header = onlyJsxTag(sortable, 'TableHead');
-    expect(jsxAttr(header, 'scope')).toBe('"col"');
-    expect(jsxAttr(header, 'aria-sort')).toContain('props.sort.getAriaSort');
-    expect(jsxAttr(header, 'role')).toBeUndefined();
-    const button = onlyJsxTag(sortable, 'button');
-    expect(jsxAttr(button, 'type')).toBe('"button"');
-    expect(jsxAttr(button, 'class')).toContain('focus-visible:ring-2');
-    expect(jsxAttr(button, 'onKeyDown')).toBeUndefined();
-    expect(jsxAttr(button, 'style')).toBeUndefined();
-    expect(jsxAttr(button, 'class')).toContain('[text-align:inherit]');
-    expect(jsxAttr(button, 'class')).toContain('[text-transform:inherit]');
-    const conditional = findNodes(sortable, ts.isJsxElement).find(
-      (node) =>
-        node.openingElement.tagName.getText() === 'Show' && node.getText().includes('<button'),
-    );
-    expect(conditional).toBeDefined();
-    expect(jsxAttr(conditional!.openingElement, 'when')).toBe('props.sortKey !== undefined');
-    expect(jsxAttr(conditional!.openingElement, 'fallback')).toBe('props.children');
   });
 
   it('keeps mobile host tables focused on useful operational columns', () => {

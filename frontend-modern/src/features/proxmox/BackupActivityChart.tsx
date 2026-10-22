@@ -1,4 +1,4 @@
-import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import type { Accessor, Component } from 'solid-js';
 
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -33,13 +33,15 @@ import {
   getBackupActivityTooltipRows,
   type BackupActivityMetricMode,
   type BackupActivityNoun,
+  type BackupActivityPoint,
   type BackupActivityRangeDays,
   type BackupActivitySegmentKind,
   type BackupActivityTimeline,
 } from './proxmoxBackupActivityPresentation';
 
 interface TooltipState {
-  dayKey: string;
+  dateLabel: string;
+  point: BackupActivityPoint;
   x: number;
   y: number;
 }
@@ -63,36 +65,13 @@ interface BackupActivityChartProps {
 }
 
 export const BackupActivityChart: Component<BackupActivityChartProps> = (props) => {
-  const [tooltipAnchor, setTooltipAnchor] = createSignal<TooltipState | null>(null);
-  const [focusedDayKey, setFocusedDayKey] = createSignal<string | null>(null);
-  const keyboardHelpId = `backup-activity-${createUniqueId()}-keyboard-help`;
-  let dayGroup: HTMLDivElement | undefined;
+  const [tooltip, setTooltip] = createSignal<TooltipState | null>(null);
 
   const points = () => props.timeline().points;
-  // Key buttons by calendar day, not by replaceable metric observations. A clock
-  // tick or Count/Volume change must not remove the operator's focused button.
-  const pointsByKey = createMemo(() => new Map(points().map((point) => [point.key, point])));
-  const dayKeys = createMemo(() => [...pointsByKey().keys()]);
-  const tabStopKey = () => {
-    const focused = focusedDayKey();
-    if (focused && pointsByKey().has(focused)) return focused;
-    const selected = props.selectedDateKey();
-    return selected && pointsByKey().has(selected) ? selected : dayKeys().at(-1);
-  };
-  const tooltip = () => {
-    const anchor = tooltipAnchor();
-    const point = anchor && pointsByKey().get(anchor.dayKey);
-    return anchor && point
-      ? { ...anchor, point, dateLabel: getRecoveryPrettyDateLabel(anchor.dayKey) }
-      : null;
-  };
   const axisMax = () => props.timeline().axisMax;
   const hasSelection = () => props.selectedDateKey() !== null;
   const metricMode = (): BackupActivityMetricMode =>
     props.metricMode?.() ?? props.metricToggle?.mode() ?? 'count';
-  const unmeasuredCount = () =>
-    points().reduce((sum, point) => sum + (point.unmeasuredCount ?? 0), 0);
-  const hasMeasuredActivity = () => points().some((point) => point.total > 0);
 
   const axisTicks = () =>
     getRecoveryTimelineAxisTicks(points().length, false, props.timeline().labelEvery);
@@ -104,37 +83,16 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
 
   const chartGapStyle = () => `${getRecoveryTimelineChartGapPx(props.range())}px`;
 
-  const showTooltip = (target: HTMLElement, dayKey: string) => {
+  const showTooltip = (target: HTMLElement, point: BackupActivityPoint, dateLabel: string) => {
     const rect = target.getBoundingClientRect();
-    setTooltipAnchor({
-      dayKey,
+    setTooltip({
+      dateLabel,
+      point,
       x: rect.left + rect.width / 2,
       y: rect.top,
     });
   };
-  const hideTooltip = () => setTooltipAnchor(null);
-  const navigateDay = (event: KeyboardEvent, dayKey: string) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    if (event.key === 'Escape') {
-      hideTooltip();
-      return;
-    }
-    const index = dayKeys().indexOf(dayKey);
-    const last = dayKeys().length - 1;
-    const next =
-      event.key === 'Home'
-        ? 0
-        : event.key === 'End'
-          ? last
-          : event.key === 'ArrowLeft'
-            ? Math.max(0, index - 1)
-            : event.key === 'ArrowRight'
-              ? Math.min(last, index + 1)
-              : null;
-    if (next === null) return; // Keep native Tab, Enter and Space behaviour.
-    event.preventDefault();
-    dayGroup?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus();
-  };
+  const hideTooltip = () => setTooltip(null);
 
   return (
     <div class="rounded-lg border border-border-subtle px-2 py-2">
@@ -211,30 +169,14 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
         </div>
       </div>
 
-      <Show when={metricMode() === 'volume'}>
-        <p class="mb-2 text-[11px] text-muted" data-backup-volume-evidence>
-          Volume includes reported positive sizes only.
-          <Show when={unmeasuredCount() > 0}>
-            {' '}
-            {unmeasuredCount()} completed restore {unmeasuredCount() === 1 ? 'point' : 'points'} in
-            this window {unmeasuredCount() === 1 ? 'has' : 'have'} no positive size reported.
-          </Show>
-        </p>
-      </Show>
       <Show
-        when={hasMeasuredActivity()}
+        when={points().length > 0}
         fallback={
-          <div class="flex min-h-24 items-center justify-center px-2 py-3 text-xs text-muted">
-            {metricMode() === 'volume' && unmeasuredCount() > 0
-              ? 'Completed restore points exist in this window, but no positive sizes were reported. Use Count to view activity.'
-              : `No completed restore-point activity in the selected ${props.range()}-day window.`}
+          <div class="flex h-24 items-center justify-center text-xs text-muted">
+            No activity in the selected window.
           </div>
         }
       >
-        <p id={keyboardHelpId} class="mb-2 text-[11px] text-muted">
-          Use Left and Right arrow keys to move between days, Home or End to jump, and Enter or
-          Space to filter. Tab leaves the chart. Escape dismisses the tooltip.
-        </p>
         <div class="relative">
           <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
             <div
@@ -254,28 +196,21 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                 style={{ 'min-width': chartMinWidthStyle() }}
               >
                 <div
-                  ref={dayGroup}
-                  role="group"
-                  aria-label="Backup activity days"
-                  aria-describedby={keyboardHelpId}
-                  data-backup-activity-days
                   class="absolute inset-x-0 bottom-4 top-0 flex items-stretch"
                   style={{ gap: chartGapStyle() }}
                 >
-                  <For each={dayKeys()}>
-                    {(dayKey) => {
-                      const point = () => pointsByKey().get(dayKey)!;
-                      const total = () => point().total;
+                  <For each={points()}>
+                    {(point) => {
+                      const total = () => point.total;
                       const heightPct = () =>
                         axisMax() > 0 ? Math.min(100, (total() / axisMax()) * 100) : 0;
-                      const isSelected = () => props.selectedDateKey() === dayKey;
-                      const dateLabel = getRecoveryPrettyDateLabel(dayKey);
+                      const isSelected = () => props.selectedDateKey() === point.key;
+                      const dateLabel = getRecoveryPrettyDateLabel(point.key);
 
                       return (
                         <div class="min-w-[3px] flex-1 self-stretch">
                           <button
                             type="button"
-                            tabIndex={tabStopKey() === dayKey ? 0 : -1}
                             class={`h-full w-full ${getRecoveryTimelineColumnButtonClass(
                               isSelected(),
                               hasSelection(),
@@ -286,20 +221,14 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                               isSelected(),
                               props.noun,
                               metricMode(),
-                              point().unmeasuredCount,
                             )}
                             aria-pressed={isSelected() ? 'true' : 'false'}
-                            onClick={() => {
-                              setFocusedDayKey(dayKey);
-                              props.onToggleDay(dayKey);
-                            }}
-                            onKeyDown={(event) => navigateDay(event, dayKey)}
-                            onMouseEnter={(event) => showTooltip(event.currentTarget, dayKey)}
+                            onClick={() => props.onToggleDay(point.key)}
+                            onMouseEnter={(event) =>
+                              showTooltip(event.currentTarget, point, dateLabel)
+                            }
                             onMouseLeave={hideTooltip}
-                            onFocus={(event) => {
-                              setFocusedDayKey(dayKey);
-                              showTooltip(event.currentTarget, dayKey);
-                            }}
+                            onFocus={(event) => showTooltip(event.currentTarget, point, dateLabel)}
                             onBlur={hideTooltip}
                           >
                             <div class="relative h-full w-full overflow-hidden rounded-xs">
@@ -323,7 +252,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                                 >
                                   <For each={props.segmentKinds}>
                                     {(kind) => {
-                                      const count = () => point().counts[kind] ?? 0;
+                                      const count = () => point.counts[kind] ?? 0;
                                       const segmentPct = () =>
                                         total() > 0 ? (count() / total()) * 100 : 0;
                                       return (
@@ -396,7 +325,6 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                           t().point.total,
                           props.noun,
                           metricMode(),
-                          t().point.unmeasuredCount,
                         )}
                       </div>
                     </div>
@@ -413,9 +341,6 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                         t().point,
                         props.segmentKinds,
                         metricMode(),
-                      ).filter(
-                        (row) =>
-                          metricMode() !== 'volume' || !t().point.unmeasuredCount || row.count > 0,
                       )}
                     >
                       {(row) => (

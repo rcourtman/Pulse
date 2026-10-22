@@ -96,26 +96,10 @@ Jump to a group:
 
 ### Backups and storage
 
-- **PBS datastore Usage is Unknown, Unavailable or differs from an alert:** read
-  [datastore capacity and alert distinctions](PBS.md#datastore-capacity-is-unknown-or-disagrees-with-an-alert).
-  A reachable server is not a successful capacity read; changing alert thresholds
-  does not change Usage colours. Do not delete backups to make the display agree.
-- **A PBS job says Healthy despite an error, warning or running status:** compare
-  [the same task's status evidence](PBS.md#a-pbs-job-looks-healthy-but-its-status-disagrees).
-  An `OK` or `success` word inside a longer message is not completed success.
-  Use existing PBS records; do not run another job or verification to test the badge.
-- **Backup activity has no volume or the chart and row counts differ:** use
-  [Count, range and size-evidence checks](PBS.md#backup-activity-has-no-volume-or-fewer-rows-than-expected).
-  Missing sizes are not zero-byte backups; activity is not proof of protection.
 - **Backup rows look duplicated or copies are missing:** compare
   [node-local copies, shared storage and PBS collection paths](PBS.md#duplicate-backups).
   Matching filenames or VMIDs do not prove one stored copy; do not delete
   backups or change retention to make the display agree.
-- **Coverage's job identity, timing or latest result is unclear:** expand the
-  guest's [job identity and timing](PBS.md#read-backup-job-identity-and-timing).
-  For an Unknown latest result, read the [collected job evidence](PBS.md#latest-backup-job-is-unknown).
-  An unknown duration is not a live timer; a reported end does not prove guest
-  thaw. Compare existing records, without rerunning a backup or guest-agent probe.
 - **RAID is reported degraded despite a spare:** compare
   [required members, active members and spares](TROUBLESHOOTING.md#raid-array-is-degraded-with-a-spare).
   A spare-inclusive total is not the required member count; do not change the
@@ -876,14 +860,12 @@ row is not proof that Proxmox deleted the job.
 
 | Observation in Pulse | What to compare | What it does not establish |
 | --- | --- | --- |
-| **Unknown**, even with current sync times | Expand **Reported last result** and **Interpretation**, then compare the same job's outcome, failures and error in Proxmox. Missing or unrecognised results are Unknown, not evidence of queued work. | A recent time, zero displayed failures or no displayed error alone does not prove success. |
-| **Pending** | The provider explicitly reports a pending last result. Compare the same job's existing native status. | Pending is not a successful completion, restore check or confirmation that the scheduler is currently running. |
-| Old sync times or an overdue next sync | The same job's existing native last/next sync and outcome. Record whether actual sync times advance during ordinary polling. | A changing “ago” or “overdue” label is the browser clock advancing, not evidence of a new poll. An OK result describes the last reported sync, not current inventory or a running scheduler. |
+| **Pending**, with current sync times | The same job's outcome, failures and error in Proxmox. Pulse can retain sync times without a usable outcome for its Healthy/Pending classification. | Pending alone does not prove a job is waiting or failed. A recent time, zero displayed failures or no displayed error alone does not prove success. |
+| Old sync times or an overdue next sync | The same job's existing native last/next sync and outcome. Record whether actual sync times advance during ordinary polling. | A changing “ago” or “overdue” label is the browser clock advancing, not evidence of a new poll. A Healthy pill does not establish current inventory or a running scheduler. |
 | Empty inventory, missing tab or load error | Whether the expected jobs still exist in Proxmox, which Pulse connection owns them, and any displayed read error. | Missing or failed collection is unknown, not an empty healthy result. Correcting a status pill does not establish lifecycle or polling recovery. |
 
-For one affected job, expand its row using the control beside **Guest**.
-**Reported last result** and **Interpretation** explain the status; a reported
-error is not cleared by an OK result or zero failures. The details retain **Job**, **Route**, **Last sync**, **Next sync**, **Duration**
+For one affected job, expand its row using the control beside **Guest**;
+the details retain **Job**, **Route**, **Last sync**, **Next sync**, **Duration**
 and **Failures** even when narrow layouts hide table columns. Compare the
 owning installation, job/guest ID and source → target route with the existing
 native Proxmox replication view. Similar names or VMIDs in separate

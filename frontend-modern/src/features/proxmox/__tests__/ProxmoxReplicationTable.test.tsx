@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import type { JSX } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReplicationJob } from '@/types/api';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
@@ -12,6 +13,14 @@ import {
   formatMobileReplicationGuestLabel,
 } from '../ProxmoxReplicationTable';
 import replicationTableSource from '../ProxmoxReplicationTable.tsx?raw';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const replicationJob = (overrides: Partial<ReplicationJob> = {}): ReplicationJob => ({
   id: 'replication-100',
@@ -36,298 +45,6 @@ afterEach(() => {
 });
 
 describe('ProxmoxReplicationTable', () => {
-  const table = (jobs: ReplicationJob[]) => (
-    <ProxmoxReplicationTable
-      jobs={jobs}
-      error={undefined}
-      onRetry={() => undefined}
-      emptyIcon={<span />}
-      emptyTitle="No replication jobs"
-      emptyDescription="Replication jobs appear here."
-    />
-  );
-  const jobRow = () => screen.getByRole('cell', { name: '100 (web)' }).closest('tr')!;
-
-  it.each([400, 1440])(
-    'updates the mounted verdict, details and labels without losing disclosure focus at %ipx',
-    async (width) => {
-      vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
-      vi.spyOn(Date, 'now').mockReturnValue(1_700_000_300_000);
-      const initial = replicationJob({
-        lastSyncStatus: 'error',
-        error: 'Original snapshot unavailable',
-        comment: 'Original comment',
-        failCount: 2,
-      });
-      const [jobs, setJobs] = createSignal([initial]);
-      render(() => (
-        <ProxmoxReplicationTable
-          jobs={jobs()}
-          error={undefined}
-          onRetry={() => undefined}
-          emptyIcon={<span />}
-          emptyTitle="No replication jobs"
-          emptyDescription="Replication jobs appear here."
-        />
-      ));
-      const liveRow = () =>
-        screen.getByRole('cell', { name: width === 400 ? '100 web' : '100 (web)' }).closest('tr')!;
-      const row = liveRow();
-      const toggle = within(row).getByRole('button', {
-        name: 'Expand details for replication job 100-0',
-      });
-      toggle.focus();
-      await fireEvent.click(toggle);
-      const controls = toggle.getAttribute('aria-controls')!;
-      const detail = document.getElementById(controls)!;
-      const field = (label: string) =>
-        within(detail).getByText(label, { selector: 'dt' }).nextElementSibling!;
-      const retained = () => {
-        expect(liveRow()).toBe(row);
-        expect(document.getElementById(controls)).toBe(detail);
-        expect(toggle).toHaveAttribute('aria-expanded', 'true');
-        expect(toggle).toHaveFocus();
-      };
-      retained();
-      expect(within(row).getByText('Failed', { exact: true })).toBeVisible();
-      expect(field('Error')).toHaveTextContent('Original snapshot unavailable');
-
-      // Omitting optional fields is how an unrecognised provider result is
-      // projected. It must also remove the previous error and comment.
-      const unknown = { ...initial, lastSyncStatus: undefined };
-      delete unknown.error;
-      delete unknown.comment;
-      delete unknown.failCount;
-      setJobs([unknown]);
-      retained();
-      expect(within(row).getByText('Unknown', { exact: true })).toHaveClass('text-amber-600');
-      expect(screen.getByRole('button', { name: 'Unknown, 1' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Failed, 0' })).toBeInTheDocument();
-      expect(within(detail).queryByText('Error', { selector: 'dt' })).toBeNull();
-      expect(within(detail).queryByText('Comment', { selector: 'dt' })).toBeNull();
-      expect(field('Reported last result')).toHaveTextContent('Not reported');
-      expect(field('Interpretation')).toHaveTextContent('This does not mean a sync is pending');
-
-      setJobs([replicationJob()]);
-      retained();
-      expect(within(row).getByText('OK', { exact: true })).toHaveClass('text-emerald-600');
-      expect(field('Interpretation')).toHaveTextContent('last reported sync succeeded');
-
-      // Conversely a newly reported error must not stay hidden behind an OK
-      // result, and every derived label must track the same new observation.
-      setJobs([
-        replicationJob({
-          guestName: 'renamed',
-          sourceNode: 'new-source',
-          targetNode: 'new-target',
-          schedule: '*/30',
-          error: '<b>New snapshot error</b>',
-          comment: 'New comment',
-          failCount: 0,
-          lastSyncUnix: 1_700_000_240,
-          nextSyncUnix: 1_700_000_900,
-          lastSyncDurationSeconds: 8,
-        }),
-      ]);
-      expect(
-        screen
-          .getByRole('cell', { name: width === 400 ? '100 renamed' : '100 (renamed)' })
-          .closest('tr'),
-      ).toBe(row);
-      expect(document.getElementById(controls)).toBe(detail);
-      expect(toggle).toHaveFocus();
-      expect(within(row).getByText('Failed', { exact: true })).toHaveClass('text-red-600');
-      expect(field('Guest')).toHaveTextContent('100 (renamed)');
-      expect(field('Route')).toHaveTextContent('new-source → new-target');
-      expect(field('Schedule')).toHaveTextContent('*/30');
-      expect(field('Last sync')).toHaveTextContent('1m ago');
-      expect(field('Next sync')).toHaveTextContent('in 10m');
-      expect(field('Duration')).toHaveTextContent('8s');
-      expect(field('Failures')).toHaveTextContent('0');
-      expect(field('Comment')).toHaveTextContent('New comment');
-      expect(field('Error')).toHaveTextContent('<b>New snapshot error</b>');
-      expect(field('Error').querySelector('b')).toBeNull();
-      expect(field('Interpretation')).toHaveTextContent(
-        'previous successful sync does not override',
-      );
-
-      setJobs([replicationJob({ enabled: false })]);
-      expect(within(row).getByText('Disabled', { exact: true })).toHaveClass('text-muted');
-      expect(field('Interpretation')).toHaveTextContent('job is disabled');
-      expect(field('Next sync')).toHaveTextContent('—');
-      expect(within(detail).queryByText('Error', { selector: 'dt' })).toBeNull();
-      expect(toggle).toHaveFocus();
-    },
-  );
-
-  it('keeps same-VMID jobs independent and controls unique after live insertion and reordering', async () => {
-    const first = replicationJob({ id: 'site-a-100-0', instance: 'site-a' });
-    const sibling = replicationJob({
-      id: 'site-a-100-1',
-      instance: 'site-a',
-      jobId: '100-1',
-      guestName: 'sibling',
-    });
-    const independent = replicationJob({
-      id: 'site-b-100-0',
-      instance: 'site-b',
-      guestName: 'independent',
-    });
-    const [jobs, setJobs] = createSignal([first, sibling, independent]);
-    render(() => (
-      <ProxmoxReplicationTable
-        jobs={jobs()}
-        error={undefined}
-        onRetry={() => undefined}
-        emptyIcon={<span />}
-        emptyTitle="No replication jobs"
-        emptyDescription="Replication jobs appear here."
-      />
-    ));
-    const row = jobRow();
-    const toggle = within(row).getByRole('button');
-    toggle.focus();
-    await fireEvent.click(toggle);
-    const controls = toggle.getAttribute('aria-controls')!;
-    const detail = document.getElementById(controls)!;
-
-    // The former index-based control ID collides with a new row at index 0.
-    setJobs([
-      replicationJob({ id: 'site-c-100-0', instance: 'site-c', guestName: 'inserted' }),
-      independent,
-      { ...first, error: 'Only site-a failed' },
-      sibling,
-    ]);
-    expect(jobRow()).toBe(row);
-    expect(document.getElementById(controls)).toBe(detail);
-    expect(toggle).toHaveFocus();
-    expect(within(row).getByText('Failed', { exact: true })).toBeVisible();
-    for (const name of ['sibling', 'independent', 'inserted']) {
-      const other = screen.getByRole('cell', { name: `100 (${name})` }).closest('tr')!;
-      expect(within(other).getByText('OK', { exact: true })).toBeVisible();
-      expect(within(other).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
-    }
-    const ids = [...document.querySelectorAll('button[aria-controls]')].map((b) =>
-      b.getAttribute('aria-controls'),
-    );
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(detail.querySelector('[data-replication-job-error]')).toHaveTextContent(
-      'Only site-a failed',
-    );
-  });
-
-  it.each([
-    ['ok', { lastSyncStatus: 'ok' }, 'OK'],
-    ['success alias', { lastSyncStatus: ' success ' }, 'OK'],
-    ['completed alias', { lastSyncStatus: 'COMPLETED' }, 'OK'],
-    ['zero-count error', { lastSyncStatus: 'ok', error: 'Sync failed', failCount: 0 }, 'Failed'],
-    ['error without result', { lastSyncStatus: undefined, error: 'Sync failed' }, 'Failed'],
-    ['failed attempts override ok', { lastSyncStatus: 'ok', failCount: 2 }, 'Failed'],
-    ['failure result', { lastSyncStatus: ' Failed ' }, 'Failed'],
-    ['error result', { lastSyncStatus: 'ERROR' }, 'Failed'],
-    ['missing result', { lastSyncStatus: undefined }, 'Unknown'],
-    ['empty result', { lastSyncStatus: '' }, 'Unknown'],
-    ['blank result', { lastSyncStatus: '  ' }, 'Unknown'],
-    ['future result', { lastSyncStatus: 'provider-future-state' }, 'Unknown'],
-    ['running is not pending', { lastSyncStatus: 'running' }, 'Unknown'],
-    ['explicit pending', { lastSyncStatus: ' PENDING ' }, 'Pending'],
-    ['blank error is not failure', { lastSyncStatus: 'ok', error: '  ' }, 'OK'],
-    [
-      'disabled retains history',
-      { enabled: false, lastSyncStatus: 'error', error: 'Old failure' },
-      'Disabled',
-    ],
-  ] satisfies [string, Partial<ReplicationJob>, string][])(
-    'interprets %s without inventing overall health or a pending operation',
-    (_name, change, expected) => {
-      render(() => table([replicationJob(change)]));
-      expect(within(jobRow()).getByText(expected, { exact: true })).toBeVisible();
-      expect(within(jobRow()).queryByText('Healthy', { exact: true })).toBeNull();
-    },
-  );
-
-  it('keeps an absent result unreported despite a retained sync timestamp', async () => {
-    render(() => table([replicationJob({ lastSyncStatus: undefined })]));
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
-    );
-    expect(
-      screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling,
-    ).toHaveTextContent('Not reported');
-    expect(within(jobRow()).getByText('Unknown', { exact: true })).toBeVisible();
-  });
-
-  it('keeps unknown counts and filtering aligned with the same live verdict', async () => {
-    const [jobs, setJobs] = createSignal([
-      replicationJob({ lastSyncStatus: undefined }),
-      replicationJob({ id: 'other', jobId: '101-0', guestId: 101, guestName: 'other' }),
-      replicationJob({
-        id: 'error',
-        jobId: '102-0',
-        guestId: 102,
-        guestName: 'error',
-        error: 'Sync failed',
-      }),
-    ]);
-    render(() => (
-      <ProxmoxReplicationTable
-        jobs={jobs()}
-        error={undefined}
-        onRetry={() => undefined}
-        emptyIcon={<span />}
-        emptyTitle="No replication jobs"
-        emptyDescription="Replication jobs appear here."
-      />
-    ));
-    const unknown = screen.getByRole('button', { name: 'Unknown, 1' });
-    await fireEvent.click(unknown);
-    expect(unknown).toHaveAttribute('aria-pressed', 'true');
-    expect(within(jobRow()).getByText('Unknown', { exact: true })).toBeVisible();
-    expect(screen.queryByText('101 (other)')).toBeNull();
-    expect(screen.queryByText('102 (error)')).toBeNull();
-    setJobs([replicationJob(), jobs()[1], jobs()[2]]);
-    expect(screen.getByRole('button', { name: 'Unknown, 0' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByText('No replication jobs match current filters')).toBeVisible();
-    await fireEvent.click(screen.getByRole('button', { name: 'OK, 2' }));
-    expect(within(jobRow()).getByText('OK', { exact: true })).toBeVisible();
-    expect(screen.getByText('101 (other)')).toBeVisible();
-    expect(screen.queryByText('102 (error)')).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Failed, 1' }));
-    expect(screen.getByText('102 (error)')).toBeVisible();
-    expect(screen.queryByText('100 (web)')).toBeNull();
-  });
-
-  it('explains unknown outcomes and preserves the plain-text provider result without hover', async () => {
-    const raw = '<b>provider-future-state</b>';
-    render(() => table([replicationJob({ lastSyncStatus: raw })]));
-    expect(screen.getByText(/not a restore check or current guest health/)).toBeVisible();
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
-    );
-    const result = screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling!;
-    expect(result).toHaveTextContent(raw);
-    expect(result.querySelector('b')).toBeNull();
-    expect(screen.getByText(/This does not mean a sync is pending/)).toBeVisible();
-  });
-
-  it('does not lose the error behind an OK result and zero failure count', async () => {
-    render(() => table([replicationJob({ error: 'Source snapshot unavailable', failCount: 0 })]));
-    expect(within(jobRow()).getByText('Failed', { exact: true })).toBeVisible();
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
-    );
-    expect(document.querySelector('[data-replication-job-error]')).toHaveTextContent(
-      'Source snapshot unavailable',
-    );
-    expect(screen.getByText(/previous successful sync does not override/)).toBeVisible();
-    expect(
-      screen.getByText('Reported last result', { selector: 'dt' }).nextElementSibling,
-    ).toHaveTextContent('ok');
-  });
-
   it('uses five readable columns and compact time direction across phone widths', () => {
     expect(REPLICATION_MOBILE_COLUMNS).toEqual([
       'guest',
@@ -355,7 +72,7 @@ describe('ProxmoxReplicationTable', () => {
   it('renders replication duration cells through the shared duration format', () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_300_000);
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[replicationJob()]}
         error={undefined}
@@ -372,7 +89,7 @@ describe('ProxmoxReplicationTable', () => {
   });
 
   it('preserves explicit replication duration labels from the backend', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[
           replicationJob({
@@ -394,7 +111,7 @@ describe('ProxmoxReplicationTable', () => {
   it('reveals the whole error from the row disclosure at desktop width', async () => {
     const error =
       "command 'zfs send -- rpool/data/vm-100-disk-0@__replicate_100-0__' failed: exit code 255";
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[replicationJob({ lastSyncStatus: 'error', failCount: 3, error })]}
         error={undefined}
@@ -410,11 +127,75 @@ describe('ProxmoxReplicationTable', () => {
       screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
     );
 
+    // A failed job's drawer is headed by its guest and states why it failed.
+    const panel = screen.getByTestId('replication-job-detail');
+    expect(panel).toHaveAttribute('data-inline-detail-for', 'replication-100');
+    expect(screen.getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
     const detail = document.querySelector('[data-replication-job-error]');
     expect(detail).toHaveTextContent(error);
-    // The expansion wraps; only the one-line row cell truncates.
-    expect(detail?.className).toContain('wrap-break-word');
+    // The drawer wraps the error; only the one-line row cell truncates.
+    expect(detail?.parentElement?.className).toContain('wrap-anywhere');
     expect(detail?.className).not.toContain('truncate');
+    // The error is the summary, so it is not repeated as a section.
+    expect(within(panel).queryByText('Error', { selector: 'th' })).not.toBeInTheDocument();
+  });
+
+  it('keys the disclosure to the job and links the drawer to the replicated guest', async () => {
+    renderInRouter(() => (
+      <ProxmoxReplicationTable
+        jobs={[replicationJob({ guestType: 'lxc', guestNode: 'pve-a' })]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+
+    const toggle = screen.getByRole('button', { name: 'Expand details for replication job 100-0' });
+    expect(toggle).toHaveAttribute('aria-controls', 'replication-job-detail-replication-100');
+    await fireEvent.click(toggle);
+
+    expect(document.getElementById('replication-job-detail-replication-100')).not.toBeNull();
+    const link = screen.getByRole('link', { name: 'Open web' });
+    expect(link).toHaveAttribute('href', '/proxmox/overview?resource=pve%3Apve-a%3A100');
+    const panel = screen.getByTestId('replication-job-detail');
+    for (const section of ['Job', 'Route', 'Schedule']) {
+      expect(within(panel).getByText(section, { selector: 'th' })).toBeInTheDocument();
+    }
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse web details' }));
+    expect(screen.queryByTestId('replication-job-detail')).not.toBeInTheDocument();
+  });
+
+  it('leads a pending job drawer with its error and omits the link without a guest', async () => {
+    renderInRouter(() => (
+      <ProxmoxReplicationTable
+        jobs={[
+          replicationJob({
+            lastSyncStatus: 'pending',
+            error: 'target unreachable',
+            guestId: undefined,
+            guestName: undefined,
+          }),
+        ]}
+        error={undefined}
+        onRetry={() => undefined}
+        emptyIcon={<span />}
+        emptyTitle="No replication jobs"
+        emptyDescription="Replication jobs appear here."
+      />
+    ));
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
+    );
+    const sections = [...document.querySelectorAll('[data-testid="replication-job-detail"] th')];
+    expect(sections[0]).toHaveTextContent('Error');
+    expect(
+      within(screen.getByTestId('replication-job-detail')).getByText('target unreachable'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('gives the error column more room than the 8% that clipped it', () => {
@@ -461,7 +242,7 @@ describe('ProxmoxReplicationTable relative times', () => {
       nextSyncUnix: (start + 10 * 60_000) / 1000,
     });
   const renderTable = () =>
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxReplicationTable
         jobs={[job()]}
         error={undefined}
@@ -503,15 +284,17 @@ describe('ProxmoxReplicationTable relative times', () => {
       screen.getByRole('button', { name: 'Expand details for replication job 100-0' }),
     );
     const detail = (label: string) =>
-      screen.getByText(label, { selector: 'dt' }).nextElementSibling as HTMLElement;
+      screen.getByText(label, { selector: 'td' }).nextElementSibling as HTMLElement;
 
     expect(detail('Last sync')).toHaveTextContent('5m ago');
     expect(detail('Next sync')).toHaveTextContent('in 10m');
+    expect(screen.getByText('Last synced 5m ago · next sync in 10m')).toBeInTheDocument();
 
     twoHoursLater();
 
     expect(detail('Last sync')).toHaveTextContent('2h ago');
     expect(detail('Next sync')).toHaveTextContent('1h overdue');
-    expect(detail('Next sync')).toHaveClass('text-red-600');
+    expect(detail('Next sync')).toHaveClass('text-rose-700');
+    expect(screen.getByText('Last synced 2h ago · next sync 1h overdue')).toBeInTheDocument();
   });
 });

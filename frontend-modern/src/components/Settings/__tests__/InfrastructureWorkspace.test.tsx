@@ -454,10 +454,11 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Agent Doctor')).toBeInTheDocument());
-    expect(screen.getByText('zeus')).toBeInTheDocument();
+    // The lone target opens on its own, headed by its name.
+    expect(screen.getByRole('heading', { name: 'zeus' })).toBeInTheDocument();
     expect(screen.queryByText('other')).not.toBeInTheDocument();
-    expect(screen.getByText('5.1.34')).toBeInTheDocument();
-    expect(screen.getByText('6.0.0-rc.6')).toBeInTheDocument();
+    expect(screen.getAllByText('5.1.34').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('6.0.0-rc.6').length).toBeGreaterThan(0);
     expect(
       screen.getByText(/upgrade agent:agent-zeus --enable-proxmox --proxmox-type pve/),
     ).toBeInTheDocument();
@@ -605,8 +606,8 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Agent Doctor')).toBeInTheDocument());
-    expect(screen.getByText('zeus')).toBeInTheDocument();
-    expect(screen.getByText('5.1.34')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'zeus' })).toBeInTheDocument();
+    expect(screen.getAllByText('5.1.34').length).toBeGreaterThan(0);
     // With no published target there is no target version or command to guess at.
     expect(screen.queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
   });

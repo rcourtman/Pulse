@@ -61,81 +61,29 @@ interface BackupServerRow {
   memoryTotal?: number;
   uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
-  backupCount?: number;
+  backupCount: number;
   // A later datastore row of the server on the row above: host cells stay empty.
   continuesServer: boolean;
 }
 
 // Key by instance and datastore so multi-datastore servers get accurate counts.
-function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, Map<string, number>> {
-  const counts = new Map<string, Map<string, number>>();
+function buildBackupCounts(backups: readonly PBSBackup[]): Map<string, number> {
+  const counts = new Map<string, number>();
   for (const backup of backups) {
-    const instance = backup.instance ?? '';
-    const stores = counts.get(instance) ?? new Map<string, number>();
-    stores.set(backup.datastore ?? '', (stores.get(backup.datastore ?? '') ?? 0) + 1);
-    counts.set(instance, stores);
+    const key = `${backup.instance ?? ''}::${backup.datastore ?? ''}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
 }
 
-// Current PBS inventories name their configured connection. Retain the older
-// instance-ID fallback only when no configured name owns that token and its ID
-// has one owner. In particular, "backup" must not borrow "pbs-backup"'s rows.
-function backupSourceOwners(servers: readonly Resource[], key: (server: Resource) => string) {
-  const owners = new Map<string, Set<string>>();
-  for (const server of servers) {
-    const source = key(server);
-    if (!source) continue;
-    const ids = owners.get(source) ?? new Set<string>();
-    ids.add(server.id);
-    owners.set(source, ids);
-  }
-  return owners;
-}
-
-function BackupInventoryCount(props: {
-  value?: number;
-  state?: 'available' | 'loading' | 'unavailable';
-}) {
-  return (
-    <Show
-      when={!props.state || props.state === 'available'}
-      fallback={
-        <span class="text-muted text-[11px]" title={`PBS backup inventory is ${props.state}`}>
-          {props.state === 'loading' ? 'Loading' : 'Unavailable'}
-        </span>
-      }
-    >
-      <Show
-        when={props.value !== undefined}
-        fallback={
-          <span
-            class="text-muted text-[11px]"
-            title="The PBS backup source cannot be matched to one server. This does not mean no backups exist."
-          >
-            Unknown
-          </span>
-        }
-      >
-        <PlatformTableNumberValue value={props.value} format={formatPlatformTableIntegerValue} />
-      </Show>
-    </Show>
-  );
-}
-
 function serverIsOnline(resource: Resource): boolean {
-  const status = (resource.status ?? '').trim().toLowerCase();
-  // The canonical PBS producer gives an explicit offline state precedence.
-  // A retained healthy facet cannot make its capacity or host metrics current.
-  // Warning/degraded may describe storage risk on a reachable server.
-  if (status === 'offline') return false;
+  const status = (resource.status ?? '').toLowerCase();
   const conn = (resource.pbs?.connectionHealth ?? '').trim().toLowerCase();
   if (conn) return conn === 'healthy' || conn === 'ok';
   return status === 'online' || status === 'running';
 }
 
 function connectionLabel(resource: Resource): string {
-  if ((resource.status ?? '').trim().toLowerCase() === 'offline') return 'Offline';
   const conn = resource.pbs?.connectionHealth?.trim();
   if (conn) return conn.charAt(0).toUpperCase() + conn.slice(1);
   return serverIsOnline(resource) ? 'Online' : 'Offline';
@@ -166,20 +114,12 @@ function datastoreCapacity(datastore: ResourcePBSDatastore | undefined, online: 
   ) {
     return { state: 'unknown' as const, percent: undefined };
   }
-  const percent = (datastore.used / datastore.total) * 100;
-  const reportedPercent = datastore.usagePercent;
-  if (
-    !Number.isFinite(percent) ||
-    percent < 0 ||
-    (reportedPercent !== undefined && (!Number.isFinite(reportedPercent) || reportedPercent < 0))
-  ) {
+  const percent =
+    datastore.usagePercent !== undefined
+      ? datastore.usagePercent
+      : (datastore.used / datastore.total) * 100;
+  if (!Number.isFinite(percent) || percent < 0) {
     return { state: 'unknown' as const, percent: undefined };
-  }
-  // Allow a supplied percentage rounded to a whole number, but never choose
-  // between materially contradictory readings. Render and classify the same
-  // byte ratio so accepted rounding cannot hide a capacity warning.
-  if (reportedPercent !== undefined && Math.abs(reportedPercent - percent) > 0.5) {
-    return { state: 'unknown' as const, percent: undefined, conflict: true };
   }
   return { state: 'available' as const, percent };
 }
@@ -374,27 +314,20 @@ export function buildBackupServerRows(
 ): BackupServerRow[] {
   const rows: BackupServerRow[] = [];
   const counts = buildBackupCounts(backups);
+  // PBS backups carry instance; resources may expose it under name or pbs.instanceId.
+  const countFor = (server: Resource, datastoreName: string): number => {
+    const ids = [server.name, server.pbs?.instanceId].filter(Boolean) as string[];
+    for (const id of ids) {
+      const n = counts.get(`${id}::${datastoreName}`);
+      if (n !== undefined) return n;
+    }
+    return 0;
+  };
   // `model().pbs` is scope-filtered (proxmox-pbs), which also catches PBS
   // *datastore* storage resources (type 'storage', sources ['pbs']). This table
   // is about the server, so keep only actual PBS server instances — otherwise a
   // datastore renders as a phantom offline "server" row.
   const pbsServers = servers.filter((resource) => resource.type === 'pbs');
-  const names = backupSourceOwners(pbsServers, (server) => server.name);
-  const legacyIds = backupSourceOwners(pbsServers, (server) => server.pbs?.instanceId ?? '');
-  const countFor = (server: Resource, datastoreName: string): number | undefined => {
-    if (server.name && names.get(server.name)?.size !== 1) return undefined;
-    let identified = false;
-    for (const source of [server.name, server.pbs?.instanceId]) {
-      if (!source) continue;
-      const owners = names.get(source) ?? legacyIds.get(source);
-      if (owners?.size !== 1 || !owners.has(server.id)) continue;
-      identified = true;
-      const stores = counts.get(source);
-      // Select a whole source, not a different fallback for each datastore.
-      if (stores) return stores.get(datastoreName) ?? 0;
-    }
-    return identified ? 0 : undefined;
-  };
   const sortedServers = pbsServers
     .map((server) => {
       const agent = uniquelyCorrelatedAgent(server, servers);
@@ -595,11 +528,7 @@ export function ProxmoxBackupServersTable(props: {
                   const capacityNotice = () =>
                     capacityEvidence().state === 'unavailable'
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
-                      : capacityEvidence().conflict
-                        ? 'Datastore capacity is unknown. The reported percentage disagrees with the used and total bytes. This does not mean the datastore is empty.'
-                        : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
-                  const capacityLabel = () =>
-                    capacityEvidence().state === 'unavailable' ? 'Unavailable' : 'Unknown';
+                      : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
                   const rowIdentity = { id: row.key };
                   const isExpanded = () => detail.isExpanded(rowIdentity);
                   const detailRowId = () => detail.detailRowId(rowIdentity);
@@ -730,20 +659,14 @@ export function ProxmoxBackupServersTable(props: {
                               <Show
                                 when={capacityEvidence().state === 'available'}
                                 fallback={
-                                  <button
-                                    type="button"
-                                    class="min-h-8 rounded-sm text-[11px] text-amber-600 underline decoration-dotted underline-offset-2 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-amber-300"
+                                  <span
+                                    class="text-[11px] text-amber-600 dark:text-amber-300"
                                     title={capacityNotice()}
-                                    aria-label={`Explain ${capacityLabel().toLowerCase()} capacity for ${row.serverName} / ${datastore().name}`}
-                                    aria-expanded={isExpanded()}
-                                    aria-controls={detailRowId()}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      detail.toggle(rowIdentity);
-                                    }}
                                   >
-                                    {capacityLabel()}
-                                  </button>
+                                    {capacityEvidence().state === 'unavailable'
+                                      ? 'Unavailable'
+                                      : 'Unknown'}
+                                  </span>
                                 }
                               >
                                 <div class="flex items-center justify-end gap-2">
@@ -776,10 +699,27 @@ export function ProxmoxBackupServersTable(props: {
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
-                              <BackupInventoryCount
-                                value={row.backupCount}
-                                state={props.backupInventoryState}
-                              />
+                              <Show
+                                when={
+                                  !props.backupInventoryState ||
+                                  props.backupInventoryState === 'available'
+                                }
+                                fallback={
+                                  <span
+                                    class="text-muted text-[11px]"
+                                    title={`PBS backup inventory is ${props.backupInventoryState}`}
+                                  >
+                                    {props.backupInventoryState === 'loading'
+                                      ? 'Loading'
+                                      : 'Unavailable'}
+                                  </span>
+                                }
+                              >
+                                <PlatformTableNumberValue
+                                  value={row.backupCount}
+                                  format={formatPlatformTableIntegerValue}
+                                />
+                              </Show>
                             </Show>
                           </TableCell>
                         </Show>
@@ -803,60 +743,14 @@ export function ProxmoxBackupServersTable(props: {
                       </TableRow>
                       <PlatformResourceDetailTableRow
                         resource={row.resource}
+                        statusIndicator={{
+                          variant: row.online ? 'success' : 'danger',
+                          label: row.connectionLabel,
+                        }}
                         open={isExpanded()}
                         detailRowId={detailRowId()}
                         colSpan={visibleColumns().length}
                         initialShowHostDetails
-                        beforeDetails={
-                          <Show when={row.datastore}>
-                            {(datastore) => (
-                              <section
-                                aria-label={`Datastore capacity for ${row.serverName} / ${datastore().name}`}
-                                class="mb-3 min-w-0 rounded-md border border-border p-3 text-xs text-base-content [overflow-wrap:anywhere]"
-                              >
-                                <h3 class="font-semibold">Datastore capacity</h3>
-                                <dl class="mt-2 space-y-1">
-                                  <div>
-                                    <dt class="inline text-muted">Backup server: </dt>
-                                    <dd class="inline">{row.serverName}</dd>
-                                  </div>
-                                  <div>
-                                    <dt class="inline text-muted">Datastore: </dt>
-                                    <dd class="inline">{datastore().name}</dd>
-                                  </div>
-                                  <div>
-                                    <dt class="inline text-muted">Backup entries: </dt>
-                                    <dd class="inline">
-                                      <BackupInventoryCount
-                                        value={row.backupCount}
-                                        state={props.backupInventoryState}
-                                      />
-                                    </dd>
-                                  </div>
-                                </dl>
-                                <p class="mt-2 text-muted">
-                                  Entries in Pulse's collected PBS inventory, not a restore or
-                                  guest-health check.
-                                </p>
-                                <Show
-                                  when={capacityEvidence().state === 'available'}
-                                  fallback={
-                                    <p class="mt-2 text-amber-600 dark:text-amber-300">
-                                      {capacityNotice()} Server reachability does not confirm a
-                                      successful datastore capacity read.
-                                    </p>
-                                  }
-                                >
-                                  <p class="mt-2">
-                                    Used: <PlatformTablePercentValue value={pct()} /> ·{' '}
-                                    {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
-                                    {formatPlatformTableBytesValue(datastore().total)}
-                                  </p>
-                                </Show>
-                              </section>
-                            )}
-                          </Show>
-                        }
                         onClose={() => detail.close(rowIdentity)}
                       />
                     </>

@@ -1,15 +1,16 @@
-import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { For, Show, createMemo, createResource, type Component } from 'solid-js';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
-import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
-import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
-import type { Alert } from '@/types/api';
-import { Card } from '@/components/shared/Card';
-import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
-import { InfoCardKeyValueRow } from '@/components/shared/InfoCardFrame';
-import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
+import {
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TechnicalDetailsSection } from '@/components/shared/TechnicalDetailsDisclosure';
 import {
   PlatformDetailTable,
   PlatformDetailTableBody,
@@ -23,19 +24,25 @@ import {
   PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
-import { getPMGHealth } from './pmgPresentation';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { apiFetch } from '@/utils/apiClient';
-import type { PMGInstance, PMGNodeStatus, PMGQueueStatus, PMGSpamBucket } from '@/types/api';
+import type {
+  PMGInstance,
+  PMGMailStats,
+  PMGNodeStatus,
+  PMGQuarantineTotals,
+  PMGQueueStatus,
+  PMGRelayDomain,
+  PMGSpamBucket,
+} from '@/types/api';
 import type { Resource } from '@/types/resource';
 
-// Inline drawer for a single Proxmox Mail Gateway instance. Drops the
-// per-stat tile pattern in favor of stacked-bar diagrams that show the
-// SHAPE of mail flow + quarantine + spam-score distribution at a
-// glance, paired with proper info-dense tables for cluster nodes and
-// top domains. Fetches the full PMGInstance on open and when its accepted
-// resource observation changes, so the row keeps its slim payload.
+// The Mail tab of a Mail Gateway's resource drawer: mail flow, quarantine,
+// spam scores, per-node queues and the busiest domains. The drawer around it
+// owns the header, status, alerts and history, so this body is headless. It
+// fetches the full PMGInstance when the tab opens so the row keeps its slim
+// payload.
 
 interface PMGInstancesResponse {
   data: PMGInstance[];
@@ -67,23 +74,24 @@ function formatAge(seconds: number): string {
   return `${Math.floor(seconds / 86_400)}d`;
 }
 
-function queueCell(queue: PMGQueueStatus | undefined): {
-  count: number | undefined;
-  label: string;
-} {
-  if (!queue) return { count: undefined, label: '' };
+function queueCell(queue: PMGQueueStatus | undefined): { count: number; label: string } {
+  if (!queue) return { count: 0, label: '—' };
   return {
     count: queue.total,
-    label: [queue.active, queue.deferred, queue.hold, queue.incoming]
-      .map((value) => formatPlatformTableIntegerValue(value))
-      .join('/'),
+    label: `${queue.active}/${queue.deferred}/${queue.hold}/${queue.incoming}`,
   };
 }
 
+const inOut = (inValue: number | undefined, outValue: number | undefined): string =>
+  `${formatPlatformTableIntegerValue(inValue ?? 0, '0')} / ${formatPlatformTableIntegerValue(outValue ?? 0, '0')}`;
+
+const bytesOrDash = (value: number | undefined): string =>
+  value && value > 0 ? formatBytes(value) : '—';
+
 // StackedBar renders a horizontal stacked bar from labelled segments.
 // Each segment carries a tone (color), value, and label; segments with
-// 0 value collapse out. A legend with name + count + share renders
-// below.
+// 0 value collapse out. An optional legend with name + count + share
+// renders below.
 interface StackedSegment {
   key: string;
   label: string;
@@ -91,7 +99,7 @@ interface StackedSegment {
   tone: string;
 }
 
-function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
+function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string; legend?: boolean }) {
   const total = createMemo(() => props.segments.reduce((sum, s) => sum + Math.max(0, s.value), 0));
   const visible = createMemo(() => props.segments.filter((s) => s.value > 0));
   return (
@@ -116,27 +124,29 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
           </For>
         </div>
       </Show>
-      <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-        <For each={props.segments}>
-          {(seg) => {
-            const share = total() > 0 ? (seg.value / total()) * 100 : 0;
-            return (
-              <div class="flex items-center gap-1.5">
-                <span class={`inline-block h-2 w-2 rounded-xs ${seg.tone}`} aria-hidden="true" />
-                <span class="text-muted">{seg.label}</span>
-                <span class="text-base-content font-semibold tabular-nums">
-                  {formatPlatformTableIntegerValue(seg.value)}
-                </span>
-                <Show when={total() > 0}>
-                  <span class="text-muted tabular-nums text-[10px]">
-                    {formatPlatformTablePercentValue(share)}
+      <Show when={props.legend !== false}>
+        <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+          <For each={props.segments}>
+            {(seg) => {
+              const share = total() > 0 ? (seg.value / total()) * 100 : 0;
+              return (
+                <div class="flex items-center gap-1.5">
+                  <span class={`inline-block h-2 w-2 rounded-xs ${seg.tone}`} aria-hidden="true" />
+                  <span class="text-muted">{seg.label}</span>
+                  <span class="text-base-content font-semibold tabular-nums">
+                    {formatPlatformTableIntegerValue(seg.value)}
                   </span>
-                </Show>
-              </div>
-            );
-          }}
-        </For>
-      </div>
+                  <Show when={total() > 0}>
+                    <span class="text-muted tabular-nums text-[10px]">
+                      {formatPlatformTablePercentValue(share)}
+                    </span>
+                  </Show>
+                </div>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
     </div>
   );
 }
@@ -177,335 +187,217 @@ function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
   );
 }
 
-// InOutBar shows paired values (e.g. mail in vs mail out) as two
-// adjacent half-bars sharing a max scale. The label sits ABOVE the
-// bar and the values sit ON the bar segments — matches the Workloads
-// MetricBar convention of writing the value on the fill.
-function InOutBar(props: {
-  label: string;
-  inValue: number;
-  outValue: number;
-  format?: (value: number) => string;
-}) {
-  const format = props.format ?? formatPlatformTableIntegerValue;
-  const max = Math.max(props.inValue, props.outValue, 1);
-  const inWidth = (props.inValue / max) * 50;
-  const outWidth = (props.outValue / max) * 50;
-  return (
-    <div class="space-y-1">
-      <div class="text-[11px] text-muted">{props.label}</div>
-      <div
-        class="relative flex h-4 w-full overflow-hidden rounded-sm bg-surface-hover"
-        title={`In ${format(props.inValue)} · Out ${format(props.outValue)}`}
-      >
-        <div class="relative bg-blue-500/60" style={{ width: `${inWidth}%` }} />
-        <div class="w-px bg-surface" />
-        <div class="relative bg-purple-500/60" style={{ width: `${outWidth}%` }} />
-        <span class="pointer-events-none absolute inset-0 flex items-center justify-between px-1.5 text-[10px] font-semibold text-base-content leading-none tabular-nums">
-          <span>In {format(props.inValue)}</span>
-          <span>Out {format(props.outValue)}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
+const inboundSegments = (stats: PMGMailStats): StackedSegment[] => {
+  const countIn = Math.max(0, stats.countIn ?? 0);
+  const spam = Math.max(0, stats.spamIn ?? 0);
+  const virus = Math.max(0, stats.virusIn ?? 0);
+  const bounces = Math.max(0, stats.bouncesIn ?? 0);
+  const greylist = Math.max(0, stats.greylistCount ?? 0);
+  const rbl = Math.max(0, stats.rblRejects ?? 0);
+  const pregreet = Math.max(0, stats.pregreetRejects ?? 0);
+  const clean = Math.max(0, countIn - (spam + virus + bounces));
+  return [
+    { key: 'clean', label: 'Clean', value: clean, tone: 'bg-metric-normal-bg' },
+    { key: 'spam', label: 'Spam', value: spam, tone: 'bg-metric-warning-bg' },
+    { key: 'virus', label: 'Virus', value: virus, tone: 'bg-metric-critical-bg' },
+    { key: 'bounces', label: 'Bounces', value: bounces, tone: 'bg-orange-500/60' },
+    { key: 'greylist', label: 'Greylist', value: greylist, tone: 'bg-blue-500/60' },
+    { key: 'rbl', label: 'RBL', value: rbl, tone: 'bg-purple-500/60' },
+    { key: 'pregreet', label: 'Pregreet', value: pregreet, tone: 'bg-slate-500/60' },
+  ];
+};
 
-export const ProxmoxMailGatewayDrawer: Component<{
-  instanceRow: Resource;
-  onClose?: () => void;
-  /** Open alerts for this gateway, matched across its identity aliases by the table. */
-  alerts?: Alert[];
-}> = (props) => {
-  const id = () => {
-    const meta = props.instanceRow.pmg;
-    return asTrimmedString(meta?.instanceId) || props.instanceRow.id;
-  };
-  // Refresh only for this gateway's accepted observation, not object replacement,
-  // unrelated alerts or clock ticks. Legacy rows use lastSeen when the PMG
-  // collection timestamp is absent; health changes also work without a timestamp.
-  const observationKey = createMemo(() =>
-    JSON.stringify([
-      id(),
-      props.instanceRow.pmg?.lastUpdated ?? props.instanceRow.lastSeen,
-      props.instanceRow.status,
-      props.instanceRow.pmg?.connectionHealth,
-    ]),
-  );
-  const [instance, { refetch }] = createResource<PMGInstance | null, string>(observationKey, () =>
-    fetchPMGInstance(id()),
-  );
-  // Resource reads throw after a failed request. Keep the row-derived heading
-  // and the existing Retry UI usable rather than throwing outside that UI.
-  const detail = () => (instance.error ? undefined : instance());
+const quarantineSegments = (quarantine: PMGQuarantineTotals): StackedSegment[] => [
+  { key: 'spam', label: 'Spam', value: quarantine.spam ?? 0, tone: 'bg-metric-warning-bg' },
+  { key: 'virus', label: 'Virus', value: quarantine.virus ?? 0, tone: 'bg-metric-critical-bg' },
+  {
+    key: 'attachment',
+    label: 'Attachment',
+    value: quarantine.attachment ?? 0,
+    tone: 'bg-orange-500/60',
+  },
+  {
+    key: 'blacklisted',
+    label: 'Blacklisted',
+    value: quarantine.blacklisted ?? 0,
+    tone: 'bg-slate-500/60',
+  },
+];
 
-  const now = useRelativeTimeNow();
-  const stats = createMemo(() => detail()?.mailStats);
-  const quarantine = createMemo(() => detail()?.quarantine);
-  const nodes = createMemo<PMGNodeStatus[]>(() => detail()?.nodes ?? []);
-  const spamBuckets = createMemo<PMGSpamBucket[]>(() => detail()?.spamDistribution ?? []);
+const relayDomainLabel = (domain: PMGRelayDomain): string => {
+  const comment = asTrimmedString(domain.comment);
+  return comment ? `${domain.domain} (${comment})` : domain.domain;
+};
+
+// The mail-flow content cards: each figure is a detail row, and the two
+// pictures (inbound disposition, spam scores) sit under their card's rows.
+export const buildMailGatewayMailFlowSections = (instance: PMGInstance): DetailSection[] => {
+  const stats = instance.mailStats;
+  const quarantine = instance.quarantine;
+  const spamBuckets = instance.spamDistribution ?? [];
+  const relayDomains = (instance.relayDomains ?? []).filter((domain) =>
+    asTrimmedString(domain.domain),
+  );
+  const timeframe = asTrimmedString(stats?.timeframe);
+  return compactDetailSections([
+    stats
+      ? {
+          label: timeframe ? `Mail flow (${timeframe})` : 'Mail flow',
+          testId: 'pmg-mail-flow-section',
+          rows: compactDetailRows([
+            makeDetailRow('Mail in / out', inOut(stats.countIn, stats.countOut)),
+            makeDetailRow('Spam in / out', inOut(stats.spamIn, stats.spamOut)),
+            makeDetailRow('Virus in / out', inOut(stats.virusIn, stats.virusOut)),
+            makeDetailRow('Bounces in / out', inOut(stats.bouncesIn, stats.bouncesOut)),
+            makeDetailRow(
+              'Bytes in / out',
+              `${bytesOrDash(stats.bytesIn)} / ${bytesOrDash(stats.bytesOut)}`,
+            ),
+            makeDetailRow('Greylisted', formatPlatformTableIntegerValue(stats.greylistCount, '0')),
+            makeDetailRow('Junk in', formatPlatformTableIntegerValue(stats.junkIn, '0')),
+            makeDetailRow('RBL rejects', formatPlatformTableIntegerValue(stats.rblRejects, '0')),
+            makeDetailRow(
+              'Pregreet rejects',
+              formatPlatformTableIntegerValue(stats.pregreetRejects, '0'),
+            ),
+            makeDetailRow(
+              'Avg process',
+              stats.averageProcessTimeMs ? `${Math.round(stats.averageProcessTimeMs)}ms` : '—',
+            ),
+          ]),
+          footerContent: (
+            <StackedBar
+              segments={inboundSegments(stats)}
+              ariaLabel="Inbound mail disposition breakdown"
+            />
+          ),
+        }
+      : null,
+    quarantine
+      ? {
+          label: 'Quarantine',
+          testId: 'pmg-quarantine-section',
+          rows: compactDetailRows(
+            quarantineSegments(quarantine).map((segment) =>
+              makeDetailRow(segment.label, formatPlatformTableIntegerValue(segment.value, '0')),
+            ),
+          ),
+          footerContent: (
+            <StackedBar
+              segments={quarantineSegments(quarantine)}
+              ariaLabel="Quarantine breakdown by category"
+              legend={false}
+            />
+          ),
+        }
+      : null,
+    spamBuckets.length > 0
+      ? {
+          label: 'Spam scores',
+          testId: 'pmg-spam-scores-section',
+          rows: compactDetailRows([
+            makeDetailRow(
+              'Buckets',
+              `${spamBuckets.length} bucket${spamBuckets.length === 1 ? '' : 's'}`,
+            ),
+          ]),
+          footerContent: <SpamHistogram buckets={spamBuckets} />,
+        }
+      : null,
+    relayDomains.length > 0
+      ? {
+          label: 'Relay domains',
+          testId: 'pmg-relay-domains-section',
+          rows: compactDetailRows([
+            makeDetailRow('Domains', relayDomains.map(relayDomainLabel).join(', '), {
+              wrap: true,
+            }),
+          ]),
+        }
+      : null,
+  ]);
+};
+
+const CARD_HEADING_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-base-content';
+
+export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (props) => {
+  const id = () => asTrimmedString(props.resource.pmg?.instanceId) || props.resource.id;
+  const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
+
+  // Solid rethrows a resource's error when it is read, so every read goes
+  // through this guard and the failure renders as a notice below.
+  const failed = () => instance.state === 'errored';
+  const loaded = createMemo(() => (failed() ? undefined : instance()));
+  const nodes = createMemo<PMGNodeStatus[]>(() => loaded()?.nodes ?? []);
   const topDomains = createMemo(() =>
-    (detail()?.domainStats ?? [])
+    (loaded()?.domainStats ?? [])
       .slice()
       .sort((a, b) => (b.mailCount ?? 0) - (a.mailCount ?? 0))
       .slice(0, 8),
   );
-  const relayDomains = createMemo(() => detail()?.relayDomains ?? []);
-
-  // The full instance can still report online after a partial collection
-  // failure. Do not let it erase a stale/degraded resource or an open alert.
-  const health = () =>
-    getPMGHealth(
-      [
-        props.instanceRow.status,
-        props.instanceRow.pmg?.connectionHealth,
-        detail()?.status,
-        detail()?.connectionHealth,
-      ],
-      props.alerts,
-    );
+  const flowSections = createMemo(() => {
+    const value = loaded();
+    return value ? buildMailGatewayMailFlowSections(value) : [];
+  });
   const name = () =>
-    asTrimmedString(detail()?.name) ||
-    asTrimmedString(props.instanceRow.name) ||
-    props.instanceRow.id;
-  const version = () =>
-    asTrimmedString(detail()?.version) || asTrimmedString(props.instanceRow.pmg?.version) || '—';
-  const hostname = () => asTrimmedString(detail()?.host);
-
-  const inboundSegments = createMemo<StackedSegment[]>(() => {
-    const s = stats();
-    if (!s) return [];
-    const countIn = Math.max(0, s.countIn ?? 0);
-    const spam = Math.max(0, s.spamIn ?? 0);
-    const virus = Math.max(0, s.virusIn ?? 0);
-    const bounces = Math.max(0, s.bouncesIn ?? 0);
-    const greylist = Math.max(0, s.greylistCount ?? 0);
-    const rbl = Math.max(0, s.rblRejects ?? 0);
-    const pregreet = Math.max(0, s.pregreetRejects ?? 0);
-    const flagged = spam + virus + bounces;
-    const clean = Math.max(0, countIn - flagged);
-    return [
-      { key: 'clean', label: 'Clean', value: clean, tone: 'bg-metric-normal-bg' },
-      { key: 'spam', label: 'Spam', value: spam, tone: 'bg-metric-warning-bg' },
-      { key: 'virus', label: 'Virus', value: virus, tone: 'bg-metric-critical-bg' },
-      { key: 'bounces', label: 'Bounces', value: bounces, tone: 'bg-orange-500/60' },
-      { key: 'greylist', label: 'Greylist', value: greylist, tone: 'bg-blue-500/60' },
-      { key: 'rbl', label: 'RBL', value: rbl, tone: 'bg-purple-500/60' },
-      { key: 'pregreet', label: 'Pregreet', value: pregreet, tone: 'bg-slate-500/60' },
-    ];
-  });
-
-  const quarantineSegments = createMemo<StackedSegment[]>(() => {
-    const q = quarantine();
-    if (!q) return [];
-    return [
-      { key: 'spam', label: 'Spam', value: q.spam ?? 0, tone: 'bg-metric-warning-bg' },
-      { key: 'virus', label: 'Virus', value: q.virus ?? 0, tone: 'bg-metric-critical-bg' },
-      {
-        key: 'attachment',
-        label: 'Attachment',
-        value: q.attachment ?? 0,
-        tone: 'bg-orange-500/60',
-      },
-      {
-        key: 'blacklisted',
-        label: 'Blacklisted',
-        value: q.blacklisted ?? 0,
-        tone: 'bg-slate-500/60',
-      },
-    ];
-  });
-
-  const headingId = () => `proxmox-mail-gateway-drawer-heading-${id()}`;
+    asTrimmedString(props.resource.displayName) ||
+    asTrimmedString(props.resource.name) ||
+    props.resource.id;
+  const facts = () =>
+    [
+      asTrimmedString(loaded()?.version) || asTrimmedString(props.resource.pmg?.version),
+      asTrimmedString(loaded()?.host),
+    ].filter((fact): fact is string => Boolean(fact));
 
   return (
-    <section class="space-y-3" aria-labelledby={headingId()}>
+    <div class="space-y-3" data-testid="pmg-mail-flow">
       <Show
-        when={props.onClose}
+        when={!failed()}
         fallback={
-          <div class="min-w-0 space-y-1">
-            <DrawerSubjectHeading
-              headingId={headingId()}
-              title={name()}
-              statusVariant={health().variant}
-              statusLabel={health().label}
-              trailing={<span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>}
-            />
-            <Show when={hostname()}>
-              <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
-            </Show>
-          </div>
-        }
-      >
-        {(onClose) => (
-          <ObjectDrawerHeader collapseLabel={`Collapse ${name()} details`} onCollapse={onClose()}>
-            <div class="min-w-0 space-y-1">
-              <DrawerSubjectHeading
-                headingId={headingId()}
-                title={name()}
-                statusVariant={health().variant}
-                statusLabel={health().label}
-                trailing={
-                  <span class="shrink-0 text-[10px] font-mono text-muted">{version()}</span>
-                }
-              />
-              <Show when={hostname()}>
-                <div class="font-mono text-[10px] text-muted break-all">{hostname()}</div>
-              </Show>
-            </div>
-          </ObjectDrawerHeader>
-        )}
-      </Show>
-
-      {/* The exact problem first: a phone cannot hover the row's short reason. */}
-      <DrawerAttentionSection
-        items={(props.alerts ?? []).map((alert) => ({
-          id: alert.id,
-          ...getAlertAttentionCopy(alert, now),
-          subject: name(),
-          metric: alertTypeDisplayLabel(alert.type),
-          severity: alert.level,
-          acknowledged: alert.acknowledged,
-        }))}
-      />
-
-      <Show
-        when={!instance.error}
-        fallback={
-          <Card padding="md">
-            <p class="text-xs text-red-600 dark:text-red-300">
-              Failed to load Mail Gateway detail.
-            </p>
-            <button
-              type="button"
-              disabled={instance.loading}
-              aria-busy={instance.loading}
-              onClick={() => {
-                if (!instance.loading) void refetch();
-              }}
-              class="mt-2 inline-flex min-h-9 items-center rounded-md border border-border px-3 text-sm font-medium hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Retry
-            </button>
-          </Card>
+          <InlineNotice
+            tone="danger"
+            role="alert"
+            actionLabel="Retry"
+            actionAriaLabel={`Retry loading mail flow for ${name()}`}
+            actionOnClick={() => void refetch()}
+          >
+            Could not load mail flow for {name()}.
+          </InlineNotice>
         }
       >
         <Show
-          when={detail() !== undefined}
-          fallback={<p class="text-xs text-muted">Loading Mail Gateway detail…</p>}
+          when={loaded() !== undefined}
+          fallback={
+            <p role="status" class="flex items-center gap-2 text-xs text-muted">
+              <LoadingSpinner size="sm" tone="muted" />
+              Loading mail flow
+            </p>
+          }
         >
           <Show
-            when={detail()}
-            fallback={<p class="text-xs text-muted">No detail available for this instance.</p>}
+            when={loaded()}
+            fallback={
+              <InlineNotice tone="info" role="status">
+                This gateway has not reported mail flow yet.
+              </InlineNotice>
+            }
           >
-            <Card padding="md">
-              <div class="mb-2 flex items-baseline justify-between">
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Inbound disposition
-                </h4>
-                <span class="text-[10px] text-muted">{stats()?.timeframe ?? ''}</span>
-              </div>
-              <Show
-                when={stats()}
-                fallback={<p class="text-xs text-muted">No mail stats reported.</p>}
+            <Show when={facts().length > 0}>
+              <div
+                data-testid="pmg-mail-flow-facts"
+                class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
               >
-                <StackedBar
-                  segments={inboundSegments()}
-                  ariaLabel="Inbound mail disposition breakdown"
-                />
-                <div class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-4">
-                  <InOutBar
-                    label="Mail in / out"
-                    inValue={stats()!.countIn ?? 0}
-                    outValue={stats()!.countOut ?? 0}
-                  />
-                  <InOutBar
-                    label="Spam in / out"
-                    inValue={stats()!.spamIn ?? 0}
-                    outValue={stats()!.spamOut ?? 0}
-                  />
-                  <InOutBar
-                    label="Virus in / out"
-                    inValue={stats()!.virusIn ?? 0}
-                    outValue={stats()!.virusOut ?? 0}
-                  />
-                  <InOutBar
-                    label="Bounces in / out"
-                    inValue={stats()!.bouncesIn ?? 0}
-                    outValue={stats()!.bouncesOut ?? 0}
-                  />
-                  <InOutBar
-                    label="Bytes in / out"
-                    inValue={stats()!.bytesIn ?? 0}
-                    outValue={stats()!.bytesOut ?? 0}
-                    format={(v) => (v > 0 ? formatBytes(v) : '—')}
-                  />
-                  <InfoCardKeyValueRow
-                    class="col-span-2 text-[11px] sm:col-span-1"
-                    label="Greylist / Junk in"
-                    value={`${formatPlatformTableIntegerValue(stats()!.greylistCount)} / ${formatPlatformTableIntegerValue(stats()!.junkIn)}`}
-                    valueClass="font-mono text-[10px]"
-                  />
-                  <InfoCardKeyValueRow
-                    class="col-span-2 text-[11px] sm:col-span-1"
-                    label="RBL / Pregreet rejects"
-                    value={`${formatPlatformTableIntegerValue(stats()!.rblRejects)} / ${formatPlatformTableIntegerValue(stats()!.pregreetRejects)}`}
-                    valueClass="font-mono text-[10px]"
-                  />
-                  <InfoCardKeyValueRow
-                    class="col-span-2 text-[11px] sm:col-span-1"
-                    label="Avg process"
-                    value={
-                      stats()?.averageProcessTimeMs
-                        ? `${Math.round(stats()!.averageProcessTimeMs)}ms`
-                        : '—'
-                    }
-                    valueClass="font-mono text-[10px]"
-                  />
-                </div>
-              </Show>
-            </Card>
+                <For each={facts()}>{(fact) => <span class="wrap-anywhere">{fact}</span>}</For>
+              </div>
+            </Show>
 
-            <div class="grid gap-3 lg:grid-cols-2">
-              <Card padding="md">
-                <div class="mb-2 flex items-baseline justify-between">
-                  <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Quarantine
-                  </h4>
-                </div>
-                <Show
-                  when={quarantine()}
-                  fallback={<p class="text-xs text-muted">No quarantine data reported.</p>}
-                >
-                  <StackedBar
-                    segments={quarantineSegments()}
-                    ariaLabel="Quarantine breakdown by category"
-                  />
-                </Show>
-              </Card>
+            <Show when={flowSections().length > 0}>
+              <TechnicalDetailsSection dataTestId="pmg-mail-flow-cards" sections={flowSections()} />
+            </Show>
 
-              <Card padding="md">
-                <div class="mb-2 flex items-baseline justify-between">
-                  <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Spam score distribution
-                  </h4>
-                  <span class="text-[10px] text-muted tabular-nums">
-                    {spamBuckets().length} bucket{spamBuckets().length === 1 ? '' : 's'}
-                  </span>
-                </div>
-                <Show
-                  when={spamBuckets().length > 0}
-                  fallback={<p class="text-xs text-muted">No spam score data.</p>}
-                >
-                  <SpamHistogram buckets={spamBuckets()} />
-                </Show>
-              </Card>
-            </div>
-
-            <Card padding="md">
-              <div class="mb-2 flex items-baseline justify-between">
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Cluster nodes
-                </h4>
+            <InfoCardFrame data-testid="pmg-cluster-nodes">
+              <div class="mb-2 flex items-baseline justify-between gap-2">
+                <h3 class={CARD_HEADING_CLASS}>Cluster nodes</h3>
                 <span class="text-[10px] text-muted tabular-nums">
                   {nodes().length} node{nodes().length === 1 ? '' : 's'}
                 </span>
@@ -555,14 +447,15 @@ export const ProxmoxMailGatewayDrawer: Component<{
                         return (
                           <TableRow>
                             <TableCell class={getPlatformTableCellClassForKind('name')}>
-                              <div class="flex items-center gap-2">
+                              <div class="flex min-w-0 items-start gap-2">
                                 <StatusDot
                                   size="sm"
                                   variant={cls.variant}
                                   title={cls.label}
                                   ariaHidden
+                                  class="mt-1"
                                 />
-                                <span class="font-mono text-[11px] font-semibold text-base-content">
+                                <span class="min-w-0 whitespace-normal font-mono text-[11px] font-semibold text-base-content wrap-anywhere">
                                   {node.name || '—'}
                                 </span>
                               </div>
@@ -612,13 +505,11 @@ export const ProxmoxMailGatewayDrawer: Component<{
                   </PlatformDetailTableBody>
                 </PlatformDetailTable>
               </Show>
-            </Card>
+            </InfoCardFrame>
 
-            <Card padding="md">
-              <div class="mb-2 flex items-baseline justify-between">
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Top domains
-                </h4>
+            <InfoCardFrame data-testid="pmg-top-domains">
+              <div class="mb-2 flex items-baseline justify-between gap-2">
+                <h3 class={CARD_HEADING_CLASS}>Top domains</h3>
                 <span class="text-[10px] text-muted tabular-nums">
                   top {formatPlatformTableIntegerValue(topDomains().length)}
                 </span>
@@ -662,7 +553,12 @@ export const ProxmoxMailGatewayDrawer: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} font-mono text-[11px] text-base-content`}
                           >
-                            <span class="block truncate" title={domain.domain}>
+                            {/* Domains are compared and copied, so they wrap
+                                rather than truncate. */}
+                            <span
+                              class="block whitespace-normal wrap-anywhere"
+                              data-testid="pmg-top-domain-name"
+                            >
                               {domain.domain || '—'}
                             </span>
                           </TableCell>
@@ -693,7 +589,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}
                           >
-                            {domain.bytes && domain.bytes > 0 ? formatBytes(domain.bytes) : '—'}
+                            {bytesOrDash(domain.bytes)}
                           </TableCell>
                         </TableRow>
                       )}
@@ -701,28 +597,12 @@ export const ProxmoxMailGatewayDrawer: Component<{
                   </PlatformDetailTableBody>
                 </PlatformDetailTable>
               </Show>
-            </Card>
-
-            <Show when={relayDomains().length > 0}>
-              <div class="flex flex-wrap items-center gap-1">
-                <span class="text-[10px] uppercase tracking-wide text-muted">Relay domains</span>
-                <For each={relayDomains()}>
-                  {(rd) => (
-                    <span
-                      class="inline-flex items-center rounded-xs bg-surface-alt px-1.5 py-0.5 text-[10px] font-mono text-base-content"
-                      title={rd.comment || rd.domain}
-                    >
-                      {rd.domain}
-                    </span>
-                  )}
-                </For>
-              </div>
-            </Show>
+            </InfoCardFrame>
           </Show>
         </Show>
       </Show>
-    </section>
+    </div>
   );
 };
 
-export default ProxmoxMailGatewayDrawer;
+export default ProxmoxMailGatewayMailFlow;

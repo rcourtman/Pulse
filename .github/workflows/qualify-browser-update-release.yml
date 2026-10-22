@@ -144,6 +144,10 @@ jobs:
           set -euo pipefail
           cd tests/integration
           npm ci --ignore-scripts
+          # Ubuntu packages only: the runner image's Microsoft source is not needed and
+          # its outage (403 on 22 October 2026) failed v6.6.0-rc.6's required audit.
+          # An image without that source is fine, so a missing match never fails.
+          sudo grep -rl --null 'packages.microsoft.com' /etc/apt/sources.list.d | xargs -0 -r sudo rm -f -- || true
           npx --no-install playwright install --with-deps chromium
       - name: Require the dedicated narrow CI registration binding
         if: matrix.mode == 'browser'

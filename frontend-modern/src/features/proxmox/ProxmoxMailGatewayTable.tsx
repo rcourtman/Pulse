@@ -1,9 +1,9 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
-import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { getAlertsForResource } from '@/utils/alerts';
-import { getPMGAlertResourceIds, getPMGHealth } from './pmgPresentation';
+import { getResourceIdentityAliases } from '@/utils/resourceIdentity';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -32,10 +32,10 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowInteractionProps,
+  PlatformResourceDetailTableRow,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
-import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 
 type MailGatewayAlertColumn = 'queue' | 'deferred' | 'quarantine' | 'spam' | 'virus';
 
@@ -167,17 +167,25 @@ export const ProxmoxMailGatewayTable: Component<{
   // under its name, so "is mail flowing" is answered here, not only on Alerts.
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  // Both instance and connection alerts need an explicit scoped identity.
-  // Never join by display name, hostname, node name or a stripped ID prefix.
+  // Alerts are keyed by the PMG instance id while the row carries the unified
+  // id, so match across the resource's identity aliases (alerts contract).
+  // There is deliberately no node-name fallback: PMG node alerts carry node
+  // names, and matching on them could pin one gateway's alert on another.
+  const alertIdsFor = (resource: Resource): string[] => [
+    resource.id,
+    ...getResourceIdentityAliases(resource),
+  ];
   // One scan of the active-alert map per gateway, shared by the filter, the
-  // status counts, the row and its drawer.
+  // status counts and the row. The drawer lists the same alerts through the
+  // canonical resource matcher (PMG alerts carry the instance id, which is
+  // the resource's metrics target).
   const openAlertsById = createMemo(() => {
     const byId = new Map<string, Alert[]>();
     for (const resource of props.resources) {
       byId.set(
         resource.id,
         getAlertsForResource(
-          getPMGAlertResourceIds(resource),
+          alertIdsFor(resource),
           activeAlerts,
           alertsActivation.detectionEnabled(),
         )
@@ -188,18 +196,26 @@ export const ProxmoxMailGatewayTable: Component<{
     return byId;
   });
   const openAlertsFor = (resource: Resource): Alert[] => openAlertsById().get(resource.id) ?? [];
-  const baseHealth = (resource: Resource) =>
-    getPMGHealth([resource.status, resource.pmg?.connectionHealth]);
-  // A critical collection alert needs attention, not an invented offline
-  // appliance. Failed reachability still stays in the offline filter bucket.
-  const effectiveStatus = (resource: Resource): string => {
-    const base = baseHealth(resource);
-    if (base.variant === 'danger') return 'offline';
-    if (openAlertsFor(resource).length > 0 || base.variant === 'warning') return 'warning';
-    return base.variant === 'success' ? 'online' : 'unknown';
+  // Filtering keeps the provider's buckets: an alerted, reachable gateway
+  // counts under attention (degraded), an unreachable one stays offline.
+  const effectiveStatus = (resource: Resource): string | undefined => {
+    if (openAlertsFor(resource).length === 0) return resource.status;
+    return getSimpleStatusIndicator(resource.status).variant === 'danger'
+      ? resource.status
+      : 'warning';
   };
-  const indicatorFor = (resource: Resource) =>
-    getPMGHealth([resource.status, resource.pmg?.connectionHealth], openAlertsFor(resource));
+  // The dot follows the most severe open alert, so a critical one reads red,
+  // and a reachable gateway with open alerts reads as needing attention. The
+  // drawer header repeats this indicator rather than judging again.
+  const indicatorFor = (resource: Resource): StatusIndicator => {
+    const base = getSimpleStatusIndicator(resource.status);
+    const alerts = openAlertsFor(resource);
+    if (alerts.length === 0 || base.variant === 'danger') return base;
+    return {
+      variant: alerts[0]?.level === 'critical' ? 'danger' : 'warning',
+      label: 'Needs attention',
+    };
+  };
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -393,7 +409,7 @@ export const ProxmoxMailGatewayTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={rowAlerts()[0]?.message || indicator().label}
+                                title={rowAlerts()[0]?.message || instance.status || 'unknown'}
                                 ariaHidden
                               />
                               <span
@@ -505,21 +521,14 @@ export const ProxmoxMailGatewayTable: Component<{
                             </AlertedMetric>
                           </TableCell>
                         </TableRow>
-                        <Show when={isOpen()}>
-                          <InlineDetailTableRow
-                            cellId={detailRowId()}
-                            colspan={visibleColumnCount()}
-                            cellClass="whitespace-normal"
-                            contentClass="min-w-0 whitespace-normal px-4 py-4"
-                            data-inline-detail-for={instance.id}
-                          >
-                            <ProxmoxMailGatewayDrawer
-                              instanceRow={instance}
-                              onClose={() => detail.close(instance)}
-                              alerts={rowAlerts()}
-                            />
-                          </InlineDetailTableRow>
-                        </Show>
+                        <PlatformResourceDetailTableRow
+                          resource={instance}
+                          statusIndicator={indicator()}
+                          open={isOpen()}
+                          detailRowId={detailRowId()}
+                          colSpan={visibleColumnCount()}
+                          onClose={() => detail.close(instance)}
+                        />
                       </>
                     );
                   }}

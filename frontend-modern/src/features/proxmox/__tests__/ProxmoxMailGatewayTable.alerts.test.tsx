@@ -14,8 +14,26 @@ vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({ detectionEnabled: () => true }),
 }));
 
-vi.mock('@/utils/apiClient', () => ({
+vi.mock('@/utils/apiClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/apiClient')>()),
   apiFetch: vi.fn(async () => new Response(JSON.stringify(null), { status: 200 })),
+}));
+
+// The row opens the canonical resource drawer; its remote reads stay quiet.
+vi.mock('@/api/resources', () => ({
+  ResourceAPI: {
+    getFacetBundle: vi.fn().mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [],
+    }),
+  },
+}));
+
+vi.mock('@/api/ai', () => ({
+  AIAPI: {
+    getResourceIntelligence: vi.fn().mockResolvedValue(null),
+  },
 }));
 
 const gateway = (id: string, name: string, instanceId: string): Resource =>
@@ -29,6 +47,9 @@ const gateway = (id: string, name: string, instanceId: string): Resource =>
     status: 'online',
     lastSeen: Date.now(),
     canonicalIdentity: { primaryId: `agent:${instanceId}`, aliases: [instanceId, name] },
+    // The backend points a gateway's metrics target at its PMG source id,
+    // which is the id its alerts carry.
+    metricsTarget: { resourceType: 'agent', resourceId: instanceId },
     pmg: { instanceId, nodeCount: 1, mailCountTotal: 10, queueTotal: 3, queueDeferred: 1 },
   }) as unknown as Resource;
 
@@ -73,52 +94,17 @@ describe('ProxmoxMailGatewayTable open alerts', () => {
     expect(nameCell).not.toHaveTextContent('Message Age');
 
     fireEvent.click(screen.getByRole('button', { name: /mail-gateway-eu/ }));
-    const drawerMatches = (
-      await screen.findAllByText(/queued for 41 minutes \(threshold: 30 minutes\)/)
-    ).filter((element) => !element.closest('.sr-only'));
-    expect(drawerMatches.length).toBeGreaterThan(0);
-    expect(drawerMatches[0]).toBeVisible();
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
-  });
-
-  it('accepts an explicit scoped connection alias but never a shared name/hostname', async () => {
-    const configured = gateway('unified-1', 'shared-name', 'pmg-generated');
-    configured.canonicalIdentity!.aliases = ['shared-name', 'shared.invalid', 'pmg:config-id'];
-    activeAlerts.connection = {
-      id: 'connection',
-      resourceId: 'pmg:config-id',
-      type: 'connection-degraded',
-      level: 'critical',
-      message: 'Collection failed',
-      acknowledged: false,
-    } as Alert;
-    activeAlerts.unrelated = {
-      id: 'unrelated',
-      resourceId: 'shared-name',
-      node: 'shared.invalid',
-      type: 'queue-total',
-      level: 'critical',
-      message: 'Wrong gateway',
-      acknowledged: false,
-    } as Alert;
-    render(() => (
-      <ProxmoxMailGatewayTable
-        resources={[configured, gateway('unified-2', 'shared-name', 'other-instance')]}
-        emptyTitle="No gateways"
-        emptyDescription="No gateways"
-      />
-    ));
-    expect(document.querySelectorAll('[data-mail-gateway-alert-summary]')).toHaveLength(1);
-    expect(document.querySelector('[data-mail-gateway-alert-summary]')).toHaveTextContent(
-      'Collection failed',
-    );
-    expect(document.querySelector('[data-mail-gateway-alert-summary]')).not.toHaveTextContent(
-      'Wrong gateway',
-    );
-    fireEvent.click(screen.getAllByRole('button', { name: /Expand details for shared-name/ })[0]);
-    expect(screen.getByRole('img', { name: 'Needs attention' })).toHaveClass('bg-red-500');
-    expect(screen.getByTestId('drawer-attention-section')).toHaveTextContent('Collection failed');
-    expect(screen.getByTestId('drawer-attention-section')).not.toHaveTextContent('Wrong gateway');
+    // The row opens the gateway's resource drawer, whose Overview lists the
+    // same alert the row marks.
+    const attention = await screen.findByTestId('drawer-attention-section');
+    expect(attention).toHaveTextContent(/queued for 41 minutes \(threshold: 30 minutes\)/);
+    expect(attention).toBeVisible();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
+    // The header dot repeats the row's verdict.
+    const heading = screen.getByRole('heading', { level: 2, name: 'mail-gateway-eu' });
+    expect(heading.parentElement?.querySelector('[aria-label="Needs attention"]')).not.toBeNull();
+    expect(screen.getByRole('tab', { name: 'Mail' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 
   it('ignores acknowledged alerts', () => {

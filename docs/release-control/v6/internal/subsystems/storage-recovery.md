@@ -963,9 +963,11 @@ whether the latest snapshot contains temperature or extended SMART values.
 Temperature and ATA reallocated-sector charts, or temperature and NVMe
 endurance/spare charts, query only the already-resolved canonical disk target.
 A missing current field must not hide stored observations. An empty series is
-shown as no history samples, never a fabricated zero or current-value fallback.
+shown as no stored history in that range, never a fabricated zero or a plotted
+current-value fallback; the chart legend may still name the snapshot's reading,
+labelled current or last known.
 Overview continues to report current collection availability; explicit
-unavailable/unsupported I/O still suppresses the existing live I/O section.
+unavailable/unsupported I/O still suppresses the disk drawer's I/O chart panels.
 
 Catalog entries retain their identity across matching snapshots so ordinary
 current-temperature changes cannot remount charts, drop inspection or restart
@@ -974,13 +976,21 @@ when the explicit target or range changes; a late cancelled response cannot
 populate its replacement. This changes neither disk correlation nor collector,
 retention, permission or entitlement policy, and proves no appliance recovery.
 
-Verification: `DiskDetail.test.tsx` and `useDiskDetailModel.test.ts` pin the
-catalog and matching-snapshot boundary; `DiskDetail.history-collection.test.tsx`
-uses the actual chart owner to cover absent current fields, stored zero versus
-empty, NVMe/ATA catalogs, request counts, preserved inspection and late former
-target responses. `frontend-modern/browser-tests/disk-history-collection.cjs`
-checks the production components/client/CSS with synthetic API data on desktop
-Chromium and touch/dark phone WebKit, not native NAS or installed acceptance.
+Verification: `DiskDrawer.test.tsx` and `diskDrawerPresentation.test.ts` pin
+the disk-family catalog, its identity across matching snapshots, explicit I/O
+suppression and current readings that are never invented;
+`DiskDrawer.history-collection.test.tsx` mounts the disk drawer over the actual
+drawer history owner to cover absent current fields, stored zero versus empty,
+NVMe/ATA catalogs, request counts, preserved range and inspection, a fresh read
+and cleared inspection on range or target change, late former-target responses
+and no read without a resolvable identity. An empty stored series reads "No
+stored history in this range"; the chart legend may still show the snapshot's
+own reading, labelled current or last known. The production disk Overview,
+drawer history, client and CSS are checked with synthetic API data by
+`frontend-modern/browser-tests/disk-history-collection.cjs` (desktop Chromium,
+touch/dark phone WebKit), `guest-storage-2263.cjs` (the Overview inside the
+guest drawer) and `history-touch.cjs` (touch, pointer and keyboard inspection),
+not native NAS or installed acceptance.
 
 ### Independent physical disk temperature
 
@@ -991,12 +1001,14 @@ invented. When no detail readings or collection messages remain, the existing
 accessible unavailable-details message is shown. This presentation does not
 establish fresh collection, SMART health or native appliance acceptance.
 
-Verification: `DiskDetail.test.tsx` covers same-identity snapshot replacement
-through temperature-only, hot, missing and extended-SMART states;
+Verification: `DiskDrawer.test.tsx` covers same-identity snapshot replacement
+through temperature-only, hot, missing and extended-SMART states in one mounted
+drawer; `diskDrawerPresentation.test.ts` covers a temperature beside a missing
+or empty SMART object and invalid readings without invented counters;
 `diskDetailPresentation.branchcov0724pm.test.ts` covers disk types, invalid
-readings, units and configured thresholds. The production detail fixture in
-`frontend-modern/browser-tests/disk-temperature.cjs` checks desktop and phone
-presentation with synthetic snapshots, including the predecessor's omission.
+readings, units and configured thresholds. The production disk drawer fixture
+in `frontend-modern/browser-tests/disk-temperature.cjs` checks desktop and
+phone presentation with synthetic snapshots.
 
 ### Pool detail capacity observations
 
@@ -5193,13 +5205,11 @@ the record's `details.zfsPool`, which
 `frontend-modern/src/components/Storage/StoragePoolDetail.tsx` renders that
 report inside the row expansion so degraded pools name the failing device and
 running scrub/resilver without re-promoting per-device noise into table rows.
-The pool detail key/value rows span the full Configuration card below the
-small-screen breakpoint, then return to the two-column desktop grid. Labels
-stay fixed while long node, content, and provider values wrap. Phones retain
-the compact endpoint alignment, while the desktop grid uses the shared 7rem
-label track and places each left-aligned value immediately beside its label,
-so wide drawers remain easy to scan and narrow row expansions never
-concatenate one field with the next or overflow the drawer.
+The pool's Configuration, Topology and Datasets now render as
+`DetailSectionTable` sections inside the drawer's closed Details disclosure;
+long node, content, provider, dataset and mountpoint values wrap, so narrow
+row expansions never concatenate one field with the next or overflow the
+drawer.
 The pools table must not double-list Ceph-backed storage. Cluster-internal
 pool rows synthesized from Ceph cluster telemetry (`models.StorageFromCephPool`:
 type `ceph` homed on the `cluster` pseudo-node) are consolidated into the PVE
@@ -7950,6 +7960,54 @@ separate SMTP and saved-file counters describe report delivery only. Only daily
 aggregate counts leave the installation, with no workload, task, repository,
 client scope or reporting range. Recovery evidence, observation coverage and
 collection checkpoints remain owned by the existing recovery store.
+
+The Proxmox Backups drawers follow the shared drawer shell. The PBS server
+drawer's status dot is the one its row shows (reachable or not), not a second
+reading of the raw status, and the Coverage detail row no longer overrides the
+shared detail shell's padding, which had dropped its phone width cap. Neither
+change alters how coverage, protection posture or restore evidence is judged.
+
+Storage pool and physical-disk drawers follow the Proxmox guest and node
+drawer shape. Both open in the shared `InlineDetailTableRow` (one open at a
+time, `aria-controls` focus restore, phone width cap) under an
+`ObjectDrawerHeader` with `DrawerSubjectHeading`, whose dot reads the same
+judgement as the row (`getStoragePoolStateIndicator`,
+`getPhysicalDiskHealthIndicator`). Overview leads with the object's own alerts
+(the set that tints its row: `getRecordAlerts`, and `getPhysicalDiskAlerts`
+matching the disk's unified keys, its Proxmox disk alias and its agent's disk
+temperature key, never a sibling, machine or node alert), then "Worth
+checking" for a bad state, reduced protection, ZFS pool and scrub errors,
+devices that are not online, linked disks with errors or reallocated sectors,
+out-of-range SMART attributes and low SSD life. Charts use the shared drawer
+history at 24 hours with the range picker in their toolbar (pool usage; disk
+temperature, I/O and wear), then a facts line, content cards (ZFS pool and
+devices, linked disks, SMART health) and one closed Details. Manage holds the
+operator state for the pool or disk's unified resource id. The separate 7-day
+pool chart, the disk drawer's own History and Live I/O sections and the
+pool-local range picker are retired; no field was dropped. The guest drawer's
+embedded physical-disk detail (`GuestPhysicalDisks` -> `DiskDetail`) keeps its
+existing layout for now.
+
+The Backups record drawers follow the shared record panel. Replication jobs
+lead with a failure, then Job, Route and Schedule, keyed by job id and linking
+to the guest. Coverage opens one workload at a time across the live and
+unmatched tables, leads with restore evidence (location and details wrap),
+keeps provider evidence as a section and links to a matched guest.
+Recoverable restore points, which had no drawer and lost their location on
+phones, now open a record drawer with source, location, created, size, state,
+verification and protection. Coverage posture, restore evidence and recovery
+rules are unchanged.
+
+The guest drawer's physical disks now open the same disk Overview as the
+Storage tab, and the old disk detail, its local history range catalogue,
+metric cards, key/value rows and the storage detail presentation classes that
+only it used are removed. Storage group and spacer rows span the table's
+visible columns, so pool rows and drawers fill the table on phones.
+
+The Coverage drawer's restore evidence wraps long source labels (snapshot and
+archive names) instead of cutting them with an ellipsis: `ArtifactSourceBadge`
+takes an opt-in `wrap` that the drawer passes, while table rows keep the label
+on one line. Coverage, restore evidence and recovery rules are unchanged.
 
 ### Incomplete PBS namespace discovery cannot delete history (18 October 2026)
 

@@ -503,6 +503,7 @@ export const KubernetesNodesTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={node}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={10}

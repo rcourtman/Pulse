@@ -812,10 +812,11 @@ export const ProxmoxNodesTable: Component<{
                         <InlineDetailTableRow
                           cellId={detailRowId()}
                           colspan={visibleColumns().length}
-                          data-inline-node-detail-for={node.id}
+                          data-inline-detail-for={node.id}
                         >
                           <NodeDrawer
                             node={selectedNode()}
+                            webInterfaceUrl={externalUrl()}
                             onClose={() => setSelectedNodeId(null)}
                             alerts={getAlertsForResource(
                               alertResourceIds(),

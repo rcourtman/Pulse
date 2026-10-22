@@ -128,23 +128,7 @@ const workflowDestinations = [
       '/docs/MAIL_GATEWAY#cluster-response-or-backup-lookup-errors',
     ],
   ],
-  [
-    'PBS datastore Usage is Unknown, Unavailable or differs from an alert:',
-    ['/docs/PBS#datastore-capacity-is-unknown-or-disagrees-with-an-alert'],
-  ],
-  [
-    'A PBS job says Healthy despite an error, warning or running status:',
-    ['/docs/PBS#a-pbs-job-looks-healthy-but-its-status-disagrees'],
-  ],
-  [
-    'Backup activity has no volume or the chart and row counts differ:',
-    ['/docs/PBS#backup-activity-has-no-volume-or-fewer-rows-than-expected'],
-  ],
   ['Backup rows look duplicated or copies are missing:', ['/docs/PBS#duplicate-backups']],
-  [
-    "Coverage's job identity, timing or latest result is unclear:",
-    ['/docs/PBS#read-backup-job-identity-and-timing', '/docs/PBS#latest-backup-job-is-unknown'],
-  ],
   [
     'RAID is reported degraded despite a spare:',
     ['/docs/TROUBLESHOOTING#raid-array-is-degraded-with-a-spare'],
@@ -346,34 +330,6 @@ describe('troubleshooting workflow entry', () => {
     expect(detail.querySelector('pre')).toBeNull();
   });
 
-  it('routes a misleading PBS Healthy badge to same-task evidence without running new work', () => {
-    const row = [...entry().querySelectorAll('li')].find((element) =>
-      prose(element).startsWith(
-        'A PBS job says Healthy despite an error, warning or running status:',
-      ),
-    );
-    expect(row).toBeDefined();
-    expect(prose(row!)).toContain("the same task's status evidence");
-    expect(prose(row!)).toContain(
-      'An OK or success word inside a longer message is not completed success',
-    );
-    expect(prose(row!)).toContain(
-      'Use existing PBS records; do not run another job or verification to test the badge',
-    );
-    const heading = renderGuide('PBS').querySelector(
-      '#a-pbs-job-looks-healthy-but-its-status-disagrees',
-    );
-    expect(heading).not.toBeNull();
-    const detail = document.createElement('section');
-    for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
-      if (/^H[1-3]$/.test(next.tagName)) break;
-      detail.appendChild(next.cloneNode(true));
-    }
-    expect(prose(detail)).toContain('a successful sibling job or earlier run cannot supply');
-    expect(prose(detail)).toContain('A corrected badge alone is not monitoring or guest recovery');
-    expect(detail.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]')).not.toBeNull();
-    expect(detail.querySelector('pre')).toBeNull();
-  });
 
   it('keeps the source and shipped entry identical and preserves existing anchors', () => {
     const canonical = readFileSync(path.join(repoRoot, 'docs/TROUBLESHOOTING.md'), 'utf8');

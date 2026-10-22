@@ -1,14 +1,5 @@
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import {
-  For,
-  Show,
-  createEffect,
-  createMemo,
-  createSignal,
-  createUniqueId,
-  onCleanup,
-  type Component,
-} from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { Button } from '@/components/shared/Button';
@@ -26,6 +17,8 @@ import {
 } from '@/utils/availabilityProbePresentation';
 import { getProbeSourceChipLabel, type ProbeAgentOption } from '@/utils/availabilityProbeAgents';
 import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
+
+const AVAILABILITY_FLEET_DETAIL_ID = 'availability-fleet-detail';
 
 type AvailabilityFleetHistoryState = 'reachable' | 'unreachable' | 'indeterminate' | 'unknown';
 
@@ -235,83 +228,23 @@ export const AvailabilityFleetView: Component<{
   historyError?: string;
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
-  onFocusedDetailsUnmount?: () => void;
 }> = (props) => {
   const now = useRelativeTimeNow();
   const [selectedResourceId, setSelectedResourceId] = createSignal<string>();
-  const detailsId = `availability-fleet-details-${createUniqueId()}`;
-  let grid: HTMLDivElement | undefined;
-  let details: HTMLDivElement | undefined;
-  let detailsHadFocus = false;
-  let selectedIndex = 0;
-  let mounted = true;
-  onCleanup(() => {
-    mounted = false;
-    // The parent may replace the entire fleet with an empty state before a
-    // tile can receive focus. It owns the surviving search/Add-check control.
-    if (detailsHadFocus) props.onFocusedDetailsUnmount?.();
-  });
   const selectedResource = createMemo(() =>
     props.resources.find((resource) => resource.id === selectedResourceId()),
   );
-
-  const returnToFleet = (resourceId: string) => {
-    // Resolve the current tile after the drawer closes: a live snapshot can
-    // replace/reorder every tile while its details are open.
-    queueMicrotask(() => {
-      if (!mounted || selectedResourceId() || !grid?.isConnected) return;
-      const tiles = Array.from(
-        grid.querySelectorAll<HTMLButtonElement>('[data-availability-fleet-tile]'),
-      );
-      const target =
-        tiles.find((tile) => tile.dataset.availabilityFleetTile === resourceId) ??
-        tiles[Math.min(selectedIndex, tiles.length - 1)] ??
-        grid;
-      target.focus({ preventScroll: true });
-      target.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-    });
-  };
-
-  const openDetails = (resourceId: string) => {
-    detailsHadFocus = false;
-    setSelectedResourceId(resourceId);
-    // The existing drawer is inline below the grid, not a modal. Hand over
-    // focus and reveal its start only on activation, never on polling updates.
-    queueMicrotask(() => {
-      if (!mounted || selectedResourceId() !== resourceId || !details?.isConnected) return;
-      details.focus({ preventScroll: true });
-      details.scrollIntoView({ block: 'start', behavior: 'instant' });
-    });
-  };
-
-  const closeDetails = () => {
-    const resourceId = selectedResourceId();
-    setSelectedResourceId(undefined);
-    detailsHadFocus = false;
-    if (resourceId) returnToFleet(resourceId);
-  };
-
   // A removed check is no longer evidence for the open detail. Clear its
-  // selection so reappearance cannot reopen it. If focus was inside, return
-  // to the nearest surviving tile; do not steal focus from a filter/control.
+  // selection as well, so a later reappearance cannot silently reopen it.
   createEffect(() => {
-    const resourceId = selectedResourceId();
-    if (!resourceId) return;
-    const index = props.resources.findIndex((resource) => resource.id === resourceId);
-    if (index >= 0) {
-      selectedIndex = index;
-      return;
-    }
-    // The selected-resource memo can unmount the drawer before this effect
-    // runs. Retain focus ownership across that removal, not a detached node's
-    // contains(document.activeElement) result after focus has fallen to body.
-    const restoreFocus = detailsHadFocus;
-    detailsHadFocus = false;
-    setSelectedResourceId(undefined);
-    if (restoreFocus) returnToFleet(resourceId);
+    if (selectedResourceId() && !selectedResource()) setSelectedResourceId(undefined);
   });
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     props.resources.find((resource) => resource.id === resourceId)?.name;
+  // Tiles are disclosures for the one drawer below the grid: a second click
+  // on the open tile closes it, as a second click on a table row does.
+  const toggleResource = (resourceId: string) =>
+    setSelectedResourceId((current) => (current === resourceId ? undefined : resourceId));
 
   return (
     <section aria-label="Availability fleet" class="space-y-3">
@@ -344,11 +277,7 @@ export const AvailabilityFleetView: Component<{
       </div>
 
       <div
-        ref={grid}
         class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-        role="group"
-        aria-label="Availability checks"
-        tabIndex={-1}
         data-testid="availability-fleet-grid"
       >
         <For each={props.resources}>
@@ -376,6 +305,7 @@ export const AvailabilityFleetView: Component<{
                 emptyText: 'Not checked',
                 now: now(),
               });
+            const isSelected = () => selectedResourceId() === resource.id;
             const latency = () => {
               const value = availability()?.latencyMillis;
               return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -386,12 +316,16 @@ export const AvailabilityFleetView: Component<{
             return (
               <button
                 type="button"
-                class="group min-w-0 scroll-my-1 rounded-md border border-border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                class="group min-w-0 rounded-md border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                classList={{
+                  'border-border': !isSelected(),
+                  'border-blue-500 bg-surface-hover ring-1 ring-blue-500/40': isSelected(),
+                }}
                 aria-label={`Open details for ${resource.name}`}
-                aria-expanded={selectedResourceId() === resource.id}
-                aria-controls={selectedResourceId() === resource.id ? detailsId : undefined}
+                aria-expanded={isSelected()}
+                aria-controls={AVAILABILITY_FLEET_DETAIL_ID}
                 data-availability-fleet-tile={resource.id}
-                onClick={() => openDetails(resource.id)}
+                onClick={() => toggleResource(resource.id)}
               >
                 <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0">
@@ -458,32 +392,26 @@ export const AvailabilityFleetView: Component<{
         </For>
       </div>
 
-      <Show when={selectedResource()}>
-        {(resource) => (
-          <div
-            ref={details}
-            id={detailsId}
-            role="group"
-            aria-label={`${resource().name} details`}
-            tabIndex={-1}
-            onFocusIn={() => (detailsHadFocus = true)}
-            onFocusOut={(event) => {
-              // A real move to another control clears ownership. A blur due
-              // to removal must keep it until the selection effect returns.
-              if (selectedResource()) {
-                detailsHadFocus = details?.contains(event.relatedTarget as Node | null) ?? false;
-              }
-            }}
-            class="scroll-mt-4 rounded-md border border-border bg-surface p-3 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-          >
-            <ResourceDetailDrawer
-              resource={resource()}
-              resolveResourceLabel={resolveResourceLabel}
-              onClose={closeDetails}
-            />
-          </div>
-        )}
-      </Show>
+      {/* The same check reads the same here as in the table view: the
+          table-row drawer, headed by the dot its tile shows. Keyed by id, so
+          switching tiles resets the drawer's tabs. */}
+      <div id={AVAILABILITY_FLEET_DETAIL_ID} data-testid="availability-fleet-detail">
+        <Show when={selectedResourceId()} keyed>
+          <Show when={selectedResource()}>
+            {(resource) => (
+              <div class="rounded-sm border border-border bg-surface px-2 py-3 sm:px-4 sm:py-4">
+                <ResourceDetailDrawer
+                  resource={resource()}
+                  statusIndicator={getStandaloneResourceStatusIndicator(resource(), now())}
+                  presentation="table-row"
+                  resolveResourceLabel={resolveResourceLabel}
+                  onClose={() => setSelectedResourceId(undefined)}
+                />
+              </div>
+            )}
+          </Show>
+        </Show>
+      </div>
     </section>
   );
 };

@@ -1,4 +1,11 @@
+import { A } from '@solidjs/router';
 import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
+import {
+  compactDetailRows,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -18,6 +25,8 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
+import { buildRecordOwnerPath } from '@/features/platformPage/RecordOwnerLink';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -25,8 +34,11 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import {
+  DockerNativeDetailPanel,
   DockerResourceNameCell,
   dockerHostName,
+  dockerLabelsSection,
+  dockerReportedBySection,
   dockerJoinValues,
   dockerResourceName,
   dockerStateTextToneClass,
@@ -225,14 +237,56 @@ const networkRowHealth = (indicator: StatusIndicator): DockerResourceStatusFilte
   return 'unknown';
 };
 
-const networkDetailRows = (resource: Resource) => [
-  ['Driver', dockerTextValue(resource.docker?.driver)],
-  ['Scope', dockerTextValue(resource.docker?.scope)],
-  ['Addressing', networkAddressing(resource)],
-  ['Flags', networkFlags(resource)],
-  ['Subnets', networkSubnets(resource)],
-  ['Network ID', dockerTextValue(resource.docker?.networkId)],
-];
+// The network's own configuration, below the containers on it: what an
+// operator copies (the ID, subnets, gateways) wraps in full.
+const buildNetworkDetailSections = (resource: Resource): Array<DetailSection | null> => {
+  const subnets = (resource.docker?.subnets ?? []).filter((subnet) =>
+    asTrimmedString(subnet.subnet),
+  );
+  return [
+    {
+      label: 'Network',
+      rows: compactDetailRows([
+        makeDetailRow('Driver', asTrimmedString(resource.docker?.driver)),
+        makeDetailRow('Scope', asTrimmedString(resource.docker?.scope)),
+        makeDetailRow(
+          'Addressing',
+          networkAddressing(resource) === '—' ? null : networkAddressing(resource),
+        ),
+        makeDetailRow('Flags', networkFlags(resource), { wrap: true }),
+        makeDetailRow('Network ID', asTrimmedString(resource.docker?.networkId), { wrap: true }),
+      ]),
+    },
+    subnets.length > 0
+      ? {
+          label: subnets.length === 1 ? 'Subnet' : `Subnets (${subnets.length})`,
+          rows: compactDetailRows(
+            subnets.map((subnet) =>
+              makeDetailRow(
+                asTrimmedString(subnet.subnet) ?? '',
+                asTrimmedString(subnet.gateway)
+                  ? `Gateway ${asTrimmedString(subnet.gateway)}`
+                  : 'No gateway',
+                { wrap: true },
+              ),
+            ),
+          ),
+        }
+      : null,
+    dockerReportedBySection(resource),
+    dockerLabelsSection('Options', resource.docker?.options),
+    dockerLabelsSection('Labels', resource.docker?.labels),
+  ];
+};
+
+const networkSummary = (resource: Resource, attachmentCount: number): string =>
+  [
+    asTrimmedString(resource.docker?.driver),
+    asTrimmedString(resource.docker?.scope),
+    attachmentCount > 0 ? attachmentCountLabel(attachmentCount) : 'No containers attached',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
 const attachmentGroupKey = (row: DockerNetworkAttachmentRow): AttachmentGroupKey => {
   if (row.status.variant === 'danger' || row.status.variant === 'warning') return 'attention';
@@ -267,33 +321,60 @@ const filterAttachmentRows = (
   });
 };
 
-const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props) => (
-  <div class="rounded-sm border border-border bg-surface px-3 py-2">
-    <div class="grid gap-2 text-[11px] md:grid-cols-[minmax(0,1.2fr)_7rem_9rem_minmax(0,1fr)] md:items-center">
-      <div class="flex min-w-0 items-center gap-2">
-        <StatusDot size="sm" variant={props.row.status.variant} title={props.row.status.label} />
-        <span class="truncate font-semibold text-base-content" title={props.row.name}>
-          {props.row.name}
+// Names, addresses, ports and images wrap: a phone has no hover to read the
+// rest, and operators compare values that differ at their end. The name
+// opens the container on the Docker overview where that page can filter to it.
+const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props) => {
+  const containerPath = () =>
+    buildRecordOwnerPath({
+      id: props.row.resource.id,
+      name: props.row.name,
+      type: props.row.resource.type,
+      resource: props.row.resource,
+    });
+  return (
+    <div class="rounded-sm border border-border bg-surface px-3 py-2">
+      <div class="grid gap-x-3 gap-y-1 text-[11px] md:grid-cols-[minmax(0,1.2fr)_7rem_9rem_minmax(0,1fr)] md:items-start">
+        <div class="flex min-w-0 items-start gap-2">
+          <StatusDot
+            size="sm"
+            variant={props.row.status.variant}
+            title={props.row.status.label}
+            class="mt-1"
+          />
+          <Show
+            when={containerPath()}
+            fallback={
+              <span class="min-w-0 font-semibold text-base-content wrap-anywhere">
+                {props.row.name}
+              </span>
+            }
+          >
+            {(path) => (
+              <A
+                href={path()}
+                class="min-w-0 font-semibold text-base-content wrap-anywhere hover:underline"
+                title={`Open ${props.row.name}`}
+                data-docker-attachment-link={props.row.resource.id}
+              >
+                {props.row.name}
+              </A>
+            )}
+          </Show>
+        </div>
+        <span
+          class={dockerStateTextToneClass(props.row.status.variant) || 'text-base-content'}
+          data-docker-attachment-state={props.row.status.variant}
+        >
+          {props.row.status.label}
         </span>
+        <span class="min-w-0 font-mono text-base-content wrap-anywhere">{props.row.address}</span>
+        <span class="min-w-0 font-mono text-muted wrap-anywhere">{props.row.ports}</span>
       </div>
-      <span
-        class={dockerStateTextToneClass(props.row.status.variant) || 'text-base-content'}
-        data-docker-attachment-state={props.row.status.variant}
-      >
-        {props.row.status.label}
-      </span>
-      <span class="font-mono text-base-content" title={props.row.address}>
-        {props.row.address}
-      </span>
-      <span class="truncate font-mono text-muted" title={props.row.ports}>
-        {props.row.ports}
-      </span>
+      <div class="mt-1 min-w-0 text-[10px] text-muted wrap-anywhere">{props.row.image}</div>
     </div>
-    <div class="mt-1 truncate text-[10px] text-muted" title={props.row.image}>
-      {props.row.image}
-    </div>
-  </div>
-);
+  );
+};
 
 const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] }> = (props) => {
   const [showAll, setShowAll] = createSignal(false);
@@ -336,9 +417,9 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
       <Show
         when={props.rows.length > 0}
         fallback={
-          <div class="rounded-sm border border-border bg-surface px-3 py-2 text-[11px] text-muted">
-            No attached Docker containers reported on this network.
-          </div>
+          <InlineNotice tone="info">
+            No Docker containers are attached to this network.
+          </InlineNotice>
         }
       >
         <div class="mb-3">
@@ -367,9 +448,9 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
         <Show
           when={tableState.filtered().length > 0}
           fallback={
-            <div class="rounded-sm border border-border bg-surface px-3 py-2 text-[11px] text-muted">
-              No attached containers match current filters.
-            </div>
+            <InlineNotice tone="info">
+              No attached containers match the current filters.
+            </InlineNotice>
           }
         >
           <div class="space-y-3">
@@ -413,24 +494,6 @@ const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] 
     </section>
   );
 };
-
-const NetworkConfigDetail: Component<{ resource: Resource }> = (props) => (
-  <section class="min-w-0">
-    <h3 class="mb-2 text-xs font-semibold text-base-content">Network details</h3>
-    <div class="rounded-sm border border-border bg-surface px-3 py-2">
-      <For each={networkDetailRows(props.resource)}>
-        {([label, value]) => (
-          <div class="grid grid-cols-[6rem_minmax(0,1fr)] gap-3 py-1 text-[11px]">
-            <span class="text-muted">{label}</span>
-            <span class="truncate text-base-content" title={value}>
-              {value}
-            </span>
-          </div>
-        )}
-      </For>
-    </div>
-  </section>
-);
 
 export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) => {
   const allResources = () => props.relatedResources ?? props.resources;
@@ -642,11 +705,18 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           <InlineDetailTableRow
                             cellId={detailRowId()}
                             colspan={visibleColumnCount()}
-                            contentClass="grid gap-4 px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)]"
                             data-docker-network-detail-row={resource.id}
                           >
-                            <AttachmentDetail rows={attachments()} />
-                            <NetworkConfigDetail resource={resource} />
+                            <DockerNativeDetailPanel
+                              testId="docker-network-detail"
+                              resource={resource}
+                              status={networkRowIndicator(resource, attention())}
+                              summary={networkSummary(resource, attachments().length)}
+                              sections={() => buildNetworkDetailSections(resource)}
+                              onClose={() => drawer.close(resource)}
+                            >
+                              <AttachmentDetail rows={attachments()} />
+                            </DockerNativeDetailPanel>
                           </InlineDetailTableRow>
                         </Show>
                       </>

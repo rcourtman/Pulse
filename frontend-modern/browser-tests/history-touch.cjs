@@ -14,7 +14,6 @@ const { chromium, webkit } = require('playwright');
     cacheDir: fs.mkdtempSync(path.join(artifacts, 'vite-')),
     server: { host: '127.0.0.1', port: 5227, strictPort: true },
   });
-  const parent = false;
   let browser;
   const observations = [];
   const timestamp = Date.parse('2026-10-02T10:00:00Z');
@@ -30,7 +29,6 @@ const { chromium, webkit } = require('playwright');
       ['webkit-phone', webkit, true, true],
     ];
     for (const [name, engine, touch, dark] of configs) {
-      if (parent && !touch) continue;
       browser = await engine.launch(engine === chromium ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] } : { headless: true });
       const page = await browser.newPage({
         viewport: touch ? { width: 390, height: 844 } : { width: 1365, height: 900 },
@@ -47,13 +45,17 @@ const { chromium, webkit } = require('playwright');
         if (!url.pathname.startsWith('/api/')) return route.continue();
         if (url.pathname === '/api/metrics-store/history') {
           requests.push(Object.fromEntries(url.searchParams));
-          // The client checks a reply names the series it asked for.
+          // Each drawer reads every series of its one target in one request;
+          // the reply window is the stored samples' own span.
           const q = url.searchParams;
           const times = samples.map(sample => sample.timestamp);
+          const metrics = q.get('resourceType') === 'disk'
+            ? Object.fromEntries(['smart_temp', 'diskread', 'diskwrite', 'disk'].map(metric => [metric, samples]))
+            : { usage: samples };
           return route.fulfill({ json: {
-            resourceType: q.get('resourceType'), resourceId: q.get('resourceId'), metric: q.get('metric'), range: q.get('range'),
+            resourceType: q.get('resourceType'), resourceId: q.get('resourceId'), range: q.get('range'),
             start: times.length ? Math.min(...times) : Date.now() - 86400000, end: times.length ? Math.max(...times) : Date.now(),
-            points: samples, source: 'store',
+            metrics, source: 'store',
           } });
         }
         return route.fulfill({ json: url.pathname === '/api/license/runtime-capabilities'
@@ -64,123 +66,130 @@ const { chromium, webkit } = require('playwright');
       if (dark) await page.evaluate(() => document.documentElement.classList.add('dark'));
       const disk = page.getByRole('region', { name: 'Disk fixture' });
       const pool = page.getByRole('region', { name: 'Pool fixture' });
+      const busy = disk.getByRole('img', { name: 'Busy history', exact: true });
+      const panel = chart => chart.locator('xpath=ancestor::*[@data-testid="guest-history-group-chart"][1]');
+      // The plot's description names the inspected observation, or the count.
+      const description = chart => chart.evaluate(el => document.getElementById(el.getAttribute('aria-describedby').split(' ')[0]).textContent);
+      const readoutTime = chart => panel(chart).getByTestId('guest-history-hover-time').textContent();
+      const settled = (label, count) => page.waitForFunction(([label, count]) => [...document.querySelectorAll('[data-testid="guest-history-plot"]')].some(el => el.getAttribute('aria-label') === label && document.getElementById(el.getAttribute('aria-describedby').split(' ')[0]).textContent.includes(count)), [label, count]);
       // A phone folds the disk's charts after the first behind one button.
-      if (touch) await disk.getByTestId('disk-detail-phone-toggle').click();
-      const busy = disk.getByRole('img', { name: 'Busy chart', exact: true });
-      const description = chart => chart.evaluate(el => document.getElementById(el.getAttribute('aria-describedby')).textContent);
-      await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(el => el.getAttribute('aria-label') === 'Busy chart' && document.getElementById(el.getAttribute('aria-describedby')).textContent.includes('3 data points')));
-      const tooltip = chart => chart.locator('..').locator('[data-history-chart-tooltip]');
-      const live = chart => chart.locator('..').locator('[aria-live="polite"]');
+      if (touch) {
+        await settled('Temperature history', '3 stored observation times');
+        await disk.getByTestId('history-phone-toggle').click();
+      }
+      await settled('Busy history', '3 stored observation times');
       async function inspect(chart, fraction) {
         await chart.scrollIntoViewIfNeeded();
         const box = await chart.boundingBox();
-        // Percent labels reserve 40px at left; the time label reserves less than
-        // 25px at right. These interior positions are nearest to each real sample.
-        const x = box.x + 45 + (box.width - 70) * fraction;
+        // The plot spans 34-352 of its 360-unit viewBox; the reply window is
+        // the samples' span, so these fractions sit on the real samples.
+        const x = box.x + (box.width * (34 + fraction * 318)) / 360;
         const y = box.y + box.height / 2;
         if (touch) await page.touchscreen.tap(x, y);
         else await page.mouse.move(x, y);
         await page.waitForTimeout(80);
-        return (await tooltip(chart).count()) ? await tooltip(chart).textContent() : null;
+        return description(chart);
       }
       async function record(phase, chart, text) {
         const dimensions = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, width: innerWidth }));
         assert.ok(dimensions.scroll <= dimensions.width + 1, JSON.stringify(dimensions));
-        observations.push({ name, browser: browser.version(), touch, dark, phase, text, description: await description(chart), dimensions });
-        await page.screenshot({ path: path.join(artifacts, `${parent ? 'parent-' : ''}${name}-${phase}.png`) });
+        // An empty range has no observation time to name.
+        const readout = (await panel(chart).getByTestId('guest-history-hover-time').count()) ? await readoutTime(chart) : null;
+        observations.push({ name, browser: browser.version(), touch, dark, phase, text, readout, dimensions });
+        await page.screenshot({ path: path.join(artifacts, `${name}-${phase}.png`) });
       }
-      if (parent) {
-        for (const [phase, fraction, expected] of [['first', 0.04, '10.0%'], ['middle', 0.5, '20.0%']]) {
-          const text = await inspect(busy, fraction);
-          if (phase === 'first') assert.ok(!text?.includes(expected), `predecessor unexpectedly inspected the first tap: ${text}`);
-          await record(phase, busy, text);
-        }
-      } else {
-        for (const [phase, fraction, expected] of [['first', 0.04, '10.0%'], ['middle', 0.5, '20.0%'], ['last', 0.96, '30.0%']]) {
-          const text = await inspect(busy, fraction);
-          assert.ok(text?.includes(expected), `${name} ${phase}: ${text}`);
-          assert.equal(await live(busy).textContent(), '', 'pointer inspection must not speak keyboard announcements');
-          assert.equal(await disk.locator('[data-history-chart-tooltip]').count(), 3, 'live I/O group shares inspection');
-          await record(phase, busy, text);
-        }
-        if (touch) {
-          const read = disk.getByRole('img', { name: 'Read chart', exact: true });
-          assert.ok((await inspect(read, 0.5))?.includes('20.0 B/s'));
-          assert.ok((await tooltip(busy).textContent()).includes('20.0%'), 'a peer blur must not clear the new group tap');
-          assert.equal(await live(read).textContent(), '');
-          await inspect(busy, 0.5);
-          // A hybrid device may switch back to a real mouse after a tap.
-          await busy.scrollIntoViewIfNeeded();
-          const box = await busy.boundingBox();
-          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-          assert.ok((await tooltip(busy).textContent()).includes('20.0%'));
-          await page.mouse.move(0, 0);
-          assert.equal(await tooltip(busy).count(), 0);
-        }
-        await busy.focus();
-        for (const [key, expected] of [['Home', '10.0%'], ['ArrowRight', '20.0%'], ['End', '30.0%']]) {
-          await page.keyboard.press(key);
-          assert.ok((await live(busy).textContent()).includes(expected));
-        }
-        await page.keyboard.press('Escape');
-        assert.equal(await tooltip(busy).count(), 0);
-        await page.getByRole('button', { name: 'After charts' }).focus();
-        assert.equal(await live(busy).textContent(), '');
-
-        if (touch && engine === chromium) {
-          await busy.scrollIntoViewIfNeeded();
-          await inspect(busy, 0.5);
-          const box = await busy.boundingBox();
-          const session = await page.context().newCDPSession(page);
-          await busy.evaluate(el => {
-            el.dataset.cancelCount = '0';
-            el.addEventListener('pointercancel', () => el.dataset.cancelCount = String(Number(el.dataset.cancelCount) + 1));
-          });
-          const scrollMetrics = await page.evaluate(() => ({ before: scrollY, maximum: document.documentElement.scrollHeight - innerHeight }));
-          assert.ok(scrollMetrics.maximum > scrollMetrics.before + 200, 'the fixture must have room to scroll');
-          const before = scrollMetrics.before;
-          const x = box.x + box.width / 2, y = box.y + box.height / 2;
-          await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
-          for (let step = 1; step <= 5; step++) {
-            await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - step * 20, id: 1 }] });
-            await page.waitForTimeout(50);
-          }
-          await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-          await page.waitForTimeout(300);
-          const after = await page.evaluate(() => scrollY);
-          fs.writeFileSync(path.join(artifacts, 'pan-control.json'), JSON.stringify({before, after, pointerCancels: await busy.getAttribute('data-cancel-count'), touchAction: await busy.evaluate(el => getComputedStyle(el).touchAction)},null,2));
-          assert.ok(after > before + 40, `native pan must scroll: ${before} -> ${after}`);
-          assert.ok(Number(await busy.getAttribute('data-cancel-count')) > 0);
-          assert.equal(await tooltip(busy).count(), 0, 'native scrolling must not select a reading');
-          observations.push({ name, phase: 'native-vertical-pan', before, after, maximum: scrollMetrics.maximum, pointerCancels: Number(await busy.getAttribute('data-cancel-count')), touchAction: await busy.evaluate(el => getComputedStyle(el).touchAction) });
-          await session.detach();
-        }
-
-        const usage = pool.getByRole('img', { name: 'Usage chart', exact: true });
-        await usage.waitFor();
-        await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(el => el.getAttribute('aria-label') === 'Usage chart' && document.getElementById(el.getAttribute('aria-describedby')).textContent.includes('3 data points')));
-        assert.ok((await inspect(usage, 0.04))?.includes('10.0%'));
-        await record('pool-first', usage, await tooltip(usage).textContent());
-        assert.equal(await pool.getByLabel('Capacity history range').inputValue(), '7d');
-        samples = [point(0)];
-        await pool.getByLabel('Capacity history range').selectOption('24h');
-        await page.waitForFunction(() => [...document.querySelectorAll('canvas')].some(el => el.getAttribute('aria-label') === 'Usage chart' && document.getElementById(el.getAttribute('aria-describedby')).textContent.includes('1 data point')));
-        assert.ok((await inspect(usage, 0.5))?.includes('0.0%'));
-        await record('pool-zero-singleton', usage, await tooltip(usage).textContent());
-        samples = [];
-        await pool.getByLabel('Capacity history range').selectOption('7d');
-        await pool.getByText('No history samples in this time range.', { exact: true }).waitFor();
-        assert.equal(await inspect(usage, 0.5), null);
-        assert.equal(await live(usage).textContent(), '');
-        await record('pool-empty', usage, null);
-        assert.ok(requests.some(request => request.resourceType === 'disk' && request.resourceId === 'fixture-disk'));
-        assert.ok(requests.some(request => request.resourceType === 'storage' && request.resourceId === 'fixture-pool'));
+      for (const [phase, fraction, expected] of [['first', 0, 'Busy 10.0%'], ['middle', 0.5, 'Busy 20.0%'], ['last', 1, 'Busy 30.0%']]) {
+        const text = await inspect(busy, fraction);
+        assert.ok(text.includes(expected), `${name} ${phase}: ${text}`);
+        assert.match(await readoutTime(busy), /^Stored · /, 'the readout names an inspected time');
+        // Each panel inspects on its own: the I/O panel keeps its latest reading.
+        assert.match(await readoutTime(disk.getByRole('img', { name: 'Disk I/O history', exact: true })), /^Latest stored · /);
+        await record(phase, busy, text);
       }
+      if (touch) {
+        const read = disk.getByRole('img', { name: 'Disk I/O history', exact: true });
+        assert.match(await inspect(read, 0.5), /Read 20(\.0)? B\/s/);
+        assert.match(await readoutTime(read), /^Stored · /);
+        // The touched panel exposes its scrubber for touch inspection.
+        assert.ok(await panel(read).getByRole('slider').isVisible());
+        await inspect(busy, 0.5);
+        // A hybrid device may switch back to a real mouse after a tap.
+        await busy.scrollIntoViewIfNeeded();
+        const box = await busy.boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        assert.ok((await description(busy)).includes('Busy 20.0%'));
+        await page.mouse.move(0, 0);
+        assert.ok((await description(busy)).startsWith('3 stored observation times'));
+      }
+      // The keyboard steps through the stored observations, then lets go.
+      const scrubber = panel(busy).getByRole('slider', { name: 'Inspect Busy history' });
+      await scrubber.focus();
+      for (const [key, expected] of [['Home', 'Busy 10.0%'], ['ArrowRight', 'Busy 20.0%'], ['End', 'Busy 30.0%']]) {
+        await page.keyboard.press(key);
+        assert.ok((await scrubber.getAttribute('aria-valuetext')).includes(expected));
+        assert.ok((await description(busy)).includes(expected));
+      }
+      await page.getByRole('button', { name: 'After charts' }).focus();
+      assert.ok((await description(busy)).startsWith('3 stored observation times'));
+      assert.match(await readoutTime(busy), /^Latest stored · /);
+
+      if (touch && engine === chromium) {
+        await busy.scrollIntoViewIfNeeded();
+        await inspect(busy, 0.5);
+        const box = await busy.boundingBox();
+        const session = await page.context().newCDPSession(page);
+        await busy.evaluate(el => {
+          el.dataset.cancelCount = '0';
+          el.addEventListener('pointercancel', () => el.dataset.cancelCount = String(Number(el.dataset.cancelCount) + 1));
+        });
+        const scrollMetrics = await page.evaluate(() => ({ before: scrollY, maximum: document.documentElement.scrollHeight - innerHeight }));
+        assert.ok(scrollMetrics.maximum > scrollMetrics.before + 200, 'the fixture must have room to scroll');
+        const before = scrollMetrics.before;
+        const x = box.x + box.width / 2, y = box.y + box.height / 2;
+        await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] });
+        for (let step = 1; step <= 5; step++) {
+          await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - step * 20, id: 1 }] });
+          await page.waitForTimeout(50);
+        }
+        await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await page.waitForTimeout(300);
+        const after = await page.evaluate(() => scrollY);
+        const touchAction = await busy.evaluate(el => getComputedStyle(el).touchAction);
+        fs.writeFileSync(path.join(artifacts, 'pan-control.json'), JSON.stringify({before, after, pointerCancels: await busy.getAttribute('data-cancel-count'), touchAction},null,2));
+        assert.ok(after > before + 40, `native pan must scroll: ${before} -> ${after}`);
+        assert.ok(Number(await busy.getAttribute('data-cancel-count')) > 0);
+        assert.ok((await description(busy)).startsWith('3 stored observation times'), 'native scrolling must not select a reading');
+        observations.push({ name, phase: 'native-vertical-pan', before, after, maximum: scrollMetrics.maximum, pointerCancels: Number(await busy.getAttribute('data-cancel-count')), touchAction });
+        await session.detach();
+      }
+
+      const usage = pool.getByRole('img', { name: 'Capacity history', exact: true });
+      await usage.waitFor();
+      await settled('Capacity history', '3 stored observation times');
+      assert.ok((await inspect(usage, 0)).includes('Used 10.0%'));
+      await record('pool-first', usage, await description(usage));
+      const poolRange = pool.getByRole('combobox', { name: 'History range' });
+      assert.equal(await poolRange.inputValue(), '24h');
+      samples = [point(0)];
+      await poolRange.selectOption('7d');
+      await settled('Capacity history', '1 stored observation time');
+      await panel(usage).getByText('Single observation. No trend yet.').waitFor();
+      // A measured zero is a stored reading.
+      assert.ok((await inspect(usage, 0.5)).includes('Used 0.0%'));
+      await record('pool-zero-singleton', usage, await description(usage));
+      samples = [];
+      await poolRange.selectOption('12h');
+      await panel(usage).getByText('No stored history in this range').waitFor();
+      assert.ok((await inspect(usage, 0.5)).startsWith('No stored history observations.'));
+      assert.equal(await panel(usage).locator('[data-history-series], [data-history-observation]').count(), 0);
+      await record('pool-empty', usage, await description(usage));
+      assert.ok(requests.some(request => request.resourceType === 'disk' && request.resourceId === 'fixture-disk'));
+      assert.ok(requests.some(request => request.resourceType === 'storage' && request.resourceId === 'fixture-pool'));
       assert.deepEqual(errors, []);
       await browser.close(); browser = null;
     }
-    fs.writeFileSync(path.join(artifacts, parent ? 'parent.json' : 'result.json'), JSON.stringify({ playwright, expectedPlaywright, parent, observations }, null, 2));
-    console.log(JSON.stringify({ result: 'passed', parent, observations: observations.length }));
+    fs.writeFileSync(path.join(artifacts, 'result.json'), JSON.stringify({ playwright, expectedPlaywright, observations }, null, 2));
+    console.log(JSON.stringify({ result: 'passed', observations: observations.length }));
   } finally {
     if (browser) await browser.close();
     await server.close();

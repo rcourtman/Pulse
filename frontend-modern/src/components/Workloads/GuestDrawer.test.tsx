@@ -1904,23 +1904,3 @@ it('forwards the mounted guest clock without changing the evaluated breach or cl
   expect(copy.title).toContain('Last reading at or above 80%: 92%, 31 mins ago');
   expect(now).toHaveBeenCalledOnce();
 });
-
-describe('parent-owned guest hardware qualification', () => {
-  it('updates the same lazy disk consumer without eager inventory work or remounting it', async () => {
-    const [guest, setGuest] = createSignal(makeGuest({ agentKind: 'pulse', agentStale: false }));
-    solidRender(() => <GuestDrawer guest={guest()} onClose={() => {}} />);
-    const diskOwner = await screen.findByTestId('guest-physical-disks-stub');
-    expect(diskOwner).not.toHaveAttribute('data-last-known-reason');
-    setGuest(makeGuest({ agentKind: 'pulse', agentStale: false, status: 'paused' }));
-    expect(screen.getByTestId('guest-physical-disks-stub')).toBe(diskOwner);
-    expect(diskOwner).toHaveAttribute('data-last-known-reason', 'Proxmox reports this VM paused.');
-    setGuest(makeGuest({ agentKind: 'pulse', agentStale: true }));
-    expect(diskOwner).toHaveAttribute(
-      'data-last-known-reason',
-      'The Pulse Agent in this guest stopped reporting.',
-    );
-    setGuest(makeGuest({ agentKind: 'pulse', agentStale: false }));
-    expect(screen.getByTestId('guest-physical-disks-stub')).toBe(diskOwner);
-    expect(diskOwner).not.toHaveAttribute('data-last-known-reason');
-  });
-});

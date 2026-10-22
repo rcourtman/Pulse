@@ -1,14 +1,4 @@
-import {
-  ErrorBoundary,
-  For,
-  Show,
-  Suspense,
-  createMemo,
-  createSignal,
-  lazy,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
@@ -22,10 +12,8 @@ import {
   PROXMOX_BACKUPS_QUERY_PARAMS,
   type ProxmoxBackupsView,
 } from '@/routing/resourceLinks';
+import { apiFetch } from '@/utils/apiClient';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
-import { getShippedDocUrl } from '@/utils/docsLinks';
-import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
-import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   PlatformErrorState,
   PlatformResourceCounter,
@@ -45,11 +33,7 @@ import type {
   StorageBackup,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import {
-  backupNodeMatches,
-  backupNodeOptions,
-  resolveBackupNodeSelection,
-} from './proxmoxBackupNodeScope';
+import { BackupActivityChart } from './BackupActivityChart';
 import {
   buildBackupActivityTimeline,
   type BackupActivityMetricMode,
@@ -58,8 +42,6 @@ import {
 } from './proxmoxBackupActivityPresentation';
 import {
   buildProxmoxBackupRecoveryModel,
-  isCompletedRecoveryArtifact,
-  getRecoverableArtifactLocation,
   coverageRowMatchesSearch,
   selectWorkloadRecoveryArtifacts,
   recoverableArtifactMatchesSearch,
@@ -83,21 +65,16 @@ import {
   artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
-import { resolveBackupLocationSelection } from './proxmoxBackupLocation';
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 import {
   BackupInventoryFormatError,
-  BackupInventoryTimeoutError,
-  fetchPBSBackupInventory,
-  fetchPVEBackupInventory,
+  parsePBSBackupInventory,
+  parsePVEBackupInventory,
+  readBackupInventoryJSON,
 } from './proxmoxBackupInventory';
-
-// Coverage does not need the interactive By date chart. Keep its loading and
-// failure local so the independent inventory and filters remain usable.
-const BackupActivityChart = lazy(() => import('./BackupActivityChart'));
 
 // One backups surface, two operator views: a chronological recoverable-artifact
 // feed for "what ran when", and a guest coverage table for "what is protected".
@@ -118,6 +95,26 @@ const EMPTY_PBS_BACKUPS: PBSBackupsPayload = { backups: [] };
 const BACKUP_READ_NOTICE_CLASS =
   'rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100';
 
+async function fetchPVEBackups(signal: AbortSignal): Promise<PVEBackupsPayload> {
+  const response = await apiFetch('/api/backups/pve', { signal });
+  if (!response.ok) {
+    throw Object.assign(new Error(`Failed to load PVE backups (${response.status})`), {
+      status: response.status,
+    });
+  }
+  return parsePVEBackupInventory(await readBackupInventoryJSON(response));
+}
+
+async function fetchPBSBackups(signal: AbortSignal): Promise<PBSBackupsPayload> {
+  const response = await apiFetch('/api/backups/pbs', { signal });
+  if (!response.ok) {
+    throw Object.assign(new Error(`Failed to load PBS backups (${response.status})`), {
+      status: response.status,
+    });
+  }
+  return parsePBSBackupInventory(await readBackupInventoryJSON(response));
+}
+
 export const ProxmoxBackupsTable: Component<{
   emptyIcon: JSX.Element;
   workloads?: readonly Resource[];
@@ -127,12 +124,12 @@ export const ProxmoxBackupsTable: Component<{
   // on org changes/disposal. No new polling or cross-route inventory cache.
   const backups = createNonSuspendingQuery({
     source: () => 'pve',
-    fetcher: (_source, signal) => fetchPVEBackupInventory(signal),
+    fetcher: (_source, signal) => fetchPVEBackups(signal),
     initialValue: EMPTY_PVE_BACKUPS,
   });
   const pbsBackups = createNonSuspendingQuery({
     source: () => 'pbs',
-    fetcher: (_source, signal) => fetchPBSBackupInventory(signal),
+    fetcher: (_source, signal) => fetchPBSBackups(signal),
     initialValue: EMPTY_PBS_BACKUPS,
   });
   const inventorySources = [
@@ -144,19 +141,15 @@ export const ProxmoxBackupsTable: Component<{
   const hasReadableInventory = () =>
     inventorySources.some(({ query }) => query.resolvedOnce() && !query.error());
   const allInventoriesFailed = () => inventorySources.every(({ query }) => Boolean(query.error()));
+  const retryAllInventories = () => {
+    if (inventorySources.some(({ query }) => query.loading())) return;
+    void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
+  };
   const { isMobile } = useBreakpoint();
   const location = useLocation();
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );
-  const backupReadPending = () =>
-    inventorySources.some(({ query }) => query.loading()) || protectionPostures.response.loading;
-  const refreshBackups = () => {
-    if (backupReadPending()) return;
-    // These APIs read Pulse's already-collected snapshots. Do not turn a
-    // presentation refresh into a backup, guest probe or recurring full read.
-    void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
-  };
 
   // Saved views persist the current route query, so every filter and the active
   // backup workspace must share one URL owner. View changes also clear the
@@ -223,17 +216,17 @@ export const ProxmoxBackupsTable: Component<{
   const nodeFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.node);
   const setNodeFilter = (value: string): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.node]: value || null }, { replace: true });
+  const nodeMatches = (node: string | undefined): boolean => {
+    const selected = nodeFilter();
+    return !selected || node === selected;
+  };
 
   const locationFilter = (): string => queryValue(PROXMOX_BACKUPS_QUERY_PARAMS.location);
   const setLocationFilter = (value: string): void =>
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.location]: value || null }, { replace: true });
   const locationMatches = (artifact: RecoverableArtifact): boolean => {
-    const selected = locationSelection();
-    return (
-      selected.state === 'all' ||
-      (selected.state === 'matched' &&
-        (artifact.locationKey === selected.key || artifact.locationGroupKey === selected.key))
-    );
+    const selected = locationFilter();
+    return !selected || artifact.locationKey === selected;
   };
 
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
@@ -261,10 +254,9 @@ export const ProxmoxBackupsTable: Component<{
 
   const [coverageSortKey, setCoverageSortKey] = createSignal<CoverageSortKey>('posture');
   const [coverageSortDirection, setCoverageSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
-    new Set<string>(),
-  );
-  // Unmatched backups/jobs (guest evidence without an unambiguous live identity)
+  // One workload drawer at a time, across the live and unmatched tables.
+  const [expandedCoverageKey, setExpandedCoverageKey] = createSignal<string | null>(null);
+  // Unmatched backups (VM/LXC evidence without an unambiguous live identity)
   // are collapsed by default so the main table is active backup targets, not a
   // pile of unassigned artifacts sorted to the top.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
@@ -295,12 +287,7 @@ export const ProxmoxBackupsTable: Component<{
     }
   };
   const toggleCoverageExpansion = (key: string) =>
-    setExpandedCoverageRows((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setExpandedCoverageKey((current) => (current === key ? null : key));
   const toggleDay = (key: string) => setSelectedDateKey(selectedDateKey() === key ? null : key);
 
   // Retain readable observations while a retry is pending, but never treat a
@@ -318,17 +305,13 @@ export const ProxmoxBackupsTable: Component<{
     backups.error() ? [] : (backups.value().backupTasks ?? []),
   );
 
-  // Use the same live clock as row ages: local day windows and future-time
-  // admission must also advance (or reverse) while inventory stays unchanged.
-  // Read the current wall time on replacement too, even between shared ticks.
-  // This never renews provider observations or evaluates protection locally.
-  const wallNow = useRelativeTimeNow();
+  // Share the observation moment, refreshing it when inventory is replaced.
+  // A newly completed backup must not be "future" relative to page mount.
   const nowMs = createMemo(() => {
     pbsArtifacts();
     archives();
     snapshots();
-    tasks();
-    return wallNow();
+    return Date.now();
   });
 
   const recoveryModel = createMemo(() =>
@@ -343,41 +326,29 @@ export const ProxmoxBackupsTable: Component<{
       protectionPosturesResolved: protectionPostures.resolvedOnce(),
     }),
   );
-  const locationSelection = createMemo(() =>
-    resolveBackupLocationSelection(recoveryModel().recoverableArtifacts, locationFilter()),
-  );
-  const locationUnavailable = () =>
-    locationSelection().state === 'ambiguous' || locationSelection().state === 'missing';
 
-  // Use the complete source inventory, not the already-filtered rows. The same
-  // node scope owns Coverage, restore points and their activity chart.
-  const nodeWorkloads = createMemo(() => [
-    ...recoveryModel().coverageRows.map((row) => row.workload),
-    ...recoveryModel().recoverableArtifacts.map((artifact) => artifact.workload),
-  ]);
-  const nodeSelection = createMemo(() => resolveBackupNodeSelection(nodeWorkloads(), nodeFilter()));
-  const nodeOptions = createMemo<FilterSelectOption[]>(() => [
-    { value: '', label: 'All nodes' },
-    ...backupNodeOptions(nodeWorkloads()),
-  ]);
-  const nodeUnavailable = () =>
-    nodeSelection().state === 'ambiguous' || nodeSelection().state === 'missing';
+  // Node options for the scope filter: the distinct nodes across the workload
+  // set, "All nodes" first. PBS snapshots carry no node, so this scopes the
+  // node-bearing rows only.
+  const nodeOptions = createMemo<FilterSelectOption[]>(() => {
+    const nodes = new Set<string>();
+    for (const row of recoveryModel().coverageRows) {
+      const node = row.workload.node?.trim();
+      if (node) nodes.add(node);
+    }
+    return [
+      { value: '', label: 'All nodes' },
+      ...[...nodes]
+        .sort((a, b) => a.localeCompare(b))
+        .map((node) => ({ value: node, label: node })),
+    ];
+  });
 
   const locationOptions = createMemo<FilterSelectOption[]>(() => {
     const locations = new Map<string, string>();
-    const selected = locationSelection();
     for (const artifact of recoveryModel().recoverableArtifacts) {
       if (artifact.locationKey && artifact.locationLabel) {
         locations.set(artifact.locationKey, artifact.locationLabel);
-      }
-      // Retain the meaning and label of an existing saved store-wide filter
-      // without crowding new filter choices with redundant aggregate options.
-      if (
-        selected.state === 'matched' &&
-        artifact.locationGroupKey === selected.key &&
-        artifact.locationGroupLabel
-      ) {
-        locations.set(artifact.locationGroupKey, artifact.locationGroupLabel);
       }
     }
     return [
@@ -391,9 +362,7 @@ export const ProxmoxBackupsTable: Component<{
   // The task column auto-hides when no workload has task history (computed
   // over the full set so it does not flicker as filters change).
   const coverageHasTask = createMemo(() =>
-    recoveryModel().coverageRows.some(
-      (row) => Boolean(row.latestTask) || row.taskChronologyUnknown,
-    ),
+    recoveryModel().coverageRows.some((row) => Boolean(row.latestTask)),
   );
 
   const coverageRowsForLocation = createMemo<WorkloadCoverageRow[]>(() => {
@@ -419,14 +388,14 @@ export const ProxmoxBackupsTable: Component<{
     const term = search().trim().toLowerCase();
     const filter = coverageFilter();
     const list = coverageRowsForLocation().filter((row) => {
-      if (!backupNodeMatches(row.workload, nodeSelection())) return false;
+      if (!nodeMatches(row.workload.node)) return false;
       if (!typeMatches(row.workload.type)) return false;
       if (filter !== 'all' && row.posture !== filter) return false;
       return coverageRowMatchesSearch(row, term);
     });
     const sortKey = coverageSortKey();
     const direction = coverageSortDirection();
-    const compare = (a: WorkloadCoverageRow, b: WorkloadCoverageRow) => {
+    list.sort((a, b) => {
       switch (sortKey) {
         case 'posture':
           return cmpNumber(a.postureRank, b.postureRank, direction);
@@ -437,11 +406,7 @@ export const ProxmoxBackupsTable: Component<{
         case 'task':
           return cmpNumber(a.latestTask?.startedMs, b.latestTask?.startedMs, direction);
       }
-    };
-    // Equal names/postures/times must not inherit response order. Moving a
-    // focused disclosure's DOM row blurs it even when keyed state survives.
-    // Compare full identity, not the case-folded display-string comparator.
-    list.sort((a, b) => compare(a, b) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    });
     return list;
   });
 
@@ -496,31 +461,27 @@ export const ProxmoxBackupsTable: Component<{
     const query = params.toString();
     return `${buildProxmoxBackupsPath(next)}${query ? `?${query}` : ''}`;
   };
-  // The strip counts the whole estate, independently of the list filters.
-  // Its action must reveal that entire set, not retain a scope which can hide
-  // the counted workloads. The regular filter controls keep scoped selection.
+  // The health strip's counts that name a posture filter toggle it. From the
+  // date view a count opens Coverage already filtered to those workloads.
   const navigate = useNavigate();
   const postureSegmentFilter = (posture: Exclude<CoverageFilterValue, 'all'>) => {
-    const selected = view() === 'coverage' && coverageFilter() === posture;
-    const pressed =
-      selected && ![search().trim(), nodeFilter(), locationFilter(), typeFilter()].some(Boolean);
-    // Keep an active filter reachable if observations reduce its count to zero,
-    // even when another scope means the complete global set is not pressed.
-    if (!selected && liveHealthSummary()[posture] === 0) return {};
+    const pressed = view() === 'coverage' && coverageFilter() === posture;
+    // A zero count would only open an empty list.
+    if (!pressed && liveHealthSummary()[posture] === 0) return {};
     return {
       pressed,
       onSelect: () => {
-        const params = new URLSearchParams(location.search);
-        for (const key of Object.values(PROXMOX_BACKUPS_QUERY_PARAMS)) params.delete(key);
-        if (!pressed) params.set(PROXMOX_BACKUPS_QUERY_PARAMS.posture, posture);
-        const query = params.toString();
-        // One URL transition clears list/search/date facets atomically. Pin
-        // the route even when Coverage was only the bare-route fallback, and
-        // keep focus/scroll on the count while the same consumer updates.
-        navigate(`${buildProxmoxBackupsPath('coverage')}${query ? `?${query}` : ''}`, {
-          replace: routeView() === 'coverage',
-          scroll: false,
-        });
+        const next = coverageFilter() === posture && view() === 'coverage' ? 'all' : posture;
+        if (routeView() === 'coverage') {
+          setCoverageFilter(next);
+          return;
+        }
+        // By date, or Coverage chosen only by the health fallback: land on the
+        // Coverage route so the view cannot flip back when the counts change.
+        const target = new URL(backupViewPath('coverage'), 'https://pulse.invalid');
+        if (next === 'all') target.searchParams.delete(PROXMOX_BACKUPS_QUERY_PARAMS.posture);
+        else target.searchParams.set(PROXMOX_BACKUPS_QUERY_PARAMS.posture, next);
+        navigate(`${target.pathname}${target.search}`);
       },
     };
   };
@@ -535,31 +496,10 @@ export const ProxmoxBackupsTable: Component<{
     'snapshot',
   ];
 
-  // The chart and list describe the same target/repository scope. A selected
-  // day narrows only the list, so the rest of the timeline remains navigable.
-  const scopedRecoverableArtifacts = createMemo(() => {
-    const term = search().trim().toLowerCase();
-    const filter = recoverableFilter();
-    return recoveryModel().recoverableArtifacts.filter((artifact) => {
-      if (!backupNodeMatches(artifact.workload, nodeSelection())) return false;
-      if (!typeMatches(artifact.workload.type)) return false;
-      if (!locationMatches(artifact)) return false;
-      if (
-        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
-        artifact.sourceKind !== filter
-      ) {
-        return false;
-      }
-      if (filter === 'verified' && artifact.verified !== true) return false;
-      if (filter === 'unverified' && artifact.verified !== false) return false;
-      return recoverableArtifactMatchesSearch(artifact, term);
-    });
-  });
-
   const recoverableTimeline = createMemo(() =>
     buildBackupActivityTimeline<RecoverableArtifact>(
       chartRange(),
-      scopedRecoverableArtifacts().filter(isCompletedRecoveryArtifact),
+      recoveryModel().recoverableArtifacts,
       (artifact) => artifact.createdMs,
       (artifact) =>
         artifact.sourceKind === 'pbs'
@@ -576,15 +516,35 @@ export const ProxmoxBackupsTable: Component<{
       },
     ),
   );
+  const hasRecoverableActivityInRange = createMemo(() =>
+    recoverableTimeline().points.some((point) => point.total > 0),
+  );
 
   const filteredRecoverableArtifacts = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = recoverableFilter();
     const dateKey = selectedDateKey();
-    const list = scopedRecoverableArtifacts().filter(
-      (artifact) =>
-        !dateKey ||
-        (artifact.createdMs !== undefined &&
-          recoveryDateKeyFromTimestamp(artifact.createdMs) === dateKey),
-    );
+    const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
+      if (!nodeMatches(artifact.workload.node)) return false;
+      if (!typeMatches(artifact.workload.type)) return false;
+      if (!locationMatches(artifact)) return false;
+      if (
+        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
+        artifact.sourceKind !== filter
+      ) {
+        return false;
+      }
+      if (filter === 'verified' && artifact.verified !== true) return false;
+      if (filter === 'unverified' && artifact.verified !== false) return false;
+      if (
+        dateKey &&
+        (artifact.createdMs === undefined ||
+          recoveryDateKeyFromTimestamp(artifact.createdMs) !== dateKey)
+      ) {
+        return false;
+      }
+      return recoverableArtifactMatchesSearch(artifact, term);
+    });
     const sortKey = recoverableSortKey();
     const direction = recoverableSortDirection();
     list.sort((a, b) => {
@@ -594,11 +554,7 @@ export const ProxmoxBackupsTable: Component<{
         case 'source':
           return cmpString(a.sourceLabel, b.sourceLabel, direction);
         case 'location':
-          return cmpString(
-            getRecoverableArtifactLocation(a),
-            getRecoverableArtifactLocation(b),
-            direction,
-          );
+          return cmpString(a.location, b.location, direction);
         case 'created':
           return cmpNumber(a.createdMs, b.createdMs, direction);
         case 'size':
@@ -629,20 +585,9 @@ export const ProxmoxBackupsTable: Component<{
         label: 'Node',
         group: 'scope',
         options: nodeOptions,
-        value: () => {
-          const selected = nodeSelection();
-          return selected.state === 'matched' ? selected.key : nodeFilter();
-        },
+        value: nodeFilter,
         setValue: setNodeFilter,
         defaultValue: '',
-        formatChipValue: () => {
-          const selected = nodeSelection();
-          return selected.state === 'matched'
-            ? selected.label
-            : selected.state === 'ambiguous'
-              ? 'Ambiguous saved node'
-              : 'Unavailable saved node';
-        },
       },
       {
         id: 'location',
@@ -652,16 +597,6 @@ export const ProxmoxBackupsTable: Component<{
         value: locationFilter,
         setValue: setLocationFilter,
         defaultValue: '',
-        // A legacy URL remains intact, but its chip names the resolved exact
-        // location. Never show raw encoded keys or pretend a collision is All.
-        formatChipValue: () => {
-          const selected = locationSelection();
-          return selected.state === 'matched'
-            ? selected.label
-            : selected.state === 'ambiguous'
-              ? 'Ambiguous saved location'
-              : 'Unavailable saved location';
-        },
       },
       {
         id: 'type',
@@ -725,22 +660,6 @@ export const ProxmoxBackupsTable: Component<{
 
   return (
     <div class="space-y-3">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="min-w-0 flex-1 basis-64 text-xs text-muted">
-          Restore points reflect the last inventory read. Refresh to read new or removed backups.
-        </p>
-        <button
-          type="button"
-          class="min-h-10 shrink-0 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 aria-disabled:cursor-wait aria-disabled:opacity-60"
-          title="Read Pulse’s collected inventory and protection posture without starting a backup or contacting guests."
-          // Keep keyboard focus during the read. refreshBackups still refuses
-          // every activation while any inventory/posture request is pending.
-          aria-disabled={backupReadPending()}
-          onClick={refreshBackups}
-        >
-          {backupReadPending() ? 'Reading backups…' : 'Refresh backups'}
-        </button>
-      </div>
       <For each={inventorySources}>
         {({ label, query }) => (
           <Show when={!query.resolvedOnce() || query.error()}>
@@ -755,12 +674,6 @@ export const ProxmoxBackupsTable: Component<{
                   {' '}
                   The response format is invalid. Missing restore points do not mean no backups
                   exist.
-                </Show>
-                <Show when={query.error() instanceof BackupInventoryTimeoutError}>
-                  {' '}
-                  The inventory read timed out. Missing restore points do not mean no backups exist.
-                  Retry reads Pulse’s collected inventory. It does not start a backup or contact
-                  guests.
                 </Show>
               </span>
               <Show when={query.error()}>
@@ -795,8 +708,7 @@ export const ProxmoxBackupsTable: Component<{
           <PlatformErrorState
             title="Could not load Proxmox backup inventory"
             description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
-            onRefresh={refreshBackups}
-            refreshDisabled={backupReadPending()}
+            onRefresh={retryAllInventories}
           />
         }
       >
@@ -813,80 +725,22 @@ export const ProxmoxBackupsTable: Component<{
         >
           <div class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
-            <Show when={nodeUnavailable()}>
-              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                {nodeSelection().state === 'ambiguous'
-                  ? 'The saved node matches more than one Proxmox source.'
-                  : 'The saved node is not in the current inventory.'}{' '}
-                No workloads or restore points are selected. Choose a node or clear filters. This
-                does not mean no backups exist.
-              </p>
-            </Show>
-            <Show when={locationUnavailable()}>
-              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                {locationSelection().state === 'ambiguous'
-                  ? 'The saved backup location matches more than one source.'
-                  : 'The saved backup location is not in the current inventory.'}{' '}
-                No restore points are selected. Choose a backup location or clear filters. This does
-                not mean no backups exist.
-              </p>
-            </Show>
             <Show when={protectionPostures.response.error}>
-              <div class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center gap-2`}>
-                <p role="status" class="min-w-0 flex-1 basis-64">
-                  Protection posture is unavailable. Pulse is showing restore evidence without
-                  guessing whether workloads are protected. Each read stops waiting after 150
-                  seconds. Retry reads Pulse's collected evidence, not a guest probe.
-                </p>
-                <button
-                  type="button"
-                  class="min-h-8 rounded-md border border-current px-2 py-1 font-medium hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
-                  disabled={protectionPostures.response.loading}
-                  onClick={() => {
-                    if (!protectionPostures.response.loading) void protectionPostures.refetch();
-                  }}
-                >
-                  {protectionPostures.response.loading
-                    ? 'Retrying protection posture…'
-                    : 'Retry protection posture'}
-                </button>
+              <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                Protection posture is unavailable. Pulse is showing restore evidence without
+                guessing whether workloads are protected.
               </div>
             </Show>
 
             {/* The health strip renders identically in both route-backed views. */}
             <ProxmoxBackupsCoverageStrip
-              title="Backup coverage"
-              footnote={
-                <>
-                  <span class="mb-1 block text-base-content" data-backup-coverage-limits>
-                    Protected describes recorded backup evidence, not current guest health. It does
-                    not prove a successful restore, guest thaw or filesystem writes.{' '}
-                    <ExternalTextLink
-                      href={getShippedDocUrl('VM_DISK_MONITORING.md')}
-                      variant="compactInherit"
-                    >
-                      Backup safety guidance
-                    </ExternalTextLink>
-                  </span>
-                  Counts cover all targets. Choose a count to clear other filters and show those
-                  targets.
-                  <Show when={getBackupPostureRuleText(protectionPostures.policy())}>
-                    {(rule) => <> {rule()}</>}
-                  </Show>
-                </>
-              }
+              title="Backup health"
+              footnote={getBackupPostureRuleText(protectionPostures.policy()) ?? undefined}
               tail={
                 <span>
                   {liveTotalCount()} targets ·{' '}
                   {recoveryModel().coverageSummary.recoverableArtifacts} restore points
                   {inventoryIncomplete() ? ' read' : ''}
-                  <Show when={recoveryModel().coverageSummary.incompleteArtifacts > 0}>
-                    {' · '}
-                    {recoveryModel().coverageSummary.incompleteArtifacts} incomplete{' '}
-                    {recoveryModel().coverageSummary.incompleteArtifacts === 1
-                      ? 'entry'
-                      : 'entries'}
-                  </Show>
                   <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                     {' · '}
                     {recoveryModel().coverageSummary.withPBS} with{' '}
@@ -947,20 +801,9 @@ export const ProxmoxBackupsTable: Component<{
               ]}
             />
 
-            <Show when={recoveryModel().coverageSummary.incompleteArtifacts > 0}>
-              <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-                Incomplete backups remain listed with their state. They do not count as restore
-                points or towards the activity chart.
-              </p>
-            </Show>
-
             <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
-              <p class="text-xs text-muted" data-backup-activity-scope>
-                Activity uses the filters below. Selecting a day filters the list without narrowing
-                the chart.
-              </p>
               <Show
-                when={scopedRecoverableArtifacts().some(
+                when={recoveryModel().recoverableArtifacts.some(
                   (artifact) => artifact.createdMs === undefined,
                 )}
               >
@@ -969,41 +812,47 @@ export const ProxmoxBackupsTable: Component<{
                   unknown. They are excluded from the activity chart and day filters.
                 </p>
               </Show>
-              <ErrorBoundary
+              <Show
+                when={hasRecoverableActivityInRange()}
                 fallback={
-                  <p role="status" class="text-xs text-amber-700 dark:text-amber-300">
-                    Backup activity could not load. Restore points and filters remain available
-                    below. Reload Pulse to try again.
-                  </p>
+                  <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                    <span>No dated backup activity in the selected {chartRange()}-day window.</span>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                        onClick={() => setChartRange(90)}
+                      >
+                        Show 90 days
+                      </button>
+                      <span aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                        onClick={() => setChartRange(365)}
+                      >
+                        Show 1 year
+                      </button>
+                    </div>
+                  </div>
                 }
               >
-                <Suspense
-                  fallback={
-                    <p role="status" class="text-xs text-muted">
-                      Loading backup activity…
-                    </p>
+                <BackupActivityChart
+                  title={
+                    recoverableMetricMode() === 'volume'
+                      ? 'Backup volume per day'
+                      : 'Backups per day'
                   }
-                >
-                  <BackupActivityChart
-                    title={
-                      recoverableMetricMode() === 'volume'
-                        ? 'Reported backup volume per day'
-                        : 'Backups per day'
-                    }
-                    noun="backup"
-                    segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                    range={chartRange}
-                    onRangeChange={setChartRange}
-                    timeline={recoverableTimeline}
-                    selectedDateKey={selectedDateKey}
-                    onToggleDay={toggleDay}
-                    metricToggle={{
-                      mode: recoverableMetricMode,
-                      onChange: setRecoverableMetricMode,
-                    }}
-                  />
-                </Suspense>
-              </ErrorBoundary>
+                  noun="backup"
+                  segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                  range={chartRange}
+                  onRangeChange={setChartRange}
+                  timeline={recoverableTimeline}
+                  selectedDateKey={selectedDateKey}
+                  onToggleDay={toggleDay}
+                  metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
+                />
+              </Show>
             </Show>
 
             <FilterBar
@@ -1043,8 +892,8 @@ export const ProxmoxBackupsTable: Component<{
                   rowNoun={
                     view() === 'date'
                       ? inventoryIncomplete()
-                        ? 'backup entries read'
-                        : 'backup entries'
+                        ? 'backups read'
+                        : 'backups'
                       : 'targets'
                   }
                 />
@@ -1057,22 +906,12 @@ export const ProxmoxBackupsTable: Component<{
                 hasAnyArtifacts={recoveryModel().recoverableArtifacts.length > 0}
                 emptyIcon={props.emptyIcon}
                 emptyTitle={
-                  nodeUnavailable()
-                    ? 'Choose a node'
-                    : locationUnavailable()
-                      ? 'Choose a backup location'
-                      : inventoryIncomplete()
-                        ? 'Backup inventory is incomplete'
-                        : 'No backups yet'
+                  inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
                 }
                 emptyDescription={
-                  nodeUnavailable()
-                    ? 'The saved node cannot be matched to one current source. Choose a node or clear filters to inspect the collected inventory.'
-                    : locationUnavailable()
-                      ? 'The saved location cannot be matched to one current source. Choose an exact location or clear filters to inspect the collected inventory.'
-                      : inventoryIncomplete()
-                        ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                        : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
+                  inventoryIncomplete()
+                    ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
+                    : 'PBS snapshots, PVE backup files, and guest snapshots will appear here once backups run.'
                 }
                 sortKey={recoverableSortKey}
                 sortDirection={recoverableSortDirection}
@@ -1087,16 +926,12 @@ export const ProxmoxBackupsTable: Component<{
                 rows={liveCoverageRows()}
                 hasAnyRows={liveTotalCount() > 0}
                 emptyIcon={props.emptyIcon}
-                emptyTitle={nodeUnavailable() ? 'Choose a node' : 'No backup target coverage'}
-                emptyDescription={
-                  nodeUnavailable()
-                    ? 'The saved node cannot be matched to one current source. Choose a node or clear filters to inspect the collected inventory.'
-                    : 'VM, container, and host restore posture will appear here once backup data exists.'
-                }
+                emptyTitle="No backup target coverage"
+                emptyDescription="VM, container, and host restore posture will appear here once backup data exists."
                 sortKey={coverageSortKey}
                 sortDirection={coverageSortDirection}
                 onSort={handleCoverageSort}
-                expandedKeys={expandedCoverageRows()}
+                expandedKey={expandedCoverageKey()}
                 onToggleExpand={toggleCoverageExpansion}
                 showTaskColumn={coverageHasTask()}
               />
@@ -1114,8 +949,8 @@ export const ProxmoxBackupsTable: Component<{
                         class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
                         aria-hidden="true"
                       />
-                      {orphanedTotalCount()} unmatched backup{' '}
-                      {orphanedTotalCount() === 1 ? 'target' : 'targets'}
+                      {orphanedTotalCount()} unmatched{' '}
+                      {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
                     </span>
                     <span class="w-full text-[11px] text-muted sm:w-auto">
                       No unambiguous inventory match
@@ -1123,20 +958,16 @@ export const ProxmoxBackupsTable: Component<{
                   </button>
                   <Show when={showOrphaned()}>
                     <div class="border-t border-border-subtle p-2">
-                      <p class="mb-2 px-1 text-xs text-muted">
-                        Backups and jobs without an unambiguous live guest match are not rated. A
-                        job alone does not establish a restore point or guest recovery.
-                      </p>
                       <ProxmoxCoverageTable
                         rows={orphanedCoverageRows()}
                         hasAnyRows={orphanedTotalCount() > 0}
                         emptyIcon={props.emptyIcon}
-                        emptyTitle="No unmatched backup targets"
-                        emptyDescription="Backups and jobs without an unambiguous live guest match will appear here."
+                        emptyTitle="No unmatched backups"
+                        emptyDescription="Backups without an unambiguous live guest match will appear here."
                         sortKey={coverageSortKey}
                         sortDirection={coverageSortDirection}
                         onSort={handleCoverageSort}
-                        expandedKeys={expandedCoverageRows()}
+                        expandedKey={expandedCoverageKey()}
                         onToggleExpand={toggleCoverageExpansion}
                         showTaskColumn={coverageHasTask()}
                       />

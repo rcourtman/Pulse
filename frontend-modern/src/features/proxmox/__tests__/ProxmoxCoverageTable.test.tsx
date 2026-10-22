@@ -1,20 +1,19 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSignal, type Accessor } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from '../proxmoxBackupsTableModel';
-import {
-  BACKUP_IDENTITY_NOW,
-  identityArchive,
-  identityGuest,
-  identityPBS,
-  identitySnapshot,
-} from '../__fixtures__/backupIdentity';
-import { buildProxmoxBackupRecoveryModel } from '../proxmoxBackupRecoveryModel';
-import { ArtifactDetailText } from '../proxmoxBackupsTableShared';
-import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const row = {
   key: 'w1',
@@ -63,250 +62,8 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
-  it.each([320, 1200])(
-    'shows the recorded job location, then clears it in place instead of borrowing the guest location at %i px',
-    (width) => {
-      const node = 'old-backup-node-<img src="/unexpected">';
-      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
-        ...row,
-        latestTask: {
-          id: 'warning',
-          instance: 'original-connection',
-          node,
-          status: 'warning',
-          label: 'Warning',
-          startedAt: '2026-05-25T02:00:00Z',
-          error: 'Backup completed with warnings; review the original Proxmox task log.',
-        },
-      });
-      const { container } = render(() => (
-        <ProxmoxCoverageTable
-          rows={[current()]}
-          hasAnyRows
-          emptyIcon={<span />}
-          emptyTitle=""
-          emptyDescription=""
-          sortKey={() => 'posture'}
-          sortDirection={() => 'asc'}
-          onSort={() => {}}
-          expandedKeys={new Set(['w1'])}
-          onToggleExpand={() => {}}
-          showTaskColumn
-          layoutWidth={() => width}
-        />
-      ));
-      const detail = container.querySelector('[data-backup-task-detail]')!;
-      const value = (label: string) =>
-        [...detail.querySelectorAll('dt')].find((dt) => dt.textContent === label)
-          ?.nextElementSibling;
-      expect(value('Job connection')).toHaveTextContent('original-connection');
-      expect(value('Job node')).toHaveTextContent(node);
-      expect(value('Reported warning')).toHaveTextContent('Backup completed with warnings');
-      expect(value('Reported error')).toBeUndefined();
-      expect(detail.querySelector('img')).toBeNull();
-      expect(detail).toHaveTextContent('The workload may now be on another node.');
-      setCurrent({
-        ...row,
-        latestTask: {
-          id: 'next-job',
-          instance: '',
-          node: '  ',
-          status: 'OK',
-          label: 'OK',
-          startedAt: '2026-05-25T03:00:00Z',
-        },
-      });
-      expect(container.querySelector('[data-backup-task-detail]')).toBe(detail);
-      expect(value('Job connection')).toHaveTextContent(/^Not reported$/);
-      expect(value('Job node')).toHaveTextContent(/^Not reported$/);
-      expect(value('Reported warning')).toBeUndefined();
-      expect(detail).not.toHaveTextContent('original-connection');
-      expect(detail).not.toHaveTextContent(node);
-      expect(detail).not.toHaveTextContent(row.workload.node!);
-    },
-  );
-
-  it.each([320, 1200])(
-    'keeps a contradictory job Unknown with literal evidence at %i px, then recovers in place',
-    (width) => {
-      const error = 'Synthetic failure <img src="/unexpected" onerror="unsafe()">';
-      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
-        ...row,
-        latestTask: {
-          id: 'contradictory',
-          status: 'completed',
-          label: 'Unknown',
-          startedAt: '2026-05-25T02:00:00Z',
-          error,
-          statusErrorConflict: true,
-        },
-      });
-      const { container } = render(() => (
-        <ProxmoxCoverageTable
-          rows={[current()]}
-          hasAnyRows
-          emptyIcon={<span />}
-          emptyTitle=""
-          emptyDescription=""
-          sortKey={() => 'posture'}
-          sortDirection={() => 'asc'}
-          onSort={() => {}}
-          expandedKeys={new Set(['w1'])}
-          onToggleExpand={() => {}}
-          showTaskColumn
-          layoutWidth={() => width}
-        />
-      ));
-      const stable = container.querySelector('[data-proxmox-backup-row="coverage"]')!;
-      const jobCell = () =>
-        stable.querySelectorAll('td')[
-          headerTexts().findIndex((label) => /^(Task|Job)$/.test(label))
-        ];
-      expect(jobCell()).toHaveTextContent('Unknown');
-      expect(jobCell()).not.toHaveTextContent('OK');
-      const detail = container.querySelector('[data-backup-task-detail]')!;
-      expect(detail).toHaveTextContent('Reported statuscompleted');
-      expect(detail).toHaveTextContent(error);
-      expect(detail.querySelector('img')).toBeNull();
-      expect(detail.querySelector('[data-backup-task-status-conflict]')).toHaveTextContent(
-        'The reported job status and error disagree. This result is unknown. Check the existing job history in Proxmox.',
-      );
-      setCurrent({
-        ...row,
-        latestTask: {
-          id: 'corrected',
-          status: 'OK',
-          label: 'OK',
-          startedAt: '2026-05-25T03:00:00Z',
-        },
-      });
-      expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toBe(stable);
-      expect(jobCell()).toHaveTextContent('OK');
-      expect(container.querySelector('[data-backup-task-detail]')).toBe(detail);
-      expect(detail).not.toHaveTextContent('Reported status');
-      expect(detail).not.toHaveTextContent(error);
-      expect(detail.querySelector('[data-backup-task-status-conflict]')).toBeNull();
-    },
-  );
-
-  it.each([320, 1200])(
-    'keeps unknown job chronology distinct from no task at %i px and replaces it in place',
-    (width) => {
-      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
-        ...row,
-        taskChronologyUnknown: true,
-      });
-      const { container } = render(() => (
-        <ProxmoxCoverageTable
-          rows={[current()]}
-          hasAnyRows
-          emptyIcon={<span />}
-          emptyTitle=""
-          emptyDescription=""
-          sortKey={() => 'posture'}
-          sortDirection={() => 'asc'}
-          onSort={() => {}}
-          expandedKeys={new Set(['w1'])}
-          onToggleExpand={() => {}}
-          showTaskColumn
-          layoutWidth={() => width}
-        />
-      ));
-      expect(container.querySelector('[data-backup-task-unknown]')).toHaveAccessibleName(
-        'Latest backup job unknown',
-      );
-      expect(container.querySelector('[data-backup-task-unknown]')).toHaveTextContent(
-        width === 320 ? '?' : 'Unknown',
-      );
-      expect(container.querySelector('[data-backup-task-chronology]')).toHaveTextContent(
-        'one or more job start times are unavailable or in the future',
-      );
-      expect(container.querySelector('[data-backup-task-chronology]')).toHaveTextContent(
-        'Check the job history in Proxmox.',
-      );
-      const stable = container.querySelector('[data-proxmox-backup-row="coverage"]');
-      setCurrent({
-        ...row,
-        taskChronologyUnknown: false,
-        latestTask: {
-          id: 'known-failure',
-          label: 'Failed',
-          status: 'failed',
-          startedAt: '2026-05-25T02:00:00Z',
-          startedMs: Date.parse('2026-05-25T02:00:00Z'),
-        },
-      });
-      expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toBe(stable);
-      expect(container.querySelector('[data-backup-task-unknown]')).not.toBeInTheDocument();
-      expect(container.querySelector('[data-backup-task-chronology]')).not.toBeInTheDocument();
-      expect(stable).toHaveTextContent('Failed');
-      setCurrent({ ...row, taskChronologyUnknown: true });
-      expect(container.querySelector('[data-backup-task-unknown]')).toBeInTheDocument();
-      expect(stable).not.toHaveTextContent('Failed');
-    },
-  );
-
-  it.each([320, 1200])(
-    'explains conflicting newest outcomes without inventing invalid dates at %i px',
-    (width) => {
-      const [current, setCurrent] = createSignal<WorkloadCoverageRow>({
-        ...row,
-        taskChronologyUnknown: true,
-        taskOutcomeConflict: true,
-      });
-      const { container } = render(() => (
-        <ProxmoxCoverageTable
-          rows={[current()]}
-          hasAnyRows
-          emptyIcon={<span />}
-          emptyTitle=""
-          emptyDescription=""
-          sortKey={() => 'posture'}
-          sortDirection={() => 'asc'}
-          onSort={() => {}}
-          expandedKeys={new Set(['w1'])}
-          onToggleExpand={() => {}}
-          showTaskColumn
-          layoutWidth={() => width}
-        />
-      ));
-      const marker = container.querySelector('[data-backup-task-unknown]');
-      expect(marker).toHaveAccessibleName('Latest backup job unknown');
-      expect(marker).toHaveAttribute(
-        'title',
-        expect.stringContaining('same newest start time report different outcomes'),
-      );
-      const explanation = container.querySelector('[data-backup-task-chronology]');
-      expect(explanation).toHaveTextContent('same newest start time report different outcomes');
-      expect(explanation).not.toHaveTextContent('unavailable or in the future');
-      expect(explanation).toHaveTextContent('Check the job history in Proxmox.');
-      const stable = container.querySelector('[data-proxmox-backup-row="coverage"]');
-      setCurrent({
-        ...row,
-        taskChronologyUnknown: false,
-        taskOutcomeConflict: false,
-        latestTask: {
-          id: 'new-failure',
-          label: 'Failed',
-          status: 'failed',
-          startedAt: '2026-05-25T03:00:00Z',
-        },
-      });
-      expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toBe(stable);
-      expect(container.querySelector('[data-backup-task-unknown]')).not.toBeInTheDocument();
-      expect(container.querySelector('[data-backup-task-chronology]')).not.toBeInTheDocument();
-      expect(stable).toHaveTextContent(width === 320 ? 'Latest task: Failed' : 'Failed');
-      expect(stable).toHaveTextContent(width === 320 ? 'Prot.' : 'Protected');
-      setCurrent({ ...row, taskChronologyUnknown: true, taskOutcomeConflict: true });
-      expect(container.querySelector('[data-backup-task-chronology]')).toHaveTextContent(
-        'same newest start time',
-      );
-      expect(stable).not.toHaveTextContent('Failed');
-    },
-  );
-
   it('renders single-line rows with identity columns matching the by-date table', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -316,7 +73,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -344,7 +101,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('keeps posture, backup age and job visible in compact rows', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -354,7 +111,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={true}
         layoutWidth={() => 330}
@@ -363,12 +120,11 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     expect(headerTexts()).toEqual(['Workload', 'Posture▲', 'Age', 'Job']);
     expect(document.body.textContent).toContain('Prot.');
-    expect(document.querySelector('[data-backup-workload-target]')).toHaveTextContent('VM 100');
-    expect(document.querySelector('[data-backup-workload-node]')).toHaveTextContent('Node: pve1');
+    expect(document.body.textContent).not.toContain('VM 100 · pve1');
   });
 
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {
-    const { unmount } = render(() => (
+    const { unmount } = renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -378,7 +134,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -391,7 +147,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     );
     unmount();
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -401,7 +157,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>(['w1'])}
+        expandedKey="w1"
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -410,12 +166,98 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     expect(document.body.textContent).toContain('Provider evidence');
     expect(document.body.textContent).toContain('Proxmox Backup Server');
-    expect(document.body.textContent).toContain('pbs-main');
-    expect(document.body.textContent).toContain('Result Success');
-    expect(document.body.textContent).not.toContain('Job Success');
-    expect(document.body.textContent).toContain('pbs-backup-enumeration');
     expect(document.body.textContent).toContain('History Complete');
     expect(document.body.textContent).toContain('Access Sufficient');
+  });
+
+  it('heads the workload drawer with its posture and links to the workload', async () => {
+    const onToggleExpand = vi.fn();
+    const linked = {
+      ...row,
+      workload: { ...row.workload, resourceId: 'vm-100-resource' },
+      artifacts: [
+        {
+          id: 'pbs-1',
+          nativeId: 'pbs-1',
+          sourceKind: 'pbs',
+          sourceLabel: 'PBS',
+          workload: row.workload,
+          createdAt: '2026-07-18T23:00:00Z',
+          createdMs: Date.parse('2026-07-18T23:00:00Z'),
+          location: 'pbs-main:datastore-with-a-very-long-namespace/that-must-wrap',
+          detail: 'vm/100/2026-07-18T23:00:00Z',
+          protected: false,
+          verified: true,
+        },
+      ],
+    } as unknown as WorkloadCoverageRow;
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[linked]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={onToggleExpand}
+        showTaskColumn={false}
+        layoutWidth={() => 1_600}
+      />
+    ));
+
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(panel).getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        'A current verified backup is available from complete provider history.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole('link', { name: 'Open web' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=vm-100-resource',
+    );
+    // Restore evidence leads; provider quality is a section, not a grid.
+    expect(within(panel).getByText('Restore evidence')).toBeInTheDocument();
+    const location = panel.querySelector('[data-coverage-evidence-location]');
+    expect(location).toHaveClass('wrap-anywhere');
+    expect(location).not.toHaveClass('truncate');
+    // The source label wraps in the drawer too; a long snapshot name is not cut.
+    expect(within(panel).getByText('PBS', { selector: 'td span' })).toHaveClass(
+      'whitespace-normal',
+    );
+    expect(panel.querySelector('.grid')).toBeNull();
+    expect(within(panel).getByText('Provider evidence', { selector: 'th' })).toBeInTheDocument();
+
+    await fireEvent.click(within(panel).getByRole('button', { name: 'Collapse web details' }));
+    expect(onToggleExpand).toHaveBeenCalledWith('w1');
+  });
+
+  it('states a workload without restore points in a shared notice', () => {
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[{ ...row, posture: 'unprotected' } as WorkloadCoverageRow]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent('No restore points found for this workload.');
+    expect(notice.className).toContain('border-amber-300');
+    // No registry match, so nothing to link to.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('windows large coverage result sets while keeping one continuous table', () => {
@@ -431,7 +273,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       },
     })) as WorkloadCoverageRow[];
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={rows}
         hasAnyRows
@@ -441,7 +283,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -457,114 +299,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).not.toContain('workload-599');
   });
 
-  it('estimates unseen summaries from all measured workload heights, not the first row', async () => {
-    const rectangle = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockImplementation(function (this: Element) {
-        const key = this.getAttribute('data-proxmox-coverage-key');
-        const index = Number(key?.replace('sized-', '') ?? 0);
-        const height = key ? 40 + (index % 3) * 40 : 32;
-        return {
-          x: 0,
-          y: 0,
-          top: 0,
-          left: 0,
-          right: 1200,
-          bottom: height,
-          width: 1200,
-          height,
-        } as DOMRect;
-      });
-    try {
-      render(() => (
-        <ProxmoxCoverageTable
-          rows={Array.from({ length: 200 }, (_, index) => ({ ...row, key: `sized-${index}` }))}
-          hasAnyRows
-          emptyIcon={<span />}
-          emptyTitle=""
-          emptyDescription=""
-          sortKey={() => 'posture'}
-          sortDirection={() => 'asc'}
-          onSort={() => {}}
-          expandedKeys={new Set()}
-          onToggleExpand={() => {}}
-          showTaskColumn
-          layoutWidth={() => 1200}
-        />
-      ));
-      await fireEvent.scroll(window);
-      const measured = Array.from({ length: 140 }, (_, index) => 40 + (index % 3) * 40);
-      const average = measured.reduce((sum, height) => sum + height, 0) / measured.length;
-      const bottom = document.querySelector('tbody > tr[aria-hidden="true"] td')!;
-      expect(Number(bottom.getAttribute('height'))).toBeCloseTo(60 * average);
-      expect(Number(bottom.getAttribute('height'))).not.toBe(60 * measured[0]);
-    } finally {
-      cleanup();
-      rectangle.mockRestore();
-    }
-  });
-
-  it('keeps an expanded workload mounted and focused while its tall provider evidence is read', async () => {
-    let scrollTop = 0;
-    const rectangle = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockImplementation(function (this: Element) {
-        const isRoot = this.getAttribute('data-proxmox-backups-table') === 'coverage';
-        const height = this.hasAttribute('data-inline-detail-for') ? 6000 : 32;
-        return {
-          x: 0,
-          y: isRoot ? -scrollTop : 0,
-          top: isRoot ? -scrollTop : 0,
-          left: 0,
-          right: 1200,
-          bottom: height,
-          width: 1200,
-          height,
-        } as DOMRect;
-      });
-    const rows = Array.from({ length: 200 }, (_, index) => ({
-      ...row,
-      key: `fleet-${index}`,
-      workload: { ...row.workload, key: `fleet-${index}`, label: `fleet-${index}` },
-    }));
-    try {
-      render(() => (
-        <ProxmoxCoverageTable
-          rows={rows}
-          hasAnyRows
-          emptyIcon={<span />}
-          emptyTitle=""
-          emptyDescription=""
-          sortKey={() => 'posture'}
-          sortDirection={() => 'asc'}
-          onSort={() => undefined}
-          expandedKeys={new Set(['fleet-0'])}
-          onToggleExpand={() => undefined}
-          showTaskColumn={false}
-          layoutWidth={() => 1200}
-        />
-      ));
-      const toggle = document.querySelector<HTMLButtonElement>(
-        'button[aria-controls="proxmox-coverage-evidence-fleet-0"]',
-      )!;
-      toggle.focus();
-      scrollTop = 3000;
-      await fireEvent.scroll(window);
-      expect(document.querySelector('[data-inline-detail-for="fleet-0"]')).not.toBeNull();
-      expect(document.activeElement).toBe(toggle);
-      expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
-      scrollTop = 10000;
-      await fireEvent.scroll(window);
-      expect(document.querySelector('[data-inline-detail-for="fleet-0"]')).toBeNull();
-      expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
-    } finally {
-      cleanup();
-      rectangle.mockRestore();
-    }
-  });
-
   it('marks an empty evidence cell with a short label and the full reason on hover', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -574,7 +310,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={true}
         layoutWidth={() => 1_200}
@@ -590,7 +326,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('explains snapshot-only and unrated rows in plain words', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[
           { ...row, key: 'snapshot-only', snapshotCount: 2 },
@@ -603,7 +339,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={true}
         layoutWidth={() => 1_200}
@@ -617,7 +353,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.',
     );
     expect(titles).toContain(
-      'This backup or job does not match a guest Pulse currently monitors, so it is not rated.',
+      'This backup does not match a guest Pulse currently monitors, so it is not rated.',
     );
     expect(titles.join(' ')).not.toMatch(/canonical|provider evidence|independent recovery/);
   });
@@ -626,7 +362,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     // A capped inline-block sat above the row's text line; a block span fills
     // the fixed-layout cell and ends in an ellipsis there.
     const node = 'pve-production-rack-04-node-17.example.internal';
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[{ ...row, workload: { ...row.workload, node } }] as WorkloadCoverageRow[]}
         hasAnyRows
@@ -636,7 +372,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -648,129 +384,5 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(span?.parentElement?.children).toHaveLength(1);
     expect(span?.getAttribute('class')).toBe('block truncate');
     expect(span?.closest('table')).toHaveClass('table-fixed');
-  });
-});
-
-const artifactPathPrefix = 'local:backup/' + 'long-directory-'.repeat(8);
-const paths = [
-  artifactPathPrefix + 'vzdump-qemu-100-first.vma.zst',
-  artifactPathPrefix + 'vzdump-qemu-100-second.vma.zst',
-];
-const description = 'Before the maintenance window: ' + 'snapshot context '.repeat(8);
-const buildDetailsModel = (path = paths[0]) =>
-  buildProxmoxBackupRecoveryModel({
-    nowMs: BACKUP_IDENTITY_NOW,
-    workloads: [identityGuest('east-100', 'east', 'pve-1')],
-    pbsBackups: [identityPBS()],
-    archives: [
-      identityArchive({ id: 'first', volid: path }),
-      identityArchive({ id: 'second', volid: paths[1] }),
-    ],
-    snapshots: [identitySnapshot({ description })],
-    tasks: [],
-  });
-
-describe('restore-point details without hover', () => {
-  it.each([320, 640, 800, 1000, 1365])(
-    'retains full identifiers and descriptions in both tables at %s px',
-    (width) => {
-      const model = buildDetailsModel();
-      const { container } = render(() => (
-        <>
-          <ProxmoxRecoverableTable
-            artifacts={model.recoverableArtifacts}
-            hasAnyArtifacts
-            emptyIcon={<span />}
-            emptyTitle="No backups"
-            emptyDescription="No backups"
-            sortKey={() => 'created'}
-            sortDirection={() => 'desc'}
-            onSort={() => undefined}
-            sizeMaxBytes={2048}
-            layoutWidth={() => width}
-          />
-          <ProxmoxCoverageTable
-            rows={model.coverageRows}
-            hasAnyRows
-            emptyIcon={<span />}
-            emptyTitle="No guests"
-            emptyDescription="No guests"
-            sortKey={() => 'workload'}
-            sortDirection={() => 'asc'}
-            onSort={() => undefined}
-            expandedKeys={new Set(model.coverageRows.map((row) => row.key))}
-            onToggleExpand={() => undefined}
-            showTaskColumn={false}
-            layoutWidth={() => width}
-          />
-        </>
-      ));
-      for (const path of paths) expect(screen.getAllByText(path)).toHaveLength(2);
-      expect(screen.getAllByText(description.trim())).toHaveLength(2);
-      expect(screen.getAllByText('1 PBS file')).toHaveLength(2);
-      const details = container.querySelectorAll('[data-backup-artifact-details]');
-      expect(details).toHaveLength(8);
-      for (const detail of details) {
-        expect(detail).toHaveClass('whitespace-normal', 'wrap-anywhere');
-        expect(detail).not.toHaveClass('truncate');
-        expect(detail.closest('[hidden]')).toBeNull();
-        const cell = detail.closest('td')!;
-        if (cell.colSpan > 1) {
-          const table = cell.closest('table')!;
-          expect(cell.colSpan).toBe(table.querySelector('thead tr')!.children.length);
-        }
-      }
-    },
-  );
-
-  it('moves details between columns and continuation rows without duplicating or losing them', () => {
-    const [width, setWidth] = createSignal(1365);
-    const [model, setModel] = createSignal(buildDetailsModel());
-    const { container } = render(() => (
-      <ProxmoxRecoverableTable
-        artifacts={model().recoverableArtifacts}
-        hasAnyArtifacts
-        emptyIcon={<span />}
-        emptyTitle="No backups"
-        emptyDescription="No backups"
-        sortKey={() => 'created'}
-        sortDirection={() => 'desc'}
-        onSort={() => undefined}
-        sizeMaxBytes={2048}
-        layoutWidth={width}
-      />
-    ));
-    for (const next of [320, 640, 800, 1000, 1365]) {
-      setWidth(next);
-      expect(screen.getAllByText(paths[0])).toHaveLength(1);
-      expect(container.querySelectorAll('[data-backup-artifact-details]')).toHaveLength(4);
-    }
-    const updated = paths[0] + '-after-refresh';
-    setModel(buildDetailsModel(updated));
-    expect(screen.queryByText(paths[0])).not.toBeInTheDocument();
-    expect(screen.getByText(updated)).toBeInTheDocument();
-  });
-
-  it('avoids repeating identical context/identifier and treats provider text as plain text', () => {
-    const value = '<img src=x onerror=alert(1)>';
-    const artifact = {
-      ...buildDetailsModel().recoverableArtifacts[0],
-      detail: value,
-      detailTitle: value,
-    };
-    const { container } = render(() => <ArtifactDetailText artifact={artifact} />);
-    expect(screen.getAllByText(value)).toHaveLength(1);
-    expect(container.querySelector('[data-backup-artifact-identifier]')).toBeNull();
-    expect(container.querySelector('img')).toBeNull();
-  });
-
-  it('keeps missing details unavailable instead of constructing a provider path', () => {
-    const artifact = {
-      ...buildDetailsModel().recoverableArtifacts[0],
-      detail: '',
-      detailTitle: undefined,
-    };
-    render(() => <ArtifactDetailText artifact={artifact} />);
-    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });

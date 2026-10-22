@@ -2,14 +2,20 @@ import { For, Show, createEffect, createMemo, type Accessor, type JSX } from 'so
 
 import { createStore, reconcile } from 'solid-js/store';
 
+import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
-  formatPlatformTableDateTimeValue,
-  formatPlatformTableDurationValue,
-  formatPlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformDetailTable,
@@ -22,25 +28,24 @@ import {
   getPlatformResourceDetailRowInteractionProps,
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
-import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import {
   getWorkloadRecoveryPostureLabel,
   type WorkloadCoverageRow,
-  type CoverageTask,
 } from './proxmoxBackupRecoveryModel';
+import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceBadge,
-  ArtifactLocationText,
-  ArtifactDetailText,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
+  artifactStateLabel,
 } from './proxmoxBackupsTableShared';
 import {
   getCoverageColumns,
@@ -50,52 +55,12 @@ import {
   selectCoverageRestoreEvidence,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
-import { useProxmoxCoverageWindowing } from './useProxmoxCoverageWindowing';
+import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
 
 // Each evidence column is already named by its header, so an empty cell says
 // "None" instead of restating the source ("No PVE backup file"). The long form
 // truncated at most widths and stays available as the hover title.
 const COVERAGE_EMPTY_LABEL = 'None';
-const COVERAGE_TASK_CHRONOLOGY_EXPLANATION =
-  'Latest backup job unknown: one or more job start times are unavailable or in the future. Check the job history in Proxmox.';
-const coverageTaskExplanation = (row: WorkloadCoverageRow): string =>
-  row.taskOutcomeConflict
-    ? 'Latest backup job unknown: jobs with the same newest start time report different outcomes. Check the job history in Proxmox.'
-    : COVERAGE_TASK_CHRONOLOGY_EXPLANATION;
-// The page reads collected state, not Proxmox. Never renew a retained job's
-// observation with the page clock or clamp a future provider time to "just now".
-function CoverageTaskObservation(props: { value?: string; detailed?: boolean }) {
-  const now = useRelativeTimeNow();
-  const observedMs = createMemo(() => {
-    const ms = Date.parse(props.value ?? '');
-    return Number.isFinite(ms) && ms > 0 && ms <= now() ? ms : undefined;
-  });
-  const observedText = () =>
-    formatPlatformTableDateTimeValue(observedMs(), {
-      dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
-    });
-  return (
-    <span data-backup-task-observed>
-      <Show when={observedMs()} fallback={props.detailed ? 'Unknown' : 'Job observation unknown'}>
-        {(ms) => (
-          <>
-            <Show when={!props.detailed}>Job observed </Show>
-            <time dateTime={props.value} title={observedText()}>
-              {props.detailed
-                ? observedText()
-                : formatPlatformTableRelativeTimeValue(ms(), { now: now() })}
-            </time>
-            <Show when={props.detailed}>
-              {' · '}
-              {formatPlatformTableRelativeTimeValue(ms(), { now: now() })}
-            </Show>
-          </>
-        )}
-      </Show>
-    </span>
-  );
-}
-
 const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
@@ -139,6 +104,12 @@ const statusWordToneClass = (variant: StatusIndicatorVariant): string => {
   return 'text-base-content';
 };
 
+const statusDetailTone = (variant: StatusIndicatorVariant): DetailValueTone | undefined => {
+  if (variant === 'danger') return 'danger';
+  if (variant === 'warning') return 'warning';
+  return undefined;
+};
+
 const compactPostureLabel = (posture: WorkloadCoverageRow['posture']): string => {
   switch (posture) {
     case 'protected':
@@ -177,151 +148,63 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
   if (row.protectionPosture?.explanation) return row.protectionPosture.explanation;
   if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
   if (row.posture === 'not-evaluated') {
-    return 'This backup or job does not match a guest Pulse currently monitors, so it is not rated.';
+    return 'This backup does not match a guest Pulse currently monitors, so it is not rated.';
   }
   return 'Pulse cannot tell yet whether this guest is backed up.';
 };
 
-function CoverageTaskProvenanceNote() {
-  return (
-    <>
-      <p class="mt-2 text-muted">
-        Last observed is when Pulse read this job's history from Proxmox, not when the job finished.
-        Refreshing this page does not make retained results current. An unknown observation time is
-        not a fresh result.
-      </p>
-      <p class="mt-2 text-muted">
-        The job location is recorded at the time of the backup. The workload may now be on another
-        node.
-      </p>
-      <p class="mt-2 text-muted">
-        Reported end and recorded duration describe the job history, not evidence of guest thaw or
-        filesystem writes. Unknown duration is not a live elapsed time.
-      </p>
-    </>
-  );
-}
-
-// Share the same escaped, wrapping fields for selected and unresolved jobs.
-// An unresolved observation is never promoted to the latest-job region.
-function CoverageTaskDetail(props: { task: CoverageTask; latest?: boolean }) {
-  const now = useRelativeTimeNow();
-  const startIsUsable = () => {
-    const ms = Date.parse(props.task.startedAt);
-    return ms !== undefined && Number.isFinite(ms) && ms > 0 && ms <= now();
-  };
-  return (
-    <section
-      aria-label={props.latest ? 'Latest backup job' : undefined}
-      class="mb-2 min-w-0 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content"
-      data-backup-task-detail={props.latest ? '' : undefined}
-      data-backup-task-evidence={!props.latest ? '' : undefined}
-    >
-      <h4 class="mb-1 font-medium">
-        {props.latest ? 'Latest backup job' : 'Collected backup job'}
-      </h4>
-      <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
-        <dt class="text-muted">Job ID</dt>
-        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{props.task.id}</dd>
-        <dt class="text-muted">Result</dt>
-        <dd
-          class={`min-w-0 whitespace-pre-wrap wrap-anywhere ${statusWordToneClass(taskWordVariant(props.task.label))}`}
-        >
-          {props.task.label}
-        </dd>
-        <Show
-          when={
-            props.task.statusErrorConflict ||
-            (props.task.label === 'Failed' && props.task.status.trim().toLowerCase() !== 'failed')
-          }
-        >
-          <dt class="text-muted">Reported status</dt>
-          <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{props.task.status}</dd>
-        </Show>
-        <dt class="text-muted">Job connection</dt>
-        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
-          {props.task.instance?.trim() || 'Not reported'}
-        </dd>
-        <dt class="text-muted">Job node</dt>
-        <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">
-          {props.task.node?.trim() || 'Not reported'}
-        </dd>
-        <dt class="text-muted">Started</dt>
-        <dd class="min-w-0 whitespace-normal wrap-anywhere">
-          <Show
-            when={startIsUsable()}
-            fallback={
-              <span data-backup-task-start-unknown>
-                Unknown
-                {props.task.startedAt ? ` · reported: ${props.task.startedAt}` : ' · not reported'}
-              </span>
-            }
-          >
-            <time dateTime={props.task.startedAt}>
-              {formatPlatformTableDateTimeValue(props.task.startedAt, {
-                dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
-              })}
-            </time>
-          </Show>
-        </dd>
-        <dt class="text-muted">Reported end</dt>
-        <dd class="min-w-0 whitespace-normal wrap-anywhere" data-backup-task-end>
-          <Show
-            when={props.task.durationSeconds !== undefined}
-            fallback={
-              props.task.endedAt ? `Unknown · reported: ${props.task.endedAt}` : 'Not reported'
-            }
-          >
-            <time dateTime={props.task.endedAt}>
-              {formatPlatformTableDateTimeValue(props.task.endedAt, {
-                dateTimeFormat: { year: 'numeric', second: '2-digit', timeZoneName: 'short' },
-              })}
-            </time>
-          </Show>
-        </dd>
-        <dt class="text-muted">Recorded duration</dt>
-        <dd class="min-w-0 whitespace-normal wrap-anywhere" data-backup-task-duration>
-          {props.task.durationSeconds === undefined
-            ? 'Unknown'
-            : props.task.durationSeconds === 0
-              ? '0s'
-              : formatPlatformTableDurationValue(props.task.durationSeconds)}
-        </dd>
-        <dt class="text-muted">Last observed</dt>
-        <dd class="min-w-0 whitespace-normal wrap-anywhere">
-          <CoverageTaskObservation value={props.task.observedAt} detailed />
-        </dd>
-        <Show when={props.task.error?.trim()}>
-          {(error) => (
-            <>
-              <dt class="text-muted">
-                {props.task.label === 'Warning' ? 'Reported warning' : 'Reported error'}
-              </dt>
-              <dd class="min-w-0 whitespace-pre-wrap wrap-anywhere">{error()}</dd>
-            </>
-          )}
-        </Show>
-      </dl>
-      <Show when={props.latest}>
-        <CoverageTaskProvenanceNote />
-      </Show>
-      <Show when={props.task.statusErrorConflict}>
-        <p class="mt-2 text-amber-700 dark:text-amber-300" data-backup-task-status-conflict>
-          The reported job status and error disagree. This result is unknown. Check the existing job
-          history in Proxmox.
-        </p>
-      </Show>
-    </section>
-  );
-}
+// Provider evidence quality (did the job run, is history complete, can Pulse
+// read it) explains a posture; it is detail, not the answer.
+const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] =>
+  compactDetailSections([
+    {
+      label: 'Workload',
+      rows: compactDetailRows([
+        makeDetailRow('Type', row.workload.typeLabel),
+        makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, row.workload.vmid),
+        makeDetailRow('Node', row.workload.node),
+        makeDetailRow('Latest task', row.latestTask?.label, {
+          tone: row.latestTask
+            ? statusDetailTone(taskWordVariant(row.latestTask.label))
+            : undefined,
+        }),
+      ]),
+    },
+    {
+      label: 'Provider evidence',
+      rows: compactDetailRows(
+        (row.protectionPosture?.providerStates ?? []).map((provider) =>
+          makeDetailRow(
+            providerLabel(provider.provider),
+            [
+              `Job ${evidenceQualityLabel(provider.jobState)}`,
+              `History ${evidenceQualityLabel(provider.historyCompleteness)}`,
+              `Access ${evidenceQualityLabel(provider.permissions)}`,
+            ].join(' · '),
+            {
+              layout: 'stacked',
+              valueContent: (
+                <span class="flex flex-wrap gap-x-3 text-left font-normal leading-snug">
+                  <span>Job {evidenceQualityLabel(provider.jobState)}</span>
+                  <span>History {evidenceQualityLabel(provider.historyCompleteness)}</span>
+                  <span>Access {evidenceQualityLabel(provider.permissions)}</span>
+                </span>
+              ),
+            },
+          ),
+        ),
+      ),
+    },
+  ]);
 
 // "Workload coverage" table: one row per workload answering "does this have a
 // backup?" across PBS snapshots / PVE backup files / guest snapshots, each
 // expanding to its restore evidence. Presentational — the parent owns the
 // filtered+sorted memo, shared filters, and the expansion set. table-fixed + a
 // colgroup keeps the columns from ballooning; the inner evidence table stays
-// content-sized. When identity columns disappear, their facts stay under the
-// name. Connections are always explicit: names and VMIDs can repeat in a fleet.
+// content-sized. Rows are single-line with one datum per column — identity
+// (Type / Target ID / Node) gets its own columns, mirroring the by-date
+// recoverable table, instead of stacking under the workload name.
 export function ProxmoxCoverageTable(props: {
   rows: WorkloadCoverageRow[];
   hasAnyRows: boolean;
@@ -331,7 +214,8 @@ export function ProxmoxCoverageTable(props: {
   sortKey: Accessor<CoverageSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
   onSort: (key: CoverageSortKey) => void;
-  expandedKeys: ReadonlySet<string>;
+  /** The one workload whose drawer is open, across the live and unmatched tables. */
+  expandedKey: string | null;
   onToggleExpand: (key: string) => void;
   // The task column auto-hides when no workload has task history. Per-source
   // ages (PBS snapshot, PVE file, guest snapshot) live in the row expansion.
@@ -351,11 +235,6 @@ export function ProxmoxCoverageTable(props: {
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const columnVisible = (column: CoverageColumnId) => visibleColumnIds().includes(column);
   const columnCount = () => visibleColumns().length;
-  const evidenceColumnCount = () =>
-    3 +
-    (['location', 'size', 'details'] as const).filter((column) =>
-      isCoverageEvidenceColumnVisible(layoutMode(), column),
-    ).length;
   // Full uncertainty words must fit even beside a Job column at 320px. Numeric
   // ages were short enough for the usual gutters; compact ages use that space.
   const ageCellClass = (kind: 'text' | 'numeric-value') =>
@@ -364,12 +243,7 @@ export function ProxmoxCoverageTable(props: {
   // Solid does not replace the focused toggle (or the browser's scroll anchor).
   const [stableRows, setStableRows] = createStore<WorkloadCoverageRow[]>([]);
   createEffect(() => setStableRows(reconcile([...props.rows], { key: 'key' })));
-  const tableWindow = useProxmoxCoverageWindowing(
-    () => [...stableRows],
-    () => props.expandedKeys,
-    () => [props.rows, props.expandedKeys, layoutMode()],
-    () => props.layoutWidth?.() ?? observedWidth.width(),
-  );
+  const tableWindow = useProxmoxBackupTableWindowing(() => [...stableRows]);
 
   return (
     <Show
@@ -483,7 +357,7 @@ export function ProxmoxCoverageTable(props: {
               </Show>
               <For each={tableWindow.visibleItems()}>
                 {(row) => {
-                  const isExpanded = () => props.expandedKeys.has(row.key);
+                  const isExpanded = () => props.expandedKey === row.key;
                   const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
@@ -494,7 +368,6 @@ export function ProxmoxCoverageTable(props: {
                           onToggle: () => props.onToggleExpand(row.key),
                         })}
                         data-proxmox-backup-row="coverage"
-                        data-proxmox-coverage-key={row.key}
                       >
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
@@ -507,49 +380,9 @@ export function ProxmoxCoverageTable(props: {
                               onToggle={() => props.onToggleExpand(row.key)}
                             />
                             <div class="min-w-0">
-                              <div class="truncate font-semibold" title={row.workload.label}>
+                              <div class="truncate font-semibold">
                                 {row.workload.name || row.workload.label}
                               </div>
-                              <Show when={!columnVisible('targetId')}>
-                                <div
-                                  class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
-                                  data-backup-workload-target
-                                >
-                                  {row.workload.typeLabel} {row.workload.vmid || '—'}
-                                </div>
-                              </Show>
-                              <Show when={row.workload.instance}>
-                                {(connection) => (
-                                  <div
-                                    class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
-                                    data-backup-workload-connection
-                                  >
-                                    Connection: {connection()}
-                                  </div>
-                                )}
-                              </Show>
-                              <Show when={layoutMode() === 'compact' && row.latestTask}>
-                                {(task) => (
-                                  <div class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted">
-                                    <CoverageTaskObservation value={task().observedAt} />
-                                  </div>
-                                )}
-                              </Show>
-                              <Show
-                                when={
-                                  !columnVisible('node') &&
-                                  (row.workload.nativeNode || row.workload.node)
-                                }
-                              >
-                                {(node) => (
-                                  <div
-                                    class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted"
-                                    data-backup-workload-node
-                                  >
-                                    Node: {node()}
-                                  </div>
-                                )}
-                              </Show>
                             </div>
                           </div>
                         </TableCell>
@@ -637,72 +470,50 @@ export function ProxmoxCoverageTable(props: {
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <Show
-                              when={row.taskChronologyUnknown}
+                              when={row.latestTask}
                               fallback={
                                 <Show
-                                  when={row.latestTask}
-                                  fallback={
-                                    <Show
-                                      when={layoutMode() !== 'compact'}
-                                      fallback={<span class="block text-center text-muted">—</span>}
-                                    >
-                                      <span class="text-muted" title="No recent task">
-                                        {COVERAGE_EMPTY_LABEL}
-                                      </span>
-                                    </Show>
-                                  }
+                                  when={layoutMode() !== 'compact'}
+                                  fallback={<span class="block text-center text-muted">—</span>}
                                 >
-                                  {(task) => (
-                                    <>
-                                      <Show
-                                        when={layoutMode() !== 'compact'}
-                                        fallback={
-                                          <div class="flex justify-center">
-                                            <StatusDot
-                                              size="sm"
-                                              variant={taskWordVariant(task().label)}
-                                              title={`Latest task: ${task().label}`}
-                                              ariaHidden
-                                            />
-                                            <span class="sr-only">Latest task: {task().label}</span>
-                                          </div>
-                                        }
-                                      >
-                                        <div class="flex items-center gap-2">
-                                          <StatusDot
-                                            size="sm"
-                                            variant={taskWordVariant(task().label)}
-                                            title={task().label}
-                                            ariaHidden
-                                          />
-                                          <span
-                                            class={`truncate ${statusWordToneClass(
-                                              taskWordVariant(task().label),
-                                            )}`}
-                                          >
-                                            {task().label}
-                                          </span>
-                                        </div>
-                                      </Show>
-                                      <Show when={layoutMode() !== 'compact'}>
-                                        <div class="whitespace-normal wrap-anywhere text-[10px] leading-snug text-muted">
-                                          <CoverageTaskObservation value={task().observedAt} />
-                                        </div>
-                                      </Show>
-                                    </>
-                                  )}
+                                  <span class="text-muted" title="No recent task">
+                                    {COVERAGE_EMPTY_LABEL}
+                                  </span>
                                 </Show>
                               }
                             >
-                              <span
-                                class="block truncate font-semibold text-amber-600 dark:text-amber-300"
-                                classList={{ 'text-center': layoutMode() === 'compact' }}
-                                title={coverageTaskExplanation(row)}
-                                aria-label="Latest backup job unknown"
-                                data-backup-task-unknown
-                              >
-                                {layoutMode() === 'compact' ? '?' : 'Unknown'}
-                              </span>
+                              {(task) => (
+                                <Show
+                                  when={layoutMode() !== 'compact'}
+                                  fallback={
+                                    <div class="flex justify-center">
+                                      <StatusDot
+                                        size="sm"
+                                        variant={taskWordVariant(task().label)}
+                                        title={`Latest task: ${task().label}`}
+                                        ariaHidden
+                                      />
+                                      <span class="sr-only">Latest task: {task().label}</span>
+                                    </div>
+                                  }
+                                >
+                                  <div class="flex items-center gap-2">
+                                    <StatusDot
+                                      size="sm"
+                                      variant={taskWordVariant(task().label)}
+                                      title={task().label}
+                                      ariaHidden
+                                    />
+                                    <span
+                                      class={`truncate ${statusWordToneClass(
+                                        taskWordVariant(task().label),
+                                      )}`}
+                                    >
+                                      {task().label}
+                                    </span>
+                                  </div>
+                                </Show>
+                              )}
                             </Show>
                           </TableCell>
                         </Show>
@@ -711,188 +522,102 @@ export function ProxmoxCoverageTable(props: {
                         <InlineDetailTableRow
                           cellId={detailRowId()}
                           class=""
-                          cellClass="px-3 py-2 whitespace-normal"
-                          contentClass="min-w-0 whitespace-normal"
                           colspan={columnCount()}
                           data-inline-detail-for={row.key}
                         >
-                          <div class="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] sm:grid-cols-4">
-                            <span class="min-w-0 wrap-anywhere">
-                              <span class="font-medium text-base-content">Connection:</span>{' '}
-                              <span class="text-muted">{row.workload.instance || 'Unknown'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Type:</span>{' '}
-                              <span class="text-muted">{row.workload.typeLabel}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Target:</span>{' '}
-                              <span class="font-mono text-muted">{row.workload.vmid || '—'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Node:</span>{' '}
-                              <span class="text-muted">{row.workload.node || '—'}</span>
-                            </span>
-                            <span>
-                              <span class="font-medium text-base-content">Workload:</span>{' '}
-                              <span class="text-muted">{row.workload.label}</span>
-                            </span>
-                          </div>
-                          <div class="mb-2 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content">
-                            <span class="font-medium">
-                              {getWorkloadRecoveryPostureLabel(row.posture)}:
-                            </span>{' '}
-                            {postureExplanation(row)}
-                          </div>
-                          <Show when={row.latestTask}>
-                            {(task) => <CoverageTaskDetail task={task()} latest />}
-                          </Show>
-                          <Show when={row.taskChronologyUnknown}>
-                            <p
-                              class="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
-                              data-backup-task-chronology
-                            >
-                              {coverageTaskExplanation(row)}
-                            </p>
-                          </Show>
-                          <Show when={row.taskChronologyUnknown && row.unresolvedTasks?.length}>
-                            <section
-                              aria-label="Collected backup jobs"
-                              class="text-[11px] text-base-content"
-                              data-backup-task-unresolved
-                            >
-                              <h4 class="mb-1 text-[11px] font-medium text-base-content">
-                                Collected backup jobs
-                              </h4>
-                              <p class="mb-2 text-[11px] text-muted">
-                                These observations do not establish which job is latest. Their list
-                                order is not a job timeline. A reported OK result does not prove
-                                backup usability, guest thaw or filesystem writes.
-                              </p>
-                              <ul>
-                                <For each={row.unresolvedTasks}>
-                                  {(task) => (
-                                    <li>
-                                      <CoverageTaskDetail task={task} />
-                                    </li>
-                                  )}
-                                </For>
-                              </ul>
-                              <CoverageTaskProvenanceNote />
-                            </section>
-                          </Show>
-                          <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
-                            <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
-                              <div class="bg-surface-alt px-2 py-1 text-[11px] font-medium text-base-content">
-                                Provider evidence
-                              </div>
-                              <div class="divide-y divide-border-subtle">
-                                <For each={row.protectionPosture?.providerStates ?? []}>
-                                  {(provider) => (
-                                    <div
-                                      class="min-w-0 space-y-1 px-2 py-1.5 text-[11px]"
-                                      data-backup-provider-evidence
-                                    >
-                                      <div class="font-medium text-base-content">
-                                        {providerLabel(provider.provider)}
-                                      </div>
-                                      <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5">
-                                        <dt class="text-muted">Scope</dt>
-                                        <dd
-                                          class="min-w-0 whitespace-normal wrap-anywhere text-base-content"
-                                          data-backup-provider-scope
-                                        >
-                                          {provider.scope?.trim() || 'Unknown'}
-                                        </dd>
-                                        <dt class="text-muted">Source</dt>
-                                        <dd
-                                          class="min-w-0 whitespace-normal wrap-anywhere text-base-content"
-                                          data-backup-provider-source
-                                        >
-                                          {provider.source?.trim() || 'Unknown'}
-                                        </dd>
-                                      </dl>
-                                      <div class="flex flex-wrap gap-x-3 gap-y-0.5 text-muted">
-                                        <span>
-                                          Result {evidenceQualityLabel(provider.jobState)}
-                                        </span>
-                                        <span>
-                                          History{' '}
-                                          {evidenceQualityLabel(provider.historyCompleteness)}
-                                        </span>
-                                        <span>
-                                          Access {evidenceQualityLabel(provider.permissions)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  )}
-                                </For>
-                              </div>
-                            </div>
-                          </Show>
-                          <Show
-                            when={evidence().length > 0}
-                            fallback={
-                              <div class="text-xs text-muted">
-                                No restore evidence has been discovered for this workload.
-                              </div>
+                          <InlineDetailPanel
+                            testId="proxmox-coverage-detail"
+                            detailFor={row.key}
+                            title={row.workload.name || row.workload.label}
+                            status={{
+                              variant: coveragePostureVariant(row.posture),
+                              label: getWorkloadRecoveryPostureLabel(row.posture),
+                            }}
+                            summary={postureExplanation(row)}
+                            actions={
+                              <RecordOwnerLink
+                                subject={proxmoxBackupWorkloadSubject(row.workload)}
+                              />
                             }
+                            sections={buildCoverageDetailSections(row)}
+                            onClose={() => props.onToggleExpand(row.key)}
                           >
-                            <div class="overflow-hidden">
-                              <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
-                                <span class="font-medium text-base-content">Restore evidence</span>
-                                <Show when={row.artifacts.length > evidence().length}>
-                                  <span class="text-muted">
-                                    Showing {evidence().length} of {row.artifacts.length}
-                                  </span>
-                                </Show>
-                              </div>
-                              <PlatformDetailTable class="table-fixed text-[11px]">
-                                <PlatformDetailTableHeader>
-                                  <TableHead class={getPlatformTableHeadClassForKind('name')}>
-                                    Source
-                                  </TableHead>
-                                  <Show
-                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'location')}
-                                  >
-                                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                                      Location
-                                    </TableHead>
+                            <Show
+                              when={evidence().length > 0}
+                              fallback={
+                                <InlineNotice
+                                  tone={
+                                    row.posture === 'unprotected' || row.posture === 'attention'
+                                      ? 'warning'
+                                      : 'info'
+                                  }
+                                  role="status"
+                                  class="text-xs"
+                                >
+                                  No restore points found for this workload.
+                                </InlineNotice>
+                              }
+                            >
+                              <div class="overflow-hidden rounded-sm border border-border bg-surface">
+                                <div class="flex items-center justify-between gap-2 bg-surface-alt px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                                  <span>Restore evidence</span>
+                                  <Show when={row.artifacts.length > evidence().length}>
+                                    <span class="normal-case tracking-normal">
+                                      Showing {evidence().length} of {row.artifacts.length}
+                                    </span>
                                   </Show>
-                                  <TableHead
-                                    class={getPlatformTableHeadClassForKind('numeric-value')}
-                                  >
-                                    {PROXMOX_BACKUP_COLUMN_LABELS.created}
-                                  </TableHead>
-                                  <Show
-                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
-                                  >
+                                </div>
+                                <PlatformDetailTable class="table-fixed text-[11px]">
+                                  <PlatformDetailTableHeader>
+                                    <TableHead class={getPlatformTableHeadClassForKind('name')}>
+                                      Source
+                                    </TableHead>
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(
+                                        layoutMode(),
+                                        'location',
+                                      )}
+                                    >
+                                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                                        Location
+                                      </TableHead>
+                                    </Show>
                                     <TableHead
                                       class={getPlatformTableHeadClassForKind('numeric-value')}
                                     >
-                                      Size
+                                      {PROXMOX_BACKUP_COLUMN_LABELS.created}
                                     </TableHead>
-                                  </Show>
-                                  <TableHead class={getPlatformTableHeadClassForKind('badge')}>
-                                    State
-                                  </TableHead>
-                                  <Show
-                                    when={isCoverageEvidenceColumnVisible(layoutMode(), 'details')}
-                                  >
-                                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                                      {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(layoutMode(), 'size')}
+                                    >
+                                      <TableHead
+                                        class={getPlatformTableHeadClassForKind('numeric-value')}
+                                      >
+                                        Size
+                                      </TableHead>
+                                    </Show>
+                                    <TableHead class={getPlatformTableHeadClassForKind('badge')}>
+                                      State
                                     </TableHead>
-                                  </Show>
-                                </PlatformDetailTableHeader>
-                                <PlatformDetailTableBody class="divide-border-subtle">
-                                  <For each={evidence()}>
-                                    {(artifact) => (
-                                      <>
+                                    <Show
+                                      when={isCoverageEvidenceColumnVisible(
+                                        layoutMode(),
+                                        'details',
+                                      )}
+                                    >
+                                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                                        {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                      </TableHead>
+                                    </Show>
+                                  </PlatformDetailTableHeader>
+                                  <PlatformDetailTableBody class="divide-border-subtle">
+                                    <For each={evidence()}>
+                                      {(artifact) => (
                                         <TableRow>
                                           <TableCell
                                             class={getPlatformTableCellClassForKind('name')}
                                           >
-                                            <ArtifactSourceBadge artifact={artifact} />
+                                            <ArtifactSourceBadge artifact={artifact} wrap />
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(
@@ -901,9 +626,14 @@ export function ProxmoxCoverageTable(props: {
                                             )}
                                           >
                                             <TableCell
-                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                              class={`${getPlatformTableCellClassForKind('text')} whitespace-normal text-base-content`}
                                             >
-                                              <ArtifactLocationText artifact={artifact} />
+                                              <span
+                                                class="block wrap-anywhere"
+                                                data-coverage-evidence-location
+                                              >
+                                                {artifact.location}
+                                              </span>
                                             </TableCell>
                                           </Show>
                                           <TableCell
@@ -931,7 +661,10 @@ export function ProxmoxCoverageTable(props: {
                                           <TableCell
                                             class={getPlatformTableCellClassForKind('badge')}
                                           >
-                                            <ArtifactStateBadge artifact={artifact} />
+                                            <ArtifactStateBadge
+                                              artifact={artifact}
+                                              label={artifactStateLabel(artifact)}
+                                            />
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(
@@ -940,65 +673,25 @@ export function ProxmoxCoverageTable(props: {
                                             )}
                                           >
                                             <TableCell
-                                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                                              class={`${getPlatformTableCellClassForKind('text')} whitespace-normal text-base-content`}
                                             >
-                                              <ArtifactDetailText artifact={artifact} />
+                                              <span
+                                                class="block wrap-anywhere"
+                                                title={artifact.detailTitle}
+                                                data-coverage-evidence-detail
+                                              >
+                                                {artifact.detail || '—'}
+                                              </span>
                                             </TableCell>
                                           </Show>
                                         </TableRow>
-                                        <Show
-                                          when={
-                                            !isCoverageEvidenceColumnVisible(
-                                              layoutMode(),
-                                              'location',
-                                            ) ||
-                                            !isCoverageEvidenceColumnVisible(
-                                              layoutMode(),
-                                              'details',
-                                            )
-                                          }
-                                        >
-                                          <TableRow>
-                                            <TableCell
-                                              colspan={evidenceColumnCount()}
-                                              class="space-y-1 pt-0 text-[11px]"
-                                            >
-                                              <Show
-                                                when={
-                                                  !isCoverageEvidenceColumnVisible(
-                                                    layoutMode(),
-                                                    'location',
-                                                  )
-                                                }
-                                              >
-                                                <div>
-                                                  <span class="text-muted">Location</span>
-                                                  <ArtifactLocationText artifact={artifact} />
-                                                </div>
-                                              </Show>
-                                              <Show
-                                                when={
-                                                  !isCoverageEvidenceColumnVisible(
-                                                    layoutMode(),
-                                                    'details',
-                                                  )
-                                                }
-                                              >
-                                                <div>
-                                                  <span class="text-muted">Details</span>
-                                                  <ArtifactDetailText artifact={artifact} />
-                                                </div>
-                                              </Show>
-                                            </TableCell>
-                                          </TableRow>
-                                        </Show>
-                                      </>
-                                    )}
-                                  </For>
-                                </PlatformDetailTableBody>
-                              </PlatformDetailTable>
-                            </div>
-                          </Show>
+                                      )}
+                                    </For>
+                                  </PlatformDetailTableBody>
+                                </PlatformDetailTable>
+                              </div>
+                            </Show>
+                          </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>
                     </>

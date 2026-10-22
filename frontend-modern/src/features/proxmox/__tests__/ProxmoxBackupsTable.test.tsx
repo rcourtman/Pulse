@@ -4,8 +4,6 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
-import { getShippedDocUrl } from '@/utils/docsLinks';
-import { measureProxmoxBackupBlocks } from '../useProxmoxBackupTableWindowing';
 import {
   BACKUP_IDENTITY_NOW,
   identityGuest,
@@ -126,7 +124,7 @@ const pbsPayload = {
 };
 
 function mockBackupAPIs(
-  state: 'protected' | 'attention' | 'unprotected' | 'unknown' = 'protected',
+  state: 'protected' | 'attention' = 'protected',
   pbsResponse: typeof pbsPayload = pbsPayload,
 ) {
   apiFetchMock.mockImplementation((url: string) => {
@@ -211,8 +209,6 @@ const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
 
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
-  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.history.replaceState({}, '', '/');
   apiFetchMock.mockReset();
@@ -225,649 +221,6 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
-  it('keeps tied Coverage rows and focused evidence stable when observations reorder', async () => {
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse({
-          data:
-            url === '/api/backups/pve'
-              ? { storageBackups: [], guestSnapshots: [], backupTasks: [] }
-              : { backups: [] },
-        }),
-      ),
-    );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
-    window.history.replaceState({}, '', '/proxmox/backups/coverage');
-    const upper = { ...identityGuest('upper-100', 'East', 'pve-upper'), name: 'database' };
-    const lower = { ...identityGuest('lower-100', 'east', 'pve-lower'), name: 'database' };
-    const [workloads, setWorkloads] = createSignal([upper, lower]);
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
-    ));
-    const rows = () =>
-      Array.from(container.querySelectorAll('[data-proxmox-backup-row="coverage"]'));
-    await waitFor(() => expect(rows()).toHaveLength(2));
-    const order = rows().map((row) => row.getAttribute('data-proxmox-coverage-key'));
-    const target = container.querySelector('[data-proxmox-coverage-key="resource:upper-100"]')!;
-    const toggle = within(target as HTMLElement).getByRole('button');
-    await fireEvent.click(toggle);
-    toggle.focus();
-    expect(document.activeElement).toBe(toggle);
-    setWorkloads([{ ...lower }, { ...upper }]);
-    await waitFor(() =>
-      expect(rows().map((row) => row.getAttribute('data-proxmox-coverage-key'))).toEqual(order),
-    );
-    expect(document.activeElement).toBe(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toHaveTextContent(
-      'Connection: East',
-    );
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps yearly activity keyboard navigation separate from the scoped restore-point filter', async () => {
-    mockBackupAPIs();
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? {
-                data: {
-                  ...pvePayload.data,
-                  storageBackups: [
-                    {
-                      ...pvePayload.data.storageBackups[0],
-                      time: new Date(Date.now() - 3_600_000).toISOString(),
-                    },
-                  ],
-                },
-              }
-            : { data: { backups: [] } },
-        ),
-      ),
-    );
-    window.history.replaceState({}, '', '/proxmox/backups/date?source=archive&node=pve-a');
-    const { container } = renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-    await screen.findByRole('group', { name: 'Backup activity days' });
-    const ranges = screen.getByRole('group', { name: 'Activity range' });
-    const metrics = screen.getByRole('group', { name: 'Activity metric' });
-    fireEvent.click(within(ranges).getByRole('button', { name: '1y' }));
-    const chart = screen.getByRole('group', { name: 'Backup activity days' });
-    // Enumerate the native day controls without recomputing CSS visibility for
-    // all 365 columns. Check visibility and the accessible name on the actual
-    // interaction target below; the metric control is in its own small group.
-    const days = within(chart).getAllByRole('button', { hidden: true });
-    expect(days).toHaveLength(365);
-    expect(days.filter((day) => day.tabIndex === 0)).toEqual([days.at(-1)]);
-    const populatedDays = days.filter((day) =>
-      /: 1 backup$/.test(day.getAttribute('aria-label') ?? ''),
-    );
-    expect(populatedDays).toHaveLength(1);
-    const point = populatedDays[0];
-    expect(point).toBeVisible();
-    expect(point).toHaveAccessibleName(/: 1 backup$/);
-    point.focus();
-    fireEvent.keyDown(point, { key: 'ArrowLeft' });
-    expect(document.activeElement).not.toBe(point);
-    expect(new URLSearchParams(window.location.search).has('day')).toBe(false);
-    fireEvent.click(point);
-    await waitFor(() =>
-      expect(new URLSearchParams(window.location.search).get('day')).not.toBeNull(),
-    );
-    const selectedDay = new URLSearchParams(window.location.search).get('day');
-    expect(selectedDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
-    point.focus();
-    fireEvent.click(within(metrics).getByRole('button', { name: 'Volume' }));
-    expect(point).toHaveAccessibleName(/1\.00 MB, selected/);
-    expect(document.activeElement).toBe(point);
-    expect(point).toHaveAttribute('tabindex', '0');
-    const query = new URLSearchParams(window.location.search);
-    expect(query.get('day')).toBe(selectedDay);
-    expect(query.get('node')).toBe('pve-a');
-    expect(query.get('source')).toBe('archive');
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('keeps a job-only unmatched target inspectable without counting it as monitored or recoverable', async () => {
-    mockBackupAPIs();
-    const error = 'Cannot start backup <img src=x onerror="window.__jobInjected=true">';
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? {
-                data: {
-                  guestSnapshots: [],
-                  storageBackups: [],
-                  backupTasks: [identityTask({ status: 'error', error })],
-                },
-              }
-            : { data: { backups: [] } },
-        ),
-      ),
-    );
-    window.history.replaceState({}, '', '/proxmox/backups/coverage');
-    const { container } = renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-    const unmatched = await screen.findByRole('button', { name: /1 unmatched backup target/ });
-    expect(container).toHaveTextContent('0 targets');
-    expect(container).toHaveTextContent('0 restore points');
-    await fireEvent.click(unmatched);
-    const row = container.querySelector<HTMLElement>('[data-proxmox-backup-row="coverage"]')!;
-    expect(row).toHaveTextContent('Guest 100');
-    expect(row).toHaveTextContent('Failed');
-    await fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
-    const detail = screen.getByRole('region', { name: 'Latest backup job' });
-    expect(detail).toHaveTextContent(error);
-    expect(detail).toHaveTextContent('task-100');
-    expect(detail).toHaveTextContent('east');
-    expect(detail).toHaveTextContent('pve-1');
-    expect(detail.querySelector('img')).toBeNull();
-    expect(container).toHaveTextContent('This backup or job does not match a guest');
-    expect(container).toHaveTextContent('A job alone does not establish a restore point');
-    expect(apiFetchMock.mock.calls).toHaveLength(2);
-  });
-
-  it('reconciles an ambiguous job with live inventory without guessing ownership or refetching inventories', async () => {
-    mockBackupAPIs();
-    apiFetchJSONMock.mockResolvedValue({
-      data: [],
-      policy: {
-        freshnessWindowSeconds: 604800,
-        verificationWindowSeconds: 604800,
-        requireVerification: true,
-      },
-    });
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? {
-                data: {
-                  guestSnapshots: [],
-                  storageBackups: [],
-                  backupTasks: [identityTask({ instance: '', status: 'error' })],
-                },
-              }
-            : { data: { backups: [] } },
-        ),
-      ),
-    );
-    const east = identityGuest('east-100', 'east', 'pve-1');
-    const west = identityGuest('west-100', 'west', 'pve-1');
-    const [workloads, setWorkloads] = createSignal([west, east]);
-    window.history.replaceState({}, '', '/proxmox/backups/coverage');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={workloads()} />
-    ));
-    const rowFor = (name: string) =>
-      Array.from(
-        container.querySelectorAll<HTMLElement>('[data-proxmox-backup-row="coverage"]'),
-      ).find((row) => row.textContent?.includes(name))!;
-    await fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup target/ }));
-    expect(rowFor('east-100')).not.toHaveTextContent('Failed');
-    expect(rowFor('west-100')).not.toHaveTextContent('Failed');
-    expect(rowFor('Guest 100')).toHaveTextContent('Failed');
-    setWorkloads([east]);
-    await waitFor(() => expect(rowFor('east-100')).toHaveTextContent('Failed'));
-    expect(
-      screen.queryByRole('button', { name: /unmatched backup target/ }),
-    ).not.toBeInTheDocument();
-    expect(container).toHaveTextContent('1 targets');
-    expect(container).toHaveTextContent('0 restore points');
-    setWorkloads([east, west]);
-    await waitFor(() => expect(rowFor('Guest 100')).toHaveTextContent('Failed'));
-    expect(rowFor('east-100')).not.toHaveTextContent('Failed');
-    expect(rowFor('west-100')).not.toHaveTextContent('Failed');
-    expect(container).toHaveTextContent('2 targets');
-    expect(apiFetchMock.mock.calls).toHaveLength(2);
-  });
-
-  it.each([undefined, 0])(
-    'keeps Count available when completed backups have no positive size (%s)',
-    async (size) => {
-      mockBackupAPIs();
-      const backupTime = new Date(Date.now() - 3_600_000).toISOString();
-      apiFetchMock.mockImplementation((url: string) =>
-        Promise.resolve(
-          jsonResponse(
-            url === '/api/backups/pve'
-              ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
-              : { data: { backups: [{ ...pbsPayload.data.backups[0], backupTime, size }] } },
-          ),
-        ),
-      );
-      window.history.replaceState({}, '', '/proxmox/backups/date');
-      renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-      const volume = await screen.findByRole('button', { name: 'Volume' });
-      expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
-      await fireEvent.click(volume);
-
-      expect(screen.getByRole('button', { name: 'Count' })).toBeInTheDocument();
-      expect(volume).toHaveAttribute('aria-pressed', 'true');
-      expect(screen.getByText(/Completed restore points exist in this window/)).toBeInTheDocument();
-      expect(screen.queryByText(/No completed restore-point activity/)).not.toBeInTheDocument();
-      expect(screen.queryByText('0 B')).not.toBeInTheDocument();
-
-      await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
-      expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
-      expect(
-        screen.queryByText(/Completed restore points exist in this window/),
-      ).not.toBeInTheDocument();
-    },
-  );
-
-  it('qualifies partial volume per day and replaces missing-size evidence on ordinary refresh', async () => {
-    mockBackupAPIs();
-    const today = new Date(Date.now() - 3_600_000).toISOString();
-    const earlier = new Date(Date.now() - 3 * 86_400_000).toISOString();
-    let size: number | undefined;
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
-            : {
-                data: {
-                  backups: [
-                    { ...pbsPayload.data.backups[0], id: 'unknown-size', backupTime: today, size },
-                    {
-                      ...pbsPayload.data.backups[0],
-                      id: 'measured',
-                      backupTime: earlier,
-                      size: 1024,
-                    },
-                    {
-                      ...pbsPayload.data.backups[0],
-                      id: 'running',
-                      backupTime: today,
-                      size: 0,
-                      inProgress: true,
-                    },
-                    { ...pbsPayload.data.backups[0], id: 'undated', backupTime: '', size: 0 },
-                    {
-                      ...pbsPayload.data.backups[0],
-                      id: 'future',
-                      backupTime: new Date(Date.now() + 86_400_000).toISOString(),
-                      size: 0,
-                    },
-                    {
-                      ...pbsPayload.data.backups[0],
-                      id: 'old',
-                      backupTime: '2020-01-01T00:00:00Z',
-                      size: 0,
-                    },
-                  ],
-                },
-              },
-        ),
-      ),
-    );
-    window.history.replaceState({}, '', '/proxmox/backups/date');
-    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-    await fireEvent.click(await screen.findByRole('button', { name: 'Volume' }));
-    const missingDay = screen.getByRole('button', {
-      name: /: Size unavailable\. 1 backup without a positive size$/,
-    });
-    expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
-    expect(
-      screen.getByText(/1 completed restore point in this window has no positive size reported/),
-    ).toBeInTheDocument();
-    await fireEvent.focus(missingDay);
-    expect(screen.getAllByText('Size unavailable. 1 backup without a positive size')).toHaveLength(
-      1,
-    );
-    await fireEvent.blur(missingDay);
-
-    size = 2048;
-    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /: 2.00 KB$/ })).toBeInTheDocument(),
-    );
-    expect(screen.queryByText(/has no positive size reported/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Volume' })).toHaveAttribute('aria-pressed', 'true');
-    size = undefined;
-    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', {
-          name: /: Size unavailable\. 1 backup without a positive size$/,
-        }),
-      ).toBeInTheDocument(),
-    );
-  });
-
-  it('keeps range and metric controls usable in a genuinely empty activity window', async () => {
-    mockBackupAPIs();
-    const backupTime = new Date(Date.now() - 50 * 86_400_000).toISOString();
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
-            : { data: { backups: [{ ...pbsPayload.data.backups[0], backupTime }] } },
-        ),
-      ),
-    );
-    window.history.replaceState({}, '', '/proxmox/backups/date');
-    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
-    await screen.findByText(/No completed restore-point activity/);
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-    expect(
-      screen.getByText(/No completed restore-point activity in the selected 30-day window/),
-    ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: '90d' }));
-    expect(screen.getByRole('button', { name: /: 8.00 GB$/ })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: '7d' }));
-    expect(
-      screen.getByText(/No completed restore-point activity in the selected 7-day window/),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Count' })).toBeInTheDocument();
-  });
-
-  it('keeps restore-point completion totals and the chart truthful through inventory replacement', async () => {
-    mockBackupAPIs('attention');
-    const time = new Date(Date.now() - 3_600_000).toISOString();
-    let completed = false;
-    const runningPBS = () => ({
-      ...pbsPayload.data.backups[0],
-      backupTime: time,
-      inProgress: !completed,
-      writeActivityObserved: true,
-      writeActive: !completed,
-    });
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? { data: { backupTasks: [], storageBackups: [], guestSnapshots: [] } }
-            : { data: { backups: [runningPBS()] } },
-        ),
-      ),
-    );
-    window.history.replaceState({}, '', '/proxmox/backups/date');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-    ));
-    await screen.findAllByText('pbs-docker');
-    await waitFor(() =>
-      expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('0 restore points'),
-    );
-    expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('1 incomplete entry');
-    expect(screen.getByText(/Incomplete backups remain listed/)).toBeInTheDocument();
-    expect(await screen.findByText(/No completed restore-point activity/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /: 1 backup$/ })).not.toBeInTheDocument();
-    expect(container.querySelector('[data-backup-artifact-state]')).toHaveTextContent('Running');
-    expect(screen.getByRole('cell', { name: /1 entry$/ })).toBeInTheDocument();
-
-    completed = true;
-    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
-    await waitFor(() =>
-      expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('1 restore points'),
-    );
-    expect(screen.queryByText(/Incomplete backups remain listed/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /: 1 backup$/ })).toBeInTheDocument();
-    expect(container.querySelector('[data-backup-artifact-state]')).toHaveTextContent('Verified');
-
-    completed = false;
-    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
-    await waitFor(() =>
-      expect(screen.getByText(/targets · .*restore points/)).toHaveTextContent('0 restore points'),
-    );
-    expect(screen.queryByRole('button', { name: /: 1 backup$/ })).not.toBeInTheDocument();
-    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'Coverage' })).toBeInTheDocument();
-  });
-
-  it('keeps the job column for undated-only history and clears it only when history is empty', async () => {
-    mockBackupAPIs('protected');
-    let backupTasks = [{ ...pvePayload.data.backupTasks[0], startTime: 'not-a-date' }];
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? { data: { storageBackups: [], guestSnapshots: [], backupTasks } }
-            : { data: { backups: [] } },
-        ),
-      ),
-    );
-    window.history.replaceState({}, '', '/proxmox/backups/coverage');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-    ));
-    const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-    await waitFor(() =>
-      expect(container.querySelector('[data-backup-task-unknown]')).toBeInTheDocument(),
-    );
-    expect(screen.getByRole('button', { name: 'Sort by Task' })).toBeInTheDocument();
-    backupTasks = [];
-    await fireEvent.click(refresh);
-    await waitFor(() =>
-      expect(container.querySelector('[data-backup-task-unknown]')).not.toBeInTheDocument(),
-    );
-    expect(screen.queryByRole('button', { name: 'Sort by Task' })).not.toBeInTheDocument();
-  });
-
-  it('measures each point and provenance block by key, without borrowing a neighbour height', () => {
-    const root = document.createElement('div');
-    root.innerHTML =
-      '<table><tbody><tr aria-hidden="true"></tr><tr data-proxmox-backup-row="day" data-proxmox-backup-key="day:today"></tr><tr data-proxmox-backup-row="recoverable" data-proxmox-backup-key="artifact:short"></tr><tr data-proxmox-backup-row="location"></tr><tr data-proxmox-backup-row="recoverable" data-proxmox-backup-key="artifact:long"></tr><tr data-proxmox-backup-row="location"></tr><tr aria-hidden="true"></tr></tbody></table>';
-    const heights = [999, 24, 40, 20, 140, 60, 999];
-    for (const [index, row] of [...root.querySelectorAll('tr')].entries())
-      vi.spyOn(row, 'getBoundingClientRect').mockReturnValue({ height: heights[index] } as DOMRect);
-    expect([...measureProxmoxBackupBlocks(root)]).toEqual([
-      ['day:today', 24],
-      ['artifact:short', 60],
-      ['artifact:long', 200],
-    ]);
-    expect(measureProxmoxBackupBlocks(document.createElement('div')).size).toBe(0);
-  });
-
-  it.each(['date', 'coverage'])(
-    'keeps point verification separate from pruning and workload posture in %s',
-    async (view) => {
-      let verified: boolean | undefined = false;
-      mockBackupAPIs('protected');
-      apiFetchMock.mockImplementation((url: string) =>
-        Promise.resolve(
-          jsonResponse(
-            url === '/api/backups/pbs'
-              ? { data: { backups: [{ ...pbsPayload.data.backups[0], verified }] } }
-              : { data: { storageBackups: [], guestSnapshots: [], backupTasks: [] } },
-          ),
-        ),
-      );
-      window.history.replaceState({}, '', `/proxmox/backups/${view}`);
-      const { container } = renderInRouter(() => (
-        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-      ));
-      const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-      await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-      if (view === 'coverage') {
-        await fireEvent.click(
-          screen.getByRole('button', { name: /expand details for pbs-docker/i }),
-        );
-      }
-      const primary = () => container.querySelector('[data-backup-artifact-state]');
-      expect(primary()).toHaveTextContent('Unverified');
-      expect(screen.getByText('Prune protected')).toBeInTheDocument();
-      const initialRoute = window.location.pathname;
-      for (const next of [true, undefined]) {
-        verified = next;
-        refresh.focus();
-        await fireEvent.click(refresh);
-        await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-        await waitFor(() =>
-          expect(primary()).toHaveTextContent(next ? 'Verified' : 'Unknown verification'),
-        );
-        expect(screen.getByText('Prune protected')).toBeInTheDocument();
-        expect(window.location.pathname).toBe(initialRoute);
-        expect(refresh).toHaveFocus();
-      }
-      if (view === 'coverage') {
-        // A server-owned workload verdict is not recomputed from the point badge.
-        expect(container.querySelector('[data-proxmox-backup-row="coverage"]')).toHaveTextContent(
-          'Protected',
-        );
-        expect(screen.getByText('Restore evidence')).toBeInTheDocument();
-      }
-    },
-  );
-
-  it('refreshes readable inventories and posture without leaving the filtered expanded view', async () => {
-    mockBackupAPIs();
-    window.history.replaceState({}, '', '/proxmox/backups/coverage?q=pbs-docker&node=pve-a');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-    ));
-    const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
-    const details = () => container.querySelector('[data-inline-detail-for="resource:ct-112"]');
-    expect(details()).toHaveTextContent('PVE file');
-    expect(details()).toHaveTextContent('Snapshot');
-    const previousRoute = window.location.pathname + window.location.search;
-    expect(screen.getByText(/Restore points reflect the last inventory read/)).toBeInTheDocument();
-
-    // Removed restore points must disappear too: a refresh is replacement,
-    // not an append-only merge of the previously readable inventory.
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse(
-          url === '/api/backups/pve'
-            ? {
-                data: {
-                  ...pvePayload.data,
-                  storageBackups: [],
-                  guestSnapshots: [],
-                },
-              }
-            : pbsPayload,
-        ),
-      ),
-    );
-    refresh.focus();
-    await fireEvent.click(refresh);
-    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(2);
-    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    expect(details()).toHaveTextContent('Restore evidence');
-    expect(details()).toHaveTextContent('PBS');
-    expect(details()).not.toHaveTextContent('PVE file');
-    expect(details()).not.toHaveTextContent('Snapshot');
-    expect(window.location.pathname + window.location.search).toBe(previousRoute);
-    expect(refresh).toHaveFocus();
-  });
-
-  it('keeps a refresh single-flight until both inventories and posture have settled', async () => {
-    mockBackupAPIs();
-    const posture = await apiFetchJSONMock();
-    apiFetchJSONMock.mockClear();
-    window.history.replaceState({}, '', '/proxmox/backups/date');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-    ));
-    const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-    const rows = () => container.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
-    expect(rows()).toHaveLength(3);
-    let finishPVE!: (value: Response) => void;
-    let finishPBS!: (value: Response) => void;
-    let finishPosture!: (value: unknown) => void;
-    apiFetchMock.mockImplementation(
-      (url: string) =>
-        new Promise<Response>((resolve) => {
-          if (url === '/api/backups/pve') finishPVE = resolve;
-          else finishPBS = resolve;
-        }),
-    );
-    apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finishPosture = resolve)));
-    refresh.focus();
-    await fireEvent.click(refresh);
-    expect(screen.getByRole('button', { name: 'Reading backups…' })).toBe(refresh);
-    expect(refresh).not.toBeDisabled();
-    expect(refresh).toHaveFocus();
-    expect(refresh).toHaveAttribute('aria-disabled', 'true');
-    expect(rows()).toHaveLength(3);
-    await fireEvent.click(refresh);
-    expect(apiFetchMock).toHaveBeenCalledTimes(4);
-    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
-    finishPVE(jsonResponse({ data: { guestSnapshots: [], storageBackups: [], backupTasks: [] } }));
-    await waitFor(() => expect(rows()).toHaveLength(1));
-    expect(refresh).toHaveAttribute('aria-disabled', 'true');
-    finishPBS(new Response('{}', { status: 503 }));
-    await screen.findByText(/PBS backup inventory is unavailable/);
-    expect(rows()).toHaveLength(0);
-    expect(refresh).toHaveAttribute('aria-disabled', 'true');
-    finishPosture(posture);
-    await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-    expect(refresh).toHaveTextContent('Refresh backups');
-    expect(refresh).toHaveFocus();
-    expect(window.location.pathname).toBe('/proxmox/backups/date');
-  });
-
-  it.each(['empty', 'failed'] as const)(
-    'can discover restore points from an initially %s inventory without navigating away',
-    async (initial) => {
-      mockBackupAPIs();
-      apiFetchMock.mockImplementation((url: string) =>
-        Promise.resolve(
-          initial === 'failed'
-            ? new Response('{}', { status: 503 })
-            : jsonResponse({
-                data:
-                  url === '/api/backups/pve'
-                    ? { guestSnapshots: [], storageBackups: [], backupTasks: [] }
-                    : { backups: [] },
-              }),
-        ),
-      );
-      window.history.replaceState({}, '', '/proxmox/backups/date');
-      const { container } = renderInRouter(() => (
-        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-      ));
-      const refresh = await screen.findByRole('button', { name: 'Refresh backups' });
-      await waitFor(() => expect(refresh).toHaveAttribute('aria-disabled', 'false'));
-      expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(0);
-      mockBackupAPIs();
-      await fireEvent.click(refresh);
-      await waitFor(() =>
-        expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(
-          3,
-        ),
-      );
-      expect(screen.queryByText(/backup inventory is unavailable/)).not.toBeInTheDocument();
-      expect(window.location.pathname).toBe('/proxmox/backups/date');
-    },
-  );
-
-  it('keeps the all-failed Refresh action disabled while the initial posture read is still pending', async () => {
-    mockBackupAPIs();
-    const posture = deferred<unknown>();
-    apiFetchJSONMock.mockReturnValue(posture.promise);
-    apiFetchMock.mockImplementation(() => Promise.resolve(new Response('{}', { status: 503 })));
-    window.history.replaceState({}, '', '/proxmox/backups/date');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-    ));
-    const refresh = await screen.findByRole('button', { name: 'Refresh' });
-    expect(refresh).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Reading backups…' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    fireEvent.click(refresh);
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
-    posture.resolve({ data: [], policy: {} });
-    await waitFor(() => expect(refresh).toBeEnabled());
-    mockBackupAPIs();
-    fireEvent.click(refresh);
-    await waitFor(() =>
-      expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(3),
-    );
-  });
-
   it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
     mockBackupAPIs();
     const failed = {
@@ -907,15 +260,7 @@ describe('ProxmoxBackupsTable', () => {
     };
     await within(table).findByText('Unavailable');
     await waitFor(() => expect(backupCount()).toBe('1'));
-    // Point retention remains visible without hiding its verification result;
-    // neither depends on whether datastore capacity was readable.
-    await screen.findByText('Prune protected');
-    const restorePoints = container.querySelector(
-      '[data-proxmox-backups-table="recoverable"]',
-    ) as HTMLElement;
-    expect(within(restorePoints).getByText('Verified')).toHaveAttribute(
-      'data-backup-artifact-state',
-    );
+    await screen.findAllByText('Protected');
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
 
@@ -1059,136 +404,6 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.queryByText('Checking')).not.toBeInTheDocument();
   });
 
-  it.each(['/proxmox/backups/date', '/proxmox/backups/coverage'])(
-    'qualifies the top-level protection verdict on %s before and after evaluation',
-    async (route) => {
-      mockBackupAPIs();
-      const response = await apiFetchJSONMock();
-      apiFetchJSONMock.mockClear();
-      let finish!: (value: unknown) => void;
-      apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finish = resolve)));
-      window.history.replaceState({}, '', route);
-      const { container } = renderInRouter(() => (
-        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-      ));
-      await screen.findByText('Backup coverage');
-      const limits = () => container.querySelector('[data-backup-coverage-limits]')!;
-      const expectLimits = () => {
-        expect(limits()).toBeVisible();
-        expect(limits()).toHaveTextContent(
-          'Protected describes recorded backup evidence, not current guest health.',
-        );
-        expect(limits()).toHaveTextContent(
-          'It does not prove a successful restore, guest thaw or filesystem writes.',
-        );
-        const guidance = within(limits() as HTMLElement).getByRole('link', {
-          name: 'Backup safety guidance',
-        });
-        expect(guidance).toHaveAttribute('href', getShippedDocUrl('VM_DISK_MONITORING.md'));
-        expect(guidance).toHaveAttribute('target', '_blank');
-        expect(guidance).toHaveAttribute('rel', 'noopener noreferrer');
-      };
-      // The limits do not depend on a healthy verdict or a successful read.
-      expectLimits();
-      finish(response);
-      await screen.findByRole('button', { name: '1 protected' });
-      expectLimits();
-      expect(window.location.pathname).toBe(route);
-      expect(apiFetchMock).toHaveBeenCalledTimes(2);
-      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  it.each(['transport failure', 'conflicting verdicts', 'malformed provider evidence'])(
-    'withdraws %s without losing restore evidence and retries only posture',
-    async (failure) => {
-      mockBackupAPIs();
-      const validPosture = await apiFetchJSONMock();
-      apiFetchJSONMock.mockClear();
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-      window.history.replaceState({}, '', '/proxmox/backups/coverage');
-      const { container } = renderInRouter(() => (
-        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-      ));
-      const coverageRow = () => container.querySelector('[data-proxmox-backup-row="coverage"]')!;
-      const healthFootnote = () => container.querySelector('[data-coverage-strip-footnote]')!;
-      const scopeGuidance =
-        /Counts cover all targets\. Choose a count to clear other filters and show those targets\.$/;
-      await waitFor(() => expect(coverageRow()).toHaveTextContent('Protected'));
-      expect(healthFootnote()).toHaveTextContent(
-        'Attention: the newest backup is older than 7 days,',
-      );
-      fireEvent.click(screen.getByRole('button', { name: /expand.*pbs-docker/i }));
-      await screen.findByText('Restore evidence');
-      const details = container.querySelector('[data-inline-detail-for="resource:ct-112"]');
-      expect(details).toHaveTextContent('A current verified backup is available.');
-      const originalEvidence = details!.querySelector('table')!.textContent;
-      const inventoryReads = apiFetchMock.mock.calls.length;
-      if (failure === 'transport failure') {
-        apiFetchJSONMock.mockRejectedValue(new Error('PRIVATE_PROVIDER_FAILURE'));
-      } else {
-        const row = validPosture.data[0];
-        apiFetchJSONMock.mockResolvedValue({
-          ...validPosture,
-          data:
-            failure === 'conflicting verdicts'
-              ? [{ ...row, state: 'attention' }, row]
-              : [{ ...row, providerStates: [{ source: 'PRIVATE_PROVIDER_FAILURE' }] }],
-        });
-      }
-      await vi.advanceTimersByTimeAsync(30_000);
-      const unavailable = await screen.findByText(/Protection posture is unavailable/);
-      expect(unavailable).toHaveTextContent('Each read stops waiting after 150 seconds.');
-      expect(unavailable).toHaveTextContent(
-        "Retry reads Pulse's collected evidence, not a guest probe.",
-      );
-      expect(coverageRow()).toHaveTextContent('Unknown');
-      expect(details).toHaveTextContent('Pulse cannot tell yet whether this guest is backed up.');
-      expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
-      expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_FAILURE');
-      // Static safety and count guidance remain, but no policy rule may
-      // survive the failed policy read.
-      expect(healthFootnote()).toHaveTextContent(scopeGuidance);
-      expect(healthFootnote()).not.toHaveTextContent('Attention: the newest backup');
-      expect(healthFootnote()).toHaveTextContent('not current guest health');
-      expect(healthFootnote()).toHaveTextContent('guest thaw or filesystem writes');
-      expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
-        '0protected',
-      );
-      expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
-
-      let finishRetry!: (value: unknown) => void;
-      apiFetchJSONMock.mockReturnValue(new Promise((resolve) => (finishRetry = resolve)));
-      fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
-      expect(screen.getByRole('button', { name: 'Retrying protection posture…' })).toBeDisabled();
-      expect(coverageRow()).toHaveTextContent('Unknown');
-      expect(healthFootnote()).toHaveTextContent(scopeGuidance);
-      expect(healthFootnote()).not.toHaveTextContent('Attention: the newest backup');
-      expect(healthFootnote()).toHaveTextContent('not current guest health');
-      const retryReads = apiFetchJSONMock.mock.calls.length;
-      fireEvent.click(screen.getByRole('button', { name: 'Retrying protection posture…' }));
-      expect(apiFetchJSONMock).toHaveBeenCalledTimes(retryReads);
-      finishRetry({
-        ...validPosture,
-        policy: { ...validPosture.policy, freshnessWindowSeconds: 86_400 },
-        data: validPosture.data.map((posture: object) => ({
-          ...posture,
-          state: 'attention',
-          explanation: 'The latest provider job needs attention.',
-        })),
-      });
-      await waitFor(() => expect(coverageRow()).toHaveTextContent('Needs attention'));
-      expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
-      expect(details).toHaveTextContent('The latest provider job needs attention.');
-      expect(details!.querySelector('table')!.textContent).toBe(originalEvidence);
-      expect(healthFootnote()).toHaveTextContent(
-        'Attention: the newest backup is older than 1 day,',
-      );
-      expect(healthFootnote()).not.toHaveTextContent('older than 7 days');
-      expect(apiFetchMock).toHaveBeenCalledTimes(inventoryReads);
-    },
-  );
-
   it('defaults to coverage when protection needs attention and keeps the dated feed one click away', async () => {
     mockBackupAPIs('attention');
 
@@ -1219,10 +434,10 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByRole('button', { name: /pve backup files/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /guest snapshots/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Archives' })).not.toBeInTheDocument();
-    expect(screen.getByText('pbs-main / main / minipc')).toBeInTheDocument();
+    expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(
       screen.getByRole('cell', {
-        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 entries`,
+        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 backups`,
       }),
     ).toBeInTheDocument();
     const tables = screen.getAllByRole('table');
@@ -1342,7 +557,7 @@ describe('ProxmoxBackupsTable', () => {
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
     ));
 
-    await screen.findByText('pbs-offsite / offsite / minipc');
+    await screen.findByText('offsite / minipc');
     const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
     const offsiteOption = screen.getByRole('option', {
       name: 'Backup location: pbs-offsite / offsite',
@@ -1351,11 +566,11 @@ describe('ProxmoxBackupsTable', () => {
 
     await waitFor(() =>
       expect(new URLSearchParams(window.location.search).get('location')).toBe(
-        'backup-location-v2:["pbs","pbs-offsite","offsite"]',
+        'pbs:pbs-offsite:offsite',
       ),
     );
-    expect(screen.getByText('pbs-offsite / offsite / minipc')).toBeInTheDocument();
-    expect(screen.queryByText('pbs-main / main / minipc')).not.toBeInTheDocument();
+    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Backup location: pbs-offsite / offsite' }),
     ).toBeInTheDocument();
@@ -1363,12 +578,12 @@ describe('ProxmoxBackupsTable', () => {
     await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
     await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     expect(new URLSearchParams(window.location.search).get('location')).toBe(
-      'backup-location-v2:["pbs","pbs-offsite","offsite"]',
+      'pbs:pbs-offsite:offsite',
     );
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
-    expect(screen.getByText('pbs-offsite / offsite / minipc')).toBeInTheDocument();
-    expect(screen.queryByText('pbs-main / main / minipc')).not.toBeInTheDocument();
+    expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
   });
 
   it('clears incompatible URL facets when switching backup views', async () => {
@@ -1460,109 +675,6 @@ describe('ProxmoxBackupsTable', () => {
     });
   });
 
-  describe('global health count navigation', () => {
-    const scopes = [
-      'node=missing-node',
-      'type=vm',
-      'q=not-a-collected-workload',
-      'location=missing-repository',
-      'node=missing-node&type=vm&q=not-a-collected-workload&location=missing-repository',
-    ];
-
-    it.each(
-      (['protected', 'attention', 'unprotected', 'unknown'] as const).flatMap((state) =>
-        scopes.map((scope) => ({ state, scope })),
-      ),
-    )(
-      'reveals the $state count instead of retaining hiding scope $scope',
-      async ({ state, scope }) => {
-        mockBackupAPIs(state);
-        window.history.replaceState(
-          {},
-          '',
-          `/proxmox/backups/coverage?${scope}&posture=${state}&presentation=kept`,
-        );
-        const { container } = renderInRouter(() => (
-          <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-        ));
-        const count = await screen.findByRole('button', { name: `1 ${state}` });
-        expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(0);
-        // A posture plus an unrelated hiding filter is not the complete set
-        // named by this estate-wide count. Selecting it must not toggle off.
-        expect(count).toHaveAttribute('aria-pressed', 'false');
-        count.focus();
-        await fireEvent.click(count);
-        await waitFor(() => {
-          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(
-            1,
-          );
-          expect(window.location.pathname).toBe('/proxmox/backups/coverage');
-          const params = new URLSearchParams(window.location.search);
-          expect(params.get('posture')).toBe(state);
-          for (const key of ['node', 'type', 'q', 'location']) expect(params.get(key)).toBeNull();
-          expect(params.get('presentation')).toBe('kept');
-        });
-        expect(count).toHaveAttribute('aria-pressed', 'true');
-        expect(count).toHaveFocus();
-        expect(apiFetchMock).toHaveBeenCalledTimes(2);
-        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
-      },
-    );
-
-    it.each(['/proxmox/backups/date', '/proxmox/backups?view=coverage'])(
-      'opens complete Coverage from %s without carrying hidden scope or date facets',
-      async (route) => {
-        mockBackupAPIs('attention');
-        window.history.replaceState(
-          {},
-          '',
-          `${route}${route.includes('?') ? '&' : '?'}node=missing&type=vm&q=hidden&location=missing&source=verified&day=2026-05-25&presentation=kept`,
-        );
-        const { container } = renderInRouter(() => (
-          <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-        ));
-        await fireEvent.click(await screen.findByRole('button', { name: '1 attention' }));
-        await waitFor(() => {
-          expect(window.location.pathname).toBe('/proxmox/backups/coverage');
-          expect(window.location.search).toBe('?presentation=kept&posture=attention');
-          expect(container.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(
-            1,
-          );
-        });
-        expect(apiFetchMock).toHaveBeenCalledTimes(2);
-        expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
-      },
-    );
-
-    it('keeps an active zero count reachable without marking a scoped set complete', async () => {
-      mockBackupAPIs('protected');
-      window.history.replaceState({}, '', '/proxmox/backups/coverage?posture=attention&node=pve-a');
-      renderInRouter(() => (
-        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-      ));
-      const count = await screen.findByRole('button', { name: '0 attention' });
-      expect(count).toHaveAttribute('aria-pressed', 'false');
-      await fireEvent.click(count);
-      await waitFor(() => expect(window.location.search).toBe('?posture=attention'));
-      expect(count).toHaveAttribute('aria-pressed', 'true');
-      await fireEvent.click(count);
-      await waitFor(() => expect(window.location.search).toBe(''));
-      expect(screen.queryByRole('button', { name: '0 attention' })).toBeNull();
-    });
-
-    it('explains global scope before the protection policy arrives', async () => {
-      mockBackupAPIs();
-      apiFetchJSONMock.mockReturnValue(new Promise(() => {}));
-      renderInRouter(() => (
-        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
-      ));
-      const note = await screen.findByText(
-        /Counts cover all targets\. Choose a count to clear other filters/,
-      );
-      expect(note).not.toHaveTextContent('Attention: the newest backup');
-    });
-  });
-
   it('switches to Coverage showing posture, and keeps per-source evidence in the row expansion', async () => {
     mockBackupAPIs();
 
@@ -1579,10 +691,15 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);
 
     // Per-source detail is one click down inside the workload's row.
-    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+    const disclosure = screen.getByRole('button', { name: /expand details for pbs-docker/i });
+    await fireEvent.click(disclosure);
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
     expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+    // The drawer keeps the shared detail shell, whose phone width is capped
+    // at the table's visible area; a padding override once dropped that cap.
+    const detailCell = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
+    expect(detailCell?.firstElementChild?.className).toContain('max-w-[100cqi]');
   });
 
   it('keeps coverage evidence expanded across repeated workload snapshots', async () => {
@@ -1777,68 +894,6 @@ describe('independent Proxmox backup inventory reads', () => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
     apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
   });
-
-  it.each(['pbs', 'storageBackups', 'guestSnapshots'] as const)(
-    'withdraws duplicate %s identity and its open evidence, retaining the independent source',
-    async (kind) => {
-      const source = kind === 'pbs' ? 'pbs' : 'pve';
-      const point = kind === 'pbs' ? pbsPayload.data.backups[0] : pvePayload.data[kind][0];
-      const pve = {
-        data: {
-          ...emptyPVE.data,
-          [kind === 'guestSnapshots' ? 'guestSnapshots' : 'storageBackups']: [
-            kind === 'guestSnapshots' ? point : pvePayload.data.storageBackups[0],
-          ],
-        },
-      };
-      const valid = source === 'pbs' ? pbsPayload : pve;
-      let response = Promise.resolve(jsonResponse(valid));
-      apiFetchMock.mockImplementation((url) =>
-        url.endsWith(`/${source}`)
-          ? response
-          : Promise.resolve(jsonResponse(source === 'pbs' ? pve : pbsPayload)),
-      );
-      mountBackupReadState();
-      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
-      const prefix = kind === 'pbs' ? 'pbs' : kind === 'storageBackups' ? 'archive' : 'snapshot';
-      const row = document.querySelector(
-        `[data-proxmox-backup-key="artifact:${prefix}:${point.id}"]`,
-      )! as HTMLElement;
-      const pending = deferred<Response>();
-      response = pending.promise;
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
-      // A normal read retains the last accepted points while pending. An
-      // operator may inspect one before the conflicting response arrives.
-      fireEvent.click(within(row).getByRole('button', { name: /Backup evidence/ }));
-      expect(screen.getByRole('dialog', { name: 'Backup evidence details' })).toHaveTextContent(
-        point.id,
-      );
-      const conflict = { ...point, instance: 'PRIVATE_SOURCE_SENTINEL', verified: false };
-      pending.resolve(
-        jsonResponse(
-          source === 'pbs'
-            ? { data: { backups: [point, conflict] } }
-            : { data: { ...emptyPVE.data, [kind]: [point, conflict] } },
-        ),
-      );
-      await screen.findByText(/The response format is invalid/);
-      await waitFor(() => expect(recoverableRows()).toHaveLength(1));
-      expect(row).not.toBeInTheDocument();
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(document.body).not.toHaveTextContent('PRIVATE_SOURCE_SENTINEL');
-      const otherSource = source === 'pbs' ? 'pve' : 'pbs';
-      const reads = sourceCalls(otherSource).length;
-      response = Promise.resolve(jsonResponse(valid));
-      fireEvent.click(
-        screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` }),
-      );
-      await waitFor(() => expect(recoverableRows()).toHaveLength(2));
-      expect(screen.queryByText(/The response format is invalid/)).not.toBeInTheDocument();
-      expect(sourceCalls(otherSource)).toHaveLength(reads);
-    },
-  );
 
   it.each(['pve', 'pbs'] as const)(
     'keeps malformed HTTP200 %s responses source-local and recovers with an isolated retry',
@@ -2046,11 +1101,8 @@ describe('independent Proxmox backup inventory reads', () => {
       apiFetchMock.mockImplementation((url) =>
         Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : readPvePayload)),
       );
-      if (failed === 'both') {
-        const refresh = screen.getByRole('button', { name: 'Refresh' });
-        await waitFor(() => expect(refresh).toBeEnabled());
-        fireEvent.click(refresh);
-      } else
+      if (failed === 'both') fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      else
         fireEvent.click(
           screen.getByRole('button', { name: `Retry ${failed.toUpperCase()} inventory` }),
         );
@@ -2067,24 +1119,6 @@ describe('independent Proxmox backup inventory reads', () => {
     },
   );
 
-  it('releases both unanswered inventory reads without claiming empty backups or hiding known server health', async () => {
-    vi.useFakeTimers();
-    apiFetchMock.mockImplementation(() => new Promise(() => {}));
-    mountBackupReadState();
-    await vi.advanceTimersByTimeAsync(150_000);
-    expect(screen.getByText('Could not load Proxmox backup inventory')).toBeInTheDocument();
-    expect(screen.getAllByText(/The inventory read timed out/)).toHaveLength(2);
-    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
-    expect(serverTable()).toHaveTextContent('pbs-main');
-    expect(serverTable()).toHaveTextContent('40.0%');
-    expect(serverTable()).toHaveTextContent('Unavailable');
-    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Retry PVE inventory' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Retry PBS inventory' })).toBeEnabled();
-    expect(sourceCalls('pve')).toHaveLength(1);
-    expect(sourceCalls('pbs')).toHaveLength(1);
-  });
-
   it('retries both failed inventories and allows the first recovered source to render', async () => {
     apiFetchMock.mockResolvedValue(new Response('{}', { status: 500 }));
     mountBackupReadState();
@@ -2094,9 +1128,7 @@ describe('independent Proxmox backup inventory reads', () => {
     apiFetchMock.mockImplementation((url) =>
       url.endsWith('/pve') ? pending.promise : Promise.resolve(jsonResponse(pbsPayload)),
     );
-    const refresh = screen.getByRole('button', { name: 'Refresh' });
-    await waitFor(() => expect(refresh).toBeEnabled());
-    fireEvent.click(refresh);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await screen.findByText(/PVE backup inventory is unavailable/);
     await waitFor(() => expect(recoverableRows()).toHaveLength(1));
     pending.resolve(jsonResponse(readPvePayload));
@@ -2270,7 +1302,7 @@ describe('backup-date-evidence connected inventory', () => {
     );
     expect(warning).toHaveAttribute('role', 'status');
     expect(warning).toHaveTextContent('excluded from the activity chart and day filters');
-    expect(await screen.findByText(/No completed restore-point activity/)).toBeInTheDocument();
+    expect(screen.getByText(/No dated backup activity/)).toBeInTheDocument();
     const future = [...document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')].find(
       (row) => row.textContent?.includes('PBS'),
     )! as HTMLElement;
@@ -2293,58 +1325,6 @@ describe('backup-date-evidence connected inventory', () => {
 });
 
 describe('backup-identity: connected Coverage and By date', () => {
-  it('selects a local archive location without pooling same-volume copies or losing the filter on refresh', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
-    let archives = [
-      identityArchive({ id: 'local-a', storageNode: 'node-a' }),
-      identityArchive({ id: 'local-b', storageNode: 'node-b' }),
-    ];
-    apiFetchMock.mockImplementation((url: string) =>
-      Promise.resolve(
-        jsonResponse({
-          data:
-            url === '/api/backups/pve'
-              ? { storageBackups: archives, guestSnapshots: [], backupTasks: [] }
-              : { backups: [] },
-        }),
-      ),
-    );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
-    window.history.replaceState({}, '', '/proxmox/backups/date?location=archive%3Aeast%3Alocal');
-    const { container } = renderInRouter(() => (
-      <ProxmoxBackupsTable
-        emptyIcon={<span />}
-        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
-      />
-    ));
-    const rows = () => container.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
-    await waitFor(() => expect(rows()).toHaveLength(2));
-    expect(
-      screen.getByRole('button', { name: 'Backup location: east / local' }),
-    ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
-    const select = screen.getByRole('combobox', { name: 'Filter' }) as HTMLSelectElement;
-    const option = Array.from(select.options).find(
-      (item) => item.textContent === 'Backup location: east / local / node-b',
-    );
-    expect(option).toBeDefined();
-    await fireEvent.change(select, { target: { value: option!.value } });
-    await waitFor(() => expect(rows()).toHaveLength(1));
-    expect(rows()[0]).toHaveTextContent('local / node-b');
-    archives = [archives[1]];
-    await fireEvent.click(screen.getByRole('button', { name: 'Refresh backups' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Refresh backups' })).toBeEnabled(),
-    );
-    expect(rows()).toHaveLength(1);
-    expect(
-      screen.getByRole('button', { name: 'Backup location: east / local / node-b' }),
-    ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
-    await waitFor(() => expect(rows()).toHaveLength(1));
-    expect(rows()[0]).toHaveTextContent('local / node-b');
-  });
-
   const mockIdentityAPIs = () => {
     apiFetchMock.mockImplementation((url: string) =>
       Promise.resolve(

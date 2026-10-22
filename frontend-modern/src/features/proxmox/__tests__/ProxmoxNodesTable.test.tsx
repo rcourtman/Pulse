@@ -794,8 +794,14 @@ describe('ProxmoxNodesTable', () => {
       expect.objectContaining({
         node: expect.objectContaining({ name: 'pve-node-1' }),
         temperatureThresholds: { warning: 80, critical: 85 },
+        // The drawer header opens the same web interface as the row link.
+        webInterfaceUrl: 'https://pve-node-1:8006',
       }),
     );
+    // The standard detail-row marker the shared focus helpers look for.
+    expect(
+      screen.getByTestId('node-drawer').closest('[data-inline-detail-for="agent:pve-node-1"]'),
+    ).not.toBeNull();
 
     await fireEvent.click(screen.getByRole('button', { name: 'Collapse details for pve-node-1' }));
     expect(onShowGuests).toHaveBeenCalledTimes(1);

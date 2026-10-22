@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "base_sha": "a98b5a69dd576b55fe67795fedaf17ae0460dc19",
+  "verified_at": "2026-10-22T14:10:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/docker/DockerStorageUsageTable.tsx",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx",
+    "frontend-modern/src/features/platformPage/RecordOwnerLink.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupWorkloadSubject.ts",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "a78469a312a454f6433d6e040793fa307cab2e6b6c75cd7a37e893b18ea269cf",
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx": "e80b17ba49a95be1a9af0b6282814a7bed74b47201816e61bf6e39b6a73fad20",
+    "frontend-modern/src/features/docker/DockerConfigsTable.tsx": "9c6a1c2022ec012c34aba05be576afece10b7e9f14d944226e80c8521acfa589",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "0104a773fb5d9d374205576cdbe8c4fe12dc1f68cfe7d6ce3dd385c43a9f0de8",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "01d491360509d40f0df14604d55ad98fc1857c2834c2ef82a39cc31dcea3829b",
+    "frontend-modern/src/features/docker/DockerSecretsTable.tsx": "4ba608118ea27c520890d1cae8c813b5960e040a7b581b5af450b247c172d4e9",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "5db02e6af7a84eeb99a63d9f13c74e3f2511be8e6dff74532d455902d8cd4715",
+    "frontend-modern/src/features/docker/DockerStorageUsageTable.tsx": "7061d17be66251c0870d1f714b158151ad4f353cac5281a3bdcbd112894b9aa6",
+    "frontend-modern/src/features/docker/DockerSwarmNodesTable.tsx": "28ba2c1703d85fccc7837180895599e67e0d024bb8a39e253b5bcc03fd1322c7",
+    "frontend-modern/src/features/docker/DockerTasksTable.tsx": "3e0b1dbd12a68e388bf2f31a11bef66d8117995aeccdaeffd31aa053f0583fda",
+    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx": "3954d1b0e8a65b19c9a92160f7bad919b741c326542fab6b08ea11b4abfd7155",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "d852dd0d6eb8819fb9cab16514e31bd005143fc00748f3f6aa6af186afe3a8a0",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx": "4ce65ce2eaa0eab2d92658e96015b81607fcb6fe61fd86b4db3bb566c01ec6fe",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx": "9597edd60807b423a51c6c65f050ba0861492f2d4cb8f877310f609c050fe69b",
+    "frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx": "44182046fb5f1bb4ac363d80bbf320972721a7a8e59c8feb7ec41d402efa94c5",
+    "frontend-modern/src/features/platformPage/RecordOwnerLink.tsx": "41ef5b4ec32697d1994ca1ae49b89fd277fd8fb05cafc9ed2ba72cfecad51e0a",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "f11aaeda23858b6d77493ad43751ca1a7f1208965933c881e22416b3f9c9851d",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "34c3db2d81da3a34b1e6bd2f63c17b5ad9bd16dcfbf41c225c92965be68b5da9",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "ea2d3585b35fc02b0eb6da566c4eb9380f4a292209aa1a3ba068d55b93dffd4b",
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "156c5713eccd3014725f5fac0eea098c7b12b51d9735677bf0d1b998020f2334",
+    "frontend-modern/src/features/proxmox/proxmoxBackupWorkloadSubject.ts": "0799fcbda6713bfce94934f6c23b131e7caab2b22e92815a678354cdf69f7f4d",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "9a4c27a4011e6af8d7cb2b0e1c4205adb639fcfd0e7f9692ef99ce43c16addb0",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "7193fa08b5d98bfe8dab2c365e4b8e98ada19bb456edbefab6a3e4979c913396",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "91a55096512cf3ae6ac744ca397707a3cbe721aacc51e0186bc94adee23aa38e"
+  },
+  "routes": [
+    "/docker/networks",
+    "/docker/storage",
+    "/docker/swarm",
+    "/kubernetes/configuration",
+    "/kubernetes/events",
+    "/proxmox/replication",
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/truenas/overview",
+    "/truenas/services",
+    "/truenas/protection",
+    "/vmware/overview",
+    "/vmware/health",
+    "/vmware/activity",
+    "/standalone/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this commit on the full mock estate, signed in through the real login; first drawer of every expandable table on each route opened and compared with the same probe on origin/main",
+    "Docker Swarm services, tasks, nodes, secrets and configs, Docker networks and storage usage, and Proxmox replication and coverage drawers (no header before) now open as record drawers headed by their subject with the row's own status dot and a collapse header",
+    "Proxmox recoverable restore points, which had no drawer, open one with source, location, created, size, state and verification",
+    "Kubernetes events open a record drawer headed by the involved object with the event message as summary; ConfigMaps and RBAC objects open record drawers without a Manage tab",
+    "TrueNAS and vSphere alert, activity, service and protection drawers: clipped values 2-3 -> 0 at both widths",
+    "Drawer dot equals row dot on every drawer probed; phone drawer content equals the table scroll shell (362/362)",
+    "No console or page errors on any route at either width"
+  ],
+  "interactions": [
+    "Disclosure button and whole-row click open each drawer; opening a second row closes the first, including Coverage, which previously kept two open",
+    "Header click collapses each record drawer",
+    "Availability fleet tiles act as disclosures for the shared drawer"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "chromium-1234 headless"
+  },
+  "scope": "Full authenticated application on a mock estate; mock data, not live provider connections. Agent Doctor rows covered by component tests, not this browser pass."
+}

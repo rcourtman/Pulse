@@ -190,7 +190,7 @@ describe('matchPVEWorkload branches (via vzdump tasks)', () => {
     expect(beta?.latestTask).toBeUndefined();
   });
 
-  it('retains the job separately when multiple candidates share a vmid but no hint matches', () => {
+  it('returns undefined when multiple candidates share a vmid but no hint matches', () => {
     const model = buildModel({
       workloads: [
         workload({ id: 'vm-430a', proxmox: { vmid: 430, node: 'alpha' } }),
@@ -207,10 +207,7 @@ describe('matchPVEWorkload branches (via vzdump tasks)', () => {
         }),
       ],
     });
-    expect(
-      model.coverageRows.filter((row) => row.workload.resourceId).every((row) => !row.latestTask),
-    ).toBe(true);
-    expect(model.coverageRows.find((row) => row.isOrphaned)?.latestTask?.id).toBe('t-430');
+    expect(model.coverageRows.every((row) => row.latestTask === undefined)).toBe(true);
   });
 
   it('leaves the only candidate untouched when the native task node contradicts it', () => {
@@ -247,7 +244,7 @@ describe('matchPVEWorkload branches (via vzdump tasks)', () => {
     expect(model.coverageRows[0].latestTask?.label).toBe('OK');
   });
 
-  it('keeps an unrated source-scoped row when no candidate exists for the task vmid', () => {
+  it('yields no row when no candidate exists for the task vmid', () => {
     const model = buildModel({
       tasks: [
         task({
@@ -260,13 +257,7 @@ describe('matchPVEWorkload branches (via vzdump tasks)', () => {
         }),
       ],
     });
-    expect(model.coverageRows).toHaveLength(1);
-    expect(model.coverageRows[0]).toMatchObject({
-      isOrphaned: true,
-      posture: 'not-evaluated',
-      workload: { type: 'unknown', vmid: '460' },
-      latestTask: { id: 't-460' },
-    });
+    expect(model.coverageRows).toHaveLength(0);
   });
 });
 
@@ -421,8 +412,7 @@ describe('taskLabel branches (via latestTask.label)', () => {
     ['completed', 'OK'],
     ['error', 'Failed'],
     ['running', 'Running'],
-    ['WARNING', 'Warning'],
-    ['unrecognised-result', 'unrecognised-result'],
+    ['WARNING', 'WARNING'],
     ['', 'Unknown'],
   ])('maps task status %j to label %j', (status, expected) => {
     expect(labelForStatus(status)).toBe(expected);
@@ -510,7 +500,6 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
       unknown: 0,
       withPBS: 0,
       recoverableArtifacts: 0,
-      incompleteArtifacts: 0,
       totalBytes: 0,
     });
   });

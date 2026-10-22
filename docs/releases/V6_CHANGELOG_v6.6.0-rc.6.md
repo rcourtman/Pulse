@@ -4,6 +4,16 @@ This changelog describes the changes since `v6.5.0`. Stable `v6.5.0` remains the
 
 ## Changes since v6.5.0
 
+- Bring storage and platform drawer content up to the guest drawer (#3113)
+- Give every drawer the Proxmox drawer's heading and shell (#3112)
+- test(e2e): run licence activation against the offline issuer (#3111)
+- fix(mock): re-sight shared storage and Ceph on the PVE cadence (#3110)
+- fix(mock): keep PVE guest sightings fresh on slow mock ticks (#3109)
+- docs: rewrite the README for first-time visitors (#3108)
+- Point localized READMEs at the current licence screen (#3106)
+- Mute the workload history hover hint (#3104)
+- docs: refresh README product screenshots (#3103)
+- Release v6.6.0-rc.6 (#3100)
 - alerts: keep only the newest evidence envelope in history entries (#3096)
 - agents: name command access plainly and ask for it before the mint (#3094)
 - alerts: answer history reads from the shared fold without full copies (#3093)

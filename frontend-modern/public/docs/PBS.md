@@ -15,7 +15,7 @@ required for these API-backed readings:
 - ✅ Deduplication factor and storage efficiency stats
 - ✅ PBS server health monitoring (CPU, memory, uptime)
 - ✅ Datastore usage and namespace hierarchy
-- ✅ [Sync, verify, prune, and GC job status](#a-pbs-job-looks-healthy-but-its-status-disagrees)
+- ✅ Sync, verify, prune, and GC job status
 - ✅ Backup owner information
 - ✅ Faster queries (no PVE proxy overhead)
 
@@ -227,49 +227,6 @@ If the service's **State** looks Healthy despite a collection error, distinguish
 before changing the connection. A green State is not current datastore, job or
 guest-recovery evidence.
 
-### Datastore capacity is Unknown or disagrees with an alert
-
-In **Proxmox → Backups → Backup servers**, read **Usage** for the affected
-server and datastore, not just the server's connection status. A reachable
-PBS server does not establish a successful datastore capacity read.
-
-- **Unavailable:** the server is offline or the datastore read reports a
-  failure. Retained zero-valued counters do not mean an empty datastore.
-- **Unknown:** the capacity evidence is missing, invalid or inconsistent.
-  For example, the reported percentage can disagree with the used and total
-  bytes. Pulse does not choose the more reassuring value; this is not 0% use,
-  proof of free space or proof that the datastore is full.
-- **No datastore data:** Pulse has a server row without datastore evidence.
-  This does not establish that PBS has no datastores or backups.
-
-Where available, activate **Unknown** or **Unavailable**, or expand the row,
-to read **Datastore capacity** and its explanation. The control works by
-keyboard or touch; it does not require hovering over a tooltip. Older
-versions may omit this explanation; use the observations already available.
-Backup-entry counts and deduplication are separate readings, not evidence of
-free capacity or usable backups.
-
-When capacity is available, **Usage** uses used bytes divided by total bytes.
-Its warning starts at **75%** and danger at **90%**, independently of configured
-alert thresholds. Changing an alert threshold does not change these Usage
-colours or repair a missing reading. Conversely, an active alert can remain
-below its trigger until its separate clear condition is met; see
-[usage-alert recovery](TROUBLESHOOTING.md#a-usage-alert-stays-open-after-usage-drops).
-
-Compare only the same PBS server and datastore with its existing native PBS
-usage record, including the observation time and units where known. A newer
-reading, another datastore or an identically named store on another server
-is not a like-for-like comparison. For help, retain the Pulse version, displayed
-state or explanation and only the relevant locally reviewed, redacted readings.
-Keep full API responses, private paths, hostnames and tokens private; unknown
-details can stay unknown.
-
-Do not delete backups, run prune or garbage collection, change retention,
-recreate the connection, widen permissions, restart or run Diagnostics to make
-the display agree. Capacity is not proof of successful backup, guest thaw or
-filesystem writes. For a frozen or unresponsive guest, keep affected Pulse
-monitoring stopped and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
-
 ### PBS is Active but missing from monitoring
 
 **Active** in **Settings → Infrastructure** describes the configured
@@ -337,74 +294,6 @@ retry the poll, restart, recreate the connection or change permissions,
 retention or backups as a test. Use PBS's existing records meanwhile; see
 [backup health](#backups-are-visible-but-coverage-says-unprotected) separately
 for a Coverage disagreement.
-
-### Backup activity has no volume or fewer rows than expected
-
-In **Proxmox → Backups → By date**, **Count** shows completed restore points
-in the selected **7d**, **30d**, **90d** or **1y** window. **Volume** sums only
-their reported positive sizes. A point without a usable size still counts;
-it is not a zero-byte backup. These are restore-point observations, not a
-count of successful backup jobs or distinct protected guests.
-
-| What you see | Safe next check |
-| --- | --- |
-| Count has activity, but Volume has no measured bars | Use **Count** to see activity. Missing sizes do not mean that no backups exist. |
-| Volume shows some sizes and also reports points without a positive size | Treat the total as partial, not the size of all backups. Compare the same point's existing provider record if you already have it. |
-| A listed point does not appear in the chart | Compare its **Created** date with the selected range. Running, incomplete, undated and future-dated points do not contribute to completed activity; older points can remain in the table outside the chart window. |
-
-The activity chart and table use the same search, node, type, source,
-verification and location filters. Selecting a chart day narrows only the
-table; the rest of the timeline stays available. **Clear date filter** removes
-that day selection. The chart's range still excludes older activity even when
-older points remain in the table. Compare the same filters, dates and completed
-records before comparing totals, and retain those choices with a disagreement.
-Calendar days use your browser's local timezone.
-
-Reported volume is not datastore space used, free space or bytes transferred.
-PBS deduplication and shared copies mean it is not a storage-capacity estimate.
-For an individual point, match **Source**, **Location**, guest type/ID and
-**Created** time with its existing native record; matching names or VMIDs alone
-do not establish ownership. Keep private identifiers and paths out of reports.
-
-**Activity is not proof of protection, verification, restore readiness or guest
-thaw.** Use the [Coverage checks](#backups-are-visible-but-coverage-says-unprotected)
-for protection disagreements and [Backup safety](VM_DISK_MONITORING.md#backup-safety)
-for an unresponsive guest or uncertain freeze/thaw. Do not run a backup,
-verification, restore, live diagnostics or guest-agent probe, change retention,
-delete records or restart anything just to fill a chart or measure its size.
-
-### A PBS job looks Healthy but its status disagrees
-
-**An error, warning or running state must not be treated as a completed OK
-job just because Pulse shows a Healthy badge.** Job status text can contain
-`OK` or `success` inside a longer message; those words alone do not establish
-successful completion. Use the same task's existing PBS result when the badge
-and status disagree.
-
-In the PBS **Backup server** resource's details, look for **Job health
-evidence** when present. Compare its **State**, job family/ID, datastore,
-namespace and run time with the same job in PBS. Keep an unavailable identity
-or time unknown; a successful sibling job or earlier run cannot supply the
-missing outcome.
-
-| Observed result for the same task | What it establishes |
-| --- | --- |
-| Error or failed | Not successful completion, even if the message also contains `OK` or `success`. |
-| Warnings | A warning result, not a clean successful run. Read the existing PBS task summary for the affected work. |
-| Running | Work is in progress; neither completed success nor failure is established. |
-| No matching result, a partial read or a permission gap | The outcome is unknown. An empty list or a green connection does not supply it. |
-| Completed OK | That task reported success. It does not establish current inventory, verification of every snapshot, restore readiness or guest thaw. |
-
-Use PBS's existing task records while the readings disagree. Do not run a new
-job, backup, verification, restore or Diagnostics, restart Pulse, replace tokens
-or widen permissions to test the badge. When asking for help, retain the running
-Pulse/PBS versions, job family/ID, matching time and relevant redacted status;
-use consistent aliases for private names and keep full task logs and tokens
-private. No new capture or probe is needed just to fill a report.
-
-An unresponsive guest or uncertain freeze/thaw needs the separate
-[Backup safety](VM_DISK_MONITORING.md#backup-safety) procedure, not these display
-checks. A corrected badge alone is not monitoring or guest recovery.
 
 ### "Connection Failed" Error
 
@@ -547,8 +436,7 @@ History just to change a colour.
 
 ### Backups are visible but Coverage says Unprotected
 
-The **Backup coverage** strip (called **Backup health** in older versions) and
-the backup list answer different questions.
+The **Backup health** strip and the backup list answer different questions.
 If they disagree, use **PBS's own backup and verification records** for the
 same guest while checking Pulse's assessment; do not assume either a failed
 backup or working protection from the strip alone.
@@ -557,18 +445,14 @@ backup or working protection from the strip alone.
 | --- | --- |
 | **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
 | **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
-| **Prune protected** in a restore point's **State** | That this point is verified. This is the provider's protection-from-pruning flag, shown separately from verification; it is not the workload's protection assessment. See [prune protection](#prune-protection-is-not-verification) before changing that flag. |
+| **Protected** in a restore point's **State** | That this point is verified. This displays the backup's protected flag before its verification state; it is not the workload's protection assessment. |
 | **Protected**, **Attention**, **Unprotected** or **Unknown** on the workload | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
 
 Check one affected guest without changing its setup:
 
 1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
-   protection explanation and PBS's **Scope** and **Source** to identify each
-   observation; keep different PBS connections separate. Read its **Result**,
-   **History** and **Access** together. A successful inventory read is not a
-   successful backup job. Older versions call Result Job and may omit Scope
-   and Source; keep absent identity unknown rather than guessing from guest
-   placement. Access describes permissions; if provider evidence is absent,
+   protection explanation and the PBS **Job**, **History** and **Access**
+   evidence. Access describes permissions; if provider evidence is absent,
    record that rather than interpreting it as healthy. These are backup
    evidence states, not the PBS host's CPU/metrics History chart.
 2. Compare the listed backup with the existing record in PBS: server,
@@ -581,8 +465,7 @@ Check one affected guest without changing its setup:
    timestamp. A **guest snapshot** is not a PBS backup. Check the existing
    backup task and verification result for that same point in PBS.
 3. If the records still disagree, report the Pulse version, one guest's
-   protection explanation, the PBS scope/source and Result/History/Access values,
-   and the matching
+   protection explanation, PBS Job/History/Access values and the matching
    point's Created time, State and PBS verification result. Use consistent
    placeholders for private server, datastore, namespace and guest identities.
    Do not share tokens, full API responses, HAR exports, or screenshots with secrets.
@@ -592,123 +475,10 @@ is an inventory discrepancy, before comparing verification. **Unverified** on
 the matching point means Pulse has no successful verification evidence for it;
 it does not prove that PBS's verification job failed. **Verified** with a
 workload still needing attention is a separate assessment disagreement: retain
-its explanation and Provider evidence. **Prune protected** does not change the
-verification result alongside it. **Unknown** on a PBS point means no verification
-result was reported; it does not mean verification failed. **Job OK** is not an
+its explanation and Provider evidence. A **Protected** point leaves its
+verification state unknown from that label alone. **Job OK** is not an
 individual point's verification result. Use the records already available,
 without running Diagnostics or another verification just to compare them.
-If the latest job is **Unknown**, use the [job uncertainty checks](#latest-backup-job-is-unknown)
-before interpreting that as no job or a failed backup.
-
-#### Read backup job identity and timing
-
-In **Proxmox → Backups → Coverage**, expand the affected guest. Where present,
-**Latest backup job** shows the job Pulse could order as latest;
-**Collected backup jobs** preserves separate observations when that choice is
-uncertain. Neither is a complete or permanent native task history. Older
-versions may omit these details; use the same job's existing Proxmox record,
-not a new backup or probe, to fill a display gap.
-
-| Field | How to compare it |
-| --- | --- |
-| **Job ID** | Match the full ID within its **Job connection**, **Job node** and guest type/ID. A native task ID, such as a UPID, is not a globally unique guest identity. |
-| **Started** | The provider's reported start. Read the date, seconds and timezone when shown; compare the same instant in the native record, not just the clock time. |
-| **Reported end** | The provider's reported end, not when Pulse last polled. **Not reported** means absent; **Unknown · reported:** preserves a value that cannot establish a valid interval. |
-| **Recorded duration** | A rounded interval between usable, ordered, non-future start and end times. **Unknown** is not a live elapsed timer or proof that the job is still running. **0s** is a recorded interval rounded to seconds, not missing duration. |
-| **Last observed** | When Pulse read the job history, not when the job started, ended or the guest recovered. Refreshing the page does not establish a new provider read. |
-
-An end before the start, a future time or an unusable timestamp cannot supply
-a trustworthy duration. Do not replace an unknown time with the page refresh
-time, or combine one job's start with another job's end. The job's recorded node
-may differ from the guest's current node after a move. Match the owning
-connection too: independent installations can reuse names, VMIDs and task IDs.
-
-Search can find a collected job's ID and reported start/end as well as its
-error or node. This searches only currently collected evidence; a missing
-match does not prove that no native job ran. Clear search and view filters
-before concluding a guest row is absent.
-
-For a discrepancy, retain the Pulse version and only the matching job's
-redacted fields and native result already available. Job IDs can contain
-private names; use consistent aliases while preserving the distinction between
-jobs and connections. Keep full logs, paths, tokens and private identifiers out
-of public reports. Do not rerun a backup, verification, restore or guest-agent
-probe, run Diagnostics, restart, clear History or change permissions to fill
-these fields.
-
-**A reported end or duration does not prove successful backup, guest thaw or
-filesystem writes.** Read **Result** and any **Reported error** separately.
-If a guest is frozen or unresponsive, keep affected Pulse monitoring stopped
-and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety), not these
-display checks.
-
-#### Latest backup job is Unknown
-
-In **Proxmox → Backups → Coverage**, expand the affected guest and read the
-explanation beside its latest-job result. Pulse cannot choose a latest job
-when a job has a missing, invalid or future start, or equally recent jobs disagree.
-**Unknown** is not evidence that no job ran, that one is queued or that the
-backup failed. Use the [identity and timing checks](#read-backup-job-identity-and-timing)
-for the meaning of each recorded time, including an unknown duration.
-
-Where shown, **Collected backup jobs** keeps the observations separate from
-the latest result. Its list order is not a timeline. Read each **Job ID**,
-**Result**, **Job connection**, **Job node**, **Started**, **Last observed**
-and **Reported error** together. If **Reported status** and error disagree,
-retain both rather than treating an OK status as success. Older versions may
-omit collected jobs; use the same job's existing Proxmox records instead.
-
-- **Started** is the reported start, which may be unusable. **Last observed**
-  is when Pulse read the job history, not when the job finished. Refreshing
-  the page or a changing relative age does not establish a new collection.
-- The recorded job node can differ from the guest's current node after a
-  move. Match the owning connection, guest type/ID and original time with
-  the existing Proxmox task, not another installation's same name or VMID.
-- Search can find a collected job ID, reported error or recorded node. Clear
-  search and view filters before concluding a row is absent. Search only
-  covers collected evidence, not every native task or a complete job history.
-- An ordinary unambiguous or empty replacement can remove collected
-  observations and their search matches. This is not a permanent job log;
-  their disappearance is not evidence that the original backup recovered.
-
-For help, retain the version, explanation and only the relevant redacted job
-fields and matching native result already available. Keep full job logs,
-private names, paths and tokens out of public reports. Do not run a new
-backup, verification, restore, Diagnostics or guest-agent probe, restart,
-clear History, change permissions or repeat the failed job just to fill a gap.
-
-**An OK job is not proof of backup usability, guest thaw or filesystem writes.**
-If the guest is frozen or unresponsive, keep affected Pulse monitoring stopped
-and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety), not these display
-checks. Readable diagnostics alone do not establish recovery.
-
-#### Prune protection is not verification
-
-A PBS snapshot's **protected** flag excludes it from ordinary pruning. It is
-**retention protection**, not a check of the stored data, another backup copy,
-or protection against storage loss. Do not remove the flag to reveal another
-State label in Pulse: that can make the snapshot eligible for a later prune.
-
-Read the **same snapshot's existing record in PBS**, matching its server,
-datastore, namespace, guest type/ID and backup time. Read its protected flag and
-last verification result/time separately:
-
-- **Protected with successful verification:** these are two independent facts.
-  The result applies to that snapshot at the recorded verification time, not
-  every backup or a successful restore.
-- **Protected with failed verification:** retention has not repaired the failed
-  check. Keep the snapshot and its existing failure evidence; a Protected label
-  must not be used to dismiss it.
-- **Protected with no recorded verification result:** verification is unknown,
-  not successful or failed. A different snapshot's result or an OK backup job
-  cannot fill that gap.
-
-If Pulse shows separate prune-protection and verification labels, read both.
-If it shows only Protected, that label alone cannot distinguish these cases;
-use the existing PBS record, not a flag change or a new verification job. Do
-not run prune, garbage collection, a backup or a restore just to compare the
-displays. For a discrepancy, retain only the matching point's redacted result
-and time alongside the observations above, not a full job log or inventory.
 
 Do not delete backups, clear History, change retention or freshness settings,
 recreate tokens/connections, restart or downgrade Pulse, or run a new backup,

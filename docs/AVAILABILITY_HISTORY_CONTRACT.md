@@ -216,21 +216,9 @@ Each compact tile shows:
 - coverage-aware availability text.
 
 Selecting a tile opens the existing resource detail. Configuration stays in
-the existing Settings flow. Activation must reveal the start of the inline
-detail and move focus into its labelled group, including with fifty tiles at
-laptop and phone widths. The tile exposes its expanded state and controlled
-detail. Collapsing returns focus and scroll position to the current same-ID
-tile, not a detached snapshot. Live updates retain detail tabs and History
-controls without moving focus or scrolling again. Removal clears selection
-without reopening on reappearance; focus inside the removed detail returns to
-the nearest surviving tile (or the labelled empty grid), while outside controls
-keep their focus. When the parent replaces Fleet with an empty filtered list,
-return to search; when the inventory is empty, return to the existing Add-check
-link. Leaving the page must not move focus into a detached surface. Search,
-health filters and the table/fleet choice are unchanged.
-
-Below twenty checks the default is Table; at twenty or more it is Fleet.
-An explicit URL-owned table/fleet choice takes precedence at either scale.
+the existing Settings flow. The table remains the default until fleet mode has
+rendered-browser evidence at 50 targets on laptop and phone widths; after that,
+preference may persist locally without changing shared URLs.
 
 ## Non-goals for this slice
 
@@ -262,10 +250,7 @@ The history slice is complete only when tests prove:
 The fleet slice additionally requires a rendered-browser contract at 50
 targets, keyboard access to every tile, non-color state labels, and proof that
 an API failure renders "history unavailable" without changing current target
-health. Detail verification must inspect actual viewport geometry and pixels
-after activation, without a test-side scroll to the detail, then exercise
-keyboard collapse/return, same-ID replacement/reordering, removal/reappearance,
-and preservation of filters and History state.
+health.
 
 ## Implementation record
 

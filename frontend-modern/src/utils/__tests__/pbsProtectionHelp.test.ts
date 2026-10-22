@@ -25,13 +25,7 @@ describe('PBS protection disagreement help', () => {
     expect(
       render(guide, 'PBS').querySelector('#backups-are-visible-but-coverage-says-unprotected'),
     ).not.toBeNull();
-    // The section also contains job-identity/timing tables. Assert the safety
-    // comparison itself, not every descendant row added by those subsections.
-    const comparisons = [...article().querySelectorAll('table')].filter(
-      (table) => table.querySelector('thead th')?.textContent === 'Observation in Pulse',
-    );
-    expect(comparisons).toHaveLength(1);
-    const rows = [...comparisons[0].querySelectorAll('tbody tr')].map((row) => row.textContent);
+    const rows = [...article().querySelectorAll('tbody tr')].map((row) => row.textContent);
     expect(rows).toHaveLength(4);
     expect(rows[0]).toContain('subject-linked backup evidence');
     expect(rows[0]).toContain('not identity proof');
@@ -50,11 +44,7 @@ describe('PBS protection disagreement help', () => {
     );
     expect(steps).toHaveLength(3);
     expect(steps[0]).toContain('Proxmox → Backups → Coverage');
-    expect(steps[0]).toContain('Scope and Source');
-    expect(steps[0]).toContain('Result, History and Access');
-    expect(steps[0]).toContain('A successful inventory read is not a successful backup job');
-    expect(steps[0]).toContain('Older versions call Result Job');
-    expect(steps[0]).toContain('keep absent identity unknown');
+    expect(steps[0]).toContain('Job, History and Access');
     expect(steps[0]).toContain('provider evidence is absent');
     expect(steps[0]).toContain('not the PBS host');
     expect(steps[1]).toContain(
@@ -69,20 +59,10 @@ describe('PBS protection disagreement help', () => {
     expect(steps[1]).toContain('guest snapshot is not a PBS backup');
     expect(steps[2]).toContain('protection explanation');
     expect(article().querySelector('pre')).toBeNull();
-    const coverage = read('frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx')
-      .replace(/\{' '\}/g, ' ')
-      .replace(/\s+/g, ' ');
-    expect(coverage).toContain('Result {evidenceQualityLabel(provider.jobState)}');
-    expect(coverage).toContain('data-backup-provider-scope');
-    expect(coverage).toContain('data-backup-provider-source');
+    const coverage = read('frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx');
+    expect(coverage).toContain('Job {evidenceQualityLabel(provider.jobState)}');
     expect(coverage).toContain('History {evidenceQualityLabel(provider.historyCompleteness)}');
     expect(coverage).toContain('Access {evidenceQualityLabel(provider.permissions)}');
-  });
-
-  it('names the current coverage strip without losing the older-version signpost', () => {
-    expect(text()).toContain('Backup coverage strip (called Backup health in older versions)');
-    const source = read('frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx');
-    expect(source).toContain('title="Backup coverage"');
   });
 
   it('distinguishes the available observations without claiming a PBS cause or verification failure', () => {
@@ -99,7 +79,7 @@ describe('PBS protection disagreement help', () => {
     expect(text()).toContain('without running Diagnostics or another verification');
   });
 
-  it('keeps pruning separate from every reported or absent verification value', () => {
+  it('keeps the Protected caution truthful for every hidden verification value', () => {
     const point: RecoverableArtifact = {
       id: 'fixture-point',
       nativeId: 'fixture-point',
@@ -117,23 +97,15 @@ describe('PBS protection disagreement help', () => {
       detail: '',
       protected: true,
     };
-    for (const [verified, label] of [
-      [true, 'Verified'],
-      [false, 'Unverified'],
-      [undefined, 'Unknown'],
-    ] as const) {
-      expect(artifactStateLabel({ ...point, verified })).toBe(label);
-      expect(artifactStateLabel({ ...point, protected: false, verified })).toBe(label);
+    for (const verified of [true, false, undefined]) {
+      expect(artifactStateLabel({ ...point, verified })).toBe('Protected');
     }
     expect(artifactStateLabel({ ...point, protected: false, verified: true })).toBe('Verified');
     expect(artifactStateLabel({ ...point, protected: false, verified: false })).toBe('Unverified');
     expect(text()).toContain(
-      'Prune protected does not change the verification result alongside it',
+      'Protected point leaves its verification state unknown from that label alone',
     );
-    expect(text()).toContain(
-      "provider's protection-from-pruning flag, shown separately from verification",
-    );
-    expect(text()).toContain('Unknown on a PBS point means no verification result was reported');
+    expect(text()).toContain("displays the backup's protected flag before its verification state");
   });
 
   it('prevents destructive diagnostics and an assumed freshness-policy cause', () => {
@@ -173,8 +145,6 @@ describe('PBS protection disagreement help', () => {
     expect(text()).toContain(
       'Do not share tokens, full API responses, HAR exports, or screenshots with secrets',
     );
-    expect(text()).toContain(
-      "one guest's protection explanation, the PBS scope/source and Result/History/Access values",
-    );
+    expect(text()).toContain("one guest's protection explanation, PBS Job/History/Access values");
   });
 });

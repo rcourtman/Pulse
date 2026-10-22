@@ -193,9 +193,6 @@ import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
 import stringUtilsSource from '@/utils/stringUtils.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import useDiskListModelSource from '@/components/Storage/useDiskListModel.ts?raw';
-import diskDetailSource from '@/components/Storage/DiskDetail.tsx?raw';
-import storageDetailKeyValueRowSource from '@/components/Storage/StorageDetailKeyValueRow.tsx?raw';
-import storageDetailMetricCardSource from '@/components/Storage/StorageDetailMetricCard.tsx?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePageSource from '@/components/Storage/Storage.tsx?raw';
@@ -206,9 +203,10 @@ import useStoragePoolsTableModelSource from '@/components/Storage/useStoragePool
 import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw';
 import enhancedStorageBarSource from '@/components/Storage/EnhancedStorageBar.tsx?raw';
 import useEnhancedStorageBarModelSource from '@/components/Storage/useEnhancedStorageBarModel.ts?raw';
+import diskDrawerOverviewSource from '@/components/Storage/DiskDrawerOverview.tsx?raw';
+import diskDrawerPresentationSource from '@/features/storageBackups/diskDrawerPresentation.ts?raw';
 import storagePoolDetailSource from '@/components/Storage/StoragePoolDetail.tsx?raw';
 import useStoragePoolDetailModelSource from '@/components/Storage/useStoragePoolDetailModel.ts?raw';
-import useDiskDetailModelSource from '@/components/Storage/useDiskDetailModel.ts?raw';
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageExpansionStateSource from '@/components/Storage/useStorageExpansionState.ts?raw';
 import storageFilterStateSource from '@/components/Storage/useStorageFilterState.ts?raw';
@@ -228,10 +226,6 @@ import serviceHealthPresentationSource from '@/utils/serviceHealthPresentation.t
 import alertIncidentEventFiltersSource from '@/components/Alerts/IncidentEventFilters.tsx?raw';
 import alertIncidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import alertIncidentTimelineEventCardSource from '@/components/Alerts/IncidentTimelineEventCard.tsx?raw';
-import swarmServicesDrawerSource from '@/components/Docker/SwarmServicesDrawer.tsx?raw';
-import swarmPresentationSource from '@/utils/swarmPresentation.ts?raw';
-import k8sDeploymentsDrawerSource from '@/components/Kubernetes/K8sDeploymentsDrawer.tsx?raw';
-import k8sDeploymentPresentationSource from '@/utils/k8sDeploymentPresentation.ts?raw';
 import k8sNamespacesDrawerSource from '@/components/Kubernetes/K8sNamespacesDrawer.tsx?raw';
 import k8sNamespacePresentationSource from '@/utils/k8sNamespacePresentation.ts?raw';
 import k8sStatusPresentationSource from '@/utils/k8sStatusPresentation.ts?raw';
@@ -275,7 +269,6 @@ import nodeModalStatusFooterSource from '@/components/Settings/NodeModalStatusFo
 import nodeModalStateSource from '@/components/Settings/useNodeModalState.ts?raw';
 import nodeModalPresentationSource from '@/utils/nodeModalPresentation.ts?raw';
 import diskPresentationSource from '@/features/storageBackups/diskPresentation.ts?raw';
-import storageDetailPresentationSource from '@/features/storageBackups/detailPresentation.ts?raw';
 import diskDetailPresentationSource from '@/features/storageBackups/diskDetailPresentation.ts?raw';
 import storageRecordPresentationSource from '@/features/storageBackups/recordPresentation.ts?raw';
 import storageModelCoreSource from '@/features/storageBackups/storageModelCore.ts?raw';
@@ -1282,9 +1275,9 @@ describe('frontend resource type boundaries', () => {
     expect(diskListSource).toContain('getPhysicalDiskRoleLabel');
     expect(diskListSource).toContain('getPhysicalDiskParentLabel');
     expect(diskListSource).toContain('getPhysicalDiskLifeLabel');
-    // The source badge renders in the expansion (DiskDetail), not the table.
+    // The source badge renders in the disk drawer, not the table.
     expect(diskListSource).not.toContain('getPhysicalDiskSourceBadgePresentation');
-    expect(diskDetailSource).toContain('getPhysicalDiskSourceBadgePresentation');
+    expect(diskDrawerPresentationSource).toContain('getPhysicalDiskSourceBadgePresentation');
     expect(diskListSource).not.toContain('const titleize =');
     expect(diskListSource).not.toContain('const platformLabel =');
     expect(diskListSource).not.toContain('function hasSmartWarning(');
@@ -1306,14 +1299,14 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).toContain('StatusDot');
     expect(storagePoolDetailSource).toContain('getLinkedDiskHealthDotVariant');
     expect(storagePoolDetailSource).toContain('getLinkedDiskTemperatureTextClass');
-    expect(storagePoolDetailSource).toContain('getZfsScanTextClass');
-    expect(storagePoolDetailSource).toContain('getZfsErrorTextClass');
-    expect(storagePoolDetailSource).toContain('StorageDetailKeyValueRow');
-    expect(storagePoolDetailSource).toContain('STORAGE_DETAIL_CARD_CLASS');
+    // The pool Overview is built like the guest and node drawers: alerts,
+    // Worth checking, drawer charts, then one closed Details of sections.
     expect(storagePoolDetailSource).toContain('useStoragePoolDetailModel');
-    expect(storagePoolDetailSource).toContain('STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS');
-    expect(storagePoolDetailSource).toContain('FormSelect');
-    expect(storagePoolDetailSource).toContain('label="Capacity history range"');
+    expect(storagePoolDetailSource).toContain('DrawerAttentionSection');
+    expect(storagePoolDetailSource).toContain('DrawerExceptionList');
+    expect(storagePoolDetailSource).toContain('GuestDrawerHistory');
+    expect(storagePoolDetailSource).toContain('TechnicalDetailsDisclosure');
+    expect(storagePoolDetailSource).toContain('DetailSectionTable');
     expect(storagePoolDetailSource).not.toContain('<select');
     expect(storagePoolDetailSource).not.toContain('const ConfigRow: Component');
     expect(storagePoolDetailSource).not.toContain('const chartResourceType = createMemo');
@@ -1325,30 +1318,13 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolDetailSource).not.toContain("'text-yellow-500'");
     expect(storagePoolDetailSource).not.toContain("'text-yellow-600 dark:text-yellow-400 italic'");
     expect(storagePoolDetailSource).not.toContain("'text-red-600 dark:text-red-400 font-medium'");
-    expect(diskDetailSource).toContain('getDiskAttributeCardValueTextClass');
-    expect(diskDetailSource).toContain('attributeCards()');
-    expect(diskDetailSource).toContain('historyCharts()');
-    expect(diskDetailSource).toContain('getDiskDetailHistoryFallbackMessage');
-    expect(diskDetailSource).toContain('getDiskDetailLiveBadgeLabel');
-    expect(diskDetailSource).toContain('DISK_DETAIL_HISTORY_RANGE_OPTIONS');
-    expect(diskDetailSource).toContain('DISK_DETAIL_LIVE_CHARTS');
-    expect(diskDetailSource).toContain('StorageDetailMetricCard');
-    expect(diskDetailSource).toContain('STORAGE_DETAIL_CARD_CLASS');
-    expect(diskDetailSource).toContain('STORAGE_DISK_DETAIL_HEADER_CLASS');
-    expect(diskDetailSource).toContain('useDiskDetailModel');
-    expect(diskDetailSource).toContain('FormSelect');
-    expect(diskDetailSource).toContain('label="Disk history range"');
-    expect(diskDetailSource).not.toContain('<select');
-    expect(diskDetailSource).not.toContain('const AttrCard: Component');
-    expect(diskDetailSource).not.toContain('function extractDiskData(');
-    expect(diskDetailSource).not.toContain('const getMetricResourceId = () => {');
-    expect(diskDetailSource).not.toContain('function attrColor(');
-    expect(diskDetailSource).not.toContain(
-      'flex flex-wrap items-end justify-between gap-3 border-b border-border-subtle pb-3',
-    );
-    expect(diskDetailSource).not.toContain('class="relative"');
-    expect(useDiskDetailModelSource).toContain('extractPhysicalDiskPresentationData');
-    expect(useDiskDetailModelSource).toContain('resolvePhysicalDiskHistoryResourceId');
+    // The disk drawer is built like the guest and node drawers: alerts,
+    // Worth checking, drawer charts, then one closed Details.
+    expect(diskDrawerOverviewSource).toContain('DrawerAttentionSection');
+    expect(diskDrawerOverviewSource).toContain('DrawerExceptionList');
+    expect(diskDrawerOverviewSource).toContain('GuestDrawerHistory');
+    expect(diskDrawerOverviewSource).toContain('TechnicalDetailsDisclosure');
+    expect(diskDrawerOverviewSource).not.toContain('<select');
     expect(storagePoolRowSource).toContain('getStoragePoolProtectionTextClass');
     expect(storagePoolRowSource).toContain('stateToneClass');
     expect(storagePoolRowSource).toContain('buildStoragePoolRowModel');
@@ -1630,27 +1606,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(diskPresentationSource).toContain('export function filterAndSortPhysicalDisks');
     expect(diskDetailPresentationSource).toContain('export function getDiskDetailAttributeCards');
-    expect(diskDetailPresentationSource).toContain('export function getDiskDetailHistoryCharts');
-    expect(diskDetailPresentationSource).toContain(
-      'export const DISK_DETAIL_HISTORY_RANGE_OPTIONS',
-    );
-    expect(diskDetailPresentationSource).toContain('export const DISK_DETAIL_LIVE_CHARTS');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_CARD_CLASS');
-    expect(storageDetailPresentationSource).not.toContain('STORAGE_DETAIL_SELECT_CLASS');
-    expect(storagePoolDetailSource).toContain('filterSelectClass');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_EMPTY_CLASS');
-    expect(storageDetailPresentationSource).toContain('export const STORAGE_DETAIL_ROW_CLASS');
-    expect(storageDetailPresentationSource).toContain(
-      'export const STORAGE_DISK_DETAIL_HEADER_CLASS',
-    );
-    expect(storageDetailPresentationSource).toContain(
-      'export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS',
-    );
-    expect(storageDetailKeyValueRowSource).toContain('InfoCardKeyValueRow');
-    expect(storageDetailKeyValueRowSource).toContain('desktopAt="sm"');
-    expect(storageDetailMetricCardSource).toContain('STORAGE_DETAIL_CARD_CLASS');
-    expect(storagePoolDetailSource).toContain('<tr class={STORAGE_DETAIL_ROW_CLASS}>');
-    expect(storagePoolDetailSource).not.toContain('border-t border-border');
+    expect(storagePoolDetailSource).not.toContain('<tr class=');
     expect(storagePoolDetailSource).not.toContain('col-span-2');
     expect(storagePoolDetailSource).not.toContain('text-base-content truncate flex-1');
     expect(zfsPresentationSource).toContain('export const getZfsDeviceBlockClass');
@@ -1767,9 +1723,6 @@ describe('frontend resource type boundaries', () => {
     expect(useStorageAlertStateSource).not.toContain('const severityWeight =');
     expect(useStorageAlertStateSource).not.toContain('const mergeAlertState =');
     expect(useStorageAlertStateSource).not.toContain('const getRecordAlertResourceIds =');
-    expect(diskDetailPresentationSource).toContain(
-      'export function getDiskAttributeValueTextClass',
-    );
     expect(diskDetailPresentationSource).toContain('export function getLinkedDiskHealthDotVariant');
     expect(diskDetailPresentationSource).toContain(
       'export function getLinkedDiskTemperatureTextClass',
@@ -1909,50 +1862,6 @@ describe('frontend resource type boundaries', () => {
     expect(proxmoxMailGatewayDrawerSource).not.toContain('const statusTone =');
     expect(serviceHealthPresentationSource).toContain(
       'export function getServiceHealthPresentation',
-    );
-    expect(swarmServicesDrawerSource).toContain('getSimpleStatusIndicator');
-    expect(swarmServicesDrawerSource).toContain('<StatusDot');
-    expect(swarmServicesDrawerSource).toContain('getSwarmDrawerPresentation');
-    expect(swarmServicesDrawerSource).toContain('getSwarmServicesEmptyState');
-    expect(swarmServicesDrawerSource).toContain('getSwarmServicesLoadingState');
-    expect(swarmServicesDrawerSource).toContain('<PlatformDetailTable');
-    expect(swarmServicesDrawerSource).not.toContain('<div class="overflow-x-auto">');
-    expect(swarmServicesDrawerSource).not.toContain('const statusTone =');
-    expect(swarmServicesDrawerSource).not.toContain('No Swarm cluster detected');
-    expect(swarmServicesDrawerSource).not.toContain('Search services...');
-    expect(swarmServicesDrawerSource).not.toContain('Loading Swarm services...');
-    expect(swarmServicesDrawerSource).not.toContain('No Swarm services found');
-    expect(swarmServicesDrawerSource).not.toContain('No services match your filters');
-    expect(swarmPresentationSource).toContain('export function getSwarmDrawerPresentation');
-    expect(swarmPresentationSource).toContain('export function getSwarmServicesEmptyState');
-    expect(swarmPresentationSource).toContain('export function getSwarmServicesLoadingState');
-    expect(k8sDeploymentsDrawerSource).toContain('getSimpleStatusIndicator');
-    expect(k8sDeploymentsDrawerSource).toContain('<StatusDot');
-    expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsDrawerPresentation');
-    expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsEmptyState');
-    expect(k8sDeploymentsDrawerSource).toContain('getK8sDeploymentsLoadingState');
-    expect(k8sDeploymentsDrawerSource).toContain('<PlatformDetailTable');
-    expect(k8sDeploymentsDrawerSource).not.toContain('<div class="overflow-x-auto">');
-    expect(k8sDeploymentPresentationSource).toContain('getAllFilterOptionLabel');
-    expect(k8sDeploymentsDrawerSource).not.toContain('const statusTone =');
-    expect(k8sDeploymentsDrawerSource).not.toContain('Desired state controllers (not Pods)');
-    expect(k8sDeploymentsDrawerSource).not.toContain('Search deployments...');
-    expect(k8sDeploymentsDrawerSource).not.toContain('label="Namespace"');
-    expect(k8sDeploymentsDrawerSource).not.toContain('All namespaces');
-    expect(k8sDeploymentsDrawerSource).not.toContain('Open Pods');
-    expect(k8sDeploymentsDrawerSource).not.toContain('Loading deployments...');
-    expect(k8sDeploymentsDrawerSource).not.toContain('No deployments match your filters');
-    expect(k8sDeploymentsDrawerSource).not.toContain(
-      'Try clearing the search or namespace filter.',
-    );
-    expect(k8sDeploymentPresentationSource).toContain(
-      'export function getK8sDeploymentsDrawerPresentation',
-    );
-    expect(k8sDeploymentPresentationSource).toContain(
-      'export function getK8sDeploymentsEmptyState',
-    );
-    expect(k8sDeploymentPresentationSource).toContain(
-      'export function getK8sDeploymentsLoadingState',
     );
     expect(k8sNamespacesDrawerSource).toContain('getNamespaceCountsIndicator');
     expect(k8sNamespacesDrawerSource).toContain('getK8sNamespacesDrawerPresentation');
@@ -2211,20 +2120,12 @@ describe('frontend resource type boundaries', () => {
     expect(textPresentationSource).toContain('humanizeToken');
     expect(textPresentationSource).toContain('formatIdentifierLabel');
     expect(resourceCorrelationPresentationSource).not.toContain('formatTrimmedLabel');
-    expect(swarmServicesDrawerSource).toContain('asTrimmedString');
-    expect(swarmServicesDrawerSource).not.toContain(
-      "const normalize = (value?: string | null) => (value || '').trim();",
-    );
     expect(proxmoxMailGatewayDrawerSource).toContain('asTrimmedString');
     expect(proxmoxMailGatewayDrawerSource).not.toContain(
       "const normalize = (value?: string | null) => (value || '').trim();",
     );
     expect(k8sNamespacesDrawerSource).toContain('asTrimmedString');
     expect(k8sNamespacesDrawerSource).not.toContain(
-      "const normalize = (value?: string | null) => (value || '').trim();",
-    );
-    expect(k8sDeploymentsDrawerSource).toContain('asTrimmedString');
-    expect(k8sDeploymentsDrawerSource).not.toContain(
       "const normalize = (value?: string | null) => (value || '').trim();",
     );
     expect(activeTurnStatusSource).toContain('formatIdentifierLabel');

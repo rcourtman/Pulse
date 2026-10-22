@@ -41,21 +41,13 @@ export interface RecoverableArtifact {
   createdAt: string;
   createdMs?: number;
   size?: number;
-  /** Observed source connection, not the guest's current hosting connection. */
-  connection?: string;
   location: string;
   /** Stable source/repository identity used by the backup-location filter. */
   locationKey?: string;
   /** Operator-facing source/repository label used by the backup-location filter. */
   locationLabel?: string;
-  /** Existing saved store-wide filters remain valid for local-node locations. */
-  locationGroupKey?: string;
-  locationGroupLabel?: string;
-  /** Old saved URL aliases; usable only when they resolve one exact source. */
-  legacyLocationKey?: string;
-  legacyLocationGroupKey?: string;
   detail: string;
-  /** Full provider identifier, displayed alongside a shortened `detail`. */
+  /** Full provider identifier behind a shortened `detail`, shown on hover. */
   detailTitle?: string;
   protected: boolean;
   verified?: boolean;
@@ -66,27 +58,14 @@ export interface RecoverableArtifact {
   fileCount?: number;
 }
 
-export function getRecoverableArtifactLocation(artifact: RecoverableArtifact): string {
-  return [artifact.connection, artifact.location].filter(Boolean).join(' / ');
-}
-
 export interface CoverageTask {
   id: string;
-  /** Recorded job origin, independent of the workload's current placement. */
-  instance?: string;
-  node?: string;
   status: string;
   label: string;
   startedAt: string;
   startedMs?: number;
-  /** Literal provider end time; absence is not a running-duration measurement. */
-  endedAt?: string;
-  /** Original provider history read, which does not advance on a UI refresh. */
-  observedAt?: string;
   durationSeconds?: number;
   error?: string;
-  /** A successful status cannot settle a result that also reports an error. */
-  statusErrorConflict?: boolean;
 }
 
 export interface WorkloadCoverageRow {
@@ -107,21 +86,15 @@ export interface WorkloadCoverageRow {
   /** Unknown chronology is not an absent backup, nor an older dated backup. */
   ageUnknown?: Record<'backup' | 'pbs' | 'archive' | 'snapshot', boolean>;
   latestTask?: CoverageTask;
-  /** Collected jobs remain inspectable when chronology cannot select a latest result. */
-  unresolvedTasks?: CoverageTask[];
-  /** Unorderable dates or conflicting newest outcomes prevent a latest result. */
-  taskChronologyUnknown?: boolean;
-  /** Equally recent jobs disagree; not an unavailable or future timestamp. */
-  taskOutcomeConflict?: boolean;
   pbsCount: number;
   archiveCount: number;
   snapshotCount: number;
   posture: WorkloadRecoveryPosture;
   postureRank: number;
   protectionPosture?: ProtectionPosture;
-  // A backup/task referenced a guest ID without an unambiguous live inventory
-  // match (absent or conflicting). Tasks may not supply a VM/LXC type at all.
-  // Host backups remain first-class targets, not orphaned guests.
+  // True only when a VM/LXC row exists because a backup/task referenced a VMID
+  // with no unambiguous live inventory match (absent or conflicting). Host backups can also carry a
+  // `backup:` key, but they are first-class backup targets, not orphaned guests.
   isOrphaned: boolean;
 }
 
@@ -135,9 +108,7 @@ export interface ProxmoxBackupRecoveryModel {
     unprotected: number;
     unknown: number;
     withPBS: number;
-    /** Completed observations only; incomplete writes remain in the inventory. */
     recoverableArtifacts: number;
-    incompleteArtifacts: number;
     totalBytes: number;
   };
 }
@@ -183,12 +154,6 @@ export function isBackupArtifact(artifact: RecoverableArtifact): boolean {
   return artifact.sourceKind !== 'snapshot';
 }
 
-// Completion is independent of age, verification and prune protection. An
-// incomplete write is useful diagnostic inventory, not an available point.
-export function isCompletedRecoveryArtifact(artifact: RecoverableArtifact): boolean {
-  return !artifact.running && !artifact.failed;
-}
-
 function parseTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const ms = Date.parse(value);
@@ -213,43 +178,11 @@ function normalizeKey(value: string | number | undefined | null): string {
     .toLowerCase();
 }
 
-// Configured connection names are source identities, not DNS names. Preserve
-// their spelling just as the collector and location keys do. Only an absent
-// or whitespace-only name can use the legacy native-node matching path.
-function connectionIdentity(value: string | undefined): string {
-  return value?.trim() ? value : '';
-}
-
 function artifactLocationScope(
   sourceKind: RecoverableSourceKind,
   instance: string | undefined,
   repository: string | undefined,
-  storageNode?: string,
-): Pick<
-  RecoverableArtifact,
-  | 'locationKey'
-  | 'locationLabel'
-  | 'locationGroupKey'
-  | 'locationGroupLabel'
-  | 'legacyLocationKey'
-  | 'legacyLocationGroupKey'
-> {
-  // Provider source names are case-sensitive. Keep every tuple field, even
-  // when its label repeats another field or contains a delimiter. A versioned
-  // key cannot collide with the old URLs that need conservative resolution.
-  const connection = instance?.trim() ? instance : '';
-  const store = repository?.trim() ? repository : '';
-  const node = storageNode?.trim() ? storageNode : undefined;
-  if (!connection && !store) return {};
-  const groupKey = `backup-location-v2:${JSON.stringify([sourceKind, connection, store])}`;
-  const groupLabel = [
-    connection || 'Connection not reported',
-    store || (sourceKind === 'snapshot' ? 'Node not reported' : 'Repository not reported'),
-  ].join(' / ');
-
-  // Retain precisely the previous encoding for existing bookmarks. It is an
-  // alias, not identity: the consumer refuses it if distinct source tuples
-  // now share it (including case-folding and missing-field collisions).
+): Pick<RecoverableArtifact, 'locationKey' | 'locationLabel'> {
   const parts = [instance?.trim(), repository?.trim()].filter((part): part is string =>
     Boolean(part),
   );
@@ -257,28 +190,10 @@ function artifactLocationScope(
     (part, index) =>
       parts.findIndex((candidate) => normalizeKey(candidate) === normalizeKey(part)) === index,
   );
-  const localNode = storageNode?.trim();
-  const legacyGroupKey = [sourceKind, ...distinctParts.map(normalizeKey)].join(':');
+  if (distinctParts.length === 0) return {};
   return {
-    locationKey: node
-      ? `backup-location-v2:${JSON.stringify([sourceKind, connection, store, node])}`
-      : groupKey,
-    locationLabel: node ? `${groupLabel} / ${node}` : groupLabel,
-    legacyLocationKey: localNode
-      ? JSON.stringify([
-          sourceKind,
-          normalizeKey(instance),
-          normalizeKey(repository),
-          normalizeKey(localNode),
-        ])
-      : legacyGroupKey,
-    ...(node
-      ? {
-          locationGroupKey: groupKey,
-          locationGroupLabel: groupLabel,
-          legacyLocationGroupKey: legacyGroupKey,
-        }
-      : {}),
+    locationKey: [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
+    locationLabel: distinctParts.join(' / '),
   };
 }
 
@@ -478,12 +393,10 @@ function matchPVEWorkload<T extends WorkloadReference>(
   instance: string,
   node: string,
 ): T | undefined {
-  const instanceKey = connectionIdentity(instance);
+  const instanceKey = normalizeKey(instance);
   const nodeKey = normalizeKey(node);
   if (instanceKey) {
-    const scoped = workloads.filter(
-      (workload) => connectionIdentity(workload.instance) === instanceKey,
-    );
+    const scoped = workloads.filter((workload) => normalizeKey(workload.instance) === instanceKey);
     // A VMID is unique inside its PVE connection. Historical backup/task nodes
     // can differ after a migration; they must not override that connection.
     if (scoped.length > 0) {
@@ -496,7 +409,7 @@ function matchPVEWorkload<T extends WorkloadReference>(
     // identify one of them, but cannot rescue a known conflicting instance.
     return uniqueWorkload(
       workloads.filter(
-        (workload) => !connectionIdentity(workload.instance) && matchesNativeNode(workload, node),
+        (workload) => !normalizeKey(workload.instance) && matchesNativeNode(workload, node),
       ),
     );
   }
@@ -534,13 +447,13 @@ function resolvePBSWorkload(
   // PBS instance/datastore identify a repository, not a PVE connection. A
   // namespace can disambiguate a repeated VMID only with one exact native
   // node/alias or connection match. A display name or substring proves none.
-  const namespace = connectionIdentity(backup.namespace);
+  const namespace = normalizeKey(backup.namespace);
   const matched = namespace
     ? uniqueWorkload(
         typed.filter(
           (workload) =>
             matchesNativeNode(workload, backup.namespace) ||
-            connectionIdentity(workload.instance) === namespace,
+            normalizeKey(workload.instance) === namespace,
         ),
       )
     : undefined;
@@ -572,20 +485,7 @@ function resolveTaskWorkload(
   if (candidate) return candidate;
   // Only PVE-backed orphan rows share this source scope. A PBS namespace that
   // happens to resemble the task node is not evidence that the task owns it.
-  return (
-    matchPVEWorkload(pveWorkloadsByVmid.get(vmid) ?? [], task.instance, task.node) ??
-    // `vzdump` describes the job, not the guest type. A failed job can be the
-    // only evidence left after a guest disappears or its identity conflicts.
-    // Keep that evidence without guessing VM/LXC, pooling PBS repositories or
-    // lending its result to another monitored workload.
-    fallbackWorkload(
-      'unknown',
-      vmid,
-      [task.node, task.instance],
-      ['pve-task', task.instance, task.node],
-      task.instance,
-    )
-  );
+  return matchPVEWorkload(pveWorkloadsByVmid.get(vmid) ?? [], task.instance, task.node);
 }
 
 function newest<T>(items: readonly T[], getMs: (item: T) => number | undefined): T | undefined {
@@ -611,7 +511,7 @@ export function selectWorkloadRecoveryArtifacts(
 > {
   // Completion remains independent of age. Keep every artifact listed, but
   // don't guess the latest when even one completed date cannot be ordered.
-  const completed = artifacts.filter(isCompletedRecoveryArtifact);
+  const completed = artifacts.filter((artifact) => !artifact.running && !artifact.failed);
   const select = (items: RecoverableArtifact[]) => {
     const unknown = items.some(
       (artifact) => getRecoveryAgeBand(artifact.createdMs, nowMs) === 'unknown',
@@ -643,37 +543,18 @@ export function selectWorkloadRecoveryArtifacts(
   };
 }
 
-function taskStatusErrorConflict(task: BackupTask): boolean {
-  return (
-    ['ok', 'success', 'completed'].includes(normalizeKey(task.status)) &&
-    Boolean(task.error?.trim())
-  );
-}
-
 function taskLabel(task: BackupTask): string {
-  if (taskStatusErrorConflict(task)) return 'Unknown';
   const normalized = normalizeKey(task.status);
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') return 'OK';
-  // PVE passes its exit status through, commonly with the reason after ERROR:.
-  // Only that explicit prefix is a failure; arbitrary status text stays literal.
-  if (normalized === 'failed' || normalized === 'error' || /^error\s*:/.test(normalized))
-    return 'Failed';
-  if (normalized === 'warning') return 'Warning';
+  if (normalized === 'failed' || normalized === 'error') return 'Failed';
   if (normalized === 'running') return 'Running';
   return task.status || 'Unknown';
 }
 
-function taskDurationSeconds(task: BackupTask, nowMs: number): number | undefined {
+function taskDurationSeconds(task: BackupTask): number | undefined {
   const start = parseTimestampMs(task.startTime);
   const end = parseTimestampMs(task.endTime);
-  if (
-    start === undefined ||
-    end === undefined ||
-    getRecoveryAgeBand(start, nowMs) === 'unknown' ||
-    getRecoveryAgeBand(end, nowMs) === 'unknown' ||
-    end < start
-  )
-    return undefined;
+  if (start === undefined || end === undefined || end <= start) return undefined;
   return Math.round((end - start) / 1000);
 }
 
@@ -727,7 +608,6 @@ export function buildProxmoxBackupRecoveryModel(
       pbsCount: 0,
       archiveCount: 0,
       snapshotCount: 0,
-      taskChronologyUnknown: false,
     };
     rows.set(workload.key, row);
     if (pveSource) {
@@ -776,7 +656,6 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: backup.backupTime,
       createdMs,
       size: backup.size,
-      connection: backup.instance?.trim() || undefined,
       location: `${backup.datastore || '—'} / ${backup.namespace?.trim() || '(root)'}`,
       ...artifactLocationScope('pbs', backup.instance, backup.datastore),
       detail: pbsBackupFileDetailLabel(backup.files.length),
@@ -810,15 +689,8 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: archive.time,
       createdMs,
       size: archive.size,
-      connection: archive.instance?.trim() || undefined,
-      location:
-        [archive.storage || archive.node, archive.storageNode].filter(Boolean).join(' / ') || '—',
-      ...artifactLocationScope(
-        'archive',
-        archive.instance,
-        archive.storage || archive.node,
-        archive.storageNode,
-      ),
+      location: archive.storage || archive.node || '—',
+      ...artifactLocationScope('archive', archive.instance, archive.storage || archive.node),
       // The volid repeats the storage, guest type, VMID, and timestamp the row
       // already shows in their own columns and clips at every width; the
       // archive format is the one fact it adds, so that is the cell and the
@@ -853,7 +725,6 @@ export function buildProxmoxBackupRecoveryModel(
       createdAt: snapshot.time,
       createdMs,
       size: snapshot.sizeBytes,
-      connection: snapshot.instance?.trim() || undefined,
       location: snapshot.node || snapshot.instance || '—',
       ...artifactLocationScope('snapshot', snapshot.instance, snapshot.node),
       detail: snapshot.description || snapshot.name || snapshotSource.detailFallbackLabel,
@@ -861,62 +732,25 @@ export function buildProxmoxBackupRecoveryModel(
     });
   }
 
-  // Keep a candidate even during a tie so a strictly newer observation can
-  // supersede it. Undated/future jobs, unlike an older tie, cannot be ordered.
-  const latestTasks = new Map<
-    string,
-    { task: CoverageTask; startedMs: number; conflict: boolean }
-  >();
   for (const task of input.tasks) {
     const workload = resolveTaskWorkload(candidateIndex, pveWorkloadsByVmid, task);
     if (!workload) continue;
-    // Only inventory/artifacts can resolve another job's missing guest type.
-    // Adding task-only rows to that index makes ownership depend on job order.
-    const row = ensureRow(workload, false);
-    const startedMs = parseTimestampMs(task.startTime);
+    const row = ensureRow(workload, true);
     const candidateTask: CoverageTask = {
       id: task.id,
-      instance: task.instance,
-      node: task.node,
       status: task.status,
       label: taskLabel(task),
       startedAt: task.startTime,
-      startedMs,
-      endedAt: task.endTime,
-      observedAt: task.observedAt,
-      durationSeconds: taskDurationSeconds(task, input.nowMs),
+      startedMs: parseTimestampMs(task.startTime),
+      durationSeconds: taskDurationSeconds(task),
       error: task.error,
-      statusErrorConflict: taskStatusErrorConflict(task),
     };
-    // Do not key these by task ID: conflicting observations can share an ID.
-    // Keep collected evidence separate from any claim about the latest result.
-    (row.unresolvedTasks ??= []).push(candidateTask);
-    // An unorderable job may be newer than the dated OK/failed job. Never
-    // treat an absent time as epoch zero or let a future time win the summary.
-    // Keep this uncertainty local to the matched workload, in either order.
-    if (startedMs === undefined || getRecoveryAgeBand(startedMs, input.nowMs) === 'unknown') {
-      row.taskChronologyUnknown = true;
-      continue;
-    }
-    const selected = latestTasks.get(row.key);
-    if (!selected || startedMs > selected.startedMs) {
-      latestTasks.set(row.key, { task: candidateTask, startedMs, conflict: false });
-    } else if (startedMs === selected.startedMs) {
-      if (normalizeKey(candidateTask.label) !== normalizeKey(selected.task.label)) {
-        selected.conflict = true;
-      }
-      // Agreeing outcomes need no invented uncertainty. Pick a stable
-      // representative, not a response-order-dependent task or end time.
-      if (candidateTask.id < selected.task.id) selected.task = candidateTask;
+    if (!row.latestTask || (candidateTask.startedMs ?? 0) > (row.latestTask.startedMs ?? 0)) {
+      row.latestTask = candidateTask;
     }
   }
 
   for (const row of rows.values()) {
-    const selected = latestTasks.get(row.key);
-    row.taskOutcomeConflict = !row.taskChronologyUnknown && selected?.conflict === true;
-    row.taskChronologyUnknown = row.taskChronologyUnknown || row.taskOutcomeConflict;
-    row.latestTask = row.taskChronologyUnknown ? undefined : selected?.task;
-    if (!row.taskChronologyUnknown) row.unresolvedTasks = undefined;
     Object.assign(row, selectWorkloadRecoveryArtifacts(row.artifacts, input.nowMs));
   }
 
@@ -938,9 +772,7 @@ export function buildProxmoxBackupRecoveryModel(
       protectionPosture,
       isOrphaned:
         !row.key.startsWith('resource:') &&
-        (row.workload.type === 'vm' ||
-          row.workload.type === 'ct' ||
-          row.workload.type === 'unknown'),
+        (row.workload.type === 'vm' || row.workload.type === 'ct'),
     };
   });
 
@@ -950,8 +782,7 @@ export function buildProxmoxBackupRecoveryModel(
   });
   artifacts.sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0));
 
-  const completed = artifacts.filter(isCompletedRecoveryArtifact);
-  const totalBytes = completed.reduce((sum, artifact) => sum + (artifact.size ?? 0), 0);
+  const totalBytes = artifacts.reduce((sum, artifact) => sum + (artifact.size ?? 0), 0);
   return {
     coverageRows,
     recoverableArtifacts: artifacts,
@@ -961,13 +792,8 @@ export function buildProxmoxBackupRecoveryModel(
       attention: coverageRows.filter((row) => isCoverageAttention(row.posture)).length,
       unprotected: coverageRows.filter((row) => row.posture === 'unprotected').length,
       unknown: coverageRows.filter((row) => row.posture === 'unknown').length,
-      withPBS: coverageRows.filter((row) =>
-        row.artifacts.some(
-          (artifact) => artifact.sourceKind === 'pbs' && isCompletedRecoveryArtifact(artifact),
-        ),
-      ).length,
-      recoverableArtifacts: completed.length,
-      incompleteArtifacts: artifacts.length - completed.length,
+      withPBS: coverageRows.filter((row) => row.pbsCount > 0).length,
+      recoverableArtifacts: artifacts.length,
       totalBytes,
     },
   };
@@ -987,37 +813,10 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     row.workload.instance,
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
-    row.latestTask?.id,
-    row.latestTask?.status,
-    row.latestTask?.instance,
-    row.latestTask?.node,
-    row.latestTask?.startedAt,
-    row.latestTask?.endedAt,
     row.latestTask?.error,
-    row.taskChronologyUnknown ? 'Latest backup job unknown' : undefined,
-    ...(row.taskChronologyUnknown ? (row.unresolvedTasks ?? []) : []).flatMap((task) => [
-      task.id,
-      task.label,
-      task.status,
-      task.instance,
-      task.node,
-      task.startedAt,
-      task.endedAt,
-      task.observedAt,
-      task.error,
-    ]),
-    ...(row.protectionPosture?.providerStates ?? []).flatMap((provider) => [
-      provider.provider,
-      provider.scope,
-      provider.source,
-      provider.jobState,
-      provider.historyCompleteness,
-      provider.permissions,
-    ]),
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
       artifact.sourceTitle,
-      artifact.connection,
       artifact.location,
       artifact.detail,
     ]),
@@ -1042,7 +841,6 @@ export function recoverableArtifactMatchesSearch(
     artifact.workload.instance,
     artifact.sourceLabel,
     artifact.sourceTitle,
-    artifact.connection,
     artifact.location,
     artifact.detail,
     artifact.detailTitle,

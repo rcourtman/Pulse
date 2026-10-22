@@ -52,6 +52,7 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 
 const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
   [
@@ -174,58 +175,9 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
 const sizeLabel = (point: RecoveryPoint): string =>
   formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '-');
 
-// TrueNAS replication supplies LastRun, not independent start/end times. The
-// recovery mapper mirrors it into both transport fields, even while running.
-// Snapshot StartedAt carries creation, while a CompletedAt-only snapshot uses
-// the mapper's collection-time fallback. Keep those meanings at the consumer.
-const activityTime = (point: RecoveryPoint): { label: string; value: string | undefined } => {
-  const started = asTrimmedString(point.startedAt);
-  const completed = asTrimmedString(point.completedAt);
-  const kind = mapTrueNASProtectionKind(point);
-  if (kind === 'replication') return { label: 'Last run', value: completed || started };
-  if (kind === 'snapshot') {
-    return started ? { label: 'Created', value: started } : { label: 'Observed', value: completed };
-  }
-  return completed
-    ? { label: 'Completed', value: completed }
-    : { label: 'Started', value: started };
-};
-
-// Keep a readable date and clock on phones instead of an ellipsised timestamp.
-// Both projections use the same instant as sorting and the existing detail;
-// a LastRun is still not independent successful-completion evidence.
-const ProtectionActivityTime: Component<{ point: RecoveryPoint }> = (props) => {
-  const date = createMemo(() => {
-    const value = getPlatformTableDateTimeSortValue(activityTime(props.point).value);
-    return value === null ? undefined : new Date(value);
-  });
-  return (
-    <Show when={date()} fallback={<span>-</span>}>
-      {(value) => (
-        <time
-          dateTime={value().toISOString()}
-          title={`${activityTime(props.point).label}: ${value().toLocaleString()}`}
-          class="tabular-nums"
-        >
-          <span class="sr-only">{activityTime(props.point).label}: </span>
-          <span class="platform-table-phone-hidden-inline">
-            <PlatformTableDateTimeValue value={value()} emptyText="-" />
-          </span>
-          <span class="platform-table-phone-only-inline flex-col items-end leading-none">
-            <span>{value().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>{' '}
-            <span>
-              {value().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          </span>
-        </time>
-      )}
-    </Show>
-  );
-};
-
 // Columns a user can sort by. Every protection column carries a scalar:
-// Reported time orders chronologically and Size on raw bytes, both newest/
-// biggest first on the first click. Retain the internal time key for saved sorts.
+// Completed orders chronologically and Size on raw bytes, both newest/biggest
+// first on the first click.
 const TRUENAS_PROTECTION_SORT_KEYS = [
   'dataset',
   'artifact',
@@ -251,7 +203,9 @@ const getTrueNASProtectionSortValue = (
       return target === '-' ? null : target;
     }
     case 'completed':
-      return getPlatformTableDateTimeSortValue(activityTime(point).value);
+      return getPlatformTableDateTimeSortValue(
+        asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt),
+      );
     case 'size':
       return typeof point.sizeBytes === 'number' && Number.isFinite(point.sizeBytes)
         ? point.sizeBytes
@@ -276,7 +230,7 @@ const detailDateTime = (value?: string | null): string | null => {
   const raw = asTrimmedString(value);
   if (!raw) return null;
   const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return null;
+  if (Number.isNaN(parsed.getTime())) return raw;
   return parsed.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -286,10 +240,7 @@ const detailDateTime = (value?: string | null): string | null => {
   });
 };
 
-// These disclosures are the phone path to fields omitted from the summary.
-// Keep their actual text readable on touch, not only in desktop hover titles.
-const detailRow: typeof makeDetailRow = (label, value, options) =>
-  makeDetailRow(label, value, { wrap: true, layout: 'stacked', ...options });
+const detailRow = makeDetailRow;
 
 const outcomeTone = (point: RecoveryPoint): ProtectionDetailTone => {
   const outcome = normalizeRecoveryOutcome(point.outcome);
@@ -307,8 +258,6 @@ const sourceDatasetsLabel = (point: RecoveryPoint): string | null => {
 
 const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSection[] => {
   const kind = mapTrueNASProtectionKind(point);
-  const time = activityTime(point);
-  const reportedError = kind === 'replication' ? detailString(point, 'lastError') : '';
   const target = targetLabel(point);
   const targetSecondary = targetSecondaryLabel(point);
   const summaryRows = compactDetailRows([
@@ -318,12 +267,8 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
     }),
     detailRow('Dataset', datasetLabel(point)),
     detailRow('Host', hostLabel(point)),
-    ...(kind === 'other'
-      ? [
-          detailRow('Started', detailDateTime(point.startedAt)),
-          detailRow('Completed', detailDateTime(point.completedAt)),
-        ]
-      : [detailRow(time.label, detailDateTime(time.value) || 'Unknown')]),
+    detailRow('Started', detailDateTime(point.startedAt)),
+    detailRow('Completed', detailDateTime(point.completedAt)),
     detailRow('Size', sizeLabel(point)),
     detailRow('Verified', detailBool(point.verified)),
     detailRow('Encrypted', detailBool(point.encrypted)),
@@ -338,15 +283,6 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
     detailRow('Last snapshot', detailString(point, 'lastSnapshot')),
     detailRow('Task name', detailString(point, 'taskName')),
     detailRow('Task ID', detailString(point, 'taskId') || detailString(point, 'upid')),
-    detailRow('Reported error', reportedError, {
-      tone: outcomeTone(point),
-      layout: 'stacked',
-      valueContent: (
-        <span class="block whitespace-pre-wrap text-left leading-snug wrap-anywhere">
-          {reportedError}
-        </span>
-      ),
-    }),
   ]);
 
   const targetRows = compactDetailRows([
@@ -383,16 +319,13 @@ const DatasetCell: Component<{ point: RecoveryPoint; detailToggle?: JSX.Element 
         pulse={status() === 'running'}
         title={getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome))}
       />
-      <div class="min-w-0 leading-none">
+      <div class="min-w-0">
         <div
           class="truncate font-medium text-base-content"
           title={[name(), subtitle()].filter(Boolean).join(' · ')}
         >
           {name()}
         </div>
-        <span class="platform-table-phone-only-inline text-[10px] text-muted">
-          {kindLabel(kind())}
-        </span>
       </div>
     </div>
   );
@@ -402,10 +335,21 @@ const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => vo
   <InlineDetailPanel
     testId="truenas-protection-detail"
     detailFor={props.point.id}
-    title="Protection detail"
-    summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} · ${getRecoveryOutcomeLabel(
-      normalizeRecoveryOutcome(props.point.outcome),
-    )}`}
+    title={datasetLabel(props.point)}
+    status={{
+      variant: protectionVariant(mapTrueNASProtectionStatus(props.point)),
+      label: getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome)),
+    }}
+    summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} on ${hostLabel(props.point)}`}
+    actions={
+      <RecordOwnerLink
+        subject={{
+          id: asTrimmedString(props.point.itemRef?.id) || datasetLabel(props.point),
+          name: datasetLabel(props.point),
+          type: 'truenas-dataset',
+        }}
+      />
+    }
     sections={buildProtectionDetailSections(props.point)}
     detailAttributes={{ 'data-truenas-protection-detail-for': props.point.id }}
     onClose={props.onClose}
@@ -421,6 +365,9 @@ export const TrueNASProtectionTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
   const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
@@ -429,6 +376,8 @@ export const TrueNASProtectionTable: Component<{
     resources: rows,
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
     filter: filterTrueNASProtectionPoints,
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const statusOptions = createMemo(() =>
     withPlatformStatusCounts(TRUENAS_PROTECTION_STATUS_OPTIONS, tableState.countForStatus, {
@@ -447,7 +396,7 @@ export const TrueNASProtectionTable: Component<{
 
   return (
     <Show
-      when={!props.loading || Boolean(props.error) || rows().length > 0}
+      when={!props.loading || rows().length > 0}
       fallback={
         <PlatformTableLoadingState
           title="Loading TrueNAS protection"
@@ -460,9 +409,8 @@ export const TrueNASProtectionTable: Component<{
         fallback={
           <PlatformErrorState
             title="Could not load TrueNAS protection"
-            description="Protection activity is unavailable, not necessarily absent. Refresh to try again."
+            description="Refresh the recovery point snapshot or check the API connection state."
             onRefresh={() => props.onRefresh?.()}
-            refreshDisabled={props.loading}
           />
         }
       >
@@ -477,26 +425,6 @@ export const TrueNASProtectionTable: Component<{
           }
         >
           <div class="space-y-3">
-            <Show when={props.error}>
-              <div class="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
-                <p role="status" class="min-w-0 flex-1 basis-64">
-                  Could not refresh TrueNAS protection. Showing the last loaded records. Counts and
-                  outcomes may be out of date. These records do not establish current protection.
-                </p>
-                <button
-                  type="button"
-                  class="min-h-10 rounded-md border border-current px-3 py-2 font-medium hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-wait disabled:opacity-60"
-                  disabled={props.loading}
-                  onClick={() => {
-                    if (!props.loading) props.onRefresh?.();
-                  }}
-                >
-                  {props.loading
-                    ? 'Refreshing protection activity…'
-                    : 'Refresh protection activity'}
-                </button>
-              </div>
-            </Show>
             <Show when={props.showToolbar !== false}>
               <PlatformTableToolbar
                 search={tableState.search}
@@ -544,7 +472,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="text"
                       sort={sort}
                       sortKey="artifact"
-                      class="platform-table-phone-hidden md:w-[25%]"
+                      class="platform-table-mobile-w-25 md:w-[25%]"
                     >
                       Artifact
                     </PlatformSortableTableHead>
@@ -552,7 +480,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="text"
                       sort={sort}
                       sortKey="target"
-                      class="platform-table-phone-hidden md:w-[23%]"
+                      class="platform-table-mobile-w-15 md:w-[23%]"
                     >
                       Target
                     </PlatformSortableTableHead>
@@ -560,15 +488,15 @@ export const TrueNASProtectionTable: Component<{
                       kind="numeric-value"
                       sort={sort}
                       sortKey="completed"
-                      class="platform-table-mobile-w-30 md:w-[12%]"
+                      class="platform-table-mobile-w-15 md:w-[12%]"
                     >
-                      <PlatformResponsiveTableLabel compact="Time" full="Reported time" />
+                      <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
                     </PlatformSortableTableHead>
                     <PlatformSortableTableHead
                       kind="numeric-value"
                       sort={sort}
                       sortKey="size"
-                      class="platform-table-phone-hidden hidden lg:table-cell md:w-[8%]"
+                      class="hidden lg:table-cell md:w-[8%]"
                     >
                       Size
                     </PlatformSortableTableHead>
@@ -576,7 +504,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="badge"
                       sort={sort}
                       sortKey="outcome"
-                      class="platform-table-mobile-w-30 md:w-[9%]"
+                      class="platform-table-mobile-w-15 md:w-[9%]"
                     >
                       Outcome
                     </PlatformSortableTableHead>
@@ -615,9 +543,7 @@ export const TrueNASProtectionTable: Component<{
                                   }
                                 />
                               </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
-                              >
+                              <TableCell class={getPlatformTableCellClassForKind('text')}>
                                 <span
                                   class="block truncate text-base-content"
                                   title={[artifact(), artifactSecondary()]
@@ -627,9 +553,7 @@ export const TrueNASProtectionTable: Component<{
                                   {artifact()}
                                 </span>
                               </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
-                              >
+                              <TableCell class={getPlatformTableCellClassForKind('text')}>
                                 <span
                                   class="block truncate text-base-content"
                                   title={[target(), targetSecondary()].filter(Boolean).join(' · ')}
@@ -640,10 +564,16 @@ export const TrueNASProtectionTable: Component<{
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
-                                <ProtectionActivityTime point={point} />
+                                <PlatformTableDateTimeValue
+                                  value={
+                                    asTrimmedString(point.completedAt) ||
+                                    asTrimmedString(point.startedAt)
+                                  }
+                                  emptyText="-"
+                                />
                               </TableCell>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden hidden text-base-content lg:table-cell`}
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                               >
                                 {sizeLabel(point)}
                               </TableCell>

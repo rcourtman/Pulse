@@ -1,6 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AlertsAPI } from '@/api/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -14,25 +13,36 @@ const queryState = vi.hoisted(() => ({
   // Set to a signal accessor to drive live resource updates.
   accessor: undefined as (() => Resource[]) | undefined,
   error: undefined as unknown,
-  errorAccessor: undefined as (() => unknown) | undefined,
-  loading: false,
-  loadingAccessor: undefined as (() => boolean) | undefined,
-  refetch: vi.fn(),
   query: '',
   enabled: false,
   realtimeEnabled: undefined as (() => boolean) | undefined,
 }));
 
-// The expanded disk detail now shows its history charts in view; the chart
-// measures itself with ResizeObserver, which jsdom lacks. Its rendering is
-// covered by the HistoryChart and DiskDetail suites.
-vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChartHoverGroup: (props: { children: JSX.Element }) => <div>{props.children}</div>,
-  HistoryChart: (props: { label: string; enabled?: boolean }) => (
-    <div data-testid="history-chart" data-enabled={String(props.enabled !== false)}>
-      {props.label}
+// An opened disk shows the Storage disk drawer's Overview, whose charts read
+// metrics history. Their rendering is covered by the GuestDrawerHistory and
+// DiskDrawer suites; here they only report what they were asked to chart.
+vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
+  GuestDrawerHistory: (props: {
+    target: { resourceType: string; resourceId: string } | null;
+    range: string;
+    enabled?: boolean;
+    groups?: Array<{ label: string }>;
+  }) => (
+    <div
+      data-testid="history-chart"
+      data-enabled={String(props.enabled !== false)}
+      data-range={props.range}
+      data-target={props.target?.resourceId ?? ''}
+    >
+      {(props.groups ?? []).map((group) => group.label).join(', ')}
     </div>
   ),
+}));
+
+const activeAlertsMock = vi.hoisted(() => ({}) as Record<string, unknown>);
+vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/contexts/appRuntime')>()),
+  useWebSocket: () => ({ activeAlerts: activeAlertsMock }),
 }));
 
 vi.mock('@/hooks/useUnifiedResources', () => ({
@@ -40,19 +50,13 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
     query: string;
     enabled: () => boolean;
     realtimeEnabled?: () => boolean;
-    reportBackgroundErrors?: boolean;
-    readTimeoutMs?: number;
   }) => {
-    expect(options.reportBackgroundErrors).toBe(true);
-    expect(options.readTimeoutMs).toBe(20_000);
     queryState.query = options.query;
     queryState.enabled = options.enabled();
     queryState.realtimeEnabled = options.realtimeEnabled;
     return {
       resources: () => (queryState.accessor ? queryState.accessor() : queryState.resources),
-      error: () => queryState.errorAccessor?.() ?? queryState.error,
-      loading: () => queryState.loadingAccessor?.() ?? queryState.loading,
-      refetch: queryState.refetch,
+      error: () => queryState.error,
     };
   },
 }));
@@ -80,25 +84,24 @@ const disk: Resource = {
 };
 
 describe('GuestPhysicalDisks', () => {
-  // The first expansion lazy-loads the Storage disk detail; a cold transform of
-  // that module can outlast findByText's default wait on a loaded machine.
+  // The first expansion lazy-loads the Storage disk Overview; a cold transform
+  // of that module can outlast findByText's default wait on a loaded machine.
   beforeAll(async () => {
-    await import('@/components/Storage/DiskDetail');
+    await import('@/components/Storage/DiskDrawerOverview');
   }, 30_000);
 
   beforeEach(() => {
     queryState.resources = [];
     queryState.accessor = undefined;
     queryState.error = undefined;
-    queryState.errorAccessor = undefined;
-    queryState.loading = false;
-    queryState.loadingAccessor = undefined;
-    queryState.refetch.mockReset();
     queryState.query = '';
     queryState.enabled = false;
     queryState.realtimeEnabled = undefined;
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    for (const id of Object.keys(activeAlertsMock)) delete activeAlertsMock[id];
+  });
 
   it('shows the linked guest disk and loads its existing SMART detail on expansion', async () => {
     queryState.resources = [disk, { ...disk, id: 'host-disk', parentId: 'pve-node-1' }];
@@ -115,12 +118,55 @@ describe('GuestPhysicalDisks', () => {
     const row = within(card).getByTestId('guest-physical-disk') as HTMLDetailsElement;
     row.open = true;
     fireEvent(row, new Event('toggle'));
-    // The SMART card and the disk's Reallocated Sectors history chart both
-    // name the attribute once the detail is open.
-    expect((await within(card).findAllByText('Reallocated Sectors')).length).toBeGreaterThan(0);
-    expect(within(card).getByText('Pending Sectors')).toBeInTheDocument();
-    expect(within(card).getByText('CRC Errors')).toBeInTheDocument();
+    // The same Overview the Storage tab's disk drawer shows: alerts line,
+    // charts, facts, SMART health card, then every attribute under Details.
+    const overview = await within(card).findByTestId('disk-drawer-overview');
+    expect(within(overview).getByTestId('drawer-no-attention')).toHaveTextContent(
+      'No active alerts',
+    );
+    expect(await within(overview).findByTestId('history-chart')).toHaveAttribute(
+      'data-range',
+      '24h',
+    );
+    expect(within(overview).getByTestId('disk-drawer-health-card')).toBeInTheDocument();
+    expect(within(overview).getByText('Reallocated Sectors')).toBeInTheDocument();
+    expect(within(overview).getByText('Pending Sectors')).toBeInTheDocument();
+    expect(within(overview).getByText('CRC Errors')).toBeInTheDocument();
     expect(within(card).getAllByTestId('guest-physical-disk')).toHaveLength(1);
+  });
+
+  it("lists the disk's own open alerts in its Overview", async () => {
+    activeAlertsMock['disk-alert'] = {
+      id: 'disk-alert',
+      type: 'disk-health',
+      level: 'critical',
+      resourceId: 'disk-101-a',
+      resourceName: 'Guest SATA',
+      node: 'pve-node-1',
+      instance: 'cluster-a',
+      message: 'SMART health check failed',
+      value: 0,
+      threshold: 0,
+      startTime: '2026-10-20T10:00:00Z',
+      acknowledged: false,
+    };
+    activeAlertsMock['other-disk-alert'] = {
+      ...(activeAlertsMock['disk-alert'] as object),
+      id: 'other-disk-alert',
+      resourceId: 'disk-202-b',
+      message: 'Another disk failed',
+    };
+    queryState.resources = [disk];
+    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
+    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
+    row.open = true;
+    fireEvent(row, new Event('toggle'));
+
+    const overview = await screen.findByTestId('disk-drawer-overview');
+    const attention = within(overview).getByTestId('drawer-attention-section');
+    expect(attention).toHaveTextContent('SMART health check failed');
+    expect(attention).not.toHaveTextContent('Another disk failed');
+    expect(within(overview).queryByTestId('drawer-no-attention')).toBeNull();
   });
 
   it('pauses an expanded disk and the live list while its Overview is hidden', async () => {
@@ -177,46 +223,9 @@ describe('GuestPhysicalDisks', () => {
     }
   });
 
-  it('distinguishes an empty inventory from disk absence or health', () => {
+  it('does not add an empty storage card to an uninstrumented guest', () => {
     render(() => <GuestPhysicalDisks parentId="vm-resource-102" />);
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'No physical disks were reported for this guest. Missing inventory does not establish disk absence or health.',
-    );
-    expect(screen.queryByText('Healthy')).toBeNull();
-    expect(queryState.refetch).not.toHaveBeenCalled();
-  });
-
-  it('shows a pending read before declaring an empty inventory and clears it on real rows', () => {
-    const [loading, setLoading] = createSignal(true);
-    const [resources, setResources] = createSignal<Resource[]>([]);
-    queryState.loadingAccessor = loading;
-    queryState.accessor = resources;
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    expect(screen.getByRole('status')).toHaveTextContent('Loading physical disk inventory');
-    expect(screen.getByRole('status')).toHaveTextContent(
-      "This reads Pulse's collected inventory, not the guest.",
-    );
-    expect(screen.queryByText(/No physical disks were reported/)).toBeNull();
-    setLoading(false);
-    expect(screen.getByRole('status')).toHaveTextContent('No physical disks were reported');
-    setResources([disk]);
-    expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
-    expect(screen.getByText('Guest SATA')).toBeVisible();
-    // A refresh must not hide an accepted report or replace it with "no disks".
-    setLoading(true);
-    expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
-    expect(screen.getByText('Guest SATA')).toBeVisible();
-  });
-
-  it('does not count unrelated or non-disk resources as this guest’s inventory', () => {
-    queryState.resources = [
-      { ...disk, parentId: 'another-guest' },
-      { ...disk, id: 'not-a-disk', type: 'vm' },
-    ];
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    expect(screen.getByRole('status')).toHaveTextContent('No physical disks were reported');
-    expect(screen.queryByTestId('guest-physical-disk')).toBeNull();
   });
 
   it('encodes the parent value and never widens an empty parent to all disks', () => {
@@ -226,7 +235,6 @@ describe('GuestPhysicalDisks', () => {
     render(() => <GuestPhysicalDisks parentId=" " />);
     expect(queryState.enabled).toBe(false);
     expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
-    expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
   });
 
   it('marks a retained disk temperature as last known', () => {
@@ -266,44 +274,6 @@ describe('GuestPhysicalDisks', () => {
       'title',
       'Last known reading, not current: host agent stopped reporting',
     );
-  });
-
-  it('keeps an expired successful inventory report qualified in the row and open SMART view', async () => {
-    // The actual resource owner reconciles by canonical ID, rather than
-    // replacing the disk owner (which would correctly close a different row).
-    const [state, setState] = createStore<{ resources: Resource[] }>({
-      resources: [structuredClone(disk)],
-    });
-    queryState.accessor = () => state.resources;
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
-    row.open = true;
-    fireEvent(row, new Event('toggle'));
-    await screen.findByTestId('disk-detail-health');
-    setState(
-      'resources',
-      reconcile(
-        [{ ...disk, health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale' }] } }],
-        { key: 'id' },
-      ),
-    );
-    await waitFor(() => expect(screen.getAllByText('Last known')).toHaveLength(2));
-    expect(row.open).toBe(true);
-    expect(within(row).queryByText('Healthy')).toBeNull();
-    expect(screen.getByTestId('disk-detail-health')).toHaveTextContent(
-      'Current disk health is unconfirmed',
-    );
-    expect(row.querySelector('[data-temperature-reading]')).toHaveAttribute(
-      'data-temperature-reading',
-      'last-known',
-    );
-    expect(row.querySelector('[data-temperature-reading]')).toHaveTextContent('45°C, last known');
-    setState(
-      'resources',
-      reconcile([{ ...disk, health: { verdict: 'ok', reasons: [] } }], { key: 'id' }),
-    );
-    await waitFor(() => expect(screen.getAllByText('Healthy')).toHaveLength(2));
-    expect(row.open).toBe(true);
   });
 
   it('follows a disk between current and last known as its collection state changes', () => {
@@ -350,132 +320,5 @@ describe('GuestPhysicalDisks', () => {
     queryState.error = new Error('unavailable');
     render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
     expect(screen.getByRole('status')).toHaveTextContent('Physical disk details are unavailable.');
-  });
-
-  it.each([401, 403, 503])(
-    'withdraws previously healthy disk and SMART details after HTTP %s',
-    async (status) => {
-      const [error, setError] = createSignal<unknown>();
-      queryState.errorAccessor = error;
-      queryState.resources = [disk];
-      render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-      const row = screen.getByTestId('guest-physical-disk') as HTMLDetailsElement;
-      row.open = true;
-      fireEvent(row, new Event('toggle'));
-      await screen.findAllByText('Reallocated Sectors');
-      expect(screen.getAllByText('Healthy').length).toBeGreaterThan(0);
-
-      setError(Object.assign(new Error('PRIVATE_PROVIDER_TEXT'), { status }));
-      expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
-      expect(screen.queryByText('45°C')).toBeNull();
-      expect(screen.queryByTestId('history-chart')).toBeNull();
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'Physical disk details are unavailable.',
-      );
-      expect(screen.getByRole('status')).toHaveTextContent('not a guest probe');
-      expect(screen.queryByTestId('guest-physical-disk-inventory-status')).toBeNull();
-      expect(screen.queryByText(/PRIVATE_PROVIDER_TEXT/)).toBeNull();
-      expect(screen.getByRole('button', { name: 'Retry physical disk details' })).toBeEnabled();
-      expect(queryState.refetch).not.toHaveBeenCalled();
-    },
-  );
-
-  it('keeps failed readings withdrawn throughout a single explicit retry, then renders its new result collapsed', async () => {
-    const [error, setError] = createSignal<unknown>(new Error('unavailable'));
-    const [resources, setResources] = createSignal<Resource[]>([disk]);
-    queryState.errorAccessor = error;
-    queryState.accessor = resources;
-    let finish!: () => void;
-    queryState.refetch.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve;
-        }),
-    );
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    expect(queryState.refetch).toHaveBeenCalledTimes(1);
-    expect(button).toBeDisabled();
-    expect(button).toHaveTextContent('Retrying');
-    expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
-
-    setResources([{ ...disk, physicalDisk: { ...disk.physicalDisk!, temperature: 48 } }]);
-    setError(undefined);
-    finish();
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
-    expect(screen.getByText('48°C')).toBeInTheDocument();
-    expect(screen.queryByText('45°C')).toBeNull();
-    expect((screen.getByTestId('guest-physical-disk') as HTMLDetailsElement).open).toBe(false);
-    expect(screen.queryByTestId('history-chart')).toBeNull();
-  });
-
-  it('contains a rejected retry without exposing its error or losing the next explicit attempt', async () => {
-    queryState.resources = [disk];
-    queryState.error = new Error('unavailable');
-    queryState.refetch.mockRejectedValue(new Error('PRIVATE_RETRY_PAYLOAD'));
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
-    fireEvent.click(button);
-    await waitFor(() => expect(button).toBeEnabled());
-    expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
-    expect(screen.queryByText(/PRIVATE_RETRY_PAYLOAD/)).toBeNull();
-    fireEvent.click(button);
-    await waitFor(() => expect(queryState.refetch).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(button).toBeEnabled());
-  });
-
-  it('does not turn a successful empty retry into unavailable disks or a healthy phantom disk', async () => {
-    const [error, setError] = createSignal<unknown>(new Error('unavailable'));
-    const [resources, setResources] = createSignal<Resource[]>([disk]);
-    queryState.errorAccessor = error;
-    queryState.accessor = resources;
-    queryState.refetch.mockImplementation(async () => {
-      setResources([]);
-      setError(undefined);
-    });
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry physical disk details' }));
-    await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('No physical disks were reported'),
-    );
-    expect(screen.queryByTestId('guest-physical-disks')).toBeNull();
-    expect(screen.queryByText('Healthy')).toBeNull();
-    expect(queryState.refetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not let an unanswered old-organisation retry disable or settle a new-organisation retry', async () => {
-    queryState.error = new Error('unavailable');
-    let finishOld!: () => void;
-    let finishNew!: () => void;
-    queryState.refetch
-      .mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            finishOld = resolve;
-          }),
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise<void>((resolve) => {
-            finishNew = resolve;
-          }),
-      );
-    render(() => <GuestPhysicalDisks parentId="vm-resource-101" />);
-    const button = screen.getByRole('button', { name: 'Retry physical disk details' });
-    fireEvent.click(button);
-    expect(button).toBeDisabled();
-    eventBus.emit('org_switched', 'other-org');
-    expect(button).toBeEnabled();
-    fireEvent.click(button);
-    expect(queryState.refetch).toHaveBeenCalledTimes(2);
-    expect(button).toBeDisabled();
-    finishOld();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(button).toBeDisabled();
-    finishNew();
-    await waitFor(() => expect(button).toBeEnabled());
   });
 });

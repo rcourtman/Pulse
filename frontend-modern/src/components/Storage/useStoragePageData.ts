@@ -47,7 +47,7 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
   // Alert state follows the rows the table shows, so a Ceph pool folded into
   // its mounting storage still explains and ranks that row.
   const alertRecords = createMemo(() => consolidateCephClusterPoolRecords(records()));
-  const { getRecordAlertState } = useStorageAlertState({
+  const { getRecordAlertState, getRecordAlerts } = useStorageAlertState({
     records: alertRecords,
     activeAlerts: options.activeAlerts,
     alertsEnabled: options.alertsEnabled,
@@ -107,6 +107,7 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
   return {
     records,
     getRecordAlertState,
+    getRecordAlerts,
     nodeOptions,
     diskNodeOptions,
     nodeOnlineByLabel,

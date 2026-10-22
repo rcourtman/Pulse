@@ -1,9 +1,18 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSignal } from 'solid-js';
 
 import { TrueNASProtectionTable } from '@/features/truenas/TrueNASProtectionTable';
 import type { RecoveryPoint } from '@/types/recovery';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const makeRecoveryPoint = (
   point: Partial<RecoveryPoint> & Pick<RecoveryPoint, 'id' | 'kind' | 'mode'>,
@@ -20,29 +29,8 @@ afterEach(() => {
 });
 
 describe('TrueNASProtectionTable', () => {
-  it('keeps a failed-read notice visible even when filters hide every retained record', async () => {
-    render(() => (
-      <TrueNASProtectionTable
-        points={[makeRecoveryPoint({ id: 'retained', kind: 'snapshot', mode: 'snapshot' })]}
-        error={new Error('private diagnostic')}
-        emptyIcon={<span />}
-        emptyTitle="No protection"
-        emptyDescription="No protection"
-      />
-    ));
-    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
-      'last loaded records',
-    );
-    await fireEvent.click(screen.getByRole('button', { name: 'Attention, 0' }));
-    expect(screen.getByText('No protection events match current filters')).toBeInTheDocument();
-    expect(screen.getByText(/Could not refresh TrueNAS protection\./)).toHaveTextContent(
-      'do not establish current protection',
-    );
-    expect(screen.queryByText('private diagnostic')).not.toBeInTheDocument();
-  });
-
   it('keeps the issue count in the filters and filters directly to attention outcomes', async () => {
-    render(() => (
+    renderInRouter(() => (
       <TrueNASProtectionTable
         points={[
           makeRecoveryPoint({ id: 'healthy', kind: 'snapshot', mode: 'snapshot' }),
@@ -112,7 +100,7 @@ describe('TrueNASProtectionTable', () => {
       },
     });
 
-    render(() => (
+    renderInRouter(() => (
       <TrueNASProtectionTable
         points={[replication]}
         emptyIcon={<span />}
@@ -135,7 +123,7 @@ describe('TrueNASProtectionTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('truenas-protection-detail'));
-    expect(detail.getByText('Protection detail')).toBeInTheDocument();
+    expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('tank/apps');
     expect(detail.getByText('Protection')).toBeInTheDocument();
     expect(detail.getAllByText('Replication').length).toBeGreaterThan(1);
     expect(detail.getAllByText('Target').length).toBeGreaterThan(1);
@@ -152,263 +140,4 @@ describe('TrueNASProtectionTable', () => {
       'false',
     );
   });
-});
-
-describe('TrueNAS protection activity evidence', () => {
-  const replication = (overrides: Partial<RecoveryPoint> = {}): RecoveryPoint =>
-    makeRecoveryPoint({
-      id: 'replication-evidence',
-      kind: 'backup',
-      mode: 'remote',
-      outcome: 'running',
-      display: { itemLabel: 'tank/photos' },
-      details: { lastState: 'RUNNING' },
-      ...overrides,
-    });
-
-  const mount = (point: RecoveryPoint) =>
-    render(() => (
-      <TrueNASProtectionTable
-        points={[point]}
-        emptyIcon={<span />}
-        emptyTitle="No activity"
-        emptyDescription="No activity"
-      />
-    ));
-
-  const expand = async () => {
-    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for tank/photos' }));
-    return screen.getByTestId('truenas-protection-detail');
-  };
-
-  it('labels and sorts reported activity without claiming it completed', async () => {
-    const points = [
-      replication({ id: 'early', completedAt: '2026-05-18T01:00:00Z' }),
-      replication({ id: 'late', completedAt: '2026-05-20T01:00:00Z' }),
-      replication({ id: 'missing', completedAt: null, startedAt: null }),
-    ];
-    render(() => (
-      <TrueNASProtectionTable
-        points={points}
-        emptyIcon={<span />}
-        emptyTitle="No activity"
-        emptyDescription="No activity"
-      />
-    ));
-    const sortHeader = screen.getByRole('columnheader', { name: /Reported time/ });
-    expect(screen.queryByRole('columnheader', { name: /Completed/ })).not.toBeInTheDocument();
-    const rowIDs = () =>
-      [...document.querySelectorAll('[data-truenas-protection-row]')].map((row) =>
-        row.getAttribute('data-truenas-protection-row'),
-      );
-    await fireEvent.click(sortHeader);
-    expect(rowIDs()).toEqual(['late', 'early', 'missing']);
-    await fireEvent.click(sortHeader);
-    expect(rowIDs()).toEqual(['early', 'late', 'missing']);
-  });
-
-  it.each(['running', 'failed', 'success', 'unknown'])(
-    'uses the reported last run, not invented start/end times, for %s replication',
-    async (outcome) => {
-      mount(replication({ outcome }));
-      const detail = within(await expand());
-      expect(detail.getByText('Last run')).toBeInTheDocument();
-      expect(detail.queryByText('Started', { exact: true })).not.toBeInTheDocument();
-      expect(detail.queryByText('Completed', { exact: true })).not.toBeInTheDocument();
-      expect(document.querySelector('[data-truenas-protection-row]')).toHaveAttribute(
-        'data-truenas-protection-outcome',
-        outcome,
-      );
-    },
-  );
-
-  it('renders a long multiline reported error as escaped, wrapping text', async () => {
-    const reported = `Permission denied\n<img src=x onerror="window.fixtureUnsafe=true">\n${'dataset-'.repeat(60)}`;
-    mount(replication({ outcome: 'failed', details: { lastError: reported } }));
-    const detail = await expand();
-    const row = within(detail).getByText('Reported error').closest('tr')!;
-    const value = row.querySelector('span.whitespace-pre-wrap')!;
-    expect(value.textContent).toBe(reported);
-    expect(value).toHaveClass('wrap-anywhere');
-    expect(detail.querySelector('img, script, a')).toBeNull();
-  });
-
-  it.each([undefined, null, '', '   ', 17, false, { message: 'not a string' }])(
-    'does not invent a clean result or render a non-text reported error: %s',
-    async (lastError) => {
-      mount(replication({ details: { lastError } }));
-      const detail = within(await expand());
-      expect(detail.queryByText('Reported error')).not.toBeInTheDocument();
-      expect(detail.queryByText(/No errors/)).not.toBeInTheDocument();
-    },
-  );
-
-  it('preserves the reported error even when the supplied outcome differs', async () => {
-    mount(replication({ outcome: 'success', details: { lastError: 'Previous reported error' } }));
-    const detail = within(await expand());
-    expect(detail.getByText('Previous reported error')).toBeInTheDocument();
-    expect(detail.getByText('Reported error')).toBeInTheDocument();
-    expect(document.querySelector('[data-truenas-protection-row]')).toHaveAttribute(
-      'data-truenas-protection-outcome',
-      'success',
-    );
-  });
-
-  it.each([null, 'not a timestamp'])(
-    'keeps an unreadable last-run time unknown: %s',
-    async (at) => {
-      mount(replication({ completedAt: at, startedAt: null }));
-      const detail = within(await expand());
-      const row = detail.getByText('Last run').closest('tr')!;
-      expect(within(row).getByText('Unknown')).toBeInTheDocument();
-      expect(detail.queryByText('not a timestamp')).not.toBeInTheDocument();
-    },
-  );
-
-  it('uses the existing start-only spelling as a last-run time, not a completion', async () => {
-    mount(replication({ completedAt: null }));
-    const detail = within(await expand());
-    expect(detail.getByText('Last run').closest('tr')).not.toHaveTextContent('Unknown');
-    expect(detail.queryByText('Completed', { exact: true })).not.toBeInTheDocument();
-  });
-
-  it.each([
-    { startedAt: '2026-05-20T00:00:00Z', label: 'Created' },
-    { startedAt: null, label: 'Observed' },
-  ])('distinguishes a snapshot creation from the collection fallback: $label', async (testCase) => {
-    mount(
-      makeRecoveryPoint({
-        id: 'snapshot-evidence',
-        kind: 'snapshot',
-        mode: 'snapshot',
-        display: { itemLabel: 'tank/photos' },
-        startedAt: testCase.startedAt,
-      }),
-    );
-    const detail = within(await expand());
-    expect(detail.getByText(testCase.label)).toBeInTheDocument();
-    expect(detail.queryByText('Started', { exact: true })).not.toBeInTheDocument();
-    expect(detail.queryByText('Completed', { exact: true })).not.toBeInTheDocument();
-  });
-
-  it('replaces and removes error evidence in the same open task on accepted refresh', async () => {
-    const [points, setPoints] = createSignal([
-      replication({ outcome: 'failed', details: { lastError: 'Original failure reason' } }),
-    ]);
-    render(() => (
-      <TrueNASProtectionTable
-        points={points()}
-        emptyIcon={<span />}
-        emptyTitle="No activity"
-        emptyDescription="No activity"
-      />
-    ));
-    await expand();
-    expect(screen.getByText('Original failure reason')).toBeInTheDocument();
-    setPoints([
-      replication({
-        outcome: 'failed',
-        completedAt: '2026-05-21T01:00:00Z',
-        details: { lastError: 'Replacement failure reason' },
-      }),
-    ]);
-    expect(screen.getByText('Replacement failure reason')).toBeInTheDocument();
-    expect(screen.queryByText('Original failure reason')).not.toBeInTheDocument();
-    setPoints([replication({ outcome: 'success', completedAt: '2026-05-22T02:00:00Z' })]);
-    const detail = within(screen.getByTestId('truenas-protection-detail'));
-    expect(detail.queryByText('Reported error')).not.toBeInTheDocument();
-    expect(detail.queryByText('Replacement failure reason')).not.toBeInTheDocument();
-    expect(detail.getByText('Last run').closest('tr')).toHaveTextContent('2026');
-  });
-});
-
-describe('TrueNAS protection phone summary', () => {
-  const mount = (point: RecoveryPoint) =>
-    render(() => (
-      <TrueNASProtectionTable
-        points={[point]}
-        emptyIcon={<span />}
-        emptyTitle="No activity"
-        emptyDescription="No activity"
-        showToolbar={false}
-      />
-    ));
-
-  it('hides lower-priority headers and cells together without removing their detail', async () => {
-    mount(
-      makeRecoveryPoint({
-        id: 'phone',
-        kind: 'backup',
-        mode: 'remote',
-        outcome: 'unknown',
-        display: { itemLabel: 'tank/photos' },
-        details: { taskName: 'Replicate family photos', targetDataset: 'vault/family/photos' },
-      }),
-    );
-    const row = document.querySelector('[data-truenas-protection-row="phone"]')!;
-    const headers = document.querySelectorAll('thead th');
-    for (const index of [1, 2, 4]) {
-      expect(headers[index]).toHaveClass('platform-table-phone-hidden');
-      expect(row.children[index]).toHaveClass('platform-table-phone-hidden');
-    }
-    for (const index of [0, 3, 5]) {
-      expect(headers[index]).not.toHaveClass('platform-table-phone-hidden');
-      expect(row.children[index]).not.toHaveClass('platform-table-phone-hidden');
-    }
-    expect(within(row as HTMLElement).getByText('Replication')).toHaveClass(
-      'platform-table-phone-only-inline',
-    );
-    expect(within(row as HTMLElement).getByText('Unknown')).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for tank/photos' }));
-    const detail = within(screen.getByTestId('truenas-protection-detail'));
-    expect(detail.getAllByText('Replicate family photos').length).toBeGreaterThan(0);
-    for (const value of ['Replicate family photos', 'vault/family/photos']) {
-      for (const element of detail.getAllByText(value)) {
-        expect(element).toHaveClass('whitespace-normal', 'wrap-break-word');
-        expect(element).not.toHaveClass('truncate');
-        expect(element.closest('td')).toHaveAttribute('colspan', '2');
-      }
-    }
-    expect(detail.getAllByText('vault/family/photos').length).toBeGreaterThan(0);
-  });
-
-  it.each([
-    { kind: 'backup', mode: 'remote', startedAt: null, label: 'Last run' },
-    { kind: 'snapshot', mode: 'snapshot', startedAt: '2026-05-20T00:00:00Z', label: 'Created' },
-    { kind: 'snapshot', mode: 'snapshot', startedAt: null, label: 'Observed' },
-  ])('keeps $label and the exact instant behind both date projections', (testCase) => {
-    mount(makeRecoveryPoint({ id: 'phone', ...testCase }));
-    const time = document.querySelector('[data-truenas-protection-row] time')!;
-    expect(time).toHaveAttribute('datetime', '2026-05-20T00:00:00.000Z');
-    expect(time.querySelector('.sr-only')).toHaveTextContent(`${testCase.label}:`);
-    const narrow = time.querySelector('.platform-table-phone-only-inline')!;
-    expect(narrow).toHaveClass('flex-col');
-    const date = new Date('2026-05-20T00:00:00Z');
-    expect(narrow.children[0]).toHaveTextContent(
-      date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    );
-    expect(narrow.children[1]).toHaveTextContent(
-      date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-    );
-  });
-
-  it.each([null, '', 'unreadable'])(
-    'does not manufacture a native time or clock from %s',
-    (completedAt) => {
-      mount(
-        makeRecoveryPoint({
-          id: 'phone',
-          kind: 'backup',
-          mode: 'remote',
-          startedAt: null,
-          completedAt,
-        }),
-      );
-      const row = document.querySelector('[data-truenas-protection-row]')!;
-      expect(row.querySelector('time')).toBeNull();
-      expect(row.children[3]).toHaveTextContent('-');
-      expect(row).not.toHaveTextContent('Invalid Date');
-      expect(row).not.toHaveTextContent('unreadable');
-    },
-  );
 });

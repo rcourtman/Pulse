@@ -1,10 +1,19 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Accessor } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 
 import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
 import type { RecoverableSortKey } from '../proxmoxBackupsTableModel';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const artifact: RecoverableArtifact = {
   id: 'pbs:web:100',
@@ -31,7 +40,7 @@ const artifact: RecoverableArtifact = {
 };
 
 const renderTable = (layoutWidth: number) =>
-  render(() => (
+  renderInRouter(() => (
     <ProxmoxRecoverableTable
       artifacts={[artifact]}
       hasAnyArtifacts
@@ -48,6 +57,62 @@ const renderTable = (layoutWidth: number) =>
 
 afterEach(cleanup);
 
+describe('ProxmoxRecoverableTable record drawer', () => {
+  it('opens one restore point at a time with what the phone row drops', async () => {
+    const second: RecoverableArtifact = {
+      ...artifact,
+      id: 'pbs:db:101',
+      workload: { ...artifact.workload, key: 'vm:101', vmid: '101', name: 'db', label: 'db' },
+      location: 'offsite / pbs2',
+    };
+    renderInRouter(() => (
+      <ProxmoxRecoverableTable
+        artifacts={[
+          { ...artifact, workload: { ...artifact.workload, resourceId: 'vm-100' } },
+          second,
+        ]}
+        hasAnyArtifacts
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'created') as Accessor<RecoverableSortKey>}
+        sortDirection={() => 'desc'}
+        onSort={() => {}}
+        sizeMaxBytes={artifact.size ?? 0}
+        layoutWidth={() => 330}
+      />
+    ));
+
+    const toggle = screen.getByRole('button', { name: 'Expand details for web' });
+    expect(toggle).toHaveAttribute('aria-controls', 'proxmox-recoverable-detail-pbs:web:100');
+    await fireEvent.click(toggle);
+
+    const panel = screen.getByTestId('proxmox-recoverable-detail');
+    expect(within(panel).getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
+    expect(within(panel).getByText('PBS snapshot in main / pve1')).toBeInTheDocument();
+    expect(within(panel).getByText('main / pve1', { selector: 'span' })).toBeInTheDocument();
+    expect(within(panel).getByText('Verified')).toBeInTheDocument();
+    expect(within(panel).getByText('5 PBS files')).toBeInTheDocument();
+    expect(within(panel).getByRole('link', { name: 'Open web' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=vm-100',
+    );
+
+    // Opening another restore point closes the first.
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for db' }));
+    expect(screen.getAllByTestId('proxmox-recoverable-detail')).toHaveLength(1);
+    expect(screen.getByTestId('proxmox-recoverable-detail')).toHaveAttribute(
+      'data-inline-detail-for',
+      'pbs:db:101',
+    );
+    // The db backup has no registry match, so there is nothing to open.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Collapse db details' }));
+    expect(screen.queryByTestId('proxmox-recoverable-detail')).not.toBeInTheDocument();
+  });
+});
+
 describe('ProxmoxRecoverableTable responsive columns', () => {
   it('keeps source, location, recovery age, and state visible in compact containers', () => {
     renderTable(330);
@@ -59,15 +124,10 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       'State',
     ]);
     expect(document.body.textContent).toContain('VM 100');
-    // Full-width provenance remains readable without a hover-only fallback.
-    const location = document.querySelector('[data-backup-location]');
-    expect(location).toHaveTextContent('main / pve1');
-    expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
-    expect(location?.closest('td')).toHaveAttribute('colspan', '4');
-    const details = document.querySelector('[data-backup-artifact-details]');
-    expect(details).toHaveTextContent('5 PBS files');
-    expect(details).toHaveClass('whitespace-normal', 'wrap-anywhere');
-    expect(details?.closest('td')).toBe(location?.closest('td'));
+    // The phone projection has no location column; the row title carries it.
+    expect(document.body.textContent).not.toContain('main / pve1');
+    expect(document.querySelector('td [title*="main / pve1"]')).not.toBeNull();
+    expect(document.body.textContent).not.toContain('5 PBS files');
   });
 
   it('restores every metadata column when the table has full width', () => {
@@ -102,7 +162,7 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       },
     }));
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxRecoverableTable
         artifacts={artifacts}
         hasAnyArtifacts

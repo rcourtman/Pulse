@@ -1,6 +1,8 @@
-import { For, Show, Suspense, createSignal, lazy, onCleanup, type Component } from 'solid-js';
-import { Button } from '@/components/shared/Button';
+import { For, Show, Suspense, createMemo, createSignal, lazy, type Component } from 'solid-js';
+import type { HistoryTimeRange } from '@/api/charts';
+import { getPhysicalDiskAlerts } from '@/components/Storage/physicalDiskAlertOwner';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   extractPhysicalDiskPresentationData,
@@ -13,32 +15,49 @@ import {
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
-import { eventBus } from '@/stores/events';
 
-// SMART history and chart controls are only needed after a disk row is opened.
-// Keep their Storage detail module out of the initial Workloads surface.
-const LazyDiskDetail = lazy(() =>
-  import('@/components/Storage/DiskDetail').then(({ DiskDetail }) => ({ default: DiskDetail })),
+import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
+
+// An opened disk shows the Storage disk drawer's Overview, so a disk reads the
+// same here as on the Storage tab. Load it only once a disk row is opened, to
+// keep it out of the initial Workloads surface.
+const LazyDiskDrawerOverview = lazy(() =>
+  import('@/components/Storage/DiskDrawerOverview').then(({ DiskDrawerOverview }) => ({
+    default: DiskDrawerOverview,
+  })),
 );
+
+// The disks' reporting machine is the open guest, not a loaded resource here:
+// alerts come from each disk's own identity, its Proxmox disk key and, when
+// the guest runs an agent, that agent's SMART temperature key.
+const NO_LOADED_DISK_OWNERS: ReadonlyMap<string, Resource> = new Map();
 
 const GuestPhysicalDiskRow: Component<{
   disk: Resource;
   alertResourceIds: string[];
+  reportingAgentId?: string;
   historyEnabled: boolean;
-  lastKnownReason?: string;
 }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
-  const { getDiskTemperatureThresholds } = useAlertsActivation();
-  const data = () =>
+  const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
+    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  );
+  const { activeAlerts } = useWebSocket();
+  const { detectionEnabled, getDiskTemperatureThresholds } = useAlertsActivation();
+  const data = createMemo(() =>
     extractPhysicalDiskPresentationData(
       props.disk,
       getDiskTemperatureThresholds,
       props.alertResourceIds,
-      // An API-only disk can have an independent reporting source. The guest
-      // agent's report cannot withdraw that source's current measurement.
-      props.disk.sourceType === 'api' && !props.disk.sources?.includes('agent')
-        ? undefined
-        : props.lastKnownReason,
+    ),
+  );
+  const alerts = () =>
+    getPhysicalDiskAlerts(
+      props.disk,
+      NO_LOADED_DISK_OWNERS,
+      activeAlerts,
+      detectionEnabled(),
+      props.reportingAgentId,
     );
   const health = () => getPhysicalDiskHealthStatus(data());
   const temperature = () => getPhysicalDiskTemperaturePresentation(data());
@@ -85,12 +104,13 @@ const GuestPhysicalDiskRow: Component<{
               </p>
             }
           >
-            <LazyDiskDetail
+            <LazyDiskDrawerOverview
               disk={props.disk}
-              nodes={[]}
-              alertResourceIds={props.alertResourceIds}
+              diskData={data()}
+              alerts={alerts()}
+              historyRange={historyRange()}
+              onHistoryRangeChange={setHistoryRange}
               historyEnabled={props.historyEnabled}
-              lastKnownReason={data().lastKnownReason}
             />
           </Suspense>
         </div>
@@ -107,13 +127,13 @@ export const GuestPhysicalDisks: Component<{
    * applies, then the guest's canonical ID and override keys.
    */
   alertResourceIds?: string[];
+  /** The guest's own agent, which reports these disks' SMART temperatures. */
+  reportingAgentId?: string;
   /**
    * False while the Overview holding these disks is hidden: an expanded disk's
    * charts and the list's live refresh pause until it is shown again.
    */
   historyEnabled?: boolean;
-  /** Why this guest's own agent report cannot be a current hardware reading. */
-  lastKnownReason?: string;
 }> = (props) => {
   // The Proxmox Overview snapshot deliberately excludes physical disks. Query
   // only the open guest's direct children rather than hydrating every disk in
@@ -122,79 +142,20 @@ export const GuestPhysicalDisks: Component<{
   const source = useUnifiedResources({
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
     cacheKey: `guest-physical-disks:${parentId}`,
-    reportBackgroundErrors: true,
-    readTimeoutMs: 20_000,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
   });
-  const [retrying, setRetrying] = createSignal(false);
-  let retryGeneration = 0;
-  // The same guest id may exist in another organisation. Its read must not
-  // inherit an unanswered retry's busy state, or its eventual settlement.
-  const resetRetry = () => {
-    retryGeneration += 1;
-    setRetrying(false);
-  };
-  const unsubscribeOrgSwitch = eventBus.on('org_switched', resetRetry);
-  onCleanup(() => {
-    unsubscribeOrgSwitch();
-    retryGeneration += 1;
-  });
-  const retry = async () => {
-    if (retrying() || source.loading()) return;
-    const generation = ++retryGeneration;
-    setRetrying(true);
-    try {
-      // This only rereads Pulse's scoped inventory; it never probes the guest.
-      await source.refetch();
-    } catch {
-      // The query owns its failure state. Provider text may contain private data.
-    } finally {
-      if (generation === retryGeneration) setRetrying(false);
-    }
-  };
   const disks = () =>
-    // A retained successful snapshot is not a current successful read. Remove
-    // its rows and expanded SMART/history consumer until this query recovers.
-    source.error()
-      ? []
-      : source
-          .resources()
-          .filter(
-            (resource) => resource.type === 'physical_disk' && resource.parentId === parentId,
-          );
+    source
+      .resources()
+      .filter((resource) => resource.type === 'physical_disk' && resource.parentId === parentId);
 
   return (
     <>
-      <Show when={parentId.length > 0 && !source.error() && disks().length === 0}>
-        <InfoCardFrame data-testid="guest-physical-disk-inventory-status">
-          <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
-            Physical Disks &amp; SMART
-          </h3>
-          <p class="text-xs text-muted" role="status">
-            {source.loading()
-              ? "Loading physical disk inventory… This reads Pulse's collected inventory, not the guest."
-              : 'No physical disks were reported for this guest. Missing inventory does not establish disk absence or health.'}
-          </p>
-        </InfoCardFrame>
-      </Show>
       <Show when={source.error()}>
-        <div class="space-y-2 rounded-md border border-border p-3 text-xs text-muted">
-          <p role="status">
-            Physical disk details are unavailable. Previously loaded disk readings are hidden until
-            a read succeeds. Reads stop waiting after 20 seconds. Retry reads Pulse's collected
-            inventory, not a guest probe.
-          </p>
-          <Button
-            size="sm"
-            class="min-h-11 min-w-11 sm:min-h-0"
-            aria-label="Retry physical disk details"
-            disabled={retrying() || source.loading()}
-            onClick={() => void retry()}
-          >
-            {retrying() || source.loading() ? 'Retrying…' : 'Retry'}
-          </Button>
-        </div>
+        <p class="text-xs text-muted" role="status">
+          Physical disk details are unavailable.
+        </p>
       </Show>
       <Show when={disks().length > 0}>
         <InfoCardFrame data-testid="guest-physical-disks">
@@ -207,8 +168,8 @@ export const GuestPhysicalDisks: Component<{
                 <GuestPhysicalDiskRow
                   disk={disk}
                   alertResourceIds={props.alertResourceIds ?? []}
+                  reportingAgentId={props.reportingAgentId}
                   historyEnabled={props.historyEnabled !== false}
-                  lastKnownReason={props.lastKnownReason}
                 />
               )}
             </For>

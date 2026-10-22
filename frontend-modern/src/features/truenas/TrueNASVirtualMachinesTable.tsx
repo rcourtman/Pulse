@@ -157,11 +157,16 @@ export const TrueNASVirtualMachinesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
+  /** The page's URL search, when it owns one; the table then reads and writes it. */
+  search?: () => string;
+  onSearchChange?: (value: string) => void;
 }> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.vms,
     initialStatus: 'all' as TrueNASVMStatusFilter,
     filter: filterTrueNASVMs,
+    externalSearch: props.search,
+    onExternalSearchChange: props.onSearchChange,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-vm-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
@@ -372,6 +377,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={5}

@@ -1,24 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DISK_DETAIL_HISTORY_RANGE_OPTIONS,
-  DISK_DETAIL_LIVE_CHARTS,
-  getDiskAttributeCardValueTextClass,
-  getDiskAttributeValueTextClass,
   getDiskDetailAttributeCards,
-  getDiskDetailHealthPresentation,
-  getDiskDetailHistoryCharts,
-  getDiskDetailHistoryFallbackMessage,
-  getDiskDetailLiveBadgeLabel,
   getLinkedDiskHealthDotVariant,
   getLinkedDiskTemperatureTextClass,
 } from '@/features/storageBackups/diskDetailPresentation';
 
 describe('diskDetailPresentation', () => {
-  it('returns canonical attribute tone classes', () => {
-    expect(getDiskAttributeValueTextClass(true)).toBe('text-green-600 dark:text-green-400');
-    expect(getDiskAttributeValueTextClass(false)).toBe('text-red-600 dark:text-red-400');
-  });
-
   it('labels a retained temperature as last known without a health tone', () => {
     const disk = {
       node: 'tower',
@@ -41,7 +28,6 @@ describe('diskDetailPresentation', () => {
       { warning: 50, critical: 55 },
     );
     expect(live).toEqual([{ label: 'Temperature', value: '72°C', ok: false }]);
-    expect(getDiskAttributeCardValueTextClass(live[0])).toBe('text-red-600 dark:text-red-400');
 
     const retained = getDiskDetailAttributeCards(
       {
@@ -59,7 +45,6 @@ describe('diskDetailPresentation', () => {
     expect(retained).toEqual([
       { label: 'Last known temperature', value: '72°C', ok: true, lastKnown: true },
     ]);
-    expect(getDiskAttributeCardValueTextClass(retained[0])).toBe('text-muted');
   });
 
   it('returns canonical linked-disk state presentation', () => {
@@ -79,41 +64,6 @@ describe('diskDetailPresentation', () => {
     expect(getLinkedDiskTemperatureTextClass(71, { warning: 65, critical: 70 })).toBe(
       'text-red-500',
     );
-  });
-
-  it('carries the row verdict and its reason into the drawer header', () => {
-    const disk = {
-      node: 'tower',
-      instance: 'cluster-main',
-      devPath: '/dev/sda',
-      model: 'Archive HDD',
-      serial: 'SERIAL-1',
-      wwn: '',
-      size: 1,
-      health: 'PASSED',
-      wearout: -1,
-      type: 'hdd',
-      temperature: 42,
-      rpm: 7200,
-      used: '',
-      riskReasons: [] as string[],
-    };
-    expect(getDiskDetailHealthPresentation(disk)).toEqual({
-      label: 'Healthy',
-      summary: '',
-      tone: 'text-emerald-700 dark:text-emerald-300',
-    });
-    expect(
-      getDiskDetailHealthPresentation({
-        ...disk,
-        health: 'FAILED',
-        riskReasons: ['SMART failed.'],
-      }),
-    ).toEqual({
-      label: 'Replace Now',
-      summary: 'SMART failed.',
-      tone: 'text-red-700 dark:text-red-300',
-    });
   });
 
   it('builds canonical SATA and NVMe attribute cards', () => {
@@ -185,44 +135,5 @@ describe('diskDetailPresentation', () => {
         { label: 'Unsafe Shutdowns', value: '4', ok: true },
       ]),
     );
-  });
-
-  it('returns canonical disk detail chart contracts', () => {
-    expect(DISK_DETAIL_HISTORY_RANGE_OPTIONS.map((option) => option.value)).toEqual([
-      '1h',
-      '6h',
-      '12h',
-      '24h',
-      '7d',
-      '14d',
-      '30d',
-      '90d',
-    ]);
-    expect(DISK_DETAIL_LIVE_CHARTS.map((chart) => chart.label)).toEqual(['Read', 'Write', 'Busy']);
-    expect(getDiskDetailLiveBadgeLabel()).toBe('Real-time');
-    expect(getDiskDetailHistoryFallbackMessage()).toContain('stable identity');
-
-    expect(
-      getDiskDetailHistoryCharts({
-        node: 'tower',
-        instance: 'cluster-main',
-        devPath: '/dev/nvme0n1',
-        model: 'NVMe',
-        serial: 'SERIAL-2',
-        wwn: '',
-        size: 1,
-        health: 'PASSED',
-        wearout: -1,
-        type: 'nvme',
-        temperature: 55,
-        rpm: 0,
-        used: '',
-        riskReasons: [],
-        smartAttributes: {
-          percentageUsed: 12,
-          availableSpare: 97,
-        },
-      }).map((chart) => chart.metric),
-    ).toEqual(['smart_temp', 'smart_percentage_used', 'smart_available_spare']);
   });
 });

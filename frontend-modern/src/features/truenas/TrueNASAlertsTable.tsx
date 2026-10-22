@@ -43,7 +43,9 @@ import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
   getAlertSeverityDetailTone,
+  getAlertSeverityIndicator,
 } from '@/utils/alertSeverityPresentation';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 
 const TRUENAS_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<TrueNASIncidentSeverityFilter>();
@@ -61,7 +63,6 @@ const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSect
         detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
-        detailRow('Summary', incident.summary),
         detailRow('Label', incident.label),
         detailRow('Code', formatPlatformAlertCode(incident.code, 'truenas'), {
           title: incident.code,
@@ -98,11 +99,19 @@ const AlertDetailTable: Component<{ incident: TrueNASIncidentRow; onClose: () =>
   <InlineDetailPanel
     testId="truenas-alert-detail"
     detailFor={props.incident.id}
-    title="Alert detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
-      props.incident.code,
-      'truenas',
-    )}`}
+    title={props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'truenas')}
+    status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
+    summary={props.incident.summary || props.incident.label}
+    actions={
+      <RecordOwnerLink
+        subject={{
+          id: props.incident.resourceId,
+          name: props.incident.resourceName,
+          type: props.incident.resourceType,
+          resource: props.incident.resource,
+        }}
+      />
+    }
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-truenas-alert-detail-for': props.incident.id }}
     onClose={props.onClose}

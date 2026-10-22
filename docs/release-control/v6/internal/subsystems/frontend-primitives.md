@@ -1473,14 +1473,15 @@ acceptance.
 
 ### Stable physical-disk History composition
 
-Disk detail composes shared HistoryChart owners from stable disk-family catalog
+The disk drawer Overview (`DiskDrawerOverview`, also shown for a guest's own
+disks) composes the shared drawer history from stable disk-family catalog
 entries, independently of the latest optional temperature/SMART fields. Matching
 snapshots must not recreate chart DOM, reset inspection or restart reads. Stored
 series retain their own sample provenance; current collection unavailability is
-still reported beside the SMART facts in the detail's single view (there is no
-History tab), and empty history is not a manufactured zero. The
+still reported beside the SMART facts on Overview (there is no History tab),
+and empty history is not a manufactured zero. The
 shared target/range owner continues to cancel old selections and reject late
-responses. `DiskDetail.history-collection.test.tsx` and the production
+responses. `DiskDrawer.history-collection.test.tsx` and the production
 `browser-tests/disk-history-collection.cjs` fixture verify these boundaries with
 synthetic data; neither establishes native NAS health or installed acceptance.
 
@@ -7112,8 +7113,12 @@ retired summary-table header aliases.
 Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific
-`data-*` attributes, colspan, and content classes, but they must not recreate
-the surface-alt detail row shell locally. The content shell must clip
+`data-*` attributes and colspan, but not a cell or content class, and they
+must not recreate the surface-alt detail row shell locally. Five tables
+(Proxmox Ceph, Mail Gateway, Replication and Coverage, Docker Networks) once
+replaced the content class to change padding and silently lost the phone
+width cap below, so the shell is no longer overridable; layout a drawer
+needs belongs on an element inside it. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
 container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
@@ -7122,7 +7127,7 @@ the table scroll shell's content-box inline size (`max-w-[100cqi]`; the shell
 is a size container), never a viewport estimate of the page chrome, so a phone
 drawer does not leave an empty strip beside its content (the retired
 `100vw-3.5rem` cap left 27px at 390px) and is never wider than the table's
-visible area. Callers that pass their own `contentClass` own their width.
+visible area.
 Fixed-layout cells clip overflow, so the sticky offset is inert and horizontal
 scrolling still moves the drawer with its cell.
 Long operator-state copy must wrap inside the shared row border
@@ -7148,7 +7153,20 @@ Inline detail section content is registry-backed separately from the row shell.
 detail row compaction, section-table rendering, value-tone classes, and the
 inline collapse action for platform alert/activity/protection/service detail
 panels. `InlineDetailPanel` composes `ObjectDrawerHeader`, so its entire heading
-row closes the panel instead of presenting a separate text button; consumers
+row closes the panel instead of presenting a separate text button. It heads a
+record drawer the way object drawers are headed: `DrawerSubjectHeading` with
+the record's subject (the affected resource, service or dataset, never the
+panel kind such as "Alert detail") and its status dot, a one-line summary,
+and an optional `actions` slot for a link to the owning object; the collapse
+label names that subject rather than an id. Record values wrap
+(`DetailSectionTable` `wrapValues`), because a record is mostly sentences and
+identifiers that a phone cannot hover to read. `DrawerSubjectHeading` is the
+one subject heading for every drawer: status dot then name, the name wrapping
+rather than truncating, and the dot omitted only for a record without a
+status. `ResourceDetailDrawer` composes it too, with its source and identity
+badges in the trailing slot, and takes the table row's own `statusIndicator`
+through `PlatformResourceDetailTableRow` so the drawer dot cannot disagree
+with the row dot it opened from; consumers
 may own the platform-specific section data, but they must not recreate local
 `DetailField` grids or route platform-neutral detail tables through a
 provider-named primitive.
@@ -10653,6 +10671,50 @@ remains visible beside invalid capacity without formatting NaN/Infinity bytes.
 Model/component controls cover non-finite, absent and non-positive capacity;
 `workload-disk-metrics.cjs` checks both Bars (including the tooltip) and Sparklines
 through the same REST reading at desktop and phone widths.
+
+The storage pool drawer left the `form-select-shell` consumer list: its usage
+chart now takes its range from the shared drawer history toolbar
+(`GuestDrawerHistory`), the same control as the guest and node drawers, rather
+than a pool-local `FormSelect`. The guest drawer's embedded disk detail keeps
+its `FormSelect`. Guardrails that pinned the retired pool card classes now pin
+the drawer pieces the pool Overview composes (attention section, Worth
+checking, drawer history, closed Details of `DetailSectionTable` sections).
+
+`features/platformPage/RecordOwnerLink.tsx` is the one owner link for record
+drawers: an `InlineDetailPanel` `actions` button, styled as a drawer header
+action, that opens the object a record is about through
+`buildResourcePagePath`. It renders only when that path carries a parameter
+the target page reads to open or filter to the object (`buildRecordOwnerPath`),
+so a record never offers a link that lands on a whole tab. Platform record
+drawers compose it instead of hand-built anchors, and every record drawer is
+an `InlineDetailPanel` inside `InlineDetailTableRow`: the Docker Swarm tables
+share one panel in `DockerNativeTableShared.tsx`, Kubernetes records share
+`KubernetesRecordDetail.tsx`, and hand-written `dl`/grid detail rows are
+retired from Docker networks and storage usage, Proxmox replication, coverage
+and recoverable points, and Agent Doctor.
+
+Full-width helper rows span the visible columns, never a guess. A
+`colspan={100}` windowing spacer or `colspan={99}` storage group row created
+phantom fixed-layout columns, and on phones (where hidden columns leave the
+visible percentages short of 100%) those columns took the rest of the table:
+rows and drawers on windowed Kubernetes tables stopped at 70% of the width.
+`components/shared/tableVisibleColumnSpan.ts` counts the header's visible
+cells (re-measuring on resize and header changes), and `PlatformWindowedRows`
+spacers, `StorageGroupRow` and the storage pool spacers use it.
+`DrawerAttentionSection` also owns `DrawerNoAlertsLine`, the one "No active
+alerts" line every drawer shows (with the optional availability note), and the
+attention card's subject wraps instead of truncating.
+`features/platformPage/platformDetailTimestampRow.ts` is the one drawer row for
+a reported timestamp (absolute time and age, wrapping, an optional sentinel
+year), replacing three copies.
+
+Platform tables that a page drives from the URL pass the page's search through
+`createPlatformTableFilterState`'s `externalSearch`/`onExternalSearchChange`
+rather than a table-local signal: the TrueNAS Storage, Apps, VMs, Shares,
+Services and Protection tables now do this for `?q=`, as the Kubernetes tables
+already did, so `RecordOwnerLink` can land on a narrowed tab whose own search
+box shows and clears the filter. `ArtifactSourceBadge` takes the opt-in
+`MetadataBadge` `wrap` for drawer use; table rows keep the one-line badge.
 
 ### Configuration transfer submission ownership (15 October 2026)
 
