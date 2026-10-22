@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "e9f72bc703dc5c10a76e5545e94ae65e74d813b3",
+  "source_commit": "e9f72bc703dc5c10a76e5545e94ae65e74d813b3",
+  "verified_at": "2026-10-22T13:44:16.440223Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/stores/websocket-global.ts",
+    "frontend-modern/src/stores/websocket.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "0625742c7170035bb815b74fe52c27480393e4202358b8e4301eb16a9ac01b79",
+    "frontend-modern/src/stores/websocket-global.ts": "f1534f39980a0e6ae5ad74e40d0c1daa79e4d3c08a1ee8ea87182257c0ad427d",
+    "frontend-modern/src/stores/websocket.ts": "d6e3bf744e43f8b60e21e595263b42b3ecaafe195ba817b5999404b9ebd4c119",
+    "frontend-modern/src/useAppRuntimeState.ts": "b59962e3ec3f6b4475e384a085b8100f2f8b514da09529d06232a2c69a8f8705"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 880
+    }
+  ],
+  "states": [
+    "Open socket + welcome/pong/alert-only frames stays amber with persistent data-wait warning.",
+    "Current resource snapshot removes warning; reconnect keeps retained estate but withdraws green until a current snapshot.",
+    "Explicit empty array is valid received state; receipt is not per-reading freshness or outage recovery.",
+    "Eight final captures natively opened and inspected; eight correctly scoped nonvacuous WCAG scans have no violations or incomplete results.",
+    "Dark warning-label contrast is 14.05:1 after repair, versus measured 4.03:1 before; light label is 5.69:1."
+  ],
+  "interactions": [
+    "Real full App runtime/global websocket store/router/Layout/Proxmox table consume local synthetic GET/socket fixtures.",
+    "Focused navigation control survives data-wait transitions; desktop keyboard and narrow touch More-menu/Escape remain usable.",
+    "No page or console errors, external requests, API mutations or new full-state bootstrap read; context/browser/server close."
+  ],
+  "browser": {
+    "playwright": "1.56.1",
+    "axe": "4.14.0",
+    "engines": [
+      {
+        "case": "desktop",
+        "version": "141.0.7390.37"
+      },
+      {
+        "case": "narrow",
+        "version": "26.0"
+      }
+    ]
+  },
+  "scope": "Existing connection presentation only. Vite offline preview, not a deployed Go journey, collector freshness, original #3105 cause/recovery, guest liveness or stopped Docs history/reload control."
+}
