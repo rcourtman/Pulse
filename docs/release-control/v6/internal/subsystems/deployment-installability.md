@@ -61,9 +61,16 @@ must succeed before either retention pass. Metadata encryption failure permits
 no upload or retention, retains the previous backups and leaves private local
 failure evidence without claiming completion. Unavailable Docker inventory is
 still explicitly marked unavailable and does not skip metadata encryption.
-Plaintext inputs are removed only after successful encryption. Existing artifacts
-are not rewritten or retrospectively protected; prior plaintext metadata may
-remain in local or remote history until eligible for the configured retention.
+Encrypted jobs stream tar/gzip and metadata output directly to age on stdin;
+they never create new plaintext staging archives or inventories, even when age
+rejects the recipient or fails after reading input. A failed tar pipeline must
+fail the job even if age successfully encrypts the incomplete stream. Partial
+encrypted files may remain under private modes for diagnosis, but are not a
+completed backup. Plaintext-mode output, encrypted filenames and decrypted
+archive layout are unchanged. Existing artifacts are not rewritten or
+retrospectively protected; prior plaintext may remain in local or remote
+history until eligible for the configured retention. This is no claim about
+OS swap, core dumps or the source data's own storage encryption.
 
 Local or remote cleanup errors return failure rather than a finished message;
 retention itself can partially progress before an error. Existing data paths,
@@ -105,7 +112,10 @@ reservations (also directories and dangling links). The metadata controls use a
 closed age recorder; when real age/age-keygen are installed or explicitly supplied,
 a separate full-entrypoint case generates an isolated fixture key and decrypts
 both real tarballs and selected metadata. The fixture identity is never printed
-or retained.
+or retained. Encryption controls observe staging before and after every age
+input, reject new plaintext on encryption and producer failures, and distinguish
+a successfully encrypted partial tar stream from a successful job. A separate
+real-age invalid-recipient case checks failure without plaintext fallback.
 Retention cases exercise actual local deletion across old/young plain and
 encrypted archives and inventories, unrelated/lookalike/nested files, links and
 directories. The closed rclone adapter models synthetic uploads and expiry,
