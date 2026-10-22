@@ -1043,6 +1043,10 @@ func (h *Hub) buildStateForOrg(client *Client, orgID string) (interface{}, func(
 }
 
 func (h *Hub) closeUnavailableStateClient(client *Client) {
+	h.closeUnavailableStateClientBefore(client, time.Now().Add(time.Second))
+}
+
+func (h *Hub) closeUnavailableStateClientBefore(client *Client, deadline time.Time) {
 	if client == nil || client.closed.Load() || h.isStopping() {
 		return
 	}
@@ -1054,7 +1058,7 @@ func (h *Hub) closeUnavailableStateClient(client *Client) {
 	if client.conn != nil {
 		_ = client.conn.WriteControl(websocket.CloseMessage,
 			websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "State delivery temporarily unavailable"),
-			time.Now().Add(time.Second))
+			deadline)
 		_ = client.conn.Close()
 	}
 	h.mu.Lock()
@@ -1071,8 +1075,13 @@ func (h *Hub) closeUnavailableStateAudience(orgID string) {
 		}
 	}
 	h.mu.RUnlock()
+	// One budget for the entire audience, not one per slow connection. The
+	// shared broadcast worker (and Stop joining it) must not wait N seconds
+	// for N clients. Once the best-effort control budget expires, Close still
+	// interrupts each socket; a blocked peer may not receive the close frame.
+	deadline := time.Now().Add(time.Second)
 	for _, client := range clients {
-		h.closeUnavailableStateClient(client)
+		h.closeUnavailableStateClientBefore(client, deadline)
 	}
 }
 

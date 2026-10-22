@@ -4660,6 +4660,11 @@ observe existing work only; they never start a getter or collect an agent report
 No agent credential, removal, update or restart authority changes. The controlled
 hub/health contract test exercises the process dependency, not installed agents.
 
+Broadcast audience retirement shares one control-write deadline instead of
+extending shutdown for each slow browser. Socket expiry/closure does not stop,
+restart or diagnose any monitored agent. Real socket cleanup tests cover the
+bound while the production monitor-projection fixture starts no agent loops.
+
 
 ### Unix installer certificate probing has a total deadline
 

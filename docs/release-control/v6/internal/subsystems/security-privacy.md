@@ -1566,6 +1566,12 @@ close 1013, never auth close 1008; late abandoned results are discarded and
 recovery still calls the getter for the requesting tenant. Hub cancellation,
 reconnect/tenant and health-shape regressions cover this boundary.
 
+One content-free close deadline covers an entire affected audience. A blocked
+peer may miss the best-effort 1013 frame, but its socket and registration still
+close; unaffected tenants remain live. Real socket tests check the common
+deadline, exact generic reason and continued other-tenant delivery. The real
+monitor-projection health control uses only a gated in-memory registry read.
+
 
 ### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
 

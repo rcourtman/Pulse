@@ -5281,9 +5281,13 @@ auto-register mutation boundary.
 
 The hub bounds each initial/requested/current-broadcast queue and getter wait
 at 30 seconds. A client whose initial or requested state cannot be built receives
-a generic retryable WebSocket close (1013), not an authentication failure or an
-invented empty state. A failed current-state broadcast retires only its existing
-recipient audience by the same close path. The one shared build slot remains held until the original
+a best-effort generic retryable WebSocket close (1013), not an authentication
+failure or an invented empty state. A failed current-state broadcast retires only
+its existing recipient audience by the same close path. That entire audience
+shares one one-second control-write deadline; slow peers cannot each extend the
+shared worker or shutdown by another second. Expiry still closes their sockets
+and removes their registrations, but delivery of a close frame to a blocked
+peer is not guaranteed. The one shared build slot remains held until the original
 getter actually returns, even after timeout, disconnect or hub shutdown. A late
 abandoned result is discarded; reconnects never create parallel replacement
 getters, and shutdown does not wait for an uncancellable legacy getter.
@@ -5298,9 +5302,13 @@ making an otherwise healthy monitor fail. Individual unavailable monitored nodes
 and scheduler dead letters do not gate this process-health decision.
 
 `TestContractStateDeliveryStallReadiness` exercises the production budget through
-a real hub/socket and health handler, with idle/slow/stalled/recovered controls.
-The hub tests cover bounded reconnect work, cancellation, shutdown, late-result
-discard and tenant-scoped recovery. This contains a stalled getter and repairs
+the real `Monitor.BuildFrontendState`, an in-memory registry projection and a
+real hub/socket and health handler, with idle/slow/stalled/recovered controls.
+Only a registry read is gated; no collector, guest or database starts. The hub
+tests cover bounded reconnect work, cancellation, shutdown, late-result discard
+and tenant-scoped recovery. Real Gorilla socket tests check identical audience
+deadlines, generic 1013 delivery to responsive peers, continued delivery to the
+other tenant and closure of five stalled transports within one write budget. This contains a stalled getter and repairs
 the health blind spot; it does not establish the lock owner or cause of #3105's
 reported outage, cancel a blocked mutex, or prove installed/released recovery.
 
