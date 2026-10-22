@@ -1591,7 +1591,7 @@ describe('Docker native tables', () => {
       },
     });
 
-    render(() => (
+    renderInRouter(() => (
       <DockerNetworksTable
         resources={[network]}
         emptyIcon={<span />}
@@ -1671,7 +1671,7 @@ describe('Docker native tables', () => {
       },
     });
 
-    render(() => (
+    renderInRouter(() => (
       <DockerNetworksTable
         resources={[network]}
         relatedResources={[network, container]}
@@ -1763,7 +1763,7 @@ describe('Docker native tables', () => {
       ...Array.from({ length: 27 }, (_, offset) => makeAttachedContainer(offset + 3)),
     ];
 
-    render(() => (
+    renderInRouter(() => (
       <DockerNetworksTable
         resources={[network]}
         relatedResources={[network, ...containers]}
@@ -2163,10 +2163,14 @@ describe('Docker native tables', () => {
     const state = screen.getByText('Failed');
     expect(state).toHaveClass('text-red-600');
     expect(state).toHaveAttribute('title', 'task: non-zero exit (1)');
-    // A phone cannot hover: the expansion says why it failed.
+    // A phone cannot hover: the drawer leads with why it failed, under the
+    // task's name and the row's own dot.
     fireEvent.click(document.querySelector('[data-docker-task-row="task-2"]')!);
-    expect(screen.getByText('Error')).toBeInTheDocument();
-    expect(screen.getByText('task: non-zero exit (1)')).toBeInTheDocument();
+    const detail = within(document.querySelector('[data-testid="docker-task-detail"]')!);
+    expect(detail.getByRole('heading', { name: 'web.3' })).toBeInTheDocument();
+    expect(detail.getByLabelText('Failed')).toBeInTheDocument();
+    expect(detail.getByText('task: non-zero exit (1)')).toBeInTheDocument();
+    expect(detail.getByText('Shutdown')).toBeInTheDocument();
   });
 
   it('renders Docker Swarm secret API metadata without secret data', () => {
@@ -2203,7 +2207,7 @@ describe('Docker native tables', () => {
   });
 
   it('renders Docker Swarm config API metadata', () => {
-    render(() => (
+    renderInRouter(() => (
       <DockerConfigsTable
         resources={[
           makeResource({
@@ -2242,5 +2246,167 @@ describe('Docker native tables', () => {
     expect(
       document.querySelector('[data-inline-docker-config-detail-for="config-1"]'),
     ).not.toBeNull();
+  });
+  it('opens a Swarm service as a record drawer with every label, human dates, and its host', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T15:00:00Z'));
+    renderInRouter(() => (
+      <DockerServicesTable
+        resources={[
+          makeResource({
+            id: 'service-1',
+            type: 'docker-service',
+            name: 'checkout-api',
+            docker: {
+              hostname: 'manager-1',
+              serviceId: 'svc-abc123',
+              image: 'registry.example.com/checkout-api:2026.05',
+              mode: 'replicated',
+              desiredTasks: 4,
+              runningTasks: 2,
+              labels: {
+                'com.docker.stack.namespace': 'shop',
+                'com.example.owner': 'payments',
+                'com.example.tier': 'api',
+                'com.example.zone': 'eu-west',
+              },
+              serviceUpdate: {
+                state: 'rollback_started',
+                message: 'Service replicas below desired',
+                completedAt: '2026-05-24T13:00:00Z',
+              },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No services"
+        emptyDescription="No services"
+        showToolbar={false}
+      />
+    ));
+
+    const disclosure = screen.getByRole('button', { name: 'Expand details for checkout-api' });
+    fireEvent.click(disclosure);
+
+    const panel = document.querySelector<HTMLElement>('[data-testid="docker-service-detail"]')!;
+    const detail = within(panel);
+    // Headed by the service and the row's own dot, with its verdict in words.
+    expect(detail.getByRole('heading', { name: 'checkout-api' })).toBeInTheDocument();
+    expect(detail.getByLabelText('Rolling back')).toBeInTheDocument();
+    expect(
+      detail.getByText(
+        '2 of 4 replicas running · update rollback started · Service replicas below desired',
+      ),
+    ).toBeInTheDocument();
+    // Every label, not the first three the table cell keeps.
+    expect(detail.getByText('Labels (4)')).toBeInTheDocument();
+    expect(detail.getByText('com.example.zone')).toBeInTheDocument();
+    expect(detail.getByText('eu-west')).toBeInTheDocument();
+    // A completion stamp reads as a date and an age, the raw stamp on hover.
+    expect(detail.getAllByTitle('2026-05-24T13:00:00Z')[0]).toHaveTextContent(/2026.*\(2h ago\)$/);
+    // The reporting host is one tap away.
+    expect(detail.getByRole('link', { name: 'Open manager-1' })).toHaveAttribute(
+      'href',
+      '/docker/overview?q=manager-1',
+    );
+    // The header closes the drawer and hands focus back to the row's disclosure.
+    expect(disclosure).toHaveAttribute('aria-controls', 'docker-service-detail-service-1');
+    expect(document.getElementById('docker-service-detail-service-1')).toContainElement(panel);
+    fireEvent.click(detail.getByRole('button', { name: 'Collapse checkout-api details' }));
+    expect(document.querySelector('[data-testid="docker-service-detail"]')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('shows a Swarm secret record without any secret value', () => {
+    renderInRouter(() => (
+      <DockerSecretsTable
+        resources={[
+          makeResource({
+            id: 'secret-1',
+            type: 'docker-secret',
+            name: 'api-token',
+            docker: {
+              hostname: 'manager-1',
+              secretId: 'sec-1',
+              driver: 'vault',
+              objectCreatedAt: '2026-05-24T13:10:00Z',
+              labels: { stack: 'ops' },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No secrets"
+        emptyDescription="No secrets"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(document.querySelector('[data-docker-secret-row="secret-1"]')!);
+    const detail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-secret-detail"]')!,
+    );
+    expect(detail.getByRole('heading', { name: 'api-token' })).toBeInTheDocument();
+    expect(
+      detail.getByText("Pulse sees this secret's metadata only, never its value."),
+    ).toBeInTheDocument();
+    expect(detail.getByText('sec-1')).toBeInTheDocument();
+    expect(detail.getByText('Labels (1)')).toBeInTheDocument();
+  });
+
+  it('links each container on a network to the Docker overview', () => {
+    const network = makeResource({
+      id: 'network-1',
+      type: 'docker-network',
+      name: 'frontend',
+      docker: { hostname: 'edge-01', networkId: 'net-1', driver: 'bridge', scope: 'local' },
+    });
+    const container = makeResource({
+      id: 'container-1',
+      type: 'app-container',
+      name: 'edge-web',
+      displayName: 'edge-web',
+      status: 'running',
+      relationships: [
+        {
+          sourceId: 'container-1',
+          targetId: 'network-1',
+          type: 'attached_to',
+          confidence: 1,
+          active: true,
+          discoverer: 'docker_adapter',
+          observedAt: '2026-06-03T09:00:00Z',
+          lastSeenAt: '2026-06-03T09:00:00Z',
+        },
+      ],
+      docker: {
+        hostname: 'edge-01',
+        image: 'nginx:latest',
+        containerState: 'running',
+        networks: [{ name: 'frontend', ipv4: '10.88.0.12' }],
+      },
+    });
+
+    renderInRouter(() => (
+      <DockerNetworksTable
+        resources={[network]}
+        relatedResources={[network, container]}
+        emptyIcon={<span />}
+        emptyTitle="No networks"
+        emptyDescription="No networks"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(document.querySelector('[data-docker-network-row="network-1"]')!);
+    const detail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-network-detail"]')!,
+    );
+    expect(detail.getByRole('heading', { name: 'frontend' })).toBeInTheDocument();
+    expect(detail.getByText('bridge · local · 1 attached container')).toBeInTheDocument();
+    expect(detail.getByRole('link', { name: 'edge-web' })).toHaveAttribute(
+      'href',
+      '/docker/overview?q=edge-web',
+    );
+    expect(detail.getByText('Network ID')).toBeInTheDocument();
   });
 });

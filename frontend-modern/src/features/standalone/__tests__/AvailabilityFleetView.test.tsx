@@ -4,13 +4,21 @@ import { createSignal } from 'solid-js';
 import type { AvailabilityHistoryTarget } from '@/api/availabilityHistory';
 import type { Resource } from '@/types/resource';
 import { AvailabilityFleetView } from '../AvailabilityFleetView';
+import { getStandaloneResourceStatusIndicator } from '../standalonePageModel';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: (props: { resource: Resource; onClose?: () => void }) => (
+  ResourceDetailDrawer: (props: {
+    resource: Resource;
+    onClose?: () => void;
+    presentation?: string;
+    statusIndicator?: { variant: string; label: string };
+  }) => (
     <div
       data-testid="resource-detail-drawer"
       data-resource-id={props.resource.id}
       data-resource-status={props.resource.status}
+      data-presentation={props.presentation}
+      data-status-variant={props.statusIndicator?.variant}
     >
       <button type="button" onClick={props.onClose}>
         Close
@@ -153,6 +161,45 @@ describe('AvailabilityFleetView', () => {
       'data-resource-id',
       'availability:target-0',
     );
+  });
+
+  it('makes each tile a disclosure for the shared drawer, closed by a second click', () => {
+    render(() => (
+      <AvailabilityFleetView
+        resources={[resource(1), resource(5)]}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+
+    const first = screen.getByRole('button', { name: 'Open details for Service 1' });
+    const second = screen.getByRole('button', { name: 'Open details for Service 5' });
+    const detail = screen.getByTestId('availability-fleet-detail');
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(first).toHaveAttribute('aria-controls', detail.id);
+
+    fireEvent.click(first);
+    expect(first).toHaveAttribute('aria-expanded', 'true');
+    expect(first).toHaveClass('border-blue-500');
+    // The same drawer the checks table opens, headed by the tile's own dot.
+    const drawer = screen.getByTestId('resource-detail-drawer');
+    expect(drawer).toHaveAttribute('data-presentation', 'table-row');
+    expect(drawer).toHaveAttribute(
+      'data-status-variant',
+      getStandaloneResourceStatusIndicator(resource(1), Date.now()).variant,
+    );
+
+    fireEvent.click(second);
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(second).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-status-variant',
+      getStandaloneResourceStatusIndicator(resource(5), Date.now()).variant,
+    );
+
+    fireEvent.click(second);
+    expect(second).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
   });
 
   it('keeps current health visible when history is unavailable', () => {

@@ -33,6 +33,7 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import type { ResourceType } from '@/types/resource';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
@@ -213,6 +214,16 @@ const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => vo
       label: formatPlatformTableTitleCaseValue(props.activity.stateBucket),
     }}
     summary={`${formatActivityKind(props.activity.activityKind)} · ${props.activity.title}`}
+    actions={
+      <RecordOwnerLink
+        subject={{
+          id: props.activity.resourceId,
+          name: props.activity.resourceName,
+          type: props.activity.resourceType,
+          resource: props.activity.resource,
+        }}
+      />
+    }
     sections={buildActivityDetailSections(props.activity)}
     detailAttributes={{ 'data-vsphere-activity-detail-for': props.activity.id }}
     onClose={props.onClose}

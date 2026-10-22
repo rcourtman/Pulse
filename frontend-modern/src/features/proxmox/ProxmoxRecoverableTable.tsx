@@ -1,17 +1,33 @@
 import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
+import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import type { StatusIndicator } from '@/utils/status';
 import {
   getRecoveryFullDateLabel,
   recoveryDateKeyFromTimestamp,
 } from '@/utils/recoveryDatePresentation';
 import {
   formatPlatformTableBytesValue,
+  formatPlatformTableDateTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  PlatformResourceDetailToggleButton,
+  createPlatformResourceDetailState,
+  getPlatformResourceDetailRowInteractionProps,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
@@ -33,6 +49,8 @@ import {
   isCompactBackupIdentityLayout,
   type RecoverableColumnId,
 } from './proxmoxBackupsTablePresentation';
+import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
+import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
 import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
 
 // Flat recoverable-artifact table. Parent state owns filtering, sorting, and
@@ -68,6 +86,95 @@ function groupByDay(artifacts: readonly RecoverableArtifact[]): DayGroup[] {
   }
   return groups;
 }
+
+// The drawer dot repeats the row's State badge: the same states, the same colours.
+const artifactStateIndicator = (artifact: RecoverableArtifact): StatusIndicator => {
+  const label = artifactStateLabel(artifact);
+  if (artifact.running) return { variant: 'info', label };
+  if (artifact.failed) return { variant: 'danger', label };
+  if (artifact.sourceKind === 'snapshot') return { variant: 'info', label };
+  if (artifact.protected) return { variant: 'warning', label };
+  if (artifact.verified === true) return { variant: 'success', label };
+  if (artifact.verified === false) return { variant: 'warning', label };
+  return { variant: 'muted', label };
+};
+
+const artifactVerificationText = (artifact: RecoverableArtifact): string => {
+  if (artifact.verified === true) return 'Verified';
+  if (artifact.verified === false) return 'Not verified';
+  return '';
+};
+
+// Phones drop the location, size and details columns, so the drawer is where
+// a restore point is always readable in full.
+const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSection[] => {
+  const source = getProxmoxBackupSourcePresentation(artifact.sourceKind);
+  return compactDetailSections([
+    {
+      label: 'Restore point',
+      rows: compactDetailRows([
+        makeDetailRow('Source', source.detailFallbackLabel, {
+          title: artifact.sourceTitle ?? source.sourceTitle,
+        }),
+        makeDetailRow('Location', artifact.location, { wrap: true }),
+        makeDetailRow(
+          PROXMOX_BACKUP_COLUMN_LABELS.created,
+          artifact.createdMs === undefined
+            ? 'Unknown'
+            : formatPlatformTableDateTimeValue(artifact.createdMs),
+          { tone: artifact.createdMs === undefined ? 'warning' : undefined },
+        ),
+        makeDetailRow(
+          'Size',
+          artifact.size && artifact.size > 0 ? formatPlatformTableBytesValue(artifact.size) : '',
+        ),
+      ]),
+    },
+    {
+      label: 'State',
+      rows: compactDetailRows([
+        makeDetailRow('State', artifactStateLabel(artifact)),
+        makeDetailRow('Verification', artifactVerificationText(artifact), {
+          tone: artifact.verified === false ? 'warning' : undefined,
+        }),
+        makeDetailRow('Protected', artifact.protected ? 'Yes, kept when pruning' : ''),
+      ]),
+    },
+    {
+      label: 'Workload',
+      rows: compactDetailRows([
+        makeDetailRow('Type', artifact.workload.typeLabel),
+        makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, artifact.workload.vmid),
+        makeDetailRow('Node', artifact.workload.node),
+      ]),
+    },
+    {
+      label: PROXMOX_BACKUP_COLUMN_LABELS.details,
+      rows: compactDetailRows([
+        makeDetailRow('Identifier', artifact.detailTitle || artifact.detail, { wrap: true }),
+      ]),
+    },
+  ]);
+};
+
+const RecoverableArtifactDetail = (props: {
+  artifact: RecoverableArtifact;
+  onClose: () => void;
+}): JSX.Element => {
+  const source = () => getProxmoxBackupSourcePresentation(props.artifact.sourceKind);
+  return (
+    <InlineDetailPanel
+      testId="proxmox-recoverable-detail"
+      detailFor={props.artifact.id}
+      title={props.artifact.workload.name || props.artifact.workload.label}
+      status={artifactStateIndicator(props.artifact)}
+      summary={[source().detailFallbackLabel, props.artifact.location].filter(Boolean).join(' in ')}
+      actions={<RecordOwnerLink subject={proxmoxBackupWorkloadSubject(props.artifact.workload)} />}
+      sections={buildRecoverableDetailSections(props.artifact)}
+      onClose={props.onClose}
+    />
+  );
+};
 
 export function ProxmoxRecoverableTable(props: {
   artifacts: RecoverableArtifact[];
@@ -112,92 +219,118 @@ export function ProxmoxRecoverableTable(props: {
     ]);
   });
   const tableWindow = useProxmoxBackupTableWindowing(tableItems);
+  const drawer = createPlatformResourceDetailState({ idPrefix: 'proxmox-recoverable-detail' });
 
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
-    <TableRow class="hover:bg-surface-hover" data-proxmox-backup-row="recoverable">
-      <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
-        <div class="flex min-w-0 items-center gap-1">
-          <div
-            class="min-w-0 truncate font-semibold"
-            title={[
-              artifact.workload.name || artifact.workload.label,
-              artifact.workload.typeLabel,
-              artifact.workload.vmid,
-              // The phone projection has no location column, so the row's
-              // hover title carries the repository instead.
-              columnVisible('location') ? undefined : artifact.location,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          >
-            {artifact.workload.name || artifact.workload.label}
-          </div>
-          <Show when={isCompactBackupIdentityLayout(layoutMode())}>
-            <span class="shrink-0 text-[10px] text-muted">
-              {artifact.workload.typeLabel}
-              <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
-            </span>
-          </Show>
-        </div>
-      </TableCell>
-      <Show when={columnVisible('type')}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <ProxmoxBackupWorkloadTypeBadge
-            type={artifact.workload.type}
-            label={artifact.workload.typeLabel}
-          />
-        </TableCell>
-      </Show>
-      <Show when={columnVisible('targetId')}>
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
-        >
-          {artifact.workload.vmid || '—'}
-        </TableCell>
-      </Show>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <ArtifactSourceBadge artifact={artifact} />
-      </TableCell>
-      <Show when={columnVisible('location')}>
-        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <span class="block truncate" title={artifact.location}>
-            {artifact.location}
-          </span>
-        </TableCell>
-      </Show>
-      <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
-        <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
-      </TableCell>
-      <Show when={columnVisible('size')}>
-        <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
-          <Show
-            when={artifact.size && artifact.size > 0}
-            fallback={<span class="text-muted">No size</span>}
-          >
-            <RowMetricBar
-              valuePct={
-                props.sizeMaxBytes > 0 && artifact.size
-                  ? (artifact.size / props.sizeMaxBytes) * 100
-                  : 0
-              }
-              fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-              label={formatPlatformTableBytesValue(artifact.size)}
-              tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
+    <>
+      <TableRow
+        {...getPlatformResourceDetailRowInteractionProps({
+          expanded: drawer.isExpanded(artifact),
+          onToggle: () => drawer.toggle(artifact),
+          class: 'hover:bg-surface-hover',
+        })}
+        data-proxmox-backup-row="recoverable"
+      >
+        <TableCell class={`${getPlatformTableCellClassForKind('name')} text-base-content`}>
+          <div class="flex min-w-0 items-center gap-1">
+            <PlatformResourceDetailToggleButton
+              expanded={drawer.isExpanded(artifact)}
+              resourceLabel={artifact.workload.name || artifact.workload.label}
+              controlsId={drawer.detailRowId(artifact)}
+              onToggle={() => drawer.toggle(artifact)}
             />
-          </Show>
+            <div
+              class="min-w-0 truncate font-semibold"
+              title={[
+                artifact.workload.name || artifact.workload.label,
+                artifact.workload.typeLabel,
+                artifact.workload.vmid,
+                // The phone projection has no location column, so the row's
+                // hover title carries the repository instead.
+                columnVisible('location') ? undefined : artifact.location,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            >
+              {artifact.workload.name || artifact.workload.label}
+            </div>
+            <Show when={isCompactBackupIdentityLayout(layoutMode())}>
+              <span class="shrink-0 text-[10px] text-muted">
+                {artifact.workload.typeLabel}
+                <Show when={artifact.workload.vmid}> {artifact.workload.vmid}</Show>
+              </span>
+            </Show>
+          </div>
         </TableCell>
-      </Show>
-      <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-        <ArtifactStateBadge artifact={artifact} label={artifactStateLabel(artifact)} />
-      </TableCell>
-      <Show when={columnVisible('details')}>
+        <Show when={columnVisible('type')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <ProxmoxBackupWorkloadTypeBadge
+              type={artifact.workload.type}
+              label={artifact.workload.typeLabel}
+            />
+          </TableCell>
+        </Show>
+        <Show when={columnVisible('targetId')}>
+          <TableCell
+            class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
+          >
+            {artifact.workload.vmid || '—'}
+          </TableCell>
+        </Show>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
-            {artifact.detail || '—'}
-          </span>
+          <ArtifactSourceBadge artifact={artifact} />
         </TableCell>
+        <Show when={columnVisible('location')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <span class="block truncate" title={artifact.location}>
+              {artifact.location}
+            </span>
+          </TableCell>
+        </Show>
+        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}>
+          <ProxmoxBackupAgeText artifact={artifact} compact={layoutMode() === 'compact'} />
+        </TableCell>
+        <Show when={columnVisible('size')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
+            <Show
+              when={artifact.size && artifact.size > 0}
+              fallback={<span class="text-muted">No size</span>}
+            >
+              <RowMetricBar
+                valuePct={
+                  props.sizeMaxBytes > 0 && artifact.size
+                    ? (artifact.size / props.sizeMaxBytes) * 100
+                    : 0
+                }
+                fillClass="bg-blue-500/40 dark:bg-blue-500/40"
+                label={formatPlatformTableBytesValue(artifact.size)}
+                tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
+              />
+            </Show>
+          </TableCell>
+        </Show>
+        <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+          <ArtifactStateBadge artifact={artifact} label={artifactStateLabel(artifact)} />
+        </TableCell>
+        <Show when={columnVisible('details')}>
+          <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
+            <span class="block truncate" title={artifact.detailTitle ?? artifact.detail}>
+              {artifact.detail || '—'}
+            </span>
+          </TableCell>
+        </Show>
+      </TableRow>
+      <Show when={drawer.isExpanded(artifact)}>
+        <InlineDetailTableRow
+          cellId={drawer.detailRowId(artifact)}
+          class=""
+          colspan={visibleColumns().length}
+          data-inline-detail-for={artifact.id}
+        >
+          <RecoverableArtifactDetail artifact={artifact} onClose={() => drawer.close(artifact)} />
+        </InlineDetailTableRow>
       </Show>
-    </TableRow>
+    </>
   );
 
   return (

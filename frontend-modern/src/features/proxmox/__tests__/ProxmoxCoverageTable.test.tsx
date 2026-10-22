@@ -1,10 +1,19 @@
-import { cleanup, render } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
-import type { Accessor } from 'solid-js';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Accessor, JSX } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from '../proxmoxBackupsTableModel';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const row = {
   key: 'w1',
@@ -54,7 +63,7 @@ afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
   it('renders single-line rows with identity columns matching the by-date table', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -64,7 +73,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -92,7 +101,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('keeps posture, backup age and job visible in compact rows', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -102,7 +111,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={true}
         layoutWidth={() => 330}
@@ -115,7 +124,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {
-    const { unmount } = render(() => (
+    const { unmount } = renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -125,7 +134,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -138,7 +147,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     );
     unmount();
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -148,7 +157,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>(['w1'])}
+        expandedKey="w1"
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -159,6 +168,92 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).toContain('Proxmox Backup Server');
     expect(document.body.textContent).toContain('History Complete');
     expect(document.body.textContent).toContain('Access Sufficient');
+  });
+
+  it('heads the workload drawer with its posture and links to the workload', async () => {
+    const onToggleExpand = vi.fn();
+    const linked = {
+      ...row,
+      workload: { ...row.workload, resourceId: 'vm-100-resource' },
+      artifacts: [
+        {
+          id: 'pbs-1',
+          nativeId: 'pbs-1',
+          sourceKind: 'pbs',
+          sourceLabel: 'PBS',
+          workload: row.workload,
+          createdAt: '2026-07-18T23:00:00Z',
+          createdMs: Date.parse('2026-07-18T23:00:00Z'),
+          location: 'pbs-main:datastore-with-a-very-long-namespace/that-must-wrap',
+          detail: 'vm/100/2026-07-18T23:00:00Z',
+          protected: false,
+          verified: true,
+        },
+      ],
+    } as unknown as WorkloadCoverageRow;
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[linked]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={onToggleExpand}
+        showTaskColumn={false}
+        layoutWidth={() => 1_600}
+      />
+    ));
+
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(panel).getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        'A current verified backup is available from complete provider history.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).getByRole('link', { name: 'Open web' })).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=vm-100-resource',
+    );
+    // Restore evidence leads; provider quality is a section, not a grid.
+    expect(within(panel).getByText('Restore evidence')).toBeInTheDocument();
+    const location = panel.querySelector('[data-coverage-evidence-location]');
+    expect(location).toHaveClass('wrap-anywhere');
+    expect(location).not.toHaveClass('truncate');
+    expect(panel.querySelector('.grid')).toBeNull();
+    expect(within(panel).getByText('Provider evidence', { selector: 'th' })).toBeInTheDocument();
+
+    await fireEvent.click(within(panel).getByRole('button', { name: 'Collapse web details' }));
+    expect(onToggleExpand).toHaveBeenCalledWith('w1');
+  });
+
+  it('states a workload without restore points in a shared notice', () => {
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[{ ...row, posture: 'unprotected' } as WorkloadCoverageRow]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => 1_200}
+      />
+    ));
+
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent('No restore points found for this workload.');
+    expect(notice.className).toContain('border-amber-300');
+    // No registry match, so nothing to link to.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('windows large coverage result sets while keeping one continuous table', () => {
@@ -174,7 +269,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
       },
     })) as WorkloadCoverageRow[];
 
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={rows}
         hasAnyRows
@@ -184,7 +279,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}
@@ -201,7 +296,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('marks an empty evidence cell with a short label and the full reason on hover', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
         hasAnyRows
@@ -211,7 +306,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={true}
         layoutWidth={() => 1_200}
@@ -227,7 +322,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('explains snapshot-only and unrated rows in plain words', () => {
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[
           { ...row, key: 'snapshot-only', snapshotCount: 2 },
@@ -240,7 +335,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={true}
         layoutWidth={() => 1_200}
@@ -263,7 +358,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     // A capped inline-block sat above the row's text line; a block span fills
     // the fixed-layout cell and ends in an ellipsis there.
     const node = 'pve-production-rack-04-node-17.example.internal';
-    render(() => (
+    renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[{ ...row, workload: { ...row.workload, node } }] as WorkloadCoverageRow[]}
         hasAnyRows
@@ -273,7 +368,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
         sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
         sortDirection={() => 'asc'}
         onSort={() => {}}
-        expandedKeys={new Set<string>()}
+        expandedKey={null}
         onToggleExpand={() => {}}
         showTaskColumn={false}
         layoutWidth={() => 1_200}

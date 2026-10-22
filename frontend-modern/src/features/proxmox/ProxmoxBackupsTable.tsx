@@ -254,9 +254,8 @@ export const ProxmoxBackupsTable: Component<{
 
   const [coverageSortKey, setCoverageSortKey] = createSignal<CoverageSortKey>('posture');
   const [coverageSortDirection, setCoverageSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  const [expandedCoverageRows, setExpandedCoverageRows] = createSignal<ReadonlySet<string>>(
-    new Set<string>(),
-  );
+  // One workload drawer at a time, across the live and unmatched tables.
+  const [expandedCoverageKey, setExpandedCoverageKey] = createSignal<string | null>(null);
   // Unmatched backups (VM/LXC evidence without an unambiguous live identity)
   // are collapsed by default so the main table is active backup targets, not a
   // pile of unassigned artifacts sorted to the top.
@@ -288,12 +287,7 @@ export const ProxmoxBackupsTable: Component<{
     }
   };
   const toggleCoverageExpansion = (key: string) =>
-    setExpandedCoverageRows((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    setExpandedCoverageKey((current) => (current === key ? null : key));
   const toggleDay = (key: string) => setSelectedDateKey(selectedDateKey() === key ? null : key);
 
   // Retain readable observations while a retry is pending, but never treat a
@@ -937,7 +931,7 @@ export const ProxmoxBackupsTable: Component<{
                 sortKey={coverageSortKey}
                 sortDirection={coverageSortDirection}
                 onSort={handleCoverageSort}
-                expandedKeys={expandedCoverageRows()}
+                expandedKey={expandedCoverageKey()}
                 onToggleExpand={toggleCoverageExpansion}
                 showTaskColumn={coverageHasTask()}
               />
@@ -973,7 +967,7 @@ export const ProxmoxBackupsTable: Component<{
                         sortKey={coverageSortKey}
                         sortDirection={coverageSortDirection}
                         onSort={handleCoverageSort}
-                        expandedKeys={expandedCoverageRows()}
+                        expandedKey={expandedCoverageKey()}
                         onToggleExpand={toggleCoverageExpansion}
                         showTaskColumn={coverageHasTask()}
                       />

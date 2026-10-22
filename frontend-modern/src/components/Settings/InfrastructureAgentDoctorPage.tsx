@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
-import { ChevronDown, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-solid';
+import { ChevronLeft, RefreshCw } from 'lucide-solid';
 import { Button, CommandCopyButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import {
@@ -11,6 +11,18 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import {
+  DetailSectionTable,
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+} from '@/components/shared/DetailSectionTable';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
+import type { StatusIndicatorVariant } from '@/utils/status';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
@@ -42,34 +54,61 @@ interface InfrastructureAgentDoctorPageProps {
   onRetryDiagnostics?: () => void;
 }
 
+// The row badge and the drawer's status dot read from this one table.
 const STATUS_PRESENTATION: Record<
   InfrastructureAgentDoctorStatus,
-  { label: string; badgeClass: string }
+  { label: string; badgeClass: string; variant: StatusIndicatorVariant }
 > = {
   healthy: {
     label: 'Healthy',
+    variant: 'success',
     badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200',
   },
   waiting: {
+    variant: 'info',
     label: 'Waiting for updater',
     badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/25 dark:text-blue-200',
   },
   warning: {
+    variant: 'warning',
     label: 'Needs attention',
     badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-200',
   },
   critical: {
+    variant: 'danger',
     label: 'Critical',
     badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-200',
   },
   removed: {
+    variant: 'muted',
     label: 'Removed',
     badgeClass: 'bg-surface-alt text-muted',
   },
   unknown: {
+    variant: 'muted',
     label: 'Unknown',
     badgeClass: 'bg-surface-alt text-base-content',
   },
+};
+
+const doctorDetailRowId = (target: InfrastructureAgentDoctorTarget): string =>
+  `agent-doctor-detail-${target.key.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+
+// The drawer's one-line verdict; the reasons themselves follow as notices.
+const doctorTargetSummary = (target: InfrastructureAgentDoctorTarget): string => {
+  const count = target.reasons.length;
+  if (count > 0) return `${count} ${count === 1 ? 'issue' : 'issues'} to look at`;
+  return target.status === 'healthy'
+    ? 'No fleet-health issues detected.'
+    : 'Pulse has not received a structured diagnostic for this agent yet. This usually clears after its next report.';
+};
+
+// Evidence reads "Hostname: host-1"; the label goes in the label column.
+const evidenceDetailRow = (item: string) => {
+  const separator = item.indexOf(': ');
+  return separator > 0
+    ? makeDetailRow(item.slice(0, separator), item.slice(separator + 2), { wrap: true })
+    : makeDetailRow('Evidence', item, { wrap: true });
 };
 
 const formatLastSeen = (value?: number | string | null): string | undefined => {
@@ -192,12 +231,11 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
     return props.targets.filter((target) => target.status === filter);
   });
 
-  // A lone target (the common case when a platform page deep-links one stale
-  // agent) starts expanded so its diagnosis and update command are immediately
-  // visible; larger fleets start collapsed and expand per row.
-  const [expansionOverrides, setExpansionOverrides] = createSignal<ReadonlyMap<string, boolean>>(
-    new Map(),
-  );
+  // One target open at a time, like every other drawer table. A lone target
+  // (the common case when a platform page deep-links one stale agent) starts
+  // open so its diagnosis and update command are immediately visible; larger
+  // fleets start collapsed. `undefined` is that default, `null` is closed.
+  const [openTargetId, setOpenTargetId] = createSignal<string | null | undefined>(undefined);
   const [reenrollPendingId, setReenrollPendingId] = createSignal('');
   const [runnerCredentialPendingKey, setRunnerCredentialPendingKey] = createSignal('');
   const [issuedRunnerCredentialKeys, setIssuedRunnerCredentialKeys] = createSignal<
@@ -285,14 +323,14 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
       setReenrollPendingId('');
     }
   };
-  const isExpanded = (target: InfrastructureAgentDoctorTarget) =>
-    expansionOverrides().get(target.connectionId) ?? props.targets.length === 1;
-  const toggleExpanded = (target: InfrastructureAgentDoctorTarget) => {
-    setExpansionOverrides((previous) => {
-      const next = new Map(previous);
-      next.set(target.connectionId, !isExpanded(target));
-      return next;
-    });
+  const isExpanded = (target: InfrastructureAgentDoctorTarget) => {
+    const open = openTargetId();
+    return open === undefined ? props.targets.length === 1 : open === target.connectionId;
+  };
+  const toggleExpanded = (target: InfrastructureAgentDoctorTarget) =>
+    setOpenTargetId(isExpanded(target) ? null : target.connectionId);
+  const closeTarget = (target: InfrastructureAgentDoctorTarget) => {
+    if (isExpanded(target)) setOpenTargetId(null);
   };
 
   return (
@@ -542,29 +580,83 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                   const uninstallHandoff = () =>
                     getInfrastructureAgentDoctorUninstallHandoff(target);
                   const expanded = () => isExpanded(target);
+                  const detailRowId = () => doctorDetailRowId(target);
+                  const factSections = (): DetailSection[] =>
+                    compactDetailSections([
+                      {
+                        label: 'Agent',
+                        rows: compactDetailRows([
+                          makeDetailRow('System', target.contextLabel, { wrap: true }),
+                          makeDetailRow('Version', target.currentVersion),
+                          makeDetailRow('Target version', target.expectedVersion),
+                          makeDetailRow(
+                            'Last seen',
+                            lastSeen() ? `${lastSeen()} (${lastSeenRelative()})` : undefined,
+                            { wrap: true },
+                          ),
+                          makeDetailRow('Updater', target.updaterLabel, { wrap: true }),
+                          makeDetailRow(
+                            'Profile',
+                            target.profileLabel
+                              ? [target.profileLabel, target.profileVersionLabel]
+                                  .filter(Boolean)
+                                  .join(' ')
+                              : undefined,
+                            { wrap: true },
+                          ),
+                        ]),
+                      },
+                      {
+                        label: 'Security',
+                        rows: compactDetailRows([
+                          makeDetailRow('Privilege', target.privilegeLabel, { wrap: true }),
+                          target.status !== 'removed'
+                            ? makeDetailRow(
+                                'Safe collector',
+                                target.safeCollector ? 'Confirmed' : 'Not confirmed',
+                                { tone: target.safeCollector ? 'success' : 'warning' },
+                              )
+                            : null,
+                          makeDetailRow('Action runner', target.actionRunnerPosture.join(' · '), {
+                            wrap: true,
+                          }),
+                          makeDetailRow(
+                            'Runner credential',
+                            target.actionRunnerCredentialEligible
+                              ? undefined
+                              : target.actionRunnerCredentialBlockReason,
+                            { wrap: true },
+                          ),
+                        ]),
+                      },
+                    ]);
+                  const evidenceSections = (): DetailSection[] =>
+                    compactDetailSections([
+                      {
+                        label: 'Connection',
+                        rows: compactDetailRows([
+                          makeDetailRow('Connection ID', target.connectionId, { wrap: true }),
+                        ]),
+                      },
+                      {
+                        label: 'Identity evidence',
+                        rows: compactDetailRows(target.evidence.map(evidenceDetailRow)),
+                      },
+                    ]);
 
                   return (
                     <>
                       <TableRow class="cursor-pointer" onClick={() => toggleExpanded(target)}>
                         <TableCell class="py-1.5 pl-3 pr-3">
                           <div class="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              class="inline-flex items-center rounded-sm p-0.5 text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
-                              aria-expanded={expanded()}
-                              aria-label={`${expanded() ? 'Hide' : 'Show'} details for ${target.displayName}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleExpanded(target);
-                              }}
-                            >
-                              <Show
-                                when={expanded()}
-                                fallback={<ChevronRight class="h-3.5 w-3.5" />}
-                              >
-                                <ChevronDown class="h-3.5 w-3.5" />
-                              </Show>
-                            </button>
+                            <SummaryRowActionButton
+                              kind="disclosure"
+                              expanded={expanded()}
+                              subjectLabel={`details for ${target.displayName}`}
+                              controlsId={detailRowId()}
+                              hideWhenRowTappableOnMobile={false}
+                              onAction={() => toggleExpanded(target)}
+                            />
                             <span class="truncate text-sm font-medium text-base-content">
                               {target.displayName}
                             </span>
@@ -596,319 +688,52 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                       </TableRow>
 
                       <Show when={expanded()}>
-                        <InlineDetailTableRow colspan={6}>
-                          <div class="space-y-3 whitespace-normal">
-                            <p class="text-xs text-muted">
-                              {target.connectionId}
-                              <Show when={target.updaterLabel}>
-                                {' '}
-                                · Updater: {target.updaterLabel}
-                              </Show>
-                              <Show when={target.privilegeLabel}>
-                                {' '}
-                                · Privilege: {target.privilegeLabel}
-                              </Show>
-                              <Show when={target.profileLabel}>
-                                {' '}
-                                · Profile: {target.profileLabel}
-                                <Show when={target.profileVersionLabel}>
-                                  {' '}
-                                  ({target.profileVersionLabel})
-                                </Show>
-                              </Show>
-                            </p>
-
-                            <div class="space-y-2 rounded-md border border-border bg-surface px-3 py-3 text-xs">
-                              <div class="flex flex-wrap items-center gap-2">
-                                <span class="font-medium text-base-content">Security posture</span>
-                                <Show when={target.safeCollector}>
-                                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900/25 dark:text-emerald-200">
-                                    Safe collector confirmed
-                                  </span>
-                                </Show>
-                              </div>
-                              <Show when={target.safeProfileGuidance}>
-                                <p class="leading-5 text-muted">{target.safeProfileGuidance}</p>
-                              </Show>
-                              <Show
-                                when={
-                                  !target.safeCollector &&
-                                  target.status !== 'removed' &&
-                                  target.commandPlatform === 'linux' &&
-                                  target.actionRunnerAgentId &&
-                                  target.actionRunnerHostname
-                                }
-                              >
-                                <div class="space-y-2">
-                                  <div>
-                                    <div class="mb-1 font-medium text-base-content">
-                                      Inspect current service profile
-                                    </div>
-                                    <div class="relative">
-                                      <CommandCopyButton
-                                        onClick={() =>
-                                          void copyCommand(
-                                            buildSafeCollectorInspectCommand({
-                                              pulseUrl: operations.selectedAgentUrl(),
-                                              insecure: operations.insecureMode(),
-                                              customCaPath: operations.customCaPath(),
-                                            }),
-                                          )
-                                        }
-                                        label="Copy safe-profile inspection command"
-                                      />
-                                      <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
-                                        <code>
-                                          {buildSafeCollectorInspectCommand({
-                                            pulseUrl: operations.selectedAgentUrl(),
-                                            insecure: operations.insecureMode(),
-                                            customCaPath: operations.customCaPath(),
-                                          })}
-                                        </code>
-                                      </pre>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div class="mb-1 font-medium text-base-content">
-                                      Apply reviewed safe collector profile
-                                    </div>
-                                    <div class="relative">
-                                      <CommandCopyButton
-                                        onClick={() =>
-                                          void copyCommand(
-                                            buildSafeCollectorApplyCommand({
-                                              pulseUrl: operations.selectedAgentUrl(),
-                                              insecure: operations.insecureMode(),
-                                              customCaPath: operations.customCaPath(),
-                                            }),
-                                          )
-                                        }
-                                        label="Copy safe-profile apply command"
-                                      />
-                                      <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
-                                        <code>
-                                          {buildSafeCollectorApplyCommand({
-                                            pulseUrl: operations.selectedAgentUrl(),
-                                            insecure: operations.insecureMode(),
-                                            customCaPath: operations.customCaPath(),
-                                          })}
-                                        </code>
-                                      </pre>
-                                    </div>
-                                  </div>
-                                </div>
-                              </Show>
-                              <Show when={target.actionRunnerPosture.length > 0}>
-                                <ul class="list-disc space-y-1 pl-5 text-muted">
-                                  <For each={target.actionRunnerPosture}>
-                                    {(fact) => <li>{fact}</li>}
-                                  </For>
-                                </ul>
-                              </Show>
-                              <Show
-                                when={target.actionRunnerCredentialEligible}
-                                fallback={
-                                  <Show when={target.actionRunnerCredentialBlockReason}>
-                                    <p class="text-muted">
-                                      Action runner: {target.actionRunnerCredentialBlockReason}
-                                    </p>
-                                  </Show>
-                                }
-                              >
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  isLoading={runnerCredentialPendingKey() === target.key}
-                                  disabled={
-                                    Boolean(runnerCredentialReveal()) ||
-                                    issuedRunnerCredentialKeys().has(target.key)
-                                  }
-                                  onClick={() => void issueActionRunnerCredential(target)}
+                        <InlineDetailTableRow
+                          cellId={detailRowId()}
+                          colspan={6}
+                          data-agent-doctor-detail-for={target.connectionId}
+                        >
+                          <InlineDetailPanel
+                            testId="agent-doctor-detail"
+                            detailFor={target.key}
+                            title={target.displayName}
+                            status={{ variant: status().variant, label: status().label }}
+                            summary={doctorTargetSummary(target)}
+                            sections={[]}
+                            onClose={() => closeTarget(target)}
+                          >
+                            <For each={target.reasons}>
+                              {(reason) => (
+                                <InlineNotice
+                                  tone={target.status === 'critical' ? 'danger' : 'warning'}
                                 >
-                                  {issuedRunnerCredentialKeys().has(target.key)
-                                    ? 'Credential issued for this page session'
-                                    : target.actionRunnerCredentialAction === 'rotate'
-                                      ? 'Rotate action-runner credential'
-                                      : 'Issue one-time action-runner credential'}
-                                </Button>
-                              </Show>
-                            </div>
-
-                            <Show
-                              when={
-                                runnerCredentialReveal()?.targetKey === target.key
-                                  ? runnerCredentialReveal()
-                                  : null
-                              }
-                            >
-                              {(reveal) => {
-                                const tokenFileCommand = () => buildActionRunnerTokenFileCommand();
-                                const installCommand = () =>
-                                  buildActionRunnerInstallCommand({
-                                    pulseUrl: operations.selectedAgentUrl(),
-                                    agentId: target.actionRunnerAgentId!,
-                                    hostname: target.actionRunnerHostname!,
-                                    insecure: operations.insecureMode(),
-                                    customCaPath: operations.customCaPath(),
-                                  });
-                                return (
-                                  <section class="space-y-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
-                                    <div class="font-semibold">Save this credential now</div>
-                                    <p class="leading-5">
-                                      This secret is held only in this page's memory and cannot be
-                                      recovered after you clear or leave it. It is never placed in a
-                                      URL, diagnostic report, installer command, or process
-                                      argument.
+                                  <p class="font-medium">{reason.message}</p>
+                                  <Show when={reason.evidence?.length}>
+                                    <p class="mt-1 text-xs opacity-80 wrap-anywhere">
+                                      {(reason.evidence ?? []).join(' · ')}
                                     </p>
-                                    <div>
-                                      <div class="mb-1 font-medium">
-                                        1. Start a private token prompt
-                                      </div>
-                                      <div class="relative">
-                                        <CommandCopyButton
-                                          onClick={() => void copyCommand(tokenFileCommand())}
-                                          label="Copy private token-file command"
-                                        />
-                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
-                                          <code>{tokenFileCommand()}</code>
-                                        </pre>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div class="mb-1 font-medium">
-                                        2. Copy this credential and paste it at the prompt
-                                      </div>
-                                      <div class="relative">
-                                        <CommandCopyButton
-                                          onClick={() => void copyCommand(reveal().token)}
-                                          title="Copy one-time action-runner credential"
-                                          label={`Copy action-runner credential for ${target.displayName}`}
-                                        />
-                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
-                                          <code>{reveal().token}</code>
-                                        </pre>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div class="mb-1 font-medium">
-                                        3. Install the separate runner
-                                      </div>
-                                      <div class="relative">
-                                        <CommandCopyButton
-                                          onClick={() => void copyCommand(installCommand())}
-                                          label="Copy action-runner installer command"
-                                        />
-                                        <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
-                                          <code>{installCommand()}</code>
-                                        </pre>
-                                      </div>
-                                    </div>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => setRunnerCredentialReveal(null)}
-                                    >
-                                      Clear credential from this page
-                                    </Button>
-                                  </section>
-                                );
-                              }}
-                            </Show>
-
-                            <Show
-                              when={target.reasons.length > 0}
-                              fallback={
-                                <p class="text-xs text-muted">
-                                  {target.status === 'healthy'
-                                    ? 'No fleet-health issues detected.'
-                                    : 'Pulse has not received a structured diagnostic for this agent yet. This usually clears after its next report.'}
-                                </p>
-                              }
-                            >
-                              <ul class="space-y-2">
-                                <For each={target.reasons}>
-                                  {(reason) => (
-                                    <li class="rounded-md border border-border-subtle bg-surface px-3 py-2">
-                                      <div class="text-xs font-medium text-base-content">
-                                        {reason.message}
-                                      </div>
-                                      <Show when={reason.evidence?.length}>
-                                        <div class="mt-1 text-[11px] leading-4 text-muted">
-                                          {(reason.evidence ?? []).join(' · ')}
-                                        </div>
-                                      </Show>
-                                    </li>
-                                  )}
-                                </For>
-                              </ul>
-                            </Show>
-
-                            <Show when={target.evidence.length > 0}>
-                              <details class="text-xs text-muted">
-                                <summary class="cursor-pointer font-medium text-base-content">
-                                  Identity evidence
-                                </summary>
-                                <ul class="mt-2 list-disc space-y-1 pl-5">
-                                  <For each={target.evidence}>{(item) => <li>{item}</li>}</For>
-                                </ul>
-                              </details>
-                            </Show>
-
-                            <For each={otherRepairs()}>
-                              {(repair) => (
-                                <div class="rounded-md border border-border bg-surface px-3 py-2 text-xs">
-                                  <div class="font-medium text-base-content">{repair.label}</div>
-                                  <div class="mt-0.5 text-muted">{repair.description}</div>
-                                  <Show when={repair.scope}>
-                                    <div class="mt-1 text-[11px] text-muted">
-                                      Required scope: {repair.scope}
-                                    </div>
                                   </Show>
-                                </div>
+                                </InlineNotice>
                               )}
                             </For>
-
-                            <Show when={canAllowReenroll()}>
-                              <div class="rounded-md border border-border bg-surface px-3 py-2 text-xs">
-                                <div class="font-medium text-base-content">Allow re-enrol</div>
-                                <div class="mt-0.5 text-muted">
-                                  Clear the removal block so this agent can reconnect on its next
-                                  report.
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  class="mt-2"
-                                  disabled={reenrollPendingId() === target.connectionId}
-                                  onClick={() => void allowReenroll(target)}
-                                >
-                                  {reenrollPendingId() === target.connectionId
-                                    ? 'Allowing…'
-                                    : 'Allow re-enrol'}
-                                </Button>
-                              </div>
-                            </Show>
 
                             <Show when={target.needsUpdate || target.needsCredentialRepair}>
                               <Show
                                 when={!target.commandBlockedReason}
                                 fallback={
-                                  <div class="rounded-md border border-border bg-surface px-3 py-3 text-xs text-muted">
+                                  <InlineNotice tone="info">
                                     {target.commandBlockedReason}
-                                  </div>
+                                  </InlineNotice>
                                 }
                               >
                                 <Show
                                   when={commandReadyForTarget(target)}
                                   fallback={
-                                    <div class="rounded-md border border-border bg-surface px-3 py-3 text-xs text-muted">
+                                    <InlineNotice tone="info">
                                       {commandRequiresToken(target) && tokenGatedTargetCount() > 1
                                         ? 'Select this installation above and generate a separate credential to unlock its host-local repair command.'
                                         : 'Generate a token to unlock this host-local repair command.'}
-                                    </div>
+                                    </InlineNotice>
                                   }
                                 >
                                   <div class="relative">
@@ -937,20 +762,54 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               </Show>
                             </Show>
 
+                            <Show when={canAllowReenroll()}>
+                              <InlineNotice tone="info">
+                                <p class="font-medium">Allow re-enrol</p>
+                                <p class="mt-0.5">
+                                  Clear the removal block so this agent can reconnect on its next
+                                  report.
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  class="mt-2"
+                                  disabled={reenrollPendingId() === target.connectionId}
+                                  onClick={() => void allowReenroll(target)}
+                                >
+                                  {reenrollPendingId() === target.connectionId
+                                    ? 'Allowing…'
+                                    : 'Allow re-enrol'}
+                                </Button>
+                              </InlineNotice>
+                            </Show>
+
+                            <For each={otherRepairs()}>
+                              {(repair) => (
+                                <InlineNotice tone="info">
+                                  <p class="font-medium">{repair.label}</p>
+                                  <p class="mt-0.5">{repair.description}</p>
+                                  <Show when={repair.scope}>
+                                    <p class="mt-1 text-xs">Required scope: {repair.scope}</p>
+                                  </Show>
+                                </InlineNotice>
+                              )}
+                            </For>
+
                             <Show when={uninstallHandoff()}>
                               {(handoff) => (
                                 <div class="space-y-2">
-                                  <p class="text-xs text-muted">
+                                  <InlineNotice tone="info">
                                     This agent was removed from Pulse, but the agent software may
                                     still be installed on its host. Finish detaching it by running
                                     the uninstall command on the affected host itself. Pulse does
                                     not run commands remotely. Removal uses the host's saved
                                     connection and credentials. Do not generate a new token.
-                                  </p>
+                                  </InlineNotice>
                                   <For each={handoff().commands}>
                                     {(entry) => (
                                       <div>
-                                        <div class="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+                                        <div class="mb-1 text-xs font-medium text-base-content">
                                           {entry.label}
                                         </div>
                                         <div class="relative">
@@ -982,6 +841,195 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               )}
                             </Show>
 
+                            <DetailSectionTable
+                              sections={factSections()}
+                              dataTestId="agent-doctor-facts"
+                              wrapValues
+                            />
+
+                            <Show when={target.safeProfileGuidance}>
+                              {(guidance) => <InlineNotice tone="info">{guidance()}</InlineNotice>}
+                            </Show>
+                            <Show
+                              when={
+                                !target.safeCollector &&
+                                target.status !== 'removed' &&
+                                target.commandPlatform === 'linux' &&
+                                target.actionRunnerAgentId &&
+                                target.actionRunnerHostname
+                              }
+                            >
+                              <div class="space-y-2 text-xs">
+                                <div>
+                                  <div class="mb-1 font-medium text-base-content">
+                                    Inspect current service profile
+                                  </div>
+                                  <div class="relative">
+                                    <CommandCopyButton
+                                      onClick={() =>
+                                        void copyCommand(
+                                          buildSafeCollectorInspectCommand({
+                                            pulseUrl: operations.selectedAgentUrl(),
+                                            insecure: operations.insecureMode(),
+                                            customCaPath: operations.customCaPath(),
+                                          }),
+                                        )
+                                      }
+                                      label="Copy safe-profile inspection command"
+                                    />
+                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                      <code>
+                                        {buildSafeCollectorInspectCommand({
+                                          pulseUrl: operations.selectedAgentUrl(),
+                                          insecure: operations.insecureMode(),
+                                          customCaPath: operations.customCaPath(),
+                                        })}
+                                      </code>
+                                    </pre>
+                                  </div>
+                                </div>
+                                <div>
+                                  <div class="mb-1 font-medium text-base-content">
+                                    Apply reviewed safe collector profile
+                                  </div>
+                                  <div class="relative">
+                                    <CommandCopyButton
+                                      onClick={() =>
+                                        void copyCommand(
+                                          buildSafeCollectorApplyCommand({
+                                            pulseUrl: operations.selectedAgentUrl(),
+                                            insecure: operations.insecureMode(),
+                                            customCaPath: operations.customCaPath(),
+                                          }),
+                                        )
+                                      }
+                                      label="Copy safe-profile apply command"
+                                    />
+                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                      <code>
+                                        {buildSafeCollectorApplyCommand({
+                                          pulseUrl: operations.selectedAgentUrl(),
+                                          insecure: operations.insecureMode(),
+                                          customCaPath: operations.customCaPath(),
+                                        })}
+                                      </code>
+                                    </pre>
+                                  </div>
+                                </div>
+                              </div>
+                            </Show>
+
+                            <Show when={target.actionRunnerCredentialEligible}>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                isLoading={runnerCredentialPendingKey() === target.key}
+                                disabled={
+                                  Boolean(runnerCredentialReveal()) ||
+                                  issuedRunnerCredentialKeys().has(target.key)
+                                }
+                                onClick={() => void issueActionRunnerCredential(target)}
+                              >
+                                {issuedRunnerCredentialKeys().has(target.key)
+                                  ? 'Credential issued for this page session'
+                                  : target.actionRunnerCredentialAction === 'rotate'
+                                    ? 'Rotate action-runner credential'
+                                    : 'Issue one-time action-runner credential'}
+                              </Button>
+                            </Show>
+
+                            <Show
+                              when={
+                                runnerCredentialReveal()?.targetKey === target.key
+                                  ? runnerCredentialReveal()
+                                  : null
+                              }
+                            >
+                              {(reveal) => {
+                                const tokenFileCommand = () => buildActionRunnerTokenFileCommand();
+                                const installCommand = () =>
+                                  buildActionRunnerInstallCommand({
+                                    pulseUrl: operations.selectedAgentUrl(),
+                                    agentId: target.actionRunnerAgentId!,
+                                    hostname: target.actionRunnerHostname!,
+                                    insecure: operations.insecureMode(),
+                                    customCaPath: operations.customCaPath(),
+                                  });
+                                return (
+                                  <InlineNotice tone="warning">
+                                    <div class="space-y-3 text-xs">
+                                      <p class="text-sm font-semibold">Save this credential now</p>
+                                      <p class="leading-5">
+                                        This secret is held only in this page's memory and cannot be
+                                        recovered after you clear or leave it. It is never placed in
+                                        a URL, diagnostic report, installer command, or process
+                                        argument.
+                                      </p>
+                                      <div>
+                                        <div class="mb-1 font-medium">
+                                          1. Start a private token prompt
+                                        </div>
+                                        <div class="relative">
+                                          <CommandCopyButton
+                                            onClick={() => void copyCommand(tokenFileCommand())}
+                                            label="Copy private token-file command"
+                                          />
+                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                            <code>{tokenFileCommand()}</code>
+                                          </pre>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div class="mb-1 font-medium">
+                                          2. Copy this credential and paste it at the prompt
+                                        </div>
+                                        <div class="relative">
+                                          <CommandCopyButton
+                                            onClick={() => void copyCommand(reveal().token)}
+                                            title="Copy one-time action-runner credential"
+                                            label={`Copy action-runner credential for ${target.displayName}`}
+                                          />
+                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                            <code>{reveal().token}</code>
+                                          </pre>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div class="mb-1 font-medium">
+                                          3. Install the separate runner
+                                        </div>
+                                        <div class="relative">
+                                          <CommandCopyButton
+                                            onClick={() => void copyCommand(installCommand())}
+                                            label="Copy action-runner installer command"
+                                          />
+                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                            <code>{installCommand()}</code>
+                                          </pre>
+                                        </div>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setRunnerCredentialReveal(null)}
+                                      >
+                                        Clear credential from this page
+                                      </Button>
+                                    </div>
+                                  </InlineNotice>
+                                );
+                              }}
+                            </Show>
+
+                            <TechnicalDetailsDisclosure
+                              title="Details"
+                              subtitle="Connection and identity evidence"
+                              dataTestId="agent-doctor-evidence"
+                              sections={evidenceSections()}
+                            />
+
                             <Button
                               type="button"
                               variant="outline"
@@ -990,7 +1038,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                             >
                               Copy diagnostic report for {target.displayName}
                             </Button>
-                          </div>
+                          </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>
                     </>

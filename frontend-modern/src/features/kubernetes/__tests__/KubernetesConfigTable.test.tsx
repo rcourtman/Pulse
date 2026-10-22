@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
@@ -173,5 +173,79 @@ describe('KubernetesConfigTable', () => {
     expect(screen.getByText('ClusterRole/pulse-demo-monitoring')).toBeInTheDocument();
     expect(screen.getByText('2 subjects · Group, ServiceAccount')).toBeInTheDocument();
     expect(screen.getByText('3 subjects · Group, ServiceAccount +1')).toBeInTheDocument();
+  });
+  it('opens a Secret as a record that never names its keys', () => {
+    render(() => (
+      <KubernetesConfigTable
+        resources={[
+          makeResource({
+            id: 'api-secret',
+            type: 'k8s-secret',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              resourceKind: 'Secret',
+              secretType: 'Opaque',
+              dataKeys: ['db-password'],
+              immutable: true,
+            },
+            tags: ['team:payments'],
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No config"
+        emptyDescription="No config"
+        showToolbar={false}
+      />
+    ));
+
+    const disclosure = screen.getByRole('button', { name: 'Expand details for api-secret' });
+    fireEvent.click(disclosure);
+    const panel = document.querySelector<HTMLElement>('[data-testid="kubernetes-config-detail"]')!;
+    const detail = within(panel);
+    expect(disclosure).toHaveAttribute('aria-controls', 'kubernetes-config-drawer-api-secret');
+    expect(detail.getByRole('heading', { name: 'api-secret' })).toBeInTheDocument();
+    expect(detail.getByText('Opaque')).toBeInTheDocument();
+    expect(detail.getByText('1 data key')).toBeInTheDocument();
+    expect(detail.getByText('prod')).toBeInTheDocument();
+    expect(detail.getByText('team:payments')).toBeInTheDocument();
+    expect(panel.textContent).not.toContain('db-password');
+    // A record, not a monitored object: no Manage tab.
+    expect(detail.queryByRole('tab', { name: 'Manage' })).toBeNull();
+  });
+
+  it('opens an RBAC binding as a record of the role and subjects it binds', () => {
+    render(() => (
+      <KubernetesConfigTable
+        resources={[
+          makeResource({
+            id: 'rb-checkout',
+            type: 'k8s-role-binding',
+            name: 'checkout-api-runtime',
+            kubernetes: {
+              clusterName: 'prod',
+              namespace: 'apps',
+              resourceKind: 'RoleBinding',
+              roleKind: 'Role',
+              roleName: 'checkout-api-runtime',
+              subjectCount: 2,
+              subjectKinds: ['Group', 'ServiceAccount'],
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No RBAC"
+        emptyDescription="No RBAC"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(document.querySelector('[data-kubernetes-config-row="rb-checkout"]')!);
+    const detail = within(
+      document.querySelector<HTMLElement>('[data-testid="kubernetes-config-detail"]')!,
+    );
+    expect(detail.getByText('RoleBinding')).toBeInTheDocument();
+    expect(detail.getByText('2 subjects')).toBeInTheDocument();
+    expect(detail.getByText('Group, ServiceAccount')).toBeInTheDocument();
   });
 });

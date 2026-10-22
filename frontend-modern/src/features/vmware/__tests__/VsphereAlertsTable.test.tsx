@@ -1,9 +1,19 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VsphereAlertsTable } from '@/features/vmware/VsphereAlertsTable';
 import { buildVmwareIncidentRows } from '@/features/vmware/vmwarePageModel';
 import type { Resource } from '@/types/resource';
+
+// Record drawers link to the object they are about, which needs a router.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/*" component={component} />
+    </Router>
+  ));
 
 const makeHost = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -44,7 +54,7 @@ afterEach(() => {
 
 describe('VsphereAlertsTable', () => {
   it('renders every signal without the filter toolbar for the overview lead-in', () => {
-    render(() => (
+    renderInRouter(() => (
       <VsphereAlertsTable
         incidents={buildVmwareIncidentRows([makeHost()])}
         emptyIcon={<span />}
@@ -83,7 +93,7 @@ describe('VsphereAlertsTable', () => {
     });
     const incidents = buildVmwareIncidentRows([informational, host]);
 
-    render(() => (
+    renderInRouter(() => (
       <VsphereAlertsTable
         incidents={incidents}
         emptyIcon={<span />}
@@ -142,6 +152,8 @@ describe('VsphereAlertsTable', () => {
     expect(detail.getByText('Primary DC')).toBeInTheDocument();
     expect(detail.getByText('Action')).toBeInTheDocument();
     expect(detail.getByText('Investigate in vCenter')).toBeInTheDocument();
+    // The Hosts tab cannot open one host, so the drawer offers no owner link.
+    expect(detail.queryByRole('link')).not.toBeInTheDocument();
 
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
 
@@ -153,7 +165,7 @@ describe('VsphereAlertsTable', () => {
     );
   });
   it('drops the vCenter column when one vCenter is connected and keeps it in the drawer', async () => {
-    render(() => (
+    renderInRouter(() => (
       <VsphereAlertsTable
         incidents={buildVmwareIncidentRows([makeHost()])}
         emptyIcon={<span />}
@@ -177,7 +189,7 @@ describe('VsphereAlertsTable', () => {
     const host = makeHost();
     host.incidents = [{ ...host.incidents![0]!, startedAt }];
 
-    render(() => (
+    renderInRouter(() => (
       <VsphereAlertsTable
         incidents={buildVmwareIncidentRows([host])}
         emptyIcon={<span />}
@@ -195,7 +207,7 @@ describe('VsphereAlertsTable', () => {
     const host = makeHost();
     host.incidents = [{ ...host.incidents![0]!, startedAt: '2026-10-06T10:00:00Z' }];
 
-    render(() => (
+    renderInRouter(() => (
       <VsphereAlertsTable
         incidents={buildVmwareIncidentRows([host])}
         emptyIcon={<span />}
