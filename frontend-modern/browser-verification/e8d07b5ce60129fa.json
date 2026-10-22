@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "38ad6efbed203c13ec6e1e33928812873c272255",
+  "verified_at": "2026-10-22T00:20:49.683529Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "8effd690c981fe316a09ba7b4e94dc6cdbfde3cc3ed3ff9268bd79824111e024"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Held 2,001-resource evaluation, eleven 200-subject/one-subject batches, measured active HTTP peak four per evaluation",
+    "Completed last-batch and held first-batch targets both remain Checking until every batch settles; request-order all-subject join remains atomic",
+    "Malformed batch stops seven queued requests, cancels three active siblings and withdraws every current verdict to Unknown",
+    "Independent PBS evidence remains inspectable in an expanded row and a read-only evidence dialog after posture failure",
+    "Posture-only retry remains Unknown through pending waves, then publishes all fresh Needs attention results without rereading backup inventories",
+    "Disposal cancels four active reads without starting queued old work; remount accepts a distinct Unprotected result only after complete evaluation"
+  ],
+  "interactions": [
+    "Desktop focus/Enter and Escape, and narrow WebKit touch, open current backup details and invoke isolated retry and view disposal/remount",
+    "Held HTTP responses complete out of order and refill one free slot without a fleet-sized burst",
+    "Both end-of-fleet targets, current policy/verdict withdrawal, independent source details and unrelated URL retention are checked through the real consumer",
+    "All ten final screenshots opened using native view_image and visually inspected at desktop/light and 320px/dark widths, with no document horizontal overflow"
+  ],
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "playwright": "1.56.1",
+  "browser_report_sha256": "fba7179b06a1d6c8f3df63f88a5e97d8875502ebcc74385d619c38ee07e83d64",
+  "limits": "Synthetic per-evaluation read bound, not a global/multi-tab rate limit, installed load relief, native recovery or release availability. The single whole-evaluation deadline, denial and abort-ignoring late transports are additionally covered by unit/source tests, not claimed as extra browser journeys."
+}
