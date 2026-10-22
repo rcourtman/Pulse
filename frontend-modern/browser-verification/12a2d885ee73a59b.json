@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "0b512c87739528ca40209aa29cfb7cddb27412ff",
+  "verified_at": "2026-10-22T03:30:48.226079Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "51bda39ab1ab3c6e7e945d85d22a56ce85f2d590668269530699a5e770c9186c"
+  },
+  "routes": [
+    "/browser-tests/pbs-capacity.html (production Backups table/router fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Explicit primary offline plus retained healthy PBS facet shows Offline, unavailable datastore capacity and no current host CPU/memory/dedup",
+    "Reachable primary storage warning preserves95% capacity; existing failed-connection, unknown-capacity, measured-zero/full and source-isolation controls pass",
+    "Same-identity offline/recovery keeps the open datastore and ordinary focus/disclosure lifecycle"
+  ],
+  "interactions": [
+    "Four desktop Chromium/narrow touch WebKit cases cover direct and canonical resource projections through the actual row producer and Backups surface",
+    "Keyboard Enter/Space/Tab and native touch open/close named capacity evidence; no horizontal document overflow; context/long literal names remain readable",
+    "All four retained offline/recovered-capacity captures opened with native view_image and visually inspected; six complementary captures are not claimed inspected"
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "producer_source": "0b512c87739528ca40209aa29cfb7cddb27412ff",
+  "producer_receipt": "source-roms3641",
+  "browser_report_sha256": "bb39b1f847680ae3e8f92458a12a8a6aa0295be21b52f892df6a130842249f2c",
+  "limits": "Production PBS row producer, canonical adapter, Backups reader/table/router and shipped CSS in a safe synthetic fixture shell. Not a real PBS poll, native device/Safari, screen-reader speech, full application/WebSocket, installed recovery, restore, thaw or filesystem-liveness proof. No Docs history/reload path executed."
+}
