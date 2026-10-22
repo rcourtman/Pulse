@@ -455,7 +455,7 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
           <div class="flex items-center gap-2">
             <Show when={historyHintSlotReserved()}>
               <span
-                class={`hidden whitespace-nowrap text-[11px] lg:inline ${
+                class={`hidden whitespace-nowrap text-[11px] text-muted lg:inline ${
                   props.metricHistoryHintVisible?.() ? '' : 'invisible'
                 }`.trim()}
                 data-testid="workload-history-hover-hint"
