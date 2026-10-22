@@ -2034,12 +2034,13 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 		}
 
 		for _, bucket := range notificationQueueBucketsForJob(job, time.Now()) {
+			// Let queue admission apply its shared retry budget. A caller-local
+			// count silently shortened ordinary delivery below that horizon.
 			notif := &QueuedNotification{
 				Type:          queueTypeForNotificationDeliveryJob(bucket.job),
 				DestinationID: notificationDestinationIDForJob(bucket.job),
 				Alerts:        bucket.job.Alerts,
 				Config:        configJSON,
-				MaxAttempts:   3,
 				NextRetryAt:   bucket.nextRetryAt,
 			}
 			var enqueueErr error

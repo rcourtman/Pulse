@@ -636,7 +636,9 @@ resolution timestamp intact. The fixture does not change production deadlines,
 rate limits, or retries. It checks unseen-destination and
 unannounced-alert suppression, per-occurrence resolution metadata, eleven
 recovery renderers, individual PagerDuty keys, and the disabled-grouping burst's
-rate-limit/dead-letter consequence. The HTTP adapter is in-process; queue and
+retained rate-limited retries and subsequent-window recovery. That burst control
+drives existing limiter window state without waiting a minute or changing
+production limits; the ordinary retry-horizon control uses real due times. The HTTP adapter is in-process; queue and
 receipt persistence are real. Focused and race runs establish this synthetic
 boundary, not a full notification-suite result, installed monitor recovery,
 provider acceptance, reporter confirmation or release qualification. The existing
@@ -1646,3 +1648,31 @@ SMTP, rate-limit and routing preservation through edits and reloads with email
 on or off. Backend configuration, transport, retry policy, TLS, queue recovery
 and notification delivery are unchanged. Browser controls are synthetic, not
 native SMTP acceptance or a containing release.
+
+
+### Ordinary delivery inherits the queue's transient-recovery horizon
+
+New ordinary email, webhook and Apprise queue rows, firing or recovery, use the
+shared eight-attempt queue default. The manager must not override it with the
+old three-attempt budget. Immediate, grouped and quiet-hours-held admission
+share that rule; a hold or group merge is not a provider attempt. Existing
+admitted rows keep their original budgets, attempt counts, destination snapshots
+and deadlines. No retained failed or dead-letter work is replayed by this change.
+
+The existing 2/4/8/16/32/60/60-second retry delays remain: only transient failure
+classes can consume the longer horizon. Authentication, configuration and other
+non-retryable failures still stop immediately. Disable and occurrence-resolution
+cancellation, finite exhaustion, receipt ownership and all audit outcomes remain
+unchanged. Recoverable failures remain `retry`, never an accepted send; only a
+real successful delivery creates or consumes its occurrence/destination receipt.
+
+`ordinary_retry_budget_test.go` exercises manager admission across all three
+channels, both events, grouping and quiet holds, then actual due-row selection,
+HTTP rejection and fourth-attempt acceptance for generic and ntfy firing and
+recovery. It retains the third-failure retry log and subsequent delivered log,
+telemetry and exact receipt checks. Controlled claims separately check the
+finite eighth-attempt boundary, every recorded backoff, terminal classification
+and cancellation without
+changing production clocks or backoff. Old rows are not upgraded or replayed.
+This is synthetic loopback source acceptance, not native recipient recovery or
+attribution of fleet notification failures.
