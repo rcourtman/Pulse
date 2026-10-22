@@ -160,7 +160,7 @@ class DependabotConfigTest(unittest.TestCase):
         self.assertTrue(proposed <= required)
         self.assertIn("modernc.org/libc", required)
         for name in sorted(required | proposed):
-            expected = "go-storage-minor-patch" if name.startswith("modernc.org/") else "go-minor-patch"
+            expected = "go-storage-minor-patch" if fnmatchcase(name, "modernc.org/*") else "go-minor-patch"
             for update_type in ("minor", "patch"):
                 with self.subTest(name=name, update_type=update_type):
                     self.assertEqual(matching_groups(name, "version-updates", update_type), [expected])

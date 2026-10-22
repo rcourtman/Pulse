@@ -120,6 +120,7 @@ class ServerInstallerClientConfigTest(unittest.TestCase):
             server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
             if tls:
                 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.minimum_version = ssl.TLSVersion.TLSv1_2
                 context.load_cert_chain(self.root / "tls.crt", self.root / "tls.key")
                 server.socket = context.wrap_socket(server.socket, server_side=True)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
