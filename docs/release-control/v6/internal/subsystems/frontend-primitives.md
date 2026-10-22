@@ -25,7 +25,8 @@
 
 Every sanitized documentation table has one viewer-owned horizontal scroll
 region, named `Scrollable table`, with a native `tabindex="0"` stop and a
-visible light/dark keyboard outline. The stop is stable across viewport changes
+visible light/dark outline whenever focused, including mixed keyboard/touch
+WebKit where `:focus-visible` need not match. The stop is stable across viewport changes
 without observers or key handlers; native arrow scrolling and links/Tab remain
 unchanged. Column headers retain trusted `scope="col"` and native table semantics.
 Document-supplied focus, ARIA and data markers cannot bypass or hide this wrapper;

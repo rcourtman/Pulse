@@ -148,8 +148,10 @@ export function wrapTables(container: HTMLElement): void {
     wrapper.tabIndex = 0;
     wrapper.setAttribute('role', 'region');
     wrapper.setAttribute('aria-label', 'Scrollable table');
+    // Touch-capable WebKit can focus this with Tab without :focus-visible.
+    // This read-only region must still identify its current scroll target.
     wrapper.className =
-      'max-w-full overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400';
+      'max-w-full overflow-x-auto focus:outline-2 focus:outline-offset-2 focus:outline-blue-600 dark:focus:outline-blue-400';
     table.replaceWith(wrapper);
     wrapper.appendChild(table);
   });

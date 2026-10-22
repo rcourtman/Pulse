@@ -288,10 +288,10 @@ describe('documentation table keyboard admission', () => {
     expect(wrapper.tabIndex).toBe(0);
     expect(wrapper).toHaveAttribute('role', 'region');
     expect(wrapper).toHaveAttribute('aria-label', 'Scrollable table');
-    expect(wrapper.classList).toContain('focus-visible:outline-2');
-    expect(wrapper.classList).toContain('focus-visible:outline-offset-2');
-    expect(wrapper.classList).toContain('focus-visible:outline-blue-600');
-    expect(wrapper.classList).toContain('dark:focus-visible:outline-blue-400');
+    expect(wrapper.classList).toContain('focus:outline-2');
+    expect(wrapper.classList).toContain('focus:outline-offset-2');
+    expect(wrapper.classList).toContain('focus:outline-blue-600');
+    expect(wrapper.classList).toContain('dark:focus:outline-blue-400');
     expect(container.querySelectorAll('thead th[scope="col"]')).toHaveLength(3);
     expect(container.querySelector('table')?.hasAttribute('tabindex')).toBe(false);
   });
