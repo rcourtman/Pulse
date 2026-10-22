@@ -20,7 +20,7 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 |---|---|
 | **Fully managed hosting** | No server to manage, no updates to apply |
 | **Automatic updates** | Your instance is always on the latest version |
-| **Automatic backups** | Daily encrypted backups with 7-day retention |
+| **Automatic backups** | Confirm your instance's schedule and recovery coverage with its hosting operator; see [backup assurances](#data--privacy) |
 | **Dedicated instance** | Your data runs in an isolated container — not shared with other tenants |
 | **Wildcard TLS** | HTTPS with auto-renewing certificates |
 | **Mobile ready** | Relay is pre-configured for secure Pulse Mobile remote access |
@@ -73,12 +73,23 @@ Relay is enabled by default on Cloud instances. Open **Settings → Pulse Mobile
 ## Data & Privacy
 
 - Your monitoring data runs in an **isolated container** — no shared databases.
-- Data is stored encrypted at rest.
-- Backups are automated and encrypted.
+- Encrypted credential files do not establish encryption of all monitoring data,
+  hosted storage or backup metadata. Check the installed storage policy and
+  existing archives separately; a source update does not re-encrypt older copies.
+- Confirm the schedule, retention, encryption coverage and recovery procedure
+  with your hosting operator. A downloaded configuration export does not establish
+  these properties for hosted backups. Ask for the covered state and most recent
+  restore result, not raw archives, credentials or command inventories.
 - **Create Backup** in **Settings → System → Recovery** downloads an encrypted
   configuration export, not a complete copy of the hosted installation. Check
   the [migration scope](#migrating-tofrom-cloud) before relying on it for a move.
 - See [Privacy](PRIVACY.md) for full details.
+
+Use existing records; do not run a new backup or restore, delete older copies or
+change retention just to check this guide. Browser administrator access does not
+grant hosted filesystem or service access. Before relying on a backup for a move,
+establish [consistent full-state recovery](MIGRATION.md#full-state-recovery) for
+the state you need. These checks do not change your service or entitlement.
 
 ## Billing
 
