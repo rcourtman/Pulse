@@ -38,6 +38,9 @@ const (
 	websocketHubComponent     = "websocket_hub"
 	initialWelcomeDelay       = 500 * time.Millisecond
 	initialStateMessageDelay  = 100 * time.Millisecond
+	// Bound a client's queue + getter wait, without starting replacement
+	// getters when the original cannot be cancelled.
+	defaultStateBuildTimeout = 30 * time.Second
 	// clientReadDeadline is how long a client may stay silent before the server
 	// drops it. Liveness is proven by ANY inbound frame (data, JSON heartbeat,
 	// or protocol pong) — proxies and middleboxes (Cloudflare, AV products)
@@ -623,6 +626,8 @@ type Hub struct {
 	runDoneOnce        sync.Once
 	initialStateWG     sync.WaitGroup
 	stateBuildSlot     chan struct{}
+	stateBuildStarted  atomic.Pointer[time.Time]
+	stateBuildTimeout  time.Duration
 	mu                 sync.RWMutex
 	getState           func(orgID string) interface{} // Function to get state for specific tenant
 	allowedOrigins     []string                       // Allowed origins for CORS
@@ -735,6 +740,7 @@ func NewHub(getState func(orgID string) interface{}) *Hub {
 		runStarted:               make(chan struct{}),
 		runDone:                  make(chan struct{}),
 		stateBuildSlot:           make(chan struct{}, 1),
+		stateBuildTimeout:        defaultStateBuildTimeout,
 		getState:                 getState,
 		allowedOrigins:           []string{},             // Default to empty (will be set based on actual host)
 		coalesceWindow:           100 * time.Millisecond, // Coalesce rapid updates within 100ms
@@ -928,14 +934,13 @@ func (h *Hub) sendInitialState(client *Client) {
 		log.Debug().Str("client", client.id).Msg("client disconnected before initial state")
 		return
 	}
-	if !h.acquireStateBuildSlot(client) {
-		log.Debug().Str("client", client.id).Msg("client disconnected while waiting to build initial state")
+	stateData, release, ok := h.buildStateForOrg(client, client.orgID)
+	if !ok {
+		h.closeUnavailableStateClient(client)
 		return
 	}
-	defer h.releaseStateBuildSlot()
+	defer release()
 
-	log.Debug().Str("client", client.id).Msg("about to get state")
-	stateData := h.getStateForClient(client)
 	log.Debug().Str("client", client.id).Interface("stateType", fmt.Sprintf("%T", stateData)).Msg("got state for initial message")
 	stateData = h.prepareStateForBroadcast(stateData)
 
@@ -965,16 +970,14 @@ func (h *Hub) sendRequestedState(client *Client) {
 	if client == nil || !h.hasStateGetter() {
 		return
 	}
-	if !h.acquireStateBuildSlot(client) {
-		log.Debug().Str("client", client.id).Msg("client disconnected while waiting to build requested state")
+	stateData, release, ok := h.buildStateForOrg(client, client.orgID)
+	if !ok {
+		h.closeUnavailableStateClient(client)
 		return
 	}
-	defer h.releaseStateBuildSlot()
+	defer release()
 
-	_, sent, err := client.queueFullState(
-		"rawData",
-		h.prepareStateForBroadcast(h.getStateForClient(client)),
-	)
+	_, sent, err := client.queueFullState("rawData", h.prepareStateForBroadcast(stateData))
 	if err != nil {
 		log.Error().Err(err).Str("client", client.id).Msg("failed to marshal state for requestData")
 		return
@@ -984,11 +987,113 @@ func (h *Hub) sendRequestedState(client *Client) {
 	}
 }
 
+// StateDeliveryHealthy is a passive, content-free observation of state-build
+// progress. Health probes must not enter the state getter or wait on its locks.
+// An idle hub (including one with no browser) is not a stalled hub.
+func (h *Hub) StateDeliveryHealthy() bool {
+	if h == nil || h.isStopping() {
+		return false
+	}
+	started := h.stateBuildStarted.Load()
+	return started == nil || time.Since(*started) < h.stateBuildTimeout
+}
+
+// buildStateForOrg bounds queue + getter wait while retaining the single build
+// slot until the getter actually returns. A mutex-blocked legacy getter cannot
+// be cancelled: releasing its slot on timeout would accumulate stuck goroutines
+// and concurrent full-state builds on every reconnect. At most one abandoned
+// getter can remain, and shutdown does not wait for it. Its late result is never
+// delivered to a client or used as a delta baseline.
+//
+// A successful caller owns release through encoding/queueing, preserving the
+// existing bound on simultaneous full-state allocations.
+func (h *Hub) buildStateForOrg(client *Client, orgID string) (interface{}, func(), bool) {
+	timer := time.NewTimer(h.stateBuildTimeout)
+	defer timer.Stop()
+	if !h.acquireStateBuildSlotBefore(client, timer.C) {
+		return nil, nil, false
+	}
+
+	result := make(chan interface{})
+	abandon := make(chan struct{})
+	go func() {
+		state := h.getStateForOrg(orgID)
+		select {
+		case result <- state:
+			// The receiver now owns release. The unbuffered handoff ensures
+			// timeout/cancellation and success cannot both own the slot.
+		case <-abandon:
+			h.releaseStateBuildSlot()
+		}
+	}()
+
+	var clientDone <-chan struct{}
+	if client != nil {
+		clientDone = client.lifecycleSignal()
+	}
+	select {
+	case state := <-result:
+		return state, h.releaseStateBuildSlot, true
+	case <-timer.C:
+	case <-clientDone:
+	case <-h.stopChan:
+	}
+	close(abandon)
+	return nil, nil, false
+}
+
+func (h *Hub) closeUnavailableStateClient(client *Client) {
+	if client == nil || client.closed.Load() || h.isStopping() {
+		return
+	}
+	log.Warn().Str("component", websocketHubComponent).
+		Str("action", "state_delivery_unavailable").
+		Msg("Closing client after state delivery became unavailable")
+	// WriteControl may run concurrently with writePump. Keep the reason
+	// generic: this is retryable service unavailability, not an auth failure.
+	if client.conn != nil {
+		_ = client.conn.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "State delivery temporarily unavailable"),
+			time.Now().Add(time.Second))
+		_ = client.conn.Close()
+	}
+	h.mu.Lock()
+	h.removeClientLocked(client)
+	h.mu.Unlock()
+}
+
+func (h *Hub) closeUnavailableStateAudience(orgID string) {
+	h.mu.RLock()
+	clients := make([]*Client, 0, len(h.clients))
+	for client := range h.clients {
+		if orgID == "" || normalizeOrgID(client.orgID) == normalizeOrgID(orgID) {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.RUnlock()
+	for _, client := range clients {
+		h.closeUnavailableStateClient(client)
+	}
+}
+
 func (h *Hub) acquireStateBuildSlot(client *Client) bool {
+	timer := time.NewTimer(h.stateBuildTimeout)
+	defer timer.Stop()
+	return h.acquireStateBuildSlotBefore(client, timer.C)
+}
+
+func (h *Hub) acquireStateBuildSlotBefore(client *Client, deadline <-chan time.Time) bool {
+	if h.isStopping() {
+		return false
+	}
 	if client == nil {
 		select {
 		case h.stateBuildSlot <- struct{}{}:
+			started := time.Now()
+			h.stateBuildStarted.Store(&started)
 			return true
+		case <-deadline:
+			return false
 		case <-h.stopChan:
 			return false
 		}
@@ -997,6 +1102,8 @@ func (h *Hub) acquireStateBuildSlot(client *Client) bool {
 	lifecycleDone := client.lifecycleSignal()
 	select {
 	case h.stateBuildSlot <- struct{}{}:
+		started := time.Now()
+		h.stateBuildStarted.Store(&started)
 		h.mu.RLock()
 		_, registered := h.clients[client]
 		h.mu.RUnlock()
@@ -1004,6 +1111,8 @@ func (h *Hub) acquireStateBuildSlot(client *Client) bool {
 			return true
 		}
 		h.releaseStateBuildSlot()
+		return false
+	case <-deadline:
 		return false
 	case <-lifecycleDone:
 		return false
@@ -1013,6 +1122,8 @@ func (h *Hub) acquireStateBuildSlot(client *Client) bool {
 }
 
 func (h *Hub) releaseStateBuildSlot() {
+	// Clear progress before making the slot available to a new owner.
+	h.stateBuildStarted.Store(nil)
 	<-h.stateBuildSlot
 }
 
@@ -1308,18 +1419,27 @@ func (h *Hub) dispatchStateBroadcast(pending *Message, orgID string) {
 	if pending == nil || h.isStopping() || !h.hasRecipientsForMessage(*pending, orgID) {
 		return
 	}
+	if req, currentStateRequest := h.messageHasCurrentStateRequest(*pending); currentStateRequest {
+		if !h.hasStateGetter() {
+			return
+		}
+		requestOrgID := strings.TrimSpace(req.orgID)
+		if requestOrgID == "" {
+			requestOrgID = orgID
+		}
+		state, release, ok := h.buildStateForOrg(nil, requestOrgID)
+		if !ok {
+			h.closeUnavailableStateAudience(orgID)
+			return
+		}
+		defer release()
+		h.dispatchCurrentStateSnapshot(h.prepareStateForBroadcast(state), orgID)
+		return
+	}
 	if !h.acquireStateBuildSlot(nil) {
 		return
 	}
 	defer h.releaseStateBuildSlot()
-	if _, currentStateRequest := h.messageHasCurrentStateRequest(*pending); currentStateRequest {
-		prepared, ok := h.prepareMessageForMarshal(*pending, orgID)
-		if !ok {
-			return
-		}
-		h.dispatchCurrentStateSnapshot(prepared.Data, orgID)
-		return
-	}
 	data, ok := h.marshalBroadcastMessage(*pending, orgID)
 	if !ok {
 		return
@@ -1426,7 +1546,12 @@ func (h *Hub) prepareMessageForMarshal(msg Message, orgID string) (Message, bool
 		return Message{}, false
 	}
 
-	msg.Data = h.prepareStateForBroadcast(h.getStateForOrg(requestOrgID))
+	state, release, ok := h.buildStateForOrg(nil, requestOrgID)
+	if !ok {
+		return Message{}, false
+	}
+	defer release()
+	msg.Data = h.prepareStateForBroadcast(state)
 	return msg, true
 }
 

@@ -27610,3 +27610,157 @@ func TestSSOConfigConcurrentReadsAndAdminWrites(t *testing.T) {
 		t.Fatalf("persisted providers = %v, want %v", got, want[:writers])
 	}
 }
+
+// Uses only a controlled in-memory getter, a real hub/socket and the real
+// public health handler. No monitor, guest, endpoint or database is started.
+func TestContractStateDeliveryStallReadiness(t *testing.T) {
+	t.Setenv("PULSE_DEV_ALLOW_CONTAINER_SSH", "false")
+	entered, release, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
+	var builds atomic.Int64
+	state := models.EmptyStateFrontend()
+	state.Resources = []models.ResourceFrontend{{ID: "fixture-node", Type: "agent", Name: "recovered-node", DisplayName: "Recovered node", PlatformID: "fixture-pve", PlatformType: "proxmox-pve", SourceType: "api", Status: "online", Proxmox: json.RawMessage(`{"node":"recovered-node","instance":"fixture-pve"}`), LastSeen: time.Now().UnixMilli()}}
+	hub := pulsews.NewHub(func(orgID string) interface{} {
+		if builds.Add(1) == 1 {
+			close(entered)
+			<-release
+			close(returned)
+		}
+		if orgID != "default" {
+			t.Errorf("unexpected state scope %q", orgID)
+		}
+		return state
+	})
+	go hub.Run()
+	defer func() { unblock(); hub.Stop() }()
+	router := &Router{monitor: &monitoring.Monitor{}, wsHub: hub}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws", hub.HandleWebSocket)
+	mux.HandleFunc("/api/health", router.handleHealth)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	proof := map[string]interface{}{"kind": "controlled-getter-real-hub-and-health", "timeoutSeconds": 30}
+	health := func(phase string, expected int) {
+		t.Helper()
+		start := time.Now()
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		rec := httptest.NewRecorder()
+		router.handleHealth(rec, req)
+		if time.Since(start) > time.Second {
+			t.Errorf("%s health blocked", phase)
+		}
+		if rec.Code != expected {
+			t.Errorf("%s health = %d, want %d; %s", phase, rec.Code, expected, rec.Body.String())
+		}
+		var body map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		proof[phase] = map[string]interface{}{"status": rec.Code, "body": body}
+		if len(body) != 5 {
+			t.Errorf("health shape changed or leaked details: %v", body)
+		}
+		for _, key := range []string{"status", "timestamp", "uptime", "proxyInstallScriptAvailable", "dependencies"} {
+			if _, ok := body[key]; !ok {
+				t.Errorf("missing health field %q: %v", key, body)
+			}
+		}
+	}
+	dial := func() *websocket.Conn {
+		t.Helper()
+		header := http.Header{"Origin": []string{server.URL}}
+		c, response, err := websocket.DefaultDialer.Dial("ws"+server.URL[len("http"):]+"/ws?org_id=default", header)
+		if err != nil {
+			t.Fatalf("dial real hub: %v (%v)", err, response)
+		}
+		t.Cleanup(func() { c.Close() })
+		return c
+	}
+	read := func(c *websocket.Conn, kind string) json.RawMessage {
+		t.Helper()
+		c.SetReadDeadline(time.Now().Add(5 * time.Second))
+		for {
+			_, raw, err := c.ReadMessage()
+			if err != nil {
+				t.Fatalf("read %s: %v", kind, err)
+			}
+			var message struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(raw, &message); err != nil {
+				t.Fatal(err)
+			}
+			if message.Type == kind {
+				return raw
+			}
+		}
+	}
+	health("idle", http.StatusOK)
+	c := dial()
+	proof["welcome"] = read(c, "welcome")
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("getter never entered")
+	}
+	health("slow", http.StatusOK)
+	// Exercise the production 30-second budget, not a shortened test-only clock.
+	time.Sleep(31 * time.Second)
+	health("stalled", http.StatusServiceUnavailable)
+	for i := 0; i < 32; i++ {
+		rec := httptest.NewRecorder()
+		router.handleHealth(rec, httptest.NewRequest(http.MethodHead, "/api/health", nil))
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("stalled HEAD %d: %d", i, rec.Code)
+			break
+		}
+	}
+	if builds.Load() != 1 {
+		t.Errorf("public health probes created state builds: %d", builds.Load())
+	}
+	c.SetReadDeadline(time.Now().Add(time.Second))
+	// A periodic application ping may precede the close on the wire. Drain
+	// normal frames through the read deadline; a frame is not a close error.
+	var err error
+	for err == nil {
+		_, _, err = c.ReadMessage()
+	}
+	closeError, isClose := err.(*websocket.CloseError)
+	if !isClose || closeError.Code != websocket.CloseTryAgainLater {
+		t.Errorf("stalled initial state did not end in retryable close: %v", err)
+	} else {
+		proof["stalledClose"] = map[string]interface{}{"code": closeError.Code, "reason": closeError.Text}
+	}
+	c.Close()
+	unblock()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("fixture getter did not return")
+	}
+	recovered := dial()
+	proof["recoveredInitial"] = read(recovered, "initialState")
+	health("recovered", http.StatusOK)
+	recovered.Close()
+	stopped := make(chan struct{})
+	go func() { hub.Stop(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("hub shutdown blocked")
+	}
+	proof["builds"] = builds.Load()
+	proof["hubStopped"] = true
+	if path := os.Getenv("PULSE_STATE_STALL_PROOF_OUTPUT"); path != "" {
+		data, err := json.Marshal(proof)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Logf("real hub healthy/slow/stalled/recovered and 32 HEAD controls, %d builds", builds.Load())
+}

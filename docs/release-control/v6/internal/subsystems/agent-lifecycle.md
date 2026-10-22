@@ -4651,6 +4651,16 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Dashboard state-delivery liveness boundary
+
+State-build health is independent of agent enrollment and endpoint reachability.
+A monitor with one unavailable agent or a scheduler dead letter remains healthy
+unless the hub's own in-flight state build stalls for 30 seconds. Health probes
+observe existing work only; they never start a getter or collect an agent report.
+No agent credential, removal, update or restart authority changes. The controlled
+hub/health contract test exercises the process dependency, not installed agents.
+
+
 ### Unix installer certificate probing has a total deadline
 
 The leaf-certificate pin check in `scripts/install.sh` must finish its TCP/TLS

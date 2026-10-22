@@ -3812,6 +3812,18 @@ vdev layout is reported` in
 
 ## Current State
 
+### Dashboard state-delivery liveness boundary
+
+A persistently blocked dashboard state getter cannot make process health stay
+green solely because the monitor and hub exist. After 30 seconds of in-flight
+state work the existing public health dependency is false and GET/HEAD return
+503, without probing monitored storage or entering the getter. Client waits and
+hub shutdown are bounded while the original getter retains the single slot
+until actual completion; no invented empty estate or late result is delivered.
+This is observation/containment, not disk, backup, thaw, restore or installed
+recovery acceptance. The controlled hub/health proof starts no storage workload.
+
+
 ### Shared guest availability metadata keeps CPU separate from storage (21 October 2026)
 
 `ProxmoxData.cpuUsageUnavailable` belongs to a complete guest CPU observation.

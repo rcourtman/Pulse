@@ -5277,6 +5277,34 @@ auto-register mutation boundary.
 
 ## Current State
 
+### State-build stalls are bounded and visible to health
+
+The hub bounds each initial/requested/current-broadcast queue and getter wait
+at 30 seconds. A client whose initial or requested state cannot be built receives
+a generic retryable WebSocket close (1013), not an authentication failure or an
+invented empty state. A failed current-state broadcast retires only its existing
+recipient audience by the same close path. The one shared build slot remains held until the original
+getter actually returns, even after timeout, disconnect or hub shutdown. A late
+abandoned result is discarded; reconnects never create parallel replacement
+getters, and shutdown does not wait for an uncancellable legacy getter.
+Successful builds retain that same slot through encoding/queueing.
+
+`/api/health` keeps its existing public response shape and content-free dependency
+booleans. An in-flight state build lasting at least 30 seconds makes `websocket`
+false and GET/HEAD return 503; idle hubs and short builds remain healthy, and
+actual build completion permits recovery. No probe starts state work or takes
+its locks. An absent optional hub remains a false dependency without independently
+making an otherwise healthy monitor fail. Individual unavailable monitored nodes
+and scheduler dead letters do not gate this process-health decision.
+
+`TestContractStateDeliveryStallReadiness` exercises the production budget through
+a real hub/socket and health handler, with idle/slow/stalled/recovered controls.
+The hub tests cover bounded reconnect work, cancellation, shutdown, late-result
+discard and tenant-scoped recovery. This contains a stalled getter and repairs
+the health blind spot; it does not establish the lock owner or cause of #3105's
+reported outage, cancel a blocked mutex, or prove installed/released recovery.
+
+
 ### Saved and entered node connection tests are distinct evidence (2026-10-14)
 
 `NodesAPI.testExistingNode` sends only the encoded saved record identity to

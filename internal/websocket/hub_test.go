@@ -1471,3 +1471,273 @@ func TestHubInstanceEventsReachAllTenants(t *testing.T) {
 		}
 	}
 }
+
+// Every waiter has a deadline, but an uncancellable getter retains its slot:
+// reconnect churn must not turn one stalled build into unbounded stuck work.
+func TestHubStalledGetterBoundsReconnectWorkAndRecovers(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	hub := NewHub(nil)
+	hub.stateBuildTimeout = 50 * time.Millisecond
+	go hub.Run()
+	t.Cleanup(func() { unblock(); hub.Stop() })
+	var builds atomic.Int64
+	hub.SetStateGetter(func(org string) interface{} {
+		if builds.Add(1) == 1 {
+			close(entered)
+			<-release
+		}
+		return map[string]string{"org": org, "state": "current"}
+	})
+	for round := 0; round < 2; round++ {
+		var done sync.WaitGroup
+		for i := 0; i < 32; i++ {
+			c := registerTenantTestClient(t, hub, "reconnecting", "org-a")
+			done.Add(1)
+			go func() { defer done.Done(); hub.sendRequestedState(c) }()
+		}
+		finished := make(chan struct{})
+		go func() { done.Wait(); close(finished) }()
+		select {
+		case <-finished:
+		case <-time.After(time.Second):
+			t.Fatal("state waiters did not finish within budget")
+		}
+		if got := builds.Load(); got != 1 {
+			t.Fatalf("reconnects started %d blocked getters, want one", got)
+		}
+		if hub.StateDeliveryHealthy() {
+			t.Fatal("stalled getter remains healthy")
+		}
+		if got := hub.GetClientCount(); got != 0 {
+			t.Fatalf("%d timed-out clients remain registered", got)
+		}
+	}
+	for i := 0; i < 100; i++ {
+		if hub.StateDeliveryHealthy() {
+			t.Fatal("probe cleared stalled state")
+		}
+	}
+	if builds.Load() != 1 {
+		t.Fatal("health probes started work")
+	}
+	unblock()
+	waitStateBuildReleased(t, hub)
+	recovered := registerTenantTestClient(t, hub, "recovered", "org-b")
+	hub.sendRequestedState(recovered)
+	msg := readClientMessage(t, recovered, time.Second)
+	if msg.Type != "rawData" {
+		t.Fatalf("recovered type=%s", msg.Type)
+	}
+	payload, ok := msg.Data.(map[string]interface{})
+	if !ok || payload["org"] != "org-b" || payload["state"] != "current" {
+		t.Fatalf("late or cross-tenant result delivered: %v", msg.Data)
+	}
+	if builds.Load() != 2 || !hub.StateDeliveryHealthy() {
+		t.Fatal("ordinary scoped state delivery did not recover")
+	}
+}
+
+func waitStateBuildReleased(t *testing.T, hub *Hub) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for hub.stateBuildStarted.Load() != nil || len(hub.stateBuildSlot) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("returned getter did not release its slot")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestHubStalledGetterDoesNotHoldShutdown(t *testing.T) {
+	for _, path := range []string{"initial", "requested", "broadcast"} {
+		t.Run(path, func(t *testing.T) {
+			entered, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			hub := NewHub(nil)
+			hub.stateBuildTimeout = time.Second
+			hub.coalesceWindow = time.Millisecond
+			hub.stateBroadcastInterval = 0
+			go hub.Run()
+			t.Cleanup(func() { unblock(); hub.Stop() })
+			getter := func(string) interface{} { close(entered); <-release; return map[string]string{"late": "never deliver"} }
+			if path == "initial" {
+				hub.SetStateGetter(getter)
+			}
+			c := registerTenantTestClient(t, hub, "stalled", "default")
+			if path != "initial" {
+				hub.SetStateGetter(getter)
+			}
+			switch path {
+			case "requested":
+				go hub.sendRequestedState(c)
+			case "broadcast":
+				hub.BroadcastCurrentState()
+			}
+			select {
+			case <-entered:
+			case <-time.After(2 * time.Second):
+				t.Fatal("getter did not enter")
+			}
+			stopped := make(chan struct{})
+			go func() { hub.Stop(); close(stopped) }()
+			select {
+			case <-stopped:
+			case <-time.After(300 * time.Millisecond):
+				t.Fatal("shutdown waited for blocked getter")
+			}
+			if len(hub.stateBuildSlot) != 1 {
+				t.Fatal("shutdown freed the still-running getter's slot")
+			}
+			if hub.StateDeliveryHealthy() {
+				t.Fatal("stopped hub reports healthy")
+			}
+			unblock()
+			waitStateBuildReleased(t, hub)
+			for raw := range c.send {
+				var msg Message
+				if err := json.Unmarshal(raw, &msg); err != nil {
+					t.Fatal(err)
+				}
+				if msg.Type != "welcome" {
+					t.Fatalf("shutdown delivered abandoned result: %s", raw)
+				}
+			}
+		})
+	}
+}
+
+func TestHubClientCancellationDiscardsGetterResult(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	hub := NewHub(nil)
+	hub.stateBuildTimeout = time.Second
+	go hub.Run()
+	t.Cleanup(func() { unblock(); hub.Stop() })
+	c := registerTenantTestClient(t, hub, "cancelled", "org-a")
+	hub.SetStateGetter(func(string) interface{} { close(entered); <-release; return map[string]string{"secret": "org-a"} })
+	done := make(chan struct{})
+	go func() { hub.sendRequestedState(c); close(done) }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("getter did not enter")
+	}
+	hub.unregister <- c
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("disconnect did not cancel state wait")
+	}
+	if len(hub.stateBuildSlot) != 1 {
+		t.Fatal("disconnect freed active getter slot")
+	}
+	unblock()
+	waitStateBuildReleased(t, hub)
+	for raw := range c.send {
+		t.Fatalf("late state reached disconnected client: %s", raw)
+	}
+}
+
+func TestHubSlowGetterAndSerializationStayHealthy(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	hub := NewHub(func(org string) interface{} { close(entered); <-release; return org })
+	hub.stateBuildTimeout = time.Second
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(func() { unblock(); hub.Stop() })
+	done := make(chan struct{})
+	go func() {
+		state, finish, ok := hub.buildStateForOrg(nil, "org-b")
+		if !ok {
+			t.Error("slow getter timed out")
+		} else {
+			if state != "org-b" {
+				t.Errorf("wrong org: %v", state)
+			}
+			if len(hub.stateBuildSlot) != 1 {
+				t.Error("slot released before encoding/queueing")
+			}
+			finish()
+		}
+		close(done)
+	}()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("getter did not enter")
+	}
+	if !hub.StateDeliveryHealthy() {
+		t.Fatal("short build marked unhealthy")
+	}
+	unblock()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("slow build did not complete")
+	}
+	waitStateBuildReleased(t, hub)
+	if !hub.StateDeliveryHealthy() {
+		t.Fatal("idle hub marked unhealthy")
+	}
+}
+
+func TestHubTimedOutTenantBroadcastClosesOnlyItsAudience(t *testing.T) {
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	hub := NewHub(nil)
+	hub.stateBuildTimeout = 50 * time.Millisecond
+	hub.coalesceWindow = time.Millisecond
+	hub.stateBroadcastInterval = 0
+	go hub.Run()
+	t.Cleanup(func() { unblock(); hub.Stop() })
+	a := registerTenantTestClient(t, hub, "a", "org-a")
+	b := registerTenantTestClient(t, hub, "b", "org-b")
+	// Deltas require an actually accepted initial snapshot. Do not mistake
+	// the existing pre-hydration suppression for failed recovery.
+	if _, sent, err := b.queueFullState("initialState", map[string]string{"org": "org-b", "phase": "before"}); err != nil || !sent {
+		t.Fatalf("seed accepted org-b baseline: sent=%t err=%v", sent, err)
+	}
+	_ = readClientMessage(t, b, time.Second)
+	var builds atomic.Int64
+	hub.SetStateGetter(func(org string) interface{} {
+		if builds.Add(1) == 1 {
+			close(entered)
+			<-release
+		} else if org != "org-b" {
+			t.Errorf("recovery getter scope = %q, want org-b", org)
+		}
+		return map[string]string{"org": org, "phase": "after"}
+	})
+	hub.BroadcastCurrentStateToTenant("org-a")
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("broadcast getter did not enter")
+	}
+	select {
+	case <-a.lifecycleSignal():
+	case <-time.After(time.Second):
+		t.Fatal("timed-out audience remained live")
+	}
+	if !a.closed.Load() || b.closed.Load() || hub.GetClientCount() != 1 {
+		t.Fatal("tenant timeout retired the wrong audience")
+	}
+	if hub.StateDeliveryHealthy() || builds.Load() != 1 {
+		t.Fatal("stalled shared work is not faithfully retained")
+	}
+	unblock()
+	waitStateBuildReleased(t, hub)
+	hub.BroadcastCurrentStateToTenant("org-b")
+	msg := readClientMessage(t, b, time.Second)
+	if msg.Type != "rawData" || msg.Data.(map[string]interface{})["phase"] != "after" || builds.Load() != 2 {
+		t.Fatalf("wrong recovery audience/state: %+v", msg)
+	}
+	for raw := range a.send {
+		t.Fatalf("late result reached retired audience: %s", raw)
+	}
+}

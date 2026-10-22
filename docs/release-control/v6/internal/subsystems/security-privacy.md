@@ -1543,6 +1543,17 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### Dashboard state-delivery liveness boundary
+
+Public health retains only its existing status, timing and dependency fields
+when state delivery stalls. It returns 503 with a false websocket dependency
+without reading a tenant's state, naming a tenant or endpoint, or starting new
+getter work. Initial/requested state failure uses generic retryable WebSocket
+close 1013, never auth close 1008; late abandoned results are discarded and
+recovery still calls the getter for the requesting tenant. Hub cancellation,
+reconnect/tenant and health-shape regressions cover this boundary.
+
+
 ### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
 
 With AI Discovery removed, the telemetry snapshot's `discovery_enabled` flag
