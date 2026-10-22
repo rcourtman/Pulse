@@ -30,6 +30,12 @@ still works. No filter primitive, route or navigation is added. The source-bound
 `backup-node-scope.cjs` fixture checks keyboard and narrow touch use, visible
 scope notices, rename/navigation continuity and recovery by clearing Node.
 
+The existing backup activity chart uses a local lazy/Suspense/error boundary:
+loading or failure never replaces the surrounding filter bar, inventory or
+backup evidence with an app-level blank screen. No new route is added. The
+source-bound node-scope browser fixture exercises delayed chunk completion,
+interactive day filtering and a failed chunk at desktop and narrow widths.
+
 ### Root disk availability is visible without hover
 
 The existing machine detail's Root Disk card renders a wrapping, neutral

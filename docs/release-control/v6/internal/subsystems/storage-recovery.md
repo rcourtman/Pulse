@@ -40,6 +40,13 @@ unchanged. `backup-node-scope.test.tsx`, `proxmoxBackupNodeScope.test.ts` and th
 source-bound `browser-tests/backup-node-scope.cjs` consumer cover these rules.
 This is source/presentation proof, not installed recovery or issue #2681 closure.
 
+The interactive By date activity chart is loaded only when its existing view
+needs it. Its local loading and failure boundary keeps backup inventory, scope
+filters and evidence controls usable while that client chunk is pending or
+unavailable. Chart calculations, day filters, observations and collection do not
+change. Browser proof holds and fails the actual chunk request; bundle proof
+retains the existing per-chunk, total, preload and SRI budgets unchanged.
+
 ### Backup artifact identity must be unambiguous before row reconciliation
 
 The existing collected-inventory reader rejects repeated opaque artifact IDs

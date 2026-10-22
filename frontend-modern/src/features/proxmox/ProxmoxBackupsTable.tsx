@@ -1,4 +1,14 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  ErrorBoundary,
+  For,
+  Show,
+  Suspense,
+  createMemo,
+  createSignal,
+  lazy,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
@@ -35,7 +45,6 @@ import type {
   StorageBackup,
 } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { BackupActivityChart } from './BackupActivityChart';
 import {
   backupNodeMatches,
   backupNodeOptions,
@@ -85,6 +94,10 @@ import {
   fetchPBSBackupInventory,
   fetchPVEBackupInventory,
 } from './proxmoxBackupInventory';
+
+// Coverage does not need the interactive By date chart. Keep its loading and
+// failure local so the independent inventory and filters remain usable.
+const BackupActivityChart = lazy(() => import('./BackupActivityChart'));
 
 // One backups surface, two operator views: a chronological recoverable-artifact
 // feed for "what ran when", and a guest coverage table for "what is protected".
@@ -710,11 +723,6 @@ export const ProxmoxBackupsTable: Component<{
       { replace: true },
     );
 
-  const savedScopes = [
-    { name: 'node', selection: nodeSelection, rows: 'workloads or restore points' },
-    { name: 'backup location', selection: locationSelection, rows: 'restore points' },
-  ];
-
   return (
     <div class="space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -805,20 +813,24 @@ export const ProxmoxBackupsTable: Component<{
         >
           <div class="space-y-3">
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
-            <For each={savedScopes}>
-              {(scope) => (
-                <Show when={['ambiguous', 'missing'].includes(scope.selection().state)}>
-                  <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
-                    The saved {scope.name}{' '}
-                    {scope.selection().state === 'ambiguous'
-                      ? 'matches more than one source.'
-                      : 'is not in the current inventory.'}{' '}
-                    No {scope.rows} are selected. Choose a {scope.name} or clear filters. This does
-                    not mean no backups exist.
-                  </p>
-                </Show>
-              )}
-            </For>
+            <Show when={nodeUnavailable()}>
+              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                {nodeSelection().state === 'ambiguous'
+                  ? 'The saved node matches more than one Proxmox source.'
+                  : 'The saved node is not in the current inventory.'}{' '}
+                No workloads or restore points are selected. Choose a node or clear filters. This
+                does not mean no backups exist.
+              </p>
+            </Show>
+            <Show when={locationUnavailable()}>
+              <p role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                {locationSelection().state === 'ambiguous'
+                  ? 'The saved backup location matches more than one source.'
+                  : 'The saved backup location is not in the current inventory.'}{' '}
+                No restore points are selected. Choose a backup location or clear filters. This does
+                not mean no backups exist.
+              </p>
+            </Show>
             <Show when={protectionPostures.response.error}>
               <div class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center gap-2`}>
                 <p role="status" class="min-w-0 flex-1 basis-64">
@@ -957,21 +969,41 @@ export const ProxmoxBackupsTable: Component<{
                   unknown. They are excluded from the activity chart and day filters.
                 </p>
               </Show>
-              <BackupActivityChart
-                title={
-                  recoverableMetricMode() === 'volume'
-                    ? 'Reported backup volume per day'
-                    : 'Backups per day'
+              <ErrorBoundary
+                fallback={
+                  <p role="status" class="text-xs text-amber-700 dark:text-amber-300">
+                    Backup activity could not load. Restore points and filters remain available
+                    below. Reload Pulse to try again.
+                  </p>
                 }
-                noun="backup"
-                segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                range={chartRange}
-                onRangeChange={setChartRange}
-                timeline={recoverableTimeline}
-                selectedDateKey={selectedDateKey}
-                onToggleDay={toggleDay}
-                metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
-              />
+              >
+                <Suspense
+                  fallback={
+                    <p role="status" class="text-xs text-muted">
+                      Loading backup activity…
+                    </p>
+                  }
+                >
+                  <BackupActivityChart
+                    title={
+                      recoverableMetricMode() === 'volume'
+                        ? 'Reported backup volume per day'
+                        : 'Backups per day'
+                    }
+                    noun="backup"
+                    segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                    range={chartRange}
+                    onRangeChange={setChartRange}
+                    timeline={recoverableTimeline}
+                    selectedDateKey={selectedDateKey}
+                    onToggleDay={toggleDay}
+                    metricToggle={{
+                      mode: recoverableMetricMode,
+                      onChange: setRecoverableMetricMode,
+                    }}
+                  />
+                </Suspense>
+              </ErrorBoundary>
             </Show>
 
             <FilterBar

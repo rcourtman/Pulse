@@ -41,7 +41,13 @@ const initialPoints = [
   point('east-other-file', 'east', 'pve-b'),
   point('case-file', 'East', 'pve-a'),
 ];
-let points, server, browser, current;
+let points,
+  server,
+  browser,
+  current,
+  chartPath,
+  chartGate,
+  failChart = false;
 async function activate(locator, touch) {
   if (touch) await locator.tap();
   else {
@@ -84,7 +90,10 @@ async function capture(page, name, locator) {
       assert.equal(hash(bytes), digest, file);
       assets.set('/' + file, bytes);
     }
-    server = http.createServer((req, res) => {
+    chartPath = [...assets.keys()].find((name) => /\/BackupActivityChart-[^/]+\.js$/.test(name));
+    assert(chartPath, 'Activity chart must be a separate served chunk');
+    report.activity_chunk = chartPath;
+    server = http.createServer(async (req, res) => {
       const url = new URL(req.url, 'http://fixture.invalid');
       try {
         assert.equal(req.method, 'GET');
@@ -115,6 +124,14 @@ async function capture(page, name, locator) {
           ? url.pathname
           : '/browser-tests/backup-node-scope.html';
         assert(assets.has(key));
+        if (key === chartPath) {
+          current.chart_requests.push({ path: key, failed: failChart });
+          if (chartGate) await chartGate.promise;
+          if (failChart) {
+            res.writeHead(503);
+            return res.end('Synthetic chart unavailable');
+          }
+        }
         res.setHeader(
           'Content-Type',
           { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html' }[
@@ -146,6 +163,7 @@ async function capture(page, name, locator) {
         requests: [],
         checks: [],
         errors: [],
+        chart_requests: [],
       };
       report.cases.push(current);
       points = [...initialPoints];
@@ -182,7 +200,7 @@ async function capture(page, name, locator) {
       });
       const warning = page
         .getByRole('status')
-        .filter({ hasText: 'The saved node matches more than one source.' });
+        .filter({ hasText: 'The saved node matches more than one Proxmox source.' });
       await expect(warning).toBeVisible();
       await expect(rows('coverage')).toHaveCount(0);
       await capture(page, `${spec.name}-ambiguous`, warning);
@@ -217,9 +235,34 @@ async function capture(page, name, locator) {
       }
       await expect(rows('coverage')).toHaveCount(2);
       await capture(page, `${spec.name}-coverage`, rows('coverage').first());
+      assert.equal(current.chart_requests.length, 0, 'Coverage must not fetch the activity chart');
+      let releaseChart;
+      chartGate = {
+        promise: new Promise((resolve) => {
+          releaseChart = resolve;
+        }),
+        release: () => releaseChart(),
+      };
       await activate(page.getByRole('link', { name: 'By date', exact: true }), spec.touch);
       await expect(rows('recoverable')).toHaveCount(1);
       await expect(rows('recoverable')).toContainText('east-vm');
+      const chartPending = page.getByText('Loading backup activity…', { exact: true });
+      await expect(chartPending).toBeVisible();
+      await capture(page, `${spec.name}-chart-pending`, chartPending);
+      chartGate.release();
+      chartGate = null;
+      const days = page.getByRole('group', { name: 'Backup activity days', exact: true });
+      await expect(days).toBeVisible();
+      const buttons = days.getByRole('button');
+      const yesterday = buttons.nth((await buttons.count()) - 2);
+      await activate(yesterday, spec.touch);
+      await expect(yesterday).toHaveAttribute('aria-pressed', 'true');
+      await expect(rows('recoverable')).toHaveCount(1);
+      await activate(
+        page.getByRole('button', { name: 'Clear date filter', exact: true }),
+        spec.touch,
+      );
+
       await activate(
         rows('recoverable').getByRole('button', { name: /Backup evidence/ }),
         spec.touch,
@@ -282,6 +325,53 @@ async function capture(page, name, locator) {
       ];
       assert.deepEqual(current.errors, []);
       await context.close();
+      // A fresh client with the real chunk unavailable must retain inventory,
+      // filters and evidence access. No production or guest is contacted.
+      failChart = true;
+      points = [...initialPoints];
+      const failedContext = await browser.newContext({
+        viewport: current.viewport,
+        isMobile: spec.touch,
+        hasTouch: spec.touch,
+        locale: 'en-GB',
+        timezoneId: 'UTC',
+        colorScheme: spec.touch ? 'dark' : 'light',
+      });
+      await failedContext.route('**/*', (route) => {
+        const req = route.request(),
+          url = new URL(req.url());
+        if (url.origin !== origin || req.method() !== 'GET') {
+          report.unexpected.push(`${req.method()} ${url.origin}${url.pathname}`);
+          return route.abort();
+        }
+        return route.continue();
+      });
+      if (spec.touch)
+        await failedContext.addInitScript(() =>
+          document.addEventListener('DOMContentLoaded', () =>
+            document.documentElement.classList.add('dark'),
+          ),
+        );
+      const failedPage = await failedContext.newPage();
+      failedPage.setDefaultTimeout(10000);
+      failedPage.on('pageerror', (error) => current.errors.push(error.message));
+      await failedPage.clock.setFixedTime(new Date('2026-10-22T00:00:00Z'));
+      await failedPage.goto(
+        `${origin}/proxmox/backups/date?node=${encodeURIComponent('backup-node-v1:["east","pve-a"]')}&keep=node-proof`,
+        { waitUntil: 'domcontentloaded' },
+      );
+      const failedNotice = failedPage
+        .getByRole('status')
+        .filter({ hasText: 'Backup activity could not load.' });
+      await expect(failedNotice).toBeVisible();
+      await expect(failedPage.locator('[data-proxmox-backup-row="recoverable"]')).toHaveCount(1);
+      await capture(failedPage, `${spec.name}-chart-unavailable`, failedNotice);
+      current.checks.push(
+        'Coverage does not request the separate chart chunk; pending and failed chart retain inventory and filters; loaded chart day filtering works',
+      );
+      assert.deepEqual(current.errors, []);
+      await failedContext.close();
+      failChart = false;
       await browser.close();
       browser = null;
     }
@@ -291,6 +381,7 @@ async function capture(page, name, locator) {
     report.error = String(error.stack || error);
     process.exitCode = 1;
   } finally {
+    chartGate?.release();
     if (browser) await browser.close();
     report.cleanup.browser_closed = true;
     if (server) await new Promise((resolve) => server.close(resolve));
