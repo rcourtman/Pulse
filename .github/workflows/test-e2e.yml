@@ -226,12 +226,26 @@ jobs:
           node scripts/with-offline-entitlements.mjs node scripts/run-playwright.mjs
           --config=playwright.multi-tenant-diagnostic.config.ts
           --grep 'Scenario 1:|create, update, member manage' --workers=1 --retries=0
+      # The same issuer's Pro key, pasted into Settings the way a customer
+      # applies a purchase, then cleared back to Community.
+      - name: Prove Settings licence activation and clear
+        working-directory: tests/integration
+        env:
+          PULSE_E2E_USE_LOCAL_BACKEND: 'true'
+          PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: 'true'
+          PULSE_E2E_REPORT_DIR: playwright-report/license-activation
+          PULSE_E2E_RESULTS_DIR: test-results/license-activation
+        run: >-
+          node scripts/with-offline-entitlements.mjs node scripts/run-playwright.mjs
+          tests/10-v6-license-activation.spec.ts --project=chromium --workers=1 --retries=0
       - name: Upload offline provisioning failure report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: offline-org-provisioning-report
-          path: tests/integration/playwright-report/multi-tenant-diagnostic/
+          path: |
+            tests/integration/playwright-report/multi-tenant-diagnostic/
+            tests/integration/playwright-report/license-activation/
           retention-days: 3
 
   test-images:

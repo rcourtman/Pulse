@@ -40,6 +40,26 @@ test('offline issuer signs scoped grants and binds status/refresh to each instal
   assert.deepEqual(repeated.installation, states[1].installation);
 });
 
+test('offline issuer grants the Pro plan only for its own activation key', async t => {
+  const issuer = await startOfflineLicenseIssuer(); t.after(() => issuer.close());
+  assert.notEqual(issuer.proActivationKey, issuer.activationKey);
+  const activate = key => post(issuer, '/v1/activate', {
+    activation_key: key, instance_fingerprint: 'default', runtime: { build: 'community' },
+  }).then(r => r.json());
+  const pro = await activate(issuer.proActivationKey);
+  const claims = JSON.parse(Buffer.from(pro.grant.jwt.split('.')[1], 'base64url'));
+  assert.equal(pro.license.tier, 'pro');
+  assert.equal(claims.tier, 'pro'); assert.equal(claims.plan, 'pro_monthly');
+  assert.equal(claims.feat, undefined);
+  const refreshed = await (await post(issuer, '/v1/grants/refresh',
+    { installation_id: claims.iid, instance_fingerprint: 'default' }, pro.installation.installation_token)).json();
+  assert.equal(JSON.parse(Buffer.from(refreshed.grant.jwt.split('.')[1], 'base64url')).tier, 'pro');
+  // One fingerprint activating a different key is a different licence binding.
+  const msp = await activate(issuer.activationKey);
+  assert.notEqual(msp.installation.installation_id, pro.installation.installation_id);
+  assert.equal(msp.license.tier, 'msp');
+});
+
 test('offline issuer rejects unsupported routes, bad activation and malformed input', async t => {
   const issuer = await startOfflineLicenseIssuer(); t.after(() => issuer.close());
   const data = { activation_key: issuer.activationKey, instance_fingerprint: 'default', runtime: { build: 'community' } };
@@ -53,4 +73,5 @@ test('offline issuer rejects unsupported routes, bad activation and malformed in
   const other = await startOfflineLicenseIssuer(); t.after(() => other.close());
   assert.notEqual(other.publicKey, issuer.publicKey);
   assert.notEqual(other.activationKey, issuer.activationKey);
+  assert.notEqual(other.proActivationKey, issuer.proActivationKey);
 });

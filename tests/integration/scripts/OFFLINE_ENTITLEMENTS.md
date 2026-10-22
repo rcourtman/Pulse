@@ -36,6 +36,21 @@ exclude Community's private `rbac`, and check the security contract's
 billing.json profile writer; there is no direct capability injection.
 No offline key means the existing unentitled and other test paths are unchanged.
 
+The issuer also mints a second key, `PULSE_E2E_OFFLINE_PRO_ACTIVATION_KEY`,
+whose grants carry the Pro plan. Each key binds its own installation per
+fingerprint. `tests/10-v6-license-activation.spec.ts` pastes it into the
+Settings plan page, checks the Pro state in the UI and API, and clears it
+back to Community; without the wrapper it skips. The same CI job runs it:
+
+```sh
+PULSE_E2E_USE_LOCAL_BACKEND=true node scripts/with-offline-entitlements.mjs \
+  node scripts/run-playwright.mjs tests/10-v6-license-activation.spec.ts \
+  --project=chromium --workers=1 --retries=0
+```
+
+The managed backend is a community build, so the plan page also shows the
+"Pro runtime missing" notice a public-build customer sees after activating.
+
 The separate CI provisioning job runs two narrow scenarios and issuer boundary
 tests. It does not change stable/probation/quarantine membership. Passing it is
 not Organization sharing acceptance, private-runtime RBAC coverage, full-suite
