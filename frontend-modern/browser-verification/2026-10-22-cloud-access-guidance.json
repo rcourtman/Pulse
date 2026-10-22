@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "base_sha": "0a1782aebe973e375f72ec741ecd5cf16eb29137",
+  "verified_source_sha": "0a1782aebe973e375f72ec741ecd5cf16eb29137",
+  "verified_at": "2026-10-22T08:25:53.385193Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/CLOUD.md",
+    "docs/FAQ.md",
+    "docs/PULSE_PRO.md",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs",
+    "frontend-modern/browser-tests/cloud-availability-guide.cjs",
+    "frontend-modern/public/docs/CLOUD.md",
+    "frontend-modern/public/docs/FAQ.md",
+    "frontend-modern/public/docs/PULSE_PRO.md",
+    "frontend-modern/src/features/docs/__tests__/cloudAvailabilityGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/CLOUD.md": "813de304feff772fd1af126b486190ea89faa54b40f1ffb52cc812c37a31ef3d",
+    "docs/FAQ.md": "dc3073e53a68eae1f70008f9976783d1f518af74c6257ded5042d4f1b2a4f321",
+    "docs/PULSE_PRO.md": "16be823167f5a25f83e0662033671826e4db9aa6f8d04b10fc8d96c218b95835",
+    "frontend-modern/browser-tests/build-doc-command-help.mjs": "cffa58c70d2722397a5cfd6e85ea87ffe8348adca8899611cc6229ecf62b2860",
+    "frontend-modern/browser-tests/cloud-availability-guide.cjs": "497e6c7600dbe982dd8b568dee5fbc955dbbce26b274a91594d5989b153fa58f",
+    "frontend-modern/public/docs/CLOUD.md": "813de304feff772fd1af126b486190ea89faa54b40f1ffb52cc812c37a31ef3d",
+    "frontend-modern/public/docs/FAQ.md": "dc3073e53a68eae1f70008f9976783d1f518af74c6257ded5042d4f1b2a4f321",
+    "frontend-modern/public/docs/PULSE_PRO.md": "16be823167f5a25f83e0662033671826e4db9aa6f8d04b10fc8d96c218b95835",
+    "frontend-modern/src/features/docs/__tests__/cloudAvailabilityGuide.test.ts": "06c5dddb9cab64c979e4550cc0902c82d661617c54580e79bf0ce078ad8dcce7",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "850f8cd5134b777550703cdcddd3b5dccf0b11be2dda6724f55ac3bcb511f160",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/index.css": "c11a24a45d5c04e413b67c6f3b8c75e7728dd61e1dfe99b776a2fcaef110bf12",
+    "frontend-modern/package.json": "af4ba20019e6907d1c79b57325176767def24bc2dd82f4733615595ec51c9943",
+    "frontend-modern/package-lock.json": "1557a060ed2efee2e7dd13f1b9d8c2f4b2e90de64f356497d4a391da75932a7f"
+  },
+  "routes": [
+    "/docs/FAQ#what-do-pro-and-cloud-unlock",
+    "/docs/CLOUD#1-confirm-existing-hosted-access",
+    "/docs/PULSE_PRO#cloud",
+    "/docs/CLOUD#1-create-your-account",
+    "/docs/INSTALL"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 920
+    }
+  ],
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "states": [
+    "Actual served Cloud, FAQ and plan-reference bytes use the existing documented availability boundary. The unchanged parent-guide controls retain the absent FAQ boundary and public-signup instruction.",
+    "All eight final captures opened natively: readable desktop/light and narrow/light copy, visible existing/legacy heading focus, wrapped links and no whole-page horizontal overflow. Actual unrounded target/parent bounds remain in the retained dossier."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow WebKit touch follow FAQ to scoped hosted access, plan reference and Install; the SPA shell stays mounted.",
+    "The old account fragment reaches visible access-heading text. Forty browser resource requests are local GETs, no page errors; all three served guide bodies match the compiled binding. Browser/server closure is script-recorded, not independent descendant-cleanup proof."
+  ],
+  "source_proofs": {
+    "full_producer_source": "35858dae33eeac0aae81d4ee433a5510ae6327b5",
+    "full_producer_receipt": "source-sc14noef",
+    "full_producer_scope": "330 focused tests, seven Python checks, types/lint/format, full frontend build and budgets. Not complete product qualification.",
+    "containing_preview_receipt": "source-60kdj6ig",
+    "containing_scope": "Only the geometry/evidence fixture changed. All producer/test/manifest bytes are unchanged; final consuming preview recompiles and binds 3240 source inputs/34 artifacts."
+  },
+  "captures": [
+    {
+      "file": "desktop-faq.png",
+      "sha256": "bcb10a285c0dd2799207570def79e3d2d7218cb28cda678a6606d79ad573a45f"
+    },
+    {
+      "file": "desktop-existing-access.png",
+      "sha256": "5b8e3e7e27ccfaf340095070ead2eeb5d9add6dd981f8d35375f2c5f441283ad"
+    },
+    {
+      "file": "desktop-cloud.png",
+      "sha256": "bb2c6499ccff6c4c3259055681878d5f5d599178e75446b8cbd31569b9c5ad83"
+    },
+    {
+      "file": "desktop-legacy-access.png",
+      "sha256": "c2f38bdcf638edfa405965a857a2401c6ae677307cfe7f77ca7837d37a7e45c0"
+    },
+    {
+      "file": "narrow-faq.png",
+      "sha256": "9b94ef2da4c248df0928f7791af91b8e5e8401cf7079b38cd9e06dfb5b5ea7be"
+    },
+    {
+      "file": "narrow-existing-access.png",
+      "sha256": "6493fa81c27ab099aba724a8120394a1623fb9af6656b2c7c5571add0249539f"
+    },
+    {
+      "file": "narrow-cloud.png",
+      "sha256": "63c9f6b280b9320864d6612f10b4a87752ecf4db7ac3c6fc34ada032acaef0cc"
+    },
+    {
+      "file": "narrow-legacy-access.png",
+      "sha256": "9e150078f249c1d0c92ae288b629db15e102db663170f24da16d4a4503b6bb65"
+    }
+  ],
+  "evidence": "Retained Product intelligence outcome 20261022T074004Z: RECEIPTS.md, BROWSER-PROOF.json and PIXEL-REVIEW.json. Earlier test/runner/geometry failures remain retained.",
+  "proof_scope": "Existing help only; no new hosting, pricing/entitlement, checkout, deployment, subscription or release change; no original Back/reload/inert-control replay."
+}

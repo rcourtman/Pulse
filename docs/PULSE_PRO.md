@@ -212,7 +212,13 @@ Patrol mode decides how far Pulse can go after Patrol finds something that needs
 - Existing Pro+ entitlements remain supported for current holders, but Pro+ is no longer presented as a public self-hosted plan because monitored-system volume is no longer the paid boundary.
 
 ### Cloud
-- Hosted Pulse with Pro-level capabilities and hosted lifecycle management.
+
+Pulse Cloud is **not generally available**. The Cloud tier and feature mapping
+above describe hosted capabilities, not a public sign-up or provisioning offer.
+Self-hosted Pro does not create a hosted instance. For an existing hosted
+service, use its operator-supplied access and the [Cloud guide](CLOUD.md).
+
+- Hosted Pulse has Pro-level capabilities and hosted lifecycle management.
 - Cloud Enterprise adds internal multi-organization mode and multi-user mode.
 
 ### MSP
