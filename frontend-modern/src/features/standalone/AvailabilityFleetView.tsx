@@ -1,5 +1,14 @@
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
+import {
+  createComputed,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  type Component,
+} from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { Button } from '@/components/shared/Button';
@@ -230,6 +239,11 @@ export const AvailabilityFleetView: Component<{
   onRetryHistory?: () => void;
 }> = (props) => {
   const now = useRelativeTimeNow();
+  // Live snapshots replace resource objects. Reconciled by id, each tile (and
+  // an open drawer) keeps its identity and updates in place instead of
+  // remounting, and losing the drawer's tab, on every poll.
+  const [fleet, setFleet] = createStore<Resource[]>([]);
+  createComputed(() => setFleet(reconcile([...props.resources], { key: 'id' })));
   const [selectedResourceId, setSelectedResourceId] = createSignal<string>();
   const selectedResource = createMemo(() =>
     props.resources.find((resource) => resource.id === selectedResourceId()),
@@ -241,10 +255,20 @@ export const AvailabilityFleetView: Component<{
   });
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     props.resources.find((resource) => resource.id === resourceId)?.name;
-  // Tiles are disclosures for the one drawer below the grid: a second click
-  // on the open tile closes it, as a second click on a table row does.
+  // Tiles are disclosures for one drawer: a second click on the open tile
+  // closes it, as a second click on a table row does.
   const toggleResource = (resourceId: string) =>
     setSelectedResourceId((current) => (current === resourceId ? undefined : resourceId));
+  // Closing from the drawer's header removes the focused control, so focus
+  // returns to the tile that opened it, as a table drawer returns it to its row.
+  const closeResource = (resourceId: string) => {
+    setSelectedResourceId(undefined);
+    queueMicrotask(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[data-availability-fleet-tile]'))
+        .find((tile) => tile.dataset.availabilityFleetTile === resourceId)
+        ?.focus({ preventScroll: true }),
+    );
+  };
 
   return (
     <section aria-label="Availability fleet" class="space-y-3">
@@ -276,11 +300,15 @@ export const AvailabilityFleetView: Component<{
         </Show>
       </div>
 
+      {/* The open check's drawer is a full-width grid item right after its
+          tile. Dense packing lets the rest of that tile's row fill in first,
+          so the drawer opens directly beneath the tile at every column count
+          instead of below the whole fleet. */}
       <div
-        class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+        class="grid grid-flow-row-dense grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
         data-testid="availability-fleet-grid"
       >
-        <For each={props.resources}>
+        <For each={fleet}>
           {(resource) => {
             const availability = () => availabilityFor(resource);
             const probe = () => getAvailabilityProbePresentation(resource, new Date(now()));
@@ -314,103 +342,102 @@ export const AvailabilityFleetView: Component<{
             };
 
             return (
-              <button
-                type="button"
-                class="group min-w-0 rounded-md border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-                classList={{
-                  'border-border': !isSelected(),
-                  'border-blue-500 bg-surface-hover ring-1 ring-blue-500/40': isSelected(),
-                }}
-                aria-label={`Open details for ${resource.name}`}
-                aria-expanded={isSelected()}
-                aria-controls={AVAILABILITY_FLEET_DETAIL_ID}
-                data-availability-fleet-tile={resource.id}
-                onClick={() => toggleResource(resource.id)}
-              >
-                <div class="flex items-start justify-between gap-3">
-                  <div class="min-w-0">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <StatusDot
-                        size="sm"
-                        variant={indicator().variant}
-                        title={indicator().label}
-                        ariaHidden
-                      />
-                      <span
-                        class="truncate text-sm font-semibold text-base-content"
-                        title={resource.name}
-                      >
-                        {resource.name}
-                      </span>
+              <>
+                <button
+                  type="button"
+                  class="group min-w-0 rounded-md border bg-surface p-3 text-left shadow-xs transition hover:border-blue-400/60 hover:bg-surface-hover focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                  classList={{
+                    'border-border': !isSelected(),
+                    'border-blue-500 bg-surface-hover ring-1 ring-blue-500/40': isSelected(),
+                  }}
+                  aria-label={`Open details for ${resource.name}`}
+                  aria-expanded={isSelected()}
+                  aria-controls={AVAILABILITY_FLEET_DETAIL_ID}
+                  data-availability-fleet-tile={resource.id}
+                  onClick={() => toggleResource(resource.id)}
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="flex min-w-0 items-center gap-2">
+                        <StatusDot
+                          size="sm"
+                          variant={indicator().variant}
+                          title={indicator().label}
+                          ariaHidden
+                        />
+                        <span
+                          class="truncate text-sm font-semibold text-base-content"
+                          title={resource.name}
+                        >
+                          {resource.name}
+                        </span>
+                      </div>
+                      <div class="mt-1 truncate text-[11px] text-muted" title={endpoint()}>
+                        {endpoint()}
+                      </div>
                     </div>
-                    <div class="mt-1 truncate text-[11px] text-muted" title={endpoint()}>
-                      {endpoint()}
-                    </div>
+                    <span class={probe()?.toneClassName ?? 'text-muted'}>
+                      {probe()?.resultLabel ?? indicator().label}
+                    </span>
                   </div>
-                  <span class={probe()?.toneClassName ?? 'text-muted'}>
-                    {probe()?.resultLabel ?? indicator().label}
-                  </span>
-                </div>
 
-                <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
-                  <MetadataBadge tone="muted" size="xs" appearance="outline">
-                    {probe()?.methodLabel ?? availability()?.protocol ?? 'Probe'}
-                  </MetadataBadge>
-                  <MetadataBadge tone="muted" size="xs" appearance="outline">
-                    {source()}
-                  </MetadataBadge>
-                  <span>Checked {checked()}</span>
-                  <Show when={latency()}>{(value) => <span>{value()}</span>}</Show>
-                </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                    <MetadataBadge tone="muted" size="xs" appearance="outline">
+                      {probe()?.methodLabel ?? availability()?.protocol ?? 'Probe'}
+                    </MetadataBadge>
+                    <MetadataBadge tone="muted" size="xs" appearance="outline">
+                      {source()}
+                    </MetadataBadge>
+                    <span>Checked {checked()}</span>
+                    <Show when={latency()}>{(value) => <span>{value()}</span>}</Show>
+                  </div>
 
-                <div class="mt-3 space-y-1.5">
-                  <Show
-                    when={!props.historyLoading}
-                    fallback={
-                      <div
-                        class="h-3 animate-pulse rounded-xs bg-surface-hover"
-                        aria-label="Loading history"
-                      />
-                    }
-                  >
-                    <AvailabilityStateStrip buckets={buckets()} />
-                  </Show>
-                  <AvailabilityLatencyLine buckets={buckets()} />
-                  <div class="flex items-center justify-between gap-2 text-[10px] text-muted">
-                    <span>{availabilityText(history())}</span>
-                    <Show when={history()?.revisionBoundaries?.length}>
-                      <span title="The check configuration changed during this window">
-                        {history()?.revisionBoundaries?.length} revision
-                        {history()?.revisionBoundaries?.length === 1 ? '' : 's'}
-                      </span>
+                  <div class="mt-3 space-y-1.5">
+                    <Show
+                      when={!props.historyLoading}
+                      fallback={
+                        <div
+                          class="h-3 animate-pulse rounded-xs bg-surface-hover"
+                          aria-label="Loading history"
+                        />
+                      }
+                    >
+                      <AvailabilityStateStrip buckets={buckets()} />
                     </Show>
+                    <AvailabilityLatencyLine buckets={buckets()} />
+                    <div class="flex items-center justify-between gap-2 text-[10px] text-muted">
+                      <span>{availabilityText(history())}</span>
+                      <Show when={history()?.revisionBoundaries?.length}>
+                        <span title="The check configuration changed during this window">
+                          {history()?.revisionBoundaries?.length} revision
+                          {history()?.revisionBoundaries?.length === 1 ? '' : 's'}
+                        </span>
+                      </Show>
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                {/* The same check reads the same here as in the table view: the
+                  table-row drawer, headed by the dot its tile shows. Keyed by
+                  id, so switching tiles resets the drawer's tabs. */}
+                <Show when={isSelected()}>
+                  <div
+                    id={AVAILABILITY_FLEET_DETAIL_ID}
+                    data-testid="availability-fleet-detail"
+                    class="col-span-full rounded-sm border border-border bg-surface px-2 py-3 sm:px-4 sm:py-4"
+                  >
+                    <ResourceDetailDrawer
+                      resource={resource}
+                      statusIndicator={indicator()}
+                      presentation="table-row"
+                      resolveResourceLabel={resolveResourceLabel}
+                      onClose={() => closeResource(resource.id)}
+                    />
+                  </div>
+                </Show>
+              </>
             );
           }}
         </For>
-      </div>
-
-      {/* The same check reads the same here as in the table view: the
-          table-row drawer, headed by the dot its tile shows. Keyed by id, so
-          switching tiles resets the drawer's tabs. */}
-      <div id={AVAILABILITY_FLEET_DETAIL_ID} data-testid="availability-fleet-detail">
-        <Show when={selectedResourceId()} keyed>
-          <Show when={selectedResource()}>
-            {(resource) => (
-              <div class="rounded-sm border border-border bg-surface px-2 py-3 sm:px-4 sm:py-4">
-                <ResourceDetailDrawer
-                  resource={resource()}
-                  statusIndicator={getStandaloneResourceStatusIndicator(resource(), now())}
-                  presentation="table-row"
-                  resolveResourceLabel={resolveResourceLabel}
-                  onClose={() => setSelectedResourceId(undefined)}
-                />
-              </div>
-            )}
-          </Show>
-        </Show>
       </div>
     </section>
   );

@@ -325,6 +325,7 @@ describe('hardwareRows (via Virtual hardware section)', () => {
       label: 'Upgrade error',
       value: 'timed out',
       tone: 'warning',
+      wrap: true,
     });
   });
 
@@ -400,6 +401,7 @@ describe('toolsRows (via VMware Tools section)', () => {
       label: 'Last install error',
       value: 'boom',
       tone: 'warning',
+      wrap: true,
     });
   });
 });

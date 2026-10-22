@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import type { AvailabilityHistoryTarget } from '@/api/availabilityHistory';
 import type { Resource } from '@/types/resource';
 import { AvailabilityFleetView } from '../AvailabilityFleetView';
 import { getStandaloneResourceStatusIndicator } from '../standalonePageModel';
+
+const drawerMounts = vi.hoisted(() => ({ count: 0 }));
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
   ResourceDetailDrawer: (props: {
@@ -12,19 +14,25 @@ vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
     onClose?: () => void;
     presentation?: string;
     statusIndicator?: { variant: string; label: string };
-  }) => (
-    <div
-      data-testid="resource-detail-drawer"
-      data-resource-id={props.resource.id}
-      data-resource-status={props.resource.status}
-      data-presentation={props.presentation}
-      data-status-variant={props.statusIndicator?.variant}
-    >
-      <button type="button" onClick={props.onClose}>
-        Close
-      </button>
-    </div>
-  ),
+  }) => {
+    drawerMounts.count += 1;
+    onCleanup(() => {
+      drawerMounts.count -= 1;
+    });
+    return (
+      <div
+        data-testid="resource-detail-drawer"
+        data-resource-id={props.resource.id}
+        data-resource-status={props.resource.status}
+        data-presentation={props.presentation}
+        data-status-variant={props.statusIndicator?.variant}
+      >
+        <button type="button" onClick={props.onClose}>
+          Close
+        </button>
+      </div>
+    );
+  },
 }));
 
 const resource = (index: number): Resource =>
@@ -174,11 +182,17 @@ describe('AvailabilityFleetView', () => {
 
     const first = screen.getByRole('button', { name: 'Open details for Service 1' });
     const second = screen.getByRole('button', { name: 'Open details for Service 5' });
-    const detail = screen.getByTestId('availability-fleet-detail');
     expect(first).toHaveAttribute('aria-expanded', 'false');
-    expect(first).toHaveAttribute('aria-controls', detail.id);
+    expect(screen.queryByTestId('availability-fleet-detail')).not.toBeInTheDocument();
 
     fireEvent.click(first);
+    // The drawer opens right after its tile as a full-width grid item, so it
+    // lands beneath that tile's row rather than below the whole fleet.
+    const detail = screen.getByTestId('availability-fleet-detail');
+    expect(first).toHaveAttribute('aria-controls', detail.id);
+    expect(first.nextElementSibling).toBe(detail);
+    expect(detail).toHaveClass('col-span-full');
+    expect(screen.getByTestId('availability-fleet-grid')).toHaveClass('grid-flow-row-dense');
     expect(first).toHaveAttribute('aria-expanded', 'true');
     expect(first).toHaveClass('border-blue-500');
     // The same drawer the checks table opens, headed by the tile's own dot.
@@ -200,6 +214,46 @@ describe('AvailabilityFleetView', () => {
     fireEvent.click(second);
     expect(second).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
+  });
+
+  it('returns focus to the tile when the drawer is closed from its header', async () => {
+    render(() => (
+      <AvailabilityFleetView
+        resources={[resource(1), resource(2)]}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+
+    const tile = screen.getByRole('button', { name: 'Open details for Service 2' });
+    fireEvent.click(tile);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await Promise.resolve();
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
+    expect(tile).toHaveAttribute('aria-expanded', 'false');
+    expect(tile).toHaveFocus();
+  });
+
+  it('keeps an open drawer mounted when a live snapshot replaces the resources', () => {
+    const [resources, setResources] = createSignal([resource(1), resource(2)]);
+    render(() => (
+      <AvailabilityFleetView
+        resources={resources()}
+        historyByTarget={new Map()}
+        historyLoading={false}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open details for Service 2' }));
+    expect(drawerMounts.count).toBe(1);
+    const drawer = screen.getByTestId('resource-detail-drawer');
+
+    // New objects for the same checks, as the websocket store delivers them.
+    setResources([resource(1), { ...resource(2), status: 'offline' } as Resource]);
+
+    expect(screen.getByTestId('resource-detail-drawer')).toBe(drawer);
+    expect(drawerMounts.count).toBe(1);
+    expect(drawer).toHaveAttribute('data-resource-status', 'offline');
   });
 
   it('keeps current health visible when history is unavailable', () => {

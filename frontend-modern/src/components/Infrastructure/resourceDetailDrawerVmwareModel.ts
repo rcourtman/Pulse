@@ -241,7 +241,10 @@ const hardwareRows = (vmware?: ResourceVMwareMeta): DetailRow[] => {
     makeRow('Upgrade status', upgradeAttention ? formatEnumLabel(hardware.upgradeStatus) : '', {
       tone: getWarningTone(upgradeAttention),
     }),
-    makeRow('Upgrade error', asTrimmedString(hardware.upgradeErrorMessage), { tone: 'warning' }),
+    makeRow('Upgrade error', asTrimmedString(hardware.upgradeErrorMessage), {
+      tone: 'warning',
+      wrap: true,
+    }),
     makeRow(
       'Instant clone frozen',
       hardware.instantCloneFrozen === true ? formatBoolLabel(true) : '',
@@ -291,7 +294,10 @@ const toolsRows = (tools: ResourceVMwareTools | undefined, poweredOff: boolean):
     makeRow('Guest reboot', tools.guestRebootRequested === true ? 'Requested' : '', {
       tone: getWarningTone(tools.guestRebootRequested === true),
     }),
-    makeRow('Last install error', asTrimmedString(tools.errorMessage), { tone: 'warning' }),
+    makeRow('Last install error', asTrimmedString(tools.errorMessage), {
+      tone: 'warning',
+      wrap: true,
+    }),
   ]);
 };
 
