@@ -10724,6 +10724,17 @@ table nested in a drawer row). A value that must wrap sets the wrap on its own
 element inside the cell, as `DetailSectionTable` does with
 `block whitespace-normal`; the Coverage drawer's restore evidence Location and
 Details values now follow that pattern.
+
+`PlatformHostScope.tsx` owns the host-to-workload scope interaction for
+platform overviews: `PlatformHostScopeNameButton` (the host name as a pressed
+toggle naming the workload section it controls), `PlatformHostScopedTableTitle`
+("<Workloads> on <host>" with its count and the clear button) and
+`createPlatformHostScopeFocus` (selecting a host focuses and reveals that
+heading). The Proxmox, Docker and vSphere overviews use them, so the three stay
+one shape. A host table that scopes keeps its details chevron on phones and
+takes the `platform-table-mobile-w-38` identity column (Uptime drops to 10%),
+the same allowance the Proxmox node column has for the toggle and dot before
+the name.
 ### Configuration transfer submission ownership (15 October 2026)
 
 Recovery's existing configuration import/export dialogs and their Settings

@@ -748,6 +748,7 @@ describe('App architecture', () => {
     expect(appStylesSource).toContain('container-type: inline-size');
     expect(appStylesSource).toContain('.table-fixed.platform-table th.platform-table-name-column');
     expect(appStylesSource).toContain('th.platform-table-mobile-w-10');
+    expect(appStylesSource).toContain('th.platform-table-mobile-w-38');
     expect(appStylesSource).toMatch(/th\.platform-table-name-column\s*\{\s*width:\s*30%;\s*\}/);
     expect(appStylesSource).toContain('@container (min-width: 72rem)');
     expect(appStylesSource).toContain('.hidden.md\\:table-cell');

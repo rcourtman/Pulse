@@ -1491,6 +1491,17 @@
       width: 30%;
     }
 
+    /*
+     * A host table whose rows scope the workloads below keeps the details
+     * chevron on phones, so its identity cell carries the toggle and status
+     * dot before the name; like the Proxmox node column
+     * (PROXMOX_HOST_PHONE_IDENTITY_WIDTH_PERCENT) it needs more than the 30%
+     * anchor to show a typical host name.
+     */
+    .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-38 {
+      width: 38%;
+    }
+
     .table-scroll-shell > .table-fixed.platform-table th.platform-table-mobile-w-25 {
       width: 25%;
     }

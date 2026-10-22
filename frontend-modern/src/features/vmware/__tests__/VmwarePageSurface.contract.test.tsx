@@ -1,7 +1,8 @@
 import { createSignal, type JSX } from 'solid-js';
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
+import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
 import { VmwarePageSurface } from '../VmwarePageSurface';
 import vmwarePageSurfaceSource from '../VmwarePageSurface.tsx?raw';
 
@@ -83,7 +84,14 @@ vi.mock('@/components/Workloads/WorkloadsSurface', () => ({
 }));
 
 vi.mock('@/components/Workloads/useWorkloadsState', () => ({
-  useWorkloadsState: (...args: unknown[]) => mockUseWorkloadsState(...args),
+  // No host is picked unless a test says so.
+  useWorkloadsState: (...args: unknown[]) => ({
+    selectedNode: () => null,
+    selectedHostHint: () => null,
+    handleNodeSelect: vi.fn(),
+    hostFilterConfig: () => undefined,
+    ...mockUseWorkloadsState(...args),
+  }),
 }));
 
 vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
@@ -115,8 +123,26 @@ vi.mock('../VsphereDatastoresTable', () => ({
 }));
 
 vi.mock('../VsphereHostsTable', () => ({
-  VsphereHostsTable: (props: { hosts: Resource[] }) => (
-    <div data-testid="hosts-table" data-rows={props.hosts.length} />
+  VsphereHostsTable: (props: {
+    hosts: Resource[];
+    vmScope?: {
+      sectionId: string;
+      selectedHostId: () => string | null;
+      onShow: (host: Resource) => void;
+    };
+  }) => (
+    <div data-testid="hosts-table" data-rows={props.hosts.length}>
+      {props.hosts.map((host) => (
+        <button
+          type="button"
+          data-scope-section={props.vmScope?.sectionId}
+          aria-pressed={props.vmScope?.selectedHostId() === host.id}
+          onClick={() => props.vmScope?.onShow(host)}
+        >
+          {`host ${host.id}`}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -176,6 +202,73 @@ describe('VmwarePageSurface contract', () => {
         .compareDocumentPosition(screen.getByTestId('workloads-surface')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('narrows the VM table to a host picked in the hosts table, as Proxmox does', () => {
+    setResources([
+      makeResource({
+        id: 'esxi-01',
+        type: 'agent',
+        vmware: {
+          entityType: 'host',
+          managedObjectId: 'host-1',
+          connectionId: 'vc-1',
+          clusterName: 'Production',
+        },
+      }),
+      makeResource({
+        id: 'vm-app-01',
+        type: 'vm',
+        vmware: {
+          runtimeHostId: 'host-1',
+          runtimeHostName: 'esxi-01',
+          connectionId: 'vc-1',
+          clusterName: 'Production',
+        },
+      }),
+    ]);
+    const [selected, setSelected] = createSignal<string | null>(null);
+    const handleNodeSelect = vi.fn((scope: string | null) => setSelected(scope));
+    mockUseWorkloadsState.mockReturnValue({
+      surfaceConnected: () => true,
+      surfaceInitialDataReceived: () => true,
+      // The workload table's own placement for the host's VM.
+      allGuests: () => [
+        { id: 'vm-app-01', node: 'esxi-01.lab', instance: 'Production Cluster' },
+        { id: 'vm-app-02', node: 'esxi-02.lab', instance: 'Production Cluster' },
+      ],
+      filteredGuests: () => [{ id: 'vm-app-01' }],
+      search: () => '',
+      setSearch: vi.fn(),
+      selectedNode: selected,
+      handleNodeSelect,
+    });
+
+    render(() => <VmwarePageSurface />);
+    const hostButton = () => screen.getByRole('button', { name: 'host esxi-01' });
+    const heading = () =>
+      within(screen.getByTestId('workloads-surface')).getByRole('heading', { level: 2 });
+    expect(hostButton()).toHaveAttribute('data-scope-section', 'vsphere-vms-section');
+    expect(screen.getByTestId('vsphere-vms-section')).toContainElement(
+      screen.getByTestId('workloads-surface'),
+    );
+
+    // The scope is the one the table gave the host's own VM.
+    fireEvent.click(hostButton());
+    expect(handleNodeSelect).toHaveBeenLastCalledWith(
+      workloadNodeScopeId({ instance: 'Production Cluster', node: 'esxi-01.lab' }),
+      'pve',
+    );
+    expect(hostButton()).toHaveAttribute('aria-pressed', 'true');
+    expect(heading()).toHaveTextContent(/^VMs on esxi-01\s*1$/);
+
+    // A second click on the host, or Show all hosts, clears it.
+    fireEvent.click(hostButton());
+    expect(handleNodeSelect).toHaveBeenLastCalledWith(null, null);
+    fireEvent.click(hostButton());
+    fireEvent.click(screen.getByRole('button', { name: 'Show all hosts' }));
+    expect(handleNodeSelect).toHaveBeenLastCalledWith(null, null);
+    expect(heading()).toHaveTextContent(/^VMs\s*1$/);
   });
 
   it('titles the VM table through the tableTitle slot and counts the filtered rows', () => {

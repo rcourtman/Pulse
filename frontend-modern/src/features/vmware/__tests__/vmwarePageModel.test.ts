@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
+import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
 import {
   VMWARE_TAB_SPECS,
   buildVmwareHealthPosture,
@@ -11,6 +12,7 @@ import {
   filterVmwareVirtualMachines,
   getVmwarePageTabSpecs,
   getVmwareResourceDisplayStatus,
+  getVsphereHostWorkloadScope,
   isSingleVmwareVcenter,
   mapVmwareActivityStateBucket,
   mapVmwareDatastoreStatus,
@@ -573,5 +575,41 @@ describe('vmwarePageModel', () => {
         at({ vcenterHost: 'vcsa-edge.lab.local' }),
       ]),
     ).toBe(false);
+  });
+
+  it('scopes a host row to the scope the workload table gave its own VMs, per vCenter', () => {
+    // Two vCenters can both call a host `host-12`.
+    const labHost = makeResource({
+      id: 'lab-host',
+      type: 'agent',
+      name: 'esxi-a.lab.local',
+      vmware: { managedObjectId: 'host-12', connectionId: 'vc-1', clusterName: 'Production' },
+    });
+    const edgeHost = makeResource({
+      id: 'edge-host',
+      type: 'agent',
+      name: 'esxi-b.edge.local',
+      vmware: { managedObjectId: 'host-12', connectionId: 'vc-2', clusterName: 'Edge' },
+    });
+    const edgeVm = makeResource({
+      id: 'edge-vm',
+      type: 'vm',
+      vmware: {
+        runtimeHostId: 'host-12',
+        runtimeHostName: 'esxi-b',
+        connectionId: 'vc-2',
+        clusterName: 'Edge Services',
+      },
+    });
+    const resources = [labHost, edgeHost, edgeVm];
+    // The VM's row scope as the workload table built it.
+    const vmScope = workloadNodeScopeId({ instance: 'Edge Services', node: 'esxi-b' });
+    const workloadScopes = new Map([['edge-vm', vmScope]]);
+
+    expect(getVsphereHostWorkloadScope(edgeHost, resources, workloadScopes)).toBe(vmScope);
+    // The other vCenter's host-12 has no VMs: a scope that names it and matches none.
+    expect(getVsphereHostWorkloadScope(labHost, resources, workloadScopes)).toBe(
+      workloadNodeScopeId({ instance: 'Production', node: 'esxi-a.lab.local' }),
+    );
   });
 });

@@ -9,6 +9,7 @@ import dockerAlertsTableSource from '@/features/docker/DockerAlertsTable.tsx?raw
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
+import platformHostScopeSource from '@/features/platformPage/PlatformHostScope.tsx?raw';
 import dockerImagesTableSource from '@/features/docker/DockerImagesTable.tsx?raw';
 import dockerNetworksTableSource from '@/features/docker/DockerNetworksTable.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
@@ -772,11 +773,16 @@ describe('platform overview layout guardrails', () => {
       ['ProxmoxPageSurface', proxmoxPageSurfaceSource],
       ['VmwarePageSurface', vmwarePageSurfaceSource],
     ];
+    expect(platformHostScopeSource, 'the shared title is an accessible heading').toContain('<h2');
     for (const [name, source] of surfacesWithSharedToolbar) {
       const filterCount = (source.match(/<WorkloadsFilter\b/g) ?? []).length;
       expect(filterCount, `${name} should render exactly one <WorkloadsFilter>`).toBe(1);
       expect(source, `${name} names its workloads table even in kiosk`).toContain('tableTitle={');
-      expect(source, `${name} uses an accessible table heading`).toContain('<h2');
+      // The shared host-scoped title renders the heading, so a scoped table
+      // names its host the same way on every platform.
+      expect(source, `${name} uses the shared table heading`).toContain(
+        '<PlatformHostScopedTableTitle',
+      );
       expect(
         source.indexOf('<WorkloadsFilter'),
         `${name} filter precedes the surface`,

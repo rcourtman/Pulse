@@ -35,7 +35,7 @@ export type DockerNativeTableProps = {
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
-  title?: string;
+  title?: JSX.Element;
   showToolbar?: boolean;
   externalSearch?: () => string;
   externalStatus?: () => DockerResourceStatusFilter;

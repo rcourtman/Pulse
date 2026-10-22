@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
   StackedMemoryBar: () => <div data-testid="stacked-memory-bar" />,
@@ -198,5 +199,62 @@ describe('VsphereHostsTable', () => {
     expect(screen.getByRole('columnheader', { name: /vCenter/ })).toBeInTheDocument();
     expect(screen.getByText('Edge vCenter')).toHaveAttribute('title', 'vcsa-edge.lab.local');
     expect(screen.getByText('Lab vCenter')).toBeInTheDocument();
+  });
+
+  it('narrows the VMs from a row click and keeps the drawer on the chevron', () => {
+    const host = makeHost({ id: 'esxi-01' });
+    const onShow = vi.fn();
+    const [selectedId, setSelectedId] = createSignal<string | null>(null);
+    const { container } = render(() => (
+      <VsphereHostsTable
+        hosts={[host]}
+        scope={[host]}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+        vmScope={{ sectionId: 'vsphere-vms-section', selectedHostId: selectedId, onShow }}
+      />
+    ));
+
+    const row = container.querySelector('[data-vsphere-host-row="esxi-01"]')!;
+    const chevron = row.querySelector('[data-row-action="true"]')!;
+    expect(chevron).not.toHaveClass('sr-only');
+
+    fireEvent.click(row);
+    expect(onShow).toHaveBeenCalledWith(host);
+    expect(chevron).toHaveAttribute('aria-expanded', 'false');
+
+    const nameButton = screen.getByRole('button', { name: 'Show VMs on esxi-01' });
+    expect(nameButton).toHaveAttribute('aria-controls', 'vsphere-vms-section');
+    fireEvent.click(nameButton);
+    expect(onShow).toHaveBeenCalledTimes(2);
+
+    setSelectedId('esxi-01');
+    expect(row).toHaveAttribute('data-summary-row-active', 'true');
+    expect(nameButton).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(chevron);
+    expect(chevron).toHaveAttribute('aria-expanded', 'true');
+    expect(onShow).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the drawer from a row click where nothing is scoped', () => {
+    const host = makeHost({ id: 'esxi-02' });
+    const { container } = render(() => (
+      <VsphereHostsTable
+        hosts={[host]}
+        scope={[host]}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: /^Show VMs on/ })).toBeNull();
+    const row = container.querySelector('[data-vsphere-host-row="esxi-02"]')!;
+    fireEvent.click(row);
+    expect(row.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
   });
 });

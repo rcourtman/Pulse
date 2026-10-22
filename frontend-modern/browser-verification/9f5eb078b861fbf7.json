@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "904f1104bee17422eb532b9268ff96aa651a8fa7",
+  "verified_at": "2026-10-22T21:11:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/platformPage/PlatformHostScope.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "e6b82c648c0a9dc4154d58fdd2fe99e43f033e7c163c62557d855a33428d16dc",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "99554f4a35b165c339d251890e16a54b9cbc20219e8ed9ca22024d4997886547",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "195b155becb585c139b499b5cd169a8bbd1ab21f5f6189806d516693d42e3d42",
+    "frontend-modern/src/features/platformPage/PlatformHostScope.tsx": "5d4aa1d431d93f9791edd010bc3a3bba949a48ac5a154d7481b3e68a693fb29f",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "db841c1d850ac51e52d748c11837019fee7fb5d975d282eda454cc393618c479",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "ca4fc9c0a4a5d2124a3f1541de136d38f983f47ef46cf20c14b78ab8d4d52803",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "b32138e2cec74be61b2033a5391ab94791dfb3293d84f32742ae31f602edd91e",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx": "c9affc83e46373ff84588ce2227e4d83a3aa98b5e8c6d7faf902967857cb13ad",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "a86f7a89f9413be9e23bf1495b687f2334a4995f212104c8facfe869b00ae380",
+    "frontend-modern/src/index.css": "e4bcbb8ce98db36428e22f0bbedf2a6a056359a05f232c84f04343f8b6a72a8a"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/vmware/overview",
+    "/docker/swarm"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this change on the full mock estate, signed in through the real login",
+    "Proxmox: clicking a node row narrows the guests from 58 rows to that node's 3, marks the row, titles the table \"Guests on London Edge Standalone\" and moves focus to that heading; unchanged from main",
+    "Docker: clicking a host row sets ?host=auth-service-01, keeps all 7 hosts listed with that row marked, adds the Host chip, narrows the containers from 82 rows to 5 and titles them \"Containers on auth-service-01\" with Show all hosts",
+    "vSphere: clicking a host row sets the workload host scope, keeps all 7 hosts listed with that row marked, narrows the VMs from 25 rows to esxi-02's group and titles them \"VMs on esxi-02.lab.local 1\"",
+    "On every platform the row chevron opens the host drawer without changing the scope, Show all clears the scope and refocuses the heading, and phones keep the chevron visible",
+    "At 390px the Docker and vSphere host names stay readable (App Platfor..., esxi-01.lab.l...) after the chevron is added",
+    "Docker Swarm tab: its host table has no containers under it, so a row click still opens the host drawer and no scope buttons render",
+    "No console or page errors at either width"
+  ],
+  "interactions": [
+    "Row click on a host scopes the workload table; a second click on the same host clears it",
+    "Chevron click opens and closes the host drawer",
+    "Show all hosts / Show all nodes clears the scope"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "chromium-1234 headless"
+  },
+  "scope": "Full authenticated application on a mock estate; mock data, not live provider connections."
+}
