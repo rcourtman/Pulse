@@ -16,6 +16,29 @@
 
 ## Purpose
 
+### Hosted tarball retention requires both configured sources
+
+The existing `scripts/cloud-backup.sh` job requires both tenant and control-plane
+directories, including local-only operation. It validates positive whole-day
+retention, the explicit true/false encryption setting and all selected archive,
+encryption and remote-client prerequisites before creating archives. A source
+that disappears after admission still fails the job. Missing data is not an
+optional source and must not become an empty success that prunes previous copies.
+
+Both archive/encryption steps and every configured upload must succeed before
+either retention pass. Local or remote cleanup errors return failure rather
+than a finished message; retention itself can partially progress before an
+error. Existing paths, filenames, archive contents, encryption opt-in, remote
+prefix and retention ages stay unchanged. This is orchestration safety, not
+application-consistent snapshots, restore verification or native guest recovery.
+
+`scripts/tests/test_cloud_backup.py` executes the full shell entrypoint with
+real tar/gzip and local retention on synthetic non-database files. It checks
+missing/disappearing sources, invalid configuration, missing selected tools,
+archive/encryption/upload failures, retention errors, actual archive bytes and
+private modes, plus successful local/remote ordering. age, rclone, Docker and
+host identity are closed recording fakes, not encryption or cloud acceptance.
+
 ### Retired mock-alert cleanup preserves history and monitoring
 
 `scripts/clean-mock-alerts.sh` is a compatibility refusal, not a recovery tool.
@@ -2723,6 +2746,7 @@ transport and private-file controls in `scripts/tests/test_install_go_toolchain.
 37d. `.github/PULL_REQUEST_TEMPLATE.md`
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
+38a. `scripts/cloud-backup.sh`
 39. `scripts/com.pulse.hot-dev.plist.template`
 40. `scripts/dev-check.sh`
 41. `scripts/dev-deploy-agent.sh`

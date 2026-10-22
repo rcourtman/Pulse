@@ -4691,6 +4691,7 @@
         "scripts/capture-release-note-visuals.sh",
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
+        "scripts/cloud-backup.sh",
         "scripts/com.pulse.hot-dev.plist.template",
         "scripts/demo_public_browser_smoke.cjs",
         "scripts/dependency_advisory_watch.py",
@@ -5271,6 +5272,19 @@
               "scripts/tests/test-toggle-mock.sh",
               "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
+            ]
+          },
+          {
+            "id": "hosted-tarball-backup",
+            "label": "hosted tarball source admission and retention proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/cloud-backup.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_cloud_backup.py"
             ]
           },
           {
