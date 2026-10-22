@@ -187,6 +187,68 @@ class ContractRangeTest(SourceAdmissionFixture):
         self.assertEqual(self.run_guard().returncode, 1)
         self.assertEqual(len(self.recorded()), 2)
 
+    def test_frontend_tip_does_not_defer_an_invalid_backend_ancestor(self):
+        backend = self.changed()
+        self.changed("frontend-modern/src/example.ts")
+        self.env["CONTRACT_STATUS"] = "1"
+        result = self.run_guard(early=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        history, guard = self.recorded()
+        self.assertEqual(history["argv"][1], backend)
+        self.assertEqual(guard["files"], ["internal/example.go"])
+        self.assertEqual(guard["reason"], "")
+
+    def test_frontend_ancestor_does_not_defer_a_later_invalid_backend_commit(self):
+        frontend = self.changed("frontend-modern/src/example.ts")
+        backend = self.changed()
+        self.env["CONTRACT_STATUS"] = "1"
+        result = self.run_guard(early=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        history, guard = self.recorded()
+        self.assertEqual(history["argv"][1], backend)
+        self.assertEqual(guard["argv"][1:3], ["--diff-base", frontend])
+
+    def test_valid_backend_commit_is_checked_while_frontend_commit_is_deferred(self):
+        self.changed(trailer="backend fixture has no contract delta")
+        frontend = self.changed("frontend-modern/src/example.ts")
+        result = self.run_guard(early=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(frontend, result.stdout)
+        self.assertIn("defer early admission", result.stdout)
+        history, guard = self.recorded()
+        self.assertEqual(history["reason"], "")
+        self.assertEqual(guard["reason"], "backend fixture has no contract delta")
+        self.assertEqual(guard["files"], ["internal/example.go"])
+
+    def test_frontend_deferral_does_not_hide_a_failed_history_record(self):
+        backend = self.changed(trailer="not a history override")
+        self.changed("frontend-modern/src/example.ts")
+        self.env["HISTORY_STATUS"] = "1"
+        result = self.run_guard(early=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(len(self.recorded()), 1)
+        self.assertEqual(self.recorded()[0]["argv"][1], backend)
+        self.assertEqual(self.recorded()[0]["reason"], "")
+
+    def test_registered_backend_completion_is_still_checked_in_a_mixed_range(self):
+        backend = self.changed()
+        self.changed("frontend-modern/src/example.ts")
+        self.env["HISTORY_STATUS"] = "0"
+        result = self.run_guard(early=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(self.recorded()), 1)
+        self.assertEqual(self.recorded()[0]["argv"][1], backend)
+
+    def test_a_commit_mixing_frontend_and_backend_still_waits_for_full_governance(self):
+        self.write("frontend-modern/src/example.ts", "export const fixture = true;\n")
+        self.changed()
+        self.env["CONTRACT_STATUS"] = "1"
+        early = self.run_guard(early=True)
+        self.assertEqual(early.returncode, 0, early.stdout + early.stderr)
+        self.assertIn("defer early admission", early.stdout)
+        self.assertEqual(self.recorded(), [])
+        self.assertEqual(self.run_guard().returncode, 1)
+
     def test_reverted_frontend_source_still_needs_locked_formatter(self):
         path = "frontend-modern/src/example.ts"
         self.changed(path)
@@ -196,6 +258,17 @@ class ContractRangeTest(SourceAdmissionFixture):
         self.assertEqual(result.returncode, 0)
         self.assertIn("defer early admission", result.stdout)
         self.assertEqual(self.recorded(), [])
+
+    def test_reverted_frontend_source_does_not_hide_an_invalid_backend_commit(self):
+        path = "frontend-modern/src/example.ts"
+        self.changed(path)
+        (self.repo / path).unlink()
+        self.commit("revert")
+        self.changed()
+        self.env["CONTRACT_STATUS"] = "1"
+        result = self.run_guard(early=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.recorded()[1]["files"], ["internal/example.go"])
 
     def test_merge_only_frontend_resolution_is_deferred_not_treated_as_no_source(self):
         self.git("checkout", "--quiet", "-b", "side")
@@ -210,7 +283,9 @@ class ContractRangeTest(SourceAdmissionFixture):
         result = self.run_guard(early=True)
         self.assertEqual(result.returncode, 0)
         self.assertIn("defer early admission", result.stdout)
-        self.assertEqual(self.recorded(), [])
+        self.assertEqual([c["files"] for c in self.recorded()
+                          if c["guard"] == "canonical_completion_guard.py"],
+                         [["side.md"], ["main.md"]])
 
     def test_receipt_rules_run_actual_browser_guard_not_an_assumed_skip(self):
         self.changed("frontend-modern/browser-verification.json")
@@ -227,6 +302,16 @@ class WorkflowAdmissionTest(SourceAdmissionFixture):
             with self.subTest(workflow=name):
                 result = self.run_early_workflow(name)
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(self.installs.exists())
+
+    def test_actual_steps_stop_mixed_ranges_before_dependency_work(self):
+        self.changed()
+        self.changed("frontend-modern/src/example.ts")
+        self.env["CONTRACT_STATUS"] = "1"
+        for name in WORKFLOWS:
+            with self.subTest(workflow=name):
+                result = self.run_early_workflow(name)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertFalse(self.installs.exists())
 
     def test_actual_early_steps_allow_valid_nonfrontend_source_to_continue(self):
@@ -337,6 +422,30 @@ class RealGuardConsumerTest(SourceAdmissionFixture):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("BLOCKED", result.stderr)
         self.assertFalse(self.installs.exists())
+
+    def test_real_guard_rejects_backend_contract_debt_beside_deferred_frontend(self):
+        self.install_real_guards()
+        self.changed("internal/monitoring/poller.go")
+        frontend = self.changed("frontend-modern/src/example.ts")
+        for name in WORKFLOWS:
+            with self.subTest(workflow=name):
+                result = self.run_early_workflow(name)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("BLOCKED", result.stderr)
+                self.assertIn(frontend, result.stdout)
+                self.assertFalse(self.installs.exists())
+
+    def test_real_guard_preserves_backend_trailer_and_full_frontend_obligation(self):
+        self.install_real_guards()
+        self.changed("internal/monitoring/poller.go", trailer="fixture refactor has no observable contract change")
+        self.changed("frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx")
+        result = self.run_early_workflow("build-and-test.yml")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(self.installs.exists())
+        self.assertNotIn("ambient must not bypass", result.stdout + result.stderr)
+        full = self.run_guard()
+        self.assertEqual(full.returncode, 1, full.stdout + full.stderr)
+        self.assertIn("BLOCKED", full.stderr)
 
     def test_real_guard_accepts_commit_bound_neutral_reason_not_ambient_reason(self):
         self.install_real_guards()

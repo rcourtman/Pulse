@@ -38,17 +38,19 @@ def check(base: str, head: str, *, early: bool = False) -> int:
     git("cat-file", "-e", f"{base}^{{commit}}")
     merge_base = git("merge-base", base, head)
     commits = git("rev-list", "--reverse", "--no-merges", f"{base}..{head}").splitlines()
+    commit_files: dict[str, str] = {}
+    frontend_in_range = False
     if early:
         # The established formatting-only exception needs locked Prettier.
         # Do not misclassify a legitimate formatting commit before npm ci.
         # Include intermediate/reverted edits and merge-only resolutions, not
-        # just the net tip delta. The full required job still checks all of it.
+        # just the net tip delta. Defer only the commits needing that exception,
+        # not unrelated backend contract/history checks in the same proposal.
         paths = git("diff", "--name-only", merge_base, head, "--").splitlines()
         for commit in commits:
-            paths.extend(git("diff-tree", "--no-commit-id", "--name-only", "-r", commit).splitlines())
-        if frontend_runtime_paths(paths):
-            print("Frontend source in range; defer early admission to full Canonical Governance with locked formatting tools.", flush=True)
-            return 0
+            commit_files[commit] = git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+            paths.extend(commit_files[commit].splitlines())
+        frontend_in_range = bool(frontend_runtime_paths(paths))
     status = 0
     # Only each commit's final trailer can supply its override. In particular,
     # an ambient override cannot turn a split-history validation green.
@@ -59,6 +61,9 @@ def check(base: str, head: str, *, early: bool = False) -> int:
             print(f"Skipping root commit {commit} (no parent to diff against).", flush=True)
             continue
         parent = parents[1]
+        if early and frontend_runtime_paths(commit_files[commit].splitlines()):
+            print(f"Frontend source in commit {commit}; defer early admission for this commit to full Canonical Governance with locked formatting tools.", flush=True)
+            continue
         reason = git(
             "log", "-1", "--format=%(trailers:key=Contract-Neutral,valueonly,separator=; )",
             commit,
@@ -69,7 +74,7 @@ def check(base: str, head: str, *, early: bool = False) -> int:
              "--commit", commit, "--head", head], cwd=ROOT, env=env,
         )
         if history.returncode == 3:
-            files = git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+            files = commit_files[commit] if early else git("diff-tree", "--no-commit-id", "--name-only", "-r", commit)
             result = subprocess.run(
                 [sys.executable, "scripts/release_control/canonical_completion_guard.py",
                  "--files-from-stdin", "--diff-base", parent, "--commit", commit],
@@ -83,7 +88,11 @@ def check(base: str, head: str, *, early: bool = False) -> int:
             print(f"Canonical completion history failed for commit {commit}.", flush=True)
             status = 1
         print("::endgroup::", flush=True)
-    if early and status == 0:
+    if early and frontend_in_range:
+        # A merge-only frontend resolution also needs final-content evidence.
+        # Checked backend commits cannot answer for those pixels or formatting.
+        print("Frontend source in range; defer early admission for frontend commits and final browser evidence to full Canonical Governance with locked formatting tools. Other commits were checked.", flush=True)
+    elif early and status == 0:
         # Receipt-only changes must not bypass the required evidence rule.
         # There is no frontend source/formatter exception in this range.
         result = subprocess.run(
@@ -100,7 +109,7 @@ def main() -> int:
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", required=True)
     parser.add_argument("--early", action="store_true",
-                        help="check non-rendering ranges before dependencies; defer frontend ranges to the full required job")
+                        help="check non-rendering commits before dependencies; defer frontend commits and their final browser evidence to the full required job")
     args = parser.parse_args()
     try:
         return check(args.base, args.head, early=args.early)
