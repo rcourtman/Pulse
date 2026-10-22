@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "base_sha": "96d82f8ecbc4d0a523e38ae9faa0991000fb3ea9",
+  "source_sha": "96d82f8ecbc4d0a523e38ae9faa0991000fb3ea9",
+  "verified_at": "2026-10-22T06:24:53.652789+00:00",
+  "result": "passed",
+  "scope": "The actual shipped contributor guide consumed by production Docs/router/Markdown/PageHeader/styles. Only the existing outer application shell is synthetic. No import, cleanup, runtime service, key authentication, native guest recovery, installed or published acceptance.",
+  "content_sha256": {
+    "CONTRIBUTING.md": "31e69537e8c48bce5f36a6e021607c6055d59b26d05c869399f40e324fb2bbf2",
+    "frontend-modern/public/docs/CONTRIBUTING.md": "31e69537e8c48bce5f36a6e021607c6055d59b26d05c869399f40e324fb2bbf2",
+    "frontend-modern/src/pages/Docs.tsx": "e1d181803722b38ed211517d12495d201c299cc8ebb0a14131c58ac91c7e3a6a",
+    "frontend-modern/src/features/docs/docMarkdown.ts": "850f8cd5134b777550703cdcddd3b5dccf0b11be2dda6724f55ac3bcb511f160",
+    "frontend-modern/src/components/shared/PageHeader.tsx": "428d4c02380ba13a38d1ee7404c56b538562df904aecb66f11786ef0dbb8d259",
+    "frontend-modern/src/index.css": "c11a24a45d5c04e413b67c6f3b8c75e7728dd61e1dfe99b776a2fcaef110bf12",
+    "frontend-modern/browser-tests/doc-command-help.tsx": "81005ed6de41f32d7a581d1115e8c52be974a41ae421eab893ffe0a3a59a42f5",
+    "frontend-modern/browser-tests/doc-command-help.html": "136202c937d750c014141938d591694552558f6fb91619ebaab9e59bb0605e85",
+    "frontend-modern/browser-tests/contribution-import-safety.cjs": "74f9d820bc708eb4bf079fa5729340cacbd7fa373ca33901a2299873838fd51c",
+    "frontend-modern/package.json": "cac3433e381f9bc2f45155a067af955b3fd874b5f626741d4812f12f7ee80e7b",
+    "frontend-modern/package-lock.json": "6cef4bf1bb6747190a73071d836793eba5a6578517c22dd48f04b991a7a81c8f",
+    "tests/integration/package-lock.json": "4d0c47bb8ac78c151187901fc9d484c84e5858b04e37ff0c85fdc07626511749"
+  },
+  "source_proof": {
+    "receipt": "source-pf5hox85",
+    "source_sha": "96d82f8ecbc4d0a523e38ae9faa0991000fb3ea9",
+    "exit": 0,
+    "docs_tests_passed": 120,
+    "shipped_mirrors": 62,
+    "type_check": "passed",
+    "production_build": "passed",
+    "production_docs_consumer_build": "passed",
+    "complete_output_bytes": 393623,
+    "output_sha256": "e6d2ef3d043c5aa05600c5c3757bba775a1cfe29d85d87bb984ca68611178b89",
+    "guest_stop_completed": true,
+    "line_bound_exceeded": true,
+    "markers_truncated": false,
+    "output_account": "All raw bytes are present and hash-matched. The reporting line-bound diagnostic is retained; phases, test results, completion marker and exported static bytes were independently read and checked without replay."
+  },
+  "browser": {
+    "playwright": "1.56.1",
+    "binding_sha256": "063ca218794fc7622bbd5816fd709a8ea7cb9c4807d6f485e3137df52a95c93b",
+    "cases": [
+      {
+        "name": "desktop-chromium",
+        "browser": "141.0.7390.37",
+        "width": 1365,
+        "height": 1000,
+        "dark": false,
+        "geometry": {
+          "x": 234.5,
+          "right": 1130.5,
+          "width": 896,
+          "height": 168
+        },
+        "interaction": "keyboard Enter",
+        "exactFetchedGuide": true,
+        "importSafetyAndCleanupRendered": true,
+        "fragmentFocusAndSameShell": true,
+        "noDocumentOverflow": true
+      },
+      {
+        "name": "narrow-webkit",
+        "browser": "26.0",
+        "width": 320,
+        "height": 960,
+        "dark": true,
+        "geometry": {
+          "x": 16,
+          "right": 304,
+          "width": 288,
+          "height": 552
+        },
+        "interaction": "touch",
+        "exactFetchedGuide": true,
+        "importSafetyAndCleanupRendered": true,
+        "fragmentFocusAndSameShell": true,
+        "noDocumentOverflow": true
+      }
+    ],
+    "errors": [],
+    "request_scope": "Local GET only; no API requests. Docs index link and repeated in-document fragment use keyboard Enter and touch, focus the heading and retain the shell.",
+    "cleanup": {
+      "browserClosed": true,
+      "serverClosed": true
+    }
+  },
+  "captures": [
+    {
+      "file": "desktop-chromium-import-refusal.png",
+      "sha256": "c622a6524054f5ff295781e636ff31da74a70aa76a3d401179322b9ce42edc8d",
+      "observation": "The complete new import-safety paragraph is readable after the explicit selectors: preserve both data sets, do not guess a backup key or delete ciphertext, retain private partial files, and do not treat this as full-state recovery. Existing cleanup text is also visible."
+    },
+    {
+      "file": "desktop-chromium-cleanup-preserved.png",
+      "sha256": "9ed5ec7d6729bf804de4e77d7aa92b33c0274f82129110f7eb72bc0cd06b9b2c",
+      "observation": "The existing cleanup heading, preserved-state/fail-closed/no-sudo limits and ordinary frontend-workflow link remain readable. The import copy did not overwrite the cleanup section."
+    },
+    {
+      "file": "narrow-webkit-import-refusal.png",
+      "sha256": "701004c14f1392bbccebf4b37e9ccb574a35a31759e4d830df3b23e613bb5995",
+      "observation": "At 320 px in dark WebKit, the whole safety paragraph wraps within the page, including the .config-import.*/previous path, missing/conflicting-key refusals and the requirement to inspect partial imports privately before starting anything."
+    },
+    {
+      "file": "narrow-webkit-partial-import.png",
+      "sha256": "54599629dbe22e91405c792fd8b0b600154432941c2c2e37a55dc75309fc002a",
+      "observation": "The preceding selectors and new paragraph remain within the narrow viewport. Private previous/staged files, matching-key preservation, the full-state/live-snapshot limit and no-service-start statement are readable together."
+    },
+    {
+      "file": "narrow-webkit-cleanup-preserved.png",
+      "sha256": "69ecad362b0040133a3009e36216a65fdfb435da1ed7eafa8cc7759a3b077bb6",
+      "observation": "At 320 px, the existing cleanup heading and all preservation, linked-path, fail-closed, no-sudo and no-process-stop/restore boundaries wrap readably without document overflow."
+    }
+  ],
+  "retained_evidence": "Core continuation for 22 October 2026: RECEIPTS.md, SOURCE-PROOF-RECEIPT.json, SOURCE-PROOF-OUTPUT.log, PROOF-SOURCE.json, PREVIEW-BINDING.json, BROWSER-RESULT.json, PIXEL-REVIEW.json and DOCS-PREVIEW.tar.gz. All five captures were opened natively.",
+  "preparation_failure": "A first browser invocation failed before browser/server creation because local extraction had stopped on the line-bound flag. ENOENT, zero requests/cases/captures and client exit 1 are retained in FIRST-BROWSER-RESULT.json/PREPARATION-OBSERVATIONS.json. No product or source-test failure was cleared by replay.",
+  "remaining": "Independent review/coordinator/publisher own containing checks and protected landing. Delivery native recovery and the separate adverse mobile-WebKit history/Back/reload job are unchanged and not rerun."
+}
