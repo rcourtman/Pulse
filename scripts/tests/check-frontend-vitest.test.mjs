@@ -5,7 +5,7 @@ import { main, vitestGraphErrors } from '../check-frontend-vitest.mjs';
 
 // Version-only fixtures test admission, not acquisition or compatibility of new
 // package bytes. The complete current manifest/lock and CLI are checked as well.
-function graph(version = '4.1.11') {
+function graph(version = '4.1.12') {
   const devDependencies = { vitest: `^${version}`, '@vitest/coverage-v8': `^${version}` };
   return {
     manifest: { devDependencies },
@@ -32,23 +32,34 @@ test('current complete frontend graph and executable CLI retain the security flo
   }
 });
 
-test('PR 3058 declaration shape accepts a matching patched runner, not a historical text pin', () => {
-  const fixture = graph('4.1.12');
-  fixture.manifest.devDependencies.vitest = '^4.1.11';
-  fixture.lock.packages[''].devDependencies.vitest = '^4.1.11';
+test('patched locked bytes cannot excuse a declaration below the current advisory floor', () => {
+  for (const name of ['vitest', '@vitest/coverage-v8']) {
+    const fixture = graph();
+    fixture.manifest.devDependencies[name] = '^4.1.11';
+    fixture.lock.packages[''].devDependencies[name] = '^4.1.11';
+    assert.match(errors(fixture).join('\n'), /at or above \^4\.1\.12/);
+  }
+});
+
+test('reviewed declarations accept a later matching patched graph, not a historical text pin', () => {
+  const fixture = graph('4.1.13');
+  for (const name of ['vitest', '@vitest/coverage-v8']) {
+    fixture.manifest.devDependencies[name] = '^4.1.12';
+    fixture.lock.packages[''].devDependencies[name] = '^4.1.12';
+  }
   assert.deepEqual(errors(fixture), []);
 });
 
 test('later stable patches and minors on the reviewed major are eligible', () => {
-  for (const version of ['4.1.11', '4.1.12', '4.2.0']) {
+  for (const version of ['4.1.12', '4.1.13', '4.2.0']) {
     assert.deepEqual(errors(graph(version)), [], version);
   }
 });
 
 test('unsafe, broad, malformed and unreviewed declarations fail closed for both consumers', () => {
   for (const name of ['vitest', '@vitest/coverage-v8']) {
-    for (const range of ['^4.1.10', '^4.0.99', '^5.0.0', '^4.1.11-beta.1', '*', '>=4.1.11',
-      '^4.1.11 || ^3.0.0', '~4.1.11', '4.1.11', '^04.1.11', '^4.01.11', '^4.1.11\n',
+    for (const range of ['^4.1.11', '^4.1.10', '^4.0.99', '^5.0.0', '^4.1.12-beta.1', '*', '>=4.1.12',
+      '^4.1.12 || ^3.0.0', '~4.1.12', '4.1.12', '^04.1.12', '^4.01.12', '^4.1.12\n',
       '^4.1.9007199254740992', null, undefined]) {
       const fixture = graph();
       fixture.manifest.devDependencies[name] = range;
@@ -60,8 +71,8 @@ test('unsafe, broad, malformed and unreviewed declarations fail closed for both 
 
 test('locked companions must be stable, patched and on the reviewed major', () => {
   for (const name of ['vitest', '@vitest/mocker', '@vitest/coverage-v8']) {
-    for (const version of ['4.1.10', '4.0.99', '3.9.99', '5.0.0', '4.1.11-beta.1', '4.1.11+build',
-      '4.1', '04.1.11', '4.01.11', '4.1.11\n', '4.1.9007199254740992', null, undefined]) {
+    for (const version of ['4.1.11', '4.1.10', '4.0.99', '3.9.99', '5.0.0', '4.1.12-beta.1', '4.1.12+build',
+      '4.1', '04.1.12', '4.01.12', '4.1.12\n', '4.1.9007199254740992', null, undefined]) {
       const fixture = graph();
       fixture.lock.packages[`node_modules/${name}`] = { version };
       assert.notDeepEqual(errors(fixture), [], `${name}: ${version}`);
@@ -72,21 +83,21 @@ test('locked companions must be stable, patched and on the reviewed major', () =
 test('even safe companion version drift is not exact runner alignment', () => {
   for (const name of ['@vitest/mocker', '@vitest/coverage-v8']) {
     const fixture = graph();
-    fixture.lock.packages[`node_modules/${name}`].version = '4.1.12';
+    fixture.lock.packages[`node_modules/${name}`].version = '4.1.13';
     assert.match(errors(fixture).join('\n'), /must exactly match/);
   }
 });
 
 test('nested unsafe, missing-version or mismatched copies cannot hide behind a patched root', () => {
   for (const name of ['vitest', '@vitest/mocker', '@vitest/coverage-v8']) {
-    for (const version of ['4.1.10', '4.1.12', '5.0.0', undefined]) {
+    for (const version of ['4.1.11', '4.1.13', '5.0.0', undefined]) {
       const fixture = graph();
       fixture.lock.packages[`node_modules/tool/node_modules/${name}`] = { version };
       assert.notDeepEqual(errors(fixture), [], `${name}: ${version}`);
     }
   }
   const fixture = graph();
-  fixture.lock.packages['node_modules/tool/node_modules/@vitest/mocker'] = { version: '4.1.11' };
+  fixture.lock.packages['node_modules/tool/node_modules/@vitest/mocker'] = { version: '4.1.12' };
   assert.deepEqual(errors(fixture), []);
 });
 
@@ -105,8 +116,8 @@ test('a missing package or nested-only runner is not a complete graph', () => {
 test('manifest floors, locked runner and root lock declarations must agree', () => {
   for (const name of ['vitest', '@vitest/coverage-v8']) {
     const fixture = graph();
-    fixture.manifest.devDependencies[name] = '^4.1.12';
-    fixture.lock.packages[''].devDependencies[name] = '^4.1.12';
+    fixture.manifest.devDependencies[name] = '^4.1.13';
+    fixture.lock.packages[''].devDependencies[name] = '^4.1.13';
     assert.match(errors(fixture).join('\n'), /below the declared/);
     const stale = graph();
     delete stale.lock.packages[''].devDependencies[name];

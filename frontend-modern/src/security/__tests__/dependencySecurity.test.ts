@@ -137,7 +137,9 @@ describe('frontend dependency security floors', () => {
     }
   });
 
-  it('keeps Vitest and its mocker above the redirect-mock file-read floor', () => {
+  it('keeps Vitest and every mocker copy above the registration and traversal floors', () => {
+    // GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp require 4.1.12.
+    // The dependency-free guard checks declarations, nested copies and alignment.
     const check = fileURLToPath(
       new URL('../../../../scripts/check-frontend-vitest.mjs', import.meta.url),
     );
