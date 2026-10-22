@@ -142,12 +142,14 @@ describe('source-scoped backup Node filter', () => {
   it.each(['coverage', 'date'])(
     'does not call an unavailable saved node an empty backup estate in %s',
     async (view) => {
-      api.fetch.mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            data: { storageBackups: [], guestSnapshots: [], backupTasks: [], backups: [] },
-          }),
-          { status: 200 },
+      api.fetch.mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: { storageBackups: [], guestSnapshots: [], backupTasks: [], backups: [] },
+            }),
+            { status: 200 },
+          ),
         ),
       );
       url(view, nodeKey('gone', 'pve-1'));
