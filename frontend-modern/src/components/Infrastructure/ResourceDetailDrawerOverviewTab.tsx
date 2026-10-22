@@ -813,17 +813,17 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                       <div class="mt-2 space-y-2 border-t border-emerald-200 pt-2 dark:border-emerald-700">
                                         <For each={drawer.pbsActiveTasks()}>
                                           {(task) => (
-                                            <div class="flex items-start justify-between gap-2 text-[10px]">
-                                              <div class="min-w-0">
+                                            <div class="flex flex-wrap items-start justify-between gap-2 text-[11px]">
+                                              <div class="min-w-0 flex-1 basis-40">
                                                 <div
-                                                  class="truncate font-medium text-base-content"
+                                                  class="min-w-0 whitespace-pre-wrap wrap-anywhere font-medium text-base-content"
                                                   title={task.label}
                                                 >
                                                   {task.label}
                                                 </div>
                                                 <Show when={task.context}>
                                                   <div
-                                                    class="truncate text-muted"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere text-muted"
                                                     title={task.context ?? undefined}
                                                   >
                                                     {task.context}
@@ -831,14 +831,14 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                 </Show>
                                                 <Show when={task.error}>
                                                   <div
-                                                    class="truncate text-rose-700 dark:text-rose-300"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere text-rose-700 dark:text-rose-300"
                                                     title={task.error}
                                                   >
                                                     {task.error}
                                                   </div>
                                                 </Show>
                                               </div>
-                                              <span class="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                              <span class="max-w-full whitespace-normal wrap-anywhere rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                                                 {task.statusLabel}
                                               </span>
                                             </div>
@@ -863,17 +863,17 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                       <div class="mt-2 space-y-2 border-t border-indigo-200 pt-2 dark:border-indigo-700">
                                         <For each={pbsJobHealthEvidence().entries}>
                                           {(entry) => (
-                                            <div class="min-w-0 rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
+                                            <div class="min-w-0 rounded-sm border border-border bg-surface-hover px-2 py-1.5 text-[11px]">
                                               <div class="flex flex-wrap items-start justify-between gap-2">
-                                                <div class="min-w-0">
+                                                <div class="min-w-0 flex-1 basis-40">
                                                   <div
-                                                    class="truncate font-medium text-base-content"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere font-medium text-base-content"
                                                     title={entry.label}
                                                   >
                                                     {entry.label}
                                                   </div>
                                                   <div
-                                                    class="truncate text-muted"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere text-muted"
                                                     title={entry.sourceLabel}
                                                   >
                                                     {entry.sourceLabel}
@@ -883,7 +883,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                   <For each={entry.badges}>
                                                     {(badge) => (
                                                       <span
-                                                        class={`shrink-0 rounded-full border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
+                                                        class={`min-w-0 max-w-full whitespace-normal wrap-anywhere rounded-md border px-2 py-0.5 font-medium ${pbsEvidenceBadgeClass(
                                                           badge.tone,
                                                         )}`}
                                                       >
@@ -893,10 +893,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                   </For>
                                                 </div>
                                               </div>
-                                              <div class="mt-1 grid gap-1 text-muted sm:grid-cols-2">
+                                              <div class="mt-1 grid min-w-0 gap-1 text-muted sm:grid-cols-2">
                                                 <Show when={entry.context}>
                                                   <span
-                                                    class="truncate"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere"
                                                     title={entry.context ?? undefined}
                                                   >
                                                     {entry.context}
@@ -904,7 +904,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                 </Show>
                                                 <Show when={entry.stateLabel}>
                                                   <span
-                                                    class="truncate"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere"
                                                     title={entry.stateLabel ?? undefined}
                                                   >
                                                     State:{' '}
@@ -915,7 +915,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                 </Show>
                                                 <Show when={entry.freshnessLabel}>
                                                   <span
-                                                    class="truncate"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere"
                                                     title={entry.freshnessLabel ?? undefined}
                                                   >
                                                     {entry.freshnessLabel}
@@ -923,7 +923,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                 </Show>
                                                 <Show when={entry.postureReason}>
                                                   <span
-                                                    class="truncate text-amber-700 dark:text-amber-300"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere text-amber-700 dark:text-amber-300"
                                                     title={entry.postureReason ?? undefined}
                                                   >
                                                     {entry.postureReason}
@@ -931,7 +931,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                                 </Show>
                                                 <Show when={entry.error}>
                                                   <span
-                                                    class="truncate text-rose-700 dark:text-rose-300"
+                                                    class="min-w-0 whitespace-pre-wrap wrap-anywhere text-rose-700 dark:text-rose-300"
                                                     title={entry.error ?? undefined}
                                                   >
                                                     {entry.error}

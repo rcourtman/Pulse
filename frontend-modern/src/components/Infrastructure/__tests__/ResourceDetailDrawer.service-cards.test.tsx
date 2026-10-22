@@ -5,6 +5,10 @@ import { createStore, produce, reconcile } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { canonicalizeRealtimeResource } from '@/utils/resourceStateAdapters';
+import {
+  PBS_JOB_EVIDENCE_FIXTURE as evidenceFixture,
+  pbsJobEvidenceFixture,
+} from '../__fixtures__/pbsJobEvidence';
 
 const expandPlatformDetails = (getByTestId: (id: string) => HTMLElement): void => {
   // Platform context sits inside the Overview's one Details disclosure.
@@ -312,6 +316,67 @@ describe('ResourceDetailDrawer service cards', () => {
     expect(activeTasks.getByText('fast · Remote offsite')).toBeInTheDocument();
     expect(activeTasks.getByText('Queued')).toBeInTheDocument();
   });
+
+  it.each(['direct', 'canonical'] as const)(
+    'keeps complete PBS job evidence readable without hover across open updates (%s)',
+    async (transport) => {
+      const observation = (error: string = evidenceFixture.error): Resource => {
+        const pbs = pbsJobEvidenceFixture();
+        pbs.backupJobs![0].error = error;
+        pbs.jobHealthEvidence![0].error = error;
+        return canonicalizeRealtimeResource(
+          baseResource({
+            type: 'pbs',
+            platformType: 'proxmox-pbs',
+            ...(transport === 'direct' ? { pbs } : { platformData: { pbs, sources: ['pbs'] } }),
+          }),
+        );
+      };
+      const [resource, setResource] = createStore(observation());
+      const { getByTestId, getByRole } = render(() => <ResourceDetailDrawer resource={resource} />);
+      expandPlatformDetails(getByTestId);
+      fireEvent.click(getByRole('button', { name: 'Show service' }));
+      fireEvent.click(getByRole('button', { name: 'Show jobs' }));
+      const active = getByTestId('pbs-active-tasks');
+      const evidence = getByTestId('pbs-job-health-evidence');
+      for (const section of [active, evidence]) {
+        const error = within(section).getByText(evidenceFixture.error, {
+          normalizer: (value) => value,
+        });
+        expect(error).toHaveClass('whitespace-pre-wrap', 'wrap-anywhere');
+        expect(section.querySelector('.truncate')).toBeNull();
+        expect(section.querySelector('.rounded-full')).toBeNull();
+        expect(section.querySelector('em')).toBeNull();
+      }
+      expect(within(active).getByText(`Backup ${evidenceFixture.taskId}`)).toHaveClass(
+        'wrap-anywhere',
+      );
+      for (const value of [
+        evidenceFixture.reason,
+        evidenceFixture.state,
+        `Observed ${evidenceFixture.observedAt}`,
+      ]) {
+        expect(within(evidence).getByText(value)).toBeInTheDocument();
+      }
+      const toggle = getByRole('button', { name: 'Hide jobs' });
+      toggle.focus();
+      const updatedError =
+        'A subsequent synthetic read still has no result.\nIts complete final line is retained.';
+      setResource(reconcile(observation(updatedError)));
+      for (const section of [active, evidence]) {
+        await waitFor(() =>
+          expect(
+            within(section).getByText(updatedError, { normalizer: (value) => value }),
+          ).toBeInTheDocument(),
+        );
+        expect(section.querySelector('.truncate')).toBeNull();
+        expect(section.querySelector('.rounded-full')).toBeNull();
+      }
+      expect(getByRole('button', { name: 'Hide jobs' })).toBe(toggle);
+      expect(toggle).toHaveFocus();
+      expect(getByTestId('pbs-job-health-evidence')).toBe(evidence);
+    },
+  );
 
   it('renders merged agent hardware for a standalone PBS host', () => {
     const resource = baseResource({
