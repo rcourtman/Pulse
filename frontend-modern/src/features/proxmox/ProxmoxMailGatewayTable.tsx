@@ -519,8 +519,6 @@ export const ProxmoxMailGatewayTable: Component<{
                           <InlineDetailTableRow
                             cellId={detailRowId()}
                             colspan={visibleColumnCount()}
-                            cellClass="whitespace-normal"
-                            contentClass="min-w-0 whitespace-normal px-4 py-4"
                             data-inline-detail-for={instance.id}
                           >
                             <ProxmoxMailGatewayDrawer

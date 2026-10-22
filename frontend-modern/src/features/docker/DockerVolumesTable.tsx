@@ -34,6 +34,7 @@ import {
 } from './DockerNativeTableShared';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
 import type { Resource } from '@/types/resource';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 const DOCKER_VOLUME_SORT_KEYS = [
   'volume',
@@ -268,6 +269,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
+                          statusIndicator={getSimpleStatusIndicator(resource.status)}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={7}

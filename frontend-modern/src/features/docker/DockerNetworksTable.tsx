@@ -642,11 +642,12 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           <InlineDetailTableRow
                             cellId={detailRowId()}
                             colspan={visibleColumnCount()}
-                            contentClass="grid gap-4 px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)]"
                             data-docker-network-detail-row={resource.id}
                           >
-                            <AttachmentDetail rows={attachments()} />
-                            <NetworkConfigDetail resource={resource} />
+                            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)]">
+                              <AttachmentDetail rows={attachments()} />
+                              <NetworkConfigDetail resource={resource} />
+                            </div>
                           </InlineDetailTableRow>
                         </Show>
                       </>

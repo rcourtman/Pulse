@@ -34,6 +34,7 @@ import {
   type DockerImageUpdateTone,
 } from './dockerImagePresentation';
 import type { Resource } from '@/types/resource';
+import { getSimpleStatusIndicator } from '@/utils/status';
 
 const updateToneClass: Record<DockerImageUpdateTone, string> = {
   danger: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
@@ -256,6 +257,7 @@ export const DockerImagesTable: Component<
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
+                          statusIndicator={getSimpleStatusIndicator(resource.status)}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={5}

@@ -460,8 +460,6 @@ export function ProxmoxCoverageTable(props: {
                         <InlineDetailTableRow
                           cellId={detailRowId()}
                           class=""
-                          cellClass="px-3 py-2 whitespace-normal"
-                          contentClass="min-w-0 whitespace-normal"
                           colspan={columnCount()}
                           data-inline-detail-for={row.key}
                         >

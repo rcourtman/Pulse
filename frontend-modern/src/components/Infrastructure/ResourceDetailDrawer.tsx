@@ -1,9 +1,13 @@
 import { Show, For } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
+import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
+import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
+import type { StatusIndicator } from '@/utils/status';
 import { ReportMergeModal } from './ReportMergeModal';
 import { ProxmoxMailGatewayDrawer } from '@/features/proxmox/ProxmoxMailGatewayDrawer';
 import { K8sDeploymentsDrawer } from '@/components/Kubernetes/K8sDeploymentsDrawer';
@@ -32,6 +36,13 @@ import { getShippedDocUrl } from '@/utils/docsLinks';
 interface ResourceDetailDrawerProps {
   resource: Resource;
   onClose?: () => void;
+  /**
+   * The status the table row's own dot shows. Rows judge staleness, impaired
+   * sources and platform states (a succeeded pod, a scaled-to-zero
+   * deployment) that the raw status does not carry, so the drawer takes the
+   * row's verdict rather than recomputing a second, disagreeing one.
+   */
+  statusIndicator?: StatusIndicator;
   presentation?: ResourceDetailDrawerPresentation;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
@@ -73,43 +84,52 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     initialShowTrueNASDetails: props.initialShowTrueNASDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
+  const statusIndicator = () => props.statusIndicator ?? drawer.statusIndicator();
+  const customUrl = () => props.resource.customUrl?.trim() ?? '';
+  // The health issue is the first "Worth checking" item on Overview, so the
+  // header names the subject only; source and identity badges say what the
+  // row cannot (an agent merged with PVE, an Unraid host).
   const HeaderIdentity = () => (
-    <div class="space-y-1 min-w-0">
-      <div class="flex items-center gap-2">
-        <StatusDot
-          variant={drawer.statusIndicator().variant}
-          title={drawer.statusIndicator().label}
-          ariaLabel={drawer.statusIndicator().label}
-          size="sm"
-        />
-        <h2
-          id={headingId()}
-          class="text-sm font-semibold text-base-content min-w-0 wrap-anywhere m-0"
-          title={drawer.displayName()}
-        >
-          {drawer.displayName()}
-        </h2>
-      </div>
-      <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
-        <For each={drawer.headerBadges()}>
-          {(badge) => (
-            <span class={badge.classes} title={badge.title}>
-              {badge.label}
-            </span>
-          )}
-        </For>
-        <Show when={drawer.healthIssue()}>
-          {(issue) => (
-            <span
-              class="inline-flex max-w-full items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/25 dark:text-amber-300"
-              title={issue().title}
-            >
-              {issue().compactLabel}
-            </span>
-          )}
+    <DrawerSubjectHeading
+      headingId={headingId()}
+      title={drawer.displayName()}
+      statusVariant={statusIndicator().variant}
+      statusLabel={statusIndicator().label}
+      trailing={
+        <Show when={drawer.headerBadges().length > 0}>
+          <div class="flex flex-wrap gap-1.5" data-testid="resource-header-badges">
+            <For each={drawer.headerBadges()}>
+              {(badge) => (
+                <span class={badge.classes} title={badge.title}>
+                  {badge.label}
+                </span>
+              )}
+            </For>
+          </div>
         </Show>
-      </div>
-    </div>
+      }
+    />
+  );
+  const HeaderActions = () => (
+    <>
+      <Show when={customUrl()}>
+        <WebInterfaceLink
+          url={customUrl()}
+          ariaLabel={`Open web interface for ${drawer.displayName()}`}
+          class={getDrawerHeaderActionButtonClass()}
+        >
+          <ExternalLinkIcon class="h-3.5 w-3.5" aria-hidden="true" />
+          <span>Open</span>
+        </WebInterfaceLink>
+      </Show>
+      <Show when={isDockerContainerLifecycleResource(props.resource)}>
+        <DockerContainerLifecycleControls
+          resource={props.resource}
+          surface="resource-detail"
+          onActionSettled={props.onResourceActionSettled}
+        />
+      </Show>
+    </>
   );
 
   return (
@@ -119,13 +139,9 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         fallback={
           <div class="flex items-start justify-between gap-4">
             <HeaderIdentity />
-            <Show when={isDockerContainerLifecycleResource(props.resource)}>
-              <DockerContainerLifecycleControls
-                resource={props.resource}
-                surface="resource-detail"
-                onActionSettled={props.onResourceActionSettled}
-              />
-            </Show>
+            <div class="flex shrink-0 items-center gap-1.5">
+              <HeaderActions />
+            </div>
           </div>
         }
       >
@@ -133,15 +149,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           <ObjectDrawerHeader
             collapseLabel={`Collapse ${drawer.displayName()} details`}
             onCollapse={onClose()}
-            actions={
-              <Show when={isDockerContainerLifecycleResource(props.resource)}>
-                <DockerContainerLifecycleControls
-                  resource={props.resource}
-                  surface="resource-detail"
-                  onActionSettled={props.onResourceActionSettled}
-                />
-              </Show>
-            }
+            actions={<HeaderActions />}
           >
             <HeaderIdentity />
           </ObjectDrawerHeader>
@@ -330,6 +338,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
         <DrawerContent
           resource={props.resource}
           onClose={props.onClose}
+          statusIndicator={props.statusIndicator}
           presentation={props.presentation}
           resolveResourceLabel={props.resolveResourceLabel}
           initialShowAccessContext={props.initialShowAccessContext}

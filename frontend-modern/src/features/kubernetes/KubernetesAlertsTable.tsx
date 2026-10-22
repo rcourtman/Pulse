@@ -36,6 +36,7 @@ import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
   getAlertSeverityDetailTone,
+  getAlertSeverityIndicator,
 } from '@/utils/alertSeverityPresentation';
 import {
   filterKubernetesIncidents,
@@ -60,7 +61,6 @@ const buildAlertDetailSections = (incident: KubernetesIncidentRow): AlertDetailS
         detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
-        detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),
         detailRow('Code', formatPlatformAlertCode(incident.code, 'kubernetes'), {
           title: incident.code,
@@ -99,11 +99,11 @@ const AlertDetail: Component<{ incident: KubernetesIncidentRow; onClose: () => v
   <InlineDetailPanel
     testId="kubernetes-alert-detail"
     detailFor={props.incident.id}
-    title="Kubernetes alert detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
-      props.incident.code,
-      'kubernetes',
-    )}`}
+    title={
+      props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'kubernetes')
+    }
+    status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
+    summary={props.incident.summary || props.incident.label}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-kubernetes-alert-detail-for': props.incident.id }}
     onClose={props.onClose}

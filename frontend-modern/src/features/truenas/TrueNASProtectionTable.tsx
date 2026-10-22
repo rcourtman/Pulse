@@ -334,10 +334,12 @@ const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => vo
   <InlineDetailPanel
     testId="truenas-protection-detail"
     detailFor={props.point.id}
-    title="Protection detail"
-    summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} · ${getRecoveryOutcomeLabel(
-      normalizeRecoveryOutcome(props.point.outcome),
-    )}`}
+    title={datasetLabel(props.point)}
+    status={{
+      variant: protectionVariant(mapTrueNASProtectionStatus(props.point)),
+      label: getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome)),
+    }}
+    summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} on ${hostLabel(props.point)}`}
     sections={buildProtectionDetailSections(props.point)}
     detailAttributes={{ 'data-truenas-protection-detail-for': props.point.id }}
     onClose={props.onClose}

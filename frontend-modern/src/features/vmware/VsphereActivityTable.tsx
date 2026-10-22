@@ -19,6 +19,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
+  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableDateTimeSortValue,
   type PlatformTableFilterOption,
@@ -206,7 +207,11 @@ const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => vo
   <InlineDetailPanel
     testId="vsphere-activity-detail"
     detailFor={props.activity.id}
-    title="vSphere activity detail"
+    title={props.activity.resourceName || props.activity.title}
+    status={{
+      variant: activityStateVariant(props.activity.stateBucket),
+      label: formatPlatformTableTitleCaseValue(props.activity.stateBucket),
+    }}
     summary={`${formatActivityKind(props.activity.activityKind)} · ${props.activity.title}`}
     sections={buildActivityDetailSections(props.activity)}
     detailAttributes={{ 'data-vsphere-activity-detail-for': props.activity.id }}

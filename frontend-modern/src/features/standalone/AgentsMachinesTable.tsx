@@ -1960,6 +1960,7 @@ export const AgentsMachinesTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={machine}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={detailColspan()}

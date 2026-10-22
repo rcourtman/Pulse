@@ -183,10 +183,11 @@ const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => voi
   <InlineDetailPanel
     testId="truenas-service-detail"
     detailFor={props.row.id}
-    title="Service detail"
-    summary={`${formatServiceName(props.row.service.service)} · ${formatPlatformTableTitleCaseValue(
-      mapTrueNASServiceStatus(props.row),
-    )}`}
+    title={formatServiceName(props.row.service.service)}
+    status={{
+      variant: serviceStatusVariant(mapTrueNASServiceStatus(props.row)),
+      label: formatPlatformTableTitleCaseValue(mapTrueNASServiceStatus(props.row)),
+    }}
     sections={buildServiceDetailSections(props.row)}
     detailAttributes={{ 'data-truenas-service-detail-for': props.row.id }}
     onClose={props.onClose}

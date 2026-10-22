@@ -6418,8 +6418,12 @@ retired summary-table header aliases.
 Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific
-`data-*` attributes, colspan, and content classes, but they must not recreate
-the surface-alt detail row shell locally. The content shell must clip
+`data-*` attributes and colspan, but not a cell or content class, and they
+must not recreate the surface-alt detail row shell locally. Five tables
+(Proxmox Ceph, Mail Gateway, Replication and Coverage, Docker Networks) once
+replaced the content class to change padding and silently lost the phone
+width cap below, so the shell is no longer overridable; layout a drawer
+needs belongs on an element inside it. The content shell must clip
 horizontal paint below the large breakpoint without becoming a scroll
 container, reset the parent table's `whitespace-nowrap` inheritance, and allow
 its descendants to shrink, then restore visible overflow for the static
@@ -6428,7 +6432,7 @@ the table scroll shell's content-box inline size (`max-w-[100cqi]`; the shell
 is a size container), never a viewport estimate of the page chrome, so a phone
 drawer does not leave an empty strip beside its content (the retired
 `100vw-3.5rem` cap left 27px at 390px) and is never wider than the table's
-visible area. Callers that pass their own `contentClass` own their width.
+visible area.
 Fixed-layout cells clip overflow, so the sticky offset is inert and horizontal
 scrolling still moves the drawer with its cell.
 Long operator-state copy must wrap inside the shared row border
@@ -6454,7 +6458,20 @@ Inline detail section content is registry-backed separately from the row shell.
 detail row compaction, section-table rendering, value-tone classes, and the
 inline collapse action for platform alert/activity/protection/service detail
 panels. `InlineDetailPanel` composes `ObjectDrawerHeader`, so its entire heading
-row closes the panel instead of presenting a separate text button; consumers
+row closes the panel instead of presenting a separate text button. It heads a
+record drawer the way object drawers are headed: `DrawerSubjectHeading` with
+the record's subject (the affected resource, service or dataset, never the
+panel kind such as "Alert detail") and its status dot, a one-line summary,
+and an optional `actions` slot for a link to the owning object; the collapse
+label names that subject rather than an id. Record values wrap
+(`DetailSectionTable` `wrapValues`), because a record is mostly sentences and
+identifiers that a phone cannot hover to read. `DrawerSubjectHeading` is the
+one subject heading for every drawer: status dot then name, the name wrapping
+rather than truncating, and the dot omitted only for a record without a
+status. `ResourceDetailDrawer` composes it too, with its source and identity
+badges in the trailing slot, and takes the table row's own `statusIndicator`
+through `PlatformResourceDetailTableRow` so the drawer dot cannot disagree
+with the row dot it opened from; consumers
 may own the platform-specific section data, but they must not recreate local
 `DetailField` grids or route platform-neutral detail tables through a
 provider-named primitive.

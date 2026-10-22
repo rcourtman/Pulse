@@ -327,6 +327,7 @@ export const VsphereNetworksTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={network}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={7}

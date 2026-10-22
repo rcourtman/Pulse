@@ -135,7 +135,7 @@ describe('VsphereAlertsTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('vsphere-alert-detail'));
-    expect(detail.getByText('vSphere health detail')).toBeInTheDocument();
+    expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('esxi-01.lab.local');
     expect(detail.getByText('Managed object')).toBeInTheDocument();
     expect(detail.getByText('host-101')).toBeInTheDocument();
     expect(detail.getByText('Datacenter')).toBeInTheDocument();

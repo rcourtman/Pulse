@@ -53,7 +53,7 @@ describe('TrueNASServicesTable', () => {
     expect(row).not.toHaveAttribute('aria-expanded');
     expect(row?.querySelector('[data-row-action="true"]')).toHaveAttribute('aria-expanded', 'true');
     const detail = within(screen.getByTestId('truenas-service-detail'));
-    expect(detail.getByText('Service detail')).toBeInTheDocument();
+    expect(detail.getByRole('heading', { level: 2 })).toHaveTextContent('SMB');
     expect(detail.getByText('Service')).toBeInTheDocument();
     expect(detail.getByText('Runtime')).toBeInTheDocument();
     expect(detail.getByText('Host')).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('TrueNASServicesTable', () => {
     expect(detail.getByText('2418, 2420')).toBeInTheDocument();
     expect(detail.getByText('TrueNAS-SCALE-24.10.2')).toBeInTheDocument();
 
-    await fireEvent.click(detail.getByRole('button', { name: `Collapse ${rows[0].id} details` }));
+    await fireEvent.click(detail.getByRole('button', { name: 'Collapse SMB details' }));
 
     expect(screen.queryByTestId('truenas-service-detail')).not.toBeInTheDocument();
     expect(row).not.toHaveAttribute('aria-expanded');

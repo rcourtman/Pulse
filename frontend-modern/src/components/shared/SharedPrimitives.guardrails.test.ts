@@ -7659,6 +7659,10 @@ describe('shared primitive guardrails', () => {
     expect(inlineDetailTableRowSource).toContain('whitespace-normal');
     expect(inlineDetailTableRowSource).toContain('min-w-0');
     expect(inlineDetailTableRowSource).toContain('lg:overflow-x-visible');
+    // A per-table content or cell class replaced the shell and dropped the
+    // phone width cap on five tables; the shell is no longer overridable.
+    expect(inlineDetailTableRowSource).not.toContain('contentClass');
+    expect(inlineDetailTableRowSource).not.toContain('cellClass');
     expect(inlineDetailTableRowSource).toContain('event.stopPropagation()');
     expect(inlineDetailTableRowSource).toContain('.focus({ preventScroll: true })');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(

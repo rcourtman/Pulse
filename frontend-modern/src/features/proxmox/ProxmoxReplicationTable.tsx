@@ -682,8 +682,6 @@ export const ProxmoxReplicationTable: Component<{
                                 cellId={detailRowId}
                                 colspan={visibleColumnCount()}
                                 class=""
-                                cellClass="whitespace-normal!"
-                                contentClass="px-2 py-2 sm:px-4 sm:py-3"
                               >
                                 {/* The row truncates and narrower layouts drop columns, so
                                     the expansion is where the whole job is always readable,

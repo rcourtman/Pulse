@@ -324,6 +324,7 @@ export const KubernetesAutoscalingTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={8}

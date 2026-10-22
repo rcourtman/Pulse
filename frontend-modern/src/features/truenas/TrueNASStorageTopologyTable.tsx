@@ -632,6 +632,12 @@ export const TrueNASStorageTopologyTable: Component<{
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource()}
+                          statusIndicator={getSimpleStatusIndicator(
+                            getTrueNASStorageDotStatus(
+                              resource(),
+                              getTrueNASDiskTemperatureThresholds,
+                            ),
+                          )}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={6}

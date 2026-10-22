@@ -7089,3 +7089,9 @@ separate SMTP and saved-file counters describe report delivery only. Only daily
 aggregate counts leave the installation, with no workload, task, repository,
 client scope or reporting range. Recovery evidence, observation coverage and
 collection checkpoints remain owned by the existing recovery store.
+
+The Proxmox Backups drawers follow the shared drawer shell. The PBS server
+drawer's status dot is the one its row shows (reachable or not), not a second
+reading of the raw status, and the Coverage detail row no longer overrides the
+shared detail shell's padding, which had dropped its phone width cap. Neither
+change alters how coverage, protection posture or restore evidence is judged.
