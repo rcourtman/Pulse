@@ -1,8 +1,10 @@
 // #2263 browser fixture: mount the production guest overview and its real
-// resource query, not a reimplementation of the disk/RAID presentation.
+// resource query, not a reimplementation of the disk/RAID presentation. An
+// opened disk shows the disk drawer's Overview, which reads active alerts from
+// the app runtime, so the fixture mounts inside the shared offline runtime.
 import { createSignal, Show } from 'solid-js';
-import { render } from 'solid-js/web';
 import { GuestDrawerOverview } from '../src/components/Workloads/GuestDrawerOverview';
+import { renderInAppRuntime } from './fixtureRuntime';
 import '../src/index.css';
 
 type Mode = 'linked' | 'none' | 'error';
@@ -56,7 +58,7 @@ const overviewProps = {
   normalizedTags: [], backupPresentation: null, workloadActionAgentTitle: '',
 };
 
-render(() => (
+renderInAppRuntime(() => (
   <main class="mx-auto max-w-3xl space-y-4 p-4">
     <h1 class="text-lg font-semibold">Guest storage browser fixture</h1>
     <nav class="flex gap-2" aria-label="Fixture states">
@@ -78,4 +80,4 @@ render(() => (
       <GuestDrawerOverview {...overviewProps} guest={errorGuest as any} />
     </Show>
   </main>
-), document.getElementById('root')!);
+));

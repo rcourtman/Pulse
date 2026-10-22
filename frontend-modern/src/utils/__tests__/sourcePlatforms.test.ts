@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import canonicalPlatformAuditSource from '../../../scripts/canonical-platform-audit.mjs?raw';
 import {
   getSourcePlatformLabel,
   getSourcePlatformPresentation,
@@ -285,5 +286,21 @@ describe('sourcePlatforms', () => {
       expect(sourcePlatformScopeMatchesFilter('docker', 'proxmox-all')).toBe(false);
       expect(sourcePlatformScopeMatchesFilter('', 'proxmox-all')).toBe(false);
     });
+  });
+
+  // The platform audit names the presentation modules that own canonical
+  // copy; a module deleted with its drawer must leave the audit too, or the
+  // audit keeps pointing contributors at code that no longer exists.
+  it('names only platform presentation modules that still exist', () => {
+    const sources = import.meta.glob('/src/**/*.{ts,tsx}');
+    const auditedPaths = [
+      ...new Set(
+        [...canonicalPlatformAuditSource.matchAll(/'(src\/[^'*]+\.(?:ts|tsx))'/g)].map(
+          (match) => match[1],
+        ),
+      ),
+    ];
+    expect(auditedPaths.length).toBeGreaterThan(0);
+    expect(auditedPaths.filter((path) => !(`/${path}` in sources))).toEqual([]);
   });
 });

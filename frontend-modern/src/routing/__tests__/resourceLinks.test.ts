@@ -53,6 +53,7 @@ import {
   buildDockerPath,
   buildDockerRouteSearch,
   buildKubernetesPath,
+  buildKubernetesRouteSearch,
   buildProxmoxPath,
   buildProxmoxBackupsPath,
   buildStandalonePath,
@@ -210,6 +211,11 @@ describe('resource link routing contract', () => {
     expect(buildKubernetesPath('configuration')).toBe('/kubernetes/configuration');
     expect(buildKubernetesPath('pods')).toBe('/kubernetes/pods');
     expect(KUBERNETES_QUERY_PARAMS.cluster).toBe('cluster');
+    expect(buildKubernetesRouteSearch({ cluster: 'prod', namespace: 'kube-system' })).toBe(
+      '?cluster=prod&namespace=kube-system',
+    );
+    expect(buildKubernetesRouteSearch({ cluster: ' prod ', namespace: '' })).toBe('?cluster=prod');
+    expect(buildKubernetesRouteSearch({})).toBe('');
 
     expect(TRUENAS_PATH).toBe('/truenas');
     expect(buildTrueNASPath()).toBe('/truenas/overview');

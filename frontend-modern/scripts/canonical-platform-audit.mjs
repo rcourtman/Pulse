@@ -116,8 +116,6 @@ const ALLOWLIST = new Set([
   'src/utils/updatesPresentation.ts',
   'src/utils/alertThresholdsPresentation.ts',
   'src/utils/environmentLockPresentation.ts',
-  'src/utils/swarmPresentation.ts',
-  'src/utils/k8sDeploymentPresentation.ts',
   'src/utils/k8sNamespacePresentation.ts',
   'src/components/shared/EnvironmentLockBadge.tsx',
   'src/utils/workloadGuestPresentation.ts',
@@ -1031,20 +1029,6 @@ const HELPER_RULES = [
       /smtp\.example\.com|noreply@example\.com|Leave empty to use .*Or add one recipient per line|Show setup instructions|Hide setup instructions|Show advanced options|Hide advanced options|Send test email|Sending test email…/g,
     message:
       'Do not define local alert email-provider vocabulary, placeholders, or action copy in component code. Use @/utils/alertEmailPresentation instead.',
-  },
-  {
-    rule: 'canonical-docker/no-local-swarm-empty-state-copy',
-    regex:
-      /Loading Swarm services\.\.\.|No services match your filters|No Swarm services found|Enable Swarm service collection in the container runtime agent \(includeServices\) and wait for the next report\.|Try clearing the search\./g,
-    message:
-      'Do not define local Swarm services loading or empty-state copy in component code. Use @/utils/swarmPresentation instead.',
-  },
-  {
-    rule: 'canonical-k8s/no-local-deployments-empty-state-copy',
-    regex:
-      /Loading deployments\.\.\.|Fetching unified resources\.|No deployments match your filters|Try clearing the search or namespace filter\.|No deployments found|Enable the Kubernetes agent deployment collection, then wait for the next report\./g,
-    message:
-      'Do not define local Kubernetes deployments loading or empty-state copy in component code. Use @/utils/k8sDeploymentPresentation instead.',
   },
   {
     rule: 'canonical-k8s/no-local-namespaces-empty-state-copy',

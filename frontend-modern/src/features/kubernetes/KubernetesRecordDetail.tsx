@@ -4,13 +4,8 @@ import {
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
-  type DetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
-import {
-  formatPlatformTableDateTimeValue,
-  formatPlatformTableRelativeTimeValue,
-} from '@/features/platformPage/sharedPlatformPage';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import type { ResourcePageSubject } from '@/features/platformNavigation/resourcePagePath';
 import type { Resource } from '@/types/resource';
@@ -18,6 +13,7 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { kubernetesClusterLabel, mapKubernetesEventSeverity } from './kubernetesPageModel';
+import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
 
 // Events, ConfigMaps, Secrets, RBAC objects and namespace policies are
 // records about a cluster, not objects Pulse monitors: they carry no alerts,
@@ -49,26 +45,7 @@ export const KubernetesRecordDetailPanel: Component<{
   );
 };
 
-// "Oct 2, 2026, 09:13 PM (1h ago)": the absolute time an operator compares
-// with `kubectl` output, and the age that says whether it still matters.
-export const kubernetesTimestampRow = (
-  label: string,
-  timestamp: string | undefined,
-  now: number,
-): DetailRow | null => {
-  const raw = asTrimmedString(timestamp);
-  if (!raw) return null;
-  const absolute = formatPlatformTableDateTimeValue(raw, {
-    emptyText: '',
-    dateTimeFormat: { year: 'numeric' },
-  });
-  if (!absolute) return makeDetailRow(label, raw, { wrap: true });
-  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '', now });
-  return makeDetailRow(label, relative ? `${absolute} (${relative})` : absolute, {
-    title: raw,
-    wrap: true,
-  });
-};
+export const kubernetesTimestampRow = makeDetailTimestampRow;
 
 /** Where an object lives: its kind, namespace and cluster, and when it was made. */
 export const kubernetesObjectSection = (

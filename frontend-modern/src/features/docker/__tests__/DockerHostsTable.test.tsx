@@ -431,7 +431,7 @@ describe('DockerHostsTable', () => {
 
     const drawer = screen.getByTestId('docker-host-drawer');
     fireEvent.click(within(drawer).getByRole('tab', { name: 'Manage' }));
-    expect(within(drawer).getByText('Access')).toBeInTheDocument();
+    expect(within(drawer).getByText('Web Interface URL')).toBeInTheDocument();
     const input = within(drawer).getByPlaceholderText('https://198.51.100.100:8080');
     fireEvent.input(input, { target: { value: 'https://portainer.example:9443' } });
     fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }));
@@ -440,9 +440,12 @@ describe('DockerHostsTable', () => {
       expect(updateDockerHostMetadataMock).toHaveBeenCalledWith('runtime-stable-id', {
         customUrl: 'https://portainer.example:9443',
       });
-      expect(
-        screen.getByRole('link', { name: 'Open web interface for docker-01' }),
-      ).toHaveAttribute('href', 'https://portainer.example:9443');
+      // The row link and the drawer header's Open action follow the saved URL.
+      const links = screen.getAllByRole('link', { name: 'Open web interface for docker-01' });
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link).toHaveAttribute('href', 'https://portainer.example:9443');
+      }
     });
   });
 

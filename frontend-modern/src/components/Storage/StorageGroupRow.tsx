@@ -1,7 +1,8 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createSignal } from 'solid-js';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import type { StorageGroupedRecords } from './useStorageModel';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { createVisibleTableColumnSpan } from '@/components/shared/tableVisibleColumnSpan';
 import {
   buildStorageGroupRowPresentation,
   STORAGE_GROUP_ROW_CELL_CLASS,
@@ -29,14 +30,19 @@ interface StorageGroupRowProps {
 // from clearing an open pool elsewhere in the table.
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   const row = () => buildStorageGroupRowPresentation(props.group);
+  // Span the visible columns only; a larger span adds phantom fixed-layout
+  // columns that leave every pool row and drawer short of the edge on phones.
+  const [rowEl, setRowEl] = createSignal<HTMLTableRowElement | null>(null);
+  const columnSpan = createVisibleTableColumnSpan(rowEl);
 
   return (
     <tr
+      ref={setRowEl}
       class={STORAGE_GROUP_ROW_CLASS}
       data-summary-group-id={props.summaryGroupId ?? undefined}
       onClick={() => props.onToggle()}
     >
-      <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
+      <td colSpan={columnSpan()} class={STORAGE_GROUP_ROW_CELL_CLASS}>
         <div class={STORAGE_GROUP_ROW_CONTENT_CLASS}>
           <SummaryRowActionButton
             kind="disclosure"

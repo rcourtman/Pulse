@@ -1,6 +1,5 @@
 import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import {
@@ -9,7 +8,10 @@ import {
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import type { HistoryTimeRange } from '@/api/charts';
-import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
+import {
+  DrawerAttentionSection,
+  DrawerNoAlertsLine,
+} from '@/components/shared/DrawerAttentionSection';
 import { DrawerExceptionList } from './DrawerExceptionList';
 import {
   compactDetailRows,
@@ -569,9 +571,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         }))}
       />
       <Show when={(props.alerts ?? []).length === 0}>
-        <p data-testid="drawer-no-attention" class="text-xs font-medium text-base-content">
-          {ALERTS_EMPTY_STATE}
-        </p>
+        <DrawerNoAlertsLine />
       </Show>
 
       <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
@@ -609,7 +609,9 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           data-testid="node-drawer-facts"
           class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"
         >
-          <For each={facts()}>{(fact) => <span class="wrap-break-word">{fact}</span>}</For>
+          <For each={facts()}>
+            {(fact) => <span class="max-w-full whitespace-normal wrap-anywhere">{fact}</span>}
+          </For>
         </div>
       </Show>
 

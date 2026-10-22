@@ -20,8 +20,6 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformTableNumberValue,
   formatPlatformTableBytesValue,
-  formatPlatformTableDateTimeValue,
-  formatPlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
@@ -30,6 +28,7 @@ import type { Resource } from '@/types/resource';
 import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import type { DockerResourceStatusFilter } from './dockerPageModel';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
+import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
 
 export type DockerNativeTableProps = {
   resources: Resource[];
@@ -181,29 +180,13 @@ export const DockerNativeDetailPanel: Component<{
   );
 };
 
-// "Oct 2, 2026, 09:13 PM (1h ago)": the absolute time an operator compares
-// with logs, and the age that says whether it matters. Docker reports RFC 3339
-// stamps with nanoseconds, which never read at a glance.
+// Docker reports an unset time as the zero time (0001-01-01), so stamps
+// before 2000 are omitted rather than shown as a date.
 export const dockerDetailTimestampRow = (
   label: string,
   timestamp: string | undefined,
   now: number,
-): DetailRow | null => {
-  const raw = asTrimmedString(timestamp);
-  if (!raw) return null;
-  const absolute = formatPlatformTableDateTimeValue(raw, {
-    emptyText: '',
-    // Docker reports an unset time as the zero time (0001-01-01).
-    minYear: 2000,
-    dateTimeFormat: { year: 'numeric' },
-  });
-  if (!absolute) return null;
-  const relative = formatPlatformTableRelativeTimeValue(raw, { emptyText: '', now });
-  return makeDetailRow(label, relative ? `${absolute} (${relative})` : absolute, {
-    title: raw,
-    wrap: true,
-  });
-};
+): DetailRow | null => makeDetailTimestampRow(label, timestamp, now, { minYear: 2000 });
 
 // Every label, one row each with its key above its value: keys such as
 // com.docker.stack.namespace are too long for the label column, and the

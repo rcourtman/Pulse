@@ -7,7 +7,7 @@ import { SearchInput } from '@/components/shared/SearchInput';
 import { TableRow, TableHead, TableCell } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { buildKubernetesPath } from '@/routing/resourceLinks';
+import { buildKubernetesPath, buildKubernetesRouteSearch } from '@/routing/resourceLinks';
 import {
   PlatformDetailTable,
   PlatformDetailTableBody,
@@ -37,20 +37,28 @@ type NamespacesResponse = {
   data: NamespaceRow[];
 };
 
+const EMPTY_RESPONSE: NamespacesResponse = { cluster: '', data: [] };
+
 export const K8sNamespacesDrawer: Component<{
+  /** The cluster name the namespaces endpoint aggregates by. */
   cluster: string;
-  onOpenDeployments?: (namespace: string | null) => void;
+  /**
+   * The value the Kubernetes page scopes its rows by: the cluster id, or the
+   * name when no id is reported. Defaults to `cluster`.
+   */
+  scopeCluster?: string;
 }> = (props) => {
   const navigate = useNavigate();
   const [search, setSearch] = createSignal('');
   const drawerPresentation = getK8sNamespacesDrawerPresentation();
 
   const clusterName = createMemo(() => asTrimmedString(props.cluster) ?? '');
+  const scopeCluster = createMemo(() => asTrimmedString(props.scopeCluster) || clusterName());
 
   const [namespaces] = createResource(
     clusterName,
     async (cluster) => {
-      if (!cluster) return { cluster: '', data: [] } as NamespacesResponse;
+      if (!cluster) return EMPTY_RESPONSE;
       const params = new URLSearchParams();
       params.set('cluster', cluster);
       return apiFetchJSON<NamespacesResponse>(
@@ -58,16 +66,23 @@ export const K8sNamespacesDrawer: Component<{
         { cache: 'no-store' },
       );
     },
-    { initialValue: { cluster: '', data: [] } as NamespacesResponse },
+    { initialValue: EMPTY_RESPONSE },
   );
 
+  // Solid rethrows a resource's error when it is read, so every read checks
+  // the state first; otherwise a failed fetch would escape to the nearest
+  // error boundary instead of showing the failure state below.
+  const failed = () => namespaces.state === 'errored';
   const loadError = createMemo(() => {
-    const err = namespaces.error;
-    if (!err) return '';
-    return (err as Error)?.message || 'Failed to fetch namespaces';
+    if (!failed()) return '';
+    return (namespaces.error as Error)?.message || 'Failed to fetch namespaces';
   });
 
-  const rows = createMemo(() => (Array.isArray(namespaces()?.data) ? namespaces()!.data : []));
+  const rows = createMemo(() => {
+    if (failed()) return [];
+    const data = namespaces()?.data;
+    return Array.isArray(data) ? data : [];
+  });
 
   const filteredRows = createMemo(() => {
     const term = (asTrimmedString(search()) ?? '').toLowerCase();
@@ -75,46 +90,44 @@ export const K8sNamespacesDrawer: Component<{
     return rows().filter((row) => row.namespace.toLowerCase().includes(term));
   });
 
-  const openPods = (_namespace: string | null) => {
+  // Pods and deployments both live on the Workloads tab, which reads the
+  // cluster and namespace scope from its URL.
+  const openWorkloads = (namespace: string | null) => {
     if (!clusterName()) return;
-    navigate(buildKubernetesPath('workloads'));
+    navigate(
+      `${buildKubernetesPath('workloads')}${buildKubernetesRouteSearch({
+        cluster: scopeCluster(),
+        namespace,
+      })}`,
+    );
   };
 
   const headingId = () => `k8s-namespaces-drawer-heading-${clusterName() || 'cluster'}`;
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()}>
-      <h2 id={headingId()} class="sr-only">
+      <h3 id={headingId()} class="sr-only">
         {clusterName() || 'Kubernetes cluster'} namespaces
-      </h2>
-      <Card padding="md">
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div class="min-w-0">
-            <div class="text-sm font-semibold text-base-content">{drawerPresentation.title}</div>
-            <div class="text-xs text-muted">{drawerPresentation.description}</div>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="w-48">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder={drawerPresentation.searchPlaceholder}
-                inputClass="py-1 text-xs font-medium shadow-xs"
-                typeToSearch
-                clearOnEscape
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => openPods(null)}
-              class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-xs hover:bg-surface-hover"
-            >
-              {drawerPresentation.openAllPodsLabel}
-            </button>
-          </div>
+      </h3>
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <div class="w-48">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={drawerPresentation.searchPlaceholder}
+            inputClass="py-1 text-xs font-medium shadow-xs"
+            typeToSearch
+            clearOnEscape
+          />
         </div>
-      </Card>
+        <button
+          type="button"
+          onClick={() => openWorkloads(null)}
+          class="rounded-md border border-border bg-surface px-3 py-1 text-xs font-semibold shadow-xs hover:bg-surface-hover"
+        >
+          {drawerPresentation.openAllWorkloadsLabel}
+        </button>
+      </div>
 
       <Show
         when={!namespaces.loading}
@@ -171,17 +184,17 @@ export const K8sNamespacesDrawer: Component<{
                       return (
                         <TableRow class="text-[11px] sm:text-xs">
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex items-center gap-2 min-w-0">
+                            <div class="flex items-start gap-2 min-w-0">
                               <StatusDot
                                 size="sm"
                                 variant={podIndicator().variant}
                                 title={podIndicator().label}
                                 ariaHidden
+                                class="mt-1"
                               />
-                              <span
-                                class="font-semibold text-base-content truncate"
-                                title={row.namespace}
-                              >
+                              {/* Namespace names are compared and copied, so
+                                  they wrap rather than truncate. */}
+                              <span class="min-w-0 whitespace-normal font-semibold text-base-content wrap-anywhere">
                                 {row.namespace}
                               </span>
                             </div>
@@ -217,32 +230,17 @@ export const K8sNamespacesDrawer: Component<{
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <div class="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                aria-label={drawerPresentation.openPodsLabel}
-                                onClick={() => openPods(row.namespace)}
-                                class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-xs hover:bg-surface-hover"
-                              >
-                                <PlatformResponsiveTableLabel
-                                  compact="Pods"
-                                  full={drawerPresentation.openPodsLabel}
-                                />
-                              </button>
-                              <Show when={props.onOpenDeployments}>
-                                <button
-                                  type="button"
-                                  aria-label={drawerPresentation.viewDeploymentsLabel}
-                                  onClick={() => props.onOpenDeployments?.(row.namespace)}
-                                  class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-xs hover:bg-surface-hover"
-                                >
-                                  <PlatformResponsiveTableLabel
-                                    compact="Deployments"
-                                    full={drawerPresentation.viewDeploymentsLabel}
-                                  />
-                                </button>
-                              </Show>
-                            </div>
+                            <button
+                              type="button"
+                              aria-label={`${drawerPresentation.openWorkloadsLabel} in ${row.namespace}`}
+                              onClick={() => openWorkloads(row.namespace)}
+                              class="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-base-content shadow-xs hover:bg-surface-hover"
+                            >
+                              <PlatformResponsiveTableLabel
+                                compact="Open"
+                                full={drawerPresentation.openWorkloadsLabel}
+                              />
+                            </button>
                           </TableCell>
                         </TableRow>
                       );

@@ -227,8 +227,18 @@ describe('buildKubernetesControllerSection', () => {
     expect(section?.label).toBe('Job');
     expect(section?.testId).toBe('resource-kubernetes-controller-section');
     expect(section?.rows).toEqual([
-      { label: 'Started', value: `${absolute('2026-05-24T12:55:00Z')} (36m ago)`, wrap: true },
-      { label: 'Completed', value: `${absolute('2026-05-24T13:00:00Z')} (31m ago)`, wrap: true },
+      {
+        label: 'Started',
+        value: `${absolute('2026-05-24T12:55:00Z')} (36m ago)`,
+        title: '2026-05-24T12:55:00Z',
+        wrap: true,
+      },
+      {
+        label: 'Completed',
+        value: `${absolute('2026-05-24T13:00:00Z')} (31m ago)`,
+        title: '2026-05-24T13:00:00Z',
+        wrap: true,
+      },
       { label: 'Duration', value: '5m' },
       { label: 'Target', value: '10 completions' },
       { label: 'Active', value: '1' },
@@ -267,6 +277,7 @@ describe('buildKubernetesControllerSection', () => {
     expect(section?.rows[0]).toEqual({
       label: 'Started',
       value: `${absolute('2026-05-24T13:29:30Z')} (1m ago)`,
+      title: '2026-05-24T13:29:30Z',
       wrap: true,
     });
     expect(section?.rows[3]).toEqual({ label: 'Failed', value: '0', tone: 'default' });
@@ -295,8 +306,18 @@ describe('buildKubernetesControllerSection', () => {
     expect(section?.label).toBe('CronJob');
     expect(section?.rows).toEqual([
       { label: 'Schedule', value: '0 2 * * *', valueClass: 'font-mono' },
-      { label: 'Last run', value: `${absolute('2026-05-24T02:00:00Z')} (11h ago)`, wrap: true },
-      { label: 'Last success', value: `${absolute('2026-05-23T02:00:00Z')} (1d ago)`, wrap: true },
+      {
+        label: 'Last run',
+        value: `${absolute('2026-05-24T02:00:00Z')} (11h ago)`,
+        title: '2026-05-24T02:00:00Z',
+        wrap: true,
+      },
+      {
+        label: 'Last success',
+        value: `${absolute('2026-05-23T02:00:00Z')} (1d ago)`,
+        title: '2026-05-23T02:00:00Z',
+        wrap: true,
+      },
       { label: 'Suspended', value: 'Yes', tone: 'warning' },
       { label: 'Active', value: '0' },
       { label: 'Namespace', value: 'batch', wrap: true },

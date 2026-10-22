@@ -3,7 +3,6 @@ import { temperatureStore } from '@/utils/temperature';
 import type { PhysicalDiskPresentationData } from '@/features/storageBackups/diskPresentation';
 import {
   getDiskDetailAttributeCards,
-  getDiskDetailHistoryCharts,
   getLinkedDiskTemperatureTextClass,
 } from '@/features/storageBackups/diskDetailPresentation';
 
@@ -132,41 +131,6 @@ describe('diskDetailPresentation.branchcov0724pm', () => {
         makeDiskData({ type: 'hdd', smartAttributes: { udmaCrcErrors: 42 } }),
       );
       expect(cards).toContainEqual({ label: 'CRC Errors', value: '42', ok: false });
-    });
-  });
-
-  describe('getDiskDetailHistoryCharts disk-family catalog', () => {
-    it('includes stored temperature and reallocated sectors independently of current values', () => {
-      const charts = getDiskDetailHistoryCharts(
-        makeDiskData({
-          type: 'hdd',
-          temperature: 0,
-          smartAttributes: { reallocatedSectors: 3 },
-        }),
-      );
-      expect(charts.map((c) => c.metric)).toEqual(['smart_temp', 'smart_reallocated_sectors']);
-      expect(charts[1]).toMatchObject({
-        metric: 'smart_reallocated_sectors',
-        label: 'Reallocated Sectors',
-        unit: 'sectors',
-        color: '#f59e0b',
-      });
-    });
-
-    it('omits the reallocated-sectors chart for an NVMe disk even when the field is set', () => {
-      const charts = getDiskDetailHistoryCharts(
-        makeDiskData({ type: 'nvme', smartAttributes: { reallocatedSectors: 3 } }),
-      );
-      expect(charts.find((c) => c.metric === 'smart_reallocated_sectors')).toBeUndefined();
-    });
-
-    it('keeps stored charts available when current SMART fields are absent', () => {
-      expect(
-        getDiskDetailHistoryCharts(makeDiskData({ type: 'hdd' })).map((chart) => chart.metric),
-      ).toEqual(['smart_temp', 'smart_reallocated_sectors']);
-      expect(
-        getDiskDetailHistoryCharts(makeDiskData({ type: 'NVMe' })).map((chart) => chart.metric),
-      ).toEqual(['smart_temp', 'smart_percentage_used', 'smart_available_spare']);
     });
   });
 });

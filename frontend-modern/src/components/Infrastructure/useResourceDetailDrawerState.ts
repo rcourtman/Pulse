@@ -8,7 +8,7 @@ import { useResourceDetailDrawerHistoryState } from './useResourceDetailDrawerHi
 import { useResourceDetailDrawerDerivedState } from './useResourceDetailDrawerDerivedState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
-type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
+type DrawerTab = 'overview' | 'manage' | 'mail' | 'namespaces' | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
@@ -16,7 +16,6 @@ export interface UseResourceDetailDrawerStateOptions {
   presentation?: ResourceDetailDrawerPresentation;
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
-  initialShowTrueNASDetails?: boolean;
 }
 
 export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerStateOptions) => {
@@ -40,14 +39,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     options.initialShowHostDetails === true,
   );
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
-  const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
-  const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(
-    options.initialShowTrueNASDetails === true,
-  );
-  const [showKubernetesDetails, setShowKubernetesDetails] = createSignal(false);
   const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
-  const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
   const history = useResourceDetailDrawerHistoryState({
     get resource() {
@@ -141,18 +134,10 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowHostDetails,
     showServiceDetails,
     setShowServiceDetails,
-    showVMwareDetails,
-    setShowVMwareDetails,
-    showTrueNASDetails,
-    setShowTrueNASDetails,
-    showKubernetesDetails,
-    setShowKubernetesDetails,
     showPbsJobDetail,
     setShowPbsJobDetail,
     showPmgMailFlowDetail,
     setShowPmgMailFlowDetail,
-    k8sDeploymentsPrefillNamespace,
-    setK8sDeploymentsPrefillNamespace,
     ...history,
     ...derived,
     ...dockerActions,

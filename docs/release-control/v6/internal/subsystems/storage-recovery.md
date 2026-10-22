@@ -363,9 +363,11 @@ whether the latest snapshot contains temperature or extended SMART values.
 Temperature and ATA reallocated-sector charts, or temperature and NVMe
 endurance/spare charts, query only the already-resolved canonical disk target.
 A missing current field must not hide stored observations. An empty series is
-shown as no history samples, never a fabricated zero or current-value fallback.
+shown as no stored history in that range, never a fabricated zero or a plotted
+current-value fallback; the chart legend may still name the snapshot's reading,
+labelled current or last known.
 Overview continues to report current collection availability; explicit
-unavailable/unsupported I/O still suppresses the existing live I/O section.
+unavailable/unsupported I/O still suppresses the disk drawer's I/O chart panels.
 
 Catalog entries retain their identity across matching snapshots so ordinary
 current-temperature changes cannot remount charts, drop inspection or restart
@@ -374,13 +376,21 @@ when the explicit target or range changes; a late cancelled response cannot
 populate its replacement. This changes neither disk correlation nor collector,
 retention, permission or entitlement policy, and proves no appliance recovery.
 
-Verification: `DiskDetail.test.tsx` and `useDiskDetailModel.test.ts` pin the
-catalog and matching-snapshot boundary; `DiskDetail.history-collection.test.tsx`
-uses the actual chart owner to cover absent current fields, stored zero versus
-empty, NVMe/ATA catalogs, request counts, preserved inspection and late former
-target responses. `frontend-modern/browser-tests/disk-history-collection.cjs`
-checks the production components/client/CSS with synthetic API data on desktop
-Chromium and touch/dark phone WebKit, not native NAS or installed acceptance.
+Verification: `DiskDrawer.test.tsx` and `diskDrawerPresentation.test.ts` pin
+the disk-family catalog, its identity across matching snapshots, explicit I/O
+suppression and current readings that are never invented;
+`DiskDrawer.history-collection.test.tsx` mounts the disk drawer over the actual
+drawer history owner to cover absent current fields, stored zero versus empty,
+NVMe/ATA catalogs, request counts, preserved range and inspection, a fresh read
+and cleared inspection on range or target change, late former-target responses
+and no read without a resolvable identity. An empty stored series reads "No
+stored history in this range"; the chart legend may still show the snapshot's
+own reading, labelled current or last known. The production disk Overview,
+drawer history, client and CSS are checked with synthetic API data by
+`frontend-modern/browser-tests/disk-history-collection.cjs` (desktop Chromium,
+touch/dark phone WebKit), `guest-storage-2263.cjs` (the Overview inside the
+guest drawer) and `history-touch.cjs` (touch, pointer and keyboard inspection),
+not native NAS or installed acceptance.
 
 ### Independent physical disk temperature
 
@@ -391,12 +401,14 @@ invented. When no detail readings or collection messages remain, the existing
 accessible unavailable-details message is shown. This presentation does not
 establish fresh collection, SMART health or native appliance acceptance.
 
-Verification: `DiskDetail.test.tsx` covers same-identity snapshot replacement
-through temperature-only, hot, missing and extended-SMART states;
+Verification: `DiskDrawer.test.tsx` covers same-identity snapshot replacement
+through temperature-only, hot, missing and extended-SMART states in one mounted
+drawer; `diskDrawerPresentation.test.ts` covers a temperature beside a missing
+or empty SMART object and invalid readings without invented counters;
 `diskDetailPresentation.branchcov0724pm.test.ts` covers disk types, invalid
-readings, units and configured thresholds. The production detail fixture in
-`frontend-modern/browser-tests/disk-temperature.cjs` checks desktop and phone
-presentation with synthetic snapshots, including the predecessor's omission.
+readings, units and configured thresholds. The production disk drawer fixture
+in `frontend-modern/browser-tests/disk-temperature.cjs` checks desktop and
+phone presentation with synthetic snapshots.
 
 ### Pool detail capacity observations
 
@@ -7124,3 +7136,9 @@ Recoverable restore points, which had no drawer and lost their location on
 phones, now open a record drawer with source, location, created, size, state,
 verification and protection. Coverage posture, restore evidence and recovery
 rules are unchanged.
+
+The guest drawer's physical disks now open the same disk Overview as the
+Storage tab, and the old disk detail, its local history range catalogue,
+metric cards, key/value rows and the storage detail presentation classes that
+only it used are removed. Storage group and spacer rows span the table's
+visible columns, so pool rows and drawers fill the table on phones.

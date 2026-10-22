@@ -418,6 +418,23 @@ describe('getAlertsForUnifiedResource', () => {
     expect(ids(getAlertsForUnifiedResource(pmg, active, true))).toEqual(['pmg-queue']);
   });
 
+  it('matches PBS and PMG alerts on their instance id without a metrics target', () => {
+    const pbs = resource({
+      id: 'pbs-unified-1',
+      type: 'pbs',
+      pbs: { instanceId: 'pbs-main' },
+    } as Partial<Resource>);
+    const pmg = resource({
+      id: 'pmg-unified-1',
+      type: 'pmg',
+      pmg: { instanceId: 'pmg-main' },
+    } as Partial<Resource>);
+    const active = byId(alert('pbs-offline', 'pbs-main'), alert('pmg-queue', 'pmg-main'));
+
+    expect(ids(getAlertsForUnifiedResource(pbs, active, true))).toEqual(['pbs-offline']);
+    expect(ids(getAlertsForUnifiedResource(pmg, active, true))).toEqual(['pmg-queue']);
+  });
+
   it('matches provider incidents on the unified id without borrowing a parent agent key', () => {
     const pod = resource({
       id: 'pod-9bd9679901d26654',

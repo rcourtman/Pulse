@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import {
@@ -9,6 +9,16 @@ import {
   ProxmoxCephTable,
 } from '../ProxmoxCephTable';
 import cephClusterDrawerSource from '../ProxmoxCephClusterDrawer.tsx?raw';
+
+const activeAlerts: Record<string, unknown> = {};
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts }),
+}));
+
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({ detectionEnabled: () => true }),
+}));
 
 const makeCluster = (id: string): Resource => ({
   id,
@@ -42,7 +52,10 @@ const makeCluster = (id: string): Resource => ({
   },
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  for (const key of Object.keys(activeAlerts)) delete activeAlerts[key];
+});
 
 describe('ProxmoxCephTable', () => {
   it('keeps one phone projection of five values that each fit whole', () => {
@@ -81,7 +94,7 @@ describe('ProxmoxCephTable', () => {
     expect(disclosure).toHaveAccessibleName('Expand details for ceph-main');
   });
 
-  it('exposes complete nested pool values through the disclosure control', async () => {
+  it('shows every pool figure in the pools card without a nested expansion', () => {
     render(() => (
       <ProxmoxCephTable
         resources={[makeCluster('ceph-main')]}
@@ -91,15 +104,13 @@ describe('ProxmoxCephTable', () => {
       />
     ));
 
-    const disclosure = screen.getByRole('button', { name: 'Expand details for rbd-primary' });
-    await fireEvent.click(disclosure);
-
-    const detail = document.querySelector('[data-inline-proxmox-ceph-pool-detail-for]');
-    expect(detail).toHaveTextContent('1,764,309');
-    expect(detail).toHaveTextContent('59.2%');
-
-    await fireEvent.click(disclosure);
-    expect(document.querySelector('[data-inline-proxmox-ceph-pool-detail-for]')).toBeNull();
+    const pools = screen.getByTestId('ceph-cluster-pools');
+    expect(pools).toHaveTextContent('rbd-primary');
+    expect(pools).toHaveTextContent('1,764,309 objects');
+    expect(pools).toHaveTextContent('59.2% used');
+    expect(screen.queryByRole('button', { name: /details for rbd-primary/ })).toBeNull();
+    // Pool names sit above their figures and wrap: they are compared and copied.
+    expect(within(pools).getByText('rbd-primary')).toHaveClass('whitespace-normal');
   });
 
   it('returns focus to the disclosure for a cluster opened by the user', async () => {
@@ -177,12 +188,51 @@ describe('ProxmoxCephTable', () => {
     );
   });
 
-  it('drops the pool object count, not the usage figure, in a narrow card', () => {
-    expect(cephClusterDrawerSource).toMatch(
-      /platform-table-phone-hidden md:w-\[16%\]`\}\s*>\s*Objects/,
-    );
-    expect(cephClusterDrawerSource).toMatch(
-      /platform-table-mobile-w-20 md:w-\[20%\]`\}\s*>\s*Used/,
-    );
+  it("heads the drawer with the row's own health verdict", () => {
+    // A cluster without a reported health status reads healthy in its row, so
+    // the drawer header must not show a grey "Unknown" beside it.
+    const cluster = makeCluster('ceph-main');
+    cluster.ceph = { ...cluster.ceph!, healthStatus: '' };
+    render(() => (
+      <ProxmoxCephTable
+        resources={[cluster]}
+        emptyIcon={<span />}
+        emptyTitle="No Ceph clusters"
+        emptyDescription="No clusters"
+      />
+    ));
+
+    const heading = screen.getByRole('heading', { level: 2, name: 'ceph-main' });
+    expect(heading.parentElement?.querySelector('[aria-label="Healthy"]')).not.toBeNull();
+    expect(cephClusterDrawerSource).not.toContain('function classifyHealth');
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Manage' })).toBeInTheDocument();
+    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+  });
+
+  it('lifts health warnings, down OSDs and full pools into Worth checking', () => {
+    const cluster = makeCluster('ceph-main');
+    cluster.ceph = {
+      ...cluster.ceph!,
+      healthStatus: 'HEALTH_WARN',
+      healthMessage: '1 osds down',
+      healthChecks: [{ code: 'OSD_DOWN', severity: 'HEALTH_WARN', summary: '1 osds down' }],
+      numOsdsUp: 3,
+      pools: [{ ...cluster.ceph!.pools![0], name: 'rbd-full', percentUsed: 93.4 }],
+    };
+    render(() => (
+      <ProxmoxCephTable
+        resources={[cluster]}
+        emptyIcon={<span />}
+        emptyTitle="No Ceph clusters"
+        emptyDescription="No clusters"
+      />
+    ));
+
+    const lifted = screen.getByTestId('ceph-cluster-drawer-exceptions');
+    expect(lifted).toHaveTextContent('1 osds down');
+    expect(lifted).toHaveTextContent('3 of 4 up, 4 in');
+    expect(lifted).toHaveTextContent('Pool rbd-full');
+    expect(lifted).toHaveTextContent('93.4% used');
   });
 });

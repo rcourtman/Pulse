@@ -1,9 +1,10 @@
 export const K8S_NAMESPACES_DRAWER_TITLE = 'Namespaces';
 export const K8S_NAMESPACES_DRAWER_DESCRIPTION = 'Scope Pods and Deployments by namespace';
 export const K8S_NAMESPACES_SEARCH_PLACEHOLDER = 'Search namespaces...';
-export const K8S_NAMESPACES_OPEN_ALL_PODS_LABEL = 'Open All Pods';
-export const K8S_NAMESPACES_OPEN_PODS_LABEL = 'Open Pods';
-export const K8S_NAMESPACES_VIEW_DEPLOYMENTS_LABEL = 'View Deployments';
+// Pods and deployments share the Workloads tab, so one action opens both,
+// scoped to the namespace.
+export const K8S_NAMESPACES_OPEN_ALL_WORKLOADS_LABEL = 'Open all workloads';
+export const K8S_NAMESPACES_OPEN_WORKLOADS_LABEL = 'Open workloads';
 export const K8S_NAMESPACES_COLUMN_NAMESPACE_LABEL = 'Namespace';
 export const K8S_NAMESPACES_COLUMN_PODS_LABEL = 'Pods';
 export const K8S_NAMESPACES_COLUMN_DEPLOYMENTS_LABEL = 'Deployments';
@@ -14,9 +15,8 @@ export function getK8sNamespacesDrawerPresentation() {
     title: K8S_NAMESPACES_DRAWER_TITLE,
     description: K8S_NAMESPACES_DRAWER_DESCRIPTION,
     searchPlaceholder: K8S_NAMESPACES_SEARCH_PLACEHOLDER,
-    openAllPodsLabel: K8S_NAMESPACES_OPEN_ALL_PODS_LABEL,
-    openPodsLabel: K8S_NAMESPACES_OPEN_PODS_LABEL,
-    viewDeploymentsLabel: K8S_NAMESPACES_VIEW_DEPLOYMENTS_LABEL,
+    openAllWorkloadsLabel: K8S_NAMESPACES_OPEN_ALL_WORKLOADS_LABEL,
+    openWorkloadsLabel: K8S_NAMESPACES_OPEN_WORKLOADS_LABEL,
     namespaceColumnLabel: K8S_NAMESPACES_COLUMN_NAMESPACE_LABEL,
     podsColumnLabel: K8S_NAMESPACES_COLUMN_PODS_LABEL,
     deploymentsColumnLabel: K8S_NAMESPACES_COLUMN_DEPLOYMENTS_LABEL,

@@ -216,6 +216,83 @@ describe('DiskDrawer', () => {
     );
   });
 
+  it('charts the stored disk-family catalog when current SMART and temperature disappear', async () => {
+    historySpy.mockClear();
+    const [disk, setDisk] = createSignal(buildDisk());
+    renderDrawer(disk);
+    const chart = await screen.findByTestId('drawer-history');
+    const groups = historySpy.mock.lastCall![0].groups;
+
+    // The disk's family, not its latest readings, picks the panels.
+    setDisk(
+      buildDisk({
+        smart: undefined,
+        temperature: undefined,
+        collection: { io: { state: 'unsupported' } },
+      }),
+    );
+    expect(screen.getByTestId('drawer-history')).toBe(chart);
+    expect(chart).toHaveTextContent('disk:agent-tower:sda');
+    expect(chart).toHaveAttribute('data-metrics', 'smart_temp,smart_reallocated_sectors');
+    // No current reading is invented for a missing field.
+    expect(historySpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        currentMetrics: {
+          smart_temp: undefined,
+          smart_reallocated_sectors: undefined,
+          smart_percentage_used: undefined,
+          smart_available_spare: undefined,
+        },
+      }),
+    );
+
+    // A matching snapshot keeps the very same panels, so no chart remounts.
+    setDisk(buildDisk({ temperature: 65 }));
+    expect(historySpy.mock.lastCall![0].groups).toBe(groups);
+  });
+
+  it('keeps a standalone temperature visible through same-disk snapshot replacement', () => {
+    const [disk, setDisk] = createSignal(buildDisk({ smart: undefined }));
+    renderDrawer(disk);
+    const drawer = screen.getByTestId('disk-drawer');
+    const card = () => screen.getByTestId('disk-drawer-health-card');
+
+    // Temperature only: shown without the extended SMART object, and no
+    // counters are invented for it.
+    expect(within(card()).getByText('Temperature')).toBeInTheDocument();
+    expect(within(card()).getByText('42°C')).toBeInTheDocument();
+    expect(screen.queryByTestId('disk-drawer-notices')).toBeNull();
+    expect(screen.queryByText('Power-On Time')).toBeNull();
+    expect(screen.queryByText('Reallocated Sectors')).toBeNull();
+    expect(screen.queryByTestId('disk-drawer-smart-attributes')).toBeNull();
+
+    // Hot: the new reading replaces the old one and the verdict says so.
+    setDisk(buildDisk({ smart: undefined, temperature: 65 }));
+    expect(within(card()).getByText('65°C')).toBeInTheDocument();
+    expect(screen.queryByText('42°C')).toBeNull();
+    expect(screen.getByLabelText('Running Hot')).toBeInTheDocument();
+    expect(screen.getByTestId('disk-drawer-exceptions')).toHaveTextContent('Running Hot');
+
+    // Missing: no temperature row, and the accessible unavailable message.
+    setDisk(buildDisk({ smart: undefined, temperature: 0 }));
+    expect(within(card()).queryByText('Temperature')).toBeNull();
+    expect(screen.queryByText(/°C/)).toBeNull();
+    expect(screen.getByTestId('disk-drawer-notices')).toHaveAttribute('role', 'status');
+    expect(screen.getByTestId('disk-drawer-notices')).toHaveTextContent(
+      'Detailed SMART attributes are not available for this disk.',
+    );
+
+    // Extended SMART: the temperature returns beside the reported counters.
+    setDisk(buildDisk());
+    expect(within(card()).getByText('42°C')).toBeInTheDocument();
+    expect(screen.queryByTestId('disk-drawer-notices')).toBeNull();
+    const details = screen.getByTestId('disk-technical-details');
+    expect(within(details).getByText('Power-On Time')).toBeInTheDocument();
+    expect(within(details).getByText('Reallocated Sectors')).toBeInTheDocument();
+    // The same drawer stayed mounted throughout.
+    expect(screen.getByTestId('disk-drawer')).toBe(drawer);
+  });
+
   it('states plainly when a disk reports no SMART detail at all', () => {
     renderDrawer(() => buildDisk({ smart: undefined, temperature: undefined }));
     expect(screen.getByTestId('disk-drawer-notices')).toHaveTextContent(

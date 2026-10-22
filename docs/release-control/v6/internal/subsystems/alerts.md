@@ -5141,3 +5141,12 @@ saved-override retention. `ResourceTable.test.tsx` covers visible/reactive text
 in both layouts. `browser-tests/guest-filesystem-thresholds.cjs` connects the
 production hook, table and editors on desktop Chromium and phone WebKit,
 including scoped refusal text, custom settings and same-VMID/mount separation.
+
+Frontend alert matching for PBS and PMG resources also keys on their
+`instanceId` (`getUnifiedResourceAlertKeys` in `frontend-modern/src/utils/alerts.ts`),
+the id `internal/alerts` writes as `ResourceID` for both (`pbs.ID`, `pmg.ID`).
+The platform tables already matched it; the drawers no longer depend on a
+metrics target being set to find the same alerts. Inside a guest drawer, a
+physical disk's agent temperature alerts (`agent:<id>/disk_temp:<device>`) are
+matched through the guest's own agent id. No alert is created, cleared or
+retyped by this; it changes which open alerts a drawer lists.

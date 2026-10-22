@@ -103,14 +103,19 @@ const ALERT_LEVEL_RANK: Record<Alert['level'], number> = { critical: 0, warning:
 export const getPhysicalDiskExtraAlertKeys = (
   disk: Resource,
   owners: ReadonlyMap<string, Resource>,
+  /** The reporting agent when the caller knows it (a guest's own agent). */
+  reportingAgentId?: string,
 ): string[] => {
   const keys = new Set<string>(
     (disk.canonicalIdentity?.aliases ?? [])
       .map((alias) => alias.trim())
       .filter((alias) => alias.includes(':disk:')),
   );
-  const machine = findPhysicalDiskReportingMachine(disk, owners);
-  const agentId = machine ? getExplicitAgentIdFromResource(machine)?.trim() : '';
+  const machine = reportingAgentId?.trim()
+    ? undefined
+    : findPhysicalDiskReportingMachine(disk, owners);
+  const agentId =
+    reportingAgentId?.trim() || (machine ? getExplicitAgentIdFromResource(machine)?.trim() : '');
   const devPath = disk.physicalDisk?.devPath?.trim() ?? '';
   if (agentId && devPath) {
     const prefix = `${agentId.startsWith('agent:') ? agentId : `agent:${agentId}`}/disk_temp:`;
@@ -133,10 +138,11 @@ export const getPhysicalDiskAlerts = (
   owners: ReadonlyMap<string, Resource>,
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean,
+  reportingAgentId?: string,
 ): Alert[] => {
   if (!alertsEnabled) return [];
   const own = getAlertsForUnifiedResource(disk, activeAlerts, alertsEnabled);
-  const extraKeys = new Set(getPhysicalDiskExtraAlertKeys(disk, owners));
+  const extraKeys = new Set(getPhysicalDiskExtraAlertKeys(disk, owners, reportingAgentId));
   const ownIds = new Set(own.map((alert) => alert.id));
   const extra = Object.values(activeAlerts).filter(
     (alert) => !ownIds.has(alert.id) && extraKeys.has(alert.resourceId),

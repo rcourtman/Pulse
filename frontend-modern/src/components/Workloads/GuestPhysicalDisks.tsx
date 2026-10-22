@@ -1,5 +1,8 @@
-import { For, Show, Suspense, createSignal, lazy, type Component } from 'solid-js';
+import { For, Show, Suspense, createMemo, createSignal, lazy, type Component } from 'solid-js';
+import type { HistoryTimeRange } from '@/api/charts';
+import { getPhysicalDiskAlerts } from '@/components/Storage/physicalDiskAlertOwner';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   extractPhysicalDiskPresentationData,
@@ -13,24 +16,48 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import { formatBytes } from '@/utils/format';
 
-// SMART history and chart controls are only needed after a disk row is opened.
-// Keep their Storage detail module out of the initial Workloads surface.
-const LazyDiskDetail = lazy(() =>
-  import('@/components/Storage/DiskDetail').then(({ DiskDetail }) => ({ default: DiskDetail })),
+import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
+
+// An opened disk shows the Storage disk drawer's Overview, so a disk reads the
+// same here as on the Storage tab. Load it only once a disk row is opened, to
+// keep it out of the initial Workloads surface.
+const LazyDiskDrawerOverview = lazy(() =>
+  import('@/components/Storage/DiskDrawerOverview').then(({ DiskDrawerOverview }) => ({
+    default: DiskDrawerOverview,
+  })),
 );
+
+// The disks' reporting machine is the open guest, not a loaded resource here:
+// alerts come from each disk's own identity, its Proxmox disk key and, when
+// the guest runs an agent, that agent's SMART temperature key.
+const NO_LOADED_DISK_OWNERS: ReadonlyMap<string, Resource> = new Map();
 
 const GuestPhysicalDiskRow: Component<{
   disk: Resource;
   alertResourceIds: string[];
+  reportingAgentId?: string;
   historyEnabled: boolean;
 }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
-  const { getDiskTemperatureThresholds } = useAlertsActivation();
-  const data = () =>
+  const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
+    GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
+  );
+  const { activeAlerts } = useWebSocket();
+  const { detectionEnabled, getDiskTemperatureThresholds } = useAlertsActivation();
+  const data = createMemo(() =>
     extractPhysicalDiskPresentationData(
       props.disk,
       getDiskTemperatureThresholds,
       props.alertResourceIds,
+    ),
+  );
+  const alerts = () =>
+    getPhysicalDiskAlerts(
+      props.disk,
+      NO_LOADED_DISK_OWNERS,
+      activeAlerts,
+      detectionEnabled(),
+      props.reportingAgentId,
     );
   const health = () => getPhysicalDiskHealthStatus(data());
   const temperature = () => getPhysicalDiskTemperaturePresentation(data());
@@ -77,10 +104,12 @@ const GuestPhysicalDiskRow: Component<{
               </p>
             }
           >
-            <LazyDiskDetail
+            <LazyDiskDrawerOverview
               disk={props.disk}
-              nodes={[]}
-              alertResourceIds={props.alertResourceIds}
+              diskData={data()}
+              alerts={alerts()}
+              historyRange={historyRange()}
+              onHistoryRangeChange={setHistoryRange}
               historyEnabled={props.historyEnabled}
             />
           </Suspense>
@@ -98,6 +127,8 @@ export const GuestPhysicalDisks: Component<{
    * applies, then the guest's canonical ID and override keys.
    */
   alertResourceIds?: string[];
+  /** The guest's own agent, which reports these disks' SMART temperatures. */
+  reportingAgentId?: string;
   /**
    * False while the Overview holding these disks is hidden: an expanded disk's
    * charts and the list's live refresh pause until it is shown again.
@@ -137,6 +168,7 @@ export const GuestPhysicalDisks: Component<{
                 <GuestPhysicalDiskRow
                   disk={disk}
                   alertResourceIds={props.alertResourceIds ?? []}
+                  reportingAgentId={props.reportingAgentId}
                   historyEnabled={props.historyEnabled !== false}
                 />
               )}

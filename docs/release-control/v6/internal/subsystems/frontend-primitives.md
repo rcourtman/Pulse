@@ -854,14 +854,15 @@ acceptance.
 
 ### Stable physical-disk History composition
 
-Disk detail composes shared HistoryChart owners from stable disk-family catalog
+The disk drawer Overview (`DiskDrawerOverview`, also shown for a guest's own
+disks) composes the shared drawer history from stable disk-family catalog
 entries, independently of the latest optional temperature/SMART fields. Matching
 snapshots must not recreate chart DOM, reset inspection or restart reads. Stored
 series retain their own sample provenance; current collection unavailability is
-still reported beside the SMART facts in the detail's single view (there is no
-History tab), and empty history is not a manufactured zero. The
+still reported beside the SMART facts on Overview (there is no History tab),
+and empty history is not a manufactured zero. The
 shared target/range owner continues to cancel old selections and reject late
-responses. `DiskDetail.history-collection.test.tsx` and the production
+responses. `DiskDrawer.history-collection.test.tsx` and the production
 `browser-tests/disk-history-collection.cjs` fixture verify these boundaries with
 synthetic data; neither establishes native NAS health or installed acceptance.
 
@@ -10032,3 +10033,18 @@ share one panel in `DockerNativeTableShared.tsx`, Kubernetes records share
 `KubernetesRecordDetail.tsx`, and hand-written `dl`/grid detail rows are
 retired from Docker networks and storage usage, Proxmox replication, coverage
 and recoverable points, and Agent Doctor.
+
+Full-width helper rows span the visible columns, never a guess. A
+`colspan={100}` windowing spacer or `colspan={99}` storage group row created
+phantom fixed-layout columns, and on phones (where hidden columns leave the
+visible percentages short of 100%) those columns took the rest of the table:
+rows and drawers on windowed Kubernetes tables stopped at 70% of the width.
+`components/shared/tableVisibleColumnSpan.ts` counts the header's visible
+cells (re-measuring on resize and header changes), and `PlatformWindowedRows`
+spacers, `StorageGroupRow` and the storage pool spacers use it.
+`DrawerAttentionSection` also owns `DrawerNoAlertsLine`, the one "No active
+alerts" line every drawer shows (with the optional availability note), and the
+attention card's subject wraps instead of truncating.
+`features/platformPage/platformDetailTimestampRow.ts` is the one drawer row for
+a reported timestamp (absolute time and age, wrapping, an optional sentinel
+year), replacing three copies.
