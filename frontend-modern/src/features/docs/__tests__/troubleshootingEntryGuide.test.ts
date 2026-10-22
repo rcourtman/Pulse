@@ -50,12 +50,12 @@ const workflowRows = (section: HTMLElement): HTMLElement[] =>
 // aggregate row/link count, which cannot detect a missing or misrouted entry.
 const workflowDestinations = [
   [
-    'Dashboard stays on "Connecting to Pulse" or stops updating:',
-    ['/docs/REVERSE_PROXY#dashboard-stays-on-connecting-to-pulse-or-stops-updating'],
-  ],
-  [
     'Private information was posted:',
     ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
+  ],
+  [
+    'Dashboard stays on "Connecting to Pulse" or stops updating:',
+    ['/docs/REVERSE_PROXY#dashboard-stays-on-connecting-to-pulse-or-stops-updating'],
   ],
   [
     'Not sure which version is affected:',
