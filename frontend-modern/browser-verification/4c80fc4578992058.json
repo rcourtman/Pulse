@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "2b84b1fbdb80ee5965e7a0e8b273fdba94385359",
+  "verified_at": "2026-10-22T00:51:32.994091Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/CONFIGURATION.md",
+    "docs/DEPLOYMENT_MODELS.md",
+    "frontend-modern/public/docs/CONFIGURATION.md",
+    "frontend-modern/public/docs/DEPLOYMENT_MODELS.md"
+  ],
+  "content_sha256": {
+    "docs/CONFIGURATION.md": "3816202e957ded0942646618f4d769a41940ac61cdc505e8ed2a79bd7cc66700",
+    "docs/DEPLOYMENT_MODELS.md": "6502c8941485697863dc6c3da65af9e8feb674a6739a58aabd3a75ae4128c912",
+    "frontend-modern/public/docs/CONFIGURATION.md": "3816202e957ded0942646618f4d769a41940ac61cdc505e8ed2a79bd7cc66700",
+    "frontend-modern/public/docs/DEPLOYMENT_MODELS.md": "6502c8941485697863dc6c3da65af9e8feb674a6739a58aabd3a75ae4128c912"
+  },
+  "routes": [
+    "/docs/CONFIGURATION#back-up-recoverable-state",
+    "/docs/DEPLOYMENT_MODELS#where-configuration-lives",
+    "/docs/MIGRATION#full-state-recovery",
+    "/docs/MIGRATION#configuration-transfer",
+    "/docs/AUTO_UPDATE#what-an-update-snapshot-contains",
+    "/docs/OIDC#sign-in-fails-after-editing-a-provider",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "viewports": [
+    {
+      "width": 1360,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 960
+    }
+  ],
+  "states": [
+    "Exact-base two-file checklist reproduced through the actual Docs consumer",
+    "Current/legacy OIDC file inventories and matched encrypted-state/key recovery guidance",
+    "Complete-state recovery is distinct from limited configuration transfer and updater snapshots",
+    "Administrator-session and stopped guest-safety precautions remain linked and readable"
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch reach all five existing recovery/safety destinations with fragment focus and Back",
+    "Desktop reload and independent direct narrow load/reload preserve fragment focus",
+    "Narrow current/legacy filename and purpose cells read through the existing local table scroll without document overflow",
+    "All nine source-bound captures opened with native view_image and visually inspected"
+  ],
+  "playwright": "1.56.1",
+  "engines": [
+    "141.0.7390.37",
+    "26.0"
+  ],
+  "browser_report_sha256": "4f836ec731ae0dc127235dc0ff492f41009e0cf97cb530b307f8dc99cac914f8",
+  "limits": "Changed help surfaces verified using the original desktop/narrow observations plus a separate targeted narrow table/reload pass, not a single all-green original run. Initial multi-guide WebKit history/reload ended in page crash; cause remains unknown and that broader journey is not cleared. No real backup, restore or SSO recovery."
+}
