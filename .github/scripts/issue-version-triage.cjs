@@ -433,32 +433,47 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
   const removals = [...before].filter((name) => !after.has(name)).sort();
   if (!additions.length && !removals.length) return;
 
-  // Label lookup/creation can take time after the initial report read. Do not
-  // apply that prepared decision to a report since edited, closed or reviewed.
-  // This narrows the race; GitHub's separate label APIs are not a transaction.
-  const { data: current } = await github.rest.issues.get(target);
-  if (!current || current.number !== issue.number) {
-    throw new Error("Current issue identity did not match the triage event");
-  }
-  const currentLabels = new Set((current.labels || []).map((label) => label.name));
-  if (current.state !== "open" || current.pull_request ||
-      ["title", "body", "updated_at"].some((field) => current[field] !== issue[field]) ||
-      currentLabels.size !== before.size ||
-      [...before].some((name) => !currentLabels.has(name))) {
-    core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
-    return;
-  }
+  // Label lookup/creation can take time after the initial report read. Check
+  // before the first mutation and between writes, not just before an addition
+  // that may be followed by several destructive removals. These reads narrow
+  // the race; GitHub's separate label APIs are not a transaction.
+  const expectedLabels = new Set(before);
+  const stillCurrent = async (firstWrite) => {
+    const { data: current } = await github.rest.issues.get(target);
+    if (!current || current.number !== issue.number) {
+      throw new Error("Current issue identity did not match the triage event");
+    }
+    const currentLabels = new Set((current.labels || []).map((label) => label.name));
+    // Our own label mutations can change updated_at. Afterwards compare the
+    // report and exact expected labels, without treating our write as an edit.
+    const fields = firstWrite ? ["title", "body", "updated_at"] : ["title", "body"];
+    if (current.state !== "open" || current.pull_request ||
+        fields.some((field) => current[field] !== issue[field]) ||
+        currentLabels.size !== expectedLabels.size ||
+        [...expectedLabels].some((name) => !currentLabels.has(name))) {
+      core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
+      return false;
+    }
+    return true;
+  };
+  if (!await stillCurrent(true)) return;
 
+  let wrote = false;
   if (additions.length) {
     await github.rest.issues.addLabels({ ...target, labels: additions });
+    additions.forEach((name) => expectedLabels.add(name));
+    wrote = true;
   }
   for (const name of removals) {
+    if (wrote && !await stillCurrent(false)) return;
     try {
       await github.rest.issues.removeLabel({ ...target, name });
     } catch (error) {
       // Another synchronizer may already have removed this label.
       if (error.status !== 404) throw error;
     }
+    expectedLabels.delete(name);
+    wrote = true;
   }
 }
 
