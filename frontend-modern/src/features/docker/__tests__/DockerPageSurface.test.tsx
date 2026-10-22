@@ -7,6 +7,7 @@ import { DockerPageSurface } from '../DockerPageSurface';
 const mocks = vi.hoisted(() => ({
   pathname: '/docker/overview',
   searchParams: {} as Record<string, string>,
+  setSearchParams: vi.fn(),
   useUnifiedResources: vi.fn(),
   DockerHostsTable: vi.fn(
     (props: {
@@ -26,12 +27,18 @@ const mocks = vi.hoisted(() => ({
     ),
   ),
   DockerContainersTable: vi.fn(
-    (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
+    (props: {
+      resources: Resource[];
+      showToolbar?: boolean;
+      emptyTitle: string;
+      title?: unknown;
+    }) => (
       <div
         data-testid="docker-containers-table"
         data-resource-count={props.resources.length}
         data-show-toolbar={String(props.showToolbar)}
       >
+        {props.title as never}
         {props.emptyTitle}
       </div>
     ),
@@ -94,7 +101,7 @@ vi.mock('@solidjs/router', () => ({
       return mocks.pathname;
     },
   }),
-  useSearchParams: () => [mocks.searchParams, vi.fn()],
+  useSearchParams: () => [mocks.searchParams, mocks.setSearchParams],
 }));
 
 vi.mock('../DockerContainersTable', () => ({
@@ -228,6 +235,7 @@ const makeDockerNetwork = (overrides: Partial<Resource> = {}): Resource => ({
 beforeEach(() => {
   mocks.pathname = '/docker/overview';
   mocks.searchParams = {};
+  mocks.setSearchParams.mockReset();
   mocks.useUnifiedResources.mockReturnValue({
     error: () => null,
     loading: () => false,
@@ -299,7 +307,7 @@ describe('DockerPageSurface', () => {
     );
   });
 
-  it('applies the URL host scope to the overview host table', () => {
+  it('keeps every host listed under the URL host scope and names it on the containers', () => {
     mocks.searchParams = { host: 'frigate.mist-stork.ts.net' };
     mocks.useUnifiedResources.mockReturnValue({
       error: () => null,
@@ -341,11 +349,45 @@ describe('DockerPageSurface', () => {
 
     render(() => <DockerPageSurface />);
 
-    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
-    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
-      'data-resource-count',
-      '1',
+    // Another host stays pickable; the scoped one is marked, as on Proxmox.
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '2');
+    const hostsProps = mocks.DockerHostsTable.mock.lastCall![0] as {
+      resources: Resource[];
+      containerScope?: {
+        sectionId: string;
+        isSelected: (host: Resource) => boolean;
+        onShow: (host: Resource) => void;
+      };
+    };
+    const frigate = hostsProps.resources.find((host) => host.id === 'agent:frigate')!;
+    const tower = hostsProps.resources.find((host) => host.id === 'agent:tower')!;
+    expect(hostsProps.containerScope?.sectionId).toBe('docker-containers-section');
+    expect(hostsProps.containerScope?.isSelected(frigate)).toBe(true);
+    expect(hostsProps.containerScope?.isSelected(tower)).toBe(false);
+    expect(screen.getByTestId('docker-containers-section')).toContainElement(
+      screen.getByTestId('docker-containers-table'),
     );
+    expect(screen.getByRole('heading', { name: 'Containers on frigate' })).toBeInTheDocument();
+
+    // Clicking the scoped host clears it; another host scopes by its Docker hostname.
+    hostsProps.containerScope?.onShow(frigate);
+    expect(mocks.setSearchParams).toHaveBeenLastCalledWith({ host: null });
+    hostsProps.containerScope?.onShow(tower);
+    expect(mocks.setSearchParams).toHaveBeenLastCalledWith({ host: 'tower' });
+    fireEvent.click(screen.getByRole('button', { name: 'Show all hosts' }));
+    expect(mocks.setSearchParams).toHaveBeenLastCalledWith({ host: null });
+  });
+
+  it('titles the containers plainly until a host is picked', () => {
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByRole('heading', { name: 'Containers' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all hosts' })).not.toBeInTheDocument();
+    const hostsProps = mocks.DockerHostsTable.mock.lastCall![0] as {
+      resources: Resource[];
+      containerScope?: { isSelected: (host: Resource) => boolean };
+    };
+    expect(hostsProps.containerScope?.isSelected(hostsProps.resources[0])).toBe(false);
   });
 
   it('does not link to Machines for provider-owned guest Docker inventory', () => {

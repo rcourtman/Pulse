@@ -8673,3 +8673,18 @@ The Proxmox Coverage drawer's restore evidence values (location and details)
 wrap on their own spans rather than through the table cell, so a long snapshot
 description no longer runs past the drawer edge. No resource identity, status
 or recovery rule changes.
+
+A platform overview's host table narrows the workloads below it on every
+platform that pairs the two: a Proxmox node row shows its guests, a Docker
+host row its containers and a vSphere host row its VMs, and a second click or
+"Show all nodes" / "Show all hosts" clears it; the row's chevron alone opens
+the host drawer, and stays visible on phones. Docker scopes through the URL
+host filter its containers table already reads (`?host=`, the host's Docker
+hostname); every host stays listed and the scoped one is marked, where that
+filter used to hide the other hosts. A vSphere host scopes the shared workload
+table to the scope that table already gave one of its own VMs
+(`getVsphereHostWorkloadScope`), the VMs matched to the host by managed object
+ID within its vCenter connection so two vCenters' `host-12` stay apart; a host
+with no VMs gets a scope that names it and matches none. A host table with no
+workloads under it (Docker Swarm hosts) keeps opening the drawer on a row
+click. No resource identity, status or alert rule changes.

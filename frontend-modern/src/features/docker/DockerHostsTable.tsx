@@ -35,7 +35,11 @@ import {
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import {
+  PlatformResourceDetailToggleButton,
+  getPlatformResourceDetailRowInteractionProps,
+} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { PlatformHostScopeNameButton } from '@/features/platformPage/PlatformHostScope';
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
@@ -170,6 +174,15 @@ export const DockerHostsTable: Component<{
   title?: JSX.Element;
   actions?: JSX.Element;
   showToolbar?: boolean;
+  /**
+   * When set, a row click narrows the page's container table to that host
+   * (as on the Proxmox overview) and the chevron alone opens the host's drawer.
+   */
+  containerScope?: {
+    sectionId: string;
+    isSelected: (host: Resource) => boolean;
+    onShow: (host: Resource) => void;
+  };
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
@@ -192,6 +205,12 @@ export const DockerHostsTable: Component<{
   );
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
+  // A scoping table keeps the details chevron on phones, so the host column
+  // takes the width Uptime does not need.
+  const phoneWidths = () =>
+    props.containerScope
+      ? { host: 'platform-table-mobile-w-38', uptime: 'platform-table-mobile-w-10' }
+      : { host: 'platform-table-mobile-w-30', uptime: 'platform-table-mobile-w-20' };
 
   return (
     <Show
@@ -254,7 +273,7 @@ export const DockerHostsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class="platform-table-mobile-w-30 md:w-[13%]"
+                  class={`${phoneWidths().host} md:w-[13%]`}
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -311,7 +330,7 @@ export const DockerHostsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="uptime"
-                  class="platform-table-mobile-w-20 w-[20%] min-[360px]:w-[11%] sm:hidden md:table-cell md:w-[6%]"
+                  class={`${phoneWidths().uptime} w-[20%] min-[360px]:w-[11%] sm:hidden md:table-cell md:w-[6%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
@@ -374,6 +393,13 @@ export const DockerHostsTable: Component<{
                     const isSelected = () => selectedHostId() === host.id;
                     const toggleDrawer = () =>
                       setSelectedHostId((current) => (current === host.id ? null : host.id));
+                    const isContainerScopeSelected = () =>
+                      props.containerScope?.isSelected(host) ?? false;
+                    const rowInteraction = getPlatformResourceDetailRowInteractionProps({
+                      expanded: false,
+                      onToggle: () =>
+                        props.containerScope ? props.containerScope.onShow(host) : toggleDrawer(),
+                    });
                     // The same open alerts the host's drawer lists: Docker alerts
                     // are keyed on the Docker host id and carry the hostname, so
                     // matching the row's id or display name finds none of them.
@@ -399,14 +425,18 @@ export const DockerHostsTable: Component<{
                             isSelected() ? 'bg-surface-hover' : hostAlertBg()
                           }`}
                           data-docker-host-row={host.id}
-                          onClick={toggleDrawer}
+                          data-summary-row-active={isContainerScopeSelected() ? 'true' : undefined}
+                          onClick={rowInteraction.onClick}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
+                            <div
+                              class={`flex min-w-0 items-center ${props.containerScope ? 'gap-1 sm:gap-2' : 'gap-2'}`}
+                            >
                               <PlatformResourceDetailToggleButton
                                 expanded={isSelected()}
                                 resourceLabel={name()}
                                 controlsId={detailRowId()}
+                                hideWhenRowTappableOnMobile={!props.containerScope}
                                 onToggle={toggleDrawer}
                               />
                               <StatusDot
@@ -420,7 +450,19 @@ export const DockerHostsTable: Component<{
                                 url={customUrl()}
                                 class="min-w-0"
                                 nameClass="truncate font-semibold text-base-content"
-                              />
+                              >
+                                <Show when={props.containerScope} fallback={name()}>
+                                  {(scope) => (
+                                    <PlatformHostScopeNameButton
+                                      name={name()}
+                                      workloadNoun="containers"
+                                      controlsId={scope().sectionId}
+                                      selected={isContainerScopeSelected()}
+                                      onSelect={() => scope().onShow(host)}
+                                    />
+                                  )}
+                                </Show>
+                              </ResourceNameWithWebInterfaceLink>
                             </div>
                           </TableCell>
                           <TableCell

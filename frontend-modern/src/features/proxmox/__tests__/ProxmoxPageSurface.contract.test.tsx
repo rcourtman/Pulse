@@ -676,7 +676,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('order-1 space-y-3');
     expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-section"');
     expect(proxmoxPageSurfaceSource).toContain('tableTitle={');
-    expect(proxmoxPageSurfaceSource).toContain('id="proxmox-guests-heading"');
+    expect(proxmoxPageSurfaceSource).toContain('headingId="proxmox-guests-heading"');
     expect(proxmoxPageSurfaceSource).not.toContain('class="flex items-center gap-2 px-1"');
   });
 

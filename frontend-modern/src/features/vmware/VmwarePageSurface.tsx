@@ -36,6 +36,7 @@ import {
   useWorkloadsState,
   type WorkloadsInventorySourcesQuery,
 } from '@/components/Workloads/useWorkloadsState';
+import { workloadNodeScopeId } from '@/components/Workloads/workloadTopology';
 import {
   DEFAULT_WORKLOADS_METRIC_DISPLAY_MODE,
   getWorkloadsMetricFilterProps,
@@ -52,10 +53,15 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { Resource } from '@/types/resource';
 import { VsphereHostsTable } from './VsphereHostsTable';
 import {
+  PlatformHostScopedTableTitle,
+  createPlatformHostScopeFocus,
+} from '@/features/platformPage/PlatformHostScope';
+import {
   VMWARE_TAB_SPECS,
   buildVmwareIncidentRows,
   buildVmwarePageModel,
   getVmwarePageTabSpecs,
+  getVsphereHostWorkloadScope,
   type VmwarePageModel,
   type VmwarePageTabId,
   isSingleVmwareVcenter,
@@ -449,6 +455,8 @@ export function VmwarePageSurface() {
   );
 }
 
+const VSPHERE_VMS_SECTION_ID = 'vsphere-vms-section';
+
 interface VmwareOverviewProps {
   model: Accessor<VmwarePageModel>;
   metricDisplayMode: Accessor<WorkloadsMetricDisplayMode>;
@@ -482,6 +490,52 @@ function VmwareOverview(props: VmwareOverviewProps) {
       workloadsState.surfaceInitialDataReceived() &&
       workloadsState.allGuests().length > 0,
   );
+  // A host row narrows the VM table to that host, as a Proxmox node row does
+  // for its guests; the scope is the one the table gave the host's own VMs.
+  const workloadScopes = createMemo(
+    () =>
+      new Map(workloadsState.allGuests().map((guest) => [guest.id, workloadNodeScopeId(guest)])),
+  );
+  const hostScopes = createMemo(
+    () =>
+      new Map(
+        props
+          .model()
+          .hosts.map((host) => [
+            host.id,
+            getVsphereHostWorkloadScope(host, props.model().resources, workloadScopes()),
+          ]),
+      ),
+  );
+  const selectedScope = () => workloadsState.selectedNode() || workloadsState.selectedHostHint();
+  const selectedHost = createMemo(() =>
+    props.model().hosts.find((host) => hostScopes().get(host.id) === selectedScope()),
+  );
+  const selectedHostLabel = createMemo(() => {
+    const scope = selectedScope();
+    if (!scope) return null;
+    return (
+      selectedHost()?.name ||
+      workloadsState.hostFilterConfig()?.options.find((option) => option.value === scope)?.label ||
+      scope
+    );
+  });
+  const vmsFocus = createPlatformHostScopeFocus();
+  const showHostVms = (host: Resource) => {
+    const scope = hostScopes().get(host.id);
+    if (!scope) return;
+    const nextScope = selectedScope() === scope ? null : scope;
+    workloadsState.handleNodeSelect(nextScope, nextScope ? 'pve' : null);
+    if (nextScope) {
+      requestAnimationFrame(() => {
+        if (selectedScope() === nextScope) vmsFocus.reveal();
+      });
+    }
+  };
+  const clearHostFilter = () => {
+    workloadsState.handleNodeSelect(null, null);
+    vmsFocus.focus();
+  };
 
   return (
     <div class="space-y-4">
@@ -492,58 +546,71 @@ function VmwareOverview(props: VmwareOverviewProps) {
         emptyTitle="No vSphere hosts"
         emptyDescription="Hosts appear here once the vCenter connection enumerates them."
         showToolbar={false}
+        vmScope={{
+          sectionId: VSPHERE_VMS_SECTION_ID,
+          selectedHostId: () => selectedHost()?.id ?? null,
+          onShow: showHostVms,
+        }}
       />
-      <Show when={showSharedFilterToolbar()}>
-        <div data-summary-clear-ignore>
-          <WorkloadsFilter
-            search={workloadsState.search}
-            setSearch={workloadsState.setSearch}
-            viewMode={workloadsState.viewMode}
-            setViewMode={workloadsState.setViewMode}
-            statusMode={workloadsState.statusMode}
-            setStatusMode={workloadsState.setStatusMode}
-            groupingMode={workloadsState.groupingMode}
-            setGroupingMode={workloadsState.setGroupingMode}
-            setSortKey={workloadsState.setSortKey}
-            setSortDirection={workloadsState.setSortDirection}
-            onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
-            ariaLabel="vSphere workload filters"
-            searchPlaceholder="Search vSphere VMs by name, host, cluster, or status"
-            searchEmptyMessage="Recent vSphere workload searches appear here."
-            searchSuggestionWorkloads={workloadsState.allGuests}
-            statusOptions={VMWARE_WORKLOAD_STATUS_OPTIONS}
-            inventoryStats={workloadsState.inventoryStats}
-            suppressTypeFilter
-            columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
-            containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
-            hostFilter={workloadsState.hostFilterConfig()}
-            namespaceFilter={undefined}
-            clusterFilter={workloadsState.clusterFilterConfig()}
-            platformFilter={undefined}
-            {...getWorkloadsMetricFilterProps(workloadsState)}
-            forcedPlatform={VMWARE_PLATFORM_FILTER}
-            pinnedSelectionActive={() => Boolean(workloadsState.selectedGuestId())}
-            onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
-          />
-        </div>
-      </Show>
-      <WorkloadsSurface
-        state={workloadsState}
-        forcedPlatform={VMWARE_PLATFORM_FILTER}
-        forcedViewMode="vm"
-        tableTitle={
-          <h2 class="text-[11px] font-semibold text-muted sm:text-xs">
-            VMs
-            <Show when={showSharedFilterToolbar()}>
-              <span class="ml-1.5 font-normal tabular-nums">
-                {workloadsState.filteredGuests().length}
-              </span>
-            </Show>
-          </h2>
-        }
-        emptyStateTitle="No vSphere VMs"
-        emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
-      />
+      <section
+        id={VSPHERE_VMS_SECTION_ID}
+        aria-label="VMs"
+        class="space-y-4 scroll-mt-4"
+        data-testid="vsphere-vms-section"
+      >
+        <Show when={showSharedFilterToolbar()}>
+          <div data-summary-clear-ignore>
+            <WorkloadsFilter
+              search={workloadsState.search}
+              setSearch={workloadsState.setSearch}
+              viewMode={workloadsState.viewMode}
+              setViewMode={workloadsState.setViewMode}
+              statusMode={workloadsState.statusMode}
+              setStatusMode={workloadsState.setStatusMode}
+              groupingMode={workloadsState.groupingMode}
+              setGroupingMode={workloadsState.setGroupingMode}
+              setSortKey={workloadsState.setSortKey}
+              setSortDirection={workloadsState.setSortDirection}
+              onBeforeAutoFocus={workloadsState.handleBeforeAutoFocus}
+              ariaLabel="vSphere workload filters"
+              searchPlaceholder="Search vSphere VMs by name, host, cluster, or status"
+              searchEmptyMessage="Recent vSphere workload searches appear here."
+              searchSuggestionWorkloads={workloadsState.allGuests}
+              statusOptions={VMWARE_WORKLOAD_STATUS_OPTIONS}
+              inventoryStats={workloadsState.inventoryStats}
+              suppressTypeFilter
+              columnVisibility={workloadsState.workloadsFilterColumnVisibility()}
+              containerRuntimeFilter={workloadsState.containerRuntimeFilterConfig()}
+              hostFilter={workloadsState.hostFilterConfig()}
+              namespaceFilter={undefined}
+              clusterFilter={workloadsState.clusterFilterConfig()}
+              platformFilter={undefined}
+              {...getWorkloadsMetricFilterProps(workloadsState)}
+              forcedPlatform={VMWARE_PLATFORM_FILTER}
+              pinnedSelectionActive={() => Boolean(workloadsState.selectedGuestId())}
+              onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
+            />
+          </div>
+        </Show>
+        <WorkloadsSurface
+          state={workloadsState}
+          forcedPlatform={VMWARE_PLATFORM_FILTER}
+          forcedViewMode="vm"
+          tableTitle={
+            <PlatformHostScopedTableTitle
+              noun="VMs"
+              hostLabel={selectedHostLabel()}
+              count={showSharedFilterToolbar() ? workloadsState.filteredGuests().length : null}
+              clearLabel="Show all hosts"
+              onClear={clearHostFilter}
+              headingId="vsphere-vms-heading"
+              headingRef={vmsFocus.setHeading}
+            />
+          }
+          emptyStateTitle="No vSphere VMs"
+          emptyStateDescription="Virtual machines appear here once the vCenter connection enumerates them."
+        />
+      </section>
     </div>
   );
 }

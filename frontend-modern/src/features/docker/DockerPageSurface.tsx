@@ -44,6 +44,10 @@ import {
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import {
+  PlatformHostScopedTableTitle,
+  createPlatformHostScopeFocus,
+} from '@/features/platformPage/PlatformHostScope';
 import { collectIdentityConflictHosts } from './dockerIdentityConflict';
 import { DockerIdentityConflictNotice } from './DockerIdentityConflictNotice';
 import { updateStore } from '@/stores/updates';
@@ -435,6 +439,8 @@ function DockerSwarm(props: { model: DockerPageModel }) {
   );
 }
 
+const DOCKER_CONTAINERS_SECTION_ID = 'docker-containers-section';
+
 function DockerOverview(props: {
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];
   hostSourceCount: number;
@@ -454,15 +460,39 @@ function DockerOverview(props: {
       resource.docker?.hostSourceId,
     ].some((candidate) => asTrimmedString(candidate) === normalized);
   };
-  const scopedHosts = createMemo(() =>
-    props.hosts.filter((host) => hostMatchesFilter(host, props.hostFilter)),
-  );
   const hasMachineInventory = createMemo(() => props.hosts.some(isPulseAgentPlatformResource));
+  // A host row narrows the containers table to that host through the URL host
+  // scope the table already reads, as a Proxmox node row does for its guests.
+  // Every host stays listed so another can be picked; the scoped one is marked.
+  const [, setSearchParams] = useSearchParams();
+  const isScopedHost = (host: Resource) =>
+    props.hostFilter.trim() !== '' && hostMatchesFilter(host, props.hostFilter);
+  const scopedHostLabel = createMemo(() => {
+    const filter = props.hostFilter.trim();
+    if (!filter) return null;
+    return asTrimmedString(props.hosts.find(isScopedHost)?.name) || filter;
+  });
+  const containersFocus = createPlatformHostScopeFocus();
+  const showHostContainers = (host: Resource) => {
+    // Containers name their host by its Docker hostname.
+    const value = asTrimmedString(host.docker?.hostname) || asTrimmedString(host.name) || host.id;
+    const next = isScopedHost(host) ? null : value;
+    setSearchParams({ [DOCKER_QUERY_PARAMS.host]: next });
+    if (next) {
+      requestAnimationFrame(() => {
+        if (props.hostFilter.trim() === next) containersFocus.reveal();
+      });
+    }
+  };
+  const clearHostScope = () => {
+    setSearchParams({ [DOCKER_QUERY_PARAMS.host]: null });
+    containersFocus.focus();
+  };
 
   return (
     <div class="space-y-4">
       <DockerHostsTable
-        resources={scopedHosts()}
+        resources={props.hosts}
         sourceCount={props.hostSourceCount}
         emptyIcon={dockerIcon()}
         emptyTitle="No Docker or Podman hosts"
@@ -475,15 +505,37 @@ function DockerOverview(props: {
           </Show>
         }
         showToolbar={false}
+        containerScope={{
+          sectionId: DOCKER_CONTAINERS_SECTION_ID,
+          isSelected: isScopedHost,
+          onShow: showHostContainers,
+        }}
       />
-      <DockerContainersTable
-        resources={props.containers}
-        hosts={props.hosts}
-        emptyIcon={dockerIcon()}
-        emptyTitle="No Docker or Podman containers"
-        emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
-        onLifecycleActionSettled={props.onLifecycleActionSettled}
-      />
+      <section
+        id={DOCKER_CONTAINERS_SECTION_ID}
+        aria-label="Containers"
+        class="scroll-mt-4"
+        data-testid="docker-containers-section"
+      >
+        <DockerContainersTable
+          resources={props.containers}
+          hosts={props.hosts}
+          title={
+            <PlatformHostScopedTableTitle
+              noun="Containers"
+              hostLabel={scopedHostLabel()}
+              clearLabel="Show all hosts"
+              onClear={clearHostScope}
+              headingId="docker-containers-heading"
+              headingRef={containersFocus.setHeading}
+            />
+          }
+          emptyIcon={dockerIcon()}
+          emptyTitle="No Docker or Podman containers"
+          emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
+          onLifecycleActionSettled={props.onLifecycleActionSettled}
+        />
+      </section>
       <Show when={props.incidents.length > 0}>
         <DockerAlertsTable
           incidents={props.incidents}

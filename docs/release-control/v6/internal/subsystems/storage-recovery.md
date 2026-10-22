@@ -7153,3 +7153,8 @@ wrap is set on each value's span, because the global `.table-fixed td` rule
 forces nowrap on table cells and outranks a utility class on the cell itself,
 which left a long snapshot description cut off at the drawer edge. Coverage,
 restore evidence and recovery rules are unchanged.
+
+The Proxmox page surface's Overview guest heading ("Guests on <node>", Show all
+nodes) now renders through the shared `PlatformHostScopedTableTitle` that the
+Docker and vSphere overviews also use; its Storage, Replication, Backups, Ceph
+and Mail Gateway tabs, and every storage and recovery rule, are unchanged.
