@@ -90,10 +90,10 @@ describe('useProtectionPostures transport', () => {
     expect(() => buildProtectionPostureBatchURL(resourceIDs)).toThrow(/limited to 200/);
   });
 
-  it('joins the batches of a large fleet into the rows and the policy the tab reads', async () => {
+  it('joins more than four batches into the exact rows and policy the tab reads', async () => {
     const resourceIDs = Array.from(
-      { length: MAX_PROTECTION_POSTURE_BATCH_SIZE + 1 },
-      (_, index) => `vm:${String(index).padStart(3, '0')}`,
+      { length: MAX_PROTECTION_POSTURE_BATCH_SIZE * 5 + 1 },
+      (_, index) => `vm:${String(index).padStart(4, '0')}`,
     );
     const policy = {
       freshnessWindowSeconds: 604800,
@@ -120,13 +120,19 @@ describe('useProtectionPostures transport', () => {
       const batchSizes = apiFetchJSONMock.mock.calls.map(
         ([url]) => new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId').length,
       );
-      expect(batchSizes).toEqual([MAX_PROTECTION_POSTURE_BATCH_SIZE, 1]);
+      expect(batchSizes).toEqual([200, 200, 200, 200, 200, 1]);
       // Each batch keeps the order the backend sent; the batches join in request order.
       expect(hook.postures().map((posture) => posture.subjectResourceId)).toEqual([
-        ...resourceIDs.slice(0, MAX_PROTECTION_POSTURE_BATCH_SIZE).reverse(),
-        ...resourceIDs.slice(MAX_PROTECTION_POSTURE_BATCH_SIZE),
+        ...Array.from({ length: 6 }, (_, index) =>
+          resourceIDs
+            .slice(
+              index * MAX_PROTECTION_POSTURE_BATCH_SIZE,
+              (index + 1) * MAX_PROTECTION_POSTURE_BATCH_SIZE,
+            )
+            .reverse(),
+        ).flat(),
       ]);
-      expect(hook.postureByResourceID().get('vm:200')?.state).toBe('protected');
+      expect(hook.postureByResourceID().get('vm:1000')?.state).toBe('protected');
       expect(hook.policy()).toEqual(policy);
       // The joined response is the rows and the policy at runtime too: the wire meta of the
       // batches is not carried over (the type pin below cannot see a spread of it).
