@@ -188,6 +188,13 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     <span class="block whitespace-normal wrap-break-word text-left leading-snug">
                       {protectionPresentation().label}
                     </span>
+                    <Show when={props.backupPresentation?.absenceDetail}>
+                      {(detail) => (
+                        <span class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted">
+                          {detail()}
+                        </span>
+                      )}
+                    </Show>
                     <Show when={props.backupPresentation?.completedAt}>
                       <time
                         class="mt-1 block whitespace-normal wrap-break-word text-left font-normal leading-snug text-muted"

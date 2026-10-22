@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Missing workload backup time is scoped evidence, not universal absence
+
+The existing Proxmox row badge says **Not found** when its completion-time
+scalar is absent. The badge, name-cell indicator, hover and keyboard/touch
+disclosures name **No completed backup found**, never **None**, **Never** or
+an invented first backup. Their explanation says that Pulse has no matched
+completed-backup time and backups may still exist outside the collected or
+matched inventory. A running task remains separate activity, not completion.
+Invalid/future times remain uncertainty; measured completed times retain their
+age/threshold rules. Internal status tokens and alert policy do not change.
+
+`workloadGuestPresentation.test.ts`, `BackupStatusAccess.test.tsx` and the
+source-bound `browser-tests/backup-completion-time.cjs` cover that distinction.
+No collector, attribution, guest operation, restore or native recovery changes.
+
+
 
 ### Shipped Docs tables admit keyboard scrolling
 

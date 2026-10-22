@@ -103,6 +103,10 @@ export function getWorkloadsGuestBackupAgeRule(
   }
 }
 
+// No matched completion time is not proof of an empty provider inventory.
+export const WORKLOAD_BACKUP_NOT_FOUND_DETAIL =
+  'Pulse has no completed-backup time matched to this guest. Backups may still exist outside the collected or matched inventory.';
+
 export function getWorkloadsGuestBackupTooltip(
   status: BackupStatus,
   ageFormatted?: string | null,
@@ -116,9 +120,6 @@ export function getWorkloadsGuestBackupTooltip(
         : `Last backup: ${ageFormatted || 'Unknown'}`;
   if (backupRunning) {
     return `Backup running now · ${base.toLowerCase()}`;
-  }
-  if (status === 'never') {
-    return 'No backup found';
   }
   return base;
 }

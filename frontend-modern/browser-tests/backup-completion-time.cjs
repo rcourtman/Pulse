@@ -15,6 +15,8 @@ const iso = '2026-10-12T00:30:00.000Z';
 const label = '2026-10-12 00:30:00 UTC';
 const runtime = [
   'frontend-modern/src/utils/format.ts',
+  'frontend-modern/src/utils/workloadGuestPresentation.ts',
+  'frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx',
   'frontend-modern/src/components/Workloads/GuestRowCells.tsx',
   'frontend-modern/src/components/Workloads/guestDrawerModel.ts',
 ];
@@ -66,7 +68,7 @@ let server;
       name: 'phone-east',
       engine: webkit,
       launch: { headless: true },
-      viewport: { width: 390, height: 844 },
+      viewport: { width: 320, height: 844 },
       timezoneId: 'Asia/Tokyo',
       locale: 'ja-JP',
       colorScheme: 'dark',
@@ -83,6 +85,7 @@ let server;
       locale: spec.locale,
     });
     let context;
+    let page;
     try {
       context = await browser.newContext({
         viewport: spec.viewport,
@@ -92,7 +95,7 @@ let server;
         isMobile: !!spec.isMobile,
         hasTouch: !!spec.hasTouch,
       });
-      const page = await context.newPage();
+      page = await context.newPage();
       page.setDefaultTimeout(8000);
       await page.clock.install({ time: start - 300_000 });
       await page.clock.pauseAt(start);
@@ -131,6 +134,16 @@ let server;
               max_history_days: 90,
               runtime: { build: 'community', label: 'Fixture community' },
             };
+          else if (url.pathname === '/api/metrics-store/history')
+            body = {
+              resourceType: url.searchParams.get('resourceType'),
+              resourceId: url.searchParams.get('resourceId'),
+              range: url.searchParams.get('range'),
+              start: start - 86_400_000,
+              end: start,
+              source: 'mock_synthetic',
+              metrics: {},
+            };
           else if (url.pathname === '/api/alerts/active') body = [];
           else if (url.pathname === '/api/resources')
             body = { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 1 } };
@@ -168,6 +181,9 @@ let server;
         timeout: 30000,
       });
       await page.getByTestId('proof-policy').getByText('Policy read', { exact: true }).waitFor();
+      await page.getByText('No stored history in this range', { exact: true }).first().waitFor();
+      // The full drawer's existing Details section is closed by default.
+      await page.getByTestId('guest-technical-details').locator('summary').click();
       if (spec.colorScheme === 'dark')
         await page.evaluate(() => document.documentElement.classList.add('dark'));
       const table = page.getByRole('region', { name: 'Backup table row' });
@@ -178,7 +194,7 @@ let server;
       const dialog = () => page.getByRole('dialog', { name: /^Backup status details for / });
       const drawerTime = () =>
         page
-          .getByTestId('guest-technical-details')
+          .getByTestId('guest-drawer-overview')
           .getByText('Last completed backup', { exact: true })
           .locator('xpath=ancestor::tr')
           .locator('time');
@@ -278,14 +294,24 @@ let server;
         assert(
           result.requests
             .slice(beforeTick)
-            .every((r) => r.path === '/api/ai/intelligence/anomalies'),
-          'passive tick adds no requests beyond the unchanged row anomaly poll',
+            .every((r) =>
+              ['/api/ai/intelligence/anomalies', '/api/metrics-store/history'].includes(r.path),
+            ),
+          'passive tick adds only the existing independent row-anomaly and Overview history polls',
         );
         await record(`${type}: running activity and passive age do not renew completion`);
         await page.selectOption('#proof-state', 'ended');
         await checkTime();
         await page.selectOption('#proof-state', 'new');
         await checkTime('2026-10-12 01:45:00 UTC', '2026-10-12T01:45:00.000Z');
+        assert(
+          !(await dialog().innerText()).includes('outside the collected or matched inventory'),
+        );
+        assert(
+          !(await page.getByTestId('guest-drawer-overview').innerText()).includes(
+            'outside the collected or matched inventory',
+          ),
+        );
         await record(`${type}: only replacement completion changes both surfaces`);
         await page.selectOption('#proof-state', 'invalid');
         assert.equal(await dialog().locator('time').count(), 0);
@@ -293,10 +319,34 @@ let server;
         assert((await dialog().innerText()).includes('invalid timestamp'));
         await record(`${type}: invalid timestamp withdraws the time without calling it absence`);
         if (type === 'qemu' && spec.hasTouch) await capture('unknown-dialog');
-        await page.selectOption('#proof-state', 'absent');
-        assert.equal(await dialog().locator('time').count(), 0);
-        assert((await dialog().innerText()).includes('No completed backup yet'));
-        await record(`${type}: first running backup has no completed time`);
+        for (const state of ['missing', 'absent']) {
+          await page.selectOption('#proof-state', state);
+          assert.equal(await dialog().locator('time').count(), 0);
+          assert.equal(await drawerTime().count(), 0);
+          const detail =
+            'Pulse has no completed-backup time matched to this guest. Backups may still exist outside the collected or matched inventory.';
+          const disclosure = await dialog().innerText();
+          assert(disclosure.includes('No completed backup found'));
+          assert(disclosure.includes(detail));
+          assert(!/never|first backup|no completed backup yet/i.test(disclosure));
+          assert.equal(disclosure.includes('Backup running now'), state === 'absent');
+          assert((await page.getByTestId('guest-drawer-overview').innerText()).includes(detail));
+          assert.equal(
+            (await badge().innerText()).trim(),
+            state === 'absent' ? 'Running' : 'Not found',
+          );
+          assert((await badge().getAttribute('aria-label')).includes('no completed backup found'));
+          assert(
+            await dialog()
+              .getByText(detail, { exact: true })
+              .evaluate((e) => e.scrollWidth <= e.clientWidth),
+          );
+          assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+          await record(
+            `${type}: ${state} stays scoped to matched evidence, never universal absence or a first backup`,
+          );
+          if (type === 'qemu') await capture(`${state}-dialog`);
+        }
         await page.selectOption('#proof-state', 'future');
         assert.equal(await dialog().locator('time').count(), 0);
         assert((await dialog().innerText()).includes('timestamp is in the future'));
@@ -313,7 +363,9 @@ let server;
         assert(
           result.requests
             .slice(beforeFuture)
-            .every((r) => r.path === '/api/ai/intelligence/anomalies'),
+            .every((r) =>
+              ['/api/ai/intelligence/anomalies', '/api/metrics-store/history'].includes(r.path),
+            ),
         );
         await record(`${type}: now-valid supplied time reappears, no new observation manufactured`);
         await close(badge());
@@ -350,6 +402,38 @@ let server;
       await capture('running-indicator');
       await close(indicator());
       await record('indicator Escape returns focus without opening the row');
+      await page.selectOption('#proof-state', 'missing');
+      assert.equal(await indicator().getAttribute('aria-label'), 'No completed backup found');
+      await open(indicator());
+      assert(
+        (await dialog().innerText()).includes(
+          'Backups may still exist outside the collected or matched inventory.',
+        ),
+      );
+      assert(!/never|first backup/i.test(await dialog().innerText()));
+      await capture('missing-indicator');
+      await close(indicator());
+      await record(
+        'missing name-cell indicator is keyboard/touch accessible without a false absence claim',
+      );
+      await page.getByTestId('guest-drawer-exceptions').scrollIntoViewIfNeeded();
+      await capture('missing-drawer');
+    } catch (error) {
+      // Retain pixels at the failing step instead of requiring an unchanged rerun.
+      if (page && !page.isClosed()) {
+        try {
+          const p = path.join(output, `${spec.name}-failure.png`);
+          await page.screenshot({ path: p, fullPage: true, timeout: 5000 });
+          result.captures.push({
+            path: path.relative(root, p),
+            bytes: fs.statSync(p).size,
+            sha256: hash(fs.readFileSync(p)),
+          });
+        } catch (captureError) {
+          result.captureError = String(captureError);
+        }
+      }
+      throw error;
     } finally {
       if (context) {
         await context.close();

@@ -335,7 +335,7 @@ export function getBackupInfo(
   // Only the explicit absence sentinels mean no completed backup was found.
   // A present but unusable timestamp is uncertainty, not absence or freshness.
   if (lastBackup === null || lastBackup === undefined || lastBackup === '' || lastBackup === 0) {
-    return { status: 'never', ageMs: null, ageFormatted: 'Never' };
+    return { status: 'never', ageMs: null, ageFormatted: 'No completed backup found' };
   }
 
   let timestamp: number;

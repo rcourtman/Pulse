@@ -65,6 +65,7 @@ function Fixture() {
       case 'invalid':
         setTimestamp(NaN);
         break;
+      case 'missing':
       case 'absent':
         setTimestamp(0);
         break;
@@ -102,6 +103,7 @@ function Fixture() {
               'ended',
               'new',
               'invalid',
+              'missing',
               'absent',
               'future',
             ].map((state) => (

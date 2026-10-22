@@ -104,7 +104,7 @@ describe('one explicit completion time across backup evidence surfaces', () => {
     }
     setValue(0);
     expect(dialog.querySelector('time')).toBeNull();
-    expect(dialog).toHaveTextContent('No completed backup yet');
+    expect(dialog).toHaveTextContent('No completed backup found');
     setValue(now + RELATIVE_TIME_TICK_MS);
     expect(dialog.querySelector('time')).toBeNull();
     expect(dialog).toHaveTextContent('timestamp is in the future');
