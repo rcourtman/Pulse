@@ -93,9 +93,7 @@ describe('dashboard connection and state-delivery help', () => {
       expect(guide(match![1]).querySelector(`[id="${match![2]}"]`)).not.toBeNull();
       expect(link.hasAttribute('data-doc-link')).toBe(true);
     }
-    expect(
-      guide('REVERSE_PROXY').querySelector(`a[href="#${fragment}"]`),
-    ).not.toBeNull();
+    expect(guide('REVERSE_PROXY').querySelector(`a[href="#${fragment}"]`)).not.toBeNull();
   });
 
   it('ships the exact canonical Markdown', () => {
