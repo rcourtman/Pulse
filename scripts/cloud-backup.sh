@@ -12,6 +12,7 @@
 # Failed producers retain .partial evidence, not ordinary backup filenames.
 # Archive, encryption and configured uploads must succeed before retention.
 # Remote jobs reject rclone dry-run/interactive settings, never override them.
+# Every remote copy must transfer its file, not merely exit zero after a skip.
 # Local retention also ages out this helper's old top-level partial evidence.
 # A completed tar run is not application-consistency or restore verification.
 # Supports 30-day retention with automatic cleanup.
@@ -254,7 +255,13 @@ upload_remote() {
   local dest="${PULSE_RCLONE_REMOTE}/${remote_prefix}/${filename}"
 
   log "uploading to remote: ${dest}"
-  rclone copyto "${file_path}" "${dest}"
+  # An existing-destination skip can return exit zero. Require a transfer for
+  # each of this job's three new files before local
+  # retention may delete any previous recovery copy. Do not disable the user's
+  # selection rules or force overwrites; a skipped copy must instead stop here.
+  if ! rclone copyto "${file_path}" "${dest}" --error-on-no-transfer; then
+    die "Remote upload failed or transferred no file; no retention performed; preserve local backup files and check rclone configuration and output"
+  fi
   log "upload complete: ${dest}"
 }
 

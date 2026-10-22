@@ -41,6 +41,29 @@ same copy. That case is mandatory in the existing required native CI suite.
 These are failure-admission and local-backend checks, not cloud upload integrity,
 provider acceptance, application consistency or native guest recovery proof.
 
+Every configured remote `copyto` also uses `--error-on-no-transfer`. A zero-exit
+skip of an existing destination is not evidence of
+a replacement recovery copy. Each of the two archives and metadata must actually
+transfer before either retention pass. The helper retains the operator's selection
+rules and existing remote objects rather than disabling filters or forcing an
+overwrite. A failed, skipped or unsupported transfer stops later uploads and all
+retention, leaves the completed local files private and reports the failure;
+it never reports that skipped file as uploaded. This requires a compatible
+rclone; an older client that refuses the flag fails closed. Local-only behaviour,
+archive layout, encryption and retention age/ownership bounds are unchanged.
+
+Entrypoint controls inject a skipped first, second or metadata upload in both
+encryption modes and assert unchanged prior local/remote bytes, retained current
+local files, no later upload/expiry and no false completion. Native empty-config
+local-backend cases first establish bare-copy exit-zero/no-copy results for
+ignore-existing and update-only settings at each of the three output positions
+in both modes. The same settings must fail the complete helper
+without deleting anything, even with `RCLONE_ERROR_ON_NO_TRANSFER=false` inherited;
+ordinary plain/encrypted transfers still work. The native case is mandatory
+in `--require-native`; optional skips cannot establish their result. A client's
+transfer verdict is not independent remote content verification, atomic set
+publication, provider acceptance, application consistency or restored workloads.
+
 The configured source root itself must be a physical directory, not a symbolic
 link: tar otherwise exits successfully after archiving only the link. Admission
 rejects either linked root, including trailing-slash spellings, before creating

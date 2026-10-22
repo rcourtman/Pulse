@@ -152,16 +152,23 @@ if tool == "age":
 if tool == "rclone":
     remote = root / "remote"
     if args[0] == "copyto":
-        assert len(args) == 3, args
+        # Accept the unchanged helper for explicit exact-parent controls too.
+        assert len(args) in (3, 4) and args[3:] in ([], ["--error-on-no-transfer"]), args
         assert Path(args[1]).resolve().is_relative_to(backups), args
         assert Path(args[1]).is_file(), args
         assert args[2] == "fixture-remote:bucket/pulse-cloud-tarballs/" + Path(args[1]).name, args
         number = 1 + sum(call[:2] == [tool, "copyto"] for call in previous)
         if number == scenario.get("upload_fail"):
             sys.exit(10)
+        if scenario.get("unsupported_transfer_flag") and args[3:]:
+            sys.exit(2)
+        if number == scenario.get("upload_skip"):
+            # Closed no-transfer model, not a native rclone behaviour claim.
+            sys.exit(9 if args[3:] else 0)
         if os.environ.get("REAL_RCLONE"):
             sys.exit(subprocess.run([os.environ["REAL_RCLONE"], "--config", os.devnull, "copyto",
-                                    args[1], str(remote / Path(args[1]).name)], check=False).returncode)
+                                    args[1], str(remote / Path(args[1]).name), *args[3:]],
+                                   check=False).returncode)
         (remote / Path(args[1]).name).write_bytes(Path(args[1]).read_bytes())
         sys.exit(0)
     if args[0] == "delete":
@@ -409,11 +416,82 @@ class CloudBackupTest(unittest.TestCase):
         for path in self.old:
             self.assertEqual((self.remote / path.name).read_bytes(), b"retained previous fixture")
 
+    def assert_skipped_upload_stops_retention(self, result, number):
+        self.assert_stopped_before_retention(result)
+        copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+        self.assertEqual(len(copies), number, self.calls)
+        self.assertTrue(all(call[4:] == ["--error-on-no-transfer"] for call in copies), copies)
+        self.assertEqual(self.output.count("upload complete:"), number - 1, self.output)
+        self.assertIn("Remote upload failed or transferred no file; no retention performed", self.output)
+        for path in self.old:
+            self.assertEqual((self.remote / path.name).read_bytes(), b"retained previous fixture")
+        current = [path for path in self.backups.iterdir() if self.timestamp in path.name]
+        self.assertEqual(len(current), 3, current)
+        self.assertFalse(any(path.name.endswith(".partial") for path in current), current)
+        self.assertTrue(all(path.stat().st_mode & 0o777 == 0o600 for path in current))
+        for call in copies[:-1]:
+            local = Path(call[2])
+            self.assertEqual((self.remote / local.name).read_bytes(), local.read_bytes())
+
+    def test_each_skipped_upload_preserves_prior_local_and_remote_recovery_files(self):
+        for mode in ("false", "true"):
+            for number in (1, 2, 3):
+                with self.subTest(mode=mode, number=number):
+                    result = self.invoke({"upload_skip": number}, PULSE_BACKUP_ENCRYPT=mode)
+                    self.assert_skipped_upload_stops_retention(result, number)
+                    skipped = [call for call in self.calls if call[:2] == ["rclone", "copyto"]][-1]
+                    self.assertFalse((self.remote / Path(skipped[2]).name).exists())
+
+    def test_unsupported_transfer_flag_fails_closed_without_retention(self):
+        for mode in ("false", "true"):
+            with self.subTest(mode=mode):
+                result = self.invoke({"unsupported_transfer_flag": True}, PULSE_BACKUP_ENCRYPT=mode)
+                self.assert_skipped_upload_stops_retention(result, 1)
+                self.assertEqual([p for p in self.remote.iterdir() if self.timestamp in p.name], [])
+
     @unittest.skipUnless(REAL_RCLONE, "real rclone is not supplied or installed; native filter engine unverified")
     def test_real_rclone_local_backend_preserves_unowned_objects(self):
         # The adapter replaces only the fixed fixture destination with a local
         # path. Real rclone sees no remote config, network or provider identity.
         self.check_retention_scope(REAL_RCLONE=REAL_RCLONE)
+
+    @unittest.skipUnless(REAL_RCLONE, "real rclone is not supplied or installed; native skipped-destination gate unverified")
+    def test_real_rclone_skipped_existing_destination_cannot_authorize_retention(self):
+        # Establish native bare-copy exit-zero skips, then run the entire helper
+        # with the same settings. The explicit false environment default must
+        # not defeat the command's required no-transfer failure. Only disposable
+        # local paths are used, with no remote configuration or network identity.
+        for mode in ("false", "true"):
+            for setting in ("RCLONE_IGNORE_EXISTING", "RCLONE_UPDATE"):
+                for number, (label, suffix) in enumerate(OWNED_TYPES, 1):
+                    with self.subTest(mode=mode, setting=setting, number=number):
+                        timestamp = f"20261022-01{self.invocations + 1:04d}"
+                        filename = f"pulse-backup-{label}-{timestamp}{suffix}" + (".age" if mode == "true" else "")
+                        existing = self.remote / filename
+                        original = b"synthetic existing remote object, never replaced"
+                        existing.write_bytes(original)
+                        os.utime(existing, (4102444800, 4102444800))
+                        probe = self.root / "current-archive-probe"
+                        probe.write_bytes(b"different synthetic current archive")
+                        env = {setting: "true", "RCLONE_ERROR_ON_NO_TRANSFER": "false"}
+                        bare = subprocess.run([REAL_RCLONE, "--config", os.devnull, "copyto",
+                                               str(probe), str(existing)], env=dict(self.env, **env),
+                                              capture_output=True, timeout=10)
+                        self.assertEqual(bare.returncode, 0, "bare native existing-destination copy did not succeed")
+                        self.assertEqual(existing.read_bytes(), original)
+                        result = self.invoke(REAL_RCLONE=REAL_RCLONE, PULSE_BACKUP_ENCRYPT=mode, **env)
+                        self.assert_skipped_upload_stops_retention(result, number)
+                        self.assertEqual(existing.read_bytes(), original)
+        # Removing the skip settings restores the ordinary encrypted transfer
+        # path. The existing separate native case covers plain transfers/expiry.
+        result = self.invoke(REAL_RCLONE=REAL_RCLONE, PULSE_BACKUP_ENCRYPT="true")
+        self.assertEqual(result.returncode, 0, self.output)
+        copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
+        self.assertEqual(len(copies), 3)
+        for call in copies:
+            local = Path(call[2])
+            self.assertEqual((self.remote / local.name).read_bytes(), local.read_bytes())
+        self.assertTrue(all(not path.exists() and not (self.remote / path.name).exists() for path in self.old))
 
     def assert_archive_contents(self):
         for label, directory in (("tenants", "tenants"), ("cp", "control-plane")):
@@ -1204,6 +1282,7 @@ class CloudBackupTest(unittest.TestCase):
         self.assert_archive_contents()
         copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
         self.assertEqual(len(copies), 3)
+        self.assertTrue(all(call[4:] == ["--error-on-no-transfer"] for call in copies), copies)
         last_upload = max(self.calls.index(call) for call in copies)
         local_retention = next(index for index, call in enumerate(self.calls) if call[0] == "find")
         remote_retention = next(index for index, call in enumerate(self.calls) if call[:2] == ["rclone", "delete"])
@@ -1222,6 +1301,7 @@ class CloudBackupTest(unittest.TestCase):
             self.assertEqual(archive.stat().st_mode & 0o777, 0o600)
         copies = [call for call in self.calls if call[:2] == ["rclone", "copyto"]]
         self.assertEqual(len(copies), 3)
+        self.assertTrue(all(call[4:] == ["--error-on-no-transfer"] for call in copies), copies)
         self.assertTrue(all(call[1] == "copyto" and call[2].endswith(".age") for call in copies[:2]))
         self.assertTrue(all(call[2].endswith(".age") for call in copies), copies)
         metadata = list(self.backups.glob("pulse-backup-meta-*.txt.age"))
@@ -1456,7 +1536,8 @@ def run_native_suite():
     loader = unittest.TestLoader()
     required = {"test_real_age_recovers_archives_and_private_metadata",
                 "test_real_rclone_local_backend_preserves_unowned_objects",
-                "test_real_rclone_dry_run_success_is_not_an_upload"}
+                "test_real_rclone_dry_run_success_is_not_an_upload",
+                "test_real_rclone_skipped_existing_destination_cannot_authorize_retention"}
     if not required.issubset(loader.getTestCaseNames(CloudBackupTest)):
         print("Native backup cases are missing; no tests started", file=sys.stderr)
         return 2
