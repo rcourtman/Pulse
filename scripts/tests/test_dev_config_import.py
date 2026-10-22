@@ -228,7 +228,7 @@ class DevConfigImportTest(unittest.TestCase):
             for kind in ('symlink', 'dangling', 'directory', 'fifo'):
                 with self.subTest(directory=directory.name, kind=kind):
                     path = directory / 'api_tokens.json'
-                    path.unlink()
+                    path.unlink(missing_ok=True)
                     if kind == 'symlink': path.symlink_to(outside)
                     elif kind == 'dangling': path.symlink_to(self.root / 'absent')
                     elif kind == 'directory': path.mkdir()
