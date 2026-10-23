@@ -58,6 +58,11 @@ describe('RecordOwnerLink', () => {
 
     const link = screen.getByRole('link', { name: 'Open payments' });
     expect(link).toHaveAttribute('data-record-owner-link');
+    expect(link).toHaveAttribute('title', 'Open payments');
+    // Phones show "Open" alone; the heading beside it already names the object.
+    expect(screen.getByText('payments', { exact: false, selector: 'span.hidden' })).toHaveClass(
+      'sm:inline',
+    );
     await fireEvent.click(link);
     await waitFor(() => expect(window.location.pathname).toBe('/kubernetes/workloads'));
     expect(window.location.search).toBe('?q=payments');
