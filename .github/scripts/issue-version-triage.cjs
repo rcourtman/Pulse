@@ -139,8 +139,26 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
+function inlineVersionText(tokens) {
+  return (tokens || []).map((token) => {
+    // A release link's label is evidence; its destination and title are not.
+    // Unwrap only ordinary inline formatting, not images, struck-out values
+    // or HTML. Code spans keep their literal text rather than parsing links
+    // or comments inside them.
+    if (["link", "strong", "em"].includes(token.type)) {
+      return inlineVersionText(token.tokens);
+    }
+    if (["codespan", "escape"].includes(token.type)) return token.text;
+    return token.raw || "";
+  }).join("");
+}
+
 function normalizeLegacyVersionValue(value) {
-  const visible = String(value).trim().replace(/^[`*_]+/, "");
+  const raw = String(value).trim();
+  const blocks = lexer(raw, { gfm: true });
+  const text = blocks.length === 1 && blocks[0].type === "paragraph"
+    ? inlineVersionText(blocks[0].tokens) : raw;
+  const visible = text.trim().replace(/^[`*_]+/, "");
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the
   // server archive names; companion binaries and signatures cannot establish
