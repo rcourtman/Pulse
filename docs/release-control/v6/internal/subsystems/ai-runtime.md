@@ -9058,3 +9058,109 @@ diagnostics (`journalctl -u ... --since`, `dmesg -T`, `ss -tlnp`, `ip addr`,
 read-only. Proof: `TestExecutionIntent_ArgumentAwareReadCommands` and
 `TestExecutionIntent_RouteOperationBoundary` in
 `internal/ai/tools/tools_query_readonly_test.go`.
+
+### Typed investigation conclusions and subscription-aware investigation limits (22 October 2026)
+
+Patrol investigations record their zero-action conclusion through
+`patrol_conclude_investigation`, an investigation-only, side-effect-free,
+read-kind, mutation-none tool on the request-local `ProposalCapture`. The model
+supplies one of `resolved`, `cannot_fix` or `needs_attention` and a reason.
+The capture keeps the first conclusion: an identical replay is accepted and a
+different outcome is refused. `InvestigationRunResult.Conclusion` carries it to
+the orchestrator beside any proposal. A typed proposal still owns remediation
+and outranks a conclusion, and the conclusion consumes no evidence budget.
+Once a conclusion is recorded, the next turn is text-only: the summary.
+The final turn, whether reached by the turn limit or by the deadline reserve,
+offers only the tools that end a run: the conclusion, plus the typed proposal
+once the evidence budget is spent. Evidence exhaustion offers the proposal and
+the conclusion.
+
+A run reserves time to conclude before its context deadline. The reserve is
+one more evidence turn plus the conclusion and summary turns, each estimated as
+the slowest turn so far (20 s minimum), plus 15 s, capped at half the run's
+budget. When the time left reaches the reserve, the current turn becomes the
+final turn. The final summary call may use the time left before that deadline
+instead of the 20 s interactive bound, which interactive chat keeps.
+
+On subscription agents, a positive `StreamIdleTimeout` remains an earlier
+complete-turn deadline, because the transport buffers the whole turn.
+Investigation turns there get a four-minute caller-owned stall budget, while
+Watch keeps 60 s. Without an explicit setting, an investigation on a
+subscription agent defaults to 25 minutes and to one investigation at a time,
+because that transport serves one call at a time.
+
+`LoadConfig` and autonomy saves republish the timeout and, through the optional
+`aicontracts.InvestigationConcurrencyLimitUpdater`, the concurrency limit, so a
+provider change applies without rebuilding the orchestrator. Both read the
+orchestrator before taking the service lock, because `PatrolService` takes its
+own lock before the service lock. Patrol's outer deadline for an automatic
+investigation follows the effective timeout plus a 5-minute grace instead of a
+fixed 10 minutes.
+
+The stuck-run sweep looks up the session of the run each running finding names
+among every session the orchestrator's store holds for the finding, so a newer
+session cannot hide a live run. Without the store it uses the finding's latest
+session, and leaves the finding alone when a different run is the latest. A
+live run is reset as
+`timed_out` only after its own `InvestigationSession.Deadline` plus that
+grace, or its start plus the current timeout and grace when no deadline is
+recorded. So a timeout lowered mid-run does not cut it short, and the previous
+run's `LastInvestigatedAt` no longer resets a live re-investigation. A run the
+orchestrator holds no session for, or closed as `interrupted` when it reloaded
+after a restart, is recorded as `interrupted`. Such a run keeps its attempt, so
+a run that crashes Pulse cannot retry forever. A run the orchestrator closed
+without updating the finding takes the result its session recorded, once the
+orchestrator's own update has had the grace to land, or `timed_out` when the
+session recorded none. Without an orchestrator the sweep keeps the
+`LastInvestigatedAt` rule. A first investigation cut short by a hard restart no
+longer stays running for good. `FindingsStore.RecoverStuckInvestigation`
+applies the recovery only while the finding still shows that run as running,
+so a result or a newer run that landed after the sweep looked is kept. A run
+that started before the finding's current occurrence is recorded only as
+`interrupted`, never with its session's result. An outcome the action
+lifecycle recorded on the finding during the run, such as
+`fix_queued`, is kept and the run completes, so a queued fix still blocks
+another investigation. The close stamps `LastInvestigatedAt` like any other
+closed run.
+
+Two outcomes join the vocabulary. `unclassified` records a completed run that
+left neither a typed conclusion nor a recognisable marker. The private
+orchestrator no longer defaults that case to `needs_attention`, which ends
+investigation of the finding. `unclassified` keeps the normal cooldown and
+attempt limit, presents as needs-attention in the loop state, and lands in the
+telemetry `other` bucket with no schema change. `interrupted` records a run
+cut short by a restart, shutdown or caller cancellation. It is not
+`timed_out`, has no cooldown, and reports as `in_progress`. A run cancelled by
+shutdown spends no attempt.
+
+A typed conclusion recorded before a later provider failure or summary timeout
+stands when the run holds no proposal or action. A failure without one remains
+failed, and fallback prose is still never classified as a conclusion. The
+prose-marker reader remains a fallback. It accepts only line-start markers
+inside the conclusion section. It ignores fenced and indented-code lines,
+reading any fence-like line as a fence and ending it only where every
+CommonMark reading would, and it treats a quote as running to the next blank
+line. Where that differs from CommonMark it hides more, which can only leave
+a run unclassified. It now tolerates markdown emphasis, list markers,
+numbering, case and heading punctuation.
+
+Proofs:
+- `agentic_investigation_conclusion_test.go`: final-turn tools, the summary
+  after a conclusion, the deadline reserve, and the reserve, summary-timeout
+  and subscription turn-budget helpers.
+- `tools_conclude_test.go`: the closed vocabulary, first conclusion wins,
+  profile and capture gating, and refusals.
+- `findings_test.go`: `interrupted` and `unclassified` eligibility.
+- `patrol_investigation_limits_test.go`: the sweep (live runs held to their
+  own deadline, a live or pending run behind a newer session, restart
+  reconciliation, the settle window, session results, kept action outcomes,
+  a result from before a regression, the guarded recovery write and the
+  no-orchestrator rule) and the run ceiling.
+- `service_patrol_limits_test.go`: provider-aware limits on reload.
+- `ai_config_test.go`, `contracts_test.go` (including the session `deadline`
+  wire shape), `patrol_cost_test.go` and the orchestrator-setup case in
+  `ai_handlers_investigation_additional_test.go`.
+
+This changes outcome recording and run limits only. It widens no mutation,
+approval or execution boundary, and it is not measured improvement on
+installed systems.

@@ -10165,3 +10165,13 @@ the credential reveal render as shared `InlineNotice`s; agent and security
 facts as a `DetailSectionTable`; the connection id and identity evidence sit
 in a closed Details disclosure. No diagnosis, repair or credential flow
 changes: this is presentation only.
+
+The Patrol investigation wiring in `internal/api/ai_handlers.go` now passes the
+typed conclusion an investigation records with `patrol_conclude_investigation`
+to the private orchestrator. It also seeds the orchestrator's concurrency and
+timeout from the Patrol provider: one investigation at a time and a 25-minute
+default on a subscription agent. The digest email names the new `unclassified`
+and `interrupted` outcomes. None of this enrols, commands, updates or removes an
+agent, or touches agent identity or credentials. Investigations still reach
+hosts only through the existing read-only evidence tools and the governed
+action lifecycle.

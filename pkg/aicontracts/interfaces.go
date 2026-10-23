@@ -35,6 +35,14 @@ type InvestigationExecutionLimitUpdater interface {
 	SetInvestigationExecutionLimits(maxTurns int, timeout time.Duration)
 }
 
+// InvestigationConcurrencyLimitUpdater is the optional live-configuration
+// contract for orchestrators whose concurrent-investigation limit can change
+// without rebuilding the orchestrator. A Patrol provider that serves one call
+// at a time needs one investigation at a time.
+type InvestigationConcurrencyLimitUpdater interface {
+	SetInvestigationConcurrencyLimit(maxConcurrent int)
+}
+
 // InvestigationStoreMaintainer is an optional interface for orchestrators that
 // expose their investigation store for periodic maintenance.
 type InvestigationStoreMaintainer interface {

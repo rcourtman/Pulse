@@ -137,6 +137,8 @@ const (
 	InvestigationOutcomeNeedsAttention         InvestigationOutcome = "needs_attention"          // Requires user intervention
 	InvestigationOutcomeCannotFix              InvestigationOutcome = "cannot_fix"               // AI determined it cannot fix this
 	InvestigationOutcomeTimedOut               InvestigationOutcome = "timed_out"                // Transient timeout, will retry sooner
+	InvestigationOutcomeUnclassified           InvestigationOutcome = "unclassified"             // Finished, but its conclusion could not be read
+	InvestigationOutcomeInterrupted            InvestigationOutcome = "interrupted"              // Cancelled by a restart or shutdown, will retry
 )
 
 // FindingLifecycleEvent represents an append-only log entry of finding lifecycle transitions.
@@ -457,6 +459,9 @@ func investigationCooldownForOutcome(outcome string) time.Duration {
 		return 0
 	case InvestigationOutcomeTimedOut:
 		return investigationTimeoutCooldown
+	case InvestigationOutcomeInterrupted:
+		// A restart cut the run short; nothing about the finding changed.
+		return 0
 	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
 		return investigationFixRetryCooldown
 	default:
@@ -466,7 +471,9 @@ func investigationCooldownForOutcome(outcome string) time.Duration {
 
 func (f *Finding) investigationCooldown() time.Duration {
 	if InvestigationStatus(f.InvestigationStatus) == InvestigationStatusFailed &&
-		(f.InvestigationOutcome == "" || InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeTimedOut) {
+		(f.InvestigationOutcome == "" ||
+			InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeTimedOut ||
+			InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeInterrupted) {
 		// The run failed before producing a conclusion. The scheduled Watch
 		// cadence owns the next assessment; there is no additional cooldown.
 		// Admission, attempt limits and action authority still apply.
@@ -505,7 +512,9 @@ func deriveLoopState(f *Finding) FindingLoopState {
 		return FindingLoopStateRemediating
 	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
 		return FindingLoopStateRemediationFailed
-	case InvestigationOutcomeFixRejected, InvestigationOutcomeFixVerificationUnknown, InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix:
+	case InvestigationOutcomeFixRejected, InvestigationOutcomeFixVerificationUnknown, InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix, InvestigationOutcomeUnclassified:
+		// An unclassified run still left a summary for the operator to read;
+		// unlike needs_attention it stays eligible for another run.
 		return FindingLoopStateNeedsAttention
 	case InvestigationOutcomeTimedOut:
 		return FindingLoopStateTimedOut
@@ -2673,6 +2682,50 @@ func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome strin
 			"next_outcome": outcome,
 		})
 	}
+	s.syncLoopStateLocked(f)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// RecoverStuckInvestigation closes a run that is no longer live with the given
+// status and outcome, but only while the finding still shows that run as
+// running, so a result or a newer run that landed since the caller looked is
+// never overwritten. runStartedAt is the start of the run's session, or zero
+// when the orchestrator holds none. A run that started before the finding's
+// current occurrence is only recorded as interrupted: its result is not this
+// occurrence's. A run starts with no outcome, so an outcome already present
+// came from the action lifecycle during this run; it is kept, and the run
+// completes, so a queued fix still blocks another investigation. The close
+// becomes the finding's latest investigation time.
+func (s *FindingsStore) RecoverStuckInvestigation(id, sessionID string, runStartedAt time.Time, status InvestigationStatus, outcome InvestigationOutcome, at time.Time) bool {
+	s.mu.Lock()
+	f, exists := s.findings[id]
+	if !exists || f.InvestigationStatus != string(InvestigationStatusRunning) || f.InvestigationSessionID != sessionID {
+		s.mu.Unlock()
+		return false
+	}
+	if !runStartedAt.IsZero() && !f.acceptsInvestigationResult(sessionID, runStartedAt) {
+		status, outcome = InvestigationStatusFailed, InvestigationOutcomeInterrupted
+	}
+	prevStatus := f.InvestigationStatus
+	prevOutcome := f.InvestigationOutcome
+	if prevOutcome != "" {
+		status = InvestigationStatusCompleted
+	} else {
+		f.InvestigationOutcome = string(outcome)
+		if outcome == InvestigationOutcomeFixVerified {
+			s.resolveVerifiedFindingLocked(f, prevOutcome)
+		}
+	}
+	f.InvestigationStatus = string(status)
+	f.LastInvestigatedAt = &at
+	s.appendLifecycleLocked(f, "investigation_updated", "Investigation state updated", f.LoopState, f.LoopState, map[string]string{
+		"prev_status":  prevStatus,
+		"next_status":  string(status),
+		"prev_outcome": prevOutcome,
+		"next_outcome": f.InvestigationOutcome,
+	})
 	s.syncLoopStateLocked(f)
 	s.mu.Unlock()
 	s.scheduleSave()

@@ -12586,3 +12586,25 @@ Routes, caller scope/token filtering, cache policy and probe count are unchanged
 `TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
 HTTP statuses, private-body controls, same-credential fixture recovery and wire
 attribution. They are not installed permission or guest-recovery acceptance.
+
+### Typed investigation conclusion tool (22 October 2026)
+
+`patrol_conclude_investigation` joins `patrol_propose_action` and
+`patrol_action_capabilities` as an investigation-only tool whose canonical name
+and descriptor live in `internal/agentcapabilities/`. It is statically
+read-kind and mutation-none, projected into the investigation scope surface,
+rejected by registry policy outside the investigation profile, and unavailable
+without the request-local capture. The model supplies only `outcome`
+(`resolved`, `cannot_fix` or `needs_attention`) and `reason`. The tool records
+the run's conclusion for the private orchestrator, which persists the outcome;
+it creates no proposal and grants no plan, approval or execution authority.
+The Pulse–enterprise boundary stays additive:
+`aicontracts.OrchestratorInvestigationResult.Conclusion`,
+`aicontracts.InvestigationConclusion`, the `unclassified` and `interrupted`
+outcome constants and the optional `InvestigationConcurrencyLimitUpdater` are
+new. `aicontracts.InvestigationSession.Deadline` (`deadline`, omitted when
+unrecorded) carries when a run's own timeout expires, so investigation session
+payloads gain one optional field. An older orchestrator ignores the conclusion
+and keeps reading prose markers, and records no deadline, so core measures its
+runs from their start. Proofs: `patrol_scope_tools_test.go`, `names_test.go`,
+`tools_conclude_test.go` and `contracts_test.go`.

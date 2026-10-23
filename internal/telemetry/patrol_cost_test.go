@@ -234,6 +234,8 @@ func TestPatrolInvestigationOutcomeBucketPartitionsEveryState(t *testing.T) {
 		{"needs_attention", "needs_attention", PatrolInvestigationOutcomeNeedsAttention},
 		{"cannot_fix", "completed", PatrolInvestigationOutcomeCannotFix},
 		{"timed_out", "failed", PatrolInvestigationOutcomeTimedOut},
+		{"unclassified", "completed", PatrolInvestigationOutcomeOther},
+		{"interrupted", "failed", PatrolInvestigationOutcomeInProgress},
 		{"", "pending", PatrolInvestigationOutcomeInProgress},
 		{"", "running", PatrolInvestigationOutcomeInProgress},
 		{"", "failed", PatrolInvestigationOutcomeFailed},
@@ -252,7 +254,7 @@ func TestPatrolInvestigationOutcomeBucketPartitionsEveryState(t *testing.T) {
 	if counts.Total() != len(cases) {
 		t.Fatalf("outcome counts total = %d, want %d (every investigated finding must land in exactly one bucket)", counts.Total(), len(cases))
 	}
-	if counts.FixFailed != 2 || counts.InProgress != 2 || counts.Other != 3 || counts.NeedsAttention != 2 {
+	if counts.FixFailed != 2 || counts.InProgress != 3 || counts.Other != 4 || counts.NeedsAttention != 2 || counts.TimedOut != 1 {
 		t.Fatalf("unexpected partition: %+v", counts)
 	}
 }

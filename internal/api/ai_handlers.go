@@ -1941,6 +1941,7 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		invConfig.MaxEvidenceCalls = cfg.GetPatrolInvestigationBudget()
 		invConfig.MaxTurns = aicontracts.InvestigationModelTurnLimit(invConfig.MaxEvidenceCalls)
 		invConfig.Timeout = cfg.GetPatrolInvestigationTimeout()
+		invConfig.MaxConcurrent = cfg.GetPatrolInvestigationConcurrency()
 	}
 
 	// The knowledge store supplies the operator's infrastructure notes.
@@ -2056,6 +2057,12 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 			Params:          captured.Params,
 			Reason:          captured.Reason,
 			EvidenceIDs:     captured.Identity.EvidenceIDs,
+		}
+	}
+	if runResult.Conclusion != nil {
+		result.Conclusion = &aicontracts.InvestigationConclusion{
+			Outcome: runResult.Conclusion.Outcome,
+			Reason:  runResult.Conclusion.Reason,
 		}
 	}
 	return result, err

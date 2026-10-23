@@ -203,7 +203,8 @@ func deriveInvestigationRecordConfidence(record *aicontracts.InvestigationRecord
 		return aicontracts.InvestigationRecordConfidenceHigh
 	case aicontracts.OutcomeFixQueued, aicontracts.OutcomeFixExecuted, aicontracts.OutcomeCannotFix, aicontracts.OutcomeNeedsAttention:
 		return aicontracts.InvestigationRecordConfidenceMedium
-	case aicontracts.OutcomeFixRejected, aicontracts.OutcomeFixFailed, aicontracts.OutcomeFixVerificationFailed, aicontracts.OutcomeFixVerificationUnknown, aicontracts.OutcomeTimedOut:
+	case aicontracts.OutcomeFixRejected, aicontracts.OutcomeFixFailed, aicontracts.OutcomeFixVerificationFailed, aicontracts.OutcomeFixVerificationUnknown, aicontracts.OutcomeTimedOut,
+		aicontracts.OutcomeUnclassified, aicontracts.OutcomeInterrupted:
 		return aicontracts.InvestigationRecordConfidenceLow
 	}
 	if strings.TrimSpace(record.Conclusion) != "" || len(record.Evidence) > 0 {

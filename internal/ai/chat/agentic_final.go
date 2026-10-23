@@ -94,8 +94,9 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 	var suppressLeakedToolContent bool
 	var pendingVisibleContent string
 
-	// Keep this bounded so a stuck provider stream doesn't drag the whole request.
-	summaryCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	// Keep this bounded so a stuck provider stream doesn't drag the whole
+	// request. An investigation may use the time left before its deadline.
+	summaryCtx, cancel := context.WithTimeout(ctx, investigationSummaryTimeout(ctx, a.currentExecutionProfile(), 20*time.Second))
 	defer cancel()
 
 	summaryErr := a.provider.ChatStream(summaryCtx, summaryReq, func(event providers.StreamEvent) {

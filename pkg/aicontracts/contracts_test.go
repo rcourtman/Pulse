@@ -420,3 +420,63 @@ func TestInvestigationBudgetSeparatesEvidenceCallsFromModelTurns(t *testing.T) {
 		}
 	}
 }
+
+func TestInvestigationSessionCarriesItsRunDeadline(t *testing.T) {
+	payload, err := json.Marshal(EmptyInvestigationSession())
+	if err != nil {
+		t.Fatalf("marshal session: %v", err)
+	}
+	if strings.Contains(string(payload), `"deadline"`) {
+		t.Fatalf("a session with no recorded deadline must omit it: %s", payload)
+	}
+	deadline := time.Date(2026, 10, 23, 1, 30, 0, 0, time.UTC)
+	session := EmptyInvestigationSession()
+	session.Deadline = &deadline
+	payload, err = json.Marshal(session)
+	if err != nil {
+		t.Fatalf("marshal session: %v", err)
+	}
+	if !strings.Contains(string(payload), `"deadline":"2026-10-23T01:30:00Z"`) {
+		t.Fatalf("session must carry its run deadline: %s", payload)
+	}
+}
+
+func TestInvestigationResultCarriesTypedConclusion(t *testing.T) {
+	resultType := reflect.TypeOf(OrchestratorInvestigationResult{})
+	field, ok := resultType.FieldByName("Conclusion")
+	if !ok {
+		t.Fatal("investigation result must carry a typed Conclusion")
+	}
+	if field.Type != reflect.TypeOf((*InvestigationConclusion)(nil)) {
+		t.Fatalf("Conclusion field type = %v, want *InvestigationConclusion", field.Type)
+	}
+
+	empty, err := json.Marshal(OrchestratorInvestigationResult{})
+	if err != nil {
+		t.Fatalf("marshal empty result: %v", err)
+	}
+	if strings.Contains(string(empty), "conclusion") {
+		t.Fatalf("a run without a conclusion must omit the field: %s", empty)
+	}
+	payload, err := json.Marshal(OrchestratorInvestigationResult{Conclusion: &InvestigationConclusion{Outcome: OutcomeCannotFix, Reason: "no capability covers pool expansion"}})
+	if err != nil {
+		t.Fatalf("marshal concluded result: %v", err)
+	}
+	if !strings.Contains(string(payload), `"conclusion":{"outcome":"cannot_fix","reason":"no capability covers pool expansion"}`) {
+		t.Fatalf("conclusion wire shape changed: %s", payload)
+	}
+}
+
+func TestUnclassifiedAndInterruptedAreCanonicalWireValues(t *testing.T) {
+	for outcome, want := range map[InvestigationOutcome]string{
+		OutcomeUnclassified: "unclassified",
+		OutcomeInterrupted:  "interrupted",
+	} {
+		if string(outcome) != want {
+			t.Fatalf("outcome %q must keep wire value %q", outcome, want)
+		}
+	}
+	if _, ok := reflect.TypeOf((*InvestigationConcurrencyLimitUpdater)(nil)).Elem().MethodByName("SetInvestigationConcurrencyLimit"); !ok {
+		t.Fatal("the optional concurrency updater must keep SetInvestigationConcurrencyLimit")
+	}
+}

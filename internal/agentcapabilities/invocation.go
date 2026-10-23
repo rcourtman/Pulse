@@ -223,6 +223,9 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 	PatrolReportFindingToolName:      staticClass(ToolCallKindWrite, MutationPulseState),
 	PatrolResolveFindingToolName:     staticClass(ToolCallKindWrite, MutationPulseState),
 	PatrolProposeObserverToolName:    staticClass(ToolCallKindWrite, MutationPulseState),
+	// patrol_conclude_investigation only records the run's typed conclusion
+	// in the request-local capture; the orchestrator persists the outcome.
+	PatrolConcludeInvestigationToolName: staticClass(ToolCallKindRead, MutationNone),
 }
 
 // Clone returns a deep copy of the descriptor so callers can never

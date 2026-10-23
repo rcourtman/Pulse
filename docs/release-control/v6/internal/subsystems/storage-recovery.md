@@ -7158,3 +7158,10 @@ The Proxmox page surface's Overview guest heading ("Guests on <node>", Show all
 nodes) now renders through the shared `PlatformHostScopedTableTitle` that the
 Docker and vSphere overviews also use; its Storage, Replication, Backups, Ceph
 and Mail Gateway tabs, and every storage and recovery rule, are unchanged.
+
+The `internal/api` changes for typed Patrol investigation conclusions open no
+storage, backup or recovery path. They hand the run's typed conclusion to the
+private orchestrator, make investigation concurrency and timeout follow the
+Patrol provider, and label the `unclassified` and `interrupted` outcomes in the
+digest email. Recovery evidence, restore rules and storage capabilities are
+unchanged, and Patrol gains no storage remediation capability.

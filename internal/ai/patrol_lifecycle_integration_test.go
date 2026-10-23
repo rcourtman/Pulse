@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 // TestLifecycle_FindingToInvestigationToApproval verifies the end-to-end lifecycle:
@@ -151,12 +152,20 @@ func TestLifecycle_StuckInvestigationRecovery(t *testing.T) {
 		AnalyzeGuests: true,
 	})
 
-	// Set up orchestrator (required for MaybeInvestigateFinding path)
-	orch := newIntegrationOrchestrator(true)
-	ps.SetInvestigationOrchestrator(orch)
-
 	// Create a finding and manually set it to "running" with LastInvestigatedAt 20 minutes ago
 	twentyMinAgo := time.Now().Add(-20 * time.Minute)
+
+	// The orchestrator still holds the run's session, started 20 minutes ago,
+	// so recovery treats it as a hung run rather than one lost to a restart.
+	ps.SetInvestigationOrchestrator(&sessionReportingOrchestrator{sessions: map[string]*InvestigationSession{
+		"stuck-finding-1": {
+			ID:        "inv-stuck-1",
+			FindingID: "stuck-finding-1",
+			SessionID: "session-stuck-1",
+			Status:    aicontracts.InvestigationStatusRunning,
+			StartedAt: twentyMinAgo,
+		},
+	}})
 	stuckFinding := &Finding{
 		ID:                     "stuck-finding-1",
 		Key:                    "high-mem",

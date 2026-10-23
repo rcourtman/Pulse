@@ -23,7 +23,7 @@ func TestPatrolScopedToolProjectionUsesTypedLeastManifest(t *testing.T) {
 	if !ok {
 		t.Fatal("physical-disk scope was not recognized")
 	}
-	for _, required := range []string{PulseQueryToolName, PulseReadToolName, PulseMetricsToolName, PulseStorageToolName, PatrolActionCapabilitiesToolName, PatrolProposeActionToolName} {
+	for _, required := range []string{PulseQueryToolName, PulseReadToolName, PulseMetricsToolName, PulseStorageToolName, PatrolActionCapabilitiesToolName, PatrolProposeActionToolName, PatrolConcludeInvestigationToolName} {
 		if !slices.Contains(storageInvestigation, required) {
 			t.Fatalf("storage investigation tools missing %q: %v", required, storageInvestigation)
 		}
@@ -61,6 +61,9 @@ func TestPatrolScopedToolProjectionComposesProfileOwnedTools(t *testing.T) {
 	if slices.Contains(detection, PatrolProposeActionToolName) {
 		t.Fatalf("detection surface gained investigation proposal authority: %v", detection)
 	}
+	if slices.Contains(detection, PatrolConcludeInvestigationToolName) {
+		t.Fatalf("detection surface gained the investigation conclusion capture: %v", detection)
+	}
 }
 
 func TestGuestInvestigationsCanReadCollectedBackupEvidence(t *testing.T) {
@@ -71,7 +74,7 @@ func TestGuestInvestigationsCanReadCollectedBackupEvidence(t *testing.T) {
 				t.Fatalf("guest investigation lacks backup evidence: %v", names)
 			}
 			for _, name := range names {
-				if !IsPatrolInfrastructureEvidenceToolName(name) && name != PatrolActionCapabilitiesToolName && name != PatrolProposeActionToolName {
+				if !IsPatrolInfrastructureEvidenceToolName(name) && name != PatrolActionCapabilitiesToolName && name != PatrolProposeActionToolName && name != PatrolConcludeInvestigationToolName {
 					t.Fatalf("read projection gained action authority: %s", name)
 				}
 			}

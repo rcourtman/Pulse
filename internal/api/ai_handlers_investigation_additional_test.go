@@ -885,3 +885,51 @@ func TestPatrolExpiredActionHydrationRemovesQueuedOutcomeWithoutRewritingEvidenc
 		t.Fatal("duplicate hydration republished unchanged record")
 	}
 }
+
+func TestSetupInvestigationOrchestratorUsesSubscriptionAgentLimits(t *testing.T) {
+	prevStoreFactory := getCreateInvestigationStore()
+	SetCreateInvestigationStore(func(dataDir string) aicontracts.InvestigationStore {
+		return newTestInvestigationStore()
+	})
+	t.Cleanup(func() { SetCreateInvestigationStore(prevStoreFactory) })
+
+	var created []aicontracts.InvestigationConfig
+	prevOrchestratorFactory := getCreateInvestigationOrchestrator()
+	SetCreateInvestigationOrchestrator(func(deps aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator {
+		created = append(created, deps.Config)
+		return &stubInvestigationOrchestrator{}
+	})
+	t.Cleanup(func() { SetCreateInvestigationOrchestrator(prevOrchestratorFactory) })
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	saved := config.NewDefaultAIConfig()
+	saved.PatrolModel = config.AIProviderCodexSubscription + ":gpt-5.6-luna"
+	if err := persistence.SaveAIConfig(*saved); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+	tenantSvc := ai.NewService(persistence, nil)
+	if err := tenantSvc.LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	tenantSvc.SetStateProvider(&MockStateProvider{})
+
+	handler := &AISettingsHandler{
+		investigationStores: make(map[string]aicontracts.InvestigationStore),
+	}
+	handler.chatHandler = &AIHandler{
+		services: map[string]AIService{
+			"tenant-1": chat.NewService(chat.Config{AIConfig: config.NewDefaultAIConfig()}),
+		},
+	}
+	handler.setupInvestigationOrchestrator("tenant-1", tenantSvc)
+
+	if len(created) != 1 {
+		t.Fatalf("orchestrator factory calls = %d, want 1", len(created))
+	}
+	if created[0].MaxConcurrent != 1 {
+		t.Fatalf("MaxConcurrent = %d, want 1 for a subscription agent that serves one call at a time", created[0].MaxConcurrent)
+	}
+	if want := time.Duration(config.DefaultPatrolSubscriptionInvestigationTimeoutSec) * time.Second; created[0].Timeout != want {
+		t.Fatalf("Timeout = %s, want %s", created[0].Timeout, want)
+	}
+}
