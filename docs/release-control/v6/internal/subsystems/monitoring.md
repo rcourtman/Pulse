@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Partial PVE backup scans cannot delete durable history
+
+Only a successfully built, complete PVE backup-history observation admits
+instance-wide recovery-point reconciliation. Partial or unavailable scans may
+publish accepted rows and their actual provider-quality evidence, but cannot
+delete unseen historical points, including after live inventory is rebuilt.
+Cancellation before publication leaves the previous payload and provider
+observation untouched. Complete empty scans still remove absent PVE backup
+points without crossing connection or evidence-class boundaries.
+
+`pve_backup_reconciliation_test.go` drives ordinary storage polling, asynchronous
+ingest and canonical posture through node/content failures, denied access,
+offline/missing nodes, complete removal, recovery and cancellation. Its opt-in
+producer feeds the production Backups coverage surface in
+`scripts/check-pve-backup-reconciliation.cjs`. Retained history is not a fresh
+provider read, an available archive, guest thaw or filesystem-liveness proof.
+
 ### Locally built images report an uncheckable update state (21 October 2026)
 
 An image with no RepoDigest was built or loaded on its host, so no registry

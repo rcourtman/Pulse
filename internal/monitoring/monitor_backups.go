@@ -436,6 +436,12 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
+	if ctx.Err() != nil {
+		// A cancelled enumeration cannot publish a successful empty inventory
+		// or renew provider evidence for a payload we did not accept.
+		return
+	}
+
 	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
 	if len(preservedStorages) > 0 {
 		log.Warn().
@@ -522,15 +528,19 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if protectionObservationErr == nil {
 			observations = append(observations, protectionObservation)
 		}
-		m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
-			points,
-			observations,
-			recoveryReconcileScope{
+		batch := recoveryIngestBatch{points: points, observations: observations}
+		// Live inventory can be empty after a monitor replacement even when
+		// durable recovery history exists. A partial scan may add observations,
+		// but cannot establish absence anywhere in the instance-wide scope.
+		if protectionObservationErr == nil &&
+			protectionObservation.HistoryCompleteness == recovery.ProtectionHistoryComplete {
+			batch.reconcile = &recoveryReconcileScope{
 				provider: string(recovery.ProviderProxmoxPVE),
 				idPrefix: "pve-backup:",
 				instance: instanceName,
-			},
-		)
+			}
+		}
+		m.enqueueRecoveryIngest(batch)
 	}
 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
