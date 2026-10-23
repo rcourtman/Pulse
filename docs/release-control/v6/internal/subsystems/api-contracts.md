@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Typed MCP fleet filters survive HTTP projection
+
+GET/DELETE capability projection preserves public string and boolean query
+arguments, including explicit `false`, without stringifying numbers, null,
+arrays or objects. Path parameters and internal approval metadata remain out
+of the query; write-body and authentication contracts are unchanged.
+`get_fleet_context` still advertises `hasFindings` as boolean: true narrows to
+resources with active findings; false/omitted applies no finding-presence
+filter. String dimensions intersect with it, and legacy string transport stays
+compatible. No endpoint or API-handler filter semantics change.
+
+`TestProjectCapabilityCallGETDELETEPreservesTypedFilters` pins conversion and
+shielding; the HTTP request test pins encoding and token preservation.
+`TestServer_FleetBooleanFiltersReachRealHandler` joins actual MCP stdio/schema,
+HTTP transport, production fleet handler and text/structured output over safe
+resource/finding fixtures. It covers true/false/omission, composed filters and
+an empty intersection; this is not released-binary or customer-estate proof.
+
 ### Proxmox setup guide names the command-access option by its shared label (21 October 2026)
 
 The Proxmox node setup guide's Docker-in-LXC note now points to the Pulse
