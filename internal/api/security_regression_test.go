@@ -1988,8 +1988,6 @@ func TestRelayMobileAccessScopeDeniesAdjacentAIRoutes(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/ai/models", body: "", want: config.ScopeAIChat},
 		{method: http.MethodGet, path: "/api/ai/status", body: "", want: config.ScopeAIChat},
-		{method: http.MethodGet, path: "/api/ai/assistant/surface-tools", body: "", want: config.ScopeAIChat},
-		{method: http.MethodPost, path: "/api/ai/workflow-prompts/render", body: `{}`, want: config.ScopeAIChat},
 		{method: http.MethodPost, path: "/api/ai/workflow-prompts/activity", body: `{}`, want: config.ScopeAIChat},
 		{method: http.MethodGet, path: "/api/ai/agents", body: "", want: config.ScopeAIExecute},
 		{method: http.MethodGet, path: "/api/ai/approvals/approval-1", body: "", want: config.ScopeAIExecute},
@@ -1998,6 +1996,8 @@ func TestRelayMobileAccessScopeDeniesAdjacentAIRoutes(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/findings/finding-1/reinvestigate", body: `{}`, want: config.ScopeAIExecute},
 		{method: http.MethodPost, path: "/api/ai/findings/finding-1/reapprove", body: `{}`, want: config.ScopeAIExecute},
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1", body: "", want: config.ScopeAIChat},
+		// Retired web chat sub-resources fall to the session router default,
+		// which still refuses tokens without ai:chat before answering 404.
 		{method: http.MethodPost, path: "/api/ai/sessions/session-1/summarize", body: `{}`, want: config.ScopeAIChat},
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1/diff", body: "", want: config.ScopeAIChat},
 		{method: http.MethodPost, path: "/api/ai/sessions/session-1/fork", body: `{}`, want: config.ScopeAIChat},
@@ -3504,13 +3504,10 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 		body   string
 	}{
 		{method: http.MethodGet, path: "/api/ai/models", body: ""},
-		{method: http.MethodGet, path: "/api/ai/assistant/surface-tools", body: ""},
-		{method: http.MethodPost, path: "/api/ai/workflow-prompts/render", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/workflow-prompts/activity", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/chat", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/sessions", body: ""},
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1", body: ""},
-		{method: http.MethodGet, path: "/api/ai/question/q-1", body: ""},
 		{method: http.MethodGet, path: "/api/ai/knowledge", body: ""},
 		{method: http.MethodGet, path: "/api/ai/knowledge/export", body: ""},
 	}

@@ -485,41 +485,6 @@ func TestAgenticLoop_SystemPromptPartsSeparateStablePrefix(t *testing.T) {
 	}
 }
 
-func TestAgenticLoop_AnswerQuestion(t *testing.T) {
-	mockProvider := &MockProvider{}
-	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	loop := NewAgenticLoop(mockProvider, executor, "test")
-
-	t.Run("NoPendingQuestion", func(t *testing.T) {
-		err := loop.AnswerQuestion("missing", nil)
-		require.Error(t, err)
-	})
-
-	t.Run("AnswersDelivered", func(t *testing.T) {
-		ch := make(chan []QuestionAnswer, 1)
-		loop.pendingQs["q1"] = ch
-
-		answers := []QuestionAnswer{{ID: "q", Value: "a"}}
-		err := loop.AnswerQuestion("q1", answers)
-		require.NoError(t, err)
-
-		select {
-		case got := <-ch:
-			assert.Equal(t, answers, got)
-		default:
-			t.Fatal("expected answers to be delivered")
-		}
-	})
-
-	t.Run("AlreadyAnswered", func(t *testing.T) {
-		ch := make(chan []QuestionAnswer)
-		loop.pendingQs["q2"] = ch
-
-		err := loop.AnswerQuestion("q2", []QuestionAnswer{{ID: "q", Value: "a"}})
-		require.Error(t, err)
-	})
-}
-
 func TestWaitForApprovalDecision(t *testing.T) {
 	store, err := approval.NewStore(approval.StoreConfig{
 		DataDir:            t.TempDir(),

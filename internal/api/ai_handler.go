@@ -15,7 +15,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -57,13 +56,6 @@ type AIService interface {
 	GetModelHandoffMetadata(ctx context.Context, sessionID string) (chat.HandoffMetadata, error)
 	ClearModelHandoffContext(ctx context.Context, sessionID string) error
 	AbortSession(ctx context.Context, sessionID string) error
-	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
-	ForkSession(ctx context.Context, sessionID string) (*chat.Session, error)
-	UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error)
-	RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error)
-	SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error)
-	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
-	AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract
 	SetAlertProvider(provider chat.AssistantAlertProvider)
 	SetFindingsProvider(provider chat.AssistantFindingsProvider)
 	SetBaselineProvider(provider chat.AssistantBaselineProvider)
@@ -1030,19 +1022,9 @@ type ChatRequest struct {
 	HandoffMetadata  chat.HandoffMetadata   `json:"handoff_metadata,omitempty"`
 }
 
-type AssistantWorkflowPromptRenderRequest struct {
-	Name      string            `json:"name"`
-	Arguments map[string]string `json:"arguments,omitempty"`
-}
-
 type AssistantWorkflowPromptActivityRequest struct {
 	Name    string `json:"name"`
 	Surface string `json:"surface,omitempty"`
-}
-
-type AssistantWorkflowPromptRenderResponse struct {
-	Description string `json:"description"`
-	Text        string `json:"text"`
 }
 
 type RenameSessionRequest struct {
@@ -3020,98 +3002,6 @@ func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
-// HandleAssistantSurfaceTools handles GET /api/ai/assistant/surface-tools.
-func (h *AIHandler) HandleAssistantSurfaceTools(w http.ResponseWriter, r *http.Request) {
-	if cfg := h.getConfig(r.Context()); cfg != nil {
-		applyConfiguredCORSHeaders(
-			w,
-			r.Header.Get("Origin"),
-			cfg.AllowedOrigins,
-			"GET, OPTIONS",
-			"Accept, Cookie",
-		)
-	}
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	ctx := chat.WithExecuteAuthority(r.Context(), assistantExecuteAuthority(r.Context()))
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(svc.AssistantSurfaceToolContract(ctx))
-}
-
-// HandleRenderWorkflowPrompt handles POST /api/ai/workflow-prompts/render.
-func (h *AIHandler) HandleRenderWorkflowPrompt(w http.ResponseWriter, r *http.Request) {
-	if cfg := h.getConfig(r.Context()); cfg != nil {
-		applyConfiguredCORSHeaders(
-			w,
-			r.Header.Get("Origin"),
-			cfg.AllowedOrigins,
-			"POST, OPTIONS",
-			"Content-Type, Accept, Cookie",
-		)
-	}
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req AssistantWorkflowPromptRenderRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
-	}
-
-	manifest := agentcapabilities.CanonicalManifest()
-	result, err := agentcapabilities.BuildPulseWorkflowPromptFromManifestWithOptions(
-		manifest,
-		agentcapabilities.PulseWorkflowPromptParams{
-			Name:      req.Name,
-			Arguments: req.Arguments,
-		},
-		agentcapabilities.PulseWorkflowPromptRenderOptions{
-			ResourceContextInstruction: func(resourceID string) string {
-				return fmt.Sprintf("Use the Assistant's current Pulse context for resource %q; if it is not already attached, use the shared resource context capability before making a recommendation", resourceID)
-			},
-		},
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	h.recordAssistantWorkflowPromptActivity(r.Context(), req.Name)
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(AssistantWorkflowPromptRenderResponse{
-		Description: result.Description,
-		Text:        result.Text,
-	})
-}
-
 // HandleRecordWorkflowPromptActivity handles POST /api/ai/workflow-prompts/activity.
 func (h *AIHandler) HandleRecordWorkflowPromptActivity(w http.ResponseWriter, r *http.Request) {
 	if cfg := h.getConfig(r.Context()); cfg != nil {
@@ -3179,10 +3069,6 @@ func normalizeFirstPartyWorkflowPromptActivitySurface(surface string) string {
 	}
 }
 
-func (h *AIHandler) recordAssistantWorkflowPromptActivity(ctx context.Context, promptName string) {
-	h.recordFirstPartyWorkflowPromptActivity(ctx, config.WorkflowPromptActivitySurfacePulseAssistant, promptName)
-}
-
 func (h *AIHandler) recordFirstPartyWorkflowPromptActivity(ctx context.Context, surface, promptName string) {
 	if h == nil || strings.TrimSpace(promptName) == "" {
 		return
@@ -3198,239 +3084,6 @@ func (h *AIHandler) recordFirstPartyWorkflowPromptActivity(ctx context.Context, 
 	}); err != nil {
 		log.Debug().Err(err).Str("prompt_name", strings.TrimSpace(promptName)).Msg("Failed to record first-party workflow prompt activity")
 	}
-}
-
-// HandleSummarize handles POST /api/ai/sessions/{id}/summarize
-// Compresses context when nearing model limits
-func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !requireAssistantSessionMutationMethod(w, r) {
-		return
-	}
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	result, err := svc.SummarizeSession(ctx, sessionID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// HandleDiff handles GET /api/ai/sessions/{id}/diff
-// Rejects OpenCode-style file diff requests; Pulse sessions do not own code-file changes.
-func (h *AIHandler) HandleDiff(w http.ResponseWriter, r *http.Request, sessionID string) {
-	writeAssistantSessionFileChangesUnsupported(w)
-}
-
-// HandleFork handles POST /api/ai/sessions/{id}/fork
-// Creates a branch point in the conversation
-func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !requireAssistantSessionMutationMethod(w, r) {
-		return
-	}
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	session, err := svc.ForkSession(ctx, sessionID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(session)
-}
-
-// HandleUndoLastTurn handles POST /api/ai/sessions/{id}/undo.
-// The body is optional; retry/regenerate sends SessionTurnUndoOptions with the
-// prompt being re-run so a stale retry can never remove a different turn.
-func (h *AIHandler) HandleUndoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !requireAssistantSessionMutationMethod(w, r) {
-		return
-	}
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	var opts chat.SessionTurnUndoOptions
-	if r.Body != nil {
-		if err := json.NewDecoder(r.Body).Decode(&opts); err != nil && err != io.EOF {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-	}
-
-	result, err := svc.UndoLastTurn(ctx, sessionID, opts)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// HandleRedoLastTurn handles POST /api/ai/sessions/{id}/redo.
-func (h *AIHandler) HandleRedoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !requireAssistantSessionMutationMethod(w, r) {
-		return
-	}
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	result, err := svc.RedoLastTurn(ctx, sessionID)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// HandleSteerSession handles POST /api/ai/sessions/{id}/steer.
-// It routes a mid-turn steering message to the session's running agentic
-// loop; accepted=false with a reason is a normal outcome and the client
-// falls back to the ordinary follow-up queue.
-func (h *AIHandler) HandleSteerSession(w http.ResponseWriter, r *http.Request, sessionID string) {
-	if !requireAssistantSessionMutationMethod(w, r) {
-		return
-	}
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	var steerReq chat.SessionSteerRequest
-	if err := json.NewDecoder(r.Body).Decode(&steerReq); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	result, err := svc.SteerSession(ctx, sessionID, steerReq)
-	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// HandleRevert handles POST /api/ai/sessions/{id}/revert
-// Rejects OpenCode-style file revert requests; Pulse actions use governed history.
-func (h *AIHandler) HandleRevert(w http.ResponseWriter, r *http.Request, sessionID string) {
-	writeAssistantSessionFileChangesUnsupported(w)
-}
-
-// HandleUnrevert handles POST /api/ai/sessions/{id}/unrevert
-// Rejects OpenCode-style file unrevert requests; Pulse actions use governed history.
-func (h *AIHandler) HandleUnrevert(w http.ResponseWriter, r *http.Request, sessionID string) {
-	writeAssistantSessionFileChangesUnsupported(w)
-}
-
-func writeAssistantSessionFileChangesUnsupported(w http.ResponseWriter) {
-	http.Error(
-		w,
-		"Pulse Assistant sessions do not own file diffs or file-change revert. Use governed action history for infrastructure changes.",
-		http.StatusNotImplemented,
-	)
-}
-
-// AnswerQuestionRequest represents a request to answer a question
-type AnswerQuestionRequest struct {
-	Answers []struct {
-		ID    string `json:"id"`
-		Value string `json:"value"`
-	} `json:"answers"`
-}
-
-// HandleAnswerQuestion handles POST /api/ai/question/{questionID}/answer
-func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request, questionID string) {
-	ctx := r.Context()
-	if !h.IsRunning(ctx) {
-		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	var req AnswerQuestionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	// Convert to chat.QuestionAnswer
-	answers := make([]chat.QuestionAnswer, len(req.Answers))
-	for i, a := range req.Answers {
-		answers[i] = chat.QuestionAnswer{
-			ID:    a.ID,
-			Value: a.Value,
-		}
-	}
-
-	log.Info().
-		Str("questionID", questionID).
-		Int("answers_count", len(answers)).
-		Msg("AIHandler: Received answer to question")
-
-	svc := h.GetService(ctx)
-	if svc == nil {
-		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
-		return
-	}
-
-	if err := svc.AnswerQuestion(ctx, questionID, answers); err != nil {
-		log.Error().Err(err).Str("questionID", questionID).Msg("Failed to answer question")
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 // SetAlertProvider sets the alert provider for Assistant tools.

@@ -781,6 +781,32 @@ describe('docsLinks', () => {
     expect(probe).toContain('Empty-body requests keep the saved TLS settings');
   });
 
+  it('ships only the chat session routes Pulse Mobile still uses', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');
+    const sessions = apiReference.split('### Chat Sessions (Pulse Mobile)')[1].split('\n### ')[0];
+
+    expect(shipped).toBe(apiReference);
+    expect(sessions).toContain('these routes serve Pulse Mobile chat');
+    expect(sessions).toContain('`POST /api/ai/chat` (streaming)');
+    expect(sessions).toContain('`PATCH /api/ai/sessions/{id}` (rename)');
+    expect(sessions).toContain('`POST /api/ai/sessions/{id}/abort`');
+    // The web chat window that called these is retired.
+    for (const retired of [
+      '/summarize',
+      '/fork',
+      '/undo',
+      '/redo',
+      '/steer',
+      '/revert',
+      '/api/ai/question/',
+      '/api/ai/assistant/surface-tools',
+      '/api/ai/workflow-prompts/render',
+    ]) {
+      expect(apiReference).not.toContain(retired);
+    }
+  });
+
   it('ships the per-alert snooze and resume API contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shippedAPIReference = readFileSync(

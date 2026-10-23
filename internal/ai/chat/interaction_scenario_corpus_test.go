@@ -100,12 +100,11 @@ type interactionScenario struct {
 	name string
 	// promise states the user-visible behavior this scenario pins, in plain
 	// language. If a change makes this scenario fail, that promise broke.
-	promise        string
-	prompt         string
-	calls          []scriptedProviderCall
-	maxTurns       int
-	wantErr        bool
-	answerQuestion bool
+	promise  string
+	prompt   string
+	calls    []scriptedProviderCall
+	maxTurns int
+	wantErr  bool
 	// orderedTypes must appear in the recorded event stream as a
 	// subsequence (other events may interleave).
 	orderedTypes []string
@@ -187,18 +186,17 @@ func interactionScenarios() []interactionScenario {
 			},
 		},
 		{
-			name:           "model-selected clarification is answered before investigation",
-			promise:        "a model-selected first-turn question reaches the user and its answer returns through the same session before investigation continues",
-			prompt:         "help me choose what to check",
-			answerQuestion: true,
+			name:    "an unanswerable question call is refused without stalling the turn",
+			promise: "no Pulse client can answer pulse_question, so a model that calls it gets a refusal and keeps investigating instead of waiting forever; the user never sees a question card",
+			prompt:  "help me choose what to check",
 			calls: []scriptedProviderCall{
 				providerQuestionToolCall("call_q1"),
 				providerQueryToolCall("call_r1"),
 				providerContentDone("No active alerts right now — everything looks healthy."),
 			},
 			maxTurns:          6,
-			orderedTypes:      []string{"session", "question", "tool_start", "tool_end", "content", "done"},
-			forbiddenTypes:    []string{"error"},
+			orderedTypes:      []string{"session", "tool_start", "tool_end", "content", "done"},
+			forbiddenTypes:    []string{"error", "question"},
 			answerMustContain: []string{"No active alerts"},
 		},
 		{
@@ -257,15 +255,6 @@ func TestInteractionScenarioCorpus(t *testing.T) {
 			defer cancel()
 			execErr := service.ExecuteStream(ctx, req, func(event StreamEvent) {
 				eventLog = append(eventLog, event.Type+"|"+string(event.Data))
-				if event.Type == "question" && sc.answerQuestion {
-					var question QuestionData
-					if err := json.Unmarshal(event.Data, &question); err != nil {
-						t.Fatal(err)
-					}
-					if err := service.AnswerQuestion(ctx, question.QuestionID, []QuestionAnswer{{ID: "q1", Value: "fleet"}}); err != nil {
-						t.Fatal(err)
-					}
-				}
 				if event.Type == "content" {
 					var data ContentData
 					if err := json.Unmarshal(event.Data, &data); err == nil {

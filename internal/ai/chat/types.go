@@ -19,7 +19,6 @@ type Session struct {
 	CreatedAt      time.Time              `json:"created_at"`
 	UpdatedAt      time.Time              `json:"updated_at"`
 	MessageCount   int                    `json:"message_count,omitempty"`
-	CanRedo        bool                   `json:"can_redo,omitempty"`
 	System         bool                   `json:"system,omitempty"`
 	HandoffSummary *SessionHandoffSummary `json:"handoff_summary,omitempty"`
 }
@@ -32,36 +31,6 @@ type Session struct {
 func IsSystemSessionID(id string) bool {
 	id = strings.TrimSpace(id)
 	return id == "patrol-main" || id == "patrol-eval" || strings.HasPrefix(id, "investigation-")
-}
-
-// SessionTurnUndoResult is returned when the chat runtime removes the latest
-// user turn and makes that prompt available for editing.
-type SessionTurnUndoResult struct {
-	Success         bool   `json:"success"`
-	SessionID       string `json:"session_id"`
-	RestoredPrompt  string `json:"restored_prompt,omitempty"`
-	RemovedMessages int    `json:"removed_messages,omitempty"`
-	CanRedo         bool   `json:"can_redo"`
-	Message         string `json:"message,omitempty"`
-}
-
-// SessionTurnUndoOptions controls how the latest user turn is removed.
-type SessionTurnUndoOptions struct {
-	// ExpectedPrompt, when non-empty, only removes the turn if the latest
-	// user prompt matches it, so a retry can never remove a different turn
-	// (e.g. when the failed send never reached the session). The removed
-	// turn stays redoable until the retried send lands, at which point
-	// AddMessage clears the redo stack like any other new message.
-	ExpectedPrompt string `json:"expected_prompt"`
-}
-
-// SessionTurnRedoResult is returned when a previously undone turn is restored.
-type SessionTurnRedoResult struct {
-	Success          bool   `json:"success"`
-	SessionID        string `json:"session_id"`
-	RestoredMessages int    `json:"restored_messages,omitempty"`
-	CanRedo          bool   `json:"can_redo"`
-	Message          string `json:"message,omitempty"`
 }
 
 // SessionHandoffSummary is the browser-safe public summary of private
@@ -94,12 +63,7 @@ type Message struct {
 	ToolCalls        []ToolCall  `json:"tool_calls"`
 	ToolResult       *ToolResult `json:"tool_result,omitempty"`
 	Model            string      `json:"model,omitempty"`
-	// Steered marks a user message that was injected into a running agentic
-	// loop at a turn boundary (mid-turn steering) rather than opening a new
-	// turn. Steered user messages are persisted by the end-of-run save,
-	// unlike the turn-opening user prompt which is saved before the loop.
-	Steered   bool      `json:"steered,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp        time.Time   `json:"timestamp"`
 }
 
 func EmptyMessage() Message {
@@ -291,12 +255,6 @@ type ExecuteRequest struct {
 	SuppressSessionEvent bool `json:"-"`
 }
 
-// QuestionAnswer represents a user's answer to a question
-type QuestionAnswer struct {
-	ID    string `json:"id"`
-	Value string `json:"value"`
-}
-
 // ContentData is the data for "content" events
 type ContentData struct {
 	Text string `json:"text"`
@@ -396,59 +354,9 @@ type ApprovalNeededData struct {
 	Preflight         *ApprovalPreflightData         `json:"preflight,omitempty"`
 }
 
-// QuestionData is the data for "question" events
-type QuestionData struct {
-	SessionID  string     `json:"session_id,omitempty"`
-	QuestionID string     `json:"question_id"`
-	Questions  []Question `json:"questions"`
-}
-
-// Question represents a question from the AI to the user
-type Question struct {
-	ID       string           `json:"id"`
-	Type     string           `json:"type,omitempty"` // "text" | "select"
-	Question string           `json:"question"`
-	Header   string           `json:"header,omitempty"`
-	Options  []QuestionOption `json:"options,omitempty"`
-}
-
-// QuestionOption represents an option for a question
-type QuestionOption struct {
-	Label       string `json:"label"`
-	Value       string `json:"value,omitempty"`
-	Description string `json:"description,omitempty"`
-}
-
 // ErrorData is the data for "error" events
 type ErrorData struct {
 	Message string `json:"message"`
-}
-
-// SteerAppliedData is the data for "steer_applied" events: a steering
-// message was injected into the running loop at a turn boundary. The
-// originating client reconciles its pending row via ClientMessageID; other
-// clients on the same session render Prompt as a new steered user row.
-type SteerAppliedData struct {
-	SessionID       string `json:"session_id,omitempty"`
-	MessageID       string `json:"message_id,omitempty"`
-	ClientMessageID string `json:"client_message_id,omitempty"`
-	Prompt          string `json:"prompt,omitempty"`
-	Turn            int    `json:"turn"`
-}
-
-// SessionSteerRequest is the payload for POST /api/ai/sessions/{id}/steer.
-type SessionSteerRequest struct {
-	Prompt          string `json:"prompt"`
-	ClientMessageID string `json:"client_message_id,omitempty"`
-}
-
-// SessionSteerResult reports whether a steering message reached a running
-// loop. accepted=false with a reason is a normal outcome (e.g. the run
-// finished first); the client falls back to the ordinary queue drain.
-type SessionSteerResult struct {
-	Accepted  bool   `json:"accepted"`
-	SessionID string `json:"session_id"`
-	Reason    string `json:"reason,omitempty"` // "no_active_run" | "system_session" | "empty_prompt" | "steer_backlog"
 }
 
 // DoneData is the data for "done" events

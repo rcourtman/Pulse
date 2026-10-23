@@ -7184,3 +7184,12 @@ The `internal/api` change that makes the investigation orchestrator's finding
 writes check run ownership opens no storage, backup or recovery path. It decides
 only whether a run's start or result is recorded on a Patrol finding. Recovery
 evidence, restore rules and storage capabilities are unchanged.
+
+The `internal/api` and `internal/ai/chat` change of 2026-10-23 removes
+browser-only chat routes (`/api/ai/assistant/surface-tools`, `/api/ai/workflow-prompts/render`,
+`/api/ai/question/{id}/answer`, and the `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer`, `/diff`, `/revert`, and `/unrevert` session sub-resources). The adjacent-boundary notes above that
+name those routes are now history. Persisted chat session files no longer
+carry `turn_redo_stack` or the `steered` message flag; older files that still
+have them load unchanged and drop them on the next write. No backup, restore,
+or recovery path changes.

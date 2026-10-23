@@ -48,10 +48,13 @@ func TestPulseToolExecutorAssistantProviderToolsUsesRuntimeAvailability(t *testi
 	projected := exec.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{IncludeQuestionTool: true})
 	names := providerToolNameSet(projected)
 
-	for _, name := range []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseReadToolName, agentcapabilities.PulseControlToolName, agentcapabilities.PulseQuestionToolName} {
+	for _, name := range []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseReadToolName, agentcapabilities.PulseControlToolName} {
 		if !names[name] {
 			t.Fatalf("AssistantProviderTools did not expose available tool %s; names=%v", name, names)
 		}
+	}
+	if names[agentcapabilities.PulseQuestionToolName] {
+		t.Fatalf("canonical Assistant surface declares no interactive questions; names=%v", names)
 	}
 	if names[agentcapabilities.PulseFileEditToolName] {
 		t.Fatal("AssistantProviderTools exposed retired file mutation tool")
@@ -140,9 +143,12 @@ func TestPulseToolExecutorAssistantProviderToolsEnterThroughManifestSurfaceAffor
 func TestPulseToolExecutorAssistantProviderToolsHonorsInteractionMode(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{ReadState: &fakeReadState{}, ControlLevel: ControlLevelControlled})
 
+	// The canonical Assistant surface declares no interactive questions, so
+	// even an interactive request cannot add pulse_question: no Pulse client
+	// can answer it since the web chat window was retired.
 	interactive := providerToolNameSet(exec.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{IncludeQuestionTool: true}))
-	if !interactive[agentcapabilities.PulseQuestionToolName] {
-		t.Fatal("interactive Assistant provider surface must include the question tool")
+	if interactive[agentcapabilities.PulseQuestionToolName] {
+		t.Fatal("Assistant provider surface must not include the question tool")
 	}
 
 	nonInteractive := providerToolNameSet(exec.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{}))
@@ -168,52 +174,6 @@ func TestPulseToolExecutorAssistantProviderToolsHonorsControlLevel(t *testing.T)
 	}
 }
 
-func TestPulseToolExecutorAssistantSurfaceToolContractUsesRuntimeProjection(t *testing.T) {
-	exec := NewPulseToolExecutor(ExecutorConfig{
-		ReadState:          &fakeReadState{},
-		TypedActionPlanner: projectionTestPlanner(t),
-		AgentServer:        &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "node-1"}}},
-		ControlLevel:       ControlLevelControlled,
-	})
-
-	contract := exec.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{IncludeQuestionTool: true})
-	names := map[string]bool{}
-	for _, name := range contract.ToolNames {
-		names[name] = true
-	}
-	registryNames := map[string]bool{}
-	for _, name := range contract.RegistryToolNames {
-		registryNames[name] = true
-	}
-	nativeNames := map[string]bool{}
-	for _, name := range contract.NativeToolNames {
-		nativeNames[name] = true
-	}
-
-	if contract.SurfaceID != agentcapabilities.SurfaceIDPulseAssistant {
-		t.Fatalf("Assistant surface id = %q", contract.SurfaceID)
-	}
-	if contract.ToolSource != agentcapabilities.SurfaceToolSourceAssistantRegistry {
-		t.Fatalf("Assistant surface tool source = %q", contract.ToolSource)
-	}
-	for _, name := range []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseReadToolName, agentcapabilities.PulseControlToolName, agentcapabilities.PulseQuestionToolName} {
-		if !names[name] {
-			t.Fatalf("Assistant surface contract missing %s; names=%v", name, names)
-		}
-	}
-	for _, name := range []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseReadToolName, agentcapabilities.PulseControlToolName} {
-		if !registryNames[name] {
-			t.Fatalf("Assistant registry contract missing %s; names=%v", name, registryNames)
-		}
-	}
-	if !nativeNames[agentcapabilities.PulseQuestionToolName] {
-		t.Fatalf("Assistant native contract missing question tool; names=%v", nativeNames)
-	}
-	if len(contract.CapabilityNames) != 0 {
-		t.Fatalf("Assistant surface contract must not duplicate MCP capability names: %+v", contract.CapabilityNames)
-	}
-}
-
 // Retired execution transports alone must not advertise canonical planning on
 // either provider-facing projection, even when execution authority is enabled.
 func TestAssistantProjectionsRequireTypedPlanner(t *testing.T) {
@@ -234,13 +194,8 @@ func TestAssistantProjectionsRequireTypedPlanner(t *testing.T) {
 			})
 			opts := agentcapabilities.AssistantProviderToolOptions{}
 			names := providerToolNameSet(exec.AssistantProviderTools(opts))
-			contract := exec.AssistantSurfaceToolContract(opts)
-			found := false
-			for _, name := range contract.ToolNames {
-				found = found || name == agentcapabilities.PulseControlToolName
-			}
-			if names[agentcapabilities.PulseControlToolName] != tc.want || found != tc.want {
-				t.Fatalf("provider control=%v surface control=%v want=%v", names[agentcapabilities.PulseControlToolName], found, tc.want)
+			if names[agentcapabilities.PulseControlToolName] != tc.want {
+				t.Fatalf("provider control=%v want=%v", names[agentcapabilities.PulseControlToolName], tc.want)
 			}
 		})
 	}

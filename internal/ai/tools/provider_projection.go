@@ -12,15 +12,3 @@ func (e *PulseToolExecutor) AssistantProviderTools(opts agentcapabilities.Assist
 	}
 	return agentcapabilities.ProjectPulseAssistantProviderTools(agentcapabilities.CanonicalManifest(), e.ListTools(), e.ListToolGovernance(), opts)
 }
-
-// AssistantSurfaceToolContract returns the native Assistant surface summary
-// over the shared Pulse Intelligence Core. The executor owns the runtime
-// registry and availability rules; agentcapabilities owns the surface projection
-// contract shared with MCP and future external-agent adapters.
-func (e *PulseToolExecutor) AssistantSurfaceToolContract(opts agentcapabilities.AssistantProviderToolOptions) agentcapabilities.SurfaceToolContract {
-	contract, _ := agentcapabilities.ProjectPulseAssistantSurfaceToolContract(
-		agentcapabilities.CanonicalManifest().SurfaceContract,
-		e.AssistantProviderTools(opts),
-	)
-	return contract
-}

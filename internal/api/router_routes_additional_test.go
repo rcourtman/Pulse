@@ -38,6 +38,22 @@ func TestRouteAISessions_UnknownSubresource(t *testing.T) {
 	}
 }
 
+// The web chat window that used these session sub-resources is retired, and
+// Pulse Mobile never called them; they fall to the unknown-subresource 404.
+func TestRouteAISessions_RetiredWebChatSubresourcesAreNotFound(t *testing.T) {
+	for _, sub := range []string{"summarize", "fork", "undo", "redo", "steer", "diff", "revert", "unrevert"} {
+		router := &Router{}
+		req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/"+sub, nil)
+		rec := httptest.NewRecorder()
+
+		router.routeAISessions(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("POST %s: expected status %d, got %d", sub, http.StatusNotFound, rec.Code)
+		}
+	}
+}
+
 func TestRouteAISessions_MethodNotAllowed(t *testing.T) {
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1", nil)
@@ -140,222 +156,6 @@ func TestRouteAISessions_Abort(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
-func TestRouteAISessions_Summarize(t *testing.T) {
-	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("SummarizeSession", mock.Anything, "session-1").Return(map[string]interface{}{"summary": "ok"}, nil)
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/summarize", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_Diff(t *testing.T) {
-	mockSvc := &MockAIService{}
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/diff", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_Fork(t *testing.T) {
-	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("ForkSession", mock.Anything, "session-1").Return(&chat.Session{ID: "forked-1"}, nil)
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/fork", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_UndoLastTurn(t *testing.T) {
-	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("UndoLastTurn", mock.Anything, "session-1", chat.SessionTurnUndoOptions{}).Return(&chat.SessionTurnUndoResult{
-		Success:        true,
-		SessionID:      "session-1",
-		RestoredPrompt: "Inspect storage warnings",
-		CanRedo:        true,
-	}, nil)
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/undo", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_UndoLastTurnRetryOptions(t *testing.T) {
-	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("UndoLastTurn", mock.Anything, "session-1", chat.SessionTurnUndoOptions{
-		ExpectedPrompt: "Inspect storage warnings",
-	}).Return(&chat.SessionTurnUndoResult{
-		Success:   true,
-		SessionID: "session-1",
-	}, nil)
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	body := strings.NewReader(`{"expected_prompt":"Inspect storage warnings"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/undo", body)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_SteerSession(t *testing.T) {
-	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("SteerSession", mock.Anything, "session-1", chat.SessionSteerRequest{
-		Prompt:          "also check pve2",
-		ClientMessageID: "client-row-1",
-	}).Return(&chat.SessionSteerResult{
-		Accepted:  true,
-		SessionID: "session-1",
-	}, nil)
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	body := strings.NewReader(`{"prompt":"also check pve2","client_message_id":"client-row-1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/steer", body)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), `"accepted":true`) {
-		t.Fatalf("expected accepted result, got %s", rec.Body.String())
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_SteerSessionRejectsNonPost(t *testing.T) {
-	mockSvc := &MockAIService{}
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/steer", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestRouteAISessions_RedoLastTurn(t *testing.T) {
-	mockSvc := &MockAIService{}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("RedoLastTurn", mock.Anything, "session-1").Return(&chat.SessionTurnRedoResult{
-		Success:          true,
-		SessionID:        "session-1",
-		RestoredMessages: 2,
-		CanRedo:          false,
-	}, nil)
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/redo", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_Revert(t *testing.T) {
-	mockSvc := &MockAIService{}
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/revert", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
-func TestRouteAISessions_Unrevert(t *testing.T) {
-	mockSvc := &MockAIService{}
-
-	handler := &AIHandler{}
-	setUnexportedField(t, handler, "defaultService", mockSvc)
-
-	router := &Router{aiHandler: handler}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/unrevert", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeAISessions(rec, req)
-
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("expected status %d, got %d", http.StatusNotImplemented, rec.Code)
-	}
-	mockSvc.AssertExpectations(t)
-}
-
 func TestRouteApprovals_MissingID(t *testing.T) {
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals/", nil)
@@ -389,42 +189,6 @@ func TestRouteApprovals_MethodNotAllowed(t *testing.T) {
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestRouteQuestions_MissingID(t *testing.T) {
-	router := &Router{}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/question/", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeQuestions(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-	}
-}
-
-func TestRouteQuestions_MethodNotAllowed(t *testing.T) {
-	router := &Router{}
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/question/q1/answer", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeQuestions(rec, req)
-
-	if rec.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
-	}
-}
-
-func TestRouteQuestions_NotFound(t *testing.T) {
-	router := &Router{}
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/question/q1/unknown", nil)
-	rec := httptest.NewRecorder()
-
-	router.routeQuestions(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
 }
 

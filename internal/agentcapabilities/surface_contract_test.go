@@ -7,8 +7,8 @@ import (
 
 func TestDefaultSurfaceAffordancesPinSupportedSurfaces(t *testing.T) {
 	assistant := DefaultSurfaceAffordancesForID(SurfaceIDPulseAssistant)
-	if !assistant.Tools || !assistant.InteractiveQuestions {
-		t.Fatalf("Pulse Assistant affordances = %+v, want tools and interactive questions", assistant)
+	if !assistant.Tools || assistant.InteractiveQuestions {
+		t.Fatalf("Pulse Assistant affordances = %+v, want tools only (no client can answer questions)", assistant)
 	}
 	if assistant.Resources || assistant.Prompts || assistant.CapabilityMetadata {
 		t.Fatalf("Pulse Assistant must not default to MCP-only affordances: %+v", assistant)
@@ -56,7 +56,7 @@ func TestResolveSurfaceAffordanceContractResolvesLabelsAndDefaults(t *testing.T)
 	if ok {
 		t.Fatal("legacy Assistant fallback must not report a declared surface")
 	}
-	if legacyAssistant.SurfaceLabel != "Pulse Assistant" || !legacyAssistant.Affordances.Tools || !legacyAssistant.Affordances.InteractiveQuestions {
+	if legacyAssistant.SurfaceLabel != "Pulse Assistant" || !legacyAssistant.Affordances.Tools || legacyAssistant.Affordances.InteractiveQuestions {
 		t.Fatalf("legacy Assistant fallback = %+v", legacyAssistant)
 	}
 	if legacyAssistant.Affordances.Resources || legacyAssistant.Affordances.Prompts || legacyAssistant.Affordances.CapabilityMetadata {
@@ -182,8 +182,21 @@ func TestCloneSurfaceToolContractsDetachesNames(t *testing.T) {
 	}
 }
 
+// assistantSurfaceWithQuestions re-enables interactive questions on the
+// Pulse Assistant surface so projection tests can still cover native
+// interaction tools; the canonical manifest no longer declares them.
+func assistantSurfaceWithQuestions(contract SurfaceContract) SurfaceContract {
+	contract.OperatorSurfaces = append([]OperatorSurfaceContract(nil), contract.OperatorSurfaces...)
+	for i := range contract.OperatorSurfaces {
+		if contract.OperatorSurfaces[i].ID == SurfaceIDPulseAssistant {
+			contract.OperatorSurfaces[i].Affordances.InteractiveQuestions = true
+		}
+	}
+	return contract
+}
+
 func TestProjectPulseAssistantSurfaceToolContractSeparatesRegistryAndNativeTools(t *testing.T) {
-	contract, ok := ProjectPulseAssistantSurfaceToolContract(CanonicalManifest().SurfaceContract, []ProviderTool{
+	contract, ok := ProjectPulseAssistantSurfaceToolContract(assistantSurfaceWithQuestions(CanonicalManifest().SurfaceContract), []ProviderTool{
 		{Name: PulseQueryToolName},
 		{Name: PulseControlToolName},
 		NewPulseQuestionProviderTool(),
@@ -222,8 +235,11 @@ func TestProjectPulseAssistantSurfaceToolContractSeparatesRegistryAndNativeTools
 	if legacy.SurfaceID != SurfaceIDPulseAssistant || legacy.SurfaceLabel != "Pulse Assistant" {
 		t.Fatalf("legacy Assistant surface identity = %+v", legacy)
 	}
-	if !legacy.Affordances.Tools || !legacy.Affordances.InteractiveQuestions || legacy.Affordances.Resources {
+	if !legacy.Affordances.Tools || legacy.Affordances.InteractiveQuestions || legacy.Affordances.Resources {
 		t.Fatalf("legacy Assistant affordances = %+v", legacy.Affordances)
+	}
+	if len(legacy.NativeToolNames) != 0 {
+		t.Fatalf("legacy Assistant defaults must not offer pulse_question: %#v", legacy.NativeToolNames)
 	}
 }
 
@@ -506,8 +522,8 @@ func TestProjectPulseIntelligenceSurfaceToolContractsPreservesManifestSurfaceOrd
 	if contracts[0].SurfaceID != SurfaceIDPulseAssistant || contracts[1].SurfaceID != SurfaceIDPulseMCP || contracts[2].SurfaceID != "pulse_cli_agent" {
 		t.Fatalf("surface contract order = %+v", contracts)
 	}
-	if !reflect.DeepEqual(contracts[0].ToolNames, []string{PulseQueryToolName, PulseQuestionToolName}) {
-		t.Fatalf("Assistant projected names = %#v", contracts[0].ToolNames)
+	if !reflect.DeepEqual(contracts[0].ToolNames, []string{PulseQueryToolName}) {
+		t.Fatalf("Assistant projected names = %#v (canonical Assistant declares no interactive questions)", contracts[0].ToolNames)
 	}
 	if !reflect.DeepEqual(contracts[1].ToolNames, []string{FleetContextCapabilityName}) {
 		t.Fatalf("MCP projected names = %#v", contracts[1].ToolNames)

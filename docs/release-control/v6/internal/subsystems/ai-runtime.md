@@ -1043,8 +1043,9 @@ Any first-party workflow starter surface is a projection of that same
 catalogue, not a second prompt registry (the browser Assistant that hosted the
 starters was retired on 2026-10-22): it may decide which manifest-owned prompt
 is contextually usable, but display labels and rendered prompt text must come
-from shared manifest metadata and the shared backend renderer on
-`POST /api/ai/workflow-prompts/render`.
+from shared manifest metadata and the shared `internal/agentcapabilities`
+renderer that MCP `prompts/get` uses (the browser-only
+`POST /api/ai/workflow-prompts/render` route was removed on 2026-10-23).
 AI provider integration is registry-owned. Provider identity, display names,
 protocol family, default model, default base URL, credential fields,
 configured-state fields, clear-key fields, env-var hints, docs links, and
@@ -1505,9 +1506,7 @@ wording outside the manifest-owned surface contract.
 Surface tool summaries follow the same shared-core rule. The native Assistant
 runtime exposes provider tools through `ProjectPulseAssistantProviderTools`,
 which applies the manifest-owned Pulse Assistant surface affordances before
-registry or native interaction tools reach model requests, and exposes
-`PulseToolExecutor.AssistantSurfaceToolContract`, which projects the same
-runtime-available provider tools through `ProjectPulseAssistantSurfaceToolContract`;
+registry or native interaction tools reach model requests;
 external-agent adapters project request/response manifest capabilities through
 `ProjectManifestSurfaceToolContract` and publish the static external-adapter
 inventory on `Manifest.SurfaceToolContracts`. Missing external-adapter
@@ -1583,11 +1582,11 @@ finding-resolution detail. External-agent prompts and MCP adapters may treat a
 rejected-only decision as a terminal no-execution outcome, but approved
 decisions must still continue through execution and verification before the
 verified-outcome stage is complete.
-Runtime Assistant availability remains an authenticated Assistant concern,
-served by `GET /api/ai/assistant/surface-tools`, not a static fact in the
-public agent-capabilities manifest. A client that displays live capability
-availability must load that authenticated endpoint, and a browser client formats
-the posture through `frontend-modern/src/api/agentCapabilities.ts`; no client
+Runtime Assistant availability is not a static fact in the public
+agent-capabilities manifest. The authenticated
+`GET /api/ai/assistant/surface-tools` route that served it to the browser
+Assistant was removed on 2026-10-23 with the retired chat window, and no
+client displays live Assistant tool availability; no client
 may keep a local registry-tool catalogue or reuse MCP manifest capability names
 as native Assistant inventory. The External agents settings panel may show the
 external Pulse MCP tool posture, but it must get the normalized static
@@ -2167,9 +2166,11 @@ Shared projected-tool behavior hints are the same class of boundary: the
 neutral projection owns `ToolBehaviorHints`, while any `MCPToolAnnotations`
 name is an alias in the MCP wire edge only.
 Assistant-only provider tools are still shared Pulse Intelligence declarations:
-the native `pulse_question` clarification tool must be included in provider
+the native `pulse_question` clarification tool is declared for provider
 tool lists through `agentcapabilities.ProjectPulseAssistantProviderTools` and
-`agentcapabilities.AssistantNativeProviderTools`, its declaration must come
+`agentcapabilities.AssistantNativeProviderTools` (no chat profile offers it
+since 2026-10-23: no Pulse client can answer it, and the agentic loop pairs
+any call to it with a refusal instead of waiting), its declaration must come
 from `agentcapabilities.NewPulseQuestionProviderTool`, its JSON Schema must
 remain owned by `agentcapabilities.PulseQuestionProviderInputSchema`, its
 question type/defaulting vocabulary must use
@@ -2183,8 +2184,8 @@ tool-call artifact detection and streaming partial-tool-name holding must use
 `agentcapabilities.ProviderToolCallArtifactIndex` and
 `agentcapabilities.SplitTrailingProviderToolNamePrefix` with that shared catalog,
 so Assistant and future adapter boundaries do not fork DSML/XML/pipe/JSON/function
-leak semantics. Chat may own waiting for user answers, UI event
-emission, and user-answer delivery, but it must not carry a chat-local
+leak semantics. Chat no longer waits for user answers or emits question
+events, and it must not carry a chat-local
 provider schema, description, tool-list append rule, prompt-filter rule, parser,
 tool identity, or provider artifact detector for that interaction.
 That schema boundary is also a copy boundary: registry tool definitions must
@@ -2339,9 +2340,7 @@ thought-signature, and provider-result normalization as Assistant and MCP —
       UNIVERSAL backstop rule: EVERY code path that sends infrastructure-derived
       content to an external model MUST install `RequestSanitizerForModel` before the
       provider request — not only the interactive agentic loop. This explicitly
-      includes session compaction (`internal/ai/chat/session_compaction.go`
-      `SummarizeSession`), which sends the PERSISTED transcript (original user prompts
-      and tool outputs carry raw identifiers), and the shared service helper
+      includes the shared service helper
       `(*Service).requestSanitizerForModel` (`internal/ai/service.go`) used by
       discovery analysis, the report and fleet narrators, quick analysis, and the
       ExecuteAgentic paths. A new model-bound request path that skips the sanitizer is
@@ -2363,21 +2362,8 @@ thought-signature, and provider-result normalization as Assistant and MCP —
    session, stream, and provider rules below stay in force. The drawer,
    composer, slash-command, transcript-rendering, and browser dev-fixture
    rules that used to live in this item left with the window.
-   Assistant session compaction is a runtime-backed session workflow, not a
-   local waiting message, transcript-only UI action, or stubbed summarize
-   endpoint. The referenced OpenCode source at fetched `origin/dev` commit
-   `e82542b8023a8374f29c23b70ec019c8f256354e` registers `/compact` with
-   `/summarize` as an alias in
-   `packages/tui/src/routes/session/index.tsx` lines 548-570 and calls the
-   runtime session summary action with the current provider/model route. Pulse
-   adapts that behavior through `POST /api/ai/sessions/{id}/summarize`,
-   `chat.Service.SummarizeSession`, and
-   `SessionStore.CompactWithSummary`: the backend must reject active-running
-   sessions, build a bounded and redacted transcript for the active chat model,
-   record provider token usage as `assistant_session_compaction`, persist one
-   visible assistant summary row plus the latest bounded turns, clear redo
-   state, and never stream or persist raw provider tool-call artifacts, hidden
-   reasoning, secrets, or raw provider responses as the compacted transcript.
+   Assistant session compaction (`POST /api/ai/sessions/{id}/summarize`) was
+   removed on 2026-10-23 with the browser Assistant, its only caller.
    OpenRouter-routed Assistant chat requests must set a bounded default
    completion budget when the runtime request does not specify `MaxTokens`.
    OpenRouter preflights affordability against the requested maximum completion
@@ -2415,19 +2401,9 @@ thought-signature, and provider-result normalization as Assistant and MCP —
    route that actually completed the selected turn, and provider retry copy
    must say Pulse is retrying the selected route rather than imply automatic
    provider or model fallback.
-   Follow-up steering runs through `POST /api/ai/sessions/{id}/steer`. A
-   steering-accepted follow-up joins the loop at its next turn boundary (the
-   abort-check site in `agentic.go executeWithTools`) as a plain user message,
-   never mid-provider-stream and never mid-tool-batch; the loop announces the
-   injection with a `steer_applied` stream event carrying the client row id,
-   splices the message into `resultMessages` at its true position, and
-   persists it through the end-of-run save (whose skip-user-messages rule
-   exempts `Steered` messages). Steering carries prompt text only: it cannot
-   change the model route, control level, or autonomous mode of the running
-   turn, does not extend the turn budget or reset wrap-up brakes, and is
-   rejected for system sessions. Delivery is not guaranteed: a run that
-   finishes before a boundary discards unconsumed steers without persisting
-   them.
+   Mid-turn steering (`POST /api/ai/sessions/{id}/steer`, the agentic loop's
+   steering inbox, and the `steer_applied` stream event) was removed on
+   2026-10-23 with the browser Assistant, its only caller.
    Primary interactive chat model resolution must use the explicit configured
    chat route or, when no explicit chat route exists, a stable provider default
    without calling provider model catalogs before the selected stream starts. If
@@ -2661,25 +2637,10 @@ thought-signature, and provider-result normalization as Assistant and MCP —
    summaries `system: true` in every `Session` projection, so clients can keep
    them out of resume lists. The canonical Patrol forensic surface remains the
    `PatrolRunRecord` history at `/api/ai/patrol/runs`.
-   Assistant session forking is a runtime-backed session workflow, not a
-   header-only UI affordance. The referenced OpenCode source in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` registers
-   `session.fork` as a first-class session command and opens
-   `DialogForkFromTimeline` from the current session route. Pulse adapts that
-   source behavior through `POST /api/ai/sessions/{id}/fork`: the local
-   `chat.Service` must route to `SessionStore.Fork`, and the store must create
-   a fresh durable session ID with fresh create/update timestamps while cloning
-   the saved transcript and client-safe model handoff summary. Copied
-   messages keep their per-session message/tool IDs so assistant tool-call and
-   tool-result relationships remain intact inside the fork. Forking must not
-   mutate the source session, must continue through normal session list/load
-   contracts, and must not return `not_implemented` from the local runtime.
-   OpenCode-style session file diff/revert workflows do not apply to Pulse
-   Assistant sessions: Pulse does not own local code-file edits, and
-   infrastructure mutations are governed through approval/action history. Legacy direct calls to
-   `/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` must fail
-   explicitly with `501 Not Implemented` rather than returning a success-shaped
-   placeholder.
+   Session forking and the unsupported OpenCode-style
+   `/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` routes were removed
+   on 2026-10-23 with the browser Assistant; they answer the session router's
+   unknown-subresource `404`.
    Assistant session rename is part of the same session workflow. Pulse owns it
    through `PATCH /api/ai/sessions/{id}`, `chat.Service.RenameSession`, and
    `SessionStore.Rename`; saving must persist the normalized title, return the
@@ -2697,26 +2658,12 @@ thought-signature, and provider-result normalization as Assistant and MCP —
    record usage as `assistant_session_title`, and a failed or timed-out
    title call leaves the placeholder in place rather than failing anything
    user-visible.
-   Assistant turn undo/redo is a session repair workflow, not a
-   transcript-local delete. Pulse owns it through
-   `POST /api/ai/sessions/{id}/undo` and `POST /api/ai/sessions/{id}/redo`:
-   the backend session store must remove the latest user-authored turn plus
-   following assistant/tool messages as one durable turn, persist a bounded
-   redo stack, expose `can_redo` on the client-safe session summary, clear redo
-   state when a new message or trim changes the transcript, and keep forked
-   sessions independent from the source redo stack.
-   Retry and regenerate are turn re-runs over the same undo boundary, not a
-   parallel history mutation path. `POST /api/ai/sessions/{id}/undo` accepts an
-   optional JSON body (`chat.SessionTurnUndoOptions`) whose `expected_prompt`
-   field, when non-empty, makes the removal conditional on the latest
-   user-authored prompt matching the prompt being re-run, so a retry whose
-   failed send never reached the session cannot remove a different turn.
-   Session mutations stay POST-only at the handler: abort, summarize, fork,
-   undo, redo, and steer refuse every other method with `405` and
-   `Allow: POST` before resolving the Assistant service. A `GET` or `HEAD`
-   that the demo-mode read-only guard or the CSRF check admits as a read
-   therefore cannot cancel a running turn, compact or rewind a transcript,
-   or persist a fork.
+   Turn undo/redo, retry over the undo boundary, and the persisted redo stack
+   were removed on 2026-10-23 with the browser Assistant.
+   `POST /api/ai/sessions/{id}/abort`, the remaining session mutation, refuses
+   every other method with `405` and `Allow: POST` before resolving the
+   Assistant service, so a `GET` or `HEAD` that the demo-mode read-only guard
+   or the CSRF check admits as a read cannot cancel a running turn.
    Assistant output hygiene is part of the same boundary: provider reasoning
    and raw serialized tool-call artifacts must never serialize into
    client-facing chat streams or persisted assistant prose. Client-bound
@@ -4832,29 +4779,18 @@ resolved context) BEFORE provider projection and clone that executor
 for every provider attempt, so the offered schema and the runtime
 boundary always agree; scheduled Patrol (`ExecutePatrolStream`) applies
 the detection profile the same way, and `ListAvailableTools` projects
-through the identical path. Non-interactive profiles independently hide
-pulse_question from the manifest AND runtime-block it in the agentic
-loop before the interactive-call-set special case - a fabricated
-question call returns a non-interactive error without emitting a
-waiting event and sibling tool calls from the same provider turn keep
-processing; approval waits never block (they queue). Assistant and Watch
+through the identical path. No profile offers pulse_question (since
+2026-10-23 no Pulse client can answer it, and the manifest's Assistant
+surface no longer declares interactive questions); the agentic loop
+refuses any call to it with an error tool result - non-interactive
+wording for Patrol, ask-in-your-reply wording for chat - without
+emitting a waiting event, and sibling tool calls from the same provider
+turn keep processing; approval waits never block (they queue). Assistant and Watch
 do not infer diagnostic sufficiency from tool-call totals or silent tool turns.
 Configured run limits and repeated identical-call/error recovery still bound
 execution. Tool results never receive count-based wrap-up instructions.
-Interactive runs additionally enforce a
-look-before-asking gate: a `pulse_question` issued before the run has
-attempted any real tool call is refused with an error tool result that
-steers the model to read-only enumeration (the resolve-before-asking
-prompt policy made enforceable — small local models otherwise open
-natural first questions like "any alerts?" with a "which resource?"
-elicitation whose answer is derivable from enumeration). The refusal
-emits no question card or clarify event, sibling tool calls from the
-same provider turn keep processing rather than tripping the
-interactive-call-set skip path, any queued tool attempt (success or
-error) satisfies the gate for the rest of the run, and the gate fails
-open after `maxLookGateBlocks` refusals so a genuinely unanswerable
-prompt cannot livelock. The stream-boundary promise — a natural first
-question produces an answer, never a clarification card — is pinned in
+The stream-boundary promise - a question call never produces a
+clarification card or stalls the turn - is pinned in
 the interaction scenario corpus. The system prompt describes detection and
 investigation modes directly instead of claiming controlled or
 autonomous execution. Non-interactive operation grants no mutation
@@ -7049,8 +6985,8 @@ The runtime retains the configured turn, evidence-call, token and spend limits,
 cancellation and registered invocation permissions. Repeated identical reads
 and several failed calls do not independently remove tools. These may be useful
 rechecks or evidence of missing access. The model chooses how to continue within
-those explicit limits. First-turn clarification is delivered through the normal
-interactive question protocol without demanding an unrelated read first.
+those explicit limits. A model that needs clarification asks in its reply text:
+since 2026-10-23 no profile offers the interactive question tool.
 
 Removed metrics include workflow-machine blocks and inferred policy-block
 self-correction opportunities/success. Actual strict-resolution and routing
@@ -7059,7 +6995,7 @@ measurements. Independent action receipts and labelled qualification truth own
 outcome verification.
 
 Regression sources: `internal/ai/chat/agentic_action_gate_test.go`,
-`internal/ai/chat/agentic_look_gate_test.go`, `internal/ai/chat/agentic_test.go`,
+`internal/ai/chat/agentic_question_tool_test.go`, `internal/ai/chat/agentic_test.go`,
 `internal/ai/tools/control_targets_test.go`. Current-source real-model and browser
 qualification is recorded in the customer-journey plan. Historical passes do
 not satisfy that gate. `TestAgenticLoop_GeminiDiscoveryToLifecyclePlan` also exercises
@@ -7620,3 +7556,25 @@ Proofs:
 
 This changes which writes land, not what they record. It widens no mutation,
 approval or execution boundary.
+
+Backend routes that only the retired browser chat window called were removed
+on 2026-10-23: `/api/ai/assistant/surface-tools`, `/api/ai/workflow-prompts/render`,
+`/api/ai/question/{id}/answer`, and the `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer`, `/diff`, `/revert`, and `/unrevert` session sub-resources. Pulse Mobile chat never used them and keeps
+`/api/ai/chat`, the session list, create, rename, delete, messages, and abort
+routes, and `/api/ai/status`. With them went `chat.Service` fork, undo, redo,
+steer, summarize, answer-question, and surface-tool methods, the session
+store's fork and turn-undo operations and persisted redo stack, session
+compaction, the agentic loop's steering inbox and question-answer wait, the
+`steered` message flag, and the `question` and `steer_applied` stream events.
+No chat profile offers `pulse_question` any more: Pulse Mobile has no question
+UI and no other client can answer it, so an interactive turn that called it
+used to wait until the request ended. The agentic loop now pairs every
+`pulse_question` call with a refusal (non-interactive Patrol runs keep their
+existing wording) and continues, and the chat system prompt tells the model
+to ask in its reply text. The canonical manifest's Pulse Assistant surface no
+longer declares interactive questions, so the prompt's affordance text and the
+fallback governance names drop it; the shared `pulse_question` declaration in
+`agentcapabilities` is unchanged. Patrol investigations, provider routing, model-boundary
+sanitizing, approvals, and the Pulse Mobile chat contract are unchanged.
+Proof: `agentic_question_tool_test.go` and the interaction scenario corpus.

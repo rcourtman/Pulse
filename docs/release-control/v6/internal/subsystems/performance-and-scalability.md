@@ -1100,15 +1100,8 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    atomic approval consume, not a route-wide scan or request-hot-path fan-out;
    grant signing and WebSocket writes happen only after that bounded verifier
    succeeds.
-   Assistant mid-turn steering (`POST /api/ai/sessions/{id}/steer`, routed
-   through the session sub-route dispatch in `internal/api/router.go`) is a
-   point operation on the same terms: a map lookup of the session's active
-   loop plus an in-memory inbox append, returning immediate JSON with no
-   second SSE stream, no session-file read, and no provider work on the
-   request path. The per-session steering inbox is bounded
-   (`maxPendingSteersPerSession`), so repeated steers cannot grow service
-   memory or the running turn's prompt without limit; overflow returns
-   `steer_backlog` and the message stays on the client's queue.
+   Assistant mid-turn steering was removed on 2026-10-23 with the browser
+   chat window, its only caller.
    Scheduled-report background worker registration is allowed in router startup,
    but it must stay outside protected request handling. Due-schedule scans may
    enumerate tenant organization IDs and load each workspace schedule store, but
@@ -1219,12 +1212,8 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    capability check, but router setup and auth gating must not scan session
    files, load transcripts, hydrate handoff context, or inspect model/tool
    history before the route-local handler owns the single title mutation.
-   Assistant session undo/redo routing follows the same bounded router rule:
-   `POST /api/ai/sessions/{id}/undo` and
-   `POST /api/ai/sessions/{id}/redo` may branch to the AI handler after normal
-   auth/scope checks, but router setup must not scan sessions, read redo stacks,
-   hydrate transcripts, or perform model/provider work before the route-local
-   handler owns the single session mutation.
+   Assistant session undo/redo was removed on 2026-10-23 with the browser
+   chat window.
    Report branding follows the same bounded-work rule. Reporting handlers may
    read provider-default env configuration and a tenant-local system-settings
    record when a report is generated, but router setup and normal protected

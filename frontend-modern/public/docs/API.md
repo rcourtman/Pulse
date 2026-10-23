@@ -1548,25 +1548,20 @@ Runs an AI request which may return tool calls, findings, or suggested actions.
 
 ### Execute (Streaming)
 `POST /api/ai/execute/stream`
-Streaming variant of execute (used by the UI for incremental responses).
+Streaming variant of execute.
 
-### Assistant Chat & Sessions
-- `GET /api/ai/status`
+### Chat Sessions (Pulse Mobile)
+The web chat window is retired; these routes serve Pulse Mobile chat until
+the app retires on 31 March 2027. To ask about your infrastructure from an
+agent, connect an MCP client through `pulse-mcp` instead.
+- `GET /api/ai/status` reports whether the chat service is running
 - `POST /api/ai/chat` (streaming)
-- `GET /api/ai/sessions` returns session summaries; scoped Assistant handoffs may include a safe `handoff_summary` marker without model-only context text or command payloads.
+- `GET /api/ai/sessions` returns session summaries; scoped handoffs may include a safe `handoff_summary` marker without model-only context text or command payloads.
 - `POST /api/ai/sessions`
+- `PATCH /api/ai/sessions/{id}` (rename)
 - `DELETE /api/ai/sessions/{id}`
 - `GET /api/ai/sessions/{id}/messages`
 - `POST /api/ai/sessions/{id}/abort`
-- `POST /api/ai/sessions/{id}/summarize`
-- `POST /api/ai/sessions/{id}/fork`
-- Legacy OpenCode-style file-change routes (`GET /api/ai/sessions/{id}/diff`,
-  `POST /api/ai/sessions/{id}/revert`, `POST /api/ai/sessions/{id}/unrevert`)
-  return `501 Not Implemented`; Pulse Assistant sessions do not own file diffs
-  or file-level revert.
-
-### Question Answers
-- `POST /api/ai/question/{id}/answer`
 
 ### Kubernetes AI Analysis (Compatibility)
 `POST /api/ai/kubernetes/analyze`

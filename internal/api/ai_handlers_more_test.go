@@ -15,7 +15,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -886,32 +885,7 @@ func (s *sessionMutationRecordingAIService) AbortSession(ctx context.Context, se
 	return nil
 }
 
-func (s *sessionMutationRecordingAIService) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	s.record("summarize", sessionID)
-	return map[string]interface{}{"success": true}, nil
-}
-
-func (s *sessionMutationRecordingAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
-	s.record("fork", sessionID)
-	return &chat.Session{ID: sessionID + "-fork"}, nil
-}
-
-func (s *sessionMutationRecordingAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
-	s.record("undo", sessionID)
-	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil
-}
-
-func (s *sessionMutationRecordingAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
-	s.record("redo", sessionID)
-	return &chat.SessionTurnRedoResult{Success: true, SessionID: sessionID}, nil
-}
-
-func (s *sessionMutationRecordingAIService) SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error) {
-	s.record("steer", sessionID)
-	return &chat.SessionSteerResult{Accepted: true, SessionID: sessionID}, nil
-}
-
-var assistantSessionMutationSubresources = []string{"abort", "summarize", "fork", "undo", "redo", "steer"}
+var assistantSessionMutationSubresources = []string{"abort"}
 
 func TestAssistantSessionMutationsRequirePost(t *testing.T) {
 	for _, sub := range assistantSessionMutationSubresources {
@@ -947,11 +921,7 @@ func TestAssistantSessionMutationsRequirePost(t *testing.T) {
 			setUnexportedField(t, handler, "defaultService", svc)
 			router := &Router{aiHandler: handler}
 
-			body := ""
-			if sub == "steer" {
-				body = `{"prompt":"check the backup job too"}`
-			}
-			req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/"+sub, strings.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/"+sub, strings.NewReader(""))
 			rec := httptest.NewRecorder()
 			router.routeAISessions(rec, req)
 
@@ -976,13 +946,6 @@ func TestAssistantSessionReadSubresourcesKeepTheirMethods(t *testing.T) {
 	router.routeAISessions(messagesRec, messagesReq)
 	if messagesRec.Code != http.StatusOK {
 		t.Fatalf("GET messages status = %d, want %d: %s", messagesRec.Code, http.StatusOK, messagesRec.Body.String())
-	}
-
-	diffReq := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/diff", nil)
-	diffRec := httptest.NewRecorder()
-	router.routeAISessions(diffRec, diffReq)
-	if diffRec.Code != http.StatusNotImplemented {
-		t.Fatalf("GET diff status = %d, want %d: %s", diffRec.Code, http.StatusNotImplemented, diffRec.Body.String())
 	}
 
 	if got := svc.recorded(); len(got) != 0 {

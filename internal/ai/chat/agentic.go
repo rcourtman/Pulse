@@ -677,10 +677,8 @@ type AgenticLoop struct {
 
 	// State for ongoing executions
 	mu             sync.Mutex
-	aborted        map[string]bool                  // sessionID -> aborted
-	pendingQs      map[string]chan []QuestionAnswer // questionID -> answer channel
-	pendingSteers  map[string][]pendingSteer        // sessionID -> steering messages awaiting the next turn boundary
-	autonomousMode bool                             // When true, don't wait for approvals (for investigations)
+	aborted        map[string]bool // sessionID -> aborted
+	autonomousMode bool            // When true, don't wait for approvals (for investigations)
 	// executionProfile is the core-owned request posture (interactive
 	// Assistant, Patrol detection, Patrol investigation). It owns
 	// non-interactive behavior and the prompt's execution-mode text.
@@ -703,9 +701,8 @@ type AgenticLoop struct {
 
 // NewAgenticLoop creates a new agentic loop
 func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseToolExecutor, systemPrompt string) *AgenticLoop {
-	providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
-		IncludeQuestionTool: true,
-	})
+	// No profile offers pulse_question: no Pulse client can answer it.
+	providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{})
 
 	return &AgenticLoop{
 		provider:         provider,
@@ -715,16 +712,12 @@ func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseT
 		maxTurns:         MaxAgenticTurns,
 		orgID:            approval.DefaultOrgID,
 		aborted:          make(map[string]bool),
-		pendingQs:        make(map[string]chan []QuestionAnswer),
-		pendingSteers:    make(map[string][]pendingSteer),
 	}
 }
 
 // UpdateTools refreshes the tool list from the executor
 func (a *AgenticLoop) UpdateTools() {
-	a.tools = a.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
-		IncludeQuestionTool: true,
-	})
+	a.tools = a.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{})
 }
 
 // SetRequestSanitizer installs a model-bound request sanitizer. It is called
@@ -780,10 +773,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		a.mu.Lock()
 		delete(a.aborted, sessionID)
 		a.mu.Unlock()
-		// Unconsumed steers are dropped, never persisted: the client keeps
-		// its row queued until steer_applied confirms delivery, so an
-		// undelivered steer re-sends as a normal follow-up turn.
-		a.discardPendingSteers(sessionID)
 	}()
 
 	// Convert our messages to provider format
@@ -838,30 +827,6 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		requestSanitizer := a.requestSanitizer
 		streamIdleTimeout := a.streamIdleTimeout
 		a.mu.Unlock()
-
-		// === MID-TURN STEERING: inject queued user messages at the boundary ===
-		// Steers arrive via Service.SteerSession while a turn streams or its
-		// tools run; they join the conversation here, before the next model
-		// call, so the model reads them as ordinary user turns. Each one is
-		// announced on the stream so the drawer can settle its pending row.
-		for _, steer := range a.takePendingSteers(sessionID) {
-			msg := steer.message.NormalizeCollections()
-			providerMessages = append(providerMessages, convertToProviderMessages([]Message{msg})...)
-			resultMessages = append(resultMessages, msg)
-			if data, err := json.Marshal(SteerAppliedData{
-				SessionID:       sessionID,
-				MessageID:       msg.ID,
-				ClientMessageID: steer.clientMessageID,
-				Prompt:          msg.Content,
-				Turn:            turn,
-			}); err == nil {
-				callback(StreamEvent{Type: "steer_applied", Data: data})
-			}
-			log.Info().
-				Int("turn", turn).
-				Str("session_id", sessionID).
-				Msg("[AgenticLoop] Steering message injected at turn boundary")
-		}
 
 		// Record telemetry for loop iteration
 		if metrics := GetAIMetrics(); metrics != nil {
@@ -1200,7 +1165,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 				case "tool_start":
 					if data, ok := event.Data.(providers.ToolStartEvent); ok {
-						// pulse_question is rendered as a dedicated "question" card; suppress tool UI events.
+						// pulse_question is never offered and is refused below; keep its call out of the tool UI.
 						if data.Name == pulseQuestionToolName {
 							return
 						}
@@ -1559,13 +1524,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 		var pendingExec []pendingToolExec
 
-		// Non-interactive profiles (Patrol detection/investigation) cannot
-		// wait for user input. A fabricated pulse_question call must not
-		// reach the interactive-call-set path below - that path emits a
-		// "waiting for your answer" event and skips sibling tool calls.
-		// Instead, answer each question call with a non-interactive error
-		// and keep processing the other calls from the same provider turn.
-		if a.currentExecutionProfile().NonInteractive() {
+		// No Pulse client can answer pulse_question: the web chat that
+		// rendered question cards is retired, Pulse Mobile has no question
+		// UI, and Patrol runs are non-interactive. The tool is never
+		// offered, so a call to it is fabricated (often copied from older
+		// transcript history). Answer each one with a refusal and keep
+		// processing the other calls from the same provider turn, instead
+		// of waiting for an answer that cannot arrive.
+		{
+			questionRefusal := "pulse_question is unavailable: no one can answer it in this session. Ask the user in your reply text instead, or continue with the available evidence."
+			if a.currentExecutionProfile().NonInteractive() {
+				questionRefusal = "pulse_question is unavailable: this is a non-interactive run and no user can answer. Continue with the available evidence."
+			}
 			remaining := toolCalls[:0]
 			for _, tc := range toolCalls {
 				if tc.Name != pulseQuestionToolName {
@@ -1575,9 +1545,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				log.Warn().
 					Str("id", tc.ID).
 					Str("session_id", sessionID).
-					Msg("[AgenticLoop] Blocked pulse_question in non-interactive execution profile")
-				projection := newProviderToolResultContextProjection(tc.ID,
-					"pulse_question is unavailable: this is a non-interactive run and no user can answer. Continue with the available evidence.", true)
+					Msg("[AgenticLoop] Refused unanswerable pulse_question call")
+				projection := newProviderToolResultContextProjection(tc.ID, questionRefusal, true)
 				// Persist the refusal alongside the provider context: the
 				// assistant message above already recorded the question
 				// call, so the durable transcript must pair it with this
@@ -1595,106 +1564,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 			toolCalls = remaining
 			if len(toolCalls) == 0 {
-				// Same next-turn bookkeeping as the interactive-set path.
+				// Every call was refused: the next turn starts with the refusals.
 				currentTurnStartIndex = len(providerMessages)
 				turn++
 				continue
 			}
-		}
-
-		// pulse_question is interactive and must not run in parallel with other tools.
-		// If the provider emits multiple tool calls alongside pulse_question, skip the
-		// others and let the model retry after receiving the user's answer.
-		hasPulseQuestion := false
-		for _, tc := range toolCalls {
-			if tc.Name == pulseQuestionToolName {
-				hasPulseQuestion = true
-				break
-			}
-		}
-		if hasPulseQuestion {
-			emitWorkflowState(callback, "clarify", "Waiting for your answer before continuing.", "", pulseQuestionToolName)
-
-			for _, tc := range toolCalls {
-				log.Debug().
-					Str("tool", tc.Name).
-					Str("id", tc.ID).
-					Msg("Processing interactive tool call set (pulse_question present)")
-
-				if blockMsg, blocked := a.currentResourcePlaceholderBlock(tc); blocked {
-					log.Warn().
-						Str("tool", tc.Name).
-						Str("id", tc.ID).
-						Str("reason", blockMsg).
-						Msg("[AgenticLoop] Blocked invalid current_resource tool call before interactive-set execution")
-
-					emitCurrentResourceBlock(tc, blockMsg)
-					projection := newProviderToolResultContextProjection(tc.ID, blockMsg, true)
-					providerMessages = append(providerMessages, providers.Message{
-						Role:       "user",
-						ToolResult: &projection.Model,
-					})
-					continue
-				}
-
-				// Skip non-question tools in this turn; the model must retry after user input.
-				if tc.Name != pulseQuestionToolName {
-					skipMsg := fmt.Sprintf("SKIPPED: %s was requested this turn. Wait for the user's answer, then re-issue this tool call with the clarified inputs.", pulseQuestionToolName)
-
-					emitToolStartIfNeeded(tc)
-					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, skipMsg, false)
-
-					projection := newProviderToolResultContextProjection(tc.ID, skipMsg, true)
-					toolResultMsg := Message{
-						ID:         uuid.New().String(),
-						Role:       "user",
-						Timestamp:  time.Now(),
-						ToolResult: &projection.Transcript,
-					}
-					resultMessages = append(resultMessages, toolResultMsg)
-					providerMessages = append(providerMessages, providers.Message{
-						Role:       "user",
-						ToolResult: &projection.Model,
-					})
-					continue
-				}
-
-				// Execute the interactive question tool synchronously (blocks until user answers).
-				resultText, isError := a.executeQuestionTool(ctx, sessionID, tc, callback)
-
-				// For pulse_question we suppress tool_end on success (UI uses the question card).
-				if isError {
-					inputStr, rawInput := formatToolInputForFrontend(tc.Name, tc.Input, true)
-					jsonData, _ := json.Marshal(ToolEndData{
-						ID:       tc.ID,
-						Name:     tc.Name,
-						Input:    inputStr,
-						RawInput: rawInput,
-						Output:   resultText,
-						Success:  false,
-					})
-					callback(StreamEvent{Type: "tool_end", Data: jsonData})
-				}
-
-				projection := newProviderToolResultContextProjection(tc.ID, resultText, isError)
-				toolResultMsg := Message{
-					ID:         uuid.New().String(),
-					Role:       "user",
-					Timestamp:  time.Now(),
-					ToolResult: &projection.Transcript,
-				}
-				resultMessages = append(resultMessages, toolResultMsg)
-
-				providerMessages = append(providerMessages, providers.Message{
-					Role:       "user",
-					ToolResult: &projection.Model,
-				})
-			}
-
-			// Mark the start of the next turn's messages for compaction tracking.
-			currentTurnStartIndex = len(providerMessages)
-			turn++
-			continue
 		}
 
 		for _, tc := range toolCalls {

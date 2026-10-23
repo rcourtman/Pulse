@@ -726,9 +726,10 @@ var canonicalManifest = Manifest{
 				Description:     "The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions.",
 				Native:          true,
 				ExternalAdapter: false,
+				// No interactive questions: no Pulse client can answer
+				// pulse_question since the web chat window was retired.
 				Affordances: SurfaceAffordanceContract{
-					Tools:                true,
-					InteractiveQuestions: true,
+					Tools: true,
 				},
 			},
 			{

@@ -93,7 +93,7 @@ func TestPulseIntelligenceOverviewMarkdownProjectsManifestSurfaceContract(t *tes
 		"shared **Pulse Intelligence Core**: Canonical context, governed actions, safety gates, approval state, action audit, and verification shared by Pulse Assistant, Pulse MCP, and Pulse Patrol.",
 		"Patrol as the primary built-in operator and Assistant plus MCP as access paths",
 		"1. **Pulse Patrol**: Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.",
-		"2. **Pulse Assistant**: The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools and interactive questions.",
+		"2. **Pulse Assistant**: The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools.",
 		"3. **Pulse MCP**: The external-agent adapter that projects canonical Pulse Intelligence capabilities as MCP tools. Affordances: tools, resources, prompts, and capability metadata.",
 	} {
 		if !strings.Contains(got, expected) {
@@ -122,7 +122,7 @@ func TestMCPSurfaceContractMarkdownProjectsManifestSurfaceContract(t *testing.T)
 	for _, expected := range []string{
 		"**Pulse Intelligence Core**: Canonical context, governed actions, safety gates, approval state, action audit, and verification shared by Pulse Assistant, Pulse MCP, and Pulse Patrol.",
 		"**Pulse Patrol**: Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.",
-		"**Pulse Assistant** (the native Pulse surface): The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools and interactive questions.",
+		"**Pulse Assistant** (the native Pulse surface): The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools.",
 		"**Pulse MCP**: The external-agent adapter that projects canonical Pulse Intelligence capabilities as MCP tools. Affordances: tools, resources, prompts, and capability metadata.",
 	} {
 		if !strings.Contains(got, expected) {

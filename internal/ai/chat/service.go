@@ -3,7 +3,6 @@ package chat
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -133,9 +132,8 @@ type Service struct {
 	// dashboard. Nil means "don't record".
 	costStore *cost.Store
 
-	activeMu           sync.RWMutex
-	activeExecutions   map[string]map[*AgenticLoop]struct{}
-	questionExecutions map[string]*AgenticLoop
+	activeMu         sync.RWMutex
+	activeExecutions map[string]map[*AgenticLoop]struct{}
 }
 
 // SetPatrolProviderFactory installs a Patrol-only provider factory override.
@@ -192,7 +190,6 @@ func NewService(cfg Config) *Service {
 		controlLevelResolver: cfg.ControlLevelResolver,
 		costStore:            cfg.CostStore,
 		activeExecutions:     make(map[string]map[*AgenticLoop]struct{}),
-		questionExecutions:   make(map[string]*AgenticLoop),
 	}
 }
 
@@ -258,63 +255,6 @@ func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
 			delete(s.activeExecutions, sessionID)
 		}
 	}
-	for questionID, registeredLoop := range s.questionExecutions {
-		if registeredLoop == loop {
-			delete(s.questionExecutions, questionID)
-		}
-	}
-}
-
-// SteerSession routes a mid-turn steering message to the session's running
-// agentic loop for injection at the next turn boundary. accepted=false with
-// a reason is a normal outcome: the caller falls back to the ordinary
-// follow-up queue. Steering carries prompt text only — it cannot change the
-// model route, control level, or autonomous mode of the running turn.
-func (s *Service) SteerSession(ctx context.Context, sessionID string, req SessionSteerRequest) (*SessionSteerResult, error) {
-	sessionID = strings.TrimSpace(sessionID)
-	if err := validateSessionID(sessionID); err != nil {
-		return nil, err
-	}
-	result := &SessionSteerResult{SessionID: sessionID}
-	if IsSystemSessionID(sessionID) {
-		result.Reason = "system_session"
-		return result, nil
-	}
-	prompt := strings.TrimSpace(req.Prompt)
-	if prompt == "" {
-		result.Reason = "empty_prompt"
-		return result, nil
-	}
-
-	s.activeMu.RLock()
-	var loops []*AgenticLoop
-	for loop := range s.activeExecutions[sessionID] {
-		loops = append(loops, loop)
-	}
-	s.activeMu.RUnlock()
-	if len(loops) == 0 {
-		result.Reason = "no_active_run"
-		return result, nil
-	}
-
-	msg := Message{
-		ID:        uuid.New().String(),
-		Role:      "user",
-		Content:   prompt,
-		Steered:   true,
-		Timestamp: time.Now(),
-	}
-	for _, loop := range loops {
-		if err := loop.Steer(sessionID, msg, req.ClientMessageID); err != nil {
-			if errors.Is(err, errSteerBacklogFull) {
-				result.Reason = "steer_backlog"
-				return result, nil
-			}
-			return nil, err
-		}
-	}
-	result.Accepted = true
-	return result, nil
 }
 
 func assistantContextScopeForChatTurn(
@@ -392,30 +332,6 @@ func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextSco
 		CacheReadInputTokens:     cacheReadTokens,
 		SessionID:                strings.TrimSpace(sessionID),
 	})
-}
-
-func (s *Service) registerQuestionLoop(questionID string, loop *AgenticLoop) {
-	if s == nil || questionID == "" || loop == nil {
-		return
-	}
-
-	s.activeMu.Lock()
-	defer s.activeMu.Unlock()
-
-	if s.questionExecutions == nil {
-		s.questionExecutions = make(map[string]*AgenticLoop)
-	}
-	s.questionExecutions[questionID] = loop
-}
-
-func (s *Service) findQuestionLoop(questionID string) *AgenticLoop {
-	if s == nil || questionID == "" {
-		return nil
-	}
-
-	s.activeMu.RLock()
-	defer s.activeMu.RUnlock()
-	return s.questionExecutions[questionID]
 }
 
 func (s *Service) getActiveLoops(sessionID string) []*AgenticLoop {
@@ -969,18 +885,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			withWorkflowModelRoute(attempt.Model),
 		)
 
-		attemptCallback := func(event StreamEvent) {
-			if event.Type == "question" {
-				var data QuestionData
-				if err := json.Unmarshal(event.Data, &data); err == nil && data.QuestionID != "" {
-					s.registerQuestionLoop(data.QuestionID, loop)
-				}
-			}
-			wrappedCallback(event)
-		}
-
 		s.registerActiveLoop(session.ID, loop)
-		resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, attemptCallback)
+		resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, wrappedCallback)
 		s.unregisterActiveLoop(session.ID, loop)
 		resultMessages = sanitizeMessagesForHandoffResourcePolicy(resultMessages, handoffResources, handoffResourceProvider)
 		s.recordChatTurnCost(loop, attempt.Model, contextScope, session.ID)
@@ -1017,9 +923,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Save result messages
 	for _, msg := range resultMessages {
-		// Skip user messages (already saved) — except steered ones, which
-		// entered the conversation inside the loop and exist nowhere else.
-		if msg.Role == "user" && msg.ToolResult == nil && !msg.Steered {
+		// Skip user messages (already saved before the loop).
+		if msg.Role == "user" && msg.ToolResult == nil {
 			continue
 		}
 		if msg.Role == "assistant" && strings.TrimSpace(msg.Model) == "" {
@@ -3100,27 +3005,6 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 	return names
 }
 
-// AssistantSurfaceToolContract returns the live native Assistant surface tool
-// summary for the current runtime mode. It keeps API/UI consumers on the
-// executor-owned projection instead of rebuilding tool buckets from names.
-func (s *Service) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract {
-	s.mu.RLock()
-	executor := s.executor
-	effectiveControlLevel := s.effectiveControlLevelLocked()
-	s.mu.RUnlock()
-	if executor == nil {
-		return agentcapabilities.SurfaceToolContract{}
-	}
-	executor = executor.Clone()
-	executor.SetControlLevel(effectiveControlLevel)
-	executor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
-	executor.SetExecuteAuthority(executeAuthorityFromContext(ctx))
-
-	return executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{
-		IncludeQuestionTool: !s.isAutonomousModeEnabled(),
-	})
-}
-
 // ListSessions returns all sessions
 // maxSessionHandoffRefreshPerList bounds how many sessions get their handoff
 // action status re-checked per list call. The list is newest-first, so this
@@ -3382,67 +3266,6 @@ func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 
 	agenticLoop.Abort(sessionID)
 	return nil
-}
-
-// AnswerQuestion provides answers to a pending question
-func (s *Service) AnswerQuestion(ctx context.Context, questionID string, answers []QuestionAnswer) error {
-	s.mu.RLock()
-	started := s.started
-	agenticLoop := s.agenticLoop
-	s.mu.RUnlock()
-
-	if !started {
-		return fmt.Errorf("service not started")
-	}
-
-	if loop := s.findQuestionLoop(questionID); loop != nil {
-		return loop.AnswerQuestion(questionID, answers)
-	}
-
-	if agenticLoop == nil {
-		return fmt.Errorf("service not started")
-	}
-
-	return agenticLoop.AnswerQuestion(questionID, answers)
-}
-
-// ForkSession creates a branch
-func (s *Service) ForkSession(ctx context.Context, sessionID string) (*Session, error) {
-	s.mu.RLock()
-	sessions := s.sessions
-	s.mu.RUnlock()
-
-	if sessions == nil {
-		return nil, fmt.Errorf("service not started")
-	}
-
-	return sessions.Fork(sessionID)
-}
-
-// UndoLastTurn removes the latest user turn from the durable chat session.
-func (s *Service) UndoLastTurn(ctx context.Context, sessionID string, opts SessionTurnUndoOptions) (*SessionTurnUndoResult, error) {
-	s.mu.RLock()
-	sessions := s.sessions
-	s.mu.RUnlock()
-
-	if sessions == nil {
-		return nil, fmt.Errorf("service not started")
-	}
-
-	return sessions.UndoLastTurnWithOptions(sessionID, opts)
-}
-
-// RedoLastTurn restores the latest turn removed by UndoLastTurn.
-func (s *Service) RedoLastTurn(ctx context.Context, sessionID string) (*SessionTurnRedoResult, error) {
-	s.mu.RLock()
-	sessions := s.sessions
-	s.mu.RUnlock()
-
-	if sessions == nil {
-		return nil, fmt.Errorf("service not started")
-	}
-
-	return sessions.RedoLastTurn(sessionID)
 }
 
 // GetBaseURL returns empty since there's no sidecar
@@ -3805,9 +3628,9 @@ func (s *Service) buildSystemPromptWithToolGovernance(toolGovernance string) str
 - Write tools are allowed only when the user explicitly asks you to perform an action.
 - Status checks and monitoring are read-oriented; do not change state unless the user asked for a state change.
 - Resolve a missing target yourself before asking: use read-only query/topology tools to see which hosts, VMs, or containers exist. If exactly one plausible target matches the request (a single connected host, or one resource by that name), run read-only diagnostics against it and name the target in your answer instead of asking.
-- Ask for the target only when several plausible targets remain after looking, or when the action changes state. If a structured clarification tool is offered, use it for missing critical information (target, risky choice, preference); otherwise ask in normal assistant text.
+- Ask for the target only when several plausible targets remain after looking, or when the action changes state. Ask for missing critical information (target, risky choice, preference) in normal assistant text.
 - The same rule covers tool arguments: when a tool call fails because an argument is missing or invalid, recover yourself — enumerate the missing values with read-only tools (or retry the tool with the arguments it says it accepts) instead of asking the user. Never ask the user for internal identifiers such as resource IDs, UUIDs, or metric keys; users do not know them, and questions are reserved for preferences, risky choices, and genuine ambiguity between named options.
-- Asking may not be your first action: a clarification request issued before you have attempted any tool call this turn will be rejected. For broad questions ("how is my infrastructure doing?", "any alerts?"), call the obvious read-only tool with defaults — pulse_summarize {"action":"fleet"} needs no parameters, and the alert tools list everything without a target.
+- Look before you ask: for broad questions ("how is my infrastructure doing?", "any alerts?"), call the obvious read-only tool with defaults — pulse_summarize {"action":"fleet"} needs no parameters, and the alert tools list everything without a target.
 - Never guess a target you did not resolve. Do not attempt a tool call with current_resource or another placeholder as a stand-in for a missing target — in autonomous mode the same rules apply: resolve with read-only tools first, then ask in normal assistant text if genuine ambiguity remains.
 
 ## USER JOB
@@ -4022,19 +3845,15 @@ func firstNonEmptyRecentString(values ...string) string {
 // toolsForExecutor projects the provider tool manifest from ONE effective
 // request executor: the same clone (control level, autonomy, execution
 // profile already applied) that will execute the calls at runtime, so the
-// offered schema and the enforcement boundary can never disagree. The
-// profile owns question-tool availability: non-interactive Patrol
-// profiles never offer it, and the interactive profile keeps the
-// historical autonomous exemption.
+// offered schema and the enforcement boundary can never disagree. No
+// profile offers pulse_question: no Pulse client can answer it since the
+// web chat was retired, and the agentic loop refuses fabricated calls.
 func (s *Service) toolsForExecutor(executor *tools.PulseToolExecutor, autonomousMode bool) []providers.Tool {
 	if executor == nil {
 		executor = s.executor
 	}
 	profile := executor.ExecutionProfile()
-	includeQuestionTool := !profile.NonInteractive() && !autonomousMode
-	providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
-		IncludeQuestionTool: includeQuestionTool,
-	})
+	providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{})
 
 	// Patrol detection may be scoped by explicit product configuration,
 	// but never by prompt keyword inference. The selected Patrol model

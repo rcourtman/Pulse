@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -195,56 +194,6 @@ func (m *MockAIService) ClearModelHandoffContext(ctx context.Context, sessionID 
 func (m *MockAIService) AbortSession(ctx context.Context, sessionID string) error {
 	args := m.Called(ctx, sessionID)
 	return args.Error(0)
-}
-
-func (m *MockAIService) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	args := m.Called(ctx, sessionID)
-	return args.Get(0).(map[string]interface{}), args.Error(1)
-}
-
-func (m *MockAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
-	args := m.Called(ctx, sessionID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*chat.Session), args.Error(1)
-}
-
-func (m *MockAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
-	args := m.Called(ctx, sessionID, opts)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*chat.SessionTurnUndoResult), args.Error(1)
-}
-
-func (m *MockAIService) SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error) {
-	args := m.Called(ctx, sessionID, req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*chat.SessionSteerResult), args.Error(1)
-}
-
-func (m *MockAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
-	args := m.Called(ctx, sessionID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*chat.SessionTurnRedoResult), args.Error(1)
-}
-
-func (m *MockAIService) AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error {
-	args := m.Called(ctx, questionID, answers)
-	return args.Error(0)
-}
-
-func (m *MockAIService) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract {
-	args := m.Called(ctx)
-	if args.Get(0) == nil {
-		return agentcapabilities.SurfaceToolContract{}
-	}
-	return args.Get(0).(agentcapabilities.SurfaceToolContract)
 }
 
 func (m *MockAIService) SetAlertProvider(provider chat.AssistantAlertProvider) { m.Called(provider) }
@@ -597,74 +546,6 @@ func TestHandleStatus(t *testing.T) {
 	assert.Equal(t, "direct", resp["engine"])
 }
 
-func TestHandleAssistantSurfaceTools_UsesRuntimeSurfaceContract(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-
-	want := agentcapabilities.SurfaceToolContract{
-		SurfaceID:         agentcapabilities.SurfaceIDPulseAssistant,
-		SurfaceLabel:      "Pulse Assistant",
-		ToolSource:        agentcapabilities.SurfaceToolSourceAssistantRegistry,
-		ToolNames:         []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseQuestionToolName},
-		RegistryToolNames: []string{agentcapabilities.PulseQueryToolName},
-		NativeToolNames:   []string{agentcapabilities.PulseQuestionToolName},
-		Affordances: agentcapabilities.SurfaceAffordanceContract{
-			Tools:                true,
-			InteractiveQuestions: true,
-		},
-	}
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("AssistantSurfaceToolContract", mock.Anything).Return(want)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/assistant/surface-tools", nil)
-	w := httptest.NewRecorder()
-
-	h.HandleAssistantSurfaceTools(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-	var got agentcapabilities.SurfaceToolContract
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
-	assert.Equal(t, want.SurfaceID, got.SurfaceID)
-	assert.Equal(t, want.ToolSource, got.ToolSource)
-	assert.Equal(t, want.ToolNames, got.ToolNames)
-	assert.Equal(t, want.RegistryToolNames, got.RegistryToolNames)
-	assert.Equal(t, want.NativeToolNames, got.NativeToolNames)
-	assert.Empty(t, got.CapabilityNames)
-	assert.True(t, got.Affordances.InteractiveQuestions)
-	mockSvc.AssertExpectations(t)
-}
-
-func TestHandleAssistantSurfaceTools_RequiresRunningAssistant(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(false)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/assistant/surface-tools", nil)
-	w := httptest.NewRecorder()
-
-	h.HandleAssistantSurfaceTools(w, req)
-
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-	assert.Contains(t, w.Body.String(), "Pulse Assistant is not running")
-	mockSvc.AssertExpectations(t)
-	mockSvc.AssertNotCalled(t, "AssistantSurfaceToolContract", mock.Anything)
-}
-
-func TestHandleAssistantSurfaceTools_MethodNotAllowed(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/assistant/surface-tools", nil)
-	w := httptest.NewRecorder()
-
-	h.HandleAssistantSurfaceTools(w, req)
-
-	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
-}
-
 func TestHandleSessions(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
@@ -877,49 +758,6 @@ func TestHandleChat_InvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestHandleRenderWorkflowPrompt_UsesSharedPulseIntelligenceRenderer(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	body := fmt.Sprintf(
-		`{"name":%q,"arguments":{"resourceId":"vm:101"}}`,
-		agentcapabilities.PulseWorkflowPromptInvestigateResource,
-	)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	h.HandleRenderWorkflowPrompt(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-
-	var got AssistantWorkflowPromptRenderResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-		t.Fatalf("unmarshal render response: %v", err)
-	}
-	assert.Equal(t, "Pulse resource investigation", got.Description)
-	assert.Contains(t, got.Text, `Investigate Pulse resource "vm:101"`)
-	assert.Contains(t, got.Text, "Use the Assistant's current Pulse context")
-	assert.Contains(t, got.Text, "shared resource context capability")
-}
-
-func TestHandleRenderWorkflowPrompt_RecordsWorkflowPromptActivity(t *testing.T) {
-	persistence := config.NewConfigPersistence(t.TempDir())
-	h := newTestAIHandler(&config.Config{}, persistence, nil)
-
-	body := fmt.Sprintf(`{"name":%q}`, agentcapabilities.PulseWorkflowPromptOperationsLoop)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	h.HandleRenderWorkflowPrompt(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	history, err := persistence.LoadWorkflowPromptActivityHistory()
-	require.NoError(t, err)
-	require.Len(t, history.Events, 1)
-	assert.Equal(t, config.WorkflowPromptActivitySurfacePulseAssistant, history.Events[0].Surface)
-	assert.Equal(t, agentcapabilities.PulseWorkflowPromptOperationsLoop, history.Events[0].PromptName)
-}
-
 func TestHandleRecordWorkflowPromptActivity_RecordsFirstPartyActivationStarter(t *testing.T) {
 	for _, surface := range []string{
 		config.WorkflowPromptActivitySurfacePulsePatrol,
@@ -982,53 +820,6 @@ func TestHandleRecordWorkflowPromptActivity_RejectsExternalAgentSurfaces(t *test
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), "Unknown workflow prompt surface")
-}
-
-func TestHandleRenderWorkflowPrompt_UsesManifestWorkflowPromptRenderer(t *testing.T) {
-	source, err := os.ReadFile("ai_handler.go")
-	require.NoError(t, err)
-
-	text := string(source)
-	assert.Contains(t, text, "agentcapabilities.BuildPulseWorkflowPromptFromManifestWithOptions(")
-	assert.Contains(t, text, "manifest := agentcapabilities.CanonicalManifest()")
-	assert.NotContains(t, text, "agentcapabilities.BuildPulseWorkflowPromptWithOptions(\n\t\tagentcapabilities.CanonicalManifest().Capabilities")
-}
-
-func TestHandleRenderWorkflowPrompt_ValidatesSharedPromptArguments(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	body := fmt.Sprintf(`{"name":%q}`, agentcapabilities.PulseWorkflowPromptInvestigateResource)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	h.HandleRenderWorkflowPrompt(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "prompt argument resourceId is required")
-}
-
-func TestHandleRenderWorkflowPrompt_RejectsUnknownSharedPrompt(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(`{"name":"pulse_unknown"}`))
-	w := httptest.NewRecorder()
-
-	h.HandleRenderWorkflowPrompt(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "unknown prompt: pulse_unknown")
-}
-
-func TestHandleRenderWorkflowPrompt_RejectsInvalidJSON(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader("invalid"))
-	w := httptest.NewRecorder()
-
-	h.HandleRenderWorkflowPrompt(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "Invalid request")
 }
 
 func TestHandleChat_Success(t *testing.T) {
@@ -2297,24 +2088,6 @@ func TestCanonicalizeChatMentionType_RejectsRemovedAliases(t *testing.T) {
 	assert.Equal(t, "", canonicalizeChatMentionType("app_container"))
 }
 
-func TestHandleAnswerQuestion(t *testing.T) {
-	cfg := &config.Config{}
-	h := newTestAIHandler(cfg, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("AnswerQuestion", mock.Anything, "q1", mock.Anything).Return(nil)
-
-	body := `{"answers": [{"id": "a1", "value": "v1"}]}`
-	req := httptest.NewRequest("POST", "/api/ai/question/q1/answer", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	h.HandleAnswerQuestion(w, req, "q1")
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
 func TestHandleSessions_NotRunning(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
@@ -2389,45 +2162,6 @@ func TestHandleAbort_Error(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/abort", nil)
 	w := httptest.NewRecorder()
 	h.HandleAbort(w, req, "s1")
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestHandleSummarize_Error(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("SummarizeSession", mock.Anything, "s1").Return((map[string]interface{})(nil), assert.AnError)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/summarize", nil)
-	w := httptest.NewRecorder()
-	h.HandleSummarize(w, req, "s1")
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestHandleAnswerQuestion_InvalidJSON(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-
-	req := httptest.NewRequest("POST", "/api/ai/question/q1/answer", strings.NewReader("invalid"))
-	w := httptest.NewRecorder()
-	h.HandleAnswerQuestion(w, req, "q1")
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestHandleAnswerQuestion_Error(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("AnswerQuestion", mock.Anything, "q1", mock.Anything).Return(assert.AnError)
-
-	body := `{"answers": []}`
-	req := httptest.NewRequest("POST", "/api/ai/question/q1/answer", strings.NewReader(body))
-	w := httptest.NewRecorder()
-	h.HandleAnswerQuestion(w, req, "q1")
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
@@ -2549,46 +2283,6 @@ func TestHandleChat_BindsExecutionToRequestContext(t *testing.T) {
 	}
 }
 
-func TestHandleDiff_Unsupported(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	req := httptest.NewRequest("GET", "/api/ai/sessions/s1/diff", nil)
-	w := httptest.NewRecorder()
-	h.HandleDiff(w, req, "s1")
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-}
-
-func TestHandleFork_Error(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("ForkSession", mock.Anything, "s1").Return((*chat.Session)(nil), assert.AnError)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/fork", nil)
-	w := httptest.NewRecorder()
-	h.HandleFork(w, req, "s1")
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
-
-func TestHandleRevert_Unsupported(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/revert", nil)
-	w := httptest.NewRecorder()
-	h.HandleRevert(w, req, "s1")
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-}
-
-func TestHandleUnrevert_Unsupported(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/unrevert", nil)
-	w := httptest.NewRecorder()
-	h.HandleUnrevert(w, req, "s1")
-	assert.Equal(t, http.StatusNotImplemented, w.Code)
-}
-
 func TestHandleStatus_NotRunning(t *testing.T) {
 	h := newTestAIHandler(&config.Config{}, nil, nil)
 	mockSvc := new(MockAIService)
@@ -2658,32 +2352,6 @@ func TestHandleAbort_Success(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/abort", nil)
 	w := httptest.NewRecorder()
 	h.HandleAbort(w, req, "s1")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestHandleSummarize_Success(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("SummarizeSession", mock.Anything, "s1").Return(map[string]interface{}{"summary": "ok"}, nil)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/summarize", nil)
-	w := httptest.NewRecorder()
-	h.HandleSummarize(w, req, "s1")
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestHandleFork_Success(t *testing.T) {
-	h := newTestAIHandler(&config.Config{}, nil, nil)
-	mockSvc := new(MockAIService)
-	h.defaultService = mockSvc
-	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("ForkSession", mock.Anything, "s1").Return(&chat.Session{ID: "s2"}, nil)
-
-	req := httptest.NewRequest("POST", "/api/ai/sessions/s1/fork", nil)
-	w := httptest.NewRecorder()
-	h.HandleFork(w, req, "s1")
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 

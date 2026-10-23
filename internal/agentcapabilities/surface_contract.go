@@ -80,8 +80,7 @@ func DefaultSurfaceAffordancesForID(surfaceID string) SurfaceAffordanceContract 
 	switch strings.TrimSpace(surfaceID) {
 	case SurfaceIDPulseAssistant:
 		return SurfaceAffordanceContract{
-			Tools:                true,
-			InteractiveQuestions: true,
+			Tools: true,
 		}
 	case SurfaceIDPulseMCP:
 		return SurfaceAffordanceContract{

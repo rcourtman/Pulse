@@ -14260,40 +14260,6 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"approval_needed","data":{"approval_id":"approval-1","tool_id":"tool-2","tool_name":"pulse_exec","command":"systemctl restart nginx","run_on_host":true,"target_host":"node-1","target_type":"agent","target_id":"agent-1","risk":"high","description":"Restart web service","audit_id":"action-1","plan":{"action_id":"action-1","request_id":"approval-1","summary":"Restart web service","requires_approval":true,"approval_policy":"admin","blast_radius":"service interruption on target","rollback_available":true,"plan_hash":"hash-1","expires_at":"2026-04-23T12:30:00Z"},"context_confidence":{"level":"verified","summary":"Target was resolved to a concrete resource before approval.","evidence":["Target identifier bound to agent-1."]},"preflight":{"target":"agent:node-1 (agent-1)","current_state":"Resolved approval target: agent:node-1 (agent-1).","intended_change":"Restart web service","dry_run_available":false,"dry_run_summary":"No provider-supported dry run is available for this action.","safety_checks":["Approval is scoped to this organization."],"verification_steps":["Read back the target state after execution."],"generated_at":"2026-04-23T12:29:00Z"}}}`,
 		},
 		{
-			name: "question",
-			event: mustStreamEvent(t, "question", chat.QuestionData{
-				SessionID:  "session-1",
-				QuestionID: "question-1",
-				Questions: []chat.Question{
-					{
-						ID:       "target",
-						Type:     "select",
-						Question: "Which node should I inspect?",
-						Header:   "Target",
-						Options: []chat.QuestionOption{
-							{Label: "Node A", Value: "node-a", Description: "Primary compute node"},
-							{Label: "Node B", Value: "node-b", Description: "Replica node"},
-						},
-					},
-				},
-			}),
-			want: `{"type":"question","data":{"session_id":"session-1","question_id":"question-1","questions":[{"id":"target","type":"select","question":"Which node should I inspect?","header":"Target","options":[{"label":"Node A","value":"node-a","description":"Primary compute node"},{"label":"Node B","value":"node-b","description":"Replica node"}]}]}}`,
-		},
-		{
-			// A steering client settles its queued follow-up from this event;
-			// with the browser's generated chat types gone, this snapshot is
-			// the only pin on its wire shape.
-			name: "steer_applied",
-			event: mustStreamEvent(t, "steer_applied", chat.SteerAppliedData{
-				SessionID:       "session-1",
-				MessageID:       "message-7",
-				ClientMessageID: "client-3",
-				Prompt:          "also check the backups",
-				Turn:            2,
-			}),
-			want: `{"type":"steer_applied","data":{"session_id":"session-1","message_id":"message-7","client_message_id":"client-3","prompt":"also check the backups","turn":2}}`,
-		},
-		{
 			name: "done",
 			event: mustStreamEvent(t, "done", chat.DoneData{
 				SessionID:    "session-1",
@@ -19299,6 +19265,9 @@ func TestContract_AgentCapabilitiesManifestVersionIsPinned(t *testing.T) {
 	if !strings.Contains(src, `Version: "v1"`) {
 		t.Error("agent capabilities manifest must pin Version to v1; bumping is a breaking-change decision and should not happen silently")
 	}
+	if strings.Contains(src, `InteractiveQuestions: true`) {
+		t.Error("Pulse Assistant surface must not declare interactive questions: no Pulse client can answer pulse_question since the web chat was retired")
+	}
 	for _, required := range []string{
 		`SurfaceContract: SurfaceContract{`,
 		`ID:          "pulse_intelligence_core"`,
@@ -19306,7 +19275,6 @@ func TestContract_AgentCapabilitiesManifestVersionIsPinned(t *testing.T) {
 		`ID:          "pulse_patrol"`,
 		`ID:              SurfaceIDPulseAssistant`,
 		`ID:              SurfaceIDPulseMCP`,
-		`InteractiveQuestions: true`,
 		`CapabilityMetadata: true`,
 		`SurfaceToolContracts: []SurfaceToolContract{`,
 		`ToolNames:  canonicalPulseMCPSurfaceToolNames(),`,
@@ -19403,65 +19371,20 @@ func TestContract_PulseIntelligenceSurfaceToolProjectionKeepsAssistantAndMCPDist
 		}
 	}
 
-	assistantProjectionSource, err := os.ReadFile(filepath.Join("..", "ai", "tools", "provider_projection.go"))
-	if err != nil {
-		t.Fatalf("read internal/ai/tools/provider_projection.go: %v", err)
-	}
-	assistantProjection := string(assistantProjectionSource)
-	for _, required := range []string{
-		`func (e *PulseToolExecutor) AssistantSurfaceToolContract(opts agentcapabilities.AssistantProviderToolOptions) agentcapabilities.SurfaceToolContract`,
-		`agentcapabilities.ProjectPulseAssistantSurfaceToolContract(`,
-		`agentcapabilities.CanonicalManifest().SurfaceContract`,
-		`e.AssistantProviderTools(opts)`,
+	// The authenticated surface-tools route and its chat and tools wrappers
+	// served only the retired web chat window; they must not come back.
+	for _, retired := range []struct{ path, symbol string }{
+		{filepath.Join("..", "ai", "tools", "provider_projection.go"), `func (e *PulseToolExecutor) AssistantSurfaceToolContract(`},
+		{filepath.Join("..", "ai", "chat", "service.go"), `func (s *Service) AssistantSurfaceToolContract(`},
+		{"ai_handler.go", `func (h *AIHandler) HandleAssistantSurfaceTools(`},
+		{"router_routes_ai_relay.go", `"/api/ai/assistant/surface-tools"`},
 	} {
-		if !strings.Contains(assistantProjection, required) {
-			t.Errorf("Assistant executor must expose native surface projection through shared core contract; missing %s", required)
+		source, err := os.ReadFile(retired.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", retired.path, err)
 		}
-	}
-
-	chatServiceSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "service.go"))
-	if err != nil {
-		t.Fatalf("read internal/ai/chat/service.go: %v", err)
-	}
-	chatService := string(chatServiceSource)
-	for _, required := range []string{
-		`func (s *Service) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract`,
-		`executor.SetExecuteAuthority(executeAuthorityFromContext(ctx))`,
-		`executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{`,
-		`IncludeQuestionTool: !s.isAutonomousModeEnabled(),`,
-	} {
-		if !strings.Contains(chatService, required) {
-			t.Errorf("chat service must expose live native Assistant surface tools through the shared core contract; missing %s", required)
-		}
-	}
-
-	aiHandlerSource, err := os.ReadFile("ai_handler.go")
-	if err != nil {
-		t.Fatalf("read internal/api/ai_handler.go: %v", err)
-	}
-	aiHandler := string(aiHandlerSource)
-	for _, required := range []string{
-		`AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract`,
-		`func (h *AIHandler) HandleAssistantSurfaceTools(w http.ResponseWriter, r *http.Request)`,
-		`svc.AssistantSurfaceToolContract(ctx)`,
-		`Pulse Assistant is not running`,
-	} {
-		if !strings.Contains(aiHandler, required) {
-			t.Errorf("AI handler must expose authenticated native Assistant surface tool contract from runtime service; missing %s", required)
-		}
-	}
-
-	aiRelaySource, err := os.ReadFile("router_routes_ai_relay.go")
-	if err != nil {
-		t.Fatalf("read internal/api/router_routes_ai_relay.go: %v", err)
-	}
-	aiRelay := string(aiRelaySource)
-	for _, required := range []string{
-		`"/api/ai/assistant/surface-tools"`,
-		`RequireScope(config.ScopeAIChat, r.aiHandler.HandleAssistantSurfaceTools)`,
-	} {
-		if !strings.Contains(aiRelay, required) {
-			t.Errorf("Assistant surface tools endpoint must stay authenticated behind ai:chat route scope; missing %s", required)
+		if strings.Contains(string(source), retired.symbol) {
+			t.Errorf("%s must not reintroduce the retired web chat surface-tools path %s", retired.path, retired.symbol)
 		}
 	}
 
@@ -19483,15 +19406,16 @@ func TestContract_PulseIntelligenceSurfaceToolProjectionKeepsAssistantAndMCPDist
 	if assistant.ToolSource != agentcapabilities.SurfaceToolSourceAssistantRegistry {
 		t.Fatalf("Assistant tool source = %q", assistant.ToolSource)
 	}
+	// The canonical Assistant surface declares no interactive questions: no
+	// Pulse client can answer pulse_question since the web chat was retired.
 	if !reflect.DeepEqual(assistant.ToolNames, []string{
 		agentcapabilities.PulseQueryToolName,
 		agentcapabilities.PulseReadToolName,
-		agentcapabilities.PulseQuestionToolName,
 	}) {
 		t.Fatalf("Assistant surface tool names = %#v", assistant.ToolNames)
 	}
-	if !reflect.DeepEqual(assistant.NativeToolNames, []string{agentcapabilities.PulseQuestionToolName}) {
-		t.Fatalf("Assistant native tool names = %#v", assistant.NativeToolNames)
+	if len(assistant.NativeToolNames) != 0 {
+		t.Fatalf("Assistant native tool names = %#v, want none", assistant.NativeToolNames)
 	}
 	if len(assistant.CapabilityNames) != 0 {
 		t.Fatalf("Assistant surface must not duplicate MCP manifest capabilities: %#v", assistant.CapabilityNames)
@@ -21554,7 +21478,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 	assistantQuestionToolSrc := string(assistantQuestionToolSource)
 	for _, fragment := range []string{
 		`const pulseQuestionToolName = agentcapabilities.PulseQuestionToolName`,
-		`agentcapabilities.ParsePulseQuestionToolInput(input)`,
 	} {
 		if !strings.Contains(assistantQuestionToolSrc, fragment) {
 			t.Errorf("Assistant question tool must use shared provider declaration; missing %s", fragment)
@@ -21691,10 +21614,12 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		t.Fatalf("read internal/ai/chat/agentic.go: %v", err)
 	}
 	agenticSrc := string(assistantChatAgentic)
+	if strings.Contains(agenticSrc, "IncludeQuestionTool: true") {
+		t.Error("agentic loop must not offer pulse_question: no Pulse client can answer it since the web chat was retired")
+	}
 	for _, fragment := range []string{
 		`providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
 		`a.tools = a.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
-		`IncludeQuestionTool: true`,
 		`agentcapabilities.HasApprovalRequiredToolMarker(resultText)`,
 		`agentcapabilities.ParseApprovalRequiredToolMarkerData(resultText)`,
 		`inputWithApproval = agentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)`,
@@ -21791,6 +21716,9 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		t.Fatalf("read internal/ai/chat/service.go: %v", err)
 	}
 	chatServiceSrc := string(assistantChatService)
+	if strings.Contains(chatServiceSrc, "IncludeQuestionTool:") {
+		t.Error("chat service must not offer pulse_question: no Pulse client can answer it since the web chat was retired")
+	}
 	for _, fragment := range []string{
 		`manifest = s.executor.ListToolGovernance()`,
 		`agentcapabilities.ProviderToolNames(offeredTools)`,
@@ -21801,7 +21729,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`fallbackAssistantToolGovernanceOfferedNames(manifest)`,
 		`agentcapabilities.ManifestSurfaceAffordances(`,
 		`providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
-		`IncludeQuestionTool: includeQuestionTool`,
 		`agentcapabilities.BuildPulseAssistantOperatingInstructions()`,
 		`func (s *Service) executeAssistantRegistryToolDirect(ctx context.Context, toolName string, args map[string]interface{}, opts agentcapabilities.DirectToolExecutionOptions) (agentcapabilities.DirectToolExecutionOutcome, error)`,
 		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, agentcapabilities.PulseRunCommandToolName, args, agentcapabilities.DirectToolExecutionOptions{`,

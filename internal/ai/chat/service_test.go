@@ -331,58 +331,8 @@ func TestService_SessionWrappers(t *testing.T) {
 	require.Len(t, list, 1)
 	assert.Equal(t, "Renamed session", list[0].Title)
 
-	// Fork Session
-	forked, err := service.ForkSession(ctx, session.ID)
-	require.NoError(t, err)
-	require.NotNil(t, forked)
-	assert.NotEqual(t, session.ID, forked.ID)
-	assert.Equal(t, 1, forked.MessageCount)
-	assert.Equal(t, "Fork of Renamed session", forked.Title)
-
-	forkedMessages, err := service.GetMessages(ctx, forked.ID)
-	require.NoError(t, err)
-	require.Len(t, forkedMessages, 1)
-	assert.Equal(t, "I will inspect the device nodes.", forkedMessages[0].Content)
-	assert.NotContains(t, forkedMessages[0].Content, "pulse_read")
-
-	require.NoError(t, service.sessions.AddMessage(forked.ID, Message{
-		Role:    "user",
-		Content: "How many device nodes?",
-	}))
-	require.NoError(t, service.sessions.AddMessage(forked.ID, Message{
-		Role:    "assistant",
-		Content: "There are 42 device nodes.",
-	}))
-	undo, err := service.UndoLastTurn(ctx, forked.ID, SessionTurnUndoOptions{})
-	require.NoError(t, err)
-	require.NotNil(t, undo)
-	assert.True(t, undo.Success)
-	assert.Equal(t, "How many device nodes?", undo.RestoredPrompt)
-	assert.True(t, undo.CanRedo)
-
-	forkedMessages, err = service.GetMessages(ctx, forked.ID)
-	require.NoError(t, err)
-	require.Len(t, forkedMessages, 1)
-	assert.Equal(t, "I will inspect the device nodes.", forkedMessages[0].Content)
-
-	redo, err := service.RedoLastTurn(ctx, forked.ID)
-	require.NoError(t, err)
-	require.NotNil(t, redo)
-	assert.True(t, redo.Success)
-	assert.False(t, redo.CanRedo)
-
-	forkedMessages, err = service.GetMessages(ctx, forked.ID)
-	require.NoError(t, err)
-	require.Len(t, forkedMessages, 3)
-
-	list, err = service.ListSessions(ctx)
-	require.NoError(t, err)
-	assert.Len(t, list, 2)
-
 	// Delete Session
 	err = service.DeleteSession(ctx, session.ID)
-	require.NoError(t, err)
-	err = service.DeleteSession(ctx, forked.ID)
 	require.NoError(t, err)
 
 	// Verify deletion via List
@@ -530,58 +480,22 @@ func TestService_ExtendedMethods(t *testing.T) {
 	service := NewService(cfg)
 	ctx := context.Background()
 
-	// 1. AnswerQuestion - fails if service not started
-	err := service.AnswerQuestion(ctx, "q1", nil)
-	assert.Error(t, err)
-
-	// 2. Session compaction is a real service operation and requires startup state.
-	res, err := service.SummarizeSession(ctx, "s1")
-	assert.Error(t, err)
-	assert.Nil(t, res)
-
-	// 3. ForkSession returns error
-	_, err = service.ForkSession(ctx, "s1")
-	assert.Error(t, err)
-
-	// 4. GetBaseURL
+	// 1. GetBaseURL
 	url := service.GetBaseURL()
 	assert.Equal(t, "", url)
 
-	// 5. AbortSession
-	err = service.AbortSession(ctx, "s1")
+	// 2. AbortSession
+	err := service.AbortSession(ctx, "s1")
 	assert.Error(t, err) // Service not started
-}
-
-func TestService_AnswerQuestion_UsesRegisteredActiveLoop(t *testing.T) {
-	service := &Service{
-		started:            true,
-		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
-		questionExecutions: make(map[string]*AgenticLoop),
-	}
-	answersCh := make(chan []QuestionAnswer, 1)
-	loop := &AgenticLoop{
-		pendingQs: map[string]chan []QuestionAnswer{
-			"q-live": answersCh,
-		},
-		aborted: make(map[string]bool),
-	}
-	service.registerQuestionLoop("q-live", loop)
-
-	answers := []QuestionAnswer{{ID: "target", Value: "node-a"}}
-	err := service.AnswerQuestion(context.Background(), "q-live", answers)
-	require.NoError(t, err)
-	assert.Equal(t, answers, <-answersCh)
 }
 
 func TestService_AbortSession_UsesRegisteredActiveLoops(t *testing.T) {
 	service := &Service{
-		started:            true,
-		activeExecutions:   make(map[string]map[*AgenticLoop]struct{}),
-		questionExecutions: make(map[string]*AgenticLoop),
+		started:          true,
+		activeExecutions: make(map[string]map[*AgenticLoop]struct{}),
 	}
 	loop := &AgenticLoop{
-		aborted:   make(map[string]bool),
-		pendingQs: make(map[string]chan []QuestionAnswer),
+		aborted: make(map[string]bool),
 	}
 	service.registerActiveLoop("session-live", loop)
 
@@ -643,7 +557,7 @@ func TestService_ToolsForExecutionMode_ExposesGovernedTools(t *testing.T) {
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
 }
 
-func TestService_ToolsForExecutionMode_InteractiveAddsQuestionTool(t *testing.T) {
+func TestService_ToolsForExecutionMode_InteractiveOmitsQuestionTool(t *testing.T) {
 	service := NewService(Config{
 		AIConfig:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
 		StateProvider: &mockStateProvider{},
@@ -658,7 +572,8 @@ func TestService_ToolsForExecutionMode_InteractiveAddsQuestionTool(t *testing.T)
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
-	assert.True(t, hasProviderTool(filtered, pulseQuestionToolName))
+	// No Pulse client can answer pulse_question since the web chat was retired.
+	assert.False(t, hasProviderTool(filtered, pulseQuestionToolName))
 }
 
 func TestService_Execute_NonStreaming(t *testing.T) {
