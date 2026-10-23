@@ -79,7 +79,7 @@ func snapshotCollectionByID(m *Monitor) map[string]models.GuestSnapshot {
 	return result
 }
 
-func snapshotCollectionAlert(t *testing.T, m *Monitor, resourceID string) alerts.Alert {
+func snapshotCollectionAlert(t *testing.T, m *Monitor, resourceID string) models.Alert {
 	t.Helper()
 	for _, alert := range m.GetState().ActiveAlerts {
 		if alert.Type == "snapshot-age" && alert.ResourceID == resourceID {
@@ -87,7 +87,7 @@ func snapshotCollectionAlert(t *testing.T, m *Monitor, resourceID string) alerts
 		}
 	}
 	t.Fatalf("snapshot warning missing for %s: %+v", resourceID, m.GetState().ActiveAlerts)
-	return alerts.Alert{}
+	return models.Alert{}
 }
 
 func TestSnapshotCollectionFailureIsNotRemoval(t *testing.T) {
@@ -181,7 +181,7 @@ func TestSnapshotCollectionBrowserProducer(t *testing.T) {
 	client := &snapshotCollectionClient{replies: map[string]snapshotCollectionReply{}}
 	type frame struct {
 		Snapshots []models.GuestSnapshot `json:"snapshots"`
-		Alerts    []alerts.Alert         `json:"alerts"`
+		Alerts    []models.Alert         `json:"alerts"`
 	}
 	frames := map[string]frame{}
 	for _, phase := range []string{"observed", "failed-596", "failed-unavailable", "confirmed-empty"} {
