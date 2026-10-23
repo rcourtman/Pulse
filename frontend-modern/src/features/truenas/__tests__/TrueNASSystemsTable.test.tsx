@@ -23,6 +23,7 @@ vi.mock('@/stores/alertsActivation', () => ({
 
 import { TrueNASSystemsTable } from '@/features/truenas/TrueNASSystemsTable';
 import type { Resource } from '@/types/resource';
+import { temperatureStore } from '@/utils/temperature';
 
 const makeSystem = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resource =>
   ({
@@ -45,10 +46,41 @@ const makeSystem = (overrides: Partial<Resource> & Pick<Resource, 'id'>): Resour
 
 afterEach(() => {
   cleanup();
+  temperatureStore.setUnit('celsius');
   activeAlertsRef.current = {};
 });
 
 describe('TrueNASSystemsTable', () => {
+  it('updates both the reading and compact temperature heading with the display preference', async () => {
+    temperatureStore.setUnit('celsius');
+    const system = makeSystem({ id: 'nas-temperature', temperature: 40 });
+    const { container } = render(() => (
+      <TrueNASSystemsTable
+        systems={[system]}
+        scope={[system]}
+        emptyIcon={<span />}
+        emptyTitle="No systems"
+        emptyDescription="No systems"
+        showToolbar={false}
+      />
+    ));
+    const temperatureHeader = () =>
+      [...container.querySelectorAll('thead th')].find((header) =>
+        header.textContent?.includes('Temp'),
+      );
+
+    expect(screen.getByText('40.0°C')).toBeInTheDocument();
+    expect(temperatureHeader()).toHaveTextContent('°C');
+    temperatureStore.setUnit('fahrenheit');
+    expect(await screen.findByText('104.0°F')).toBeInTheDocument();
+    expect(temperatureHeader()).toHaveTextContent('°F');
+    expect(temperatureHeader()).not.toHaveTextContent('°C');
+    expect(system.temperature).toBe(40);
+    temperatureStore.setUnit('celsius');
+    expect(await screen.findByText('40.0°C')).toBeInTheDocument();
+    expect(temperatureHeader()).toHaveTextContent('°C');
+  });
+
   it('keeps capacity and temperature in the phone column set', () => {
     const { container } = render(() => (
       <TrueNASSystemsTable
@@ -68,8 +100,10 @@ describe('TrueNASSystemsTable', () => {
     expect(headers.find((header) => header.textContent?.includes('Capacity'))).toHaveClass(
       'platform-table-mobile-w-20',
     );
+    // A three-digit Fahrenheit reading and its unit must fit without cutting
+    // the value; the name keeps its existing share of the phone table.
     expect(headers.find((header) => header.textContent?.includes('°C'))).toHaveClass(
-      'platform-table-mobile-w-15',
+      'platform-table-mobile-w-20',
     );
   });
 

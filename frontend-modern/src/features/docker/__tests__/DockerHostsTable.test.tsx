@@ -5,6 +5,7 @@ import { createSignal } from 'solid-js';
 import type { Alert, Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
+import { temperatureStore } from '@/utils/temperature';
 import { DockerHostsTable } from '../DockerHostsTable';
 import dockerHostsTableSource from '../DockerHostsTable.tsx?raw';
 
@@ -127,11 +128,35 @@ const makeDockerHost = (overrides: Partial<Resource> = {}): Resource => ({
 
 afterEach(() => {
   cleanup();
+  temperatureStore.setUnit('celsius');
   vi.clearAllMocks();
   for (const key of Object.keys(activeAlertsMock)) delete activeAlertsMock[key];
 });
 
 describe('DockerHostsTable', () => {
+  it('updates the host temperature when the display preference changes without changing readings', async () => {
+    temperatureStore.setUnit('celsius');
+    const host = makeDockerHost({ temperature: 40 });
+    render(() => (
+      <DockerHostsTable
+        resources={[host]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('40.0°C')).toBeInTheDocument();
+    temperatureStore.setUnit('fahrenheit');
+    expect(await screen.findByText('104.0°F')).toBeInTheDocument();
+    expect(screen.queryByText('40.0°C')).not.toBeInTheDocument();
+    expect(host.temperature).toBe(40);
+    expect(localStorage.getItem('temperatureUnit')).toBe('fahrenheit');
+    temperatureStore.setUnit('celsius');
+    expect(await screen.findByText('40.0°C')).toBeInTheDocument();
+  });
+
   it('keeps five readable host fields below 360 pixels without wrapped metadata rows', () => {
     expect(dockerHostsTableSource).toContain('platform-table-mobile-w-30');
     expect(dockerHostsTableSource).toContain('platform-table-narrow-hidden');

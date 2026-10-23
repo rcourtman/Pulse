@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "acd353f30fff617ed69ef4473f86a57c59bc5c65",
+  "verified_at": "2026-10-23T22:59:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "61af45450e661037e4fe38b773ce6743196c6b3595bc208bfcd5fda6d1411587",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx": "8ccd23a7923f657843987931aa0e9cdc8e5b528e637493e21a5486caa9e26142"
+  },
+  "routes": [
+    "/browser-proof/index.html?kind=docker",
+    "/browser-proof/index.html?kind=nas"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Evidence-only shell consumes the actual GeneralSettingsPanel, temperatureStore, useUnifiedResources HTTP transform, DockerHostsTable, TrueNASSystemsTable, Docker Details and production CSS. Synthetic GET responses supply 40 Celsius and absent/sentinel readings; unrelated settings handlers are inert. This is not native-server, deployment or full-build acceptance.",
+    "Chromium 141.0.7390.37 desktop and WebKit 26.0 narrow; Playwright 1.56.1 matches the integration lock. Both platforms switch live from 40.0°C to 104.0°F, restore Fahrenheit after a fixture reload, and switch back to Celsius. Missing readings remain absent, not 32°F.",
+    "The narrow Docker temperature column remains intentionally hidden; its transformed DOM value follows the preference and actual expanded Details visibly shows 104°F. Desktop table and Details agree. Existing chart Celsius labels are outside this table repair.",
+    "TrueNAS compact heading follows °F/°C. Final 320px temperature and capacity cells are each 53px with no content overflow; source pixels show both full values. The intermediate 15% temperature cell clipped the reading; a 25% trial clipped Capacity and was not retained.",
+    "Successful unchanged Docker scenarios are reused by exact imported-file hashes; only TrueNASSystemsTable changed during the subsequent width correction. Final TrueNAS desktop and narrow scenarios pass separately. Earlier harness selector/click failures and the adverse width trials remain evidence, not aggregate passes.",
+    "Ten accepted captures of the real preference controls, tables, Docker Details and final TrueNAS Celsius/Fahrenheit states were opened with the native image tool. Fixture, driver, build scripts, logs and captures are retained with lane evidence, not committed as source."
+  ],
+  "interactions": [
+    "Clicked the production General temperature selector while the table remained mounted; checked the preference in localStorage.",
+    "Opened desktop Docker Details through its disclosure; tapped the narrow host row and opened its real Details summary. No forced clicks, CSS overrides or modal bypass.",
+    "Reloaded only the safe temperature fixture to check cold preference initialisation; no stopped Docs Back/reload or production operation.",
+    "Inspected desktop and 320px actual pixels; measured temperature and capacity fit after the TrueNAS width correction."
+  ]
+}
