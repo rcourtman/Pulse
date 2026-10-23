@@ -2494,6 +2494,8 @@ func TestRealtimeObservationPresence(t *testing.T) {
 		{"empty", nil, SystemTelemetryAvailability{}},
 		{"cpu_zero", map[string]any{"cpu": map[string]any{"usage": 0}}, SystemTelemetryAvailability{CPU: true}},
 		{"cpu_nested_zero", map[string]any{"cpu": map[string]any{"usage": map[string]any{"percent": 0}}}, SystemTelemetryAvailability{CPU: true}},
+		{"cpu_scale_aggregate_zero", map[string]any{"cpu": map[string]any{"cpu": map[string]any{"usage": 0, "temp": 36}}}, SystemTelemetryAvailability{CPU: true}},
+		{"cpu_scale_aggregate_null", map[string]any{"cpu": map[string]any{"cpu": map[string]any{"usage": nil, "temp": 36}}}, SystemTelemetryAvailability{}},
 		{"cpu_null", map[string]any{"cpu": map[string]any{"usage": nil}}, SystemTelemetryAvailability{}},
 		{"capacity_only", map[string]any{"memory": map[string]any{"total": 16}}, SystemTelemetryAvailability{}},
 		{"free_zero", map[string]any{"memory": map[string]any{"total": 16, "available": 0}}, SystemTelemetryAvailability{Memory: true}},
