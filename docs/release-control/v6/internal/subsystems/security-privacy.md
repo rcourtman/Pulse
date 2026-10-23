@@ -3658,3 +3658,12 @@ read-only projection of the existing RequireAdmin + `ai:execute` gate on
 `POST /api/ai/patrol/run`. It grants nothing: the route still enforces its own
 gate, and the field only stops the browser offering alert Investigate to
 sessions that route would refuse.
+
+Removing the browser-only chat routes on 2026-10-23 (`/api/ai/assistant/surface-tools`, `/api/ai/workflow-prompts/render`,
+`/api/ai/question/{id}/answer`, and the `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer`, `/diff`, `/revert`, and `/unrevert` session sub-resources) narrows the
+`ai:chat` surface and adds no access. The removed session sub-resources fall to
+the session router's default branch, which still refuses tokens without
+`ai:chat` before answering `404`
+(`TestRelayMobileAccessScopeDeniesAdjacentAIRoutes`). The undo, redo, and steer
+notes above are history.

@@ -10192,3 +10192,10 @@ starting write from a run whose session began before a regression this process
 observed, so a run that finishes after its finding was detected again or
 re-investigated leaves the newer state alone. It enrols, commands, updates or
 removes no agent and touches no agent identity or credential.
+
+The `internal/api` change of 2026-10-23 removes browser-only chat routes
+(`/api/ai/assistant/surface-tools`, `/api/ai/workflow-prompts/render`,
+`/api/ai/question/{id}/answer`, and the `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer`, `/diff`, `/revert`, and `/unrevert` session sub-resources). The adjacent-boundary notes above that name those routes are now
+history; none of them was agent-lifecycle state. No agent enrollment,
+command, update, identity, or credential path changes.

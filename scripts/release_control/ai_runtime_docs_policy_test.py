@@ -46,7 +46,7 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             normalized_content,
         )
         self.assertIn(
-            "Pulse Assistant**: The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools and interactive questions.",
+            "Pulse Assistant**: The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools.",
             normalized_content,
         )
         self.assertIn(

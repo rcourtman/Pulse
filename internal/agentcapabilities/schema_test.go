@@ -297,8 +297,24 @@ func TestProjectPulseAssistantProviderToolsUsesSurfaceAffordances(t *testing.T) 
 	canonical := ProjectPulseAssistantProviderTools(manifest, registryTools, governance, AssistantProviderToolOptions{
 		IncludeQuestionTool: true,
 	})
-	if names := ProviderToolNames(canonical); !reflect.DeepEqual(names, []string{PulseQueryToolName, PulseQuestionToolName}) {
-		t.Fatalf("canonical Assistant provider tools = %#v, want registry plus question", names)
+	// The canonical Assistant surface declares no interactive questions: no
+	// Pulse client can answer pulse_question since the web chat was retired.
+	if names := ProviderToolNames(canonical); !reflect.DeepEqual(names, []string{PulseQueryToolName}) {
+		t.Fatalf("canonical Assistant provider tools = %#v, want registry tools only", names)
+	}
+
+	questionsEnabled := manifest
+	questionsEnabled.SurfaceContract.OperatorSurfaces = append([]OperatorSurfaceContract(nil), manifest.SurfaceContract.OperatorSurfaces...)
+	for i := range questionsEnabled.SurfaceContract.OperatorSurfaces {
+		if questionsEnabled.SurfaceContract.OperatorSurfaces[i].ID == SurfaceIDPulseAssistant {
+			questionsEnabled.SurfaceContract.OperatorSurfaces[i].Affordances = SurfaceAffordanceContract{Tools: true, InteractiveQuestions: true}
+		}
+	}
+	interactive := ProjectPulseAssistantProviderTools(questionsEnabled, registryTools, governance, AssistantProviderToolOptions{
+		IncludeQuestionTool: true,
+	})
+	if names := ProviderToolNames(interactive); !reflect.DeepEqual(names, []string{PulseQueryToolName, PulseQuestionToolName}) {
+		t.Fatalf("questions-enabled Assistant provider tools = %#v, want registry plus question", names)
 	}
 
 	toolsDisabled := manifest

@@ -224,10 +224,10 @@ func TestBuildPulseAssistantOperatingInstructionsNamesOnlyAssistantAffordances(t
 
 	for _, expected := range []string{
 		"This surface is Pulse Assistant.",
-		"Use offered tools and interactive questions as the source of truth",
+		"Use offered tools as the source of truth",
 		"Pulse Assistant is the native Pulse surface over Pulse Intelligence Core",
 		"Pulse MCP is the external-agent adapter on the same core",
-		"Surface affordances: Pulse Assistant exposes tools and interactive questions.",
+		"Surface affordances: Pulse Assistant exposes tools.",
 		"Pulse Patrol is the primary built-in operator on Pulse Intelligence Core",
 		"governed infrastructure-operations surface",
 		"plan, approval, and execute flow",

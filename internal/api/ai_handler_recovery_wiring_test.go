@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -56,28 +55,7 @@ func (s *capturingAIService) GetModelHandoffMetadata(ctx context.Context, sessio
 func (s *capturingAIService) ClearModelHandoffContext(ctx context.Context, sessionID string) error {
 	return nil
 }
-func (s *capturingAIService) AbortSession(ctx context.Context, sessionID string) error { return nil }
-func (s *capturingAIService) SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	return nil, nil
-}
-func (s *capturingAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
-	return &chat.Session{ID: "fork"}, nil
-}
-func (s *capturingAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
-	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil
-}
-func (s *capturingAIService) SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error) {
-	return &chat.SessionSteerResult{Accepted: false, SessionID: sessionID, Reason: "no_active_run"}, nil
-}
-func (s *capturingAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
-	return &chat.SessionTurnRedoResult{Success: true, SessionID: sessionID}, nil
-}
-func (s *capturingAIService) AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error {
-	return nil
-}
-func (s *capturingAIService) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract {
-	return agentcapabilities.SurfaceToolContract{}
-}
+func (s *capturingAIService) AbortSession(ctx context.Context, sessionID string) error          { return nil }
 func (s *capturingAIService) SetAlertProvider(provider chat.AssistantAlertProvider)             {}
 func (s *capturingAIService) SetFindingsProvider(provider chat.AssistantFindingsProvider)       {}
 func (s *capturingAIService) SetBaselineProvider(provider chat.AssistantBaselineProvider)       {}

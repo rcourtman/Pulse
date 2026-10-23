@@ -342,7 +342,8 @@ func TestCanonicalManifestPinsPulseIntelligenceSurfaceContract(t *testing.T) {
 		!strings.Contains(assistant.Description, "Patrol findings") {
 		t.Fatalf("Pulse Assistant description must preserve contextual access-path role, got %q", assistant.Description)
 	}
-	if !assistant.Affordances.Tools || !assistant.Affordances.InteractiveQuestions ||
+	// No interactive questions: no Pulse client can answer pulse_question.
+	if !assistant.Affordances.Tools || assistant.Affordances.InteractiveQuestions ||
 		assistant.Affordances.Resources || assistant.Affordances.Prompts || assistant.Affordances.CapabilityMetadata {
 		t.Fatalf("Pulse Assistant affordance contract = %+v", assistant.Affordances)
 	}

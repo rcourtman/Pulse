@@ -97,15 +97,6 @@ func toolNameSet(list []providers.Tool) map[string]bool {
 	return set
 }
 
-func stringSliceContains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
 func TestToolsForExecutionMode_InteractiveExposesGovernedTools(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
@@ -130,8 +121,8 @@ func TestToolsForExecutionMode_InteractiveExposesGovernedTools(t *testing.T) {
 		!interactiveSet["pulse_docker"] {
 		t.Fatalf("expected interactive chat to expose all governed tools to the selected model")
 	}
-	if !interactiveSet[pulseQuestionToolName] {
-		t.Fatalf("expected interactive chat to expose the clarification tool")
+	if interactiveSet[pulseQuestionToolName] {
+		t.Fatalf("interactive chat must not offer pulse_question: no Pulse client can answer it")
 	}
 }
 
@@ -229,65 +220,6 @@ func TestAssistantPromptQualifiesForLocalInventoryCount(t *testing.T) {
 		if got := assistantPromptQualifiesForLocalInventoryCount(normalized); got != tt.want {
 			t.Fatalf("assistantPromptQualifiesForLocalInventoryCount(%q) = %v, want %v", tt.prompt, got, tt.want)
 		}
-	}
-}
-
-func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
-		StateProvider:      fakeStateProvider{},
-		TypedActionPlanner: &gateTestPlanner{},
-		AgentServer:        fakeAgentServer{},
-		ReadState:          &fakeCanonicalReadState{},
-		ControlLevel:       tools.ControlLevelControlled,
-	})
-	svc := &Service{
-		executor: exec,
-		cfg:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
-	}
-
-	interactive := svc.AssistantSurfaceToolContract(context.Background())
-	if interactive.SurfaceID != agentcapabilities.SurfaceIDPulseAssistant {
-		t.Fatalf("surface id = %q", interactive.SurfaceID)
-	}
-	if interactive.ToolSource != agentcapabilities.SurfaceToolSourceAssistantRegistry {
-		t.Fatalf("tool source = %q", interactive.ToolSource)
-	}
-	if !stringSliceContains(interactive.ToolNames, agentcapabilities.PulseQueryToolName) {
-		t.Fatalf("interactive surface missing registry query tool: %#v", interactive.ToolNames)
-	}
-	if !stringSliceContains(interactive.RegistryToolNames, agentcapabilities.PulseQueryToolName) {
-		t.Fatalf("interactive surface missing registry bucket: %#v", interactive.RegistryToolNames)
-	}
-	if !stringSliceContains(interactive.NativeToolNames, agentcapabilities.PulseQuestionToolName) {
-		t.Fatalf("interactive surface missing native question bucket: %#v", interactive.NativeToolNames)
-	}
-	if len(interactive.CapabilityNames) != 0 {
-		t.Fatalf("Assistant surface must not expose MCP capability names: %#v", interactive.CapabilityNames)
-	}
-	if stringSliceContains(interactive.ToolNames, agentcapabilities.PulseControlToolName) {
-		t.Fatalf("chat-only surface exposed infrastructure control: %#v", interactive.ToolNames)
-	}
-
-	executeAuthorized := svc.AssistantSurfaceToolContract(WithExecuteAuthority(context.Background(), true))
-	if !stringSliceContains(executeAuthorized.ToolNames, agentcapabilities.PulseControlToolName) {
-		t.Fatalf("execute-authorized controlled surface missing governed infrastructure control: %#v", executeAuthorized.ToolNames)
-	}
-
-	// Execute authority cannot substitute for an installed planner.
-	svc.SetTypedActionPlanner(nil)
-	unavailable := svc.AssistantSurfaceToolContract(WithExecuteAuthority(context.Background(), true))
-	if stringSliceContains(unavailable.ToolNames, agentcapabilities.PulseControlToolName) {
-		t.Fatalf("planner-less surface exposed control: %#v", unavailable.ToolNames)
-	}
-
-	svc.SetAutonomousMode(true)
-	autonomous := svc.AssistantSurfaceToolContract(context.Background())
-	if stringSliceContains(autonomous.NativeToolNames, agentcapabilities.PulseQuestionToolName) ||
-		stringSliceContains(autonomous.ToolNames, agentcapabilities.PulseQuestionToolName) {
-		t.Fatalf("autonomous Assistant surface must not expose interactive question tool: %+v", autonomous)
-	}
-	if !stringSliceContains(autonomous.RegistryToolNames, agentcapabilities.PulseQueryToolName) {
-		t.Fatalf("autonomous surface should retain registry tools: %#v", autonomous.RegistryToolNames)
 	}
 }
 
@@ -462,16 +394,20 @@ func TestBuildToolGovernancePromptSection_FallbackOfferedNamesUseAssistantAfford
 	fallback := fallbackAssistantToolGovernance()
 	names := fallbackAssistantToolGovernanceOfferedNames(fallback)
 
-	if len(names) != len(fallback)+1 {
-		t.Fatalf("fallback offered names length = %d, want governance names plus question tool", len(names))
+	// The canonical Assistant surface declares no interactive questions, so
+	// the fallback names are exactly the governance names.
+	if len(names) != len(fallback) {
+		t.Fatalf("fallback offered names length = %d, want governance names only", len(names))
 	}
 	for i, tool := range fallback {
 		if names[i] != tool.Name {
 			t.Fatalf("fallback offered names[%d] = %q, want %q", i, names[i], tool.Name)
 		}
 	}
-	if names[len(names)-1] != agentcapabilities.PulseQuestionToolName {
-		t.Fatalf("fallback offered names must include manifest-enabled question tool last, got %#v", names)
+	for _, name := range names {
+		if name == agentcapabilities.PulseQuestionToolName {
+			t.Fatalf("fallback offered names must not include pulse_question, got %#v", names)
+		}
 	}
 }
 
@@ -1007,7 +943,7 @@ func TestExecutionProfilePromptModes(t *testing.T) {
 	}
 }
 
-func TestToolsForExecutorHidesQuestionToolForPatrolProfiles(t *testing.T) {
+func TestToolsForExecutorNeverOffersQuestionTool(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		ControlLevel:  tools.ControlLevelControlled,
 		StateProvider: &mockStateProvider{},
@@ -1016,8 +952,8 @@ func TestToolsForExecutorHidesQuestionToolForPatrolProfiles(t *testing.T) {
 	svc := &Service{executor: exec, cfg: &config.AIConfig{}}
 
 	interactive := svc.toolsForExecutor(nil, false)
-	if !toolNameSet(interactive)[pulseQuestionToolName] {
-		t.Fatal("interactive non-autonomous manifest must offer pulse_question")
+	if toolNameSet(interactive)[pulseQuestionToolName] {
+		t.Fatal("interactive manifest must not offer pulse_question: no Pulse client can answer it")
 	}
 
 	detection := exec.Clone()

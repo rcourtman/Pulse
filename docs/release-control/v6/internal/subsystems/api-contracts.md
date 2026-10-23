@@ -1230,25 +1230,16 @@ surface-contract block from `Manifest.SurfaceContract` and the MCP client
 config block from `Manifest.MCPAdapter`; scope, tool, prompt, error-code, and
 Assistant/MCP/Core/Patrol relationship docs are all API-manifest projections,
 not parallel onboarding snapshots.
-Native Assistant workflow-prompt rendering is a canonical API projection of
-that same manifest. `POST /api/ai/workflow-prompts/render` is an authenticated
-`ai:chat` route owned by `internal/api/ai_handler.go` and
-`internal/api/router_routes_ai_relay.go`; it accepts the manifest prompt name
-plus argument map, validates them against the manifest-owned workflow prompt
-catalogue through `internal/agentcapabilities`, and returns only the rendered
-Assistant prompt text plus description. Clients must read prompt names,
-display labels, presentation kind hints, descriptions, and arguments through
-the generated `workflowPrompts` manifest type and call this route rather than
-rendering prompt templates locally. No first-party browser surface renders
-starters since the Assistant chat window was retired on 2026-10-22.
-MCP `prompts/list` projects those same labels as protocol prompt titles and MCP
-`prompts/get` remains the protocol-edge projection over the same shared
-workflow-prompt core. Route inventory and AI chat scope tests must pin that
-route so it does not drift into public manifest discovery, relay-mobile access,
-or `ai:execute` approval replay.
+Workflow-prompt rendering is a canonical API projection of that same
+manifest. MCP `prompts/list` projects the manifest labels as protocol prompt
+titles and MCP `prompts/get` renders through the shared workflow-prompt core
+in `internal/agentcapabilities`. The authenticated
+`POST /api/ai/workflow-prompts/render` route that rendered starters for the
+browser Assistant was removed on 2026-10-23, after the chat window that
+called it was retired; no client may render prompt templates locally.
 Successful workflow prompt rendering is also the API boundary for content-free
-guided-starter activity: native Assistant rendering records only the manifest
-prompt name, coarse Assistant surface, and timestamp; first-party Pulse app
+guided-starter activity: activity records carry only the manifest prompt
+name, coarse surface, and timestamp; first-party Pulse app
 surfaces that start the same governed journey without rendering prompt text may
 record through authenticated `POST /api/ai/workflow-prompts/activity`; and MCP
 adapters that render prompts locally may report the same event through
@@ -1443,11 +1434,10 @@ belong in `frontend-modern/src/api/agentCapabilities.ts`, so native Assistant
 UI, MCP onboarding surfaces, and future agent-compatible surfaces do not infer
 tool availability from local tool-name lists. Do not expose live Assistant
 registry availability through the public, cacheable `/api/agent/capabilities`
-manifest; that runtime inventory belongs behind the authenticated
-`GET /api/ai/assistant/surface-tools` Assistant surface endpoint when the UI
-needs it. A client that renders runtime tool posture must read that endpoint and
-format it through `getAgentSurfaceToolPosturePresentation` instead of
-hard-coding registry tool names or treating MCP capability names as native
+manifest; the authenticated `GET /api/ai/assistant/surface-tools` endpoint that served
+it to the browser Assistant was removed on 2026-10-23 with the retired chat
+window, and no client renders runtime Assistant tool posture. Clients must
+not hard-code registry tool names or treat MCP capability names as native
 Assistant tools. The Agent
 integrations panel may render MCP tool posture from the static public manifest,
 but the request/response capability filtering and `SurfaceToolContract`
@@ -1504,18 +1494,9 @@ retry fields, but `provider_fallback`, `failed_provider`, `failed_model`,
 `next_provider`, and `next_model` are retired from the stream event
 contract. Cross-route recovery belongs to explicit failed-turn actions, not
 hidden `/api/ai/chat` stream mutation.
-Assistant session summarization is a typed compaction API contract, not a
-free-form helper response. `POST /api/ai/sessions/{id}/summarize` returns a
-browser-safe `ChatSessionCompactionResult` with stable fields for `success`,
-`status`, `message`, `session_id`, `summary_message_id`,
-`original_message_count`, `compacted_message_count`, `compacted_messages`,
-`kept_recent_messages`, and `summary_chars`. Short sessions may return
-`success=false` with `status=not_needed`; transport failures, missing sessions,
-provider errors, or active-running sessions remain normal API errors. The
-payload must not include the raw transcript, raw provider response, raw tool
-input/output, hidden reasoning, secrets, or token values. Clients must
-preserve that typed response and reload canonical session state instead of
-rebuilding a compacted transcript locally.
+Assistant session summarization (`POST /api/ai/sessions/{id}/summarize` and
+its `ChatSessionCompactionResult`) was removed on 2026-10-23 with the browser
+Assistant, its only caller.
 
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row
@@ -2287,68 +2268,29 @@ payload shape change when the portal presents compact client rows.
     browser-safe `ChatSession` projection. Rename must not expose or mutate
     stored prompts, messages, provider reasoning, model handoff context,
     approvals, action state, or tool evidence.
-    `POST /api/ai/sessions/{id}/undo` and
-    `POST /api/ai/sessions/{id}/redo` own the Assistant turn-repair API
-    contract. Undo removes the latest user-authored turn and all later
-    assistant/tool messages as one durable unit, returns a browser-safe
-    `restored_prompt`, `removed_messages`, and `can_redo`, and must not expose
-    provider reasoning, raw tool output, model-only handoff text, approval
-    payload internals, or remediation command data. Redo restores the latest
-    undone turn and returns `restored_messages` plus the remaining `can_redo`
-    state. `GET /api/ai/sessions` and other `ChatSession` projections may
-    expose only the boolean `can_redo` hint alongside safe title/timestamp,
-    count, and handoff-summary fields so a client can re-enable redo after a
-    reload without reading the redo stack itself. The projection also carries
-    a boolean `system` flag for Pulse-owned background sessions (Patrol
-    detection `patrol-main`, `patrol-eval`, and `investigation-*` runs),
-    derived server-side from the well-known session IDs via
-    `chat.IsSystemSessionID`; browser clients must not re-derive that
-    ownership from ID string patterns, and must keep system sessions out of
-    resumable-chat offers (quick-resume) while leaving them listable for
-    inspection. The undo endpoint accepts an optional JSON body
-    (`chat.SessionTurnUndoOptions`) whose `expected_prompt` field makes the
-    removal conditional on the latest user-authored prompt matching the
-    prompt being re-run; retry/regenerate flows send it so a stale retry can
-    never remove a different turn, and a guard mismatch returns
-    `success:false` with a browser-safe message rather than an error status.
-    An absent or empty body preserves the unguarded undo shape.
-    `POST /api/ai/sessions/{id}/steer` owns the mid-turn steering API
-    contract (`chat.SessionSteerRequest` -> `chat.SessionSteerResult`). The
-    request carries `prompt` plus an optional `client_message_id`; the
-    response is immediate JSON, never a second SSE stream, and
-    `accepted:false` with a `reason` (`no_active_run`, `system_session`,
-    `empty_prompt`, `steer_backlog` when the bounded per-session steering
-    inbox is full) is a normal outcome that clients handle by keeping the
-    follow-up on the ordinary queue-drain path. Steering cannot carry model
-    route, control level, or autonomous-mode changes. Confirmation of
-    delivery arrives only on the session's existing chat stream as a
-    `steer_applied` event (`chat.SteerAppliedData`) echoing
-    `client_message_id`, the server message id, the prompt, and the turn
-    index; clients must treat the endpoint's `accepted:true` as inbox
-    receipt, not delivery.
-    Every Assistant session mutation sub-resource under
-    `/api/ai/sessions/{id}` (`/abort`, `/summarize`, `/fork`, `/undo`,
-    `/redo`, `/steer`) accepts only `POST`. Any other method that reaches the
+    The turn-repair, compaction, fork, and steering sub-resources (`/undo`,
+    `/redo`, `/summarize`, `/fork`, `/steer`) and the unsupported OpenCode-style
+    `/diff`, `/revert`, and `/unrevert` routes were removed on 2026-10-23 with
+    the browser Assistant that called them; Pulse Mobile never used them.
+    They fall to the session router's unknown-subresource `404` after its
+    `ai:chat` scope check, and `ChatSession` projections no longer carry
+    `can_redo`. The projection carries a boolean `system` flag for Pulse-owned
+    background sessions (Patrol detection `patrol-main`, `patrol-eval`, and
+    `investigation-*` runs), derived server-side from the well-known session
+    IDs via `chat.IsSystemSessionID`; clients must not re-derive that ownership
+    from ID string patterns, and must keep system sessions out of
+    resumable-chat offers while leaving them listable for inspection.
+    `POST /api/ai/sessions/{id}/abort` is the remaining session mutation
+    sub-resource and accepts only `POST`. Any other method that reaches the
     handler returns `405` with `Allow: POST` through
     `requireAssistantSessionMutationMethod` in `internal/api/ai_handler.go`,
     before the session service is resolved (earlier layers still answer
     first: `Router.ServeHTTP` returns `200` for `OPTIONS` preflight, and
     auth, scope, CSRF, and demo-mode guards keep their own refusals). The
-    session router dispatches these sub-resources by path alone, and the
     demo-mode read-only guard and the CSRF check both treat `GET` and `HEAD`
     as reads, so the method contract belongs to the mutating handler rather
     than to its callers. `GET /api/ai/sessions/{id}/messages` stays the read
-    path, and the unsupported `/diff`, `/revert`, and `/unrevert` handlers
-    keep answering `501` for every method that reaches them.
-    OpenCode-style file diff/revert session routes are deliberately not part
-    of Pulse's supported Assistant session contract: Pulse sessions do not own
-    local code-file edits, and infrastructure mutations must be reviewed
-    through governed approval/action history. Browser clients must not expose
-    or call `GET /api/ai/sessions/{id}/diff`,
-    `POST /api/ai/sessions/{id}/revert`, or
-    `POST /api/ai/sessions/{id}/unrevert`; legacy direct calls to those routes
-    return `501 Not Implemented` with an explicit unsupported message rather
-    than a placeholder success payload.
+    path.
     Resource-context follow-up turns are different from Patrol-run rehydration:
     browser-safe `handoff_metadata.kind=resource_context` must not replace a
     stored rich handoff envelope with a partial metadata-only envelope, and the
@@ -12544,3 +12486,18 @@ process recorded refuses neither. The adapter takes each run's start from the
 orchestrator's session store, so the Pulse–enterprise boundary is unchanged: no
 `aicontracts` type, field or method is added, and no route or payload changes.
 Proof: `ai_handlers_investigation_additional_test.go`.
+
+The public API drops the routes that only the retired browser chat window
+called (2026-10-23): `/api/ai/assistant/surface-tools`, `/api/ai/workflow-prompts/render`,
+`/api/ai/question/{id}/answer`, and the `/summarize`, `/fork`, `/undo`,
+`/redo`, `/steer`, `/diff`, `/revert`, and `/unrevert` session sub-resources. Removed session sub-resources fall to the
+session router's unknown-subresource `404` after its `ai:chat` scope check,
+and `ChatSession` projections no longer carry `can_redo`. `docs/API.md` lists
+the remaining chat routes under "Chat Sessions (Pulse Mobile)", including the
+rename route Pulse Mobile already used. The `/api/agent/capabilities` manifest's
+Pulse Assistant surface no longer declares the `interactiveQuestions`
+affordance, and the generated `docs/AI.md` and `cmd/pulse-mcp/README.md`
+surface blocks follow it. `/api/ai/status` stays for the dev
+health check. Proof: `route_inventory_test.go`,
+`router_routes_additional_test.go`, `security_regression_test.go`, and
+`frontend-modern/src/utils/__tests__/docsLinks.test.ts`.

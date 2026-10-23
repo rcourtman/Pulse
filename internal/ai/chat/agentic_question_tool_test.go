@@ -14,27 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// scriptLookTurn scripts one provider turn that issues a read-only
-// pulse_query call. The look-before-asking gate refuses a pulse_question
-// issued before any tool attempt in the run, so question-flow tests open
-// with a look turn the way real runs now must.
-func scriptLookTurn(mockProvider *MockProvider, matcher func(req providers.ChatRequest) bool) {
-	queryInput := map[string]interface{}{"action": "topology"}
-	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(matcher), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
-		cb := args.Get(2).(providers.StreamCallback)
-		cb(providers.StreamEvent{
-			Type: "tool_start",
-			Data: providers.ToolStartEvent{ID: "t0", Name: "pulse_query", Input: queryInput},
-		})
-		cb(providers.StreamEvent{
-			Type: "done",
-			Data: providers.DoneEvent{
-				ToolCalls: []providers.ToolCall{{ID: "t0", Name: "pulse_query", Input: queryInput}},
-			},
-		})
-	}).Once()
-}
-
 // hasToolResult reports whether the request carries a tool result for the
 // given provider tool-call ID.
 func hasToolResult(req providers.ChatRequest, toolUseID string) bool {
@@ -46,7 +25,11 @@ func hasToolResult(req providers.ChatRequest, toolUseID string) bool {
 	return false
 }
 
-func TestAgenticLoop_PulseQuestionToolInteractiveFlow(t *testing.T) {
+// No Pulse client can answer pulse_question since the web chat was retired:
+// Pulse Mobile has no question UI. An interactive turn must therefore pair a
+// question call with a refusal that sends the model back to plain reply text,
+// and finish, instead of waiting for an answer that cannot arrive.
+func TestAgenticLoop_RefusesPulseQuestionInInteractiveSessions(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	mockProvider := &MockProvider{}
 	loop := NewAgenticLoop(mockProvider, executor, "You are a helper")
@@ -54,83 +37,52 @@ func TestAgenticLoop_PulseQuestionToolInteractiveFlow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	sessionID := "question-session"
-	messages := []Message{{Role: "user", Content: "Do something but ask me first"}}
+	questionInput := map[string]interface{}{
+		"questions": []interface{}{
+			map[string]interface{}{
+				"id":       "q1",
+				"type":     "select",
+				"question": "Pick one",
+				"options": []interface{}{
+					map[string]interface{}{"label": "A", "value": "a"},
+					map[string]interface{}{"label": "B", "value": "b"},
+				},
+			},
+		},
+	}
 
-	// Turn 1: model looks with a read tool (satisfies the gate).
-	scriptLookTurn(mockProvider, func(req providers.ChatRequest) bool {
-		return len(req.Messages) == 1
-	})
+	queryInput := map[string]interface{}{"action": "topology"}
 
-	// Turn 2: model requests pulse_question
+	// Turn 1: the model calls pulse_question alongside a read tool.
 	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
-		return hasToolResult(req, "t0") && !hasToolResult(req, "t1")
+		return !hasToolResult(req, "t1")
 	}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		cb := args.Get(2).(providers.StreamCallback)
 		cb(providers.StreamEvent{
 			Type: "tool_start",
-			Data: providers.ToolStartEvent{
-				ID:   "t1",
-				Name: pulseQuestionToolName,
-				Input: map[string]interface{}{
-					"questions": []interface{}{
-						map[string]interface{}{
-							"id":       "q1",
-							"type":     "select",
-							"question": "Pick one",
-							"options": []interface{}{
-								map[string]interface{}{"label": "A", "value": "a"},
-								map[string]interface{}{"label": "B", "value": "b"},
-							},
-						},
-					},
-				},
-			},
+			Data: providers.ToolStartEvent{ID: "t1", Name: pulseQuestionToolName, Input: questionInput},
 		})
 		cb(providers.StreamEvent{
 			Type: "done",
 			Data: providers.DoneEvent{
 				ToolCalls: []providers.ToolCall{
-					{
-						ID:   "t1",
-						Name: pulseQuestionToolName,
-						Input: map[string]interface{}{
-							"questions": []interface{}{
-								map[string]interface{}{
-									"id":       "q1",
-									"type":     "select",
-									"question": "Pick one",
-									"options": []interface{}{
-										map[string]interface{}{"label": "A", "value": "a"},
-										map[string]interface{}{"label": "B", "value": "b"},
-									},
-								},
-							},
-						},
-					},
+					{ID: "t1", Name: pulseQuestionToolName, Input: questionInput},
+					{ID: "t2", Name: "pulse_query", Input: queryInput},
 				},
 			},
 		})
 	}).Once()
 
-	// Turn 3: model sees the answered question and replies.
+	// Turn 2: the model reads the refusal and the sibling result, then asks
+	// in its reply instead.
+	var refusal string
 	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
-		// Expect tool result message for t1 to be present
+		if !hasToolResult(req, "t2") {
+			return false
+		}
 		for _, m := range req.Messages {
 			if m.ToolResult != nil && m.ToolResult.ToolUseID == "t1" {
-				var payload struct {
-					QuestionID string           `json:"question_id"`
-					Answers    []QuestionAnswer `json:"answers"`
-				}
-				if err := json.Unmarshal([]byte(m.ToolResult.Content), &payload); err != nil {
-					return false
-				}
-				if payload.QuestionID == "" || len(payload.Answers) != 1 {
-					return false
-				}
-				if payload.Answers[0].ID != "q1" || payload.Answers[0].Value != "b" {
-					return false
-				}
+				refusal = m.ToolResult.Content
 				return true
 			}
 		}
@@ -139,68 +91,44 @@ func TestAgenticLoop_PulseQuestionToolInteractiveFlow(t *testing.T) {
 		cb := args.Get(2).(providers.StreamCallback)
 		cb(providers.StreamEvent{
 			Type: "content",
-			Data: providers.ContentEvent{Text: "Thanks, you picked B."},
+			Data: providers.ContentEvent{Text: "Which one do you want, A or B?"},
 		})
-		cb(providers.StreamEvent{
-			Type: "done",
-			Data: providers.DoneEvent{},
-		})
+		cb(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
 	}).Once()
 
 	var (
-		mu          sync.Mutex
-		events      []StreamEvent
-		questionEvt *QuestionData
+		mu     sync.Mutex
+		events []StreamEvent
 	)
-
 	callback := func(event StreamEvent) {
 		mu.Lock()
 		defer mu.Unlock()
 		events = append(events, event)
-		if event.Type == "question" && questionEvt == nil {
-			var qd QuestionData
-			_ = json.Unmarshal(event.Data, &qd)
-			questionEvt = &qd
-		}
 	}
 
-	// Run loop in background; answer as soon as we see the question event.
-	var (
-		results []Message
-		err     error
-		doneCh  = make(chan struct{})
-	)
-	go func() {
-		defer close(doneCh)
-		results, err = loop.Execute(ctx, sessionID, messages, callback)
-	}()
-
-	require.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return questionEvt != nil && questionEvt.QuestionID != ""
-	}, 2*time.Second, 10*time.Millisecond, "expected question event")
-
-	mu.Lock()
-	qID := questionEvt.QuestionID
-	mu.Unlock()
-
-	require.NoError(t, loop.AnswerQuestion(qID, []QuestionAnswer{{ID: "q1", Value: "b"}}))
-
-	select {
-	case <-doneCh:
-	case <-ctx.Done():
-		t.Fatalf("agentic loop did not complete: %v", ctx.Err())
-	}
-
+	messages := []Message{{Role: "user", Content: "Do something but ask me first"}}
+	results, err := loop.Execute(ctx, "question-session", messages, callback)
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
-	assert.Equal(t, "Thanks, you picked B.", results[len(results)-1].Content)
+	assert.Equal(t, "Which one do you want, A or B?", results[len(results)-1].Content)
+	assert.Contains(t, refusal, "pulse_question is unavailable")
+	assert.Contains(t, refusal, "Ask the user in your reply text")
 
-	// Ensure pulse_question tool_start is suppressed (UI uses question card).
+	// The durable transcript pairs the recorded question call with its
+	// refusal, so a reloaded session never holds an unanswered call.
+	paired := false
+	for _, msg := range results {
+		if msg.ToolResult != nil && msg.ToolResult.ToolUseID == "t1" {
+			paired = true
+			assert.True(t, msg.ToolResult.IsError)
+		}
+	}
+	assert.True(t, paired, "refusal must be persisted with the question call")
+
 	mu.Lock()
 	defer mu.Unlock()
 	for _, ev := range events {
+		assert.NotEqual(t, "question", ev.Type, "no client can render a question card")
 		if ev.Type == "tool_start" {
 			var ts ToolStartData
 			_ = json.Unmarshal(ev.Data, &ts)

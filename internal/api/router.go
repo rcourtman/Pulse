@@ -1075,7 +1075,7 @@ func (h *LicenseHandlers) RemoveTenantService(orgID string) {
 
 // routeAISessions routes session-specific AI chat requests
 func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
-	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort|/summarize|/diff|/fork|/undo|/redo|/revert|/unrevert]
+	// Extract session ID from path: /api/ai/sessions/{id}[/messages|/abort]
 	path := strings.TrimPrefix(req.URL.Path, "/api/ai/sessions/")
 	parts := strings.SplitN(path, "/", 2)
 	sessionID := parts[0]
@@ -1098,46 +1098,6 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			r.aiHandler.HandleAbort(w, req, sessionID)
-		case "summarize":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleSummarize(w, req, sessionID)
-		case "diff":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleDiff(w, req, sessionID)
-		case "fork":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleFork(w, req, sessionID)
-		case "undo":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleUndoLastTurn(w, req, sessionID)
-		case "redo":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleRedoLastTurn(w, req, sessionID)
-		case "steer":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleSteerSession(w, req, sessionID)
-		case "revert":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleRevert(w, req, sessionID)
-		case "unrevert":
-			if !ensureScope(w, req, config.ScopeAIChat) {
-				return
-			}
-			r.aiHandler.HandleUnrevert(w, req, sessionID)
 		default:
 			if !ensureScope(w, req, config.ScopeAIChat) {
 				return
@@ -1286,32 +1246,6 @@ func (r *Router) routeApprovals(w http.ResponseWriter, req *http.Request) {
 		}
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-}
-
-// routeQuestions routes question-specific requests
-func (r *Router) routeQuestions(w http.ResponseWriter, req *http.Request) {
-	// Extract question ID and action from path: /api/ai/question/{id}/answer
-	path := strings.TrimPrefix(req.URL.Path, "/api/ai/question/")
-	parts := strings.SplitN(path, "/", 2)
-
-	if parts[0] == "" {
-		http.Error(w, "Question ID required", http.StatusBadRequest)
-		return
-	}
-
-	questionID := parts[0]
-
-	// Check if there's an action
-	if len(parts) > 1 && parts[1] == "answer" {
-		if req.Method == http.MethodPost {
-			r.aiHandler.HandleAnswerQuestion(w, req, questionID)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-		return
-	}
-
-	http.Error(w, "Not found", http.StatusNotFound)
 }
 
 // handleAgentWebSocket handles WebSocket connections from agents for AI command execution

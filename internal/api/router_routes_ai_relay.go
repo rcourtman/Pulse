@@ -252,11 +252,9 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/incidents", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetRecentIncidents)))
 	r.mux.HandleFunc("/api/ai/incidents/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetIncidentData)))
 
-	// AI chat endpoints
-	// SECURITY: Status endpoint is part of chat UX and should require ai:chat scope for token clients.
+	// AI chat endpoints (Pulse Mobile chat; the web chat window is retired)
+	// SECURITY: Status endpoint reports the chat service and should require ai:chat scope for token clients.
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleStatus)))
-	r.mux.HandleFunc("/api/ai/assistant/surface-tools", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleAssistantSurfaceTools)))
-	r.mux.HandleFunc("/api/ai/workflow-prompts/render", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleRenderWorkflowPrompt)))
 	r.mux.HandleFunc("/api/ai/workflow-prompts/activity", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleRecordWorkflowPromptActivity)))
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend, r.aiHandler.HandleChat)))
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
@@ -266,9 +264,6 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// Require ai:execute scope to prevent low-privilege tokens from enumerating or denying approvals
 	r.mux.HandleFunc("/api/ai/approvals", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteApprovalsList, r.aiAutoFixEndpoints.HandleListApprovals)))
 	r.mux.HandleFunc("/api/ai/approvals/", RequireAuth(r.config, r.routeApprovals))
-
-	// AI question endpoints - require ai:chat scope for interactive AI features
-	r.mux.HandleFunc("/api/ai/question/", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.routeQuestions)))
 
 	// Provide extension endpoints to the approval handler for investigation fix gating
 	r.aiSettingsHandler.SetAIAutoFixEndpoints(r.aiAutoFixEndpoints)
