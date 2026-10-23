@@ -59,11 +59,15 @@ func snapshotCollectionMonitor(t *testing.T, kind string, withPeers bool) *Monit
 			if node == "node-b" && (!withPeers || site == "other-site") {
 				continue
 			}
-			id := alerts.BuildGuestKey(site, node, 101)
+			vmid := 101
+			if node == "node-b" {
+				vmid = 202
+			}
+			id := alerts.BuildGuestKey(site, node, vmid)
 			if kind == "qemu" {
-				vms = append(vms, models.VM{ID: id, VMID: 101, Name: "database", Node: node, Instance: site, Type: kind, Status: "running"})
+				vms = append(vms, models.VM{ID: id, VMID: vmid, Name: "database", Node: node, Instance: site, Type: kind, Status: "running"})
 			} else {
-				containers = append(containers, models.Container{ID: id, VMID: 101, Name: "database", Node: node, Instance: site, Type: kind, Status: "running"})
+				containers = append(containers, models.Container{ID: id, VMID: vmid, Name: "database", Node: node, Instance: site, Type: kind, Status: "running"})
 			}
 		}
 		m.state.UpdateGuestsForInstance(site, vms, containers)
@@ -97,7 +101,7 @@ func TestSnapshotCollectionFailureIsNotRemoval(t *testing.T) {
 				m := snapshotCollectionMonitor(t, kind, true)
 				old := proxmox.Snapshot{Name: "weekly", SnapTime: time.Now().Add(-16 * 24 * time.Hour).Unix(), Description: "last accepted listing", Parent: "base"}
 				key := kind + "/node-a/101"
-				peerKey := kind + "/node-b/101"
+				peerKey := kind + "/node-b/202"
 				client := &snapshotCollectionClient{replies: map[string]snapshotCollectionReply{key: {snapshots: []proxmox.Snapshot{old}}, peerKey: {snapshots: []proxmox.Snapshot{old}}}}
 				m.pollGuestSnapshots(context.Background(), "site", client)
 				m.pollGuestSnapshots(context.Background(), "other-site", client)
@@ -120,7 +124,7 @@ func TestSnapshotCollectionFailureIsNotRemoval(t *testing.T) {
 				if !reflect.DeepEqual(after[targetID], before[targetID]) {
 					t.Fatalf("failed %s listing removed or changed accepted snapshot: before=%+v after=%+v", kind, before[targetID], after[targetID])
 				}
-				if len(after) != 3 || !reflect.DeepEqual(after[otherID], before[otherID]) || after["site-node-b-101-fresh-peer"].Name != "fresh-peer" {
+				if len(after) != 3 || !reflect.DeepEqual(after[otherID], before[otherID]) || after["site-node-b-202-fresh-peer"].Name != "fresh-peer" {
 					t.Fatalf("failed listing leaked across node/instance or blocked accepted peer: %+v", after)
 				}
 				current := snapshotCollectionAlert(t, m, resourceID)

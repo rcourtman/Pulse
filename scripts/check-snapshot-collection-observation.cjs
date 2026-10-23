@@ -1,0 +1,150 @@
+// Run from the assigned root with pulse-worker-browser. No external services.
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const http = require('node:http');
+const crypto = require('node:crypto');
+const { chromium, webkit } = require('playwright');
+
+const root = '/workspace';
+const compiled = path.join(root, 'tmp/backup-date-static');
+const output = path.join(root, 'tmp/snapshot-collection-browser');
+const origin = 'http://127.0.0.1:5371';
+const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
+const binding = JSON.parse(fs.readFileSync(path.join(compiled, 'binding.json')));
+const producer = JSON.parse(fs.readFileSync(path.join(root, 'tmp/snapshot-collection-producer.json')));
+const frames = producer.frames;
+const result = {
+  result: 'incomplete',
+  source: producer.source_sha,
+  base: producer.base_sha,
+  producer,
+  consumer: binding,
+  harness: hash(fs.readFileSync(__filename)),
+  playwright: require('playwright/package.json').version,
+  cases: [],
+  requests: [],
+  captures: [],
+  cleanup: { browser: false, server: false },
+  limits: 'Real pollGuestSnapshots/GetState.ActiveAlerts -> AlertsAPI -> Overview/card; synthetic PVE listings only. Inventory retention is checked by the producer, not rendered by this alert fixture. No installed recovery, guest action, backup execution, notification delivery or reporter acceptance.',
+};
+let server;
+let browser;
+
+(async () => {
+  fs.mkdirSync(output, { recursive: true });
+  assert.equal(result.playwright, JSON.parse(fs.readFileSync(path.join(root, 'tests/integration/package-lock.json'))).packages['node_modules/@playwright/test'].version);
+  assert.equal(binding.graph, hash(fs.readFileSync(path.join(root, 'frontend-modern/package-lock.json'))));
+  assert.equal(binding.builder, hash(fs.readFileSync(path.join(root, 'frontend-modern/browser-tests/build-backup-date-observation.mjs'))));
+  for (const [file, digest] of Object.entries(producer.sources)) {
+    assert.equal(hash(fs.readFileSync(path.join(root, file))), digest, file);
+  }
+  const phases = ['observed', 'failed-596', 'failed-unavailable', 'confirmed-empty'];
+  for (const phase of phases.slice(0, -1)) {
+    assert.deepEqual(frames[phase].snapshots, frames.observed.snapshots, phase);
+    assert.equal(frames[phase].alerts.length, 1, phase);
+    assert.equal(frames[phase].alerts[0].id, frames.observed.alerts[0].id, phase);
+    assert.equal(frames[phase].alerts[0].startTime, frames.observed.alerts[0].startTime, phase);
+    assert.equal(frames[phase].alerts[0].level, 'critical', phase);
+  }
+  assert.equal(frames['confirmed-empty'].snapshots.length, 0);
+  assert.deepEqual(frames['confirmed-empty'].alerts, []);
+  for (const [file, digest] of Object.entries(binding.sources)) {
+    assert.equal(hash(fs.readFileSync(path.join(root, 'frontend-modern', file))), digest, file);
+  }
+  for (const file of ['src/api/alerts.ts', 'src/features/alerts/OverviewTab.tsx', 'src/features/alerts/AlertOverviewAlertCard.tsx']) {
+    assert(binding.sources[file], `real consumer not compiled: ${file}`);
+  }
+  const assets = new Map();
+  for (const [file, digest] of Object.entries(binding.artifacts)) {
+    const bytes = fs.readFileSync(path.join(compiled, file));
+    assert.equal(hash(bytes), digest, file);
+    assets.set('/' + file, bytes);
+  }
+  server = http.createServer((request, response) => {
+    const pathname = new URL(request.url, origin).pathname;
+    const bytes = assets.get(pathname);
+    if (!bytes || request.method !== 'GET') {
+      response.writeHead(404).end();
+      return;
+    }
+    response.writeHead(200, { 'Content-Type': { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[path.extname(pathname)] || 'application/octet-stream' });
+    response.end(bytes);
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(5371, '127.0.0.1', resolve);
+  });
+  for (const [name, engine, width, height] of [
+    ['desktop', chromium, 1280, 900],
+    ['narrow', webkit, 320, 812],
+  ]) {
+    browser = await engine.launch(engine === chromium ? { headless: true, channel: 'chromium', args: ['--no-sandbox'] } : { headless: true });
+    const page = await browser.newPage({ viewport: { width, height }, isMobile: width < 768, hasTouch: width < 768, locale: 'en-GB', timezoneId: 'UTC' });
+    page.setDefaultTimeout(10000);
+    const record = { name, width, height, browser: browser.version(), errors: [], phases: [] };
+    page.on('pageerror', (error) => record.errors.push(error.message));
+    let phase = 'observed';
+    await page.route('**/*', async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      assert.equal(url.origin, origin, 'external request');
+      assert.equal(request.method(), 'GET', 'unexpected mutation');
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      result.requests.push({ viewport: name, phase, path: url.pathname });
+      let body;
+      if (url.pathname === '/api/alerts/active') body = frames[phase].alerts;
+      else if (url.pathname === '/api/alerts/delivery-diagnosis') body = [];
+      else if (url.pathname === '/api/notifications/health') body = { queue: { status: 'unavailable' } };
+      else if (url.pathname === '/api/alerts/incidents') body = null;
+      else throw new Error(`unexpected API read: ${url.pathname}`);
+      return route.fulfill({ json: body });
+    });
+    await page.goto(origin + '/browser-tests/backup-date-observation.html');
+    await page.waitForFunction(() => window.__backupDate?.generation() === 1);
+    for (phase of phases) {
+      if (phase !== 'observed') {
+        const previous = await page.evaluate(() => window.__backupDate.generation());
+        await page.getByRole('button', { name: 'Refresh monitoring evidence', exact: true }).click();
+        await page.waitForFunction((generation) => window.__backupDate.generation() > generation, previous);
+      }
+      const active = await page.evaluate(() => Object.values(window.__backupDate.active()));
+      assert.deepEqual(active, frames[phase].alerts, `producer/consumer mismatch in ${name}/${phase}`);
+      if (phase !== 'confirmed-empty') {
+        await page.getByText(frames[phase].alerts[0].message, { exact: true }).waitFor();
+        const more = page.getByRole('button', { name: 'More', exact: true });
+        if (await more.count()) {
+          await more.click();
+          await page.getByRole('button', { name: 'Less', exact: true }).click();
+        }
+      } else {
+        assert.equal(await page.getByText(frames.observed.alerts[0].message, { exact: true }).count(), 0);
+      }
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      });
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+      assert.equal(overflow, false, `${name}/${phase} horizontal overflow`);
+      const capture = `${name}-${phase}.png`;
+      await page.screenshot({ path: path.join(output, capture), fullPage: true });
+      result.captures.push({ file: capture, sha256: hash(fs.readFileSync(path.join(output, capture))) });
+      record.phases.push({ phase, active: active.length, overflow });
+    }
+    assert.deepEqual(record.errors, []);
+    result.cases.push(record);
+    await browser.close();
+    browser = undefined;
+  }
+  result.result = 'passed';
+})().catch((error) => {
+  result.result = 'failed';
+  result.error = String(error.stack || error);
+  process.exitCode = 1;
+}).finally(async () => {
+  if (browser) await browser.close();
+  result.cleanup.browser = true;
+  if (server) await new Promise((resolve) => server.close(resolve));
+  result.cleanup.server = true;
+  fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify(result, null, 2) + '\n');
+});

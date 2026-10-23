@@ -1176,11 +1176,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				for _, snap := range snapshots {
 					result.snapshots = append(result.snapshots, buildSnapshot(target, snap))
 				}
-			} else if target.guestType == "lxc" {
-				errStr := err.Error()
-				if strings.Contains(errStr, "596") || strings.Contains(errStr, "not available") {
-					result.polled = true
-				}
+				// Only an accepted listing establishes membership, including an
+				// empty one. LXC 596/unavailable errors are not deletion evidence;
+				// leave failed guests unpolled so their last listing is retained.
 			}
 
 			results <- result
