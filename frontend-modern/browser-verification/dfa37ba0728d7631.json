@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "92f20dafdbece689a67dcf22994ff37d81d39a93",
+  "verified_at": "2026-10-23T19:12:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "ce25db85b1a6a191134cc6cf9e758240873aea085ca9955e818fe0e59058f697"
+  },
+  "routes": [
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private Pulse Pro build of this content with a seeded finding whose investigation run failed after planning a restart: the Investigation section shows the Fix queued outcome badge and no Re-investigate button",
+    "The failed run's note ('investigation final response failed: context deadline exceeded') renders in the muted information style (border-border-subtle bg-surface text-muted), not the red error style",
+    "The Restart action below it shows Approval required with Review in Actions and no plan-identity warning",
+    "Investigation thread expanded",
+    "No horizontal overflow at either width; the note wraps inside the 375px drawer"
+  ],
+  "interactions": [
+    "Opened Finding options and history from the Activity tab",
+    "Opened the finding's Review drawer",
+    "Expanded the investigation thread",
+    "Checked the drawer for a Re-investigate button and the note's computed colours at both widths"
+  ]
+}

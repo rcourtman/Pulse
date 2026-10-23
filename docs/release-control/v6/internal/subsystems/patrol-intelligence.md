@@ -2817,3 +2817,18 @@ now starts a targeted Patrol run, so alert follow-up lands on the Patrol page.
 `patrolInvestigationContextModel.ts` shrank to the investigation-record
 presentation that `InvestigationSection` uses, and the Patrol tool transcript
 block moved to `frontend-modern/src/components/patrol/ToolExecutionBlock.tsx`.
+
+### Failed run with a planned fix (23 October 2026)
+
+An investigation can persist a canonical action plan and then fail, normally
+on the final summary call. The orchestrator (in pulse-pro) keeps the plan's
+outcome, normally `fix_queued`, on the failed run instead of `timed_out` or
+`interrupted`, so the retry gates leave the finding alone rather than plan the
+same fix again, and it refuses a manual re-investigation while the latest
+run's outcome is `fix_queued` (409 `action_pending`). The Investigation section
+matches: it offers no Re-investigate while the outcome is `fix_queued`,
+whatever the run status, and the failed run's note renders as information, as
+for an interrupted run, because the queued fix is what the operator acts on.
+Once core reconciles the plan's approval, rejection or expiry, the outcome
+changes and the usual rules apply again. Proof:
+`frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx`.

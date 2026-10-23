@@ -44,10 +44,11 @@ const INVESTIGATION_BADGE_PROPS = {
 const summaryClass =
   'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none wrap-break-word prose-headings:my-2 prose-p:my-2 prose-pre:overflow-x-auto prose-code:break-all prose-code:before:content-none prose-code:after:content-none';
 
-// A run cut short by a restart did not fail: Patrol runs it again, so its note
-// reads as information rather than as an error.
+// A run cut short by a restart did not fail: Patrol runs it again. A run that
+// stopped after planning a fix left that fix waiting for approval. Either way,
+// its note reads as information rather than as an error.
 const runNoteClass = (outcome: string | undefined): string =>
-  outcome === 'interrupted'
+  outcome === 'interrupted' || outcome === 'fix_queued'
     ? 'border-border-subtle bg-surface text-muted'
     : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300';
 
@@ -102,6 +103,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
     const inv = investigation();
     if (!inv) return true; // No investigation yet
     if (inv.status === 'running') return false;
+    // A queued fix is still open, even after a run that failed later.
+    // Investigating again would plan a second action for the same problem.
+    if (inv.outcome === 'fix_queued') return false;
     return (
       inv.status === 'failed' ||
       inv.status === 'needs_attention' ||
