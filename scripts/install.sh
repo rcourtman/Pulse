@@ -3913,7 +3913,7 @@ nas_agent_removal_paths_safe() {
 # line containing pulse-agent; that also deletes unrelated tools and installs.
 # status returns one fixed word, never the source (which may contain secrets).
 filter_nas_agent_boot_file() {
-    local platform="$1" path="$2" mode="$3" size="" expected="" last=""
+    local platform="$1" path="$2" mode="$3" size="" expected="" last="" unraid_launch=""
     if [[ ! -e "$path" && ! -L "$path" ]]; then
         [[ "$mode" != status ]] || printf 'absent\n'
         return 0
@@ -3927,11 +3927,14 @@ filter_nas_agent_boot_file() {
     fi
     if [[ "$platform" == QNAP ]]; then
         expected=$(render_qnap_autorun_block "$STATE_DIR/start-pulse-agent.sh") || return 1
+    else
+        unraid_launch=$(render_unraid_go_launch "$STATE_DIR/start-pulse-agent.sh") || return 1
     fi
-    PULSE_NAS_BOOT_EXPECTED="$expected" LC_ALL=C awk -v platform="$platform" -v mode="$mode" \
+    PULSE_NAS_BOOT_EXPECTED="$expected" PULSE_NAS_BOOT_LAUNCH="$unraid_launch" LC_ALL=C awk -v platform="$platform" -v mode="$mode" \
         -v wrapper="$STATE_DIR/start-pulse-agent.sh" -v runtime="$INSTALL_DIR/$BINARY_NAME" '
         function launch(s) {
-            if (platform == "Unraid") return s == "bash " wrapper || s == "bash \"" wrapper "\""
+            # Installers before the detached entry launched the wrapper in the foreground.
+            if (platform == "Unraid") return s == ENVIRON["PULSE_NAS_BOOT_LAUNCH"] || s == "bash " wrapper || s == "bash \"" wrapper "\""
             return s == wrapper " &" || s == "\"" wrapper "\" &" ||
                    s == "sh " wrapper " &" || s == "sh \"" wrapper "\" &"
         }
@@ -4127,6 +4130,77 @@ teardown_nas_agent_boot_owner() {
     # Close state once more after flash unmount/recovery retirement, while the
     # credentials and wrapper still exist. No unchecked global pkill follows.
     confirm_nas_agent_removal_quiescent "$platform"
+}
+
+# Unraid's rc.local runs go (as /var/tmp/go, after fromdos) to completion, and
+# the wrapper is an endless watchdog loop. Launched in the foreground it never
+# returns, so every later line in go is skipped. Background it with its output
+# redirected so it also holds no descriptor that rc.local may be waiting on.
+render_unraid_go_launch() {
+    printf 'bash %q >> %q 2>&1 &\n' "$1" "/var/log/${AGENT_NAME}.log"
+}
+
+# go is the user's boot script. Remove only the installer's marker and command
+# lines that reference a Pulse wrapper or this runtime binary, which covers
+# foreground, hand-edited and old-location entries, so the new entry is the
+# only launch. Other lines that mention pulse-agent (log directories, hosts
+# entries, a co-installed agent, comments) stay. Line endings become LF, as
+# Unraid's fromdos makes them before running go, so removal can parse the file.
+# A removed line must not leave go unparseable either: bash stops at a syntax
+# error, which skips the rest of boot just as a hang does.
+write_unraid_go_entry() {
+    local go_script="$1" wrapper_script="$2" runtime_binary="$3" filtered=""
+    if [[ -f "$go_script" ]]; then
+        filtered=$(mktemp) || return 1
+        if ! LC_ALL=C awk -v runtime="$runtime_binary" '
+            # Whether s names word as a whole file name: neither neighbour can
+            # continue the name. A runtime path must not continue a longer path.
+            function refers(s, word, slash,    rest, i, b, a) {
+                rest = s
+                while ((i = index(rest, word)) > 0) {
+                    b = i > 1 ? substr(rest, i - 1, 1) : ""
+                    a = substr(rest, i + length(word), 1)
+                    if (b !~ /[A-Za-z0-9._-]/ && (slash || b != "/") && a !~ /[A-Za-z0-9._-]/) return 1
+                    rest = substr(rest, i + length(word))
+                }
+                return 0
+            }
+            # Text before a comment, only when the comment is certain. A
+            # backslash, an expansion, a backquote or an unterminated quote
+            # makes the line doubtful, and a doubtful line is still checked.
+            function code(s,    i, c, q) {
+                q = ""
+                for (i = 1; i <= length(s); i++) {
+                    c = substr(s, i, 1)
+                    if (q == "\047") { if (c == "\047") q = ""; continue }
+                    if (c == "\\" || c == "$" || c == "`") return s
+                    if (q == "\"") { if (c == "\"") q = ""; continue }
+                    if (c == "\"" || c == "\047") { q = c; continue }
+                    if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:];&|(]/)) return substr(s, 1, i - 1)
+                }
+                return s
+            }
+            {
+                line = $0
+                sub(/\r$/, "", line)
+                if (line == "# Pulse Agent") next
+                command = code(line)
+                if (refers(command, "start-pulse-agent.sh", 1) || refers(command, runtime, 0)) next
+                print line
+            }
+        ' "$go_script" > "$filtered" ||
+            { LC_ALL=C awk '{ sub(/\r$/, ""); print }' "$go_script" | bash -n 2>/dev/null &&
+                ! bash -n "$filtered" 2>/dev/null; } ||
+            ! cat "$filtered" > "$go_script"; then
+            rm -f "$filtered"
+            return 1
+        fi
+        rm -f "$filtered"
+    else
+        printf '#!/bin/bash\n' > "$go_script" || return 1
+        chmod +x "$go_script"
+    fi
+    { printf '# Pulse Agent\n'; render_unraid_go_launch "$wrapper_script"; } >> "$go_script"
 }
 
 remove_qnap_autorun_block() {
@@ -7552,27 +7626,14 @@ done
 EOF
 
 
-    # Add to /boot/config/go if not already present
-    GO_MARKER="# Pulse Agent"
-    if [[ -f "$GO_SCRIPT" ]]; then
-        # Remove any existing Pulse agent entries (line-by-line, not range-based)
-        sed -i "/^${GO_MARKER}$/d" "$GO_SCRIPT" 2>/dev/null || true
-        sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
+    # Replace the startup entry in /boot/config/go. The entry runs the wrapper
+    # through bash because /boot is FAT32 and has no execute bits.
+    if write_unraid_go_entry "$GO_SCRIPT" "$WRAPPER_SCRIPT" "$RUNTIME_BINARY"; then
+        log_info "Added startup entry to ${GO_SCRIPT}..."
     else
-        # Create go script if it doesn't exist
-        echo "#!/bin/bash" > "$GO_SCRIPT"
-        chmod +x "$GO_SCRIPT"
+        log_warn "Could not update ${GO_SCRIPT} safely. To start the agent on boot, replace its Pulse Agent lines with:"
+        log_warn "  $(render_unraid_go_launch "$WRAPPER_SCRIPT")"
     fi
-
-    # Append startup entry (use bash explicitly since /boot is FAT32 and doesn't support execute bits)
-    cat >> "$GO_SCRIPT" <<EOF
-
-${GO_MARKER}
-bash ${WRAPPER_SCRIPT}
-
-EOF
-
-    log_info "Added startup entry to ${GO_SCRIPT}..."
 
     # Start the agent now using the wrapper script (includes watchdog)
     # Use shell backgrounding instead of nohup for broader compatibility (QNAP, etc.)
