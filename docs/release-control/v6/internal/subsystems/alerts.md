@@ -33,6 +33,25 @@ Its opt-in browser frames come from `CheckBackups` and `GetActiveAlerts`.
 This is age-evidence handling only: no change to backup execution, source
 inventory readiness, snapshot alerts, native freeze/thaw safety or notification
 delivery, and no proof of a reported installation's recovery.
+### A listed snapshot with an unknown creation date is not recovered
+
+Snapshot warning cleanup distinguishes an absent snapshot from a still-listed
+snapshot whose creation time is missing, non-positive Unix time or in the future.
+After current guest policy and overrides are applied, an unknown date retains
+only that snapshot's existing canonical occurrence, including its trusted
+age/size evidence, acknowledgement and observation time. It neither creates a
+new occurrence nor refreshes old evidence. A trustworthy dated observation,
+authoritative removal, exclusion or disablement still follows normal recovery.
+The global alerting switch remains an evaluation pause, not evidence of recovery.
+
+This is deliberately conservative for both age and size warnings: an incomplete
+snapshot observation does not independently update either metric. It introduces
+no guest, snapshot, backup, filesystem or freeze/thaw operation.
+`snapshot_date_observation_test.go` checks repeated gaps, epoch conversion,
+exact occurrence/evidence preservation, lifecycle events, independent instances,
+policy changes, trustworthy recovery and removal. The real manager's exported
+frames feed the production Alerts API adapter and Overview/card browser fixture
+at desktop and narrow viewports; this is not installed guest recovery.
 
 ### Legacy alert-history compaction releases removed-row storage
 
