@@ -456,18 +456,30 @@ func TestPBSNamespaceDiscoveryFailureRetainsRecoveryHistory(t *testing.T) {
 				for range 2 {
 					f.poll(t, "pbs-main")
 					after := f.points(t, "pbs-main")
-					if len(after) != 2 {
-						t.Errorf("failed namespace discovery deleted durable history: %d points", len(after))
+					// A new root archive is accepted while the source-wide scan
+					// is partial. Retain both prior historical points, not only
+					// the unreadable child; reconcile old root history only when
+					// an ordinary complete enumeration is authoritative again.
+					if len(after) != len(before)+1 {
+						t.Errorf("partial discovery points=%d, want retained history plus one new root point (%d)", len(after), len(before)+1)
 					}
 					for id, point := range before {
-						if point.Details["namespace"] == "tenant" && !reflect.DeepEqual(after[id], point) {
-							t.Error("unseen namespace point was deleted or renewed without an observation")
+						if !reflect.DeepEqual(after[id], point) {
+							t.Error("historical point was deleted or renewed without an observation")
 						}
 					}
-					for _, point := range after {
-						if point.Details["namespace"] == "" && (point.CompletedAt == nil || point.CompletedAt.Unix() != f.backupAt.Load()) {
-							t.Error("independent successful root read did not update its point")
+					freshRootPoints := 0
+					for id, point := range after {
+						if _, historical := before[id]; historical {
+							continue
 						}
+						if point.Details["namespace"] != "" || point.CompletedAt == nil || point.CompletedAt.Unix() != f.backupAt.Load() {
+							t.Error("new point did not come from the accepted fresh root read")
+						}
+						freshRootPoints++
+					}
+					if freshRootPoints != 1 {
+						t.Errorf("accepted fresh root points=%d, want 1", freshRootPoints)
 					}
 					permissions := operationaltrust.EvidencePermissionsUnknown
 					if status == http.StatusForbidden {
