@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,22 @@ import (
 )
 
 const defaultVMwarePollInterval = 60 * time.Second
+
+// defaultVMwarePollTimeout bounds the whole inventory refresh, not each REST read.
+const defaultVMwarePollTimeout = 20 * time.Second
+
+func vmwarePollTimeout() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("PULSE_VMWARE_POLL_TIMEOUT")); raw != "" {
+		if duration, err := time.ParseDuration(raw); err == nil && duration > 0 {
+			return duration
+		}
+		// Environment input can contain private text; diagnose the setting,
+		// not its value. A malformed value never disables the deadline.
+		log.Warn().Dur("timeout", defaultVMwarePollTimeout).
+			Msg("Invalid PULSE_VMWARE_POLL_TIMEOUT, using default")
+	}
+	return defaultVMwarePollTimeout
+}
 
 // VMwareConnectionPollError captures the last runtime poll error for one
 // configured VMware connection.
@@ -340,7 +357,7 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 		return
 	}
 
-	pollCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	pollCtx, cancel := context.WithTimeout(ctx, vmwarePollTimeout())
 	defer cancel()
 
 	at := time.Now().UTC()

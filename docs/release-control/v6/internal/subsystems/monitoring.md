@@ -8112,3 +8112,25 @@ unfiltered chart results against the full reader with 1,000-point series,
 including LTTB selection and caller mutation. Metrics-store guards compare the
 projections across mixed tiers and buckets, changed database snapshots and
 Docker legacy/observed provenance; the query-plan guard covers both SQL forms.
+
+
+### Bounded VMware whole-inventory refresh budget
+
+`PULSE_VMWARE_POLL_TIMEOUT` is an optional positive Go duration for the whole
+vCenter refresh. The default stays twenty seconds. Empty values use the default;
+malformed, nonpositive and overflowing values warn without logging their raw
+contents, then keep the default bound. This changes neither the independent
+per-HTTP-request timeout nor a shorter caller lifetime. Polls stay serial and
+cancellable; extending one connection's allowed time can delay its siblings.
+Failure retains cached records, observed inventory and the last success time;
+only an accepted refresh replaces them and clears its consecutive failures.
+
+`TestVMwareInventoryRefreshBudgetContract` covers the parsing and private-value
+warning boundary, then uses Go's virtual clock to
+exercise a twenty-one-second production-provider refresh against the default
+and a configured thirty-second budget, then a shorter parent deadline. It
+checks cache/summary retention, ordinary successful replacement, serial
+multi-connection dispatch and canonical resource projection for consuming
+browser proof. No poll interval, API limit, TLS setting, provider permissions
+or timeout threshold is waived. These synthetic controls are not vCenter 8.0.3
+or installed recovery, and do not attribute #2070's HTTP 500 to refresh duration.
