@@ -174,6 +174,74 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('keeps unchanged findings, and the list, when a refresh reads them again', async () => {
+    // Rows render findings with <For>, keyed by object: a refresh that
+    // replaced unchanged findings rebuilt every row and remounted an open
+    // review on each 30s/60s poll.
+    const records = () => [
+      {
+        id: 'patrol-disk',
+        key: 'patrol-disk',
+        severity: 'warning' as const,
+        category: 'capacity' as const,
+        resource_id: 'instance:node:105',
+        resource_name: 'db-01',
+        resource_type: 'vm',
+        title: 'db-01 data disk is 91% full',
+        description: 'The PostgreSQL volume grew 4% in two days.',
+        detected_at: '2026-10-22T07:00:00Z',
+        last_seen_at: '2026-10-23T09:40:00Z',
+        auto_resolved: false,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 1,
+        lifecycle: [{ at: '2026-10-22T07:00:00Z', type: 'detected', message: 'Detected' }],
+      },
+      {
+        id: 'patrol-backup',
+        key: 'patrol-backup',
+        severity: 'warning' as const,
+        category: 'backup' as const,
+        resource_id: 'instance:node:201',
+        resource_name: 'pbs-01',
+        resource_type: 'host',
+        title: 'Nightly backup on pbs-01 takes three times longer than usual',
+        description: 'The last three backup jobs each ran for about 3 hours.',
+        detected_at: '2026-10-22T07:00:00Z',
+        last_seen_at: '2026-10-23T09:40:00Z',
+        auto_resolved: false,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 0,
+      },
+    ];
+    vi.mocked(getPatrolFindings).mockImplementation(async () => records());
+    await aiIntelligenceStore.loadPatrolFindings();
+    const first = aiIntelligenceStore.patrolFindings;
+
+    await aiIntelligenceStore.loadPatrolFindings();
+    expect(aiIntelligenceStore.patrolFindings).toBe(first);
+
+    // The API returns tied findings in no fixed order.
+    vi.mocked(getPatrolFindings).mockImplementation(async () => records().reverse());
+    await aiIntelligenceStore.loadPatrolFindings();
+    const reordered = aiIntelligenceStore.patrolFindings;
+    expect(reordered.map((finding) => finding.id)).toEqual(['patrol-backup', 'patrol-disk']);
+    expect(reordered[0]).toBe(first[1]);
+    expect(reordered[1]).toBe(first[0]);
+
+    vi.mocked(getPatrolFindings).mockImplementation(async () =>
+      records().map((record) =>
+        record.id === 'patrol-disk' ? { ...record, title: 'db-01 data disk is 93% full' } : record,
+      ),
+    );
+    await aiIntelligenceStore.loadPatrolFindings();
+    const changed = aiIntelligenceStore.patrolFindings;
+    expect(changed[1]).toBe(first[1]);
+    expect(changed[0]).not.toBe(first[0]);
+    expect(changed[0].title).toBe('db-01 data disk is 93% full');
+  });
+
   it('keeps the unclassified and interrupted outcomes on both finding feeds', async () => {
     const outcomes = { 'run-unclassified': 'unclassified', 'run-interrupted': 'interrupted' };
     const finding = (id: string, outcome: string) => ({

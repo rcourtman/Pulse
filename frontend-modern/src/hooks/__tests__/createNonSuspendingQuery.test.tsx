@@ -351,6 +351,37 @@ it('lets a background read slower than the poll interval settle', async () => {
   expect(screen.getByTestId('query')).toHaveTextContent('third');
 });
 
+it('polls on a cadence that follows state, and stops when it has none', async () => {
+  vi.useFakeTimers();
+  const fetcher = vi.fn().mockResolvedValue('read');
+  const [cadence, setCadence] = createSignal<number | undefined>(30_000);
+  const Probe = () => {
+    const query = createNonSuspendingQuery({
+      source: () => 'investigation',
+      fetcher,
+      initialValue: '',
+      pollMs: cadence,
+    });
+    return <output data-testid="query">{query.value()}</output>;
+  };
+  render(() => <Probe />);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+
+  // A run starts: poll faster.
+  setCadence(5_000);
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(fetcher).toHaveBeenCalledTimes(4);
+
+  // Nothing left to follow: stop.
+  setCadence(undefined);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(fetcher).toHaveBeenCalledTimes(4);
+});
+
 it('drops a stalled read loading state even when its replacement also hangs', async () => {
   vi.useFakeTimers();
   const hang = () => new Promise<string>(() => undefined);

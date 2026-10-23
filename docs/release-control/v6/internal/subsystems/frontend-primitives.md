@@ -5069,6 +5069,14 @@ consumer renders that failure as it renders any other (the Proxmox Replication
 table shows its error and Retry; workload sparklines keep retained series). A
 transport that always takes longer than that deadline plus one poll interval
 never publishes.
+`pollMs` may also be an accessor, for a cadence that follows state (23 October
+2026): a Patrol finding review re-reads its investigation every 5 seconds while
+the run is active and every 30 seconds otherwise, and its thread only while the
+run is live or after a failed read. A new cadence restarts the interval, a read
+already in flight keeps its protection, and an accessor that returns undefined
+stops polling. A consumer that needs two cadences uses one accessor rather than
+a second timer that calls `refetch`, because a refetch and a poll replace each
+other's slow reads.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,

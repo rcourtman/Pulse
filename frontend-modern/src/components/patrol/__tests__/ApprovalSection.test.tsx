@@ -1,7 +1,9 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
+import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationSession } from '@/api/ai';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { PatrolActionReference } from '@/types/actionAudit';
 import approvalSectionSource from '../ApprovalSection.tsx?raw';
 import ApprovalSection from '../ApprovalSection';
@@ -54,6 +56,7 @@ function investigation(action?: PatrolActionReference): InvestigationSession {
 
 describe('ApprovalSection typed action handoff', () => {
   beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     getInvestigationMock.mockReset();
   });
 
@@ -86,6 +89,61 @@ describe('ApprovalSection typed action handoff', () => {
     expect(approvalSectionSource).not.toContain('executeAction');
     expect(approvalSectionSource).not.toContain('approveInvestigationFix');
     expect(approvalSectionSource).not.toContain('proposed_fix.commands');
+  });
+
+  it('reads the governed action through the non-suspending query', () => {
+    // The nearest Suspense boundary above a review is the app's route
+    // boundary, whose fallback replaces the page and loses the reader's place.
+    expect(approvalSectionSource).not.toContain('createResource');
+    expect(approvalSectionSource).toContain('createNonSuspendingQuery');
+  });
+
+  it('keeps the page around a finding review while the governed action loads', async () => {
+    let finishRead: (value: InvestigationSession) => void = () => {};
+    getInvestigationMock.mockReturnValue(
+      new Promise<InvestigationSession>((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <Suspense fallback={<div>Loading view...</div>}>
+              <ApprovalSection findingId="finding-1" investigationOutcome="fix_queued" />
+            </Suspense>
+          )}
+        />
+      </Router>
+    ));
+
+    expect(await screen.findByText('Loading governed action…')).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+
+    finishRead(investigation(actionReference('pending_approval')));
+    expect(await screen.findByRole('link', { name: /review in actions/i })).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+  });
+
+  it('reads the action again on its own after a failed read', async () => {
+    // Findings refreshes no longer remount the review, so it retries itself.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      getInvestigationMock.mockRejectedValueOnce(new Error('Pulse is restarting'));
+      getInvestigationMock.mockResolvedValueOnce(
+        investigation(actionReference('pending_approval')),
+      );
+
+      renderSection('fix_queued');
+      expect(await screen.findByText('Action details unavailable')).toBeInTheDocument();
+
+      vi.advanceTimersByTime(30_000);
+      expect(await screen.findByRole('link', { name: /review in actions/i })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('deep-links a pending action to its exact governed review', async () => {

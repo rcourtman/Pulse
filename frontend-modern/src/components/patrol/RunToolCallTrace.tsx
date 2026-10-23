@@ -5,7 +5,7 @@
  * Lazy-loads tool call details when expanded.
  */
 
-import { Component, createSignal, createResource, Show, For } from 'solid-js';
+import { Component, createSignal, Show, For } from 'solid-js';
 import {
   getPatrolRunWithToolCalls,
   type ToolCallRecord,
@@ -13,6 +13,7 @@ import {
   type ToolCallVerificationStatus,
 } from '@/api/patrol';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
   getToolCallResultBadgeTone,
@@ -106,11 +107,15 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
   const [expandedCall, setExpandedCall] = createSignal<string | null>(null);
 
-  // Lazy-load tool calls when expanded — fetch small batch since the run is likely recent
-  const [toolCalls] = createResource(
-    () => (expanded() ? props.runId : null),
-    async (runId) => {
-      if (!runId) return [];
+  // Lazy-load tool calls when expanded — fetch small batch since the run is likely recent.
+  // Like the finding review's reads, this one never suspends: the nearest
+  // Suspense boundary is the app's route boundary, whose fallback replaces
+  // the page and loses the reader's place.
+  const toolCallsQuery = createNonSuspendingQuery<ToolCallRecord[], string>({
+    source: () => (expanded() ? props.runId : null),
+    cacheKey: (runId) => `patrol-run-tool-calls:${runId}`,
+    retainPreviousValueOnSourceChange: false,
+    fetcher: async (runId) => {
       try {
         const run = await getPatrolRunWithToolCalls(runId);
         return run?.tool_calls ?? [];
@@ -118,7 +123,10 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
         return [];
       }
     },
-  );
+    initialValue: [],
+  });
+  const toolCalls = toolCallsQuery.value;
+  const toolCallsLoading = () => !toolCallsQuery.resolvedOnce();
 
   const truncate = (text: string, max: number = 200) =>
     text.length <= max ? text : text.slice(0, max - 1) + '...';
@@ -148,14 +156,14 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
         </button>
 
         <Show when={expanded()}>
-          <Show when={toolCalls.loading}>
+          <Show when={toolCallsLoading()}>
             <div class="flex items-center gap-2 text-xs text-muted py-2 mt-2">
               <LoadingSpinner size="sm" />
               {getToolCallsLoadingState()}
             </div>
           </Show>
 
-          <Show when={!toolCalls.loading && toolCalls() && toolCalls()!.length > 0}>
+          <Show when={toolCalls().length > 0}>
             <div class="mt-2 space-y-1">
               <For each={toolCalls()}>
                 {(call: ToolCallRecord, index) => {
@@ -232,7 +240,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
             </div>
           </Show>
 
-          <Show when={!toolCalls.loading && (!toolCalls() || toolCalls()!.length === 0)}>
+          <Show when={!toolCallsLoading() && toolCalls().length === 0}>
             <p class="text-xs text-muted mt-2">{getToolCallsUnavailableState()}</p>
           </Show>
         </Show>

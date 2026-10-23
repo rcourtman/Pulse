@@ -1,7 +1,9 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationRecord } from '@/api/ai';
 import type { Investigation } from '@/api/patrol';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import {
   getInvestigationOutcomeBadgeTone,
   getInvestigationOutcomeLabel,
@@ -39,6 +41,7 @@ vi.mock('../InvestigationMessages', () => ({
 
 describe('InvestigationSection', () => {
   beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     getInvestigationMock.mockReset();
     reinvestigateFindingMock.mockReset();
     loadFindingsMock.mockReset();
@@ -50,6 +53,140 @@ describe('InvestigationSection', () => {
 
   it('keeps investigation loading indicators on the shared LoadingSpinner primitive', () => {
     expect(investigationSectionSource).toContain('LoadingSpinner');
+  });
+
+  it('reads the investigation without suspending the page around a finding review', () => {
+    // The nearest Suspense boundary above a review is the app's route
+    // boundary, whose fallback replaces the page and loses the reader's place.
+    expect(investigationSectionSource).not.toContain('createResource');
+    expect(investigationSectionSource).toContain('createNonSuspendingQuery');
+  });
+
+  it('does not offer another run before the first read says what the run is doing', async () => {
+    let finishRead: (value: Investigation) => void = () => {};
+    getInvestigationMock.mockReturnValueOnce(
+      new Promise<Investigation>((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+
+    render(() => <InvestigationSection findingId="finding-pending" investigationStatus="failed" />);
+
+    expect(await screen.findByText('Loading investigation...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+
+    finishRead({
+      id: 'inv-pending',
+      finding_id: 'finding-pending',
+      session_id: 'session-pending',
+      status: 'failed',
+      outcome: 'fix_queued',
+      started_at: '2026-10-23T10:00:00.000Z',
+      turn_count: 6,
+    });
+    expect(await screen.findByText(getInvestigationOutcomeLabel('fix_queued'))).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the last answer when a later read fails', async () => {
+    getInvestigationMock.mockResolvedValueOnce({
+      id: 'inv-kept',
+      finding_id: 'finding-kept',
+      session_id: 'session-kept',
+      status: 'completed',
+      outcome: 'unclassified',
+      started_at: '2026-10-23T10:00:00.000Z',
+      turn_count: 3,
+      summary: 'The service restarted twice.',
+    } satisfies Investigation);
+    getInvestigationMock.mockRejectedValueOnce(new Error('Pulse is restarting'));
+    reinvestigateFindingMock.mockResolvedValue({ success: true });
+
+    render(() => <InvestigationSection findingId="finding-kept" investigationStatus="completed" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Re-investigate' }));
+    await waitFor(() => expect(getInvestigationMock).toHaveBeenCalledTimes(2));
+    // Let the failed read settle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText('The service restarted twice.')).toBeInTheDocument();
+    expect(screen.queryByText(/No investigation yet/)).not.toBeInTheDocument();
+  });
+
+  it('reads again on its own after a failed first read', async () => {
+    // Findings refreshes no longer remount the review, so it retries itself.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      getInvestigationMock.mockRejectedValueOnce(new Error('Pulse is restarting'));
+      getInvestigationMock.mockResolvedValueOnce({
+        id: 'inv-retry',
+        finding_id: 'finding-retry',
+        session_id: 'session-retry',
+        status: 'completed',
+        outcome: 'unclassified',
+        started_at: '2026-10-23T10:00:00.000Z',
+        turn_count: 3,
+        summary: 'Read on the second try.',
+      } satisfies Investigation);
+
+      render(() => (
+        <InvestigationSection findingId="finding-retry" investigationStatus="completed" />
+      ));
+      await waitFor(() => expect(getInvestigationMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText('Read on the second try.')).not.toBeInTheDocument();
+
+      vi.advanceTimersByTime(30_000);
+      expect(await screen.findByText('Read on the second try.')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the investigation on screen, and the route in place, while it is read again', async () => {
+    getInvestigationMock.mockResolvedValueOnce({
+      id: 'inv-reread',
+      finding_id: 'finding-reread',
+      session_id: 'session-reread',
+      status: 'completed',
+      outcome: 'unclassified',
+      started_at: '2026-10-23T10:00:00.000Z',
+      turn_count: 3,
+      summary: 'Memory pressure explains the restarts.',
+    } satisfies Investigation);
+    let finishRead: (value: Investigation) => void = () => {};
+    getInvestigationMock.mockReturnValueOnce(
+      new Promise<Investigation>((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+    reinvestigateFindingMock.mockResolvedValue({ success: true });
+
+    render(() => (
+      <Suspense fallback={<div>Loading view...</div>}>
+        <InvestigationSection findingId="finding-reread" investigationStatus="completed" />
+      </Suspense>
+    ));
+
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+    expect(await screen.findByText('Memory pressure explains the restarts.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Re-investigate' }));
+    await waitFor(() => expect(getInvestigationMock).toHaveBeenCalledTimes(2));
+
+    // The second read is still in flight.
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading investigation...')).not.toBeInTheDocument();
+    expect(screen.getByText('Memory pressure explains the restarts.')).toBeInTheDocument();
+
+    finishRead({
+      id: 'inv-reread-2',
+      finding_id: 'finding-reread',
+      session_id: 'session-reread-2',
+      status: 'running',
+      started_at: '2026-10-23T10:05:00.000Z',
+      turn_count: 0,
+    });
+    expect(await screen.findByText('Running')).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
   });
 
   it('renders investigation status badges from the shared finding presentation contract', async () => {

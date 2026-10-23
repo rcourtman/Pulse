@@ -840,6 +840,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
 3. Letting the Patrol page, local store, and findings UI drift into separate shadow truths for the same Patrol status or finding lifecycle state
 4. Recreating Patrol run-history, status-bar, runtime-summary, or workspace-tab status/metadata badge shells locally instead of composing `StatusIndicatorBadge` and `MetadataBadge`
 5. Recreating border-based Patrol or AI finding loading spinner shells locally instead of composing `LoadingSpinner`
+6. Reading finding-review or run-history data with `createResource`, or any read that suspends, instead of `createNonSuspendingQuery`: the nearest Suspense boundary is the app's route boundary, whose fallback replaces the page and loses the reader's place. Rebuilding findings rows or an open review for a refresh that returned the same findings is forbidden for the same reason
 
 ## Completion Obligations
 
@@ -2832,3 +2833,55 @@ for an interrupted run, because the queued fix is what the operator acts on.
 Once core reconciles the plan's approval, rejection or expiry, the outcome
 changes and the usual rules apply again. Proof:
 `frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx`.
+
+### Finding reviews keep their place across refreshes (23 October 2026)
+
+The app shell re-reads Patrol findings every 30 seconds and the Patrol page
+every 60. Each read parsed new objects, so `FindingsPanel` rebuilt every row
+and remounted an open finding review. The remounted review read its
+investigation with `createResource`, and that read suspended the nearest
+Suspense boundary, the app's route boundary. Its "Loading view..." fallback
+replaced the whole page, so someone reading a review on the Activity tab was
+thrown back to the top. The same happened on opening a review or its thread,
+on Re-investigate, and on every 5-second poll of a running investigation.
+Now:
+
+- `aiIntelligenceStore` keeps the object of every finding a read returns
+  unchanged, and keeps the list when nothing changed.
+- `FindingsPanel` keeps a display group while its findings are the same
+  objects (`reuseIdenticalPatrolFindingDisplayGroups`). It settles sort ties by
+  finding id, because the API returns tied findings in no fixed order and a
+  Patrol run stamps one time on every finding it sees. The open review reads
+  its related findings through a getter, so it is redrawn only when its own
+  finding changes.
+- `InvestigationSection`, `ApprovalSection` and `InvestigationMessages` read
+  through `createNonSuspendingQuery`. The last answer stays on screen while
+  the next loads, and a remounted review shows the retained answer at once.
+  `RunToolCallTrace` moves to the same query. It did not suspend before, but
+  only because each of its reads checked `loading` first.
+- The remounts had also re-read the review every 30 seconds. The mounted
+  review now does that itself through the query's own poll, which never
+  replaces a slow read still in flight: the investigation and its governed
+  action re-read every 30 seconds, and the investigation every 5 seconds while
+  it runs (`pollMs` takes an accessor for that). A failed read keeps the last
+  answer instead of replacing it with "none"; only a 404 means the finding has
+  no investigation. The thread belongs to its run's session id, so a new run
+  reads its own thread and a re-read of the same run leaves it alone. It is
+  read again every 5 seconds while the run is live, once more when the run
+  finishes, and 30 seconds after a failed read; a message that comes back
+  unchanged keeps its row, and any tool output expanded in it. Re-investigate
+  stays hidden until the first read answers, because until then a running
+  investigation or a queued fix looks like none.
+- Rebuilding rows on every refresh had also kept their ages current. Rows and
+  the review now stay mounted, so their ages (last seen, acknowledged, last
+  investigated, regressions, lifecycle, an investigation's start and its
+  thread's messages) read the shared relative-time clock.
+
+A change to the open finding itself still redraws the review, which closes
+its thread, but the page does not move. Proofs:
+`frontend-modern/src/components/AI/__tests__/FindingsPanel.refresh.test.tsx`,
+`frontend-modern/src/components/AI/__tests__/FindingsPanel.test.ts`,
+`frontend-modern/src/stores/__tests__/aiIntelligence.test.ts`,
+`frontend-modern/src/hooks/__tests__/createNonSuspendingQuery.test.tsx`, and the
+`InvestigationSection`, `ApprovalSection`, `InvestigationMessages` and
+`RunToolCallTrace` tests under `frontend-modern/src/components/patrol/__tests__/`.

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "7b39194ae2fc921e91b98259d0e1679c67541430",
+  "verified_at": "2026-10-23T22:08:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+    "frontend-modern/src/stores/aiIntelligence.ts",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "ec6ad2732f705f14f2dfda0471b056e605eab18e709360f9c277d5385626c676",
+    "frontend-modern/src/components/patrol/ApprovalSection.tsx": "6c7dac44ca991fe99e55ae38ea7cb4f60e5de58ae83ca7163ca6706893971d2f",
+    "frontend-modern/src/components/patrol/InvestigationMessages.tsx": "dceb6715810bf20a5d31caf68ad3c6ac1cb8a0a98990bbc0b7ecd18ae044467b",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "73a2e84a34426d1bb9bb2fb9e8214c190502b57a132bbe0cf02d0a388f84df1f",
+    "frontend-modern/src/components/patrol/RunToolCallTrace.tsx": "d0f982e6a3e954421b6a5a99d1b1605885523044e5cdf5dc3aaf62312e8b35fe",
+    "frontend-modern/src/hooks/createNonSuspendingQuery.ts": "7e24f7f22de510e32c53c7165c0e2b009e88293ee5f340ca5d4c1082868512d9",
+    "frontend-modern/src/stores/aiIntelligence.ts": "b3e6b1e5d61e493796f117f334a8bc9af8689d1e6087561780edd4d7dd6fb849",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "d4396dd219ac518b23cf7c9fecd2bebb2f7545927e066ee6261bae3eebc590ed"
+  },
+  "routes": [
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private Pulse Pro stack: the enterprise binary built on pulse-dev from main 15ea29fe2b (pulse and pulse-enterprise), Vite dev server of this change, small mock estate, seeded Patrol findings and orchestrator investigation sessions; compared with main's frontend sources on the same backend",
+    "Before (main) at 1024x768: opening a finding's review moved the page from 1389px to 0; opening its thread and each 30s and 60s findings reload flashed the route's Loading view fallback and dropped a reader at 2715px to 0; the open row and the review's content were rebuilt three times in 70 seconds, which closed the thread and reset the review's inner scroll",
+    "After at 1024x768, 1440x900 and 390x844: opening the review kept the page where it was (1584, 1417 and 2525px); over 70 seconds (two 30s reloads, one 60s reload and a 30s re-read of the investigation) the page stayed at 3050, 1585 and 4483px with no Loading view fallback, no row or review content rebuilt, rows in the same order, the thread still open and the review's inner scroll unchanged",
+    "A 150-second watch at 1024x768 with unchanged findings: no row moved or was rebuilt",
+    "History: with the runs list fulfilled to carry tool calls, expanding a run's tool calls kept the page at 1024x768 and 390x844 and listed the three calls",
+    "Ages in the open review and rows read the shared clock (last seen, started); the review's investigation, Patrol record, summary and Re-investigate render as on main",
+    "No Loading view fallback in any run; the only console error was the rig's 500 for seeded investigation messages, which the thread shows as No investigation messages available"
+  ],
+  "interactions": [
+    "Opened the Activity tab and Finding options and history",
+    "Opened a finding's review from mid-page, opened its investigation thread, scrolled the review into view and scrolled inside the review",
+    "Kept the review open for 70 seconds (150 seconds once) while the app's 30s and the page's 60s findings reloads ran",
+    "Opened History, selected a run, returned to History, opened Technical details and expanded the run's tool calls"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "151.0.7922.34 headless"
+  },
+  "scope": "Pulse Pro binary on a mock estate with seeded Patrol findings and investigation sessions; mock data, not live provider connections."
+}
