@@ -131,7 +131,7 @@ func (f *pbsPosturePollFixture) poll(t *testing.T, instance string, mode int32, 
 	f.m.mu.Lock()
 	clear(f.m.pbsBackupCacheTime)
 	f.m.mu.Unlock()
-	f.m.pollPBSBackups(context.Background(), instance, f.client, datastores)
+	f.m.pollPBSBackups(context.Background(), instance, f.client, datastores, nil)
 	f.wait(t)
 }
 
@@ -289,7 +289,7 @@ func TestPBSOrdinaryPollSnapshotFailuresDoNotClaimCompleteHistory(t *testing.T) 
 				}
 				// No TTL manipulation on the next poll: a failed refresh must not
 				// become a healthy cached read while snapshot access is still lost.
-				f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, ds)
+				f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, ds, nil)
 				f.wait(t)
 			}
 			f.poll(t, "pbs-main", 0, ds)

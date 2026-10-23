@@ -8,14 +8,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	recoverystore "github.com/rcourtman/pulse-go-rewrite/internal/recovery/store"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
@@ -186,7 +190,7 @@ func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
 					phase.Store(mode)
 					// No cache clearing, TTL expiry or monitor replacement: these
 					// are consecutive ordinary polls of the same connection.
-					f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, ds)
+					f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, ds, nil)
 					f.wait(t)
 				}
 				frames := map[string]any{}
@@ -282,5 +286,275 @@ func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Namespace discovery is part of backup enumeration, not just optional drawer
+// metadata. Drive the public poll entry point and its background backup worker
+// so a missing namespace cannot masquerade as an authoritative root-only scan.
+type pbsNamespacePollFixture struct {
+	m                *Monitor
+	store            *recoverystore.Store
+	client           *pbs.Client
+	datastoreStatus  atomic.Int32
+	datastoreBody    atomic.Pointer[string]
+	versionStatus    atomic.Int32
+	backupReads      atomic.Int32
+	namespaceStatus  atomic.Int32
+	namespaceRemoved atomic.Bool
+	rootEmpty        atomic.Bool
+	backupAt         atomic.Int64
+	childReads       atomic.Int32
+	ids              []string
+}
+
+func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
+	t.Helper()
+	m, manager := recoveryIngestTestMonitor(t)
+	f := &pbsNamespacePollFixture{m: m}
+	f.backupAt.Store(time.Now().UTC().Add(-time.Hour).Truncate(time.Second).Unix())
+	m.state = models.NewState()
+	m.state.UpdateVMs([]models.VM{
+		{ID: makeGuestID("cluster", "node-a", 100), VMID: 100, Instance: "cluster", Node: "node-a", Name: "guest-100", Status: "running"},
+		{ID: makeGuestID("cluster", "node-b", 101), VMID: 101, Instance: "cluster", Node: "node-b", Name: "guest-101", Status: "running"},
+	})
+	for _, id := range []int{100, 101} {
+		f.ids = append(f.ids, unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster", id))
+	}
+	var err error
+	f.store, err = manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { f.wait(t); _ = f.store.Close() })
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		var data any = []any{}
+		switch r.URL.Path {
+		case "/api2/json/version":
+			if status := f.versionStatus.Load(); status != 0 {
+				http.Error(w, "fixture version unavailable", int(status))
+				return
+			}
+			data = map[string]any{"version": "3.4.2"}
+		case "/api2/json/admin/datastore":
+			if status := f.datastoreStatus.Load(); status != 0 {
+				http.Error(w, "fixture discovery unavailable", int(status))
+				return
+			}
+			if body := f.datastoreBody.Load(); body != nil {
+				_, _ = w.Write([]byte(*body))
+				return
+			}
+			data = []map[string]any{{"store": "archive"}}
+		case "/api2/json/admin/datastore/archive/status":
+			data = map[string]any{"total": 4096, "used": 1024, "avail": 3072}
+		case "/api2/json/admin/datastore/archive/namespace":
+			status := int(f.namespaceStatus.Load())
+			if status == 200 {
+				_, _ = w.Write([]byte(`{"data":`)) // incomplete, not a complete empty list
+				return
+			}
+			if status != 0 {
+				http.Error(w, "fixture namespace discovery unavailable", status)
+				return
+			}
+			if !f.namespaceRemoved.Load() {
+				data = []map[string]any{{"ns": "tenant"}}
+			}
+		case "/api2/json/admin/datastore/archive/groups":
+			f.backupReads.Add(1)
+			id := "100"
+			if r.URL.Query().Get("ns") == "tenant" {
+				id = "101"
+				f.childReads.Add(1)
+			}
+			if id != "100" || !f.rootEmpty.Load() {
+				data = []map[string]any{{"backup-type": "vm", "backup-id": id, "last-backup": f.backupAt.Load(), "backup-count": 1}}
+			}
+		case "/api2/json/admin/datastore/archive/snapshots":
+			f.backupReads.Add(1)
+			id := r.URL.Query().Get("backup-id")
+			if r.URL.Query().Get("ns") == "tenant" {
+				f.childReads.Add(1)
+			}
+			data = []map[string]any{{"backup-type": "vm", "backup-id": id, "backup-time": f.backupAt.Load(), "size": 1024,
+				"files": []string{"index.json.blob"}, "verification": map[string]any{"state": "ok"}, "comment": "guest-" + id}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	t.Cleanup(server.Close)
+	f.client, err = pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.config = &config.Config{EnableBackupPolling: true, BackupPollingCycles: 1, PBSInstances: []config.PBSInstance{
+		{Name: "pbs-main", Host: server.URL, MonitorDatastores: true, MonitorBackups: true},
+		{Name: "pbs-other", Host: server.URL, MonitorDatastores: true, MonitorBackups: true},
+	}}
+	m.lastPBSBackupPoll = make(map[string]time.Time)
+	m.pollStatusMap = make(map[string]*pollStatus)
+	return f
+}
+
+func (f *pbsNamespacePollFixture) wait(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		f.m.mu.RLock()
+		polling := len(f.m.pbsBackupPollers) > 0
+		f.m.mu.RUnlock()
+		f.m.recoveryIngestMu.Lock()
+		ingesting := f.m.recoveryIngestRunning
+		f.m.recoveryIngestMu.Unlock()
+		if !polling && !ingesting {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("PBS namespace poll/ingest did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func (f *pbsNamespacePollFixture) poll(t *testing.T, instance string) {
+	t.Helper()
+	f.m.pollPBSInstance(context.Background(), instance, f.client)
+	f.wait(t)
+}
+
+func (f *pbsNamespacePollFixture) points(t *testing.T, instance string) map[string]recovery.RecoveryPoint {
+	t.Helper()
+	points, _, err := f.store.ListPoints(context.Background(), recovery.ListPointsOptions{Limit: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(map[string]recovery.RecoveryPoint)
+	for _, point := range points {
+		if point.RepositoryRef != nil && point.RepositoryRef.Namespace == instance {
+			out[point.ID] = point
+		}
+	}
+	return out
+}
+
+func (f *pbsNamespacePollFixture) postures(t *testing.T) []recovery.ProtectionPosture {
+	t.Helper()
+	postures, total, err := f.store.ListProtectionPostures(context.Background(), recovery.ProtectionPostureQuery{SubjectResourceIDs: f.ids})
+	if err != nil || total != len(f.ids) {
+		t.Fatalf("postures total=%d err=%v", total, err)
+	}
+	return postures
+}
+
+func TestPBSNamespaceDiscoveryFailureRetainsRecoveryHistory(t *testing.T) {
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden, http.StatusOK} {
+		for _, cold := range []bool{false, true} {
+			t.Run(fmt.Sprintf("status-%d/cold-%t", status, cold), func(t *testing.T) {
+				f := newPBSNamespacePollFixture(t)
+				f.poll(t, "pbs-main")
+				before := f.points(t, "pbs-main")
+				if len(before) != 2 {
+					t.Fatalf("initial points=%d, want root and tenant", len(before))
+				}
+				for _, p := range f.postures(t) {
+					if p.State != recovery.ProtectionStateProtected {
+						t.Fatalf("healthy control=%+v", p)
+					}
+				}
+				if cold {
+					// Monitor replacement removes live inventory, not durable history.
+					vms := f.m.state.GetSnapshot().VMs
+					f.m.state = models.NewState()
+					f.m.state.UpdateVMs(vms)
+				}
+				f.namespaceStatus.Store(int32(status))
+				f.backupAt.Add(15 * 60)
+				reads := f.childReads.Load()
+				for range 2 {
+					f.poll(t, "pbs-main")
+					after := f.points(t, "pbs-main")
+					// A new root archive is accepted while the source-wide scan
+					// is partial. Retain both prior historical points, not only
+					// the unreadable child; reconcile old root history only when
+					// an ordinary complete enumeration is authoritative again.
+					if len(after) != len(before)+1 {
+						t.Errorf("partial discovery points=%d, want retained history plus one new root point (%d)", len(after), len(before)+1)
+					}
+					for id, point := range before {
+						if !reflect.DeepEqual(after[id], point) {
+							t.Error("historical point was deleted or renewed without an observation")
+						}
+					}
+					freshRootPoints := 0
+					for id, point := range after {
+						if _, historical := before[id]; historical {
+							continue
+						}
+						if point.Details["namespace"] != "" || point.CompletedAt == nil || point.CompletedAt.Unix() != f.backupAt.Load() {
+							t.Error("new point did not come from the accepted fresh root read")
+						}
+						freshRootPoints++
+					}
+					if freshRootPoints != 1 {
+						t.Errorf("accepted fresh root points=%d, want 1", freshRootPoints)
+					}
+					permissions := operationaltrust.EvidencePermissionsUnknown
+					if status == http.StatusForbidden {
+						permissions = operationaltrust.EvidencePermissionsPartial
+					}
+					for _, p := range f.postures(t) {
+						if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
+							p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryPartial ||
+							p.ProviderStates[0].Permissions != permissions || p.ProviderStates[0].JobState != recovery.OutcomeWarning {
+							t.Errorf("discovery failure presented as complete/healthy: %+v", p)
+						}
+					}
+					if f.childReads.Load() != reads {
+						t.Error("failed discovery guessed a hidden namespace read")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPBSNamespaceDiscoveryRecoveryAndScopedRemoval(t *testing.T) {
+	f := newPBSNamespacePollFixture(t)
+	f.poll(t, "pbs-other")
+	other := f.points(t, "pbs-other")
+	f.poll(t, "pbs-main")
+	f.namespaceStatus.Store(http.StatusServiceUnavailable)
+	f.poll(t, "pbs-main")
+	if len(f.points(t, "pbs-main")) != 2 {
+		t.Error("transient discovery failure removed tenant history")
+	}
+	f.namespaceStatus.Store(0)
+	f.poll(t, "pbs-main")
+	if len(f.points(t, "pbs-main")) != 2 {
+		t.Fatal("recovery did not restore namespace scope")
+	}
+	for _, p := range f.postures(t) {
+		for _, provider := range p.ProviderStates {
+			if provider.HistoryCompleteness != recovery.ProtectionHistoryComplete {
+				t.Errorf("recovered discovery still incomplete: %+v", p)
+			}
+		}
+	}
+	f.namespaceRemoved.Store(true)
+	f.poll(t, "pbs-main")
+	if got := len(f.points(t, "pbs-main")); got != 1 {
+		t.Errorf("authoritative namespace removal retained %d points, want root only", got)
+	}
+	if !reflect.DeepEqual(other, f.points(t, "pbs-other")) {
+		t.Error("namespace removal crossed connection scope")
+	}
+	f.rootEmpty.Store(true)
+	f.poll(t, "pbs-main")
+	if len(f.points(t, "pbs-main")) != 0 {
+		t.Error("authoritative complete empty scan retained points")
+	}
+	if !reflect.DeepEqual(other, f.points(t, "pbs-other")) {
+		t.Error("empty scan crossed connection scope")
 	}
 }

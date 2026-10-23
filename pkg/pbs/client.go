@@ -933,6 +933,17 @@ func (c *Client) GetDatastoresFiltered(
 			Msg("Failed to parse PBS datastore list response")
 		return nil, fmt.Errorf("failed to parse datastore list: %w", err)
 	}
+	// Only an explicit array establishes the datastore scope. In particular,
+	// missing/null data and nameless rows are not an authoritative empty list:
+	// callers use a successful empty enumeration to reconcile backup history.
+	if datastoreList.Data == nil {
+		return nil, fmt.Errorf("datastore list response contains no data array")
+	}
+	for _, ds := range datastoreList.Data {
+		if strings.TrimSpace(ds.Store) == "" {
+			return nil, fmt.Errorf("datastore list response contains an unnamed datastore")
+		}
+	}
 
 	// Now get status for each datastore
 	var datastores []Datastore

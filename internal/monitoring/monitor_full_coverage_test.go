@@ -222,7 +222,7 @@ func TestPollPBSBackups(t *testing.T) {
 	}
 
 	// Execute
-	m.pollPBSBackups(context.Background(), "pbs1", client, datastores)
+	m.pollPBSBackups(context.Background(), "pbs1", client, datastores, nil)
 
 	// Verify
 	found := false
@@ -1115,7 +1115,7 @@ func TestPollPBSBackupsCachedIncompleteSnapshotLosesStaleTaskObservation(t *test
 		WriteActive:           false,
 	}})
 
-	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}}, nil)
 
 	if snapshotRequests.Load() != 1 {
 		t.Fatalf("snapshot requests = %d, want 1 cached fallback attempt", snapshotRequests.Load())

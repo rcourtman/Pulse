@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -319,6 +320,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			if errors.IsAuthError(versionErr) || errors.IsAuthError(datastoreErr) {
 				m.recordAuthFailure(instanceName, "pbs")
 			}
+			// The connectivity fallback also failed datastore discovery. Qualify
+			// retained backup evidence through the ordinary serialized admission.
+			if !stderrors.Is(datastoreErr, context.Canceled) {
+				m.pollPBSBackupsAsync(instanceName, client, instanceCfg, nil, nil, datastoreErr)
+			}
 			return
 		}
 	}
@@ -358,10 +364,15 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			Msg("PBS node status retrieved")
 	}
 
+	// Keep discovery quality with the immutable input to the background backup
+	// poll. Public datastore presentation is not an authoritative scope receipt.
+	namespaceErrors := make(map[string]error)
+	var datastoreDiscoveryErr error
 	// Poll datastores if enabled
 	if instanceCfg.MonitorDatastores {
 		datastores, err := client.GetDatastoresFiltered(ctx, includeDatastore)
 		if err != nil {
+			datastoreDiscoveryErr = err
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get datastores")
 		} else {
@@ -417,6 +428,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 				namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
 				if err != nil {
+					namespaceErrors[ds.Store] = err
 					log.Warn().Err(err).
 						Str("instance", instanceName).
 						Str("datastore", ds.Store).
@@ -520,94 +532,88 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			Msg("Added PBS datastores to unified storage view")
 	}
 
-	// Poll backups if enabled
-	if instanceCfg.MonitorBackups {
-		if len(pbsInst.Datastores) == 0 {
-			log.Debug().
-				Str("instance", instanceName).
-				Msg("No PBS datastores available for backup polling")
-		} else if !m.backupPollingEnabledSetting() {
-			log.Debug().
-				Str("instance", instanceName).
-				Msg("Skipping PBS backup polling - globally disabled")
-		} else {
-			now := time.Now()
-
-			m.mu.Lock()
-			lastPoll := m.lastPBSBackupPoll[instanceName]
-			if m.pbsBackupPollers == nil {
-				m.pbsBackupPollers = make(map[string]bool)
-			}
-			inProgress := m.pbsBackupPollers[instanceName]
-			m.mu.Unlock()
-
-			shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
-			if !shouldPoll {
-				if reason != "" {
-					log.Debug().
-						Str("instance", instanceName).
-						Str("reason", reason).
-						Msg("Skipping PBS backup polling this cycle")
-				}
-			} else if inProgress {
-				log.Debug().
-					Str("instance", instanceName).
-					Msg("PBS backup polling already in progress")
-			} else {
-				datastoreSnapshot := make([]models.PBSDatastore, len(pbsInst.Datastores))
-				copy(datastoreSnapshot, pbsInst.Datastores)
-
-				// Atomically check and set poller flag
-				m.mu.Lock()
-				if m.pbsBackupPollers[instanceName] {
-					// Race: another goroutine started between our check and lock
-					m.mu.Unlock()
-					log.Debug().
-						Str("instance", instanceName).
-						Msg("PBS backup polling started by another goroutine")
-				} else {
-					m.pbsBackupPollers[instanceName] = true
-					m.lastPBSBackupPoll[instanceName] = newLast
-					m.mu.Unlock()
-
-					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
-						defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", inst))
-						defer func() {
-							m.mu.Lock()
-							delete(m.pbsBackupPollers, inst)
-							m.lastPBSBackupPoll[inst] = time.Now()
-							m.mu.Unlock()
-						}()
-
-						log.Info().
-							Str("instance", inst).
-							Int("datastores", len(ds)).
-							Msg("Starting background PBS backup polling")
-
-						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
-						// so derive the backup poll context from the long-lived runtime context instead.
-						parentCtx := m.getRuntimeContext()
-						if parentCtx == nil {
-							parentCtx = context.Background()
-						}
-						backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
-						defer cancel()
-
-						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
-
-						log.Info().
-							Str("instance", inst).
-							Dur("duration", time.Since(start)).
-							Msg("Completed background PBS backup polling")
-					}(datastoreSnapshot, instanceName, now, client)
-				}
-			}
-		}
-	} else {
-		log.Debug().
-			Str("instance", instanceName).
-			Msg("PBS backup monitoring disabled")
+	// A successful empty scope and a failed discovery both need an accepted
+	// backup-poll result; neither may silently keep the last good protection.
+	if !stderrors.Is(datastoreDiscoveryErr, context.Canceled) {
+		m.pollPBSBackupsAsync(instanceName, client, instanceCfg, pbsInst.Datastores, namespaceErrors, datastoreDiscoveryErr)
 	}
+}
+
+// pollPBSBackupsAsync admits all backup-scope outcomes through one worker.
+// Failed discovery never becomes an empty enumeration, and a skipped/disabled
+// discovery is not absence evidence. Keeping failure/empty publication inside
+// this admission prevents it from racing an older in-flight backup worker.
+func (m *Monitor) pollPBSBackupsAsync(instanceName string, client *pbs.Client, instanceCfg *config.PBSInstance, datastores []models.PBSDatastore, namespaceErrors map[string]error, discoveryErr error) {
+	if !instanceCfg.MonitorBackups || !instanceCfg.MonitorDatastores || !m.backupPollingEnabledSetting() {
+		return
+	}
+	now := time.Now()
+	m.mu.RLock()
+	lastPoll := m.lastPBSBackupPoll[instanceName]
+	m.mu.RUnlock()
+	shouldPoll, reason, newLast := m.shouldRunBackupPoll(lastPoll, now)
+	if !shouldPoll {
+		log.Debug().Str("instance", instanceName).Str("reason", reason).Msg("Skipping PBS backup polling this cycle")
+		return
+	}
+
+	datastoreSnapshot := append([]models.PBSDatastore(nil), datastores...)
+	m.mu.Lock()
+	if m.pbsBackupPollers[instanceName] {
+		m.mu.Unlock()
+		log.Debug().Str("instance", instanceName).Msg("PBS backup polling already in progress")
+		return
+	}
+	if m.pbsBackupPollers == nil {
+		m.pbsBackupPollers = make(map[string]bool)
+	}
+	if m.lastPBSBackupPoll == nil {
+		m.lastPBSBackupPoll = make(map[string]time.Time)
+	}
+	m.pbsBackupPollers[instanceName] = true
+	m.lastPBSBackupPoll[instanceName] = newLast
+	m.mu.Unlock()
+
+	go func() {
+		defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", instanceName))
+		defer func() {
+			m.mu.Lock()
+			delete(m.pbsBackupPollers, instanceName)
+			m.lastPBSBackupPoll[instanceName] = time.Now()
+			m.mu.Unlock()
+		}()
+
+		// The main polling loop cancels its per-cycle context after returning.
+		// Backup work keeps the existing independent, runtime-scoped deadline.
+		parentCtx := m.getRuntimeContext()
+		if parentCtx == nil {
+			parentCtx = context.Background()
+		}
+		backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
+		defer cancel()
+		if backupCtx.Err() != nil {
+			return
+		}
+		if discoveryErr != nil {
+			// One unreadable discovery scope, not a guessed datastore count.
+			// Only actual authentication/authorization status establishes denial.
+			denied := 0
+			if status, ok := pbs.HTTPStatus(discoveryErr); ok && (status == 401 || status == 403) {
+				denied = 1
+			}
+			observation, err := buildPBSProtectionProviderObservation(instanceName, 1, 0, 1, denied, time.Now().UTC())
+			if err != nil {
+				log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to build PBS discovery failure observation")
+				return
+			}
+			m.ingestProtectionProviderObservationsAsync([]recovery.ProtectionProviderObservation{observation})
+		} else {
+			// The explicit empty list is authoritative and reconciles only this
+			// connection; the ordinary poller also drops its live rows/cache.
+			m.pollPBSBackups(backupCtx, instanceName, client, datastoreSnapshot, namespaceErrors)
+		}
+		log.Info().Str("instance", instanceName).Dur("duration", time.Since(now)).Msg("Completed background PBS backup polling")
+	}()
 }
 
 // recordPBSNodeHistory writes the API-observed CPU and memory measurements to
