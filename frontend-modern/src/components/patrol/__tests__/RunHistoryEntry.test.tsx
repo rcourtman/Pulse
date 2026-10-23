@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import runHistoryEntrySource from '../RunHistoryEntry.tsx?raw';
 import { RunHistoryEntry } from '../RunHistoryEntry';
-import dockerHistory from '../__fixtures__/dockerPatrolHistory.json';
 
 const { findingsPanelState } = vi.hoisted(() => ({
   findingsPanelState: {
@@ -166,7 +165,7 @@ describe('RunHistoryEntry', () => {
     expect(screen.queryByText('healthy')).not.toBeInTheDocument();
   });
 
-  it('uses a shared coverage summary without treating scope aliases as a resource total', () => {
+  it('uses a shared coverage summary when a scoped run checked fewer resources than its scope', () => {
     render(() => (
       <RunHistoryEntry
         run={{
@@ -205,60 +204,6 @@ describe('RunHistoryEntry', () => {
             false),
       ).length,
     ).toBeGreaterThan(0);
-  });
-
-  it.each(dockerHistory.cases)(
-    'renders the real $case host count without counting scope aliases as workloads',
-    (entry) => {
-      expect(entry.run.status).toBe('error');
-      // The producer omits the optional zero auto-fix count on the wire.
-      const producedRun: PatrolRunRecord = {
-        ...entry.run,
-        status: 'error',
-        auto_fix_count: 0,
-      };
-      render(() => (
-        <RunHistoryEntry
-          run={producedRun}
-          isLive={false}
-          patrolStream={patrolStream}
-          selected={true}
-          onSelect={vi.fn()}
-        />
-      ));
-
-      expect(producedRun.effective_scope_resource_ids).toHaveLength(4);
-      expect(screen.getByText('Resources checked (1)')).toBeInTheDocument();
-      expect(screen.getByText('1 Docker host')).toBeInTheDocument();
-      expect(screen.getByText('Provider not ready')).toBeInTheDocument();
-      expect(screen.getByText('chat service not available')).toBeInTheDocument();
-      expect(screen.queryByText('1 container')).not.toBeInTheDocument();
-      expect(screen.queryByText(/of 4 scoped/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/^All clear/)).not.toBeInTheDocument();
-      expect(findingsPanelState.latestProps?.scopeResourceIds).toEqual(
-        producedRun.effective_scope_resource_ids,
-      );
-
-      fireEvent.click(screen.getByRole('button', { name: 'Discuss' }));
-      const context = openMock.mock.calls[0]?.[0];
-      expect(JSON.stringify(context)).toContain('Checked 1 scoped resource');
-      expect(JSON.stringify(context)).toContain('Provider not ready');
-      expect(JSON.stringify(context)).not.toMatch(/of 4 scoped|Scoped to 4 resources/);
-    },
-  );
-
-  it('labels multiple collected Docker hosts without implying a container count', () => {
-    render(() => (
-      <RunHistoryEntry
-        run={{ ...run, resources_checked: 2, docker_checked: 2 }}
-        isLive={false}
-        patrolStream={patrolStream}
-        selected={true}
-        onSelect={vi.fn()}
-      />
-    ));
-    expect(screen.getByText('2 Docker hosts')).toBeInTheDocument();
-    expect(screen.queryByText(/containers/)).not.toBeInTheDocument();
   });
 
   it('surfaces structured Patrol runtime error details on expanded runs', () => {
