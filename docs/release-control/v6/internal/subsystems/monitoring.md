@@ -23,6 +23,9 @@ Only a successfully built, complete PVE backup-history observation admits
 instance-wide recovery-point reconciliation. Partial or unavailable scans may
 publish accepted rows and their actual provider-quality evidence, but cannot
 delete unseen historical points, including after live inventory is rebuilt.
+Carried live rows do not renew point-level observation evidence: only rows
+actually returned by this scan enter recovery ingest, while historical points
+retain their previous evidence under the current incomplete provider observation.
 Cancellation before publication leaves the previous payload and provider
 observation untouched. Complete empty scans still remove absent PVE backup
 points without crossing connection or evidence-class boundaries.

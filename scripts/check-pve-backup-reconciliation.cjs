@@ -82,7 +82,7 @@ let browser, server;
       result.requests.push({ viewport: name, phase, path: url.pathname });
       return route.fulfill({ json: body });
     });
-    for (phase of ['observed', 'partial', 'denied', 'recovered', 'confirmed-empty']) {
+    for (phase of ['observed', 'warm-partial', 'partial', 'denied', 'recovered', 'confirmed-empty']) {
       if (phase === 'observed') await page.goto(origin + '/proxmox/backups/coverage');
       else await page.reload();
       const expand = page.getByRole('button', { name: 'Expand details for guest-102', exact: true });
@@ -99,7 +99,7 @@ let browser, server;
         assert(body.includes(`History ${cap(provider.historyCompleteness)}`));
         assert(body.includes(`Access ${cap(provider.permissions)}`));
       }
-      if (phase === 'partial' || phase === 'denied') {
+      if (phase === 'warm-partial' || phase === 'partial' || phase === 'denied') {
         assert.notEqual(posture.state, 'protected');
         assert.equal(posture.providerStates[0].historyCompleteness, 'partial');
         assert.equal(Object.keys(producer.frames[phase].points).length, 2, 'unseen historical point disappeared');

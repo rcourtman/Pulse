@@ -442,6 +442,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		return
 	}
 
+	// Carry-forward serves the live inventory, not a new provider observation.
+	// Only rows actually returned this poll may renew point-level evidence.
+	observedBackups := allBackups
 	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
 	if len(preservedStorages) > 0 {
 		log.Warn().
@@ -509,7 +512,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	points, evidenceErr := proxmoxrecoverymapper.FromPVEStorageBackupsWithEvidence(
-		allBackups,
+		observedBackups,
 		guestInfo,
 		protectionObservedAt,
 	)

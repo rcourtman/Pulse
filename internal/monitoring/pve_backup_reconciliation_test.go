@@ -202,6 +202,26 @@ func TestPVEBackupIncompletePollRetainsRecoveryHistory(t *testing.T) {
 	}
 }
 
+func TestPVEBackupRetainedRowsCannotRenewRecoveryEvidence(t *testing.T) {
+	f := newPVEReconciliationFixture(t)
+	f.poll(t)
+	before := f.points(t)
+	f.client.contentErr = fmt.Errorf("503 unavailable")
+	f.client.at = f.client.at.Add(15 * time.Minute)
+	for range 2 {
+		f.poll(t)
+		if len(f.m.state.GetSnapshot().PVEBackups.StorageBackups) != 2 {
+			t.Fatal("warm failed read lost its last accepted live inventory")
+		}
+		for id, point := range before {
+			if point.SubjectResourceID == f.ids[1] && !reflect.DeepEqual(f.points(t)[id], point) {
+				t.Error("carried row renewed point evidence without a successful provider read")
+			}
+		}
+		f.assertHistory(t, recovery.ProtectionHistoryPartial, operationaltrust.EvidencePermissionsUnknown)
+	}
+}
+
 func TestPVEBackupCompletePollStillReconcilesOnlyItsScope(t *testing.T) {
 	for _, noStorages := range []bool{false, true} {
 		t.Run(fmt.Sprintf("no-storages=%t", noStorages), func(t *testing.T) {
@@ -268,6 +288,10 @@ func TestPVEBackupReconciliationProducer(t *testing.T) {
 	}
 	f.poll(t)
 	capture("observed")
+	f.client.contentErr = fmt.Errorf("503 unavailable")
+	f.poll(t)
+	capture("warm-partial")
+	f.client.contentErr = nil
 	f.coldState()
 	f.client.nodeErr = fmt.Errorf("503 unavailable")
 	f.poll(t)
