@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "5c7d2c6e677575d2894cda5147406957708767ce",
+  "verified_at": "2026-10-23T10:15:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "47d96594cd9597c299db948e9c057b55943bde65f4d714027c3446635b8aa7b0"
+  },
+  "routes": [
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private Pulse Pro stack (enterprise binary from pulse-enterprise#139 on this tree, Vite dev server of this change, seeded Patrol findings and runs); for the scenarios other than live, Playwright fulfilled the digest request with the live response and a replaced investigations block, the shape the digest-count backend change emits",
+    "Live digest (3 unclassified, 2 interrupted): the Investigated tile reads 5 with \"3 finished without a clear conclusion,\" and \"2 interrupted by a restart.\"",
+    "failed bucket beside unclassified and interrupted runs (total 6): \"2 ended with an error,\" then \"3 finished without a clear conclusion.\"",
+    "failed after timeouts (total 3): \"2 timed out,\" then \"1 ended with an error.\"",
+    "Only an outcome the card has no wording for (total 4): the tile shows 4 with no detail line, instead of \"No issues needed a closer look.\"",
+    "Empty week (total 0): \"No issues needed a closer look.\" as before",
+    "1440 dark and light and 390 dark for every scenario; no page or console errors"
+  ],
+  "interactions": [
+    "Opened the Patrol Activity tab for each scenario and viewport and read the This week card"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "151.0.7922.34 headless"
+  },
+  "scope": "Pulse Pro binary on a mock estate with seeded Patrol state; four of the five digest scenarios are fulfilled responses, not backend output."
+}

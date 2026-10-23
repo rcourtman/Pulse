@@ -20,6 +20,7 @@ import {
   type Finding as PatrolFinding,
   type CapacityForecast,
   type FindingFlapping,
+  type InvestigationOutcome,
 } from '@/api/patrol';
 import type { ResourceCriticality } from '@/api/resourceOperatorState';
 import type {
@@ -54,19 +55,24 @@ const VALID_INVESTIGATION_STATUSES = new Set<string>([
   'failed',
   'needs_attention',
 ]);
-const VALID_INVESTIGATION_OUTCOMES = new Set<string>([
-  'resolved',
-  'fix_queued',
-  'fix_executed',
-  'fix_failed',
-  'fix_rejected',
-  'needs_attention',
-  'cannot_fix',
-  'timed_out',
-  'fix_verified',
-  'fix_verification_failed',
-  'fix_verification_unknown',
-]);
+// Keyed by the API union so type-check fails here, rather than the value being
+// dropped as unknown, when the backend gains an outcome.
+const INVESTIGATION_OUTCOME_KEYS: Record<InvestigationOutcome, true> = {
+  resolved: true,
+  fix_queued: true,
+  fix_executed: true,
+  fix_failed: true,
+  fix_rejected: true,
+  needs_attention: true,
+  cannot_fix: true,
+  timed_out: true,
+  unclassified: true,
+  interrupted: true,
+  fix_verified: true,
+  fix_verification_failed: true,
+  fix_verification_unknown: true,
+};
+const VALID_INVESTIGATION_OUTCOMES = new Set<string>(Object.keys(INVESTIGATION_OUTCOME_KEYS));
 const VALID_SEVERITIES = new Set<string>(['critical', 'warning', 'info', 'watch']);
 const VALID_RESOURCE_CRITICALITIES = new Set<string>(['high', 'medium', 'low', '']);
 const VALID_SOURCES = new Set<string>([
@@ -185,18 +191,7 @@ export interface UnifiedFinding {
   // Investigation fields (Patrol mode)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-  investigationOutcome?:
-    | 'resolved'
-    | 'fix_queued'
-    | 'fix_executed'
-    | 'fix_failed'
-    | 'fix_rejected'
-    | 'needs_attention'
-    | 'cannot_fix'
-    | 'timed_out'
-    | 'fix_verified'
-    | 'fix_verification_failed'
-    | 'fix_verification_unknown';
+  investigationOutcome?: InvestigationOutcome;
   lastInvestigatedAt?: string;
   investigationAttempts?: number;
   investigationRecord?: InvestigationRecord;

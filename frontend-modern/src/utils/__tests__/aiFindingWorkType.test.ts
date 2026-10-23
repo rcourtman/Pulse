@@ -41,6 +41,15 @@ describe('classifyPatrolFindingWorkType', () => {
     },
   );
 
+  it.each(['unclassified', 'interrupted'] as const)(
+    'does not count %s as a failed fix, since no fix was tried',
+    (outcome) => {
+      expect(classifyPatrolFindingWorkType(makeFinding({ investigationOutcome: outcome }))).toBe(
+        'new',
+      );
+    },
+  );
+
   it('classifies investigation running as in_progress', () => {
     expect(classifyPatrolFindingWorkType(makeFinding({ investigationStatus: 'running' }))).toBe(
       'in_progress',
@@ -230,6 +239,22 @@ describe('getPatrolFindingActionableState', () => {
     expect(
       getPatrolFindingActionableState(makeFinding({ investigationOutcome: 'fix_executed' })),
     ).toEqual({ label: 'Verifying fix', tone: 'info' });
+  });
+
+  it('tells the operator Patrol will retry an interrupted run', () => {
+    expect(
+      getPatrolFindingActionableState(
+        makeFinding({ investigationStatus: 'failed', investigationOutcome: 'interrupted' }),
+      ),
+    ).toEqual({ label: 'Will retry', tone: 'neutral' });
+  });
+
+  it('leaves an unclassified run on the default review state', () => {
+    expect(
+      getPatrolFindingActionableState(
+        makeFinding({ investigationStatus: 'completed', investigationOutcome: 'unclassified' }),
+      ),
+    ).toBeUndefined();
   });
 
   it('returns undefined for non-active findings', () => {

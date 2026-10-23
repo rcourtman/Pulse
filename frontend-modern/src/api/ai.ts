@@ -9,6 +9,7 @@ import {
 } from './responseUtils';
 import { logger } from '@/utils/logger';
 import { consumeJSONEventStream } from './streaming';
+import type { InvestigationOutcome } from './patrol';
 import type {
   AISettings,
   AISettingsUpdateRequest,
@@ -521,18 +522,6 @@ export type ApprovalDecisionResult =
 
 export type InvestigationStatus =
   'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
-export type InvestigationOutcome =
-  | 'resolved'
-  | 'fix_queued'
-  | 'fix_executed'
-  | 'fix_failed'
-  | 'fix_rejected'
-  | 'needs_attention'
-  | 'cannot_fix'
-  | 'timed_out'
-  | 'fix_verified'
-  | 'fix_verification_failed'
-  | 'fix_verification_unknown';
 
 export interface ProposedFix {
   id: string;

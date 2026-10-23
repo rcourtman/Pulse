@@ -44,6 +44,13 @@ const INVESTIGATION_BADGE_PROPS = {
 const summaryClass =
   'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none wrap-break-word prose-headings:my-2 prose-p:my-2 prose-pre:overflow-x-auto prose-code:break-all prose-code:before:content-none prose-code:after:content-none';
 
+// A run cut short by a restart did not fail: Patrol runs it again, so its note
+// reads as information rather than as an error.
+const runNoteClass = (outcome: string | undefined): string =>
+  outcome === 'interrupted'
+    ? 'border-border-subtle bg-surface text-muted'
+    : 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300';
+
 interface InvestigationSectionProps {
   findingId: string;
   investigationStatus?: string;
@@ -100,6 +107,8 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       inv.status === 'needs_attention' ||
       inv.outcome === 'cannot_fix' ||
       inv.outcome === 'timed_out' ||
+      inv.outcome === 'unclassified' ||
+      inv.outcome === 'interrupted' ||
       inv.outcome === 'fix_rejected' ||
       inv.outcome === 'fix_verification_failed' ||
       inv.outcome === 'fix_verification_unknown' ||
@@ -125,8 +134,8 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
   return (
     <div class="mt-3 pt-3 border-t border-border-subtle">
-      {/* Header */}
-      <div class="flex items-center justify-between mb-2">
+      {/* Header; wraps so a long outcome label never squeezes the action */}
+      <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-2">
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-base-content">Investigation</span>
           {/* Show outcome badge when available, otherwise show status badge */}
@@ -159,7 +168,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             type="button"
             onClick={handleReinvestigate}
             disabled={reinvestigating()}
-            class="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/25 rounded-sm transition-colors disabled:opacity-50"
+            class="flex items-center gap-1 whitespace-nowrap px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/25 rounded-sm transition-colors disabled:opacity-50"
           >
             <RefreshCwIcon class={`w-3 h-3 ${reinvestigating() ? 'animate-spin' : ''}`} />
             Re-investigate
@@ -187,13 +196,19 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
         <div class="mb-2 rounded-sm border border-border bg-surface-alt p-2">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs font-medium text-base-content">Patrol record</span>
-            <MetadataBadge
-              {...INVESTIGATION_BADGE_PROPS}
-              tone={getInvestigationStatusBadgeTone(props.investigationRecord!.status)}
+            {/* As in the header, the outcome replaces the run status once there is
+                one: an interrupted run's status is failed, which it is not. */}
+            <Show
+              when={investigationRecord().outcomeLabel}
+              fallback={
+                <MetadataBadge
+                  {...INVESTIGATION_BADGE_PROPS}
+                  tone={getInvestigationStatusBadgeTone(props.investigationRecord!.status)}
+                >
+                  {investigationRecord().statusLabel}
+                </MetadataBadge>
+              }
             >
-              {investigationRecord().statusLabel}
-            </MetadataBadge>
-            <Show when={investigationRecord().outcomeLabel}>
               <MetadataBadge
                 {...INVESTIGATION_BADGE_PROPS}
                 tone={getInvestigationOutcomeBadgeTone(props.investigationRecord!.outcome ?? '')}
@@ -318,7 +333,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
           </Show>
 
           <Show when={investigationRecord().error}>
-            <div class="mt-2 rounded-sm border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300">
+            <div
+              class={`mt-2 rounded-sm border p-2 text-xs ${runNoteClass(props.investigationRecord?.outcome)}`}
+            >
               {investigationRecord().error}
             </div>
           </Show>
@@ -336,6 +353,8 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 inv().error?.trim() !== investigationRecord().error &&
                 (inv().status === 'failed' ||
                   inv().outcome === 'timed_out' ||
+                  inv().outcome === 'interrupted' ||
+                  inv().outcome === 'unclassified' ||
                   inv().outcome === 'fix_failed' ||
                   inv().outcome === 'fix_rejected' ||
                   inv().outcome === 'fix_verification_failed' ||
@@ -344,7 +363,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                   inv().outcome === 'cannot_fix')
               }
             >
-              <div class="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 rounded-sm p-2">
+              <div class={`rounded-sm border p-2 text-xs ${runNoteClass(inv().outcome)}`}>
                 {inv().error}
               </div>
             </Show>

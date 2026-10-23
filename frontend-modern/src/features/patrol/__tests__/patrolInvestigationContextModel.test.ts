@@ -41,7 +41,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(presentation).toMatchObject({
       hasRecord: true,
       statusLabel: 'Completed',
-      outcomeLabel: 'Fix Queued',
+      outcomeLabel: 'Fix queued',
       confidenceLabel: 'High confidence',
       conclusion: 'Backup job saturated CPU.',
       evidenceSummaries: ['CPU stayed above 95% for 10 minutes', 'Backup process held IO wait.'],
@@ -138,6 +138,32 @@ describe('patrolInvestigationContextModel', () => {
       'Re-pin previous datastore mount',
     ]);
   });
+
+  it.each([
+    ['unclassified', 'completed', 'No clear conclusion'],
+    ['interrupted', 'failed', 'Interrupted — will retry'],
+    ['cannot_fix', 'completed', 'Cannot remediate'],
+  ])(
+    'labels a %s record with the investigation outcome wording',
+    (outcome, status, outcomeLabel) => {
+      // The record badge sits beside the investigation's own outcome badge, so
+      // both must name the same outcome the same way.
+      const presentation = buildPatrolInvestigationRecordPresentation({
+        id: `record-${outcome}`,
+        finding_id: `finding-${outcome}`,
+        subject: { resource_id: 'vm-102' },
+        trigger: { title: 'Service keeps restarting', detected_at: '2026-10-22T12:00:00Z' },
+        status,
+        outcome,
+        evidence: [],
+        verification: [],
+        rollback: [],
+        tools_used: [],
+        started_at: '2026-10-22T12:00:00Z',
+      });
+      expect(presentation.outcomeLabel).toBe(outcomeLabel);
+    },
+  );
 });
 
 describe('Patrol page header IA framing', () => {

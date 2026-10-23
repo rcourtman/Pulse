@@ -70,6 +70,7 @@ describe('getInvestigationOutcomeSortOrder', () => {
     ['timed_out', 1],
     ['needs_attention', 1],
     ['cannot_fix', 1],
+    ['unclassified', 1],
     ['fix_queued', 2],
   ] as const)('ranks outcome %s at %i', (outcome, expected) => {
     expect(getInvestigationOutcomeSortOrder(outcome)).toBe(expected);
@@ -79,6 +80,12 @@ describe('getInvestigationOutcomeSortOrder', () => {
     expect(getInvestigationOutcomeSortOrder('resolved')).toBe(3);
     expect(getInvestigationOutcomeSortOrder('fix_executed')).toBe(3);
     expect(getInvestigationOutcomeSortOrder('fix_verified')).toBe(3);
+  });
+
+  it('ranks an interrupted run with findings Patrol has not investigated yet', () => {
+    expect(getInvestigationOutcomeSortOrder('interrupted')).toBe(
+      getInvestigationOutcomeSortOrder(undefined),
+    );
   });
 
   it('defaults an unrecognised outcome to 3', () => {
@@ -109,6 +116,7 @@ describe('doesFindingNeedAttention (ATTENTION_OUTCOMES set membership)', () => {
     'timed_out',
     'needs_attention',
     'cannot_fix',
+    'unclassified',
   ] as const;
 
   it.each(attentionOutcomes)(
@@ -123,6 +131,16 @@ describe('doesFindingNeedAttention (ATTENTION_OUTCOMES set membership)', () => {
       ).toBe(true);
     },
   );
+
+  it('does not flag an interrupted run, which Patrol reruns by itself', () => {
+    expect(
+      doesFindingNeedAttention({
+        id: 'f-interrupted',
+        status: 'active',
+        investigationOutcome: 'interrupted',
+      }),
+    ).toBe(false);
+  });
 
   it('does not flag a non-attention outcome that is not awaiting approval', () => {
     // fix_executed is positive progress, not in the attention set.

@@ -107,6 +107,9 @@ export interface CapacityForecast {
 
 export type InvestigationStatus =
   'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
+// Every outcome the backend records (InvestigationOutcome in
+// internal/ai/findings.go). The findings store keys its accepted values by
+// this union, so a new outcome must be added here first.
 export type InvestigationOutcome =
   | 'resolved'
   | 'fix_queued'
@@ -116,6 +119,8 @@ export type InvestigationOutcome =
   | 'needs_attention'
   | 'cannot_fix'
   | 'timed_out'
+  | 'unclassified'
+  | 'interrupted'
   | 'fix_verified'
   | 'fix_verification_failed'
   | 'fix_verification_unknown';
@@ -794,6 +799,8 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
   needs_attention: 'Needs Attention',
   cannot_fix: 'Cannot Remediate',
   timed_out: 'Timed Out — Will Retry',
+  unclassified: 'No Clear Conclusion',
+  interrupted: 'Interrupted — Will Retry',
   fix_verified: 'Fix Verified',
   fix_verification_failed: 'Verification Failed',
   fix_verification_unknown: 'Verification Inconclusive',
@@ -818,6 +825,9 @@ export const investigationOutcomeColors: Record<InvestigationOutcome, string> = 
   cannot_fix: 'border-slate-200 bg-slate-50 text-slate-600',
   timed_out:
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300',
+  unclassified:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300',
+  interrupted: 'border-border bg-surface-alt text-base-content',
   fix_verified:
     'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/25 dark:text-green-300',
   fix_verification_failed:

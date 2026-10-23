@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "base_sha": "ec40662af4ee76357db34ba9e2948aabce5de139",
+  "verified_at": "2026-10-23T10:00:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/ai.ts",
+    "frontend-modern/src/api/patrol.ts",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
+    "frontend-modern/src/stores/aiIntelligence.ts",
+    "frontend-modern/src/utils/aiFindingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/ai.ts": "f4dcc21f7c5f3beebd018b79497f8b28381dac0aa6fd77cee9228e6d80bc1482",
+    "frontend-modern/src/api/patrol.ts": "7db97b440d0ce58b3b7c083e5ccc3f9b66cbd11c94c4bde3afe100909f252bbe",
+    "frontend-modern/src/components/patrol/InvestigationSection.tsx": "4131510e8c04fc77f30b0e087ece959aa0e9eb7c4aaaf57379c9ae8dd44dbb47",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "4a052efde6be8533ba8d536981583b6b73054d4cfc3366ccc3481978af9ba0b5",
+    "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts": "695c66d153bd71b4a96ca4d12566442992cdf0a7bf11f40202a1e09b471cd34d",
+    "frontend-modern/src/stores/aiIntelligence.ts": "3e1bd22947b5cec496c5a95c1f1716827ebf035e2de72a590763fda967bacde7",
+    "frontend-modern/src/utils/aiFindingPresentation.ts": "cce327e538a9f47a9818af21858ed99d7471a8a5221d19fc1ab1efa844b1ac82"
+  },
+  "routes": [
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private Pulse Pro stack: the enterprise binary from pulse-enterprise#139 built against this tree on main ec40662af4, Vite dev server of this change, small mock estate, with seeded Patrol findings, orchestrator investigation sessions and a week of runs (three unclassified runs, two interrupted runs, one needs_attention run outside the digest window); compared with main's frontend sources on the same backend",
+    "This week card at 1440 dark and light and 390 dark: the Investigated tile reads 5 with \"3 finished without a clear conclusion,\" and \"2 interrupted by a restart.\" (main: \"No issues needed a closer look.\")",
+    "Open work list: Needs Attention (4) counts the three unclassified runs and the needs_attention run (main counted 1); unclassified rows show Needs review and interrupted rows show Will retry (main: Needs review for both)",
+    "Review drawer for the unclassified run: the investigation badge reads \"No clear conclusion\" in the warning tone with Re-investigate (main: the raw key \"unclassified\" and no Re-investigate); the Patrol record shows \"No clear conclusion\" and Low confidence without a Completed status badge; the run summary renders below",
+    "Review drawer for the interrupted run: investigation and record badges read \"Interrupted — will retry\" in the neutral tone, no red Failed status badge, and the restart note renders in the muted information style (main: raw \"interrupted\", a red Failed badge and the note in red)",
+    "Review drawer for the needs_attention run: the record badge reads \"Needs attention\" from the shared labels (main: \"Needs Attention\")",
+    "390px drawers: the investigation header wraps, so Re-investigate keeps its label on one line instead of breaking across two",
+    "No page errors in the headless runs and no console errors in the app's browser pane"
+  ],
+  "interactions": [
+    "Opened the Activity tab and expanded Finding options and history",
+    "Opened and closed the review drawers of the unclassified, interrupted and needs_attention findings at each viewport",
+    "Scrolled the finding list and the open drawer"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "151.0.7922.34 headless"
+  },
+  "scope": "Pulse Pro binary on a mock estate with seeded Patrol findings and investigation sessions; mock data, not live provider connections."
+}

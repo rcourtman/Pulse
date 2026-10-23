@@ -2765,6 +2765,36 @@ Issue explanation follows the [customer-journey qualification boundary](../../..
 which separates scripted interaction proof from provider reasoning, remediation
 and repeatable customer outcomes.
 
+### Unclassified and interrupted investigations (23 October 2026)
+
+The Patrol page presents the two outcomes the backend records since
+rcourtman/Pulse#3129 instead of dropping them as unknown.
+`frontend-modern/src/stores/aiIntelligence.ts` keys the outcomes it accepts by
+the `InvestigationOutcome` union in `frontend-modern/src/api/patrol.ts`, which
+`frontend-modern/src/api/ai.ts` now reuses, so a value the union gains fails
+type-check until the store accepts it.
+
+`unclassified`, a finished run with no readable conclusion, reads "No clear
+conclusion" in the warning tone. It joins the Needs Attention queue and sorts
+beside `needs_attention`, keeps Re-investigate, and its workflow step asks the
+operator to read the summary. `interrupted`, a run a restart or shutdown cut
+short, reads "Interrupted — will retry" in the neutral tone. It stays out of
+the attention queue, its collapsed row says "Will retry" rather than "Needs
+review", and its run note renders as information, not as an error. Neither
+counts as a failed fix. The This week card names both with the digest email's
+wording and order, along with the digest's `failed` bucket for a run that
+ended on an error with no outcome ("ended with an error"). When a week's
+investigations have no worded outcome, the Investigated tile shows the count
+alone: "No issues needed a closer look" and the watch-only sentence are kept
+for a week with no investigations. The Patrol record's outcome badge uses the
+shared outcome label, and like the investigation header the record shows its
+run status only until the run has an outcome, so an interrupted run no longer
+shows "Failed" beside "will retry". Proofs:
+`frontend-modern/src/stores/__tests__/aiIntelligence.test.ts`,
+`frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx`,
+`frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts`
+and `frontend-modern/src/features/patrol/__tests__/PatrolWeeklyDigestCard.test.tsx`.
+
 ### Expired action continuity (2026-09-07)
 
 An expired, unexecuted canonical action maps the investigation outcome to

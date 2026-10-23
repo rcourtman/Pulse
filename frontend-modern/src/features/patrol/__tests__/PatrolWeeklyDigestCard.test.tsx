@@ -202,4 +202,55 @@ describe('PatrolWeeklyDigestCard', () => {
       describeDigestInvestigationOutcomes({ resolved: 3, fix_failed: 1, cannot_fix: 2 }),
     ).toEqual(['1 fix failed', '2 could not fix']);
   });
+
+  it('names unclassified and interrupted runs in the email order', () => {
+    // A run with no readable conclusion still needs a read, so it ranks just
+    // after timeouts; an interrupted run Patrol retries ranks last.
+    expect(
+      describeDigestInvestigationOutcomes({ interrupted: 2, unclassified: 3, resolved: 1 }),
+    ).toEqual(['3 finished without a clear conclusion', '1 resolved']);
+    expect(
+      describeDigestInvestigationOutcomes({ interrupted: 2, timed_out: 1, unclassified: 3 }),
+    ).toEqual(['1 timed out', '3 finished without a clear conclusion']);
+    expect(describeDigestInvestigationOutcomes({ interrupted: 2 })).toEqual([
+      '2 interrupted by a restart',
+    ]);
+  });
+
+  it('shows an unclassified week on the Investigated tile', async () => {
+    apiMocks.getDigest.mockResolvedValue(
+      digest({ investigations: { total: 5, by_outcome: { unclassified: 4, interrupted: 1 } } }),
+    );
+    render(() => <PatrolWeeklyDigestCard />);
+
+    expect(await screen.findByText('4 finished without a clear conclusion,')).toBeInTheDocument();
+    expect(screen.getByText('1 interrupted by a restart.')).toBeInTheDocument();
+  });
+
+  it('names runs that ended with an error between timeouts and unclear runs', () => {
+    expect(
+      describeDigestInvestigationOutcomes({ unclassified: 3, failed: 2, interrupted: 1 }),
+    ).toEqual(['2 ended with an error', '3 finished without a clear conclusion']);
+    expect(describeDigestInvestigationOutcomes({ failed: 1, timed_out: 2 })).toEqual([
+      '2 timed out',
+      '1 ended with an error',
+    ]);
+  });
+
+  it('never says nothing was investigated under a non-zero count', () => {
+    const investigated = (
+      investigations: PatrolDigest['investigations'],
+      mode: PatrolDigest['mode'] = 'approval',
+    ) =>
+      buildDigestTiles(digest({ mode, investigations })).find((tile) => tile.id === 'investigated');
+    // A run whose outcome has no wording on the card still happened.
+    expect(investigated({ total: 3, by_outcome: { unknown: 3 } })).toMatchObject({
+      value: '3',
+      details: [],
+    });
+    expect(investigated({ total: 2, by_outcome: { unknown: 2 } }, 'monitor')?.details).toEqual([]);
+    expect(investigated({ total: 0, by_outcome: {} })?.details).toEqual([
+      'No issues needed a closer look.',
+    ]);
+  });
 });
