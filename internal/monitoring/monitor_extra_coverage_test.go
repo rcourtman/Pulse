@@ -2394,7 +2394,7 @@ func TestMonitor_PollPBSBackups_Extra(t *testing.T) {
 		t.Fatal(err)
 	}
 	ds := []models.PBSDatastore{{Name: "ds1"}}
-	m.pollPBSBackups(context.Background(), "pbs1", client, ds)
+	m.pollPBSBackups(context.Background(), "pbs1", client, ds, nil)
 }
 
 func TestMonitor_RetryPVEPortFallback_Detailed_Extra(t *testing.T) {

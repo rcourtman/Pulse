@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -807,5 +809,40 @@ func TestPBSPolledCapacityRequiresObservedRecovery(t *testing.T) {
 	poll()
 	if active := manager.GetActiveAlerts(); len(active) != 0 {
 		t.Fatalf("raised policy did not clear high-usage alert: %+v", active)
+	}
+}
+
+func TestPBSNamespaceDiscoveryFirstPollDoesNotInventScope(t *testing.T) {
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden} {
+		t.Run(fmt.Sprintf("status-%d", status), func(t *testing.T) {
+			f := newPBSNamespacePollFixture(t)
+			f.namespaceStatus.Store(int32(status))
+			f.poll(t, "pbs-main")
+			if len(f.points(t, "pbs-main")) != 1 || f.childReads.Load() != 0 {
+				t.Fatal("failed first discovery invented a child namespace or lost readable root history")
+			}
+			for _, p := range f.postures(t) {
+				if p.State == recovery.ProtectionStateProtected {
+					t.Errorf("incomplete first discovery claimed current protection: %+v", p)
+				}
+			}
+		})
+	}
+}
+
+func TestPBSNamespaceDiscoveryLegacyRootOnlyRemainsComplete(t *testing.T) {
+	f := newPBSNamespacePollFixture(t)
+	// The existing PBS client treats an absent namespace endpoint on legacy
+	// versions as a successful root-only inventory. Preserve that support.
+	f.namespaceStatus.Store(http.StatusNotFound)
+	f.poll(t, "pbs-main")
+	if len(f.points(t, "pbs-main")) != 1 || f.childReads.Load() != 0 {
+		t.Fatal("legacy root-only inventory was not collected")
+	}
+	for _, p := range f.postures(t) {
+		if p.SubjectResourceID == f.ids[0] && (p.State != recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
+			p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryComplete) {
+			t.Errorf("legacy root-only support was marked incomplete: %+v", p)
+		}
 	}
 }

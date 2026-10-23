@@ -1579,7 +1579,7 @@ type pbsBackupFetchRequest struct {
 }
 
 // pollPBSBackups fetches all backups from PBS datastores
-func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore) {
+func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore, namespaceErrors map[string]error) {
 	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
 
 	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
@@ -1615,6 +1615,15 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		datastoreHadSuccess := false
 		datastoreNamespaceErrors := 0
 		datastoreTerminalNamespaceErrors := 0
+		// The root namespace remains readable when discovering child namespaces
+		// fails. Its accepted rows are useful, but they cannot establish that
+		// undiscovered namespaces are empty or renew complete-provider evidence.
+		if err := namespaceErrors[ds.Name]; err != nil {
+			datastoreNamespaceErrors++
+			if !shouldReuseCachedPBSBackups(err) {
+				datastoreTerminalNamespaceErrors++
+			}
+		}
 		groupsReused := 0
 		groupsRequested := 0
 

@@ -6907,6 +6907,21 @@ without deleting retained artifacts. The observation is persisted before
 reconciliation, so cached backup files cannot continue presenting current
 protection after collection becomes incomplete or unauthorized.
 
+PBS namespace discovery is part of that collection evidence. An unavailable,
+malformed or denied namespace listing must travel with the matching datastore
+snapshot into background backup polling. A readable root namespace may still
+supply accepted artifacts, but cannot turn failed child-namespace discovery
+into a complete root-only inventory. Such a poll records partial history with
+unknown or partial access, preserves unseen durable history and never guesses
+child namespace requests. Recovery and a later successful namespace removal
+resume ordinary complete, connection-scoped reconciliation. The PBS client's
+existing legacy root-only response for an absent namespace endpoint is unchanged.
+`TestPBSNamespaceDiscoveryFailureRetainsRecoveryHistory` crosses real HTTP
+namespace discovery, background polling, durable ingest and canonical posture
+on warm and replacement inventories; recovery, scoped removal, first-read and
+legacy controls cover both safe retention and authoritative absence. No public
+model, endpoint, policy, guest operation or restorable-backup claim is added.
+
 Direct PBS backup enumeration emits two separate storage/recovery inputs:
 subject-linked recovery points and one typed provider observation for the
 polled PBS instance. A complete poll records complete history with sufficient
