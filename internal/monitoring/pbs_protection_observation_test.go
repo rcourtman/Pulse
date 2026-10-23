@@ -296,6 +296,10 @@ type pbsNamespacePollFixture struct {
 	m                *Monitor
 	store            *recoverystore.Store
 	client           *pbs.Client
+	datastoreStatus  atomic.Int32
+	datastoreBody    atomic.Pointer[string]
+	versionStatus    atomic.Int32
+	backupReads      atomic.Int32
 	namespaceStatus  atomic.Int32
 	namespaceRemoved atomic.Bool
 	rootEmpty        atomic.Bool
@@ -328,8 +332,20 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 		var data any = []any{}
 		switch r.URL.Path {
 		case "/api2/json/version":
+			if status := f.versionStatus.Load(); status != 0 {
+				http.Error(w, "fixture version unavailable", int(status))
+				return
+			}
 			data = map[string]any{"version": "3.4.2"}
 		case "/api2/json/admin/datastore":
+			if status := f.datastoreStatus.Load(); status != 0 {
+				http.Error(w, "fixture discovery unavailable", int(status))
+				return
+			}
+			if body := f.datastoreBody.Load(); body != nil {
+				_, _ = w.Write([]byte(*body))
+				return
+			}
 			data = []map[string]any{{"store": "archive"}}
 		case "/api2/json/admin/datastore/archive/status":
 			data = map[string]any{"total": 4096, "used": 1024, "avail": 3072}
@@ -347,6 +363,7 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 				data = []map[string]any{{"ns": "tenant"}}
 			}
 		case "/api2/json/admin/datastore/archive/groups":
+			f.backupReads.Add(1)
 			id := "100"
 			if r.URL.Query().Get("ns") == "tenant" {
 				id = "101"
@@ -356,6 +373,7 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 				data = []map[string]any{{"backup-type": "vm", "backup-id": id, "last-backup": f.backupAt.Load(), "backup-count": 1}}
 			}
 		case "/api2/json/admin/datastore/archive/snapshots":
+			f.backupReads.Add(1)
 			id := r.URL.Query().Get("backup-id")
 			if r.URL.Query().Get("ns") == "tenant" {
 				f.childReads.Add(1)

@@ -6932,6 +6932,29 @@ denied access. Retained backup points survive failed enumeration, but the new
 provider observation immediately prevents those cached points from being
 presented as current protection truth.
 
+Datastore discovery itself is part of that backup-scope result, including
+the connectivity fallback. An admitted failed or malformed listing records
+unavailable history while retaining existing raw artifacts, durable points and
+snapshot-cache ages; only HTTP 401/403 establishes denied access. An explicit
+successful empty array (including a fully excluded scope) instead reconciles
+the connection's backup points, live rows and cache timestamps. Missing/null
+`data` and unnamed datastore entries are rejected before any detail request,
+not interpreted as authoritative absence. Both outcomes use the existing
+serialized background backup admission, cadence and runtime deadline.
+Disabled, not-due, in-flight and cancelled work is not an accepted empty scope;
+backup availability remains separate from node connectivity. Ordinary complete
+recovery resumes collection and protection without credential or guest changes.
+`TestGetDatastoresRequiresExplicitNamedScope` and
+`TestGetDatastoresAcceptsExplicitEmptyScope` pin the client envelope boundary.
+`TestPBSDatastoreDiscoveryFailureQualifiesRetainedHistory` crosses real HTTP,
+ordinary background polling, warm/rebuilt live state, durable ingestion and
+canonical posture for repeated 401/403/404/503 and malformed listings.
+`TestPBSDatastoreDiscoveryEmptyReconcilesOnlyAcceptedScope`,
+`TestPBSDatastoreDiscoverySkippedScopeIsNotEmpty` and
+`TestPBSDatastoreDiscoveryFailedConnectivityFallback` cover scoped removal,
+exclusions, reappearance, admission/cancellation and failed fallback. These are
+synthetic source checks, not installed PBS or guest/restore acceptance.
+
 PBS mapping attaches provider scope and a typed evidence envelope to every
 successfully enumerated recovery point. Identity correlation is confirmed only
 for direct canonical identity and inferred only for an auditable unique
