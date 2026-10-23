@@ -8442,14 +8442,7 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 }
 
 func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_systemd_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("systemd teardown refusal controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_systemd_teardown.py"), "AgentSystemdTeardown", []string{
 		"test_unknown_read_stop_and_disable_retain_every_artifact",
 		"test_unsettled_or_unknown_states_never_authorise_deletion",
 		"test_helper_socket_and_service_are_reconciled_together",
@@ -8458,14 +8451,7 @@ func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_full_batch_reconciles_earlier_activation_sources",
 		"test_real_read_timeout_stops_its_owned_child",
 		"test_timeout_probe_keeps_prepared_tool_and_refuses_missing_preparation",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentSystemdTeardown."+name+") ... ok") {
-			t.Fatalf("systemd teardown control %s did not pass:\n%s", name, output)
-		}
-	}
-	if !strings.Contains(string(output), "\nRan 8 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete systemd teardown verdict:\n%s", output)
-	}
+	}, time.Minute)
 	entry, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
 		t.Fatal(err)
@@ -8476,21 +8462,13 @@ func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
 		quiesce >= strings.Index(uninstall, "pkill -f") {
 		t.Fatal("full removal must quiesce every affected systemd unit before remote removal or process mutation")
 	}
-	t.Logf("%s", output)
 }
 
 func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix shell/OpenRC controls; Windows has its own native SCM gate")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_openrc_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("OpenRC teardown refusal controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_openrc_teardown.py"), "AgentOpenRCTeardown", []string{
 		"test_stop_and_disable_refusals_retain_every_local_file",
 		"test_failed_partial_or_diagnostic_observations_are_not_replaced_by_another_read",
 		"test_independent_post_stop_and_runlevel_reads_are_mandatory",
@@ -8503,29 +8481,14 @@ func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_unexpected_service_paths_refuse_before_stop_or_deletion",
 		"test_source_selection_and_caller_order_have_one_bounded_observation_per_operation",
 		"test_real_status_timeout_stops_its_owned_child_without_erasure",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentOpenRCTeardown."+name+") ... ok") {
-			t.Fatalf("OpenRC teardown control %s did not pass:\n%s", name, output)
-		}
-	}
-	if !strings.Contains(string(output), "\nRan 12 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete OpenRC teardown verdict:\n%s", output)
-	}
-	t.Logf("%s", output)
+	}, time.Minute)
 }
 
 func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix rc.d/SysV controls; Windows has its own native SCM gate")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_legacy_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("legacy manager removal controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_legacy_teardown.py"), "AgentLegacyTeardown", []string{
 		"test_stop_refusal_retains_all_local_recovery",
 		"test_manager_refusal_precedes_remote_and_state_erasure",
 		"test_ignored_stop_disable_and_reactivation_are_not_success",
@@ -8544,29 +8507,14 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_process_inventory_does_not_return_arguments_or_secrets",
 		"test_real_process_timeout_stops_owned_child_without_erasure",
 		"test_rendered_stop_retains_pidfiles_on_refused_or_ignored_signals",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentLegacyTeardown."+name+") ... ok") {
-			t.Fatalf("legacy manager control %s did not pass:\n%s", name, output)
-		}
-	}
-	if !strings.Contains(string(output), "\nRan 18 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete legacy manager verdict:\n%s", output)
-	}
-	t.Logf("%s", output)
+	}, time.Minute)
 }
 
 func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "agent_upstart_teardown.py"))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("DSM Upstart retirement and production EXIT cleanup controls: %v\n%s", err, output)
-	}
-	for _, name := range []string{
+	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_upstart_teardown.py"), "AgentUpstartTeardown", []string{
 		"test_link_fixture_preserves_exclusive_no_target_directory_semantics",
 		"test_link_fixture_exposes_the_old_directory_restore_race",
 		"test_refused_manager_precedes_remote_and_state_erasure",
@@ -8584,15 +8532,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_absent_stopped_and_repeated_removal_require_observed_manager_absence",
 		"test_source_selection_keeps_upstart_out_of_sysv_and_before_erasure",
 		"test_real_status_timeout_stops_owned_child_without_erasure",
-	} {
-		if !strings.Contains(string(output), name+" (__main__.AgentUpstartTeardown."+name+") ... ok") {
-			t.Fatalf("DSM Upstart control %s did not pass:\n%s", name, output)
-		}
-	}
-	if !strings.Contains(string(output), "\nRan 17 tests in ") || !strings.Contains(string(output), "\nOK\n") {
-		t.Fatalf("incomplete DSM Upstart verdict:\n%s", output)
-	}
-	t.Logf("%s", output)
+	}, time.Minute)
 }
 
 func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T) {
