@@ -8142,6 +8142,36 @@ cache. Proof: `scripts/tests/test_browser_os_packages.py`,
 `scripts/tests/test_e2e_test_images.py`, which also pins that this cache can
 never carry the E2E test images.
 
+### Configuration snapshot publication preserves earlier recovery copies
+
+The root installer's pre-update configuration snapshot must not reuse a
+second-resolution destination. Each attempt reserves a private, unique hidden
+sibling, copies the configuration contents with metadata and nested links
+preserved, and publishes it by a same-directory non-overwriting rename. A file,
+directory or dangling link at the final path stops the update, even when GNU
+`mv -n` returns zero after skipping. Copy/allocation/publication failure removes
+only the invocation's incomplete stage and never rotates earlier snapshots.
+
+Incomplete hidden stages are not retention candidates. After publication,
+rotation still keeps the configured number of snapshots (five by default),
+including the current invocation's completed copy for positive retention counts
+after same-second retries or a backwards clock step. Zero still disables
+completed-snapshot retention. Legacy timestamp-only snapshots remain eligible for
+ordinary rotation, not rewritten or treated as incomplete. The existing
+read-only-parent fallback and disk-headroom admission remain. Discard after a
+pre-mutation staging failure names only this invocation's completed snapshot.
+All three existing-install update/reinstall entries explicitly stop if the
+backup fails, including when their caller suppresses implicit shell `errexit`.
+
+`scripts/tests/test_server_config_backups.py` exercises real fixture files,
+copy/rename/retention, metadata and links; injected failures cover allocation,
+copy and publication, including exit-zero late collisions. It checks rapid
+retries, clock reversal, another invocation's retention, fallback, owned discard
+and the actual three update entries. The discovered Go installer suite executes
+it on the existing repository test routes. These are disposable filesystem
+and caller controls, not application-consistent backup, power-loss durability,
+installed upgrade/rollback acceptance or the original guest-thaw recovery.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry

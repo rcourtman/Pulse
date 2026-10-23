@@ -365,9 +365,8 @@ func TestRootInstallScriptConfigBackupCleansPartialCopy(t *testing.T) {
 ` + extractRootInstallShellFunction(t, "backup_existing") + `
 		date() { printf '20260704-141422\n'; }
 		cp() {
-			if [[ "$1" == "-a" && "$2" == "$CONFIG_DIR_UNDER_TEST" ]]; then
-				mkdir -p "$3"
-				printf 'partial\n' > "$3/partial"
+			if [[ "$1" == "-a" && "$3" == "$CONFIG_DIR_UNDER_TEST/." ]]; then
+				printf 'partial\n' > "$4/partial"
 				return 1
 			fi
 			command cp "$@"
@@ -376,7 +375,8 @@ func TestRootInstallScriptConfigBackupCleansPartialCopy(t *testing.T) {
 			echo "backup_existing unexpectedly passed after a failed copy" >&2
 			exit 1
 		fi
-		if [[ -e "$BACKUP_DIR_UNDER_TEST" ]]; then
+		if compgen -G "$CONFIG_DIR_UNDER_TEST.backup.*" >/dev/null ||
+		   compgen -G "$(dirname "$CONFIG_DIR_UNDER_TEST")/.$(basename "$CONFIG_DIR_UNDER_TEST").backup.*" >/dev/null; then
 			echo "partial backup was not removed" >&2
 			exit 1
 		fi
@@ -465,7 +465,7 @@ func TestRootInstallScriptConfigBackupRotatesOldSnapshots(t *testing.T) {
 	}
 	found := false
 	for _, name := range names {
-		if name == prefix+"20260706-020000" {
+		if strings.HasPrefix(name, prefix+"20260706-020000.") {
 			found = true
 		}
 	}
@@ -2718,5 +2718,45 @@ func TestRootInstallScriptPulseOwnershipExcludesServerStaging(t *testing.T) {
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("ownership calls:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestRootInstallScriptConfigBackupZeroRetention(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "config")
+	if err := os.Mkdir(configDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "settings.json"), []byte("retained source\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	script := `set -euo pipefail
+print_info() { :; }; print_warn() { :; }; print_error() { :; }
+ensure_config_backup_headroom() { :; }
+CONFIG_BACKUP_KEEP_COUNT=0
+` + extractRootInstallShellFunction(t, "prune_config_backups") + "\n" +
+		extractRootInstallShellFunction(t, "backup_existing") + `
+backup_existing
+test -f "$CONFIG_DIR/settings.json"
+if compgen -G "$CONFIG_DIR.backup.*" >/dev/null; then
+    echo "zero retention kept a completed snapshot" >&2
+    exit 1
+fi
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "CONFIG_DIR="+configDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("zero snapshot retention: %v\n%s", err, out)
+	}
+}
+
+func TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_config_backups.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("configuration backup publication controls: %v\n%s", err, out)
 	}
 }
