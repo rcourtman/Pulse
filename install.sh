@@ -3060,19 +3060,25 @@ create_user() {
 prune_config_backups() {
     # Unattended updates create one snapshot per run; without rotation they
     # fill small root filesystems (issue #1646). Keep the newest snapshots
-    # and delete the rest. Snapshot names embed a sortable timestamp, so a
-    # lexicographic sort orders them oldest-first.
+    # and delete the rest. Snapshot names embed a sortable timestamp. Positive
+    # retention keeps this invocation's completed snapshot, even after a clock step
+    # backwards or when random suffixes share the same timestamp.
     local backup_parent="$1"
     local snapshot_prefix="$2"
     local keep="${CONFIG_BACKUP_KEEP_COUNT:-5}"
+    local current_backup="${3:-}" current_count=0
     local backups=()
     local entry
 
     while IFS= read -r entry; do
+        if [[ "$entry" == "$current_backup" ]] && (( keep > 0 )); then
+            current_count=1
+            continue
+        fi
         [[ -n "$entry" ]] && backups+=("$entry")
     done < <(find "$backup_parent" -maxdepth 1 -mindepth 1 -type d -name "${snapshot_prefix}*" 2>/dev/null | sort)
 
-    local excess=$(( ${#backups[@]} - keep ))
+    local excess=$(( ${#backups[@]} + current_count - keep ))
     if (( excess <= 0 )); then
         return 0
     fi
@@ -3086,9 +3092,10 @@ prune_config_backups() {
 }
 
 backup_existing() {
+    LAST_CONFIG_BACKUP_DIR=""
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
-        local backup_parent backup_dir
+        local backup_parent backup_dir backup_stage stage_name
         backup_parent="$(dirname "$CONFIG_DIR")"
         if [[ ! -w "$backup_parent" ]]; then
             # The hardened pulse-update.service unit mounts /etc read-only
@@ -3098,13 +3105,31 @@ backup_existing() {
             mkdir -p "$backup_parent" || return 1
         fi
         ensure_config_backup_headroom "$CONFIG_DIR" "$backup_parent" || return 1
-        backup_dir="$backup_parent/$(basename "$CONFIG_DIR").backup.$(date +%Y%m%d-%H%M%S)"
-        if ! cp -a "$CONFIG_DIR" "$backup_dir"; then
-            rm -rf "$backup_dir"
+        # Reserve private work before copying. A second-resolution destination
+        # can already be another run's recovery copy: cp would nest into it,
+        # and failed-copy cleanup would then erase that earlier snapshot.
+        # Hidden, incomplete copies are not candidates for snapshot rotation.
+        if ! backup_stage=$(mktemp -d -- "$backup_parent/.$(basename "$CONFIG_DIR").backup.$(date +%Y%m%d-%H%M%S).XXXXXX"); then
+            print_error "Could not create configuration backup; existing snapshots are unchanged"
+            return 1
+        fi
+        stage_name="${backup_stage##*/}"
+        backup_dir="$backup_parent/${stage_name#.}"
+        if ! cp -a -- "$CONFIG_DIR/." "$backup_stage/"; then
+            rm -rf -- "$backup_stage"
+            print_error "Configuration backup failed; existing snapshots are unchanged"
+            return 1
+        fi
+        # GNU mv -n can return zero without moving anything. Admit publication
+        # only when our stage actually disappeared; never merge or overwrite a
+        # file, directory or link that appeared at the final path.
+        if ! mv -T -n -- "$backup_stage" "$backup_dir" || [[ -e "$backup_stage" || -L "$backup_stage" ]]; then
+            rm -rf -- "$backup_stage"
+            print_error "Could not publish configuration backup; existing snapshots are unchanged"
             return 1
         fi
         LAST_CONFIG_BACKUP_DIR="$backup_dir"
-        prune_config_backups "$backup_parent" "$(basename "$CONFIG_DIR").backup."
+        prune_config_backups "$backup_parent" "$(basename "$CONFIG_DIR").backup." "$backup_dir"
     fi
 }
 
@@ -5284,7 +5309,7 @@ main() {
                 exit 1
             fi
             
-            backup_existing
+            backup_existing || return 1
             create_user
             download_pulse
             # A half-removed installation (binary present, /etc/pulse or the
@@ -5490,7 +5515,7 @@ main() {
                     exit 1
                 fi
                 
-                backup_existing
+                backup_existing || return 1
                 create_user
                 download_pulse
                 # Same repair as the --version path: a half-removed
@@ -5522,7 +5547,7 @@ main() {
                 LATEST_RELEASE="$CURRENT_VERSION"
                 offer_existing_auto_updates
 
-                backup_existing
+                backup_existing || return 1
                 create_user
                 download_pulse
                 setup_directories
