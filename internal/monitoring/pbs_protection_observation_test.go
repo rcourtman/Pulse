@@ -375,6 +375,7 @@ func newPBSNamespacePollFixture(t *testing.T) *pbsNamespacePollFixture {
 		{Name: "pbs-other", Host: server.URL, MonitorDatastores: true, MonitorBackups: true},
 	}}
 	m.lastPBSBackupPoll = make(map[string]time.Time)
+	m.pollStatusMap = make(map[string]*pollStatus)
 	return f
 }
 
