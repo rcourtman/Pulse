@@ -231,6 +231,16 @@ describe('getAlertStyles', () => {
   });
 });
 
+describe('alerts module surface', () => {
+  // isStateAlertType and isMetricAlertType only fed the retired Assistant
+  // alert briefing, and left with it.
+  it('carries no Assistant briefing classifiers', async () => {
+    const alertsModule = await import('@/utils/alerts');
+    expect(Object.keys(alertsModule)).not.toContain('isStateAlertType');
+    expect(Object.keys(alertsModule)).not.toContain('isMetricAlertType');
+  });
+});
+
 describe('getAlertsForUnifiedResource', () => {
   // Identity shapes below are copied from a mock-mode /api/state payload.
   const alert = (id: string, resourceId: string, overrides: Partial<Alert> = {}): Alert => ({

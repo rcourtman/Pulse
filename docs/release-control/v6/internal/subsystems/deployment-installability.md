@@ -8110,6 +8110,13 @@ They prove phase coverage, build/discovery/check failure propagation, passing
 tests, explicit skips, examples and fuzz seeds; actual failure, exit zero,
 timeout and unmatched test names must fail.
 
+`highlight.js` left the `frontend-modern` dependencies on 2026-10-22. Its only
+importer was the retired Assistant chat code-block highlighter, so the
+production build already shipped no `vendor-highlight` chunk; the reviewed
+dependency floor in `dependencySecurity.test.ts` drops with it. The lockfile
+loses only that package entry. Installer, artifact, signing, promotion and
+rollback boundaries are unchanged.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry

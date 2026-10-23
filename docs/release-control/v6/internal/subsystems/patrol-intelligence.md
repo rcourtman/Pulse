@@ -178,7 +178,6 @@ sources, and retains the note as operator context.
 27. `frontend-modern/src/utils/patrolRuntimePresentation.ts`
 28. `frontend-modern/src/utils/patrolRuntimeActions.ts`
 29. `frontend-modern/src/utils/textPresentation.ts`
-30. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
 31. `tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts`
 32. `frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx`
 33. `frontend-modern/src/stores/patrolAttention.ts`
@@ -832,7 +831,6 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
 5. Add or change Patrol header schedule and runtime presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`.
    Patrol must not surface retired hosted-model credit badges or trial-like activation prompts in the normal self-hosted GA app, even when legacy transport fields are still present.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
-7. Keep Patrol and chat stream-matching / mention dedupe aligned through the shared `frontend-modern/src/utils/chatIdentifiers.ts`
 8. Keep Patrol transport and payload changes aligned through the governed AI runtime and API contract transport surfaces
 
 ## Forbidden Paths
@@ -1003,158 +1001,27 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    not as a broad automation promise.
 8. Keep the Patrol store aligned with the shared structured investigation
    record when transport carries one. `frontend-modern/src/stores/aiIntelligence.ts`
-   may retain `investigationRecord` as data for Assistant handoff and Patrol
-   presentation, but visible Patrol copy and Assistant handoff context
-   must flow through the governed Patrol investigation-context helpers. Those
-   helpers also own the Assistant drawer briefing content for Patrol records,
-   including the rule that action artifact commands are summarized by count only
-   and never rendered as raw command text in the handoff surface. When Patrol
-   hands a pending fix or approval into Assistant, the shared handoff may retain
-   only structured action references such as approval ID, status, request/expiry
-   timestamps, action plan identity, fix ID, risk, target, and resource
-   identity; approval and execution authority stays with the governed
-   approval/remediation surfaces. Assistant may refresh the referenced
-   approval's current status for review, and the backend handoff builder must
-   recover a live pending Patrol investigation-fix approval by finding ID when
-   the durable record lacks the current approval reference, but Patrol
-   presentation must still keep command payloads inside governed
-   approval/remediation context rather than rendering them as handoff copy.
-   Assistant's governed action artifact metadata must derive from the same
-   structured handoff action after that recovery, so the briefing cannot
-   contradict the action reference passed to chat execution while still leaving
-   next-step reasoning to the configured LLM.
-   Assistant may also hydrate the referenced action plan or action audit so the
-   handoff explains current action lifecycle state, requester, capability,
-   approval policy, plan expiry, preflight/dry-run posture, and terminal
-   success/failure without treating approval as execution authority or exposing
-   raw command/execution payloads. Assistant may also
-   enrich that same handoff with refreshed unified finding and
-   investigation-record state, canonical resource-policy guidance, current
-   canonical resource-state and capability context, canonical
-   resource-relationship context, and recent canonical resource-timeline changes
-   for explanation; Assistant resolves those state, topology, and timeline
-   lookups through the current canonical unified-resource model before falling
-   back to handoff IDs where compatibility requires it.
-   When a Patrol finding declares root-cause or correlated finding IDs, the
-   Assistant handoff may also resolve those related findings through the current
-   unified finding store and summarize them as model-only context. Those
-   related finding summaries must include current recency and latest lifecycle
-   facts when present, and may seed their own structured resources for the same
-   canonical policy, state, topology, and timeline hydration, but Patrol
-   presentation must treat them as explanation for the current finding rather
-   than approval, lifecycle, disclosure, or execution authority.
-   Assistant handoffs from Patrol findings must also include a concise factual
-   finding briefing derived from the unified finding and structured
-   investigation record before the detailed finding context, so Assistant
-   receives current risk, recency, evidence snapshot, verification summary,
-   conclusion, latest lifecycle event, and governed approval/action artifact
-   metadata instead of behaving like a generic chat over a pasted incident dump.
-   Patrol is the scheduled
-   probe, context assembler, and execution-governance owner; the configured LLM
-   is the diagnostic and remediation-reasoning owner. Patrol handoffs may
-   provide system context, resource posture, action posture, and governed tools,
-   but ordinary context attachment must not synthesize, pre-fill, or submit
-   chat prompts. The explicitly labelled Explain action starts the shared
-   evidence-first Assistant request with the selected attention record, bounded
-   evidence, resource references, and the canonical finding handoff when exactly
-   one finding is linked. Ambiguous links must not select an arbitrary finding.
-   Neither path may force active tool use, name a required tool path, show
-   suggested prompt chips, or present
-   a Patrol-authored remediation answer for the LLM to execute. Patrol
-   runs must still call the configured model when deterministic triage is quiet,
-   and unmatched deterministic signals may be returned as context for another
-   model pass but must not be converted into Pulse-authored findings after the
-   model declines to report them. Legacy unified AI-finding integration must
-   likewise store model-reported findings as evidence and must not auto-generate
-   remediation plans from finding metadata.
-   Visible Patrol
-   Assistant handoffs must not make the operator think Pulse has already
-   produced the correct fix. The visible Assistant drawer briefing opened from a Patrol
-   finding must be compact and source-named: current status/risk, one primary
-   subject, and any approval-required boundary, with richer evidence, action
-   artifacts, and command counts staying in model-only or governed action
-   context rather than drawer chrome; prompt suggestions must not be generated
-   for Patrol handoffs. When a
-   structured investigation record is not available yet, the same Patrol-owned
-   helper must still brief the operator from current finding facts such as
-   active status, severity, recurrence, and loop state instead of opening a
-   generic empty Assistant drawer. When a live pending Patrol approval exists
-   for that finding, the visible Assistant briefing may include only safe
-   approval metadata such as approval ID, pending status, risk, requested time,
-   expiry, target label, generated approval summary, and command count; it must
-   not copy the approval command payload into Assistant drawer prose. The
-   model-only runtime briefing must apply that same
-   recovered approval reference when adding factual governed action artifact
-   metadata. The initial prompt for a Patrol finding may include governed action
-   context when safe metadata is attached, but it must frame that context as
-   input for the LLM to evaluate rather than as a Patrol-authored remediation
-   answer. Finding
-   handoffs must be assembled through the Patrol-owned handoff model so the
-   prompt, visible briefing, model-only finding context, resource reference,
-   bounded action reference, and drawer approval-required disclosure stay in
-   sync. The model-only context may include
-   current finding status, recurrence, investigation record facts, evidence,
-   verification, approval state, dry-run posture, existing action artifact
-   summary, target resource references, and governed action references without
-   raw command payloads. Patrol action summaries in
-   `frontend-modern/src/components/patrol/ApprovalSection.tsx` that open
-   Assistant must follow that same Patrol-owned handoff model rather than a
-   prompt-only local shortcut: pass approval ID/status/risk/target plus safe
-   summary/count metadata as review context, attach the target resource
-   reference, include bounded `handoff_actions` for live approvals or structured
-   action artifacts when present, mark the drawer's approval-required
-   disclosure, attach the Patrol-owned visible drawer briefing for the pending approval or
-   queued-fix recovery state, and never paste the approval command or
-   action command text into the chat prompt. Existing remediation-plan or
-   action-plan artifacts follow the same boundary: plan status, risk, and
-   command counts are allowed as non-authoritative governed action posture for
-   the LLM to critique, but visible handoffs must not render Patrol step lists
-   or suggested prompt chips, and command or rollback command text stays in the
-   governed remediation or approval surface. Generic finding
-   discussion handoffs for any non-empty Patrol `finding_id`, including
-   context-only findings and findings that reference a live approval, action
-   artifact, fix outcome, or remediation plan, run in the approval-required
-   mode `/api/ai/chat` sets server-side for every request; the browser sends no
-   execution-mode field, so default autonomous Assistant settings cannot bypass
-   the Patrol action-governance boundary. The assembled handoff must still pass
-   through the Assistant runtime's resource-policy sanitizer before prompt
-   injection, so Patrol-owned prose
-   cannot leak governed resource names, IDs, aliases, nodes, paths, or
-   addresses outside the canonical policy boundary.
-   If a `fix_queued` finding no longer has a live approval payload or detailed
-   action artifact payload available, the recovery action must still open Assistant
-   with the same Patrol-owned visible briefing and approval-required posture
-   from current finding facts; it must not fall back to generic investigation
-   chat or invite execution from missing command details.
-   Patrol run-history Assistant handoffs are a separate run-context surface:
-   the visible drawer must keep the `Patrol run attached` headline, may show the
-   scoped run subject, safe runtime-failure/action label, and classified
-   redacted failure summary, and must continue to omit raw provider payloads,
-   command text, and remediation instructions.
-   If the live approval is gone but the structured action artifact payload is still
-   available, the recovery Assistant briefing must carry only safe action artifact
-   metadata such as description, target, risk, rationale, destructive posture,
-   and command count. Raw command text remains in the governed remediation or
-   approval panel, while Assistant gets enough context to explain approval
-   recovery and risk without becoming an execution surface.
-   Generic finding-level Assistant handoffs must use that same safe metadata
-   boundary when the list response lacks a full investigation record: they may
-   hydrate the latest investigation session to recover action artifact summary,
-   risk, target, rationale, destructive posture, and command count, but they must
-   still keep command text out of both the user-authored prompt and visible
-   Assistant briefing.
-   If the referenced finding is no longer current, Assistant must drop the
-   stored handoff instead of continuing from stale Patrol context. Assistant
-   handoff context must also carry the unified
-   finding's current lifecycle and recency facts, including active/resolved/
-   snoozed/dismissed/suppressed state, detection/last-seen/resolution
-   timestamps, recurrence/regression, and recent lifecycle events, rather than
-   treating the investigation conclusion as the whole current record. Detailed
-   lifecycle events in Assistant handoff context must stay bounded, model-only,
-   and explicitly separated from approval/execution authority. Patrol must keep
-   the visible finding and drawer briefing tied to the shared investigation
-   payload rather than forking a Patrol-local lifecycle, policy, topology, or
-   timeline summary. The inline Patrol investigation surface must also treat a
+   may retain `investigationRecord` as data for Patrol presentation, and visible
+   Patrol copy must flow through the governed Patrol investigation-context
+   helper (`buildPatrolInvestigationRecordPresentation` in
+   `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`),
+   which summarizes action artifact commands by count only and never renders
+   raw command text. Approval and execution authority stays with the governed
+   approval/remediation surfaces. The finding, approval, remediation-plan,
+   run-history, and assessment hand-offs into the browser Assistant drawer
+   that this obligation used to govern were retired with the chat window on
+   2026-10-22, and Patrol surfaces must not grow a chat hand-off back. The
+   backend chat runtime keeps its finding-context rules for clients that still
+   send a Patrol `finding_id` (see `ai-runtime`).
+   Patrol is the scheduled probe, context assembler, and execution-governance
+   owner; the configured LLM is the diagnostic and remediation-reasoning owner.
+   Patrol runs must still call the configured model when deterministic triage
+   is quiet, and unmatched deterministic signals may be returned as context for
+   another model pass but must not be converted into Pulse-authored findings
+   after the model declines to report them. Legacy unified AI-finding
+   integration must likewise store model-reported findings as evidence and must
+   not auto-generate remediation plans from finding metadata.
+   The inline Patrol investigation surface must also treat a
    structured `investigationRecord` as investigation data, even when the legacy
    investigation-detail endpoint has no separate session payload, so it must not
    render empty-state copy above a durable Patrol record. The Patrol-owned
@@ -1164,11 +1031,10 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    renderer surfaces an explicit `Impact not assessed` placeholder whenever
    an investigation record exists with no impact text, and a parallel
    `Rollback not specified` placeholder whenever rollback is empty, so the
-   operator-visible gap is conspicuous rather than hidden. The Patrol
-   finding briefing card built by
+   operator-visible gap is conspicuous rather than hidden. The record
+   presentation built by
    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
-   may include populated impact text in its bounded detail lines but must
-   omit the placeholder copy from that compact card so it stays tight,
+   may carry populated impact text but must omit the placeholder copy,
    leaving placeholder rendering to the full investigation surface.
    `frontend-modern/src/components/AI/FindingsPanel.tsx` is the canonical
    renderer for that operator-facing impact text on the unified findings
@@ -1177,7 +1043,7 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    On non-Patrol findings views, the same panel may surface
    `investigation_record.confidence` as a collapsed-row badge beside the
    investigation outcome. The default Patrol page keeps that process evidence in
-   the expanded issue, run history, or Assistant context so current issue rows
+   the expanded issue or run history so current issue rows
    stay readable.
    Finding rows must keep their disclosure control separate from inline manual
    controls: the row summary may be a keyboard-accessible expand/collapse
@@ -1187,8 +1053,7 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    `FindingsPanel.tsx` also renders the
    `previousResolvedFixSummary` operational-memory field directly on
    the expanded finding card with emerald-accented styling, so
-   operators see "what worked last time" inline without having to
-   open Assistant. The summary lives on the finding shell
+   operators see "what worked last time" inline. The summary lives on the finding shell
    (`UnifiedFinding`/`Finding`), not on the per-record investigation
     presentation; the Patrol-owned investigation-context model must not
     absorb it into impact, verification, or rollback (those represent
@@ -1212,31 +1077,22 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    compact status text. New trust categories must extend the
    `FindingsTrustSummary` contract first rather than inventing
    per-page keys.
-   Findings carry contextual Assistant entry points keyed on intent: the
-   default "Discuss with Assistant" button opens an open-ended chat
-   handoff, and a parallel "Explain" button opens the same handoff with
-   a `PatrolAssistantFindingIntent='explain'` seed that asks the LLM to
-   walk through what we know, why it matters, how confident the
-   analysis is, what remains uncertain, and what the model would do next. Both
-   buttons must route through `buildPatrolAssistantFindingHandoff` so
-   the structured context (investigation record, operational memory,
-   pending approval, proposed fix, next-step action) is attached
-   uniformly; only the leading sentence differs by intent. The
-   badge palette is provided by `getInvestigationConfidenceBadgeClasses`
-   in `frontend-modern/src/utils/aiFindingPresentation.ts`: high is
-   reassuringly emphasized, medium is neutral, low is a soft amber.
-   Findings without an investigation record (or without a recorded
-   confidence) must show no confidence badge rather than defaulting to
-   one, mirroring the impact rule that absent metadata is not fabricated.
-   Expanded Patrol finding cards must keep action density product-grade: one
-   primary Assistant intent button is visible inline (`Investigate`, `Verify
-fix`, or `Explain` based on current finding state), while secondary
-   Assistant intents and operator management controls live behind compact
-   in-flow `Assistant` and `Manage` menus. Those menus must render inside the
-   expanded finding detail rather than as clipped floating panels, and the
+   Expanded Patrol finding cards keep action density product-grade: one
+   primary action is visible inline (the finding's governed primary action
+   when it has one, otherwise `Investigate` for an un-investigated active
+   finding, which starts Patrol's investigation through
+   `reinvestigateFinding`), while operator management controls live behind a
+   compact in-flow `Resolve or dismiss` menu. That menu must render inside the
+   expanded finding detail rather than as a clipped floating panel, and the
    per-finding "Create rule from this" action must remain disabled unless the
    finding has both a concrete resource and category for a scoped suppression
-   rule.
+   rule. The confidence badge palette is provided by
+   `getInvestigationConfidenceBadgeClasses` in
+   `frontend-modern/src/utils/aiFindingPresentation.ts`: high is reassuringly
+   emphasized, medium is neutral, low is a soft amber. Findings without an
+   investigation record (or without a recorded confidence) must show no
+   confidence badge rather than defaulting to one, mirroring the impact rule
+   that absent metadata is not fabricated.
    An actionable active finding must always expose a forward path into the
    governed action loop at its own expanded row. Above Watch only, that is the
    inline `Investigate` intent. In Watch only, the same expanded-row slot
@@ -1272,35 +1128,11 @@ fix`, or `Explain` based on current finding state), while secondary
    than dropping it; runtime-failure findings produced by
    `internal/ai/patrol_runtime_failure.go` are the first source to depend
    on that path reaching the Patrol page surface.
-   Patrol no longer opens a whole-surface assessment handoff: the summary card
-   that offered it and its builder in
-   `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` are
-   gone. Assistant sessions saved from that handoff still restore through the
-   shared drawer as `handoff_metadata.kind=patrol_assessment` with the
-   `patrol-assessment` target and `targetId=pulse-patrol-assessment`, never as
-   generic scoped context or as a single-finding session because one bounded
-   action reference names a finding. Saved assessment and finding sessions must
-   not expose or restore Patrol-authored next-step titles, recommendation
-   detail, action labels, or app-route hrefs through `handoff_summary`; legacy
-   stored recommendation fields are ignored rather than converted into hidden
-   context.
-   Patrol run-history entries may also open Assistant for a selected run, but
-   that handoff must flow through the same Patrol-owned investigation-context
-   model rather than a row-local prompt. The browser-visible prompt and drawer
-   briefing may include only classified, redacted runtime-failure summaries and
-   safe run identity facts. The browser request must send safe
-   `handoff_metadata` for the saved-session identity envelope: kind
-   `patrol_run`, run ID, safe run type/status, and a runtime-failure boolean,
-   never provider-bound runtime failure detail, analysis text, tool traces, raw
-   provider payloads, or scoped resource context. Backend Assistant runtime owns
-   the model-only run context: it resolves the run ID from Patrol history,
-   rebuilds bounded run facts, scoped resource references, sanitized analysis,
-   and classified failure detail server-side, and rehydrates the same context
-   from stored metadata on follow-up turns. The exchange runs in the
-   server-set approval-required mode; the handoff must present a source-named
-   visible drawer briefing and
-   frame Assistant as explanation and next-step review rather than execution or
-   automatic retry authority.
+   Assistant sessions saved from the retired Patrol assessment, finding, and
+   run hand-offs may still exist server-side. Their `handoff_summary` must not
+   expose or restore Patrol-authored next-step titles, recommendation detail,
+   action labels, or app-route hrefs; legacy stored recommendation fields are
+   ignored rather than converted into hidden context.
 9. Keep the normal Patrol status summary plain and operator-first rather
    than a hero-style or decorative card surface. The default page renders no
    status summary card or assessment strip today: the header control row
@@ -1751,8 +1583,7 @@ Proxmox monitoring lens before Patrol or Assistant chrome, while the stable
 Patrol tab may still expose the open-work count. Calm-day copy such as `No
 current issues` and checked-resource coverage belongs inside the Patrol route
 after the operator chooses Patrol; the monitor lens must not become a hidden
-Patrol all-clear page, and Assistant launchers must stay scoped to the current
-surface.
+Patrol all-clear page.
 The readiness contract now applies before Patrol work is admitted, not only
 after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must
@@ -1942,10 +1773,8 @@ model`), and that action must use the canonical Pulse Intelligence
 route `/settings/pulse-intelligence/patrol` rather than the legacy
 `/settings/system-ai` compatibility alias. Runtime/setup findings in the
 default current-issues flow must stay primary-action-only: they should not add
-a visible `Open in Assistant` secondary button or a generic `Manage` menu
-beside the direct setup action.
-Assistant can still receive runtime context from the broader Patrol/Assistant
-handoff paths, but a setup impairment should not read as a menu of workflows.
+a secondary chat button or a generic `Manage` menu beside the direct setup
+action; a setup impairment should not read as a menu of workflows.
 When setup is the only active Patrol work, the Patrol page should collapse that
 state into one `Fix Patrol setup` workspace task with the direct
 `Open Provider & Models` action; the readiness banner must not duplicate that
@@ -2948,3 +2777,13 @@ handoff. The attached Assistant context suppresses unrelated empty-chat
 starters and recent sessions. Starting a new conversation clears that context
 and restores the ordinary welcome surface. Regression and current-browser
 qualification are recorded in the customer-journey qualification document.
+
+Patrol stopped handing work to the browser Assistant on 2026-10-22, when the
+chat window was retired. Finding cards, approval rows, run history, and the
+attention workbench lost their "Discuss", "Explain with Assistant", and
+"Ask Assistant" actions; the inline `Investigate` action (a Patrol
+re-investigation) and the governed approval controls stay. Alert Investigate
+now starts a targeted Patrol run, so alert follow-up lands on the Patrol page.
+`patrolInvestigationContextModel.ts` shrank to the investigation-record
+presentation that `InvestigationSection` uses, and the Patrol tool transcript
+block moved to `frontend-modern/src/components/patrol/ToolExecutionBlock.tsx`.

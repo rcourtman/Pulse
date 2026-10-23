@@ -15,7 +15,7 @@ const ADMIN_ONLY_TABS: ReadonlyArray<{
   { tab: 'monitoring-availability', capability: 'availabilityRead' },
   { tab: 'system-ai', capability: 'pulseIntelligenceRead' },
   { tab: 'system-ai-patrol', capability: 'pulseIntelligenceRead' },
-  { tab: 'system-ai-assistant', capability: 'pulseIntelligenceRead' },
+  { tab: 'system-ai-agents', capability: 'pulseIntelligenceRead' },
   { tab: 'support-diagnostics', capability: 'diagnosticsRead' },
   { tab: 'support-reporting', capability: 'reportingRead' },
   { tab: 'support-logs', capability: 'systemLogsRead' },

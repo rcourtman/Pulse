@@ -17,7 +17,7 @@ import {
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
@@ -62,7 +62,7 @@ export const useAgentProfilesPanelState = () => {
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
 
-  const aiAvailable = createMemo(() => aiChatStore.enabled === true);
+  const aiAvailable = createMemo(() => aiAvailabilityStore.enabled === true);
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
   const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
   const [loading, setLoading] = createSignal(true);

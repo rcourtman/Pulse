@@ -22,7 +22,6 @@ import RefreshIcon from 'lucide-solid/icons/refresh-cw';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import RepeatIcon from 'lucide-solid/icons/repeat';
 import ShieldOffIcon from 'lucide-solid/icons/shield-off';
-import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import type {
   AttentionActionOffer,
@@ -50,8 +49,6 @@ import {
   getPatrolAttentionProtectionPresentation,
   getPatrolProtectionProviderLabels,
 } from '@/features/patrol/patrolControlPresentation';
-import { aiChatStore } from '@/stores/aiChat';
-import { buildPatrolAttentionAssistantHandoff } from './patrolInvestigationContextModel';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
@@ -935,12 +932,6 @@ function AttentionDetail(props: {
     const subject = pageSubject();
     return subject ? buildResourceThresholdsPath(subject) : ALERT_THRESHOLDS_PATH;
   };
-  const openAssistant = () => {
-    const value = detail();
-    if (!value) return;
-    const handoff = buildPatrolAttentionAssistantHandoff(value, linkedFindings());
-    aiChatStore.explain(handoff.context);
-  };
   const copyResourceId = async (value: string) => {
     if (await copyToClipboard(value)) setCopiedResourceId(value);
   };
@@ -1072,17 +1063,6 @@ function AttentionDetail(props: {
                     <span>{flapping().detail}</span>
                   </p>
                 )}
-              </Show>
-              <Show when={aiChatStore.enabled === true}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="mt-2 min-h-11 gap-1.5 px-2 text-blue-700 hover:bg-surface-hover hover:underline dark:text-blue-300 sm:min-h-0"
-                  onClick={openAssistant}
-                >
-                  <SparklesIcon class="h-4 w-4" aria-hidden="true" />
-                  Explain with Assistant
-                </Button>
               </Show>
             </section>
 

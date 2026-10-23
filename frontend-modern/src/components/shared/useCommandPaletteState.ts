@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useNavigate } from '@solidjs/router';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import {
   buildDockerPath,
@@ -8,8 +8,7 @@ import {
   buildTrueNASPath,
   buildVmwarePath,
 } from '@/routing/resourceLinks';
-import { aiChatStore, type AIChatCommandRequestAction } from '@/stores/aiChat';
-import { getAssistantPageContext } from '@/utils/assistantPageContext';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import {
   buildCommandPaletteCommands,
   filterCommandPaletteCommands,
@@ -19,26 +18,16 @@ import {
 
 export type { CommandPaletteModalCommand, CommandPaletteModalProps } from './commandPaletteModel';
 
-const runAfterPaletteSelection = (action: () => void) => {
-  queueMicrotask(action);
-};
-
 export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const [query, setQuery] = createSignal('');
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
   const [listboxRef, setListboxRef] = createSignal<HTMLDivElement>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
 
-  const requestAssistantCommand = (action: AIChatCommandRequestAction) => {
-    runAfterPaletteSelection(() => aiChatStore.requestCommand(action));
-  };
-
-  // Same session capability that gates the Assistant launcher and the Patrol
-  // tab: with AI off, the palette offers neither Assistant nor Patrol.
-  const aiAvailable = () => aiChatStore.enabled === true;
+  // Same session capability that gates the Patrol tab: with AI off, the
+  // palette does not offer Patrol.
+  const aiAvailable = () => aiAvailabilityStore.enabled === true;
 
   const commands = createMemo(() =>
     buildCommandPaletteCommands({
@@ -55,24 +44,6 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
       platformVisibility: props.platformVisibility(),
       patrolVisible: aiAvailable(),
       navigate,
-      assistantOpenPresentation: {
-        label: assistantPageContext().commandLabel,
-        description: assistantPageContext().commandDescription,
-      },
-      assistantActions: aiAvailable()
-        ? {
-            open: () =>
-              runAfterPaletteSelection(() => aiChatStore.open(assistantPageContext().context)),
-            help: () => requestAssistantCommand('help'),
-            newSession: () => requestAssistantCommand('new'),
-            sessions: () => requestAssistantCommand('sessions'),
-            models: () => requestAssistantCommand('models'),
-            providers: () => requestAssistantCommand('providers'),
-            status: () => requestAssistantCommand('status'),
-            undo: () => requestAssistantCommand('undo'),
-            redo: () => requestAssistantCommand('redo'),
-          }
-        : undefined,
     }),
   );
 

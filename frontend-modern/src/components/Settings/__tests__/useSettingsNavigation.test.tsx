@@ -69,7 +69,7 @@ describe('useSettingsNavigation', () => {
     });
   });
 
-  it('routes legacy external-agent API hashes to Pulse Intelligence Assistant', async () => {
+  it('routes legacy external-agent API hashes to Pulse Intelligence External agents', async () => {
     for (const hash of ['#external-agent-setup', '#pulse-mcp-setup']) {
       cleanup();
       navigateSpy.mockReset();
@@ -77,7 +77,45 @@ describe('useSettingsNavigation', () => {
 
       await waitFor(() => {
         expect(navigateSpy).toHaveBeenCalledWith(
-          '/settings/pulse-intelligence/assistant#external-agent-setup',
+          '/settings/pulse-intelligence/agents#external-agent-setup',
+          {
+            replace: true,
+            scroll: false,
+          },
+        );
+      });
+    }
+  });
+
+  it('keeps the setup anchor when retired Assistant settings links land on External agents', async () => {
+    cleanup();
+    navigateSpy.mockReset();
+    renderHarness('/settings/pulse-intelligence/assistant', '', '#external-agent-setup');
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/settings/pulse-intelligence/agents#external-agent-setup',
+        {
+          replace: true,
+          scroll: false,
+        },
+      );
+    });
+  });
+
+  it('keeps the setup anchor for every retired Assistant settings link form', async () => {
+    const forms: Array<[string, string]> = [
+      ['/settings/pulse-intelligence/assistant/', ''],
+      ['/settings', '?tab=assistant'],
+      ['/settings', '?tab=system-ai-assistant'],
+    ];
+    for (const [pathname, search] of forms) {
+      cleanup();
+      navigateSpy.mockReset();
+      renderHarness(pathname, search, '#external-agent-setup');
+      await waitFor(() => {
+        expect(navigateSpy).toHaveBeenCalledWith(
+          '/settings/pulse-intelligence/agents#external-agent-setup',
           {
             replace: true,
             scroll: false,

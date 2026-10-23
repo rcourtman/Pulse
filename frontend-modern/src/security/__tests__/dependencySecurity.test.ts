@@ -240,7 +240,6 @@ describe('frontend dependency security floors', () => {
       // GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr and GHSA-c6gr-qvv4-5v3f
       // (SAFE_FOR_TEMPLATES, IN_PLACE detached handlers, SMIL href) need 3.4.17.
       ['dompurify', [3, 4, 17]],
-      ['highlight.js', [11, 12, 0]],
       ['solid-js', [1, 9, 15]],
       ['@types/node', [26, 6, 3]],
       ['lucide-solid', [0, 577, 0]],

@@ -7,7 +7,6 @@ import {
   buildSourceSections,
 } from '@/components/Infrastructure/resourceDetailDrawerIdentityModel';
 import type { Resource } from '@/types/resource';
-import { buildResourceAssistantContext } from '@/utils/resourceAssistantContextModel';
 
 const baseResource = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'resource-1',
@@ -104,38 +103,6 @@ describe('resourceDetailDrawerIdentityModel', () => {
     expect(identityView.aliasPreviewValues).toEqual(identityView.identityAliasValues.slice(0, 4));
     expect(identityView.hasAliasOverflow).toBe(true);
     expect(identityView.identityCardHasRichData).toBe(true);
-  });
-
-  it('builds resource Assistant handoffs from canonical resource identity without prompt text', () => {
-    const context = buildResourceAssistantContext(
-      baseResource({
-        id: 'system-container-6adaf34f529d241a',
-        type: 'system-container',
-        name: 'homeassistant',
-        displayName: 'homeassistant',
-        technology: 'lxc',
-        parentName: 'delly',
-        discoveryTarget: {
-          resourceType: 'system-container',
-          agentId: 'delly',
-          resourceId: '101',
-          hostname: 'homeassistant',
-        },
-      }),
-    );
-
-    expect(context.targetType).toBe('resource');
-    expect(context.targetId).toBe('system-container-6adaf34f529d241a');
-    expect(context.handoffContext).toBeUndefined();
-    expect(context.handoffMetadata).toEqual({ kind: 'resource_context' });
-    expect(context.handoffResources).toEqual([
-      {
-        id: 'system-container-6adaf34f529d241a',
-        name: 'homeassistant',
-        type: 'system-container',
-        node: 'delly',
-      },
-    ]);
   });
 
   it('builds canonical source sections and identity-match precedence', () => {

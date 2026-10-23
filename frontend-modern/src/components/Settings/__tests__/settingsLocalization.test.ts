@@ -30,7 +30,7 @@ describe('settings localization catalog', () => {
     expect(groups[0]?.label).toBe('Infrastruktur');
     expect(groups[0]?.items[0]?.label).toBe('Infrastruktur');
     expect(getSettingsNavItem('system-updates', 'de')?.label).toBe('Updates');
-    expect(getSettingsNavItem('system-ai-assistant', 'de')?.label).toBe('Assistant');
+    expect(getSettingsNavItem('system-ai-agents', 'de')?.label).toBe('Externe Agenten');
     expect(getSettingsNavItem('security-data-handling', 'de')?.label).toBe('Ressourcenschutz');
   });
 
@@ -39,7 +39,7 @@ describe('settings localization catalog', () => {
     expect(groups.find((group) => group.id === 'system')?.label).toBe('Sistema');
     expect(getSettingsNavItem('system-ai', 'es')?.label).toBe('Proveedores y modelos');
     expect(getSettingsNavItem('system-ai-patrol', 'es')?.label).toBe('Patrol');
-    expect(getSettingsNavItem('system-ai-assistant', 'es')?.label).toBe('Assistant');
+    expect(getSettingsNavItem('system-ai-agents', 'es')?.label).toBe('Agentes externos');
     expect(getSettingsNavItem('support-diagnostics', 'es')?.label).toBe('Diagnóstico y salud');
   });
 
@@ -78,10 +78,10 @@ describe('settings localization catalog', () => {
       description:
         'Configura proveedores, modelos predeterminados, salud de proveedores, presupuesto y uso para Pulse Intelligence.',
     });
-    expect(spanishMeta['system-ai-assistant']).toEqual({
-      title: 'Assistant',
+    expect(spanishMeta['system-ai-agents']).toEqual({
+      title: 'Agentes externos',
       description:
-        'Configura el comportamiento del chat, los permisos de acciones, las sesiones y los conectores de agentes externos (MCP) del Assistant.',
+        'Conecta Claude Code, Codex y otros clientes MCP con las herramientas gobernadas de Pulse.',
     });
     expect(spanishMeta['system-billing']).toEqual({
       title: 'Planes y facturacion',
@@ -92,10 +92,10 @@ describe('settings localization catalog', () => {
       description:
         'Konfigurieren Sie Anbieter, Standardmodelle, Anbieterzustand, Budget und Nutzung fuer Pulse Intelligence.',
     });
-    expect(getSettingsHeaderMeta('de')['system-ai-assistant']).toEqual({
-      title: 'Assistant',
+    expect(getSettingsHeaderMeta('de')['system-ai-agents']).toEqual({
+      title: 'Externe Agenten',
       description:
-        'Konfigurieren Sie Chatverhalten, Aktionsrechte, Sitzungen und externe Agent-Verbindungen (MCP) des Assistant.',
+        'Verbinden Sie Claude Code, Codex und andere MCP-Clients mit den kontrollierten Tools von Pulse.',
     });
     expect(getSettingsHeaderMeta('de')['system-billing']).toEqual({
       title: 'Plaene & Abrechnung',

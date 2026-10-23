@@ -13,11 +13,9 @@ import type { AISettings, PatrolReadiness } from '@/types/ai';
 const recordWorkflowPromptActivityMock = vi.hoisted(() => vi.fn());
 const loggerDebugMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/api/aiChat', async (importOriginal) => ({
+vi.mock('@/api/workflowPrompts', async (importOriginal) => ({
   ...((await importOriginal()) as object),
-  AIChatAPI: {
-    recordWorkflowPromptActivity: recordWorkflowPromptActivityMock,
-  },
+  recordWorkflowPromptActivity: recordWorkflowPromptActivityMock,
 }));
 
 vi.mock('@/utils/logger', async (importOriginal) => ({

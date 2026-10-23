@@ -192,7 +192,7 @@ test.describe.serial('Storage growth column', () => {
       }, { timeout: 30_000 })
       .toBe('match');
 
-    // Viewport-only: full-page screenshots can hang while the assistant panel
+    // Viewport-only: full-page screenshots can hang while a side panel
     // animates.
     await page.screenshot({
       path: path.resolve(ARTIFACTS_DIR, 'storage-growth-24h.png'),

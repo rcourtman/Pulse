@@ -42,7 +42,12 @@ type securityStatusSettingsCapabilities struct {
 	// tightening one gate cannot silently hide the other's tabs. System →
 	// General stays ungated - theme, language, and unit preferences there are
 	// user-scoped, not instance administration.
-	SystemSettingsRead  bool `json:"systemSettingsRead"`
+	SystemSettingsRead bool `json:"systemSettingsRead"`
+	// PatrolRun answers the RequireAdmin + ai:execute gate on
+	// POST /api/ai/patrol/run from this snapshot (securityStatusCanRunPatrol),
+	// so a surface that starts a Patrol run (alert Investigate) is offered to
+	// the sessions the route accepts.
+	PatrolRun           bool `json:"patrolRun"`
 	APIAccessRead       bool `json:"apiAccessRead"`
 	APIAccessWrite      bool `json:"apiAccessWrite"`
 	AuthenticationRead  bool `json:"authenticationRead"`
@@ -308,6 +313,7 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 		SystemLogsRead:        canReadSettings,
 		ReportingRead:         canReadReporting,
 		SystemSettingsRead:    canReadSettings,
+		PatrolRun:             r.securityStatusCanRunPatrol(snapshot),
 		APIAccessRead:         r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsRead),
 		APIAccessWrite:        r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers, config.ScopeSettingsWrite),
 		AuthenticationRead:    canReadSettings,
@@ -323,6 +329,38 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 		RelayWrite:            canAdminSettings,
 		BillingAdmin:          r.canAccessPlatformAdminSurface(snapshot),
 	}
+}
+
+// securityStatusCanRunPatrol answers the RequireAdmin + ai:execute gate on
+// POST /api/ai/patrol/run from the security status snapshot, reading
+// credentials the way every other admin capability does, so it validates no
+// token and has no side effect. It departs from canAccessAdminSurface where
+// ensureAdminSession disagrees with that helper in ways a browser meets: an
+// instance administrator on an org-scoped session is admitted, an
+// organization-bound token is refused whatever its scopes, and a session cookie
+// riding along with a token must belong to an instance administrator. The
+// snapshot's remaining gaps (recovery-session binding, proxy-over-token
+// precedence, Bearer-only tokens, the dev bypass beside an explicit token) are
+// shared with every settings capability.
+func (r *Router) securityStatusCanRunPatrol(snapshot securityStatusAuthSnapshot) bool {
+	if r == nil || r.config == nil || !snapshot.authenticated {
+		return false
+	}
+	switch snapshot.authMethod {
+	case "session":
+		return sessionUserCarriesAdminPrivileges(r.config, snapshot.username)
+	case "api_token":
+		if !tokenActsForInstance(snapshot.tokenRecord) || !snapshot.hasScopes(config.ScopeAIExecute) {
+			return false
+		}
+		if snapshot.request != nil {
+			if cookie, err := readSessionCookie(snapshot.request); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+				return sessionUserCarriesAdminPrivileges(r.config, strings.TrimSpace(GetSessionUsername(cookie.Value)))
+			}
+		}
+		return true
+	}
+	return snapshot.canAccessAdminSurface(config.ScopeAIExecute)
 }
 
 func (r *Router) securityStatusSessionCapabilities(ctx context.Context) securityStatusSessionCapabilities {

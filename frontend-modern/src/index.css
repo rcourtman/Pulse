@@ -355,52 +355,11 @@
      overflow hidden and .app-scroll-shell owns vertical scrolling.
      Forcing a root scrollbar here would reserve a dead gutter at the
      right viewport edge and shift every fixed right-anchored element
-     (e.g. the Assistant launcher tab) off the true screen edge. */
+     off the true screen edge. */
 }
 
 @layer utilities {
   /* Former v3 component rules: emitted before the generated utilities. */
-  /* Assistant code-block syntax highlighting (highlight.js tokens).
-     Chat code blocks always render on the dark prose-pre slate background,
-     so a single readable-on-dark palette serves both app themes. */
-  .prose pre code.hljs-highlighted .hljs-comment,
-  .prose pre code.hljs-highlighted .hljs-quote {
-    color: var(--color-slate-400);
-    font-style: italic;
-  }
-  .prose pre code.hljs-highlighted .hljs-keyword,
-  .prose pre code.hljs-highlighted .hljs-selector-tag,
-  .prose pre code.hljs-highlighted .hljs-literal,
-  .prose pre code.hljs-highlighted .hljs-built_in {
-    color: var(--color-violet-300);
-  }
-  .prose pre code.hljs-highlighted .hljs-string,
-  .prose pre code.hljs-highlighted .hljs-regexp,
-  .prose pre code.hljs-highlighted .hljs-addition {
-    color: var(--color-emerald-300);
-  }
-  .prose pre code.hljs-highlighted .hljs-number,
-  .prose pre code.hljs-highlighted .hljs-symbol,
-  .prose pre code.hljs-highlighted .hljs-bullet {
-    color: var(--color-amber-300);
-  }
-  .prose pre code.hljs-highlighted .hljs-title,
-  .prose pre code.hljs-highlighted .hljs-section,
-  .prose pre code.hljs-highlighted .hljs-name,
-  .prose pre code.hljs-highlighted .hljs-function {
-    color: var(--color-sky-300);
-  }
-  .prose pre code.hljs-highlighted .hljs-attr,
-  .prose pre code.hljs-highlighted .hljs-attribute,
-  .prose pre code.hljs-highlighted .hljs-variable,
-  .prose pre code.hljs-highlighted .hljs-template-variable {
-    color: var(--color-cyan-300);
-  }
-  .prose pre code.hljs-highlighted .hljs-meta,
-  .prose pre code.hljs-highlighted .hljs-deletion {
-    color: var(--color-rose-300);
-  }
-
   .touch-scroll {
     -webkit-overflow-scrolling: touch;
   }

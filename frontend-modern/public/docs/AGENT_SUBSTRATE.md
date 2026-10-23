@@ -214,6 +214,6 @@ Pulse; verification can be unavailable without proving that nothing ran.
 
 - [Configuration](CONFIGURATION.md) for API tokens and their scopes.
 - [API reference](API.md) for the wider Pulse HTTP surface.
-- [AI features](AI.md) for how Patrol and the Assistant use the same context.
+- [AI features](AI.md) for how Patrol and external agents use the same context.
 - `cmd/pulse-mcp/README.md` in the repository for adapter setup examples
   covering OpenCode, Claude Desktop, and Claude Code.

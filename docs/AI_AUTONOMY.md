@@ -1,19 +1,20 @@
 # Pulse Intelligence Modes and Safety Configuration
 
-This guide covers how to configure Patrol mode, Pulse Assistant command access, and the safety guardrails that apply before Pulse can change infrastructure.
+This guide covers how to configure Patrol mode and the safety guardrails that apply before Pulse can change infrastructure.
 
 For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level feature availability, see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
-## Two Axes of Control
+## Patrol Mode Is the Control
 
-Pulse separates AI permissions into two independent axes:
+**Patrol Mode** decides what Patrol may handle automatically after it finds an
+issue: watch only, ask before changes, handle safe fixes, or use policy
+autopilot. Patrol mode is configured on the **Patrol** page.
 
-1. **Patrol Mode** — What Patrol may handle automatically after it finds an issue: watch only, ask before changes, handle safe fixes, or use policy autopilot.
-2. **Assistant Command Access** — Whether the interactive chat assistant can execute commands during a chat session.
-
-Patrol mode is configured on the **Patrol** page. Assistant command access is configured in **Settings → Pulse Intelligence → Assistant**.
+The in-app Pulse Assistant chat, and its separate chat action setting, have been
+retired. Pulse Mobile's chat keeps the level saved before then until the app
+retires on 31 March 2027 (see [Pulse Mobile chat control level](#pulse-mobile-chat-control-level)).
 
 ---
 
@@ -95,43 +96,41 @@ Without the `ai_autofix` capability, the effective Patrol mode is clamped to `mo
 
 ---
 
-## Assistant Control Levels
+## Pulse Mobile chat control level
 
-Control levels govern interactive Assistant queries and action planning, not
-Patrol's autonomy or permission to execute infrastructure work.
+The control level governs Pulse Mobile chat queries and action planning, not
+Patrol's autonomy or permission to execute infrastructure work. The web
+settings page that edited it was retired with the in-app chat; the saved value
+still applies to Pulse Mobile until the app retires on 31 March 2027.
 
 | Mode | Key | Query | Plan infrastructure actions | Availability |
 |------|-----|:-----:|:---------------------------:|--------------|
 | **Read-only** | `read_only` | Yes | No | Community |
 | **Ask first** | `controlled` | Yes | For operator review in **Actions** | Community |
 
-Assistant chat does not execute the plans it saves. A legacy saved `autonomous`
-preference displays as **Ask first** and keeps its stored value and existing
-entitlement checks for older clients. It does not bypass approval. An unrelated
-settings save does not rewrite that preference. Unknown values fail closed to
-read-only. Patrol mode and Autopilot acknowledgements remain separate.
+Chat does not execute the plans it saves. A legacy saved `autonomous`
+preference acts as **Ask first** and keeps its stored value and existing
+entitlement checks for older clients. It does not bypass approval. Web settings
+saves never rewrite that preference. Unknown values fail closed to read-only.
+Patrol mode and Autopilot acknowledgements remain separate.
 
-To keep Assistant away from a specific guest, lock it: open the guest, choose
-**Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
-Pulse then refuses typed actions that target that resource, including
+To keep chat and Patrol away from a specific guest, lock it: open the guest,
+choose **Manage**, turn on **Never auto-remediate** under Operator overrides,
+and save. Pulse then refuses typed actions that target that resource, including
 approved ones (see [Keep a Resource Off-Limits](#keep-a-resource-off-limits)).
-Older versions also showed a **Protected guests** list here. It never excluded a
-guest from action plans, so it has been removed.
 
 ### Configuration
 
-**UI:** Settings → Pulse Intelligence → Assistant → Chat action mode
-
-**API:** This intentionally changes Assistant action planning access. Use the same private
-administrator header file with `settings:write`; the token must also have
-permission to change settings. Prefer the UI for one-off changes, and verify
-the saved **Chat action mode** there afterwards. Do not use a write as an
-authentication test.
+**API only.** This intentionally changes Pulse Mobile chat action planning
+access. Use the same private administrator header file with `settings:write`;
+the token must also have permission to change settings. Read
+`control_level` from `GET /api/settings/ai` afterwards to confirm the saved
+value. Do not use a write as an authentication test.
 
 Use the same `pulse_api` helper defined above, with its private response file
 and request limits. Supporting PUT in the helper grants no additional access.
-If the response is lost, check the saved **Chat action mode** in the UI before
-deciding whether another change is needed; do not repeat the write blindly.
+If the response is lost, read the saved `control_level` before deciding
+whether another change is needed; do not repeat the write blindly.
 
 ```bash
 pulse_api PUT /api/settings/ai/update <<'JSON'
@@ -141,12 +140,12 @@ JSON
 
 ### Reviewing plans (Ask first)
 
-1. Assistant requests a typed action for an explicitly identified resource with
+1. Chat requests a typed action for an explicitly identified resource with
    the advertised capability.
 2. Pulse saves the canonical plan in **Actions** without requesting execution.
 3. Review the target, operation, approval policy and expiry in **Actions**.
-4. Use the existing authorised approval and run controls; Chat action mode grants
-   no additional access or automatic approval.
+4. Use the existing authorised approval and run controls; the chat control
+   level grants no additional access or automatic approval.
 5. Read the recorded execution and independent verification outcome before
    concluding that the operation worked. Do not repeat an uncertain operation.
 
@@ -186,15 +185,15 @@ If the AI provider experiences consecutive failures, the circuit breaker (`inter
 
 ### Discovery-Before-Action
 
-The assistant cannot operate on resources it hasn't first discovered. This prevents hallucinated resource IDs from reaching infrastructure commands.
+The AI runtime cannot operate on resources it hasn't first discovered. This prevents hallucinated resource IDs from reaching infrastructure commands.
 
 ### Verification-After-Write
 
-After executing any control action, the assistant must verify the result with a read operation before reporting success. This is enforced by the FSM — the assistant cannot return to idle state without verification.
+After executing any control action, the AI runtime must verify the result with a read operation before reporting success. This is enforced by the FSM — the runtime cannot return to idle state without verification.
 
 ### Keep a Resource Off-Limits
 
-To stop Pulse acting on a specific guest, host or container, open its drawer, choose **Manage**, turn on **Never auto-remediate** under Operator overrides, confirm the prompt, and click **Save overrides**. Pulse then refuses typed actions that target that exact resource: the Assistant declines to plan one when it can read the lock, Patrol will not run one, and the action lifecycle checks the lock again before it runs an action that was already planned, even when approved. The lock covers that resource only, not its host or other resources, and it does not stop read-only investigation. Turn it off and save again when you want Pulse to act on the resource again. A resource whose lifecycle is Retired is blocked the same way until the lifecycle is set back to Active.
+To stop Pulse acting on a specific guest, host or container, open its drawer, choose **Manage**, turn on **Never auto-remediate** under Operator overrides, confirm the prompt, and click **Save overrides**. Pulse then refuses typed actions that target that exact resource: chat declines to plan one when it can read the lock, Patrol will not run one, and the action lifecycle checks the lock again before it runs an action that was already planned, even when approved. The lock covers that resource only, not its host or other resources, and it does not stop read-only investigation. Turn it off and save again when you want Pulse to act on the resource again. A resource whose lifecycle is Retired is blocked the same way until the lifecycle is set back to Active.
 
 ---
 

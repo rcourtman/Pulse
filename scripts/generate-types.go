@@ -1,9 +1,7 @@
 // Generates TypeScript types for frontend consumption from Go types.
 //
-// Currently this covers Pulse Assistant chat SSE event payloads and the
-// Pulse Intelligence agent capabilities discovery manifest.
-// Sources of truth: internal/ai/chat event data structs and
-// internal/agentcapabilities manifest structs.
+// Currently this covers the Pulse Intelligence agent capabilities discovery
+// manifest. Source of truth: internal/agentcapabilities manifest structs.
 //
 // Usage:
 //
@@ -11,7 +9,6 @@
 //
 // Output:
 //
-//	frontend-modern/src/api/generated/aiChatEvents.ts
 //	frontend-modern/src/api/generated/agentCapabilities.ts
 //go:build ignore
 
@@ -27,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 )
 
 type tsTypeDef struct {
@@ -36,37 +32,6 @@ type tsTypeDef struct {
 }
 
 func main() {
-	chatDefs := []reflect.Type{
-		reflect.TypeOf(chat.ContentData{}),
-		reflect.TypeOf(chat.ThinkingData{}),
-		reflect.TypeOf(chat.WorkflowStateData{}),
-		reflect.TypeOf(chat.SessionData{}),
-		reflect.TypeOf(chat.ToolStartData{}),
-		reflect.TypeOf(chat.ToolProgressData{}),
-		reflect.TypeOf(chat.ToolCancelData{}),
-		reflect.TypeOf(chat.ToolEndData{}),
-		reflect.TypeOf(chat.ApprovalPlanData{}),
-		reflect.TypeOf(chat.ApprovalContextConfidenceData{}),
-		reflect.TypeOf(chat.ApprovalPreflightData{}),
-		reflect.TypeOf(chat.ApprovalNeededData{}),
-		reflect.TypeOf(chat.QuestionData{}),
-		reflect.TypeOf(chat.Question{}),
-		reflect.TypeOf(chat.QuestionOption{}),
-		reflect.TypeOf(chat.SteerAppliedData{}),
-		reflect.TypeOf(chat.DoneData{}),
-		reflect.TypeOf(chat.ErrorData{}),
-	}
-
-	if err := writeTypeScriptDefinitions(
-		filepath.Join("frontend-modern", "src", "api", "generated", "aiChatEvents.ts"),
-		"internal/ai/chat event payload structs.",
-		chatDefs,
-		"",
-		chatStreamEventUnion(),
-	); err != nil {
-		fatal(err)
-	}
-
 	agentCapabilityDefs := []reflect.Type{
 		reflect.TypeOf(agentcapabilities.Capability{}),
 		reflect.TypeOf(agentcapabilities.CapabilityCategory{}),
@@ -137,29 +102,6 @@ func writeTypeScriptDefinitions(outPath, source string, defs []reflect.Type, ext
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, err.Error())
 	os.Exit(1)
-}
-
-func chatStreamEventUnion() string {
-	var buf strings.Builder
-	// Stream event union matches internal/api/contract_test.go snapshots.
-	buf.WriteString("export type AIChatStreamEvent =\n")
-	buf.WriteString("  | { type: 'session'; data: SessionData }\n")
-	buf.WriteString("  | { type: 'content'; data: ContentData }\n")
-	buf.WriteString("  | { type: 'thinking'; data: ThinkingData }\n")
-	buf.WriteString("  | { type: 'workflow_state'; data: WorkflowStateData }\n")
-	buf.WriteString("  | { type: 'tool_start'; data: ToolStartData }\n")
-	buf.WriteString("  | { type: 'tool_progress'; data: ToolProgressData }\n")
-	buf.WriteString("  | { type: 'tool_cancel'; data: ToolCancelData }\n")
-	buf.WriteString("  | { type: 'tool_end'; data: ToolEndData }\n")
-	buf.WriteString("  | { type: 'approval_needed'; data: ApprovalNeededData }\n")
-	// QuestionData is wrapped by the backend as {question_id, questions} plus session_id in some callers.
-	// The contract test covers {question_id, questions}; the UI currently expects session_id too.
-	// Keep session_id optional for backward compatibility.
-	buf.WriteString("  | { type: 'question'; data: QuestionData & { session_id?: string } }\n")
-	buf.WriteString("  | { type: 'steer_applied'; data: SteerAppliedData }\n")
-	buf.WriteString("  | { type: 'done'; data?: DoneData }\n")
-	buf.WriteString("  | { type: 'error'; data: ErrorData };\n")
-	return buf.String()
 }
 
 func agentCapabilitiesAliases() string {

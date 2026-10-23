@@ -146,8 +146,8 @@ export function buildPatrolSetupModelRequest(
   options: { sharedModel: string; intervalAdjust: PatrolIntervalAutoAdjust | null },
 ): AISettingsUpdateRequest {
   const request: AISettingsUpdateRequest = { patrol_model: modelId };
-  // A fresh install has no shared model either; give the Assistant the same
-  // one so the provider the operator just connected also answers chat.
+  // A fresh install has no shared model either; use the same one so the
+  // provider the operator just connected also serves reports and other AI calls.
   if (!options.sharedModel.trim()) request.model = modelId;
   if (options.intervalAdjust) request.patrol_interval_minutes = options.intervalAdjust.to;
   return request;

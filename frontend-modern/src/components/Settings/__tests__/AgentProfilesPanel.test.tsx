@@ -69,8 +69,8 @@ vi.mock('@/api/agentProfiles', () => ({
   },
 }));
 
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: {
+vi.mock('@/stores/aiAvailability', () => ({
+  aiAvailabilityStore: {
     enabled: false,
   },
 }));

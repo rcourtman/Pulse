@@ -1066,8 +1066,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
           <p class="font-semibold">Lock this resource against all automated remediation?</p>
           <p class="mt-1 leading-relaxed">
-            Pulse will block every automated fix on this resource, including ones already approved
-            in Patrol or the Assistant, until this is turned off.
+            Pulse will block every automated fix on this resource, including ones already approved,
+            until this is turned off.
           </p>
           <div class="mt-2 flex items-center gap-2">
             <button

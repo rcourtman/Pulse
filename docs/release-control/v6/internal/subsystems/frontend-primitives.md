@@ -1583,7 +1583,6 @@ removal/failure retention and containing publication remain separate evidence.
 5. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 6. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
    6a. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
-7. `frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx`
 8. `frontend-modern/src/components/Settings/AIModelSelectionSection.tsx`
 9. `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`
 10. `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
@@ -1695,7 +1694,6 @@ removal/failure retention and containing publication remain separate evidence.
      111a. `frontend-modern/src/utils/storageSummaryCache.ts`
 111. `frontend-modern/src/components/shared/TableCardHeader.tsx`
 112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
-113. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
 114. `frontend-modern/src/utils/upgradeNavigation.ts`
 115. `frontend-modern/src/components/DemoBanner.tsx`
      116a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
@@ -1706,7 +1704,7 @@ removal/failure retention and containing publication remain separate evidence.
 119. `frontend-modern/src/stores/licenseCommercial.ts`
 120. `frontend-modern/src/useAppRuntimeState.ts`
 121. `frontend-modern/src/routing/routePreload.ts`
-122. `frontend-modern/src/stores/aiChat.ts`
+122. `frontend-modern/src/stores/aiAvailability.ts`
 123. `frontend-modern/scripts/header-audit.mjs`
 124. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
 125. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
@@ -2226,11 +2224,11 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    work, with Patrol as the built-in operator that checks infrastructure,
    follows Patrol mode before acting, asks when approval is required, verifies
    outcomes, and records history, state that external agents use that same boundary, and make the canonical
-   `/settings/pulse-intelligence/assistant#external-agent-setup` route land on
+   `/settings/pulse-intelligence/agents#external-agent-setup` route land on
    and briefly focus this panel with setup open rather than leaving the user at
    the generic API token inventory. Legacy `/settings/security/api#external-agent-setup` and
    `/settings/security/api#pulse-mcp-setup` links must remain accepted and may
-   redirect to the canonical Pulse Intelligence Assistant route. Normal API
+   redirect to the canonical Pulse Intelligence External agents route. Normal API
    Access visits remain token-management first, and external-agent setup must
    not reorder the API token inventory because it no longer lives on that page.
    The Assistant settings default must keep setup mechanics behind a `Show connector setup`
@@ -2290,70 +2288,7 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
 11. `frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx` shared with `performance-and-scalability`: the shared bounded table-row renderer is both a canonical platform-page primitive and a fleet-scale mounted-DOM performance boundary.
 12. `frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts` shared with `performance-and-scalability`: the platform windowing controller is both a canonical frontend scroll primitive and a directional-runway performance hot path.
 13. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
-14. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
-    Assistant session pickers and reloads must restore only safe
-    `handoff_summary` presentation state from the session list. Loading a plain
-    session or starting a new conversation must clear stale scoped handoff
-    briefing state so Patrol and alert context does not visually leak between
-    conversations. Browser-originated model handoff payloads are one-shot
-    request seeds: after the first successful chat send, this store must clear
-    `handoffContext`, `handoffResources`, `handoffActions`, and safe
-    `handoffMetadata`; it must also clear any preferred workflow prompt request
-    once the manifest-rendered starter has seeded the composer and the first
-    scoped send succeeds. The store must preserve the safe visible briefing and
-    scoped approval-required posture, so later turns rely on backend session
-    hydration instead of resending stale browser context. Patrol handoffs must not include
-    Persisted Assistant redo availability is safe session chrome, not transcript
-    content. The drawer may consume `ChatSession.can_redo` from the backend
-    session list to re-enable Redo after reload or session refresh, but it must
-    not read or duplicate the redo stack in frontend state. Undo restores the
-    editable prompt draft and safe structured send metadata into the composer;
-    Redo clears that recovered draft only after the backend restores the turn.
-    Browser-owned session-management comments, command request handling, and
-    question-answer plumbing in this store and the adjacent chat hook must name
-    the native drawer surface as Pulse Assistant rather than reviving the
-    retired generic `Pulse AI` label. Shared model/provider settings guidance
-    still belongs to Pulse Intelligence > Provider & Models.
-    Patrol handoffs must not include
-    safe next-step labels, action kinds, or whitelisted app-route hrefs in
-    `handoffMetadata`; the drawer must treat
-    `handoff_summary.requires_approval` as a current pending-decision flag, not a
-    historical action marker, so completed or rejected handoff actions render as
-    action context rather than pending approval. A restored Patrol run summary
-    must remain visibly sourced to Pulse Patrol, restore a `patrol-run` target
-    plus run ID/type/status/runtime-failure presentation only, and must not
-    rehydrate model-only runtime failure detail into browser context. New Patrol
-    run requests follow the same drawer boundary: source-owned context and
-    briefing copy may show classified, redacted failure summaries for operator
-    review, but `handoffContext`, `handoffResources`, and `handoffActions` for
-    run-history context must stay absent from the browser request so the backend
-    can rebuild model-bound context from the stored Patrol run. Restored
-    Patrol assessment, Patrol finding, and Patrol control save-failure sessions
-    follow the same safe-summary rule: the drawer may restore source label,
-    title, target type, status badge, bounded resource facts, and approval/action
-    status from `handoff_summary`, but
-    it must not infer a finding target from bounded action references or
-    reconstruct hidden model context, provider details, retry payloads, commands,
-    preflight output, or action results in the browser. If the safe summary
-    was created by a legacy build that stored Patrol next-step metadata,
-    recommendation detail, action labels, safe action kind, or whitelisted
-    app-route href, the session picker plus restored drawer must ignore those
-    fields rather than carrying them forward as hidden context or visible
-    recommendation copy.
-    Session-load and new-conversation transitions must be success-bound: if the
-    underlying session operation fails, the shared drawer store must not clear or
-    replace the current scoped handoff context.
-    Restored Patrol assessment sessions use that same
-    `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
-    retired dashboard target, so restored-session chrome remains source-named;
-    Patrol no longer opens live assessment handoffs.
-    The shared `frontend-modern/src/components/shared/AIModelPicker.tsx`
-    primitive must keep model route presentation delegated to the AI runtime
-    label helpers. Pulse-owned local Assistant routes such as
-    `pulse:local-inventory` and `pulse:mock-assistant` are implementation
-    routes and must render as named choices without secondary raw route IDs,
-    while external provider route IDs may remain visible where they disambiguate
-    catalog entries.
+14. `frontend-modern/src/stores/aiAvailability.ts` shared with `ai-runtime`: the AI availability store is both the AI runtime session capability and the app-shell gate for Patrol entry points.
 15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must expose the manifest `surface_kind` field so runtime lenses such as
     `docker` are not collapsed back into owning platform semantics.
@@ -2659,14 +2594,8 @@ not a replacement status card, CTA band, or page-local nested card.
    Standalone machine row action triggers follow the same rule: the Machines
    table owns remove-agent semantics and menu placement, while
    `ActionIconButton` owns the compact muted trigger chrome.
-   AI Chat follows that same boundary for drawer header controls, session row
-   actions, transcript fallback close/download actions, activity-dock queued
-   follow-up controls, composer send, footer help/route actions, and compact
-   dismiss controls: the Assistant owns chat/session behavior and copy, while
-   `ActionIconButton` owns h-5/h-6/h-7/h-8/h-9 sizing, outline, primary, accent,
-   warning, info, danger, disabled, title, and focus chrome.
-   AI Chat message and tool copy controls follow the copy-action boundary:
-   MessageItem and ToolExecutionBlock own the copied text and timer semantics,
+   Patrol tool copy controls follow the copy-action boundary:
+   `ToolExecutionBlock` owns the copied text and timer semantics,
    while `CopyValueButton` owns copied-state iconography, disabled handling,
    focus, and embedded-row propagation behavior.
    Global app-shell prompts are part of the same action boundary.
@@ -3510,36 +3439,26 @@ Agent`), with the plain-language source phrase available through accessible
     review destination for a current paid feature, it must scope the operator into the
     usage-owned policy ledger rather than plan-selection intent or CTA copy
     that frames the flow as monitored-system-cap expansion.
-14. Keep assistant availability bootstrap on the shared app-shell boundary.
+14. Keep AI availability bootstrap on the shared app-shell boundary.
     `frontend-modern/src/useAppRuntimeState.ts`,
-    `frontend-modern/src/App.tsx`,
-    `frontend-modern/src/stores/aiChat.ts`, and
-    `frontend-modern/src/components/AI/Chat/index.tsx` must consume the
+    `frontend-modern/src/App.tsx`, and
+    `frontend-modern/src/stores/aiAvailability.ts` must consume the
     backend-owned `/api/security/status.sessionCapabilities.assistantEnabled`
     fact instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary
-    route bootstrap. Closed assistant chrome and non-AI settings panels may
-    not initialize assistant runtime state until an owned assistant or Patrol
-    surface is actually open. `frontend-modern/src/stores/aiChat.ts` is the
-    shared drawer shell owner for assistant open/close state, focus handoff,
-    and tenant-local context/session persistence; the app shell must not fork
-    that state across `App.tsx`, `AppLayout.tsx`, or page-level helpers.
-    The same shared shell boundary must keep Pulse Assistant coherent while a
-    blocking shared dialog owns the viewport: closed launcher affordances must
-    hide until the dialog clears, and the shell must close any already-open
-    assistant drawer instead of leaving background assistant controls visibly
-    active behind the modal. Non-critical app-shell prompts, including
-    promotional or feedback prompts, must not use the shared blocking dialog
-    stack because they must not suppress Pulse Assistant access or look like
-    required operational acknowledgement.
+    route bootstrap. Non-AI settings panels may not initialize AI runtime state
+    until an owned Patrol surface is actually open, and the app shell must not
+    fork the AI-enabled fact across `App.tsx`, `AppLayout.tsx`, or page-level
+    helpers. Non-critical app-shell prompts, including promotional or feedback
+    prompts, must not use the shared blocking dialog stack because they must
+    not look like required operational acknowledgement.
     AI-owned frontend surfaces that need shared settings or model-catalog
     truth must route those reads through
     `frontend-modern/src/stores/aiRuntimeState.ts` rather than each feature
     bootstrapping `/api/settings/ai` or `/api/ai/models` independently.
     Non-AI settings panels such as
     `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`
-    must stay on the app-shell assistant-availability fact instead of
-    re-reading raw AI settings just to decide whether assistant affordances
-    should render.
+    must stay on the app-shell AI availability fact instead of re-reading raw
+    AI settings just to decide whether AI affordances should render.
 15. Keep Patrol shell composition and product-first provider vocabulary on the
     shared feature-presentation boundary.
     `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`,
@@ -3639,23 +3558,15 @@ Agent`), with the plain-language source phrase available through accessible
     save-failure state returns, it must stay viewport-bounded, expose an
     accessible dialog label, bind any model selector to the shared runtime
     settings and model catalog, show readiness context (provider, model,
-    summary) next to a direct provider-settings action rather than behind
-    Assistant alone, and describe a saved but not ready response as a saved
-    configuration issue rather than a failed save. An Assistant handoff from it
-    must send a source-named, model-only briefing and close the popover so the
-    shared Assistant drawer is not visually hidden behind feature chrome. When
-    governed fixes are locked, the Patrol header presents `Watch only` as the
+    summary) next to a direct provider-settings action, and describe a saved but not ready response as a saved
+    configuration issue rather than a failed save. When governed fixes are
+    locked, the Patrol header presents `Watch only` as the
     effective mode with no enabled paid choice, and the Patrol state owner
     refuses any other level when a save starts. Its autonomy payload
     never carries `full_mode_unlocked`: `PUT /api/ai/patrol/autonomy` itself
     clears stale full-mode unlock and Autopilot activation state on every save
     below Autopilot, so disabled paid controls cannot leak stale permission
-    into a save. When a
-    restored Patrol assessment session is attached, the shared Assistant drawer
-    empty state must
-    stay aligned with that source-named briefing and must not render generic
-    cluster/system starter prompts below the Patrol-owned context. The Patrol
-    feature shell must also consume the Patrol-owned findings source for its
+    into a save. The Patrol feature shell must also consume the Patrol-owned findings source for its
     findings tab, run-scoped findings panels, and tab badges so shared feature
     composition does not rebuild Patrol state by filtering the cross-product
     unified findings feed.
@@ -4185,114 +4096,16 @@ production table, router and styles; it does not qualify full-app scrolling.
     IDs into setup payloads. The shared settings shell should let the backend
     resolve the effective BYOK model and then render that returned state rather
     than guessing a model in the modal.
-    Scoped Assistant handoffs keep their approval-required disclosure in
-    drawer context: `autonomousMode:false` on `AIChatContext` is a drawer-only
-    flag the chat transport never sends, because `/api/ai/chat` sets
-    approval-required mode server-side for every request. Dashboard and other
-    route-owned entry points may open the
-    Assistant drawer with source context and that flag, but they
-    must not infer a user task from an ordinary context-only open. Explicit
-    labelled explanation actions use `aiChatStore.explain` and the shared
-    explanation dispatcher, which captures the request context, waits for open
-    initialization, preserves drafts, and acknowledges each request once.
-    Older request completion must not clear newer handoff context. Neither
-    path may mutate persistent AI control-level settings or trigger background
-    Assistant settings/model bootstrap before the drawer is open. Patrol finding handoffs that add structured
-    investigation-record framing must derive that context through
-    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
-    so shared drawer primitives stay shell-owned rather than becoming a
-    Patrol-specific diagnosis formatter; shared drawer primitives must not
-    branch on intent themselves. Patrol-page
-    surfaces must not add standalone trust strips to shared header or
-    workspace chrome; high-signal trust facts may feed the Patrol-owned
-    assessment readout, but shared drawer/chrome primitives stay free of
-    the `FindingsTrustSummary` shape so adding new trust signals goes
+    Patrol-page surfaces must not add standalone trust strips to shared header
+    or workspace chrome; high-signal trust facts may feed the Patrol-owned
+    assessment readout, but shared chrome primitives stay free of the
+    `FindingsTrustSummary` shape so adding new trust signals goes
     through the contract first rather than per-shell branching.
     Patrol refresh controls stay on that same feature-owned shell
     boundary: `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
     must make the refresh affordance generation-aware and timeout-bounded, so
     a slow supporting intelligence read cannot permanently disable the
     stale-data Retry control while Patrol findings and status remain visible.
-    That feature-owned
-    presentation helper is the single emitter for investigation-record
-    `impact` and `rollback` fields: when an investigation record exists but those fields
-    are empty, the helper emits explicit `Impact not assessed` and
-    `Rollback not specified` lines into the model-only Patrol finding
-    prompt context so the operator-visible gap is surfaced to Assistant
-    rather than hidden, and shared chat primitives stay free of that
-    placeholder logic. Patrol run-history handoffs must also use that feature helper rather
-    than a row-local Assistant prompt, so the shared drawer receives only a
-    generic visible briefing, safe run identity metadata, and
-    `autonomousMode:false`; the backend rebuilds the bounded model-only run
-    context, scoped resource references, and runtime failure detail from the
-    run ID, while the Patrol feature remains the source of run copy and
-    retry/configuration guidance. Finding handoff action references
-    may add live pending approval posture only as safe structured metadata:
-    approval ID, pending status, risk, target, requested/expiry timestamps,
-    action plan identity, requester identity, approval policy, plan expiry, and
-    dry-run posture. Those references may be passed through shared chat
-    transport as `handoff_actions` for model-only refresh, but the shared drawer
-    stays a generic shell rather than a Patrol summary prompt builder. The
-    Patrol helper may turn those same safe references into visible action
-    labels and safety notes for finding-level handoffs, but it must not produce
-    Patrol-authored suggested prompt chips, recommendation titles,
-    recommendation reasons, or route-owned next-step actions. Patrol finding
-    prompts, action labels, and safety notes must describe findings, pending
-    approvals, and governed action references as evidence for the configured
-    model, not as a frontend-authored decision tree.
-    Finding-level drawer opens may also pass one bounded
-    model-only finding context, one target resource reference, and one
-    `handoff_actions` reference for a live approval or proposed fix. It must not
-    expose raw command or execution payloads.
-    The
-    drawer may render a generic
-    context-briefing band from `frontend-modern/src/stores/aiChat.ts`, but
-    feature-owned helpers must provide compact source labels, primary subject,
-    status, and governed approval/action artifact metadata while keeping
-    detailed evidence, safety notes, and model-only finding context outside
-    drawer chrome. Prompt suggestions, attention-reason copy, and
-    operator-decision framing must stay out of Patrol drawer chrome.
-    Patrol finding and action-artifact handoffs must not render suggested prompt
-    chips in the drawer and must not become another primitive path for raw
-    approval, command, or rollback command payload text. Missing-detail
-    queued-fix recovery actions must still provide the feature-owned Patrol
-    briefing and approval-required disclosure rather than opening the
-    shared drawer as context-free generic Assistant chat. If a feature-owned
-    expired-approval recovery action still has structured action artifact metadata,
-    the shared drawer may receive only safe summary fields and command counts;
-    raw command text remains outside shared Assistant primitives.
-    When those feature-owned helpers attach backend model-only context, the
-    drawer store may carry only bounded handoff text and structured resource
-    references for the shared chat transport; approval, lifecycle, and command
-    authority remain with the owning runtime surfaces.
-    Patrol finding handoffs should still provide that briefing from current
-    finding facts when a durable Patrol investigation record is not attached
-    yet, rather than opening the shared drawer as empty generic chat.
-    When the feature helper adds live approval state to the generic drawer
-    briefing, it may pass only safe approval metadata into
-    `AIChatContextBriefing`, including generated approval summaries and command
-    counts when available; raw approval commands remain owned by the governed
-    approval/remediation panels. If the generic finding-level helper hydrates
-    latest investigation detail to recover action artifact context, it may pass only
-    safe summary fields and command counts into the drawer briefing. Shared
-    approval-required posture must derive its subject from that briefing or
-    structured finding context, so Patrol handoffs render as Patrol handoffs or
-    Patrol findings, and alert handoffs render as alert investigations, rather
-    than generic dashboard briefs. Patrol approval-row Assistant prompts must
-    route through the same
-    feature-owned finding handoff helper rather than hand-written prompt-only
-    drawer opens: safe approval metadata, action artifact summaries, resource
-    references, and bounded `handoff_actions` may enter the prompt and context,
-    but raw command text stays out and the handoff must set the drawer's
-    `autonomousMode:false` disclosure instead of changing the user's persistent
-    Assistant control level. Patrol remediation-plan drawer handoffs must use the same
-    primitive boundary: plan title/status/risk, step labels, and command counts
-    may enter Assistant context; raw command and rollback command payloads must
-    stay in the governed remediation/action panel. All Patrol finding
-    discussion handoffs, including context-only findings without a live approval
-    or proposed fix, must set `autonomousMode:false` as that drawer-only flag
-    so the drawer shows the approval-required posture the server enforces,
-    without mutating the persistent Assistant control setting.
 14. Keep shared filter primitives coherent with source-owned option hydration.
     Active platform/runtime pages and Settings infrastructure surfaces must keep
     canonical options visible in shared filter controls even when current
@@ -4546,9 +4359,8 @@ production table, router and styles; it does not qualify full-app scrolling.
     Proxmox scope resolver as a compatibility fallback.
 37. Keep shared commercial upgrade navigation typed and destination-aware.
     Shared paywall shells and upgrade actions must route internal billing or
-    cloud destinations through `frontend-modern/src/utils/upgradeNavigation.ts`,
-    `frontend-modern/src/components/shared/UpgradeLink.tsx`, and
-    `frontend-modern/src/components/shared/useUpgradeNavigation.ts` instead of
+    cloud destinations through `frontend-modern/src/utils/upgradeNavigation.ts`
+    and `frontend-modern/src/components/shared/UpgradeLink.tsx` instead of
     guessing from labels, hardcoding `target="_blank"`, or calling
     `window.open(...)` from each feature surface. Inline upgrade links may use
     `UpgradeLink`; button-styled upgrade CTAs must use `UpgradeButtonLink` so
@@ -4828,13 +4640,14 @@ elsewhere. No new member primitive was introduced — vSphere composition
 reuses the same expandable member-row rendering, status presentation, and
 merge semantics Proxmox clusters already use.
 
-Assistant availability in the app shell is derived from the
+AI availability in the app shell is derived from the
 `sessionCapabilities.assistantEnabled` security-status capability, and
-`aiChatStore.refreshEnabledFromServer()` is the canonical way to re-derive it
-mid-session. AI settings save paths (setup modal, enable toggle, Provider &
-Models save) must call it after a successful save so assistant entry points
-appear or disappear without a full reload; no surface may flip
-`aiChatStore.setEnabled` from settings state directly.
+`aiAvailabilityStore.refreshEnabledFromServer()` is the canonical way to
+re-derive it mid-session. AI settings save paths (setup modal, enable toggle,
+Provider & Models save, provider removal) and organization switches must call
+it so Patrol entry points and alert Investigate appear or disappear without a
+full reload; no surface may flip `aiAvailabilityStore.setEnabled` from settings
+state directly.
 
 Patrol `fix_rejected` presentation is owned by the Patrol/AI finding surfaces
 that render the governed-action loop, while the surrounding badge, button,
@@ -5042,18 +4855,6 @@ that mention the Infrastructure settings destination now consume
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` for the
 canonical `Settings → Infrastructure` label and source-strategy copy. Shared
 primitives must not fork that string or revive removed nested route labels.
-The shared Assistant drawer owns compact source-named approval posture for
-governed handoffs. Patrol handoffs render as Patrol, and alert plus alert
-incident timeline handoffs render as alert investigations rather than dashboard
-briefs. Those same drawer handoffs may carry model-only chat context and
-resource references to the backend, but the drawer remains a presentation and
-transport owner rather than the source of approval or execution truth. Patrol
-briefings must stay simple: source, status, one primary subject, and an optional
-safe route link. They must not render remediation step lists, evidence chips,
-command summaries, or suggested-prompt chips as drawer chrome. If a
-feature-owned briefing includes a safe route-owned `actionHref`, the drawer may
-render the briefing action label as a normal app link; that link is navigation
-guidance only and must not become approval or execution authority.
 
 `SettingsTab` no longer includes `infrastructure-connections` or
 `infrastructure-install`. The single `infrastructure-systems` entry in
@@ -5207,8 +5008,7 @@ storage-only live chart primitive for the same telemetry.
 That same shared-primitive floor now also owns upgrade-navigation semantics.
 `frontend-modern/src/utils/upgradeNavigation.ts` is the canonical typed
 internal-vs-external destination helper, while
-`frontend-modern/src/components/shared/UpgradeLink.tsx` and
-`frontend-modern/src/components/shared/useUpgradeNavigation.ts` own how shared
+`frontend-modern/src/components/shared/UpgradeLink.tsx` owns how shared
 paywall surfaces navigate those destinations. Feature shells may request a
 commercial destination, but they must not re-decide whether that destination
 opens in-app or in a new tab once the shared primitive exists.
@@ -5755,8 +5555,8 @@ interaction across guest, node, Docker/unified-resource, Ceph cluster,
 Proxmox Mail Gateway, and shared inline detail panels: pressing anywhere in the subject row collapses the detail,
 Enter/Space work through the native button, and lifecycle actions do not bubble
 into collapse. Generic `Ask Assistant` and `Copy context` actions do not belong
-in object drawer headers: Assistant remains available through the global shell,
-and raw context export must not compete with the operational reading path.
+in object drawer headers: raw context export must not compete with the
+operational reading path.
 `frontend-modern/src/components/Workloads/MetricMiniSparkline.tsx` and
 `frontend-modern/src/features/proxmox/BackupActivityChart.tsx` render their
 hover tooltips through `frontend-modern/src/components/shared/TooltipPortal.tsx`
@@ -6541,20 +6341,8 @@ builds and filters command rows, holds selected menu state via
 `createFooterMenuState`, resets selection as the query changes, and routes
 keyboard movement and selection through `handleKey`. Pulse adapts that contract
 by keeping command construction in the shared palette model and command
-execution in the shared palette state / Assistant store instead of moving
+execution in the shared palette state instead of moving
 editor-specific command routing into the render shell.
-Assistant command-palette actions are shell requests, not duplicated chat
-logic. New session, session picker, model picker, Undo, and Redo commands must
-flow through the shared `frontend-modern/src/stores/aiChat.ts` command request
-contract so the drawer owns disabled/loading state, prompt restoration, and
-notifications while the palette remains only a searchable command surface.
-The command-palette Assistant open command is also contextual shell routing:
-`frontend-modern/src/components/shared/useCommandPaletteState.ts` must derive
-current-view context through `frontend-modern/src/utils/assistantPageContext.ts`
-and pass that context into `aiChatStore.open(...)`, while
-`frontend-modern/src/components/shared/commandPaletteModel.ts` owns the
-corresponding `Ask about <view>` label. It must not fall back to an empty
-generic Assistant open action.
 The shared search field now follows that same owner split.
 `frontend-modern/src/components/shared/SearchField.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useSearchFieldState.ts` owns focused-
@@ -7937,7 +7725,6 @@ representative top-level panels such as
 `frontend-modern/src/components/Settings/AISettings.tsx`,
 `frontend-modern/src/components/Settings/AIModelSelectionSection.tsx`,
 `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`,
-`frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx`,
 `frontend-modern/src/components/Settings/AISettingsStatusAndActions.tsx`,
 `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`,
 `frontend-modern/src/components/Settings/AISettingsDialogs.tsx`, and
@@ -7945,13 +7732,12 @@ representative top-level panels such as
 the canonical AI settings runtime boundary. `AISettings.tsx` is the shell,
 `frontend-modern/src/components/Settings/useAISettingsState.ts` owns the
 runtime lifecycle and persistence flow, model/provider setup now routes
-through `AIModelSelectionSection.tsx`, discovery, budget, timeout, and
-permission controls route through `AIRuntimeControlsSection.tsx`, chat
-maintenance routes through `AIChatMaintenanceSection.tsx`, and readiness plus
+through `AIModelSelectionSection.tsx`, budget and timeout controls route
+through `AIRuntimeControlsSection.tsx`, and readiness plus
 save/test actions route through `AISettingsStatusAndActions.tsx`.
 `AISettingsStatusAndActions.tsx` may expose provider connection status and
 test actions only for the Provider & Models page; section pages reuse the save
-bar without making Patrol or Assistant look like provider setup
+bar without making Patrol or External agents look like provider setup
 screens. Future AI settings work must extend those section owners instead of
 re-inlining large runtime subsections into the shell.
 Provider-specific settings fields inside
@@ -8240,34 +8026,18 @@ activation/recovery routes may still render their owned content, but sidebar
 discovery, trial CTAs, plan-review links, plan upsells, and feature upgrade
 links must not appear unless an explicit handoff, hosted-mode policy, or active
 entitlement says they should.
-That same shared app-shell boundary now also owns assistant bootstrap silence
-on non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
-`frontend-modern/src/App.tsx`,
-`frontend-modern/src/stores/aiChat.ts`,
-`frontend-modern/src/components/AI/Chat/index.tsx` must treat
+That same shared app-shell boundary now also owns AI bootstrap silence on
+non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
+`frontend-modern/src/App.tsx`, and
+`frontend-modern/src/stores/aiAvailability.ts` must treat
 `/api/security/status.sessionCapabilities.assistantEnabled` as the only
-general-route assistant availability fact, while closed assistant chrome and
-non-AI settings panels stay off `/api/settings/ai` and `/api/ai/*` until an
-owned assistant or Patrol surface is actually open. `frontend-modern/src/stores/aiChat.ts`
-must therefore stay presentation-only with respect to assistant bootstrap:
-org-switch cleanup, keyboard focus, drawer state, and local context/session
-persistence belong there, while backend settings/model reads stay on
+general-route AI availability fact, while non-AI settings panels stay off
+`/api/settings/ai` and `/api/ai/*` until an owned Patrol surface is actually
+open. Backend settings/model reads stay on
 `frontend-modern/src/stores/aiRuntimeState.ts`. The governed browser proof in
 `tests/integration/tests/11-first-session.spec.ts` must continue to assert
-that plain settings routes render without assistant bootstrap traffic or
-console noise.
-When an owned Patrol or alert surface attaches a source-named Assistant
-handoff, that same drawer shell must keep the empty conversation state aligned
-with the attached briefing as neutral `Context attached` copy instead of
-rendering generic cluster/system starter prompts or feature-authored suggested
-prompt chips below the source-owned context.
-The global Assistant launcher and the command-palette Assistant open command
-follow the same contextual rule. They must derive current-view context through
-`frontend-modern/src/utils/assistantPageContext.ts`, label the action as asking
-about the current monitoring, Patrol, alerts, or settings view, and open the
-drawer with that `pulse-view` context attached. They must not call
-`aiChatStore.toggle()` or `aiChatStore.open()` without context from the
-authenticated shell, because that reintroduces a generic Assistant front door.
+that plain settings routes render without AI bootstrap traffic or console
+noise.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y
@@ -10076,3 +9846,13 @@ one shape. A host table that scopes keeps its details chevron on phones and
 takes the `platform-table-mobile-w-38` identity column (Uptime drops to 10%),
 the same allowance the Proxmox node column has for the toggle and dot before
 the name.
+
+The browser Assistant chat window was retired on 2026-10-22, taking its
+drawer, launcher, command-palette entries, chat action-icon and copy shells,
+and the Assistant hand-off buttons on alerts, Patrol, and resource drawers
+with it. `frontend-modern/src/stores/aiAvailability.ts` now holds the shell's
+AI-enabled fact that the chat store used to carry, and the Patrol tool
+transcript block moved to `frontend-modern/src/components/patrol/` with its
+`CopyValueButton` composition intact. The External agents settings page lives
+at `/settings/pulse-intelligence/agents`; the old `/assistant` path redirects
+there.

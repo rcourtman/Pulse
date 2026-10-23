@@ -41,10 +41,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Patrol',
     description: 'Set when Patrol runs, what starts it, and which model it uses.',
   },
-  'system-ai-assistant': {
-    title: 'Assistant',
-    description:
-      'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
+  'system-ai-agents': {
+    title: 'External agents',
+    description: "Connect Claude Code, Codex, and other MCP clients to Pulse's governed tools.",
   },
   'system-relay': {
     title: 'Pulse Mobile',
@@ -163,9 +162,9 @@ const SETTINGS_HEADER_META_KEYS = {
     title: 'settings.header.systemAiPatrol.title',
     description: 'settings.header.systemAiPatrol.description',
   },
-  'system-ai-assistant': {
-    title: 'settings.header.systemAiAssistant.title',
-    description: 'settings.header.systemAiAssistant.description',
+  'system-ai-agents': {
+    title: 'settings.header.systemAiAgents.title',
+    description: 'settings.header.systemAiAgents.description',
   },
   'system-relay': {
     title: 'settings.header.systemRelay.title',

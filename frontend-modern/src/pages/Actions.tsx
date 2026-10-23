@@ -10,7 +10,7 @@ import { Card } from '@/components/shared/Card';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { PATROL_AUTONOMY_FEATURE_KEY } from '@/features/patrol/patrolAutonomyAvailability';
 import { PATROL_PATH } from '@/routing/resourceLinks';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import {
@@ -80,7 +80,7 @@ export function Actions() {
 
   const watchOnlyGuidance = createMemo(() =>
     getActionsWatchOnlyEmptyState({
-      aiEnabled: aiChatStore.enabled === true,
+      aiEnabled: aiAvailabilityStore.enabled === true,
       patrolWatchOnly: patrolWatchOnly(),
       patrolModesUnlocked: hasFeature(PATROL_AUTONOMY_FEATURE_KEY),
       commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),

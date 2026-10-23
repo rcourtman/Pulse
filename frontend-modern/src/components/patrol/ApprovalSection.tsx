@@ -7,26 +7,19 @@
  */
 
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
-import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import { Component, For, Show, createMemo, createResource } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { Button, ButtonLink } from '@/components/shared/Button';
+import { ButtonLink } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { buildActionReviewPath } from '@/features/actions/actionRouting';
-import { buildPatrolAssistantFindingHandoff } from '@/features/patrol/patrolInvestigationContextModel';
-import { aiChatStore } from '@/stores/aiChat';
 import type { ActionAuditState, PatrolActionReference } from '@/types/actionAudit';
 
 interface ApprovalSectionProps {
   findingId: string;
-  findingStatus?: string;
   hasAction?: boolean;
   investigationOutcome?: string;
-  findingTitle?: string;
   resourceName?: string;
-  resourceType?: string;
-  resourceId?: string;
 }
 
 const FIX_RELATED_OUTCOMES = new Set([
@@ -122,40 +115,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     ),
   );
 
-  const handleDiscuss = (event: Event) => {
-    event.stopPropagation();
-    const current = action();
-    const handoff = buildPatrolAssistantFindingHandoff({
-      id: props.findingId,
-      title: props.findingTitle || 'Patrol finding',
-      subject: props.resourceName || 'affected resource',
-      description:
-        current?.plan.message ||
-        investigation()?.summary ||
-        'Review the current Patrol finding and its governed action state.',
-      findingStatus: props.findingStatus ?? 'active',
-      investigationOutcome: props.investigationOutcome,
-      loopState: props.investigationOutcome || current?.state,
-      resourceId: props.resourceId || current?.resource_id,
-      resourceName: props.resourceName,
-      resourceType: props.resourceType,
-      pendingApproval: current
-        ? {
-            status: current.state,
-            targetName: props.resourceName || current.resource_id,
-            actionId: current.action_id,
-            actionApprovalPolicy: current.plan.approvalPolicy,
-            actionPlanExpiresAt: current.plan.expiresAt,
-            actionPlanMessage: current.plan.message,
-            actionPreflight: current.plan.preflight?.intendedChange,
-            actionDryRunSummary: current.plan.preflight?.dryRunSummary,
-            actionRequestedBy: 'pulse_patrol',
-          }
-        : null,
-    });
-    aiChatStore.open(handoff.context);
-  };
-
   return (
     <Show when={shouldShow()}>
       <div class="mt-3 border-t border-border-subtle pt-3">
@@ -181,10 +140,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     no longer available. It cannot be approved or executed from legacy fix data.
                   </div>
                 </div>
-                <Button type="button" variant="primary" size="sm" onClick={handleDiscuss}>
-                  <MessageSquareIcon class="h-3.5 w-3.5" />
-                  Discuss with Assistant
-                </Button>
               </div>
             }
           >
@@ -276,10 +231,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       {actionHubLabel(currentAction().state)}
                       <ArrowRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
                     </ButtonLink>
-                    <Button type="button" variant="ghost" size="sm" onClick={handleDiscuss}>
-                      <MessageSquareIcon class="h-3.5 w-3.5" />
-                      Discuss with Assistant
-                    </Button>
                   </div>
                 </div>
               );

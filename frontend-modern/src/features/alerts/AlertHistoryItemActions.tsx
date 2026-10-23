@@ -107,7 +107,6 @@ export function AlertHistoryItemActions(props: AlertHistoryItemActionsProps) {
             acknowledged: props.alert.status === 'acknowledged',
             metadata: props.alert.systemAlert ? { systemAlert: true } : undefined,
           }}
-          resourceType={props.alert.resourceType}
           subjectLabel={props.alert.title}
           subjectTime={props.state.formatAlertRowTimestamp(props.alert.startTime)}
           variant="icon"

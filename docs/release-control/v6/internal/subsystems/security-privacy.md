@@ -3644,3 +3644,17 @@ weakened. The diagnostic wire/identity and ordinary same-credential recovery
 controls in `diagnostics_access_test.go`, `diagnostics_additional_test.go`,
 `contract_test.go` and `client_request_test.go` cover these properties; they do
 not establish provider or installed acceptance.
+
+The i18n catalogs dropped the retired Assistant alert hand-off strings on
+2026-10-22. The `alerts.assistant.*` keys were replaced by user-visible
+`alerts.investigate.*` action labels in English, German, and Spanish, and their
+entries left the allowed-identical-translation lists in
+`frontend-modern/src/i18n/policy.ts`. No alert identifiers, resource names, commands, or machine-facing
+text moved into translated copy, and the untranslated-content policy is
+otherwise unchanged.
+
+The security status `settingsCapabilities.patrolRun` field (2026-10-22) is a
+read-only projection of the existing RequireAdmin + `ai:execute` gate on
+`POST /api/ai/patrol/run`. It grants nothing: the route still enforces its own
+gate, and the field only stops the browser offering alert Investigate to
+sessions that route would refuse.

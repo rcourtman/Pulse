@@ -117,7 +117,7 @@ export function buildReportingRequest(
     };
     const filename = buildReportingFilename(context.format, resource.id, context.now, definition);
 
-    // Only POST may narrate a PDF with Pulse Assistant; the catalog names
+    // Only POST may narrate a PDF with AI; the catalog names
     // GET only for backends that accept nothing else.
     if (definition.singleResourceMethod === 'POST') {
       return {

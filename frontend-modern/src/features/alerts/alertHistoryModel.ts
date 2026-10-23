@@ -295,8 +295,8 @@ export function buildAlertHistoryItems({
 // stay open below its trigger while its message keeps the last breach, so the
 // row leads with the reading Pulse is evaluating now, as the Alerts card does.
 // Closed rows, and open ones without a live status, keep the recorded message,
-// which search and the Assistant handoff also read. The clock is read only for
-// open rows, so closed rows do not re-render on every tick.
+// which search also reads. The clock is read only for open rows, so closed rows
+// do not re-render on every tick.
 export function getAlertHistoryRowCopy(
   item: Pick<HistoryItem, 'description' | 'liveAlert'>,
   now: () => number = Date.now,

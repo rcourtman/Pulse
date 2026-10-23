@@ -110,6 +110,11 @@ export interface SecurityStatusSettingsCapabilities {
    * the other's tabs.
    */
   systemSettingsRead: boolean;
+  /**
+   * The RequireAdmin + ai:execute gate on POST /api/ai/patrol/run, so alert
+   * Investigate is only offered to sessions the run route accepts.
+   */
+  patrolRun: boolean;
   apiAccessRead: boolean;
   apiAccessWrite: boolean;
   authenticationRead: boolean;

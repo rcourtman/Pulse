@@ -121,8 +121,8 @@ describe('useReportingPanelState', () => {
     loadRuntimeLicenseStatusMock = vi.fn();
     loadCommercialLicenseStatusMock = vi.fn();
 
-    vi.doMock('@/stores/aiChat', () => ({
-      aiChatStore: {
+    vi.doMock('@/stores/aiAvailability', () => ({
+      aiAvailabilityStore: {
         get enabled() {
           return aiEnabled;
         },

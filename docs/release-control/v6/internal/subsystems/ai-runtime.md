@@ -385,11 +385,6 @@ coalescing or the stored format, and it is not a shutdown flush.
 `TestIncidentStoreFlushJoinsQueuedSave` proves the join covers a queued save
 that has not started.
 
-Assistant owns composer registration and focus on every open, rather than only
-on component mount. Closing clears the registered input so later keyboard
-commands cannot target a detached composer. A handoff must leave Escape and
-keyboard input in Assistant, not the underlying alert search.
-
 ### Process-wide memory ID ownership
 
 `internal/ai/memory` preserves random UUID incident and incident-event IDs from
@@ -1044,11 +1039,11 @@ terminal decision state, not proven operations value; `verified` is the only
 completed first-party value state and requires the approved, verified outcome
 plus recorded action history. MCP/external-agent readiness remains optional
 external-agent setup context.
-Native Assistant workflow starters in `frontend-modern/src/components/AI/Chat/`
-are a browser projection of that same catalogue, not a second prompt registry:
-they may decide which manifest-owned prompt is contextually usable, but display
-labels and rendered prompt text must come from shared manifest metadata and the
-shared backend renderer on
+Any first-party workflow starter surface is a projection of that same
+catalogue, not a second prompt registry (the browser Assistant that hosted the
+starters was retired on 2026-10-22): it may decide which manifest-owned prompt
+is contextually usable, but display labels and rendered prompt text must come
+from shared manifest metadata and the shared backend renderer on
 `POST /api/ai/workflow-prompts/render`.
 AI provider integration is registry-owned. Provider identity, display names,
 protocol family, default model, default base URL, credential fields,
@@ -1354,29 +1349,25 @@ a measured cost reduction or installed-deployment cache-read rate.
 7. `frontend-modern/src/api/agentCapabilities.ts`
    7a. `frontend-modern/src/api/generated/agentCapabilities.ts`
 8. `frontend-modern/src/api/ai.ts`
-   8a. `frontend-modern/src/api/aiChat.ts`
+   8a. `frontend-modern/src/api/workflowPrompts.ts`
 9. `frontend-modern/src/api/patrol.ts`
 10. `frontend-modern/src/components/AI/AICostDashboard.tsx`
 11. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
-12. `frontend-modern/src/components/AI/Chat/`
-13. `frontend-modern/src/utils/aiChatPresentation.ts`
-14. `frontend-modern/src/utils/assistantPageContext.ts`
-15. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
-16. `frontend-modern/src/utils/aiCostPresentation.ts`
-17. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-18. `frontend-modern/src/utils/aiProviderPresentation.ts`
-19. `frontend-modern/src/utils/textPresentation.ts`
-20. `frontend-modern/src/stores/aiRuntimeState.ts`
-21. `frontend-modern/src/stores/aiChat.ts`
-22. `docs/AI.md`
-23. `pkg/aicontracts/investigation.go`
-24. `pkg/aicontracts/orchestrator_deps.go`
-25. `pkg/aicontracts/fix_execution.go`
-26. `pkg/extensions/ai_autofix.go`
-27. `internal/ai/qualification/`
-28. `cmd/patrol-qualify/`
-29. `tests/qualification/patrol/`
-30. `docs/AI_PATROL_QUALIFICATION.md`
+12. `frontend-modern/src/utils/aiCostPresentation.ts`
+13. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+14. `frontend-modern/src/utils/aiProviderPresentation.ts`
+15. `frontend-modern/src/utils/textPresentation.ts`
+16. `frontend-modern/src/stores/aiRuntimeState.ts`
+17. `frontend-modern/src/stores/aiAvailability.ts`
+18. `docs/AI.md`
+19. `pkg/aicontracts/investigation.go`
+20. `pkg/aicontracts/orchestrator_deps.go`
+21. `pkg/aicontracts/fix_execution.go`
+22. `pkg/extensions/ai_autofix.go`
+23. `internal/ai/qualification/`
+24. `cmd/patrol-qualify/`
+25. `tests/qualification/patrol/`
+26. `docs/AI_PATROL_QUALIFICATION.md`
 
 ## Shared Boundaries
 
@@ -1388,14 +1379,14 @@ a measured cost reduction or installed-deployment cache-read rate.
    reintroduce proof-first or activation-loop copy into Assistant, Patrol, or
    external-agent onboarding surfaces.
 4. `frontend-modern/src/api/ai.ts` shared with `api-contracts`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
-5. `frontend-modern/src/api/aiChat.ts` shared with `api-contracts`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
-6. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `api-contracts`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
-7. `frontend-modern/src/api/patrol.ts` shared with `api-contracts`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+5. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `api-contracts`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
+6. `frontend-modern/src/api/patrol.ts` shared with `api-contracts`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+7. `frontend-modern/src/api/workflowPrompts.ts` shared with `api-contracts`: the workflow prompt activity client is both the AI runtime workflow-prompt telemetry surface and a canonical API payload contract boundary.
 8. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `api-contracts`, `frontend-primitives`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
    Its default copy must frame connected clients as optional connector access
    to Pulse context and Patrol work, with Patrol as the operator that watches,
    acts within Patrol mode, asks for approval when required, verifies outcomes,
-   and records history. The normal Assistant settings view must keep setup
+   and records history. The External agents settings view must keep setup
    mechanics behind a `Show connector setup` disclosure, with direct setup
    links opening that disclosure automatically. Default copy must make clear
    that connected tools do not get separate powers. Tool-contract posture and manifest facts are
@@ -1406,13 +1397,13 @@ a measured cost reduction or installed-deployment cache-read rate.
    manifest details using user-facing labels such as Agent starting points and
    Agent capabilities.
    Direct links to
-   `/settings/pulse-intelligence/assistant#external-agent-setup` must focus this
-   External agents panel after the Assistant settings layout settles,
+   `/settings/pulse-intelligence/agents#external-agent-setup` must focus this
+   External agents panel after the settings layout settles,
    because connected agents are optional access to Patrol work and should not
    strand users at the generic token inventory. Legacy
    `/settings/security/api#external-agent-setup` and
    `/settings/security/api#pulse-mcp-setup` links must remain accepted and
-   redirect to the canonical Pulse Intelligence Assistant route.
+   redirect to the canonical Pulse Intelligence External agents route.
    The `Choose Patrol mode` handoff must target the Patrol operator surface at
    `/patrol#patrol-control`, where the mode is configured, while API
    Access remains the token and external-client setup surface. The expanded
@@ -1421,7 +1412,7 @@ a measured cost reduction or installed-deployment cache-read rate.
    The visible full-surface token preset for that setup is `Patrol external agent`;
    `pulse_intelligence_agent` remains only the compatibility preset id used by
    the route and token model.
-9. `frontend-modern/src/stores/aiChat.ts` shared with `frontend-primitives`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+9. `frontend-modern/src/stores/aiAvailability.ts` shared with `frontend-primitives`: the AI availability store is both the AI runtime session capability and the app-shell gate for Patrol entry points.
 10. `internal/agentcapabilities/action_target.go` shared with `api-contracts`: the Pulse Intelligence governed action target type and resource-to-action-target mapping vocabulary are both the Assistant approval/runtime routing contract and the canonical API/agent target contract for governed actions.
 11. `internal/agentcapabilities/control_level.go` shared with `api-contracts`: the Pulse Intelligence control-level vocabulary and control-tool availability predicate are both the Assistant runtime gating contract and the canonical API/agent permission posture for governed action tools.
 12. `internal/agentcapabilities/errors.go` shared with `api-contracts`: the Pulse Intelligence agent error envelope is both the canonical API failure payload contract and the AI runtime adapter error-parsing contract for Assistant and external-agent surfaces.
@@ -1594,12 +1585,11 @@ decisions must still continue through execution and verification before the
 verified-outcome stage is complete.
 Runtime Assistant availability remains an authenticated Assistant concern,
 served by `GET /api/ai/assistant/surface-tools`, not a static fact in the
-public agent-capabilities manifest. When the Pulse Assistant shell displays
-live capability availability, it must load that authenticated endpoint through
-`AIChatAPI.getAssistantSurfaceTools()` and format the posture through
-`frontend-modern/src/api/agentCapabilities.ts`; the shell must not keep a local
-registry-tool catalogue or reuse MCP manifest capability names as native
-Assistant inventory. The External agents settings panel may show the
+public agent-capabilities manifest. A client that displays live capability
+availability must load that authenticated endpoint, and a browser client formats
+the posture through `frontend-modern/src/api/agentCapabilities.ts`; no client
+may keep a local registry-tool catalogue or reuse MCP manifest capability names
+as native Assistant inventory. The External agents settings panel may show the
 external Pulse MCP tool posture, but it must get the normalized static
 `SurfaceToolContract` from `manifest.surfaceToolContracts` through
 `getAgentManifestSurfaceToolContract(manifest, AGENT_SURFACE_ID_PULSE_MCP)`
@@ -1629,13 +1619,6 @@ context, and findings before treating an outcome as verified. Successful render 
 that starter is activation evidence for the Patrol issue-handling journey, not
 proof of contextual collaboration, governed action execution, verification, or
 finding resolution.
-Native Assistant callers may request a preferred workflow prompt through safe
-browser context, but the drawer must resolve that request against the
-manifest-owned workflow prompt catalogue and render it through
-`/api/ai/workflow-prompts/render`; it must not inline prompt templates or
-silently append to an existing composer draft. Preferred workflow prompt
-requests are one-shot browser seeds and must be cleared with the scoped handoff
-payload after the first successful send.
 The MCP `tools/call` execution
 helper must
 accept the manifest and surface id, apply the same affordance and surface-tool
@@ -1850,14 +1833,11 @@ than owning string literals in `internal/ai/tools`.
 Shared Pulse Intelligence workflow prompt definitions, manifest-owned
 `workflowPrompts` catalogue selection, prompt display labels, MCP prompt title
 projection, presentation kind hints, prompt argument validation, and prompt
-rendering rules live in the neutral workflow-prompt core so native Assistant
-starters, frontend manifest consumers, and external MCP prompts cannot drift.
+rendering rules live in the neutral workflow-prompt core so frontend manifest
+consumers and external MCP prompts cannot drift.
 When `workflowPrompts` is present on a manifest it is authoritative; capability
 projection is compatibility plumbing for older manifests, not a second prompt
-catalogue. The native Assistant starter row must therefore derive starter
-availability from `workflowPrompts` and the attached Assistant context, then call
-the AI/API-owned render route before inserting any prompt text into the composer;
-it must not copy prompt labels, prompt bodies, or MCP `prompts/get` rendering
+catalogue. Frontend consumers must not copy prompt labels, prompt bodies, or MCP `prompts/get` rendering
 logic into frontend state. MCP prompt list/get helpers must likewise accept the
 manifest-owned workflow prompt catalogue through `ManifestPulseWorkflowPrompts`,
 `ProjectMCPWorkflowPrompts`, `GetMCPPromptFromManifestSurface`,
@@ -2303,55 +2283,6 @@ handoff contract inherits the same `agentcapabilities` input-map,
 thought-signature, and provider-result normalization as Assistant and MCP —
 `TestOrchestratorAndChatAdaptersMapTheirMessageContracts` enforces it.
 
-Assistant frontend presentation changes under
-`frontend-modern/src/components/AI/Chat/` must keep live tool activity aligned
-with OpenCode's mutable tool-part pattern without losing Pulse's operator audit
-trail. The current OpenCode reference at fetched `origin/dev` commit
-`233427f08eb8b2a0627123816e807123fbbe5b26` keeps tool input/progress/result as
-a single mutable part in `packages/tui/src/context/sync-v2.tsx` lines 276-345,
-updates running tool metadata from the execution context in
-`packages/opencode/src/session/tools.ts` lines 53-66, and suppresses completed
-successful tool detail when `showDetails` is off in
-`packages/tui/src/routes/session/index.tsx` lines 1704-1779. Pulse adapts that
-by keeping successful completed tool rows command/status visible, compacting
-them while the same Assistant turn is still streaming and newer concrete
-activity has arrived, and keeping successful raw output behind the details
-disclosure by default once the turn completes. Pending tools, skipped/canceled
-tools, failed tools, and completed-turn tool details must remain
-visible/inspectable; failed output may render inline because it is actionable.
-AI Chat icon-only actions own Assistant/session semantics, labels, and
-handlers, but their visible button chrome must compose the shared
-`ActionIconButton` primitive from `frontend-modern/src/components/shared/Button.tsx`.
-Header utilities, session row controls, transcript fallback close/download
-controls, activity-dock queued follow-up actions, composer send, footer
-help/route actions, and compact dismiss controls must not recreate local
-h-5/h-6/h-7/h-8/h-9 icon-button class shells. Message and tool transcript copy
-controls own Assistant copy targets and copied-state timing, but their visible
-copied-state icon chrome must compose `CopyValueButton` from the same shared
-button primitive boundary rather than message- or tool-local copy/check shells.
-
-Assistant live workflow status follows OpenCode's current-state timeline
-model. CANONICAL (supersedes the per-row transcript-status rules elsewhere in
-this contract): live workflow status is FOOTER-OWNED and must never be narrated
-into the scrolling transcript. OpenCode keeps "the model is doing X" in a single
-pinned footer line and puts only durable artifacts (user text, reasoning, tool
-calls, the answer) in the timeline; Pulse mirrors that by rendering the latest
-replacing workflow status ONLY in the activity dock above the composer
-(`currentStatus` / `assistant-activity-dock` in
-`frontend-modern/src/components/AI/Chat/index.tsx`) and never as a transcript
-row or message-header chip — `shouldRenderWorkflowStatusEvent` and
-`shouldShowHeaderWorkflowStatus` in
-`frontend-modern/src/components/AI/Chat/MessageItem.tsx` are hard-`false`. The
-dock must stay up for the whole turn: it is gated on the streaming assistant
-message (`assistantTurnActive`), not `chat.isLoading()`, because loading flips
-false at visible-turn-complete and would make the footer flash and vanish.
-History may persist for audit/session state, but the dock renders the latest
-replacing status immediately. Pulse must not replay stale status history through
-artificial timers when the stream already has a newer workflow/tool state.
-Frontend display code may refresh elapsed-time suffixes while a turn is active,
-but status selection must read the current workflow status directly rather than
-deriving an older display status from `workflowStatusHistory`.
-
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
    Patrol deterministic disk-health evidence changes in
    `internal/ai/patrol_signals.go` and `internal/ai/patrol_ai.go` must read
@@ -2426,7 +2357,12 @@ deriving an older display status from `workflowStatusHistory`.
       ("a withheld or placeholder label") and must instruct the model not to repeat a
       withheld placeholder back to the user as the resource identity; the
       `current_resource` handle remains the authoritative target.
-3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
+3. Add or change Assistant chat request flow through `internal/api/ai_handler.go` and `internal/ai/chat/`
+   The browser Assistant chat window was retired on 2026-10-22. This request
+   flow still runs Patrol investigations and serves Pulse Mobile chat, so the
+   session, stream, and provider rules below stay in force. The drawer,
+   composer, slash-command, transcript-rendering, and browser dev-fixture
+   rules that used to live in this item left with the window.
    Assistant session compaction is a runtime-backed session workflow, not a
    local waiting message, transcript-only UI action, or stubbed summarize
    endpoint. The referenced OpenCode source at fetched `origin/dev` commit
@@ -2442,10 +2378,6 @@ deriving an older display status from `workflowStatusHistory`.
    visible assistant summary row plus the latest bounded turns, clear redo
    state, and never stream or persist raw provider tool-call artifacts, hidden
    reasoning, secrets, or raw provider responses as the compacted transcript.
-   The drawer header action and `/compact` slash command must call the same
-   endpoint, surface compacting progress, reload the compacted session and
-   session list, keep focus in the composer after completion, and treat
-   `not_needed` results as quiet operator feedback instead of an error.
    OpenRouter-routed Assistant chat requests must set a bounded default
    completion budget when the runtime request does not specify `MaxTokens`.
    OpenRouter preflights affordability against the requested maximum completion
@@ -2467,404 +2399,35 @@ deriving an older display status from `workflowStatusHistory`.
    provider JSON bodies, request URLs, request methods, dashboard links, and
    key-management links must not be streamed or persisted as chat-visible
    assistant output.
-   Assistant provider readiness is part of that same request flow: when the
-   drawer opens or the selected chat model changes, the frontend must start a
-   background verification of the selected provider/model through
-   `/api/ai/test/{provider}`. That check must use neutral provider diagnostic
-   copy owned by `internal/ai/`, not Patrol runtime-finding wording, and the
-   drawer may surface the result as actionable retry/settings status plus
-   same-model configured-provider alternatives without converting it into
-   assistant-authored output. Provider checking is a background diagnostic and
-   must not delay the user's first useful chat turn; the drawer should keep
-   routine selected-route health visible in compact composer chrome while
-   reserving the larger provider-status banner for requested checks and
-   actionable failures. A confirmed selected-route provider error must keep
-   typed text and focus without blocking normal chat dispatch, but the send path
-   must still use the currently selected route until the operator explicitly
-   chooses a different route. Same-model configured-provider alternatives remain
-   visible one-click route changes and failed-turn retry choices, not automatic
-   send-time recovery or hidden provider fallback. The OpenCode reference
-   behavior for this slice is retries on the selected provider/model, not
-   silent fallback to another provider or route; Pulse must adapt that as
-   explicit route choice plus visible route search/recovery. Frontend stream
-   reducers must ignore retired `provider_fallback` workflow phases entirely
-   instead of rendering compatibility "fallback rejected" rows, because the
-   selected-route retry/error contract is the only live recovery path until an
-   operator explicitly chooses another route. The Assistant
-   `/model` command therefore has two owned paths: an exact `provider:model-id`
-   argument selects that route directly, and an OpenCode-style
-   `provider/model-id` argument is accepted only when the provider prefix is a
-   known Pulse provider before being normalized back to canonical
-   `provider:model-id` storage. Partial or unknown slash text opens the shared
-   model picker with the search text prefilled instead of becoming a hidden
-   route guess.
-   Assistant model-selection defaults are settings-owned: the drawer may persist
-   explicit model selections only for concrete session IDs, while blank-session
-   chat defaults must flow from `/api/settings/ai` `chat_model` or `model`.
-   Browser storage must not keep a hidden `__default__` model route that
-   overrides the configured chat model after the operator changes provider
-   settings; stale blank-session defaults must be ignored and cleaned on mount
-   so routes such as OpenRouter become visible and effective immediately.
-   Assistant session model continuity is transcript-owned, not ambient UI state.
-   `internal/ai/chat` must persist the effective selected model route on the
-   user turn as well as final assistant turns, and the browser chat runtime must
-   restore the latest explicit `provider:model` route from loaded session
-   messages before publishing the loaded session ID to drawer/session storage.
-   During an active Assistant turn, the drawer must keep the effective model
-   route visible next to the live turn status using the route recorded on the
-   streaming assistant message first and the selected route only as a fallback;
-   live progress text remains the activity description, while route identity is
-   separate compact chrome so provider/model state stays inspectable without
-   polluting status copy. Provider-start copy must stay route-neutral
-   ("Waiting for assistant.") because selected-route identity belongs in the
-   route chrome and stream metadata, not in transient activity text; retry copy
-   must say Pulse is retrying the selected route, not imply automatic provider
-   or model fallback.
-   Legacy bare model names, provider response IDs without a Pulse route prefix,
-   URLs, and malformed route strings must be ignored so loading older sessions
-   cannot corrupt the active selector. The referenced OpenCode source at fetched
-   `origin/dev` commit `2006259a02a87edf9e37f253cbddf3188309026b` restores
-   local session model state from the latest user message in
-   `packages/app/src/pages/session.tsx` lines 361-368 through
-   `packages/app/src/pages/session/session-model-helpers.ts`; Pulse adapts that
-   pattern by using its persisted explicit route contract rather than terminal
-   provider/model objects.
-   Follow-up sends during an active Assistant response are chat-runtime queue
-   state that steers the running response by default. The drawer must accept
-   and echo the user's follow-up as a queued user turn without aborting or
-   replacing the active model stream, must show an itemized composer-adjacent
-   queue with per-follow-up edit/remove controls plus clear-all, and must
-   offer each follow-up to the running loop through
-   `POST /api/ai/sessions/{id}/steer` (mid-turn steering). A steering-accepted
-   follow-up joins the loop at its next turn boundary (the abort-check site in
-   `agentic.go executeWithTools`) as a plain user message, never mid-provider-
-   stream and never mid-tool-batch; the loop announces the injection with a
-   `steer_applied` stream event carrying the client row id so the drawer
-   settles the pending row into a delivered user turn, splices the message
-   into `resultMessages` at its true position, and persists it through the
-   end-of-run save (whose skip-user-messages rule exempts `Steered` messages).
-   Steering carries prompt text only: it cannot change the model route,
-   control level, or autonomous mode of the running turn, does not extend the
-   turn budget or reset wrap-up brakes, and is rejected for system sessions.
-   Once accepted for steering, a follow-up row loses its edit/remove
-   affordances (the text is in the loop's hands). Delivery is not guaranteed:
-   a run that finishes before a boundary discards unconsumed steers without
-   persisting them, and the drawer, which keeps the row queued until
-   `steer_applied` arrives, drains it in order after the active stream
-   becomes idle exactly as before — the pre-steering queue semantics remain
-   the fallback path, and paused queues do not steer. Queued follow-ups must
-   snapshot the effective
-   model route at enqueue time so a later model/provider switch cannot silently
-   reroute an already-queued user turn, and both the transcript queued-user row
-   and composer-adjacent queue row must surface that snapshotted route label when
-   it exists; explicit failed-turn recovery actions labelled from a configured
-   provider route must pass that selected route as an override instead of
-   relying on ambient selector state. The referenced
-   OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps current, recent, and
-   selected models as structured `{ providerID, modelID }` values in
-   `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` and
-   `packages/opencode/src/provider/provider.ts`, so Pulse must preserve the
-   equivalent route identity for queued and retried turns. Queue-drain UX
-   verification must have a deterministic local fixture path so agents can
-   test queued follow-up echo, hold, drain, and tool-row replacement without
-   opening a real provider stream. The referenced OpenCode source at fetched
-   `origin/dev` commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa` emits
-   local demo tool events through
-   `packages/opencode/src/cli/cmd/run/demo.ts` (`startTool` and `doneTool`,
-   lines 451-525; demo command routing, lines 1039-1076); Pulse adapts that by
-   keeping `/fixture queue-hold` and `/fixture queued-follow-up` fully local
-   browser fixtures for queue interaction proof. The referenced OpenCode source
-   at fetched `origin/dev` commit
-   `e82542b8023a8374f29c23b70ec019c8f256354e` exposes queued prompts through
-   `RunQueuedPromptSelectBody` in
-   `packages/opencode/src/cli/cmd/run/footer.command.tsx` lines 588-650:
-   queued rows are searchable and keyboard-operable, with Enter/Ctrl+E editing
-   the selected prompt and Delete/Ctrl+D removing it. Pulse adapts that pattern
-   to the browser drawer by making each composer-adjacent queued follow-up row
-   focusable and directly operable with Enter to edit and Delete/Backspace to
-   remove, while retaining the visible icon buttons and avoiding terminal-only
-   shortcuts that collide with browser chrome. OpenCode's `DialogModel` feeds
-   current, recent, favorite, and provider model rows into
-   `DialogSelect`, while `DialogSelect` maintains a selected row and handles
-   up/down/page/home/end/return navigation. The fetched OpenCode
-   `origin/dev` commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa` keeps those
-   bindings in `packages/tui/src/ui/dialog-select.tsx` lines 288-378. Pulse's
-   browser model picker must expose the same route identity as a labelled
-   search/listbox surface, focus search on open, move keyboard focus from
-   search into the current or filtered model row, and keep every actionable
-   list row, including catalog-disclosure rows, navigable without requiring
-   mouse clicks. The 2026-06-07 model-provider slice rechecked OpenCode
-   `origin/dev` commit `914a643`: `packages/app/src/components/dialog-select-model.tsx`
-   exposes provider connection and model management actions directly inside
-   the model picker, while `packages/tui/src/component/dialog-model.tsx`
-   exposes a provider action in the same dialog. Pulse adapts that by wiring
-   the Assistant model chooser's provider action to the governed Assistant &
-   Patrol provider settings route instead of hiding provider repair behind a
-   separate slash command or silently switching model routes. The same
-   2026-06-07 activity-visibility pass rechecked OpenCode
-   `packages/app/src/pages/session/message-timeline.tsx` and
-   `message-timeline.data.ts`: active turns are represented as session timeline
-   rows, with busy/retry state kept visible while assistant parts continue to
-   arrive. Pulse adapts that by keeping fast command/tool completions in a
-   transient running state long enough for the compact transcript row to paint,
-   while still collapsing large command output behind the existing tool-details
-   affordance. Stop is the explicit
-   interruption path: it must abort the active stream, clear queued follow-ups
-   and pending tool/approval/question affordances, preserve any partial model
-   text, return focus to the composer, and render a neutral transcript marker
-   rather than persisting synthetic assistant answer text or surfacing the
-   interruption as a retryable provider failure.
-   The referenced OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` routes prompt interruption
-   through the prompt command in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`
-   (`session.interrupt`, lines 379-399) and handles stream interruption in
-   `packages/opencode/src/session/processor.ts` (`Effect.onInterrupt`, lines
-   977-983; aborted tool state finalization, lines 888-915). Pulse adapts that
-   terminal active-part behavior by clearing unresolved pending tool,
-   approval, and question transcript rows on explicit Stop while preserving
-   already-streamed answer text and completed tool evidence before showing the
-   neutral stopped marker.
-   The same terminal cleanup applies to non-interrupt terminal paths. When a
-   stream reaches `done`, emits a structured `error`, or rejects before an SSE
-   terminal event, the drawer must not leave pending tool, approval, or
-   question controls live in the transcript. The referenced OpenCode source at
-   commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9` mutates active tool
-   parts into terminal `success` or `failed` rows in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`session.next.tool.success`, lines 328-348;
-   `session.next.tool.failed`, lines 350-371), and the processor marks
-   interrupted active tools terminal before completing the assistant message in
-   `packages/opencode/src/session/processor.ts` (lines 888-917). Pulse adapts
-   that by retaining completed tool rows and assistant text while removing
-   unresolved interactive rows from terminal browser transcript state.
-   Completed tool rows must preserve timing once a pending row resolves. The
-   referenced OpenCode source at fetched `origin/dev` commit
-   `effd27b23900720a53e965396ff1a105c1f7e9c8` carries tool identity and
-   state through `toolCommit` / `startTool` / `doneTool` in
-   `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 622-733) and
-   formats elapsed tool state with `span` in
-   `packages/opencode/src/cli/cmd/run/tool.ts` (lines 191-200). Pulse adapts
-   that by carrying the stream event start/end timestamps into the completed
-   browser tool row, so the visible activity timeline does not collapse when a
-   running command is replaced by its completed result. When a live browser
-   stream receives a `tool_start` and successful `tool_end` in the same
-   buffered burst, the completed row may briefly present as running before it
-   settles to completed, matching OpenCode's perceptible pending-tool motion
-   at fetched `origin/dev` commit
-   `1025540fcc2a69609a0131a7168300205656d728` in
-   `packages/ui/src/components/basic-tool.tsx` (`pending`, lines 90 and
-   195-205) and `packages/ui/src/components/tool-status-title.tsx` while
-   keeping Pulse's typed completed tool row, persisted status, answer stream,
-   and failure state authoritative. That settle interval must be bounded,
-   live-only, success-only, and must not delay assistant content, terminal
-   cleanup, or failed-tool visibility. Completed browser tool
-   rows must also preserve output trust when a raw preview is intentionally
-   suppressed: the referenced OpenCode source at fetched `origin/dev` commit
-   `1025540fcc2a69609a0131a7168300205656d728` keeps output visibility as an
-   explicit tool-view policy in `packages/opencode/src/cli/cmd/run/tool.ts`
-   (`ToolView.output`, lines 40-44; tool display hooks, lines 117-123), and
-   commits allowed tool output into scrollback in
-   `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 960-964). Pulse
-   completed rows must expose safe bounded plain-text output previews when they
-   can be rendered without turning the transcript into a raw terminal dump,
-   while keeping the full raw output behind the existing details disclosure.
-   Structured, binary, unavailable, or otherwise noisy output may collapse to
-   compact output metadata. Raw input/output details must remain copyable from
-   the disclosure without expanding the default transcript.
-   Completed Assistant context summaries must use the same operator-facing
-   tool-input presentation as the visible tool rows, not raw internal tool
-   identifiers. A completed `pulse_read` device inspection should therefore
-   summarize as the inspected resource/action, while raw tool names such as
-   `pulse_read` or bare fallback labels such as `read` remain fallback-only
-   debug/detail vocabulary.
-   Live workflow activity is also active turn state, not disposable waiting
-   copy. The referenced OpenCode source at fetched `origin/dev` commit
-   `1025540fcc2a69609a0131a7168300205656d728` defines model, shell, step,
-   and tool lifecycle events in `packages/core/src/session/event.ts` (model
-   switched lines 62-70; shell started/ended lines 151-174; tool lifecycle
-   lines 340-392), projects them into durable message/part rows in
-   `packages/core/src/session/message-updater.ts` (step started lines
-   189-210; tool called/progress/success/failed lines 269-335), and renders
-   model-switch plus tool rows in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (model switch lines 120-122 and 262-274; tool rows lines 455-500).
-   Pulse adapts that by keeping the latest browser `workflow_status` activity
-   visible in the live stream event sequence across content, tool, approval,
-   and question boundaries instead of dropping it the instant a richer row
-   arrives. Burst workflow statuses may still replace one another until a
-   durable stream boundary appears, and terminal cleanup on done/error/Stop
-   may remove transient workflow-status rows while preserving typed
-   model-switch and tool evidence. When the selected model route is already
-   known at turn creation, Pulse must seed a selected-model stream event before
-   backend/provider activity arrives so the transcript and active-turn footer
-   show concrete route motion instead of a generic request-start wait.
-   If backend/provider startup immediately confirms a different selected route
-   before any durable assistant content, thinking, tool, approval, or question
-   evidence arrives, that confirmed route replaces the provisional local
-   selected-model row rather than stacking multiple "Using ..." rows. Once a
-   durable boundary exists, later route events are preserved chronologically.
-   Rendered workflow-status rows, active-turn footer text, and transcript
-   export status lines must normalize internal tool identifiers such as
-   `pulse_query`, `pulse_read`, and `pulse_exec` into operator-facing activity
-   labels, while preserving the raw typed event payload for Details/debug paths.
-   Provider retry states are a distinct live activity kind: a `provider_retry`
-   workflow status must render as retrying in the active-turn footer and live
-   workflow row so the operator sees selected-route recovery in progress rather
-   than another generic waiting/thinking state.
-   Assistant-authored visible answer prose is part of the same boundary: model
-   text may describe the action in operator vocabulary such as "read command"
-   or "inventory lookup", but raw internal identifiers such as `pulse_read`
-   must not appear in the normal transcript, copied answer text, or transcript
-   export unless the operator explicitly opens raw details/debug content.
-   Selected-model route rows are typed route evidence, not live activity. They
-   may render immediately while the backend/provider stream is still quiet, but
-   they must not hide or outrank workflow progress once a `request_start`,
-   provider, tool, thinking, approval, question, or content activity is
-   available. This follows the referenced OpenCode separation between session
-   status and model/tool transcript events at fetched `origin/dev` commit
-   `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`: Pulse keeps the selected route
-   visible as durable evidence while the active-turn footer and live workflow
-   rows answer what the assistant is doing now. The generated frontend SSE
-   contract must include workflow `provider` and `model` fields so
-   selected-route activity is typed end to end.
-   The transcript viewport is part of the same live activity contract. The
-   referenced OpenCode source at fetched `origin/dev` commit
-   `1025540fcc2a69609a0131a7168300205656d728` forwards reducer commits into
-   terminal scrollback in
-   `packages/opencode/src/cli/cmd/run/stream.ts` (lines 140-145) and renders
-   bottom-sticky activity in
-   `packages/opencode/src/cli/cmd/run/footer.subagent.tsx` (lines 148-153)
-   with `stickyScroll={true}` and `stickyStart="bottom"`. Pulse adapts that
-   by tracking whether the browser transcript is pinned to the live bottom
-   before streamed content or tool rows grow, continuing to follow active
-   output while pinned, and preserving the operator's scroll position after
-   they intentionally scroll away from live activity. When the transcript is
-   unpinned while messages exist, the drawer must expose an accessible
-   jump-to-latest command that returns the operator to the live bottom without
-   requiring a manual scroll gesture.
-   Composer prompt history is also drawer-local chat-runtime state: the drawer
-   may persist a bounded local history of submitted prompt text and structured
-   mentions for ArrowUp/ArrowDown recall, but that history must not persist or
-   replay one-shot finding handoff, approval, autonomous-mode, or other scoped
-   send options. The referenced OpenCode source at fetched `origin/dev` commit
-   `ba57718b0516c7a8670d1e820b1a24146a8b8262` binds prompt history navigation
-   in `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` to the
-   input cursor boundary: previous history is available at the start of the
-   current draft, and next history restores the saved draft at the end. Pulse's
-   Assistant drawer follows that draft-safe recall model rather than limiting
-   history recall to an empty composer. Once a history entry is loaded, the
-   same boundary ownership remains direction-specific: ArrowUp may move to an
-   older prompt only from the start edge, and ArrowDown may move newer or
-   restore the saved draft only from the end edge, so normal textarea movement
-   is not stolen at the opposite boundary. Scoped context replay remains owned
-   by explicit session handoff metadata or queued follow-up edit state.
-   Unsent composer drafts are recoverable remount state, not prompt history:
-   closing or remounting the Assistant drawer must restore the current prompt,
-   structured mentions, cursor position, and any queued-follow-up edit metadata
-   without writing the draft into submitted prompt history. The referenced
-   OpenCode source at commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   keeps a module-local `stashed` prompt in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, restores it
-   in `Prompt` `onMount` (lines 595-604), and captures it in `onCleanup`
-   (lines 607-610). Pulse adapts that source behavior with a drawer-local
-   composer stash so normal close/reopen does not drop an unsent user thought
-   or downgrade a scoped queued follow-up into a plain prompt.
-   Composer submission must read the live input buffer at submit time and
-   suppress only overlapping dispatches from the same browser interaction. The
-   referenced OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` guards
-   `Prompt.submit()` with local `submitting` state (lines 910-924) and syncs
-   the live input `plainText` into prompt state before downstream reads
-   (lines 930-936) so double-dispatch and IME/composition races do not send a
-   stale or phantom prompt. Pulse adapts that by reading the live textarea
-   value before trimming and by using a one-dispatch composer guard that still
-   releases immediately for intentional queued follow-ups during an active
-   turn.
-   Assistant drawer controls are part of that same prompt command surface. The
-   referenced OpenCode prompt source exposes command-named actions such as
-   prompt submit, session interrupt, prompt history movement, and prompt stash
-   operations through explicit command titles before those actions reach the
-   terminal UI. Pulse's browser drawer must therefore expose command-specific
-   accessible names and selected/expanded state for always-visible chat actions
-   such as New session, session history, collapse/close, autonomous-warning
-   recovery, and the control-mode selector instead of depending on title-only
-   icon controls or ambiguous short labels.
-   The slash command autocomplete is a command-discovery surface, not just a
-   text shortcut hint. The referenced OpenCode source at fetched `origin/dev`
-   commit `914a643` advertises session
-   commands such as `/models`, `/new`, `/sessions`, `/compact`, `/export`, and
-   `/connect` in `packages/tui/src/feature-plugins/home/tips-view.tsx` lines
-   179-192, while each command registration carries a command title, category,
-   and slash metadata in `packages/tui/src/routes/session/index.tsx` (for
-   `/compact`, lines 548-570). Pulse adapts that by showing the full local
-   Assistant command set in the scrollable slash list instead of silently
-   capping discovery to the first few commands, and every listed command row
-   must carry a matching icon so `/compact`, `/undo`, `/redo`, and other
-   lower-frequency actions do not appear as unfinished blank rows. OpenCode's
-   current app prompt popover keeps unmatched slash searches inside the prompt
-   surface and renders an empty-command state in
-   `packages/app/src/components/prompt-input/slash-popover.tsx` (fetched
-   `origin/dev` commit `914a643`, lines 96-100); Pulse adapts that by keeping
-   genuinely unmatched `/...` drafts open with a clear empty state while still
-   hiding disabled-only command matches so manual Enter can explain why the local
-   command is unavailable. The slash list must avoid persistent visible keyboard
-   shortcut instruction footers; owned key handling is proven by behavior and
-   accessible command state instead of extra instructional chrome.
-   Slash autocomplete close semantics are owned by that same prompt command
-   surface. The referenced OpenCode source at fetched `origin/dev` commit
-   `4519a1da329c1a4fc384054e7203ba7d06928205` clears a transient slash
-   command query when `hide()` closes prompt autocomplete in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx`
-   (lines 668-678), so Pulse's browser slash command popup must close Escape
-   and outside-click locally, clear only slash-only command drafts, return focus
-   to the composer, and leave ordinary prompts or already-submitted local
-   command actions untouched. Closing the popup must not leave `/mo`, `/new`, or
-   another executable command token behind for the next Enter press.
-   Prompt-owned popups must consume their local keyboard commands before global
-   drawer handlers can reinterpret them. The same OpenCode autocomplete source
-   wraps previous/next selection at list boundaries in
-   `packages/tui/src/component/prompt/autocomplete.tsx` lines 552-559 at fetched
-   `origin/dev` commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`, and
-   registers prompt-scoped previous/next/hide/select/complete commands in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/autocomplete.tsx`
-   (lines 600-658), and OpenCode's help dialog binds Escape as a dialog-local
-   close command in
-   `packages/opencode/src/cli/cmd/tui/ui/dialog-help.tsx` (lines 11-16).
-   Pulse adapts that by having slash autocomplete, resource mention
-   autocomplete, and Assistant command help prevent default handling and stop
-   later document-level keyboard handlers for their owned navigation,
-   selection, and close keys. Slash and resource mention autocomplete must wrap
-   up/down movement across the visible options, and resource mentions must expose
-   the same selected-row state as a labelled listbox rather than only a visual
-   hover fill. Escape inside those local surfaces must close the local
-   popup/dialog only; it must not also close the Assistant drawer.
-   Failed-turn retry is part of that same local chat-runtime boundary: a
-   retryable in-memory assistant error may replay the original user turn's
-   structured mentions, finding id, model route, handoff context, handoff
-   resources, handoff actions, and handoff metadata (execution mode is not
-   part of that request; `/api/ai/chat` sets it), but must not reconstruct scoped
-   context from prompt history or saved transcript prose. Provider/model route
-   recovery is explicit user-visible recovery, not hidden chat execution. A
-   failed turn may expose route-and-retry actions through the existing drawer
-   model selector so operators can move from a blocked direct provider route to a
-   configured gateway or alternate model without losing the draft or creating a
-   parallel picker, but `/api/ai/chat` must not automatically switch provider or
-   model routes inside a single Assistant turn after the selected route fails.
-   That prohibition includes same-model gateway equivalents and configured
-   provider defaults: those routes may be offered as explicit recovery actions,
-   but the selected turn owns its selected route until it completes or fails.
-   The referenced OpenCode source at fetched `dev` commit
-   `e82542b8023a8374f29c23b70ec019c8f256354e` models this boundary by keeping
-   same-route retry visible in `packages/opencode/src/session/retry.ts`,
-   publishing retry status from `packages/opencode/src/session/processor.ts`,
-   rendering retry state in `packages/ui/src/components/session-retry.tsx`, and
-   treating provider/model changes as explicit session events in
-   `packages/core/src/session/event.ts` and
-   `packages/opencode/src/session/prompt.ts`. Pulse adapts that behavior for the
-   drawer instead of implementing automatic cross-provider route switching.
+   Provider readiness checks through `/api/ai/test/{provider}` must use
+   neutral provider diagnostic copy owned by `internal/ai/`, not Patrol
+   runtime-finding wording. Chat turns retry on the selected provider/model
+   route: `/api/ai/chat` must not switch provider or model routes inside a
+   single Assistant turn after the selected route fails, and that prohibition
+   includes same-model gateway equivalents and configured provider defaults.
+   Those routes may be offered as explicit recovery actions, but the selected
+   turn owns its selected route until it completes or fails.
+   Assistant session model continuity is transcript-owned, not ambient client
+   state. `internal/ai/chat` must persist the effective selected model route on
+   the user turn as well as final assistant turns, so a client that reloads a
+   session can restore the latest explicit `provider:model` route from the
+   loaded messages. Assistant completion events must carry the effective model
+   route that actually completed the selected turn, and provider retry copy
+   must say Pulse is retrying the selected route rather than imply automatic
+   provider or model fallback.
+   Follow-up steering runs through `POST /api/ai/sessions/{id}/steer`. A
+   steering-accepted follow-up joins the loop at its next turn boundary (the
+   abort-check site in `agentic.go executeWithTools`) as a plain user message,
+   never mid-provider-stream and never mid-tool-batch; the loop announces the
+   injection with a `steer_applied` stream event carrying the client row id,
+   splices the message into `resultMessages` at its true position, and
+   persists it through the end-of-run save (whose skip-user-messages rule
+   exempts `Steered` messages). Steering carries prompt text only: it cannot
+   change the model route, control level, or autonomous mode of the running
+   turn, does not extend the turn budget or reset wrap-up brakes, and is
+   rejected for system sessions. Delivery is not guaranteed: a run that
+   finishes before a boundary discards unconsumed steers without persisting
+   them.
    Primary interactive chat model resolution must use the explicit configured
    chat route or, when no explicit chat route exists, a stable provider default
    without calling provider model catalogs before the selected stream starts. If
@@ -2881,34 +2444,17 @@ deriving an older display status from `workflowStatusHistory`.
    `provider_fallback`, `failed_provider`, `failed_model`, `next_provider`, or
    `next_model` workflow metadata. Once visible output has streamed, Pulse must
    also keep the failure on that visible attempt rather than silently changing
-   route mid-turn. Frontend reducers must discard stale or nonconforming
-   `provider_fallback` workflow metadata without rendering a rejected-route
-   status, switching routes, or inferring a model switch from `next_model`.
-   Provider retry
-   workflow states that include `retry_after_ms`
-   must render as live countdowns derived from the workflow `started_at`
-   timestamp while the turn is active, matching OpenCode's visible retry wait
-   behavior instead of freezing the first retry label.
-   Assistant completion events must carry the effective model route that actually
-   completed the selected turn. The drawer must render the initial
-   `provider_start` workflow state as a selected-model row (`Using ...`) before
-   visible content or tool activity when the event arrives. Later model-route
-   changes may still be rendered as typed `model_switch` transcript rows when
-   they come from explicit route recovery or restored historical data, but the UI
-   must label them neutrally as selected or switched routes rather than as
-   automatic provider fallback, and completing a streamed route-switch row must
-   not promote that route into the active model selection without an explicit
-   user action.
+   route mid-turn.
    Interactive Assistant streams must establish the session ID and emit the
    `session` event once as soon as the HTTP SSE writer is ready, before finding
    handoff recovery, model resolution, selected-provider startup,
    handoff/context prefetch, recent-session injection, inventory summary reads,
    tool scoping, or provider startup. The chat service then persists/ensures
-   that same session ID while suppressing duplicate session events. This keeps
-   the drawer's visible turn anchored while backend preparation continues and
+   that same session ID while suppressing duplicate session events. This keeps the
+   client's visible turn anchored while backend preparation continues and
    prevents simple prompts from appearing stuck in an opaque thinking state.
    Stored finding or handoff recovery is eligible only for a session ID supplied
-   by the browser as an existing conversation. A session ID generated at the
+   by the client as an existing conversation. A session ID generated at the
    HTTP stream boundary for a new turn must not trigger persisted handoff
    lookups or legacy session discovery before the service creates the session,
    because that turns a new prompt into a large-history storage scan before
@@ -2919,29 +2465,13 @@ deriving an older display status from `workflowStatusHistory`.
    turns, and selected-provider startup. These events are runtime progress, not
    Assistant-authored analysis, and they must not become keyword routers,
    explore pre-passes, or instructions that choose the model's next action.
-   Backend-emitted `workflow_state` rows that explain real provider, context, or
-   tool progress must remain visible while the turn is active, but they are
-   transient runtime state rather than completed Assistant evidence. Terminal
-   `done`, terminal `error`, and explicit Stop must clear workflow-status rows
-   together with local prompt placeholders and unresolved interactive rows such
-   as approvals, questions, and pending tools, while preserving durable
-   model-route, content, reasoning, completed-tool, canceled-tool, and error
-   evidence. The referenced OpenCode
-   source at fetched `origin/dev` commit
-   `914a643ab26053df463ef78a1deadcdb223e8783` writes step, tool, and text parts
-   as soon as they arrive in `packages/opencode/src/session/processor.ts` lines
-   151-162, 322-339, 443-466, and 787-806, then renders completed text parts
-   from stored part state in `packages/ui/src/components/message-part.tsx` lines
-   1545-1551; Pulse adapts that part-style visibility by keeping live workflow
-   activity visible without storing stale provider-start or waiting labels as
-   completed transcript evidence.
    Selected-provider startup copy must describe the provider route as actively
    starting the response (for example, `<Provider> is starting the response.`)
    rather than as a passive wait label, while preserving the same
    `provider_start` phase and concrete model-route payload.
    The HTTP chat stream handler also owns visible idle progress for silent
    intervals after the stream has opened: if no client-visible Assistant event
-   reaches the browser for the governed idle interval while execution is still
+   reaches the client for the governed idle interval while execution is still
    request-bound, the handler must emit a neutral `workflow_state` with phase
    `stream_idle` rather than relying only on hidden SSE comment heartbeats.
    Legacy Assistant SSE routes that still use the older execute event envelope,
@@ -2953,220 +2483,6 @@ deriving an older display status from `workflowStatusHistory`.
    transport liveness signal only; it must replace the active workflow status,
    stop before terminal `done`/`error`, and must not become persisted assistant
    prose or raw provider reasoning.
-   The drawer transcript owns detailed in-flight progress for the active turn:
-   a new assistant row must start with a neutral local preparation status until
-   stream progress arrives, must show the current effective model route while
-   the turn is still streaming, and must keep late workflow progress visible
-   through the composer footer while transcript rows continue to render typed
-   Assistant evidence. Workflow status is live
-   progress, not answer content or a delayed walkthrough; each new
-   `workflow_state` replaces the canonical active status immediately. The
-   browser may retain a bounded in-flight history of those replaced labels for
-   state continuity. When several statuses arrive in one backend/network burst,
-   the live transcript row and active-turn composer footer must use the same
-   paced presentation helper so the operator sees the row move through
-   preparation, context, provider, and tool states instead of jumping to the
-   final burst label. Single fresh status updates still render immediately, and
-   separated transcript workflow rows stay tied to their own streamed event
-   when a durable content/tool/approval/question boundary exists. Older neutral
-   statuses may disappear when replaced by newer status, tool, reasoning, or
-   answer evidence; that replacement is the intended motion signal.
-   That history must stay live-only: once visible assistant text, tool progress,
-   approvals, questions, terminal `done`, terminal `error`, or explicit Stop
-   take over, stale workflow text and the presentation history must clear so
-   the row does not keep saying it is waiting on a phase that has already been
-   superseded. Live workflow and pending-tool activity must retain a per-state
-   start timestamp so the drawer can show elapsed wait/run time for long
-   provider starts and tool calls instead of repeating a timeless waiting label.
-   Completed plain-text tool output must keep a bounded transcript preview
-   visible by default, with full input/output available through expansion, so
-   the operator sees evidence of what completed without receiving a raw output
-   dump. Structured, binary, unavailable, or otherwise noisy output may stay
-   collapsed behind details, but a successful text command must not degrade to
-   an opaque `output available` badge when a safe preview can be rendered.
-   If the UI enters a loading turn before the assistant shell or first
-   `workflow_state` exists, the active-turn footer must show the active startup
-   status `Sending prompt.` and derive elapsed time from the submitted, non-queued
-   user turn or assistant shell timestamp. Queued follow-up messages must not
-   reset that active-turn startup clock. The same active-turn footer owns the
-   Stop affordance while a response is running, so interruption remains attached
-   to the live status row instead of hiding only in the composer action cluster.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `0875203a6c726d7a37b5ffbb770cc433c98e7cd6` mutates typed message parts as
-   events arrive in `packages/opencode/src/cli/cmd/tui/context/sync.tsx`
-   (`message.part.updated` and `message.part.delta`) and represents session
-   activity as separately updated status in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`session.next.step.started`, `session.next.text.delta`, and tool state
-   events). Pulse adapts that event-by-event activity model with browser-safe
-   `workflow_state` and typed tool rows, including replacing `stream_idle`
-   status while no provider event has arrived, rather than exposing terminal
-   UI internals or chain-of-thought.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` applies each typed event to the
-   active assistant message in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`; Pulse adapts that
-   precedence by letting typed content, model-switch, tool, approval, and
-   question evidence own the visible row once it exists, while later neutral
-   workflow states such as provider reasoning still replace the live footer
-   heartbeat instead of being hidden behind generic "generating" copy.
-   The referenced OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders active assistant work
-   as session-owned parts in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
-   (`Session`, line 185; `ToolPart` mapping, lines 1788-1796;
-   `InlineToolRow`, line 1926) and mutates the matching active tool/text state
-   in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`apply(event)`, line 120; `session.next.tool.*`, lines 276-372);
-   Pulse's browser drawer adapts that model by keeping the transcript rows
-   typed and stable while the active-turn footer remains a replacing live
-   status slot for provider and workflow progress between visible parts.
-   The same OpenCode commit applies each streamed session event as its own
-   state mutation in `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`apply(event)`, line 120; `session.next.tool.input.started`, line 276;
-   `session.next.tool.progress`, line 317; `session.next.tool.success`, line
-   328; `session.next.tool.failed`, line 350), so Pulse's shared browser SSE
-   consumer must treat opted-in Assistant progress events as paint checkpoints.
-   Pulse's active-turn status ranking must also treat terminal `tool_end`
-   events as fresh visible activity, adapting OpenCode's in-place
-   completed/error tool-part mutation by replacing stale provider-start footer
-   copy with completed or failed tool activity while still preferring any
-   separate unresolved pending tool over a terminal sibling tool.
-   Read-only shell-backed Assistant tools must expose the redacted `$ ...`
-   command preview in the active-turn status while the tool is running and when
-   its terminal row replaces stale workflow copy; friendly intent labels may
-   remain inside tool cards, but the live dock must not hide a known read-only
-   command behind generic "running command" text. Write/control commands remain
-   governed by approval and action surfaces rather than gaining a free-form live
-   shell shortcut. The referenced OpenCode source at fetched `origin/dev` commit
-   `e82542b8023a8374f29c23b70ec019c8f256354e` records shell commands as visible
-   commits in `packages/opencode/src/cli/cmd/run/session-data.ts`
-   (`startShell`, lines 690-702; `session.next.shell.started`, lines 783-795;
-   `session.next.shell.ended`, lines 803-821) and keeps non-shell tool status
-   visible through `toolStatus` on running tool parts (lines 932-942). Pulse
-   adapts that shell visibility by reusing its redacted read-only command
-   preview in the browser-safe active-turn status instead of exposing raw
-   outputs, secrets, or unrestricted control commands.
-   `frontend-modern/src/api/streaming.ts` must yield through an
-   animation-frame-backed browser paint checkpoint, with a bounded timer
-   fallback for inactive tabs, before draining the next opted-in event; a plain
-   synchronous loop or microtask-only pause is insufficient because it can still
-   render workflow/tool steps only after a batch has already finished. Chat text
-   and reasoning deltas must paint immediately for the first delta in a run and
-   then periodically so coalesced provider chunks do not arrive as one burst,
-   while avoiding a frame wait for every token.
-   Pulse's reducer must also keep the same keyed-part behavior: repeated
-   `tool_start` or `tool_progress` events for one backend tool ID, or the same
-   normalized tool name when an older server omits IDs, upsert one pending tool
-   row and collapse stale duplicate pending rows instead of replaying several
-   near-identical steps in the transcript.
-   A supplied invocation ID is authoritative. Distinct IDs must not merge by
-   tool name during start, progress, cancellation, completion or approval
-   cleanup. Completing one invocation must leave its sibling approvals intact.
-   Message rendering keys rows by message ID and reads immutable transcript
-   values. It must not deeply reconcile shared tool objects: removing a status
-   row must never mutate evidence retained in another event or in toolCalls.
-   `frontend-modern/src/api/aiChat.ts` owns the Assistant predicate: token
-   content and hidden reasoning may continue to opt out of those checkpoints so
-   answer streaming remains fast, while session, workflow, model-switch, tool,
-   approval, and question events remain user-visible progress checkpoints.
-   That same frontend stream boundary owns the deterministic dev/test fixture
-   used for fast Assistant UX iteration: `frontend-modern/src/api/aiChat.ts`
-   may short-circuit an explicit local fixture prompt only when
-   `import.meta.env.DEV` or test mode is active, and the fixture must emit the
-   same typed `StreamEvent` objects (`session`, `workflow_state`, `thinking`,
-   `tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
-   `done`) through the normal `useChat` reducer rather than rendering a
-   separate mock transcript. The local `provider-retry` fixture must exercise
-   the real `provider_retry` workflow state, including attempt metadata and
-   `retry_after_ms`, so browser proof of retry countdown behavior does not
-   depend on external provider availability or API spend.
-   The local `tool-chain` fixture must exercise consecutive tool activity with
-   paced `tool_start` -> `tool_progress` -> `tool_end` transitions for one
-   tool followed by a second live tool, so browser proof can verify completed
-   rows compact while the next tool row replaces the active motion.
-   Dev/test fixture prompts are also part of the Assistant command-discovery
-   surface: slash autocomplete and Assistant command help must expose an
-   insertable `/fixture` command in development/test builds, search it by
-   canonical fixture names such as `provider-retry`, and submit completed
-   `/fixture <name>` prompts through the normal chat send path so
-   `maybeRunAIChatDevStreamFixture` remains the single local execution boundary.
-   Production command surfaces must omit that dev command instead of advertising
-   a fixture mode that the runtime will not intercept.
-   The local `stream-idle` fixture must exercise the real `stream_idle`
-   workflow state after selected-provider startup so browser proof of visible
-   idle liveness does not depend on making a real provider pause on demand.
-   The local `send-hold` fixture must exercise the local prompt-send boundary
-   by emitting the session event and then holding before the first backend
-   `workflow_state`, so browser proof can capture `Sending prompt.` without
-   depending on real provider latency.
-   This fixture is a local development primitive, not a product mode: it must
-   not bypass backend governance in production, persist as a server session, or
-   introduce any UI-only event shape that real providers cannot emit.
-   Live answer text must be paced in the presentation layer, not throttled or
-   mutated in the canonical stream state: appended content is revealed in short
-   readable slices while the turn is streaming, and completed/restored messages
-   render immediately from the full stored content. This adapts OpenCode's
-   `createPacedValue` live markdown pattern in
-   `packages/ui/src/components/message-part.tsx` so Pulse feels active without
-   delaying copy/export, tool boundaries, approvals, or audit evidence.
-   Live workflow labels follow that same presentation-layer constraint: the
-   canonical SSE/store state remains the latest typed `workflow_state`, and the
-   browser must render single fresh status updates immediately while using
-   bounded live-only history only to pace backend/network burst replacements.
-   This follows the current OpenCode TUI event mutation model at fetched
-   `origin/dev` commit
-   `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577`, especially
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`, where
-   `session.next.step.started`, text deltas, and tool progress mutate the
-   current assistant state event-by-event. Pulse uses the bounded status
-   history only to preserve reducer continuity, not to delay audit evidence,
-   approvals, tool boundaries, transcript export, or completed/restored
-   messages.
-   Completed Assistant tool rows follow the same source-anchored display policy:
-   the referenced OpenCode commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` keeps ordinary tool activity terse
-   through `GenericTool`/`InlineToolRow` in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`, hides generic
-   output unless `showGenericToolOutput` is enabled, and bounds output-heavy
-   blocks with `packages/opencode/src/cli/cmd/tui/util/collapse-tool-output.ts`.
-   Pulse adapts that by keeping the completed tool action visible in the
-   transcript, rendering only short safe plain-text output previews inline, and
-   keeping structured JSON, unavailable output, noisy output, and the full raw
-   payload behind Details. This preserves evidence for inspection without
-   letting command output compete with the Assistant answer flow.
-   The row itself owns the details trigger, not a tiny adjacent text action:
-   completed tool rows with inspectable input or output must expose
-   `aria-expanded`, keyboard activation, and a chevron affordance on the row
-   header so opening evidence feels like expanding the tool part. That adapts
-   OpenCode's `BasicTool` collapsible trigger in
-   `packages/ui/src/components/basic-tool.tsx`, where the trigger row and
-   arrow own expansion while pending/running tools remain locked.
-   Tool-row summaries are part of that same source-anchored contract, not
-   assistant prose cleanup: when provider or backend transport supplies a
-   function-style call such as `pulse_read(...)` or a friendly string backed by
-   structured raw input, Pulse must derive the visible row from the parsed tool
-   arguments and keep the raw transport form behind Details. This adapts
-   OpenCode's `ToolPart`/`InlineToolRow` rendering in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` and the
-   `session.next.tool.input.*` mutations in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`: typed tool state
-   owns the action row, while raw invocation syntax is inspection detail.
-   The live active-turn footer is part of the same contract: pending tools must
-   reuse the tool-row action/command summary instead of falling back to generic
-   tool names such as `read` or `query`. This keeps the always-visible progress
-   surface aligned with OpenCode's visible `ToolPart` state rather than hiding
-   the concrete command until the transcript row catches up.
-   Streaming thinking rows follow the same source-anchored reasoning-display
-   contract: OpenCode commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` renders reasoning through
-   `ReasoningPart`/`ReasoningHeader` in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` and extracts only
-   provider summary metadata with `reasoningSummary` in
-   `packages/opencode/src/cli/cmd/tui/context/thinking.ts`. Pulse adapts that by
-   showing a live `Thinking:`/completed `Thought:` row with duration and optional
-   provider summary title while keeping the raw reasoning body out of the
-   transcript.
    Provider reasoning must not become fallback assistant answer text when an
    OpenAI-compatible non-stream response contains `reasoning` or
    `reasoning_content` without visible `content`. The referenced OpenCode
@@ -3183,367 +2499,28 @@ deriving an older display status from `workflowStatusHistory`.
    `message.content` and storing OpenAI-compatible reasoning only in
    `ReasoningContent`, so hidden provider reasoning cannot be rendered as the
    final answer by any Pulse surface that consumes non-stream chat responses.
-   The active-turn status strip follows the same source-backed part freshness
-   rule: OpenCode commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   updates live assistant parts in place through
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`latestTool`, `latestText`, `latestReasoning`, and `apply(event)`),
-   renders reasoning headers with `ReasoningPart`/`ReasoningHeader` in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`, and keeps the
-   prompt footer as the replacing live status surface in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`. Pulse adapts
-   that by ranking workflow, content, hidden reasoning, and pending-tool footer
-   copy by the freshest activity timestamp: a later answer token can replace an
-   older tool status, and a later in-place tool progress patch can replace the
-   answer status again without moving the transcript's chronological row.
-   The active OpenCode-parity Assistant goal requires future parity slices to
-   reference OpenCode's actual source implementation before changing Pulse
-   behavior. Each slice must record the inspected OpenCode commit SHA plus
-   source file, symbol/function, and line anchor for the behavior being adapted,
-   including message parts, tool-state mutation, progress rendering,
-   model/session selection, and prompt/footer interaction. Parity means adapting
-   the proven interaction model, not guessing from screenshots or observed
-   behavior alone.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `54f4974546104bb72f7a0be2b75b92f9defc009b` builds the model dialog from
-   provider metadata, favorites, recent models, and provider sections in
-   `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx`, keeps
-   structured `{ providerID, modelID }` current/recent/favorite state with
-   provider-catalog validation in
-   `packages/opencode/src/cli/cmd/tui/context/local.tsx`, and formats the
-   effective model label from provider/model metadata in
-   `packages/opencode/src/cli/cmd/run/variant.shared.ts`. Pulse's Assistant
-   drawer adapts that selector workflow by keeping explicit recent model routes
-   above the provider catalog, routing chat-specific default/override options
-   through the shared model picker, preserving selected older models in the
-   visible list, and accepting custom model entries only when they are explicit
-   `provider:model` routes that the backend chat stream can execute. Unknown
-   recent or custom Pulse routes may survive catalog hydration only when they
-   still have a valid provider/model shape; malformed route strings must not
-   become selectable chat routes. The 2026-06-07 fast-model-route slice
-   rechecked OpenCode `origin/dev` commit
-   `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`: the TUI command registry
-   exposes `model.list` as `/models` plus `/mo` and hidden
-   `model.cycle_recent` / `model.cycle_recent_reverse` commands in
-   `packages/tui/src/app.tsx` lines 725-751, the app command registry exposes
-   `model.choose` as `/model` with keybind `mod+'` in
-   `packages/app/src/pages/session/use-session-commands.tsx` lines 514-522,
-   and `DialogModel` promotes favorites/recents before provider catalog rows
-   in `packages/tui/src/component/dialog-model.tsx` lines 23-54. Pulse adapts
-   that command model by letting the composer consume `/model <provider:model>`
-   as a local route switch, `/model default` as an inherited-default reset, and
-   `/model next` / `/model previous` as recent-route cycling without sending
-   those command strings to the provider. Malformed `/model ...` arguments must
-   remain editable in the composer with a local correction message rather than
-   being silently cleared or treated as assistant prompts. The referenced
-   OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   `packages/opencode/src/cli/cmd/tui/component/dialog-model.tsx` passes the
-   current structured model route into `DialogSelect` at lines 146-171, and
-   `packages/opencode/src/cli/cmd/run/footer.command.tsx` marks the current
-   direct-mode model row with a `current` footer at lines 796-804. Pulse adapts
-   that by making the shared model picker mark the selected catalog, recent,
-   override, custom, or inherited-default route as a visible `Current`
-   `role="option"` row with `aria-selected`, instead of relying on background
-   color alone.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `147169e9b78bdd8430800f883af6b6485e5156e4` runs ordinary follow-up
-   prompts through a serial local queue in
-   `packages/opencode/src/cli/cmd/run/runtime.queue.ts`: prompts submitted
-   behind an active ordinary turn remain visible as queued prompts, expose
-   removal through `FooterApi.onQueuedRemove`, and are removed from the visible
-   queue before their own turn begins. Pulse's Assistant drawer adapts that
-   behavior by keeping queued follow-ups in the transcript, showing queue
-   position, snapshotted model-route identity, and edit/remove controls on each
-   queued user row, and draining those rows through the existing chat-runtime
-   queue without aborting the active model stream.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` registers the
-   `session.interrupt` command while a turn is non-idle in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, and its
-   direct-run footer implements the same two-press interrupt guard in
-   `packages/opencode/src/cli/cmd/run/footer.ts` while rendering the armed
-   state in `packages/opencode/src/cli/cmd/run/footer.view.tsx`. Pulse's
-   Assistant drawer adapts that ergonomics model by letting Escape from the
-   focused composer arm the visible Stop control first and letting the next
-   Escape confirm the same governed `chat.stop()` path as the Stop button,
-   including aborting the active stream, clearing queued follow-ups, preserving
-   partial text, and returning focus to the composer. The App-level Assistant
-   drawer Escape guard must not close the drawer when Escape originates inside
-   the shared model picker; model-picker Escape is a local search/listbox close
-   path that returns focus to the picker trigger while the drawer remains open.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` keeps prompt/footer status visible
-   only while the session is non-idle in
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`, and maps
-   `turn.send`, `turn.wait`, and tool status patches into a live footer in
-   `packages/opencode/src/cli/cmd/run/footer.ts` plus
-   `packages/opencode/src/cli/cmd/run/session-data.ts`. Pulse's drawer adapts
-   that as an active-turn status strip: no idle diagnostics, but while a turn is
-   loading it must show waiting, current tool/workflow progress, or generating
-   status even when the transcript already contains an in-flight assistant row.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` resolves the direct-run wait when
-   `packages/opencode/src/cli/cmd/run/stream.transport.ts` verifies the session
-   is idle, maps `turn.idle` to an idle footer phase in
-   `packages/opencode/src/cli/cmd/run/footer.ts`, and then flushes scrollback
-   separately from later state sync. Pulse's Assistant drawer adapts that
-   completion boundary by clearing the visible active turn as soon as the chat
-   stream has processed its terminal `done` or `error` event; async
-   conversation/session-list refresh may continue afterward, but it must not
-   keep the composer footer or transcript row saying the assistant is still
-   generating.
-   When multiple governed tools are pending, completed tools must not blank the
-   status while another tool is still running, and the status heartbeat should
-   follow the latest progressed pending tool without reordering the transcript's
-   chronological tool rows. Pulse adapts this with a mutable footer status and
-   inline pending rows that show the current activity plus elapsed time while
-   keeping large command output collapsed.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` updates the existing typed tool
-   part through `updateToolCall` in
-   `packages/opencode/src/session/processor.ts` and renders ordered assistant
-   content parts through `AssistantMessage`/`AssistantTool` in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`;
-   Pulse pending tool progress must therefore mutate the matching row in place
-   and carry separate activity freshness metadata for the footer instead of
-   moving an earlier active tool row below later tools when progress arrives.
-   Assistant experience parity claims against OpenCode must cite the inspected
-   OpenCode commit, source file, source symbol/function, and line anchor that
-   defines the behavior being adapted; observed UI behavior alone is not
-   sufficient governance evidence for future parity slices.
-   The referenced OpenCode source at commit
-   `f750deaa3e95098fdde5fb00305b273e43c5b2cd` mutates a single tool part from
-   `pending` input through `running` progress to completed/error in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`, with tool metadata
-   updates flowing through `packages/opencode/src/session/tools.ts`. Pulse's
-   stream contract adapts that model with `tool_start`, `tool_progress`, and
-   `tool_end` events that update the same visible pending tool row in place.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` creates and mutates tool parts as
-   input arrives in `packages/opencode/src/session/processor.ts`
-   (`ensureToolCall`, `tool-input-start`, `tool-input-delta`,
-   `tool-input-end`), applies those input/running/completion updates in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`session.next.tool.input.started`, `.delta`, `.ended`, `.called`,
-   `.progress`, `.success`, `.failed`), and renders the same live tool part in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`. Pulse's
-   Assistant stream must mirror that timing: model-selected tools become
-   visible when the tool name is known, streamed function-argument deltas,
-   including Anthropic `input_json_delta` chunks, surface as `tool_progress`,
-   later argument/progress updates mutate the pending row, and completion
-   replaces that row rather than appending a delayed batch of steps. Waiting
-   until `[DONE]`, `message_stop`, or execution completion recreates the
-   delayed batch feeling this contract is meant to prevent. Policy-hidden
-   placeholder attempts remain governed by the runtime and may resolve the
-   pending row into a durable skipped `tool_cancel` row instead of either
-   persisting a failed tool card or hiding the activity. If a terminal
-   `tool_end` or `tool_cancel` reaches the browser without a matching pending
-   row, the frontend must still append terminal tool evidence instead of
-   dropping the only visible activity. The 2026-06-07 Pulse slice rechecked
-   OpenCode `origin/dev` commit
-   `1025540fcc2a69609a0131a7168300205656d728`, where
-   `packages/core/src/session/event.ts` and
-   `packages/core/src/session/message-updater.ts` keep tool lifecycle events as
-   typed message parts through terminal success/failed states; Pulse adapts
-   that lifecycle shape by making skipped policy/runtime tool calls visible as
-   terminal transcript rows.
-   The 2026-06-07 live-tool-evidence slice rechecked OpenCode `origin/dev`
-   commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`:
-   `packages/core/src/session/event.ts` lines 307-366 define live tool input
-   and bounded progress events, `packages/core/src/session/message-updater.ts`
-   lines 247-293 mutates the same assistant tool part from pending input to
-   running progress, and `packages/ui/src/components/basic-tool.tsx` lines
-   90 and 246-253 keep pending/running tools as active compact rows rather than
-   expanding details by default. Pulse adapts that source model for
-   infrastructure operations by keeping the compact live row primary while
-   allowing an operator to expand pending/running tool rows for copyable raw
-   input and current progress evidence; raw provider envelopes stay behind
-   Details and are used there when structured arguments are still placeholder
-   `{}` / `[]`. The local dev `/fixture pending-tool` stream is the canonical
-   no-provider browser proof fixture for this live pending-tool Details window
-   and must keep a paced running state long enough to exercise the row before
-   it resolves.
-   The 2026-06-07 skipped-evidence slice rechecked OpenCode `origin/dev`
-   commit `31c099be435d59bd6749ace7a9f2bb2245e6d3fa`:
-   `packages/core/src/session/event.ts` lines 307-336 define replayable tool
-   input start/delta/end events and lines 386-399 define terminal failed tool
-   events, `packages/core/src/session/message-updater.ts` lines 247-267 and
-   318-339 preserve and update the same assistant tool part through input and
-   failure, and `packages/opencode/src/session/tools.ts` lines 48-65 and
-   180-200 keep terminal tool input/output evidence. Pulse skipped/canceled
-   tool rows must therefore keep raw tool input and skip reason behind the same
-   expandable, copyable Details panel used for completed terminal tool rows,
-   while the compact row remains the operator-readable action summary.
-   While streamed arguments are still invalid, incomplete JSON, or incomplete
-   provider-style function-call input, the frontend must use the `raw_input`
-   fragment to show a safe partial command/path/query summary instead of a
-   blank `{}` request row, then replace it with the structured summary once
-   parsing succeeds. The 2026-06-07 Pulse slice rechecked OpenCode
-   `origin/dev` commit `effd27b23900720a53e965396ff1a105c1f7e9c8`:
-   `packages/opencode/src/session/processor.ts` lines 431-451 append
-   `tool-input-delta` text to the same call, and
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx` lines 276-294
-   render and mutate that pending tool part as input arrives.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` keeps tool invocations as durable
-   message parts in `packages/opencode/src/session/processor.ts`
-   (`ensureToolCall`, `updateToolCall`, `completeToolCall`) and renders the
-   typed part immediately in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (`AssistantTool`, `pendingInput`, `toolComplete`). Pulse's Assistant chat
-   stream must also preserve that event-by-event feel when HTTP or browser
-   buffering delivers several SSE messages in one network chunk: the frontend
-   stream consumer must let the browser paint between buffered Assistant
-   progress/tool/status events for chat streams instead of synchronously
-   draining a coalesced `tool_start`/`tool_progress`/`tool_end` batch in one
-   JavaScript task. Ordinary content-token streaming must also get an immediate
-   first-delta paint checkpoint and periodic checkpoints for long coalesced
-   chunks, but must not be frame-throttled on every token by that progress-batch
-   safeguard.
-   Mock-mode Assistant streaming is a canonical fixture for that same runtime
-   contract, not a frontend-only demo. When `mockmode.IsEnabled()` is true,
+   Mock-mode Assistant streaming is a canonical backend fixture, not a
+   client-only demo. When `mockmode.IsEnabled()` is true,
    `chat.Service.createProvider` must return the internal mock Assistant
    provider before invoking injected provider factories or configured external
    providers, and `chat.Service.ExecuteStream` must short-circuit the user turn
    only after the durable session is ensured and the user message is persisted.
-   The fixture must emit the same browser-facing event family used by real
+   The fixture must emit the same client-facing event family used by real
    turns: anchored `session`/prepare events from the normal entry path followed
    by mock `workflow_state`, `tool_start`, `tool_progress`, `tool_end`,
    response `workflow_state`, content chunks, and terminal `done`. It must also
-   persist a real assistant message with model route `pulse:mock-assistant`,
-   a successful `pulse_query` tool call, and a successful `pulse_read` tool call
+   persist a real assistant message with model route `pulse:mock-assistant`, a
+   successful `pulse_query` tool call, and a successful `pulse_read` tool call
    whose progress event includes provider-style raw input such as
-   `pulse_read(...)`. That fixture keeps session restore, transcript tooling,
-   stream-contract tests, and live browser checks exercising the same
-   backend-to-browser shape as a real provider/tool turn, including the raw
-   function-call syntax Pulse must summarize instead of rendering. Pulse-owned
-   local Assistant routes such as `pulse:local-inventory` and
-   `pulse:mock-assistant` must render through named labels (`Pulse inventory`,
-   `Pulse mock Assistant`) in shared model picker and transcript chrome; the
-   raw route IDs are implementation details, unlike external provider route IDs
-   that may remain visible for disambiguation. Mock mode is
-   also an effective runtime-config
-   overlay: `internal/api/ai_handler.go` startup, restart, config sync, and
-   tenant service initialization must treat Assistant as enabled in memory when
-   mock mode is active, without saving or mutating the persisted `AIConfig`, so
-   `/api/ai/chat` and Assistant sessions are available with zero configured
-   external providers or models. The live fixture must pace its status, tool,
-   and content events enough for the browser to paint each state in sequence;
-   unit tests may disable that pace, but the dev fixture must not collapse into
-   a single final completed row. This fixture must not emit `provider_fallback`
-   in non-mock mode and must not become Pulse-authored remediation or routing
-   behavior. The referenced OpenCode source at fetched `origin/dev` commit
-   `4519a1da329c1a4fc384054e7203ba7d06928205` publishes tool-call and
-   tool-result events incrementally in
-   `packages/core/src/session/runner/publish-llm-event.ts`, mutates assistant
-   tool parts through pending/running/completed states in
-   `packages/core/src/session/message-updater.ts`, and renders the current tool
-   part state in `packages/ui/src/components/message-part.tsx` through
-   `packages/ui/src/components/basic-tool.tsx`. Pulse adapts that source model
-   by making the mock fixture prove the same visible state sequence without
-   copying OpenCode's editor-specific tool catalog.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` renders tool-specific inline
-   labels such as `Read <path>`, `Grep "<pattern>"`, `WebFetch <url>`, and bash
-   commands in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
-   Pulse's compact tool rows must follow that operator-language model: the row
-   should summarize the actual governed action (`search "prowlarr"`, `list
-active alerts`, `topology summary`, `Inspect devices on current resource`,
-   or exact governed write commands where the command itself is the operator
-   decision) instead of exposing only internal action names such as `QUERY
-search`, `exec`, provider function calls, or raw JSON; raw input and full
-   output stay available behind Details. The referenced OpenCode source at
-   fetched `origin/dev` commit
-   `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577` renders Bash tool state through
-   `Bash` in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (lines 701-735), where the pending row is replaced by the concrete command
-   and completed block output keeps `$ <command>` visible above bounded output.
-   Pulse adapts that for read-style infrastructure tools by keeping the
-   operator action label as the primary row and adding a sanitized `$ ...`
-   command preview below it when the tool input carries a shell command; raw
-   provider envelopes such as `pulse_read(...)`, raw JSON, and full command
-   output remain Details-only. Any visible command-copy affordance must copy
-   that same sanitized command preview rather than the raw provider/tool input.
-   The referenced OpenCode source at
-   commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` also renders pending tool rows
-   through `InlineTool` pending text in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (`InlineTool`, lines 563-651; `Bash`, lines 701-735; `Read`, lines
-   758-770; `Grep`, lines 788-790). Pulse adapts that by using
-   action-specific pending copy such as `Writing command...`, `Preparing
-query...`, and `Reading storage...` before streamed tool arguments are
-   parseable, then replacing that copy with the governed command/query/resource
-   summary as soon as input arrives.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `4519a1da329c1a4fc384054e7203ba7d06928205` renders completed bash and
-   generic tool output inside the tool block and uses `collapseToolOutput` in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (`GenericTool`, lines 526-559; `Bash`, lines 701-731) to keep long output bounded.
-   Pulse's completed tool rows must adapt that by previewing short actionable
-   plain-text output for successful and failed tools while keeping long output
-   bounded behind Details. Structured JSON, unavailable output, truncated
-   successful output, and the full raw payload stay behind Details. The browser
-   implementation owner is
-   `frontend-modern/src/components/AI/Chat/ToolExecutionBlock.tsx`; completed
-   `tool_end` events preserve streamed `raw_input` for the same readable command
-   summary used while the tool is pending.
-   The 2026-06-07 completed-output badge slice rechecked OpenCode `origin/dev`
-   commit `e82542b8023a8374f29c23b70ec019c8f256354e` in the same
-   `session-v2.tsx` `GenericTool` / `Bash` renderers (lines 527-559 and
-   702-735): overflow is communicated through the expandable tool block, not
-   through transport-sized copy in the compact row. Pulse adapts that by keeping
-   exact output type/size in the accessible label and Details panel while the
-   visible compact badge says only `output available`.
-   The 2026-06-07 transcript command-evidence slice rechecked OpenCode
-   `origin/dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e` in
-   `packages/opencode/src/cli/cmd/run/session-data.ts`: OpenCode keeps tool
-   activity readable in session history while stripping shell echo noise from
-   assistant text. Pulse adapts that by including the same sanitized `$ command`
-   preview shown in live read-tool rows in copied/exported Assistant transcripts.
-   Transcripts must still exclude raw provider call syntax such as
-   `pulse_read(...)`, raw JSON tool payloads, obvious command secrets, and
-   unbounded raw tool output by default.
-   The 2026-06-07 active-dock pacing slice rechecked current OpenCode
-   `origin/dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e` in
-   `packages/tui/src/feature-plugins/system/session-v2.tsx`: `InlineTool`
-   (lines 564-651) keeps one visible activity row that moves from pending copy
-   to completed copy, while `Bash` (lines 702-740) keeps shell activity visible
-   through the same inline/block transition. Pulse adapts that for the
-   Assistant dock by pacing burst-arriving workflow status history locally so
-   `Preparing context`, `Reading inventory`, and provider wait states appear in
-   sequence; statuses that arrive one at a time still replace immediately.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `fa2b63f850fc0a23bec2bdff9e660450d3fe7913` also keeps assistant text,
-   reasoning, and tool invocation as typed message parts in
-   `packages/opencode/src/session/message.ts`, while
-   `packages/opencode/src/session/processor.ts` updates text and reasoning
-   parts through `*-delta` events instead of rendering raw provider tool-call
-   syntax as assistant prose. The referenced OpenCode source at fetched
-   `origin/dev` commit `1399323b78a04229d9bfe00c7436d7f41770fda8` renders
-   reasoning with `AssistantReasoning` and `ReasoningHeader` in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`,
-   separate from `AssistantText` and `AssistantTool`. Pulse's frontend stream
-   reducer must preserve the same user-facing invariant: visible transcript
-   content is typed assistant text, a neutral typed thinking-progress row, or a
-   typed Pulse tool/approval/question row. The thinking-progress row may expose
-   live activity state such as `Thinking...` / `Thinking complete`, but it must
-   not render raw provider reasoning text. Suspicious compacted provider
-   prelude text that looks like tool-call narration must be buffered until it is
-   proven to be normal answer text or stripped when a raw tool-call marker
-   arrives; it must not flash as run-on prose such as
-   `I'llcheckthedevicenodes...` while the actual governed tool row is still
-   being assembled, and it must not be promoted to final assistant answer text
-   when the stream reaches `done` without proving a normal answer. The
-   referenced OpenCode source at fetched `origin/dev` commit
-   `1025540fcc2a69609a0131a7168300205656d728` keeps rendered answer text as
-   typed text parts in `packages/ui/src/components/message-part.tsx` and uses
-   `createPacedValue` only as a presentation-layer reveal; Pulse adapts that by
-   preserving typed content exactly while suppressing malformed compacted
-   tool-prelude residue rather than inventing spaces or storing it as prose.
+   `pulse_read(...)`, so session restore and stream-contract tests exercise the
+   same shape as a real provider/tool turn. Mock mode is also an effective
+   runtime-config overlay: `internal/api/ai_handler.go` startup, restart,
+   config sync, and tenant service initialization must treat Assistant as
+   enabled in memory when mock mode is active, without saving or mutating the
+   persisted `AIConfig`, so `/api/ai/chat` and Assistant sessions are
+   available with zero configured external providers or models. The fixture
+   must not emit `provider_fallback` and must not become Pulse-authored
+   remediation or routing behavior.
    A pre-tool assistant preamble such as "I'll check that" does not satisfy the
    final-answer contract after Pulse executes tools. The final-response guard
    must require non-empty assistant text after the latest user/tool-result
@@ -3643,77 +2620,25 @@ query...`, and `Reading storage...` before streamed tool arguments are
    247-318), by preserving the operator's explicit tool intent until Pulse can
    stream a visible `tool_start` / `tool_progress` / `tool_end` path instead of
    collapsing the turn into unrelated inventory prose.
-   The Assistant transcript should show compact
-   activity as work happens: local context reads, governed tool names, provider
-   routing, fallback, and first-token waiting must appear as the latest
-   replacing live status/header status rather than a dead-looking wait state, a
-   dumped list of transient phases, or a delayed replay of stale status history.
-   This adapts the referenced OpenCode source at fetched `origin/dev` commit
-   `914a643`, where the app session timeline derives visible activity from the
-   current session status and streamed message/tool parts instead of pacing old
-   status labels back through the UI. Hide or collapse unsafe details and bulky
-   outputs, but do not hide the fact that Pulse is running a local read,
-   invoking a governed tool, or waiting on a provider. Stream-idle heartbeats
-   must inherit the selected provider/model route when Pulse has that route, so
-   the visible row reads as route-specific liveness instead of falling back to
-   generic Assistant waiting copy. Pulse must not rewrite the inputs of a
-   model-chosen tool call (the former summary-only `pulse_query` topology
-   input default is removed with the query-only scope); `pulse_query`
-   defaults are owned by the tool definition the model sees, not by
-   post-hoc input mutation. Assistant answer style should stay operational
-   and must not use emoji, warning icons, or decorative symbols unless the user
-   explicitly asks for that tone.
+   Stream-idle heartbeats must inherit the selected provider/model route when
+   Pulse has that route. Pulse must not rewrite the inputs of a model-chosen
+   tool call (the former summary-only `pulse_query` topology input default is
+   removed with the query-only scope); `pulse_query` defaults are owned by the
+   tool definition the model sees, not by post-hoc input mutation. Assistant
+   answer style should stay operational and must not use emoji, warning icons,
+   or decorative symbols unless the user explicitly asks for that tone.
    The system prompt for a turn must describe only the tools actually offered to the
    provider for that turn; generic tool-governance prose must not name tools
    hidden from the current manifest. Deterministic provider-request capture is
    the primary proof harness for this fast path; live OpenRouter/browser checks
    are final smoke tests, not the iteration loop.
-   Restored Assistant sessions must hydrate saved assistant content and
-   persisted tool calls into the same transcript event shape used by live
-   streams so switching sessions does not hide prior tool evidence or collapse
-   the resumed conversation into a text-only transcript. Saved Assistant
-   message history is part of that same output contract: service reads and
-   `GET /api/ai/sessions/{id}/messages` must return a client-safe projection
-   that normalizes collection fields, strips `reasoning_content`, and sanitizes
-   stored assistant prose before the browser restores a transcript. Provider
-   reasoning may remain in runtime-only history for model continuity, but it
-   must not serialize through public session history or resumed drawer state.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `09d9cf01f93798939c1284fbe974b6e1f4d2759d` stores message parts as typed
-   text, reasoning, and `tool-invocation` entries whose tool invocation state
-   is `call`, `partial-call`, or `result` in
-   `packages/opencode/src/session/message.ts`. Pulse adapts that restored
-   transcript contract by folding persisted internal tool-result transport
-   messages back into the browser-safe assistant `tool_calls` projection as
-   completed `output` plus `success` state, preserving the assistant message's
-   effective model route, and omitting the internal tool-result messages from
-   the restored browser transcript.
-   Pending tool progress is part of the same transcript contract: pending tool
-   stream events must render inline as compact rows in the assistant turn,
-   transition to `running` or `waiting` through `tool_progress`, and resolve in
-   place on `tool_end` instead of disappearing until completion or relying only
-   on the drawer-level status bar. The referenced OpenCode source at fetched
-   `origin/dev` commit `ba57718b0516c7a8670d1e820b1a24146a8b8262` emits an ACP
-   `tool_call` when a tool part is known and then sends `tool_call_update`
-   patches for pending, running, completed, and failed states through
-   `packages/opencode/src/acp/event.ts` and
-   `packages/opencode/src/acp/tool.ts`; Pulse adapts that by keeping the live
-   pending row's current progress text visible inside the transcript at drawer
-   width, not only in the footer/status strip.
-   The drawer transcript must treat those in-place progress patches as fresh
-   visible activity even when the message count and stream-event count do not
-   change. The referenced OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9` applies
-   `session.next.tool.progress` by mutating the latest matching tool part in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-   (`apply(event)`, line 120; `session.next.tool.progress`, lines 317-326)
-   and renders the same session-owned tool part through
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
-   (`ToolPart` mapping, lines 1788-1796; `InlineToolRow`, line 1926).
-   Pulse adapts that by deriving transcript scroll/freshness from the latest
-   message's activity fingerprint, including pending-tool progress and
-   `updatedAt`, instead of using appended-event count as the only streamed
-   activity signal.
+   Saved Assistant message history is part of the same output contract:
+   service reads and `GET /api/ai/sessions/{id}/messages` must return a
+   client-safe projection, including persisted tool calls, that normalizes
+   collection fields, strips `reasoning_content`, and sanitizes stored
+   assistant prose before a client restores a transcript. Provider reasoning
+   may remain in runtime-only history for model continuity, but it must not
+   serialize through public session history.
    Assistant session listing is a history-browsing path, not a send-path lock.
    The session store must not hold its shared mutex while scanning and parsing
    every persisted session file for `/api/ai/sessions`; writes must remain
@@ -3733,34 +2658,9 @@ query...`, and `Reading storage...` before streamed tool arguments are
    Pulse-owned background sessions are not resumable chats. The session store
    owns the well-known background session IDs (`patrol-main`, `patrol-eval`,
    `investigation-*`) through `chat.IsSystemSessionID` and marks their
-   summaries `system: true` in every `Session` projection. The Assistant
-   empty-state quick-resume list (`selectQuickResumeSessions` in
-   `frontend-modern/src/components/AI/Chat/recentSessionsModel.ts`) must
-   exclude system sessions — a Patrol detection log titled with the raw triage
-   seed is forensic material, not a conversation to resume — while the
-   drawer-owned session picker and the Settings sessions panel keep listing
-   them for inspection. The canonical Patrol forensic surface remains the
+   summaries `system: true` in every `Session` projection, so clients can keep
+   them out of resume lists. The canonical Patrol forensic surface remains the
    `PatrolRunRecord` history at `/api/ai/patrol/runs`.
-   Assistant session navigation must provide a searchable history path in the
-   drawer-owned picker, using the canonical `/api/ai/sessions` contract rather
-   than a separate recent-chat store. Search is applied before result limiting
-   so the picker can narrow older sessions without hiding matches behind a
-   recency cap, the picker must open immediately with cached sessions while any
-   refresh/search is still running, and loading/error states must stay inside
-   the picker instead of making the main send path look busy. The referenced
-   OpenCode source at fetched `origin/dev` commit
-   `4519a1da329c1a4fc384054e7203ba7d06928205` implements
-   `SessionSwitcherDialog` in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/session/dialog.tsx` with
-   `createDebouncedSignal("", 150)`,
-   `sdk.client.session.list({ search: input.query, limit: 30, ...input.filter })`,
-   recency ordering through
-   `orderByRecency`, and pinned/current session options before navigation.
-   Pulse adapts that source workflow with a debounced Assistant session search
-   field, bounded recent-session refreshes with
-   `GET /api/ai/sessions?limit=30`, searched refreshes with
-   `GET /api/ai/sessions?search=...&limit=30`, and searched result rows that
-   resume through the same session-loading path as the normal recent list.
    Assistant session forking is a runtime-backed session workflow, not a
    header-only UI affordance. The referenced OpenCode source in
    `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` registers
@@ -3769,49 +2669,22 @@ query...`, and `Reading storage...` before streamed tool arguments are
    source behavior through `POST /api/ai/sessions/{id}/fork`: the local
    `chat.Service` must route to `SessionStore.Fork`, and the store must create
    a fresh durable session ID with fresh create/update timestamps while cloning
-   the saved transcript and browser-safe model handoff summary. Copied
+   the saved transcript and client-safe model handoff summary. Copied
    messages keep their per-session message/tool IDs so assistant tool-call and
    tool-result relationships remain intact inside the fork. Forking must not
    mutate the source session, must continue through normal session list/load
    contracts, and must not return `not_implemented` from the local runtime.
    OpenCode-style session file diff/revert workflows do not apply to Pulse
    Assistant sessions: Pulse does not own local code-file edits, and
-   infrastructure mutations are governed through approval/action history. The
-   Settings maintenance surface must not advertise session file changes or
-   session revert actions, and legacy direct calls to
+   infrastructure mutations are governed through approval/action history. Legacy direct calls to
    `/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` must fail
    explicitly with `501 Not Implemented` rather than returning a success-shaped
    placeholder.
-   The picker trigger and result rows are part of that source-backed workflow:
-   the trigger must expose its accessible name and expanded state, opening the
-   picker must focus search, and each result must be a keyboard-addressable
-   option with up/down, page, home/end, and Escape navigation from both the
-   focused search field and focused result rows. Session-picker Escape is a
-   local close path that returns focus to the session trigger and must consume
-   the keypress so the App-level Assistant drawer Escape guard does not also
-   close the whole drawer. Delete remains a named row action instead of a
-   mouse-only affordance.
-   Message-level copy is part of the same OpenCode-aligned message action
-   surface, but Pulse must keep it browser-safe and role-neutral rather than
-   implying unsupported message-level fork/revert semantics. The referenced
-   OpenCode source in `packages/tui/src/routes/session/dialog-message.tsx`
-   exposes `message.copy` by collecting non-synthetic text parts for the
-   selected message. Pulse adapts that by allowing visible user and completed
-   assistant transcript rows to copy their own visible text through the shared
-   clipboard fallback helper; hidden reasoning, raw tool input/output, provider
-   envelopes, and scoped handoff metadata remain excluded unless the operator
-   explicitly opens a raw Details surface.
-   Assistant session rename is part of that same source-backed session
-   workflow. The referenced OpenCode source in
-   `packages/opencode/src/cli/cmd/tui/component/dialog-session-list.tsx`
-   imports `DialogSessionRename` and invokes the runtime session rename action
-   from the session list, so Pulse must not leave rename as local picker state.
-   Pulse owns the equivalent through `PATCH /api/ai/sessions/{id}`,
-   `chat.Service.RenameSession`, and `SessionStore.Rename`; the drawer picker
-   may render the edit inline, but saving must persist the normalized title,
-   return the updated `ChatSession`, update the visible row without closing the
-   picker, and leave messages, handoff context, approvals, and tool evidence
-   unchanged.
+   Assistant session rename is part of the same session workflow. Pulse owns it
+   through `PATCH /api/ai/sessions/{id}`, `chat.Service.RenameSession`, and
+   `SessionStore.Rename`; saving must persist the normalized title, return the
+   updated `ChatSession`, and leave messages, handoff context, approvals, and
+   tool evidence unchanged.
    Session titles follow OpenCode's generated-title model: after a session's
    first exchange completes, the chat runtime upgrades the auto-truncated
    first-prompt placeholder to a short model-generated title
@@ -3824,91 +2697,49 @@ query...`, and `Reading storage...` before streamed tool arguments are
    record usage as `assistant_session_title`, and a failed or timed-out
    title call leaves the placeholder in place rather than failing anything
    user-visible.
-   Assistant turn undo/redo is also a source-backed session repair workflow,
-   not a transcript-local delete button. The referenced OpenCode source in
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` registers
-   `session.undo` and `session.redo` as first-class session commands and uses
-   runtime revert/unrevert responses to restore the user's prompt into the
-   composer. Pulse adapts that behavior through
-   `POST /api/ai/sessions/{id}/undo` and
-   `POST /api/ai/sessions/{id}/redo`: the backend session store must remove the
-   latest user-authored turn plus following assistant/tool messages as one
-   durable turn, persist a bounded redo stack, expose `can_redo` on the
-   browser-safe session summary, clear redo state when a new message or trim
-   changes the transcript, and keep forked sessions independent from the source
-   redo stack. The drawer must restore the removed prompt, structured mentions,
-   finding id, handoff context and metadata, and selected
-   model route when available so the operator can edit and resend without
-   reconstructing hidden context from transcript prose.
+   Assistant turn undo/redo is a session repair workflow, not a
+   transcript-local delete. Pulse owns it through
+   `POST /api/ai/sessions/{id}/undo` and `POST /api/ai/sessions/{id}/redo`:
+   the backend session store must remove the latest user-authored turn plus
+   following assistant/tool messages as one durable turn, persist a bounded
+   redo stack, expose `can_redo` on the client-safe session summary, clear redo
+   state when a new message or trim changes the transcript, and keep forked
+   sessions independent from the source redo stack.
    Retry and regenerate are turn re-runs over the same undo boundary, not a
    parallel history mutation path. `POST /api/ai/sessions/{id}/undo` accepts an
    optional JSON body (`chat.SessionTurnUndoOptions`) whose `expected_prompt`
    field, when non-empty, makes the removal conditional on the latest
    user-authored prompt matching the prompt being re-run, so a retry whose
    failed send never reached the session cannot remove a different turn.
-   Frontend retry ("Try again" on a failed turn, model-route switch retry) and
-   regenerate must remove the replaced turn through this guarded undo before
-   re-sending so session history never records the prompt twice; a failed
-   guard or transport error degrades to a plain re-send rather than blocking
-   the retry. The removed turn stays redoable until the re-sent message lands,
-   at which point the normal new-message rule clears redo state. The
-   regenerate affordance is offered only on the latest settled assistant
-   answer (nothing streaming, no error block, no pending approval or
-   question, and a user prompt available to re-send) because the undo
-   boundary only operates on the last durable turn.
    Session mutations stay POST-only at the handler: abort, summarize, fork,
    undo, redo, and steer refuse every other method with `405` and
    `Allow: POST` before resolving the Assistant service. A `GET` or `HEAD`
    that the demo-mode read-only guard or the CSRF check admits as a read
    therefore cannot cancel a running turn, compact or rewind a transcript,
    or persist a fork.
-   The empty Assistant drawer may surface recent non-empty sessions as direct
-   resume actions using the backend session list already owned by the drawer;
-   it must not create a parallel recent-chat store or product-authored prompt
-   shortcut path.
    Assistant output hygiene is part of the same boundary: provider reasoning
-   and raw serialized tool-call artifacts must never render as assistant
-   transcript prose or serialize into client-facing chat streams. Browser-bound
+   and raw serialized tool-call artifacts must never serialize into
+   client-facing chat streams or persisted assistant prose. Client-bound
    Assistant stream events must pass through `chat.StreamEvent.ClientSafe()`;
    provider `thinking` chunks are runtime-only and may be retained internally
-   for model continuity, but they are dropped before the browser/API boundary.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` stores assistant output as typed
-   text, reasoning, and `tool-invocation` parts in
-   `packages/opencode/src/session/message.ts` and mutates those typed parts
-   through explicit stream events in
-   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`; Pulse adapts that
-   invariant by stripping operational decorative status glyphs, warning icons,
-   and check/cross badges from browser-safe assistant prose while preserving
-   ordinary Unicode answer text such as units.
-   The agentic stream may translate the first private provider reasoning delta
-   before visible output into a neutral `model_thinking` workflow status so the
-   drawer shows live activity without exposing chain-of-thought. Neutral
-   progress comes from the active stream state, workflow status, or governed
-   tool/question/approval events, not from a reasoning body. Pulse tool
-   invocations must surface only through governed `tool_start` / `tool_end`,
-   approval, or question blocks; if a provider emits `pulse_*` / `patrol_*`
-   calls, DSML, XML/function-call envelopes, or JSON tool-call shapes as text
-   content, the chat runtime must strip them before streaming, persistence, and
-   frontend rendering. Compacted no-whitespace internal prelude text attached
-   to a leaked tool invocation is part of that same artifact and must be
-   suppressed or retracted from the current stream segment instead of rendered
-   as assistant prose; if that compacted prelude is still pending when the
-   stream closes, terminal flush must drop it rather than turning unreadable
-   provider residue into the final answer. Drawer-level loading/progress status
-   must stay scoped to the active turn and must collapse back to quiet when the
-   turn is idle; it may mirror the latest active tool/workflow state as a
-   compact heartbeat, but raw outputs, restored evidence, errors, and completed
-   details stay in the transcript row that owns the turn. Completed tool rows in
-   the drawer may show
-   compact tool name, action summary, status, and an
-   explicit details affordance, but raw tool input/output JSON must not render
-   in the default transcript. Token accounting and other provider metadata
-   remain runtime/accounting data, not normal transcript prose.
-   Background provider-readiness checks are diagnostics and must stay quiet
-   while idle unless they produce an actionable issue; checking status may
-   surface during an active send, but an open empty drawer must not look busy
-   just because Pulse is verifying the selected route.
+   for model continuity, but they are dropped before the client/API boundary.
+   Client-safe assistant prose has operational decorative status glyphs,
+   warning icons, and check/cross badges stripped while ordinary Unicode
+   answer text such as units is preserved. The agentic stream may translate
+   the first private provider reasoning delta before visible output into a
+   neutral `model_thinking` workflow status so clients can show live activity
+   without exposing chain-of-thought. Pulse tool invocations must surface only
+   through governed `tool_start` / `tool_end`, approval, or question blocks; if
+   a provider emits `pulse_*` / `patrol_*` calls, DSML, XML/function-call
+   envelopes, or JSON tool-call shapes as text content, the chat runtime must
+   strip them before streaming and persistence. Compacted no-whitespace
+   internal prelude text attached to a leaked tool invocation is part of that
+   same artifact and must be suppressed or retracted from the current stream
+   segment instead of streamed as assistant prose; if that compacted prelude
+   is still pending when the stream closes, terminal flush must drop it rather
+   than turning unreadable provider residue into the final answer. Token
+   accounting and other provider metadata remain runtime/accounting data, not
+   transcript prose.
 4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
    Provider preflight diagnostics returned from `internal/api/ai_handlers.go`
    must reuse the Patrol runtime failure classifier in `internal/ai/` and
@@ -3933,216 +2764,76 @@ query...`, and `Reading storage...` before streamed tool arguments are
    require an explicit `allow_broad_scope` request from a dedicated rule
    management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/assistantPageContext.ts`, and `frontend-modern/src/utils/aiChatPresentation.ts`
+6. Add or change AI provider and provider-health presentation through `frontend-modern/src/utils/aiProviderPresentation.ts` and `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
    AI provider/model presentation must preserve the model transport route when
    the selected provider is a gateway. OpenRouter-routed model IDs such as
    `openrouter:deepseek/...` must render with an explicit `via OpenRouter`
    label in the shared picker, System AI settings status, and inherited default
    descriptions unless the server-supplied model name already carries that
-   route. Assistant transcript rows must carry and render the effective model
-   route that produced each live or restored response so route recovery and
-   mixed-provider sessions remain auditable. Direct provider models must not
-   gain a gateway label, but explicit direct route strings such as
-   `deepseek:deepseek-v4-pro` must still render with provider identity rather
-   than collapsing to a bare-looking model payload. Gateway route strings must
-   still render as readable provider/model labels before catalog hydration; this
-   mirrors OpenCode's source pattern of retaining structured
-   `providerID`/`modelID` metadata and presenting catalog names with ID
-   fallbacks rather than leaking raw route storage IDs into primary chat chrome.
-   Assistant model selector actions must
-   remain route-distinct: if the configured chat override resolves to the same
-   route as the effective default or the already selected session model, the
-   drawer must not render a duplicate override action.
-   Assistant provider-readiness actions must send operators to the canonical
+   route. Direct provider models must not gain a gateway label, but explicit
+   direct route strings such as `deepseek:deepseek-v4-pro` must still render
+   with provider identity rather than collapsing to a bare-looking model
+   payload. Gateway route strings must still render as readable provider/model
+   labels before catalog hydration, presenting catalog names with ID fallbacks
+   rather than leaking raw route storage IDs into primary settings chrome.
+   The shared model picker separates selected model labels from badges such as
+   `default` in both visible text and the button accessible name, so an
+   OpenRouter default route renders as
+   `Qwen: Qwen3.7 Plus via OpenRouter · default` rather than
+   `OpenRouterdefault`.
+   Provider-readiness repair actions must send operators to the canonical
    Pulse Intelligence > Provider & Models route
    `/settings/pulse-intelligence/provider`; `/settings/system-ai` remains a
    compatibility alias for old deep links rather than the href emitted by new
-   Assistant repair actions.
-   Assistant discovery-context hints must use the same product language as
-   Pulse Intelligence settings: the visible hint is `Discovery is off`, while
-   the body explains that enabling it gives Assistant real service, version,
-   and command context instead of generic guidance. The hint must not
-   reintroduce the old `Workload Discovery` label as a separate product concept.
-   Authenticated shell Assistant launches must use
-   `frontend-modern/src/utils/assistantPageContext.ts` to attach factual
-   current-route context before the drawer opens. That helper may identify the
-   current platform, Patrol, Alerts, Settings, or unknown Pulse view and provide
-   neutral briefing metadata, but it must not synthesize a prompt, require a
-   tool choice, or turn Assistant back into the primary operations front door.
-   Assistant route and control chrome belongs with the prompt surface, not the
-   drawer title row. The referenced OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx` derives the
-   current provider label in `Prompt` lines 196-197 and renders agent, model,
-   provider, and variant metadata in the prompt footer at lines 1452-1479; the
-   model metadata row uses an explicit `·` separator before the model at line
-   1462 and before variants at line 1471, so adjacent metadata must not collapse
-   into fused labels. Pulse's shared model picker adapts that by separating
-   selected model labels from badges such as `default` in both visible text and
-   the button accessible name, so an OpenRouter default route renders as
-   `Qwen: Qwen3.7 Plus via OpenRouter · default` rather than
-   `OpenRouterdefault`.
-   The session route injects that prompt through
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx`
-   `session_prompt` lines 1313-1333. Pulse adapts that by keeping the active
-   model route selector, control-mode selector, and last-turn summary in
-   composer chrome while the drawer header stays limited to drawer/session
-   commands.
-   Empty Assistant sessions are prompt-first transcript surfaces, not product
-   marketing or instruction panels. The referenced OpenCode source at commit
-   `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
-   `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` derives
-   session messages in `Session` lines 185-203, renders only the message
-   stream inside the scrollbox at lines 1188-1295, and renders `Prompt` in the
-   `session_prompt` slot at lines 1313-1333 without inserting a centered
-   no-message title or subtitle. Pulse adapts that by leaving a blank
-   transcript blank, keeping scoped handoff context in the drawer context
-   strip, and limiting no-message transcript affordances to real
-   recent-session resume actions.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `1399323b78a04229d9bfe00c7436d7f41770fda8` renders the completed assistant
-   footer in
-   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-   (`AssistantMessage`) with agent, provider/model, and turn duration rather
-   than token counts. Pulse Assistant rows adapt that by keeping visible token
-   accounting out of the transcript while showing a compact completed-turn
-   duration beside the effective model label once a turn reaches `done`,
-   `error`, or user interruption. Runtime token usage may surface in
-   low-priority composer chrome instead, but the completed-turn surface is a
-   route summary rather than a token counter: the referenced OpenCode source at
-   fetched `dev` commit `3867fa2bad0e644166e360e2e99cfe426fe71105` imports
-   `turnSummaryCommit` in
-   `packages/opencode/src/cli/cmd/run/scrollback.surface.ts` lines 19-20, and
-   `packages/opencode/src/cli/cmd/run/turn-summary.ts` lines 5-46 renders a
-   final system summary from agent, model, and duration. Pulse adapts that by
-   deriving the latest non-streaming assistant `ChatMessage`, rendering the
-   effective provider/model route, completed-turn duration, and backend-proven
-   total token count in the composer footer. The input/output split remains in
-   the footer title/accessibility text, not the visible transcript or composer
-   copy, so shorthand such as `4358 in · 943 out` cannot read like assistant
-   output. If provider usage is missing, the route and duration remain visible;
-   active streaming turns never become the completed-turn summary. Cost and
-   context-limit percentages stay absent until the runtime exposes those values
-   through a governed contract.
-   Assistant tool activity is visible transcript activity, not a hidden context
-   footer. The referenced OpenCode source at fetched `origin/dev` commit
-   `e82542b8023a8374f29c23b70ec019c8f256354e`
-   `packages/opencode/src/cli/cmd/run/types.ts` defines append-only
-   `StreamCommit` rows for assistant, reasoning, tool, and system sources at
-   lines 284-312, while
-   `packages/opencode/src/cli/cmd/run/footer.ts` queues commits and only
-   coalesces consecutive progress chunks for the same part/tool at lines
-   512-545. Pulse adapts that contract by rendering each Assistant
-   `pending_tool`, completed `tool`, and `tool_cancel` event as its own
-   chronological transcript row. Tool inputs, command previews, progress text,
-   and outputs may remain collapsed inside the row, but context/read/query
-   tools must not be replaced by a generic grouped footer that makes several
-   operations appear all at once.
-   Queued follow-up turns are active session pressure, not hidden backlog.
-   The referenced OpenCode source at fetched `origin/dev` commit
-   `e82542b8023a8374f29c23b70ec019c8f256354e`
-   `packages/opencode/src/tool/todowrite.txt` describes status tracking as
-   surfacing progress to the user at line 1 and requires status updates in real
-   time rather than batched completion at line 25, while
-   `packages/opencode/src/session/tools.ts` updates running tool metadata with
-   title, status, input, and start time at lines 54-63. Pulse adapts that
-   session-activity pattern by keeping queued follow-ups visible in the
-   Assistant activity dock and appending the queued count to the active-turn
-   headline while the current response is streaming. The queued row may retain
-   edit, remove, promote, resume, and clear controls, but the primary headline
-   must not imply the user's just-submitted follow-up disappeared behind a
-   generic `Generating response` state.
-   Restored Patrol mode save-failure handoffs may preserve compatible
-   summary kinds such as `patrol_configuration_failure`, but Assistant drawer
-   titles, subjects, action labels, and safety notes must describe Patrol mode
-   rather than reviving generic configuration wording. Stable route markers,
-   telemetry fields, and API wire names may retain `patrol_control`;
-   user-facing Assistant, external-agent, generated MCP, and frontend copy must
-   call the operator's choice `Patrol mode`.
-7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
-8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
+   repair actions.
+   Stable route markers, telemetry fields, and API wire names may retain
+   `patrol_control`; user-facing external-agent, generated MCP, and frontend
+   copy must call the operator's choice `Patrol mode`.
+7. Keep AI presentation text helpers aligned through the shared `frontend-modern/src/utils/textPresentation.ts`
+8. Keep the AI availability session capability aligned through the shared `frontend-modern/src/stores/aiAvailability.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own AI-enabled state
    The shared app shell may also mount the deployment-installability-owned
    post-update release highlights card. That card must consume published
    release notes through the update surface and must not read, reset, or
-   otherwise couple itself to Assistant sessions, Patrol state, model routing,
-   or AI-provider readiness.
-   That shared drawer ownership also covers passive resource reads while the
-   shell is mounted but closed. `frontend-modern/src/components/AI/Chat/`
-   may consume the live websocket snapshot or the existing unified-resource
-   cache for assistant context and suggestions, but it must not reopen
-   `useResources()` or trigger a second unfiltered `all-resources` REST fetch
-   just because the drawer component is present in the app shell.
-   The same app-shell boundary keeps Patrol/Assistant/Actions utility navigation
+   otherwise couple itself to AI availability, Patrol state, model routing, or
+   AI-provider readiness.
+   The same app-shell boundary keeps Patrol and Actions utility navigation
    accessible-name safe: labelled icon SVGs may remain meaningful when rendered
    standalone, but `frontend-modern/src/AppLayout.tsx` must treat them as
    decorative inside tabs so the announced tab name comes from product chrome
    and meaningful badge text rather than icon title duplication. Global
-   governed operations use the peer `/actions` utility destination and stable
-   Assistant page context. Actions owns its selected state and pending-approval
-   badge while Patrol owns only its operational-attention count. This
-   navigation relationship must not merge Actions state into Assistant drawer
-   state or allow the drawer to become an alternate action review client.
-   Scoped
-   approval handoffs sourced from Patrol, active alerts, or alert incident
-   timelines must render as source-named investigation handoffs in the drawer
-   instead of generic dashboard briefs. Source-owned handoff helpers may attach
-   bounded model-only context, resources, action references, and metadata, but
-   ordinary context attachment must not synthesize, prefill, or submit a user
-   prompt. An explicit labelled Explain action is a user-selected task and
-   dispatches the shared evidence-first explanation request through
-   `frontend-modern/src/components/AI/Chat/hooks/useExplanationRequest.ts`.
-   It preserves drafts and current work, captures the selected context before
-   asynchronous initialization, and uses normal send, queue, and retry handling.
-   The store marks that context `autonomousMode:false` so the drawer discloses
-   approval-required posture; the request itself carries no execution-mode
-   field, because `/api/ai/chat` sets that mode server-side. It must not prescribe a diagnosis
-   or a tool sequence or grant action authority. The drawer
-   presentation must stay compact: source, status, one primary subject, and an
-   optional safe route link. It must not render Patrol-authored remediation
-   steps, evidence chips, command summaries, recommendations, or suggested-prompt
-   chips as the answer. Restored Patrol assessment sessions must use the
-   `patrol-assessment` target identity rather than inheriting retired dashboard
-   context; Patrol no longer opens live assessment handoffs. While such a
-   session is attached, the Assistant empty
-   message state must also remain source-named and must not fall back to generic
-   cluster/system starter prompts that compete with the attached briefing.
-   Structured Patrol run handoffs may render bounded, redacted diagnostic lines
-   in the drawer when they are opened directly from Patrol run history, but the
-   attached headline must remain source-owned (`Patrol run attached`)
-   and the drawer must still exclude raw provider payloads, commands, and
-   Patrol-authored remediation steps.
+   governed operations use the peer `/actions` utility destination. Actions
+   owns its selected state and pending-approval badge while Patrol owns only
+   its operational-attention count.
    Platform tabs in that same `frontend-modern/src/App.tsx` shell may remain
    admitted after a current authenticated REST bootstrap or from retained
    server-owned WebSocket state during stream recovery. That navigation
-   evidence must remain independent from Assistant session, handoff, and drawer
-   state, and browser-local Assistant or resource metadata must not resolve
-   platform navigation on an otherwise evidence-free first load. The app
-   shell's global GitHub-star prompt stays behind the kiosk/settings-access
-   gate and outside every AI runtime surface. Assistant, Patrol, Actions, and
-   Discovery chrome must not host commercial prompts.
-   Reloaded Assistant sessions may consume the backend-owned
+   evidence must remain independent from AI availability, and browser-local
+   resource metadata must not resolve platform navigation on an otherwise
+   evidence-free first load. The app shell's global GitHub-star prompt stays
+   behind the kiosk/settings-access gate and outside every AI runtime surface.
+   Patrol and Actions chrome must not host commercial prompts.
+   Clients that reload Assistant sessions may consume the backend-owned
    `handoff_summary` only as safe presentation state and a Patrol finding
    pointer; hidden model context, command payloads, preflight data, and action
-   results stay backend-owned and must not be reconstructed in the browser.
+   results stay backend-owned and must not be reconstructed in a client.
 9. Add or change public Pulse Intelligence overview wording through `docs/AI.md`; it may
-   describe Assistant and Patrol capabilities, but it must not revive legacy
+   describe Patrol and external-agent capabilities, but it must not revive legacy
    commercial shorthand such as `incident memory` as a current product promise.
    The public overview must preserve the product architecture: Pulse
    Intelligence Core owns canonical context, governed actions, safety gates,
    approval state, action audit, and verification; Pulse Patrol is the primary
    built-in operator on that core; its public summary must stay concise as
    watching, investigating, acting within the chosen Patrol mode, verifying outcomes,
-   and recording what happened; and Pulse Assistant plus Pulse MCP are
-   contextual and external-agent access paths over the same governed
-   capabilities.
+   and recording what happened; and Pulse MCP is the external-agent access
+   path over the same governed capabilities.
    Public overview, safety, and onboarding copy must use the same visible
    Patrol mode labels as the product (`Watch only`, `Ask first`,
    `Safe auto-fix`, `Autopilot`) and must not reintroduce the retired
    `Only watch`, `Ask before changes`, `Fix safe issues`,
    `Auto-fix safe issues`, `Full control`, or `Policy autopilot` labels as
    customer-facing names.
-   The public overview must also preserve the model-owned AI boundary: Pulse
-   Assistant and Patrol provide governed context, tools, safety gates,
+   The public overview must also preserve the model-owned AI boundary: Patrol
+   and the external-agent path provide governed context, tools, safety gates,
    approval state, and audit trails, while the configured LLM owns diagnosis,
    prioritization, fix reasoning, and tool choice. Public copy must not
    present Pulse code as the intelligence engine, a prompt-keyword router, a
@@ -4157,50 +2848,47 @@ query...`, and `Reading storage...` before streamed tool arguments are
    External-agent setup metadata follows the same rule: Pulse MCP server name,
    command, base URL flag/default, token environment variable, and supported
    client config families are manifest-owned in
-   `/api/agent/capabilities.mcpAdapter`. Assistant, Pulse Intelligence
-   settings, README, and MCP surfaces may present that setup, but must not
+   `/api/agent/capabilities.mcpAdapter`. Pulse Intelligence settings,
+   README, and MCP surfaces may present that setup, but must not
    maintain separate MCP setup constants. Security API settings may only host
    the scoped-token creation link used by that setup.
 10. Platform/runtime top-level pages registered in
     `frontend-modern/src/App.tsx` and the primary tab list in
-    `frontend-modern/src/AppLayout.tsx` must keep the AI launcher chrome
-    intact: they extend `aiChatStore`-aware route shells rather than mounting
-    bespoke layouts that suppress the Assistant launcher, Patrol entry, or
-    the AI keyboard-shortcut handlers. New per-platform sub-routes inherit
-    the shared AI-aware chrome by virtue of routing through `AppLayout`, and
-    must not introduce a parallel chat surface, launcher button, or model
-    picker on the platform page itself; cross-platform AI guidance stays
-    routed through Assistant and Patrol. The Patrol utility destination in
-    `AppLayout`'s tab lists shares the nav identity-stability contract owned
-    by `frontend-primitives` (`stableNavTabs.ts`): a websocket state frame
-    with structurally unchanged tab content must not recreate the Patrol
-    button DOM or its attention-count badge element. Patrol and the peer
+    `frontend-modern/src/AppLayout.tsx` must keep the Patrol entry chrome
+    intact: they extend `aiAvailabilityStore`-aware route shells rather than
+    mounting bespoke layouts that suppress the Patrol entry or its keyboard
+    shortcut. New per-platform sub-routes inherit the shared chrome by virtue
+    of routing through `AppLayout`, and must not introduce a chat surface,
+    launcher button, or model picker on the platform page itself;
+    cross-platform AI work stays routed through Patrol. The Patrol utility
+    destination in `AppLayout`'s tab lists shares the nav identity-stability
+    contract owned by `frontend-primitives` (`stableNavTabs.ts`): a websocket
+    state frame with structurally unchanged tab content must not recreate the
+    Patrol button DOM or its attention-count badge element. Patrol and the peer
     utility destinations commit navigation without awaiting best-effort module
-    warming, so lazy-route work cannot make the shared AI-aware shell drop or
-    defer a tap.
+    warming, so lazy-route work cannot make the shared shell drop or defer a
+    tap.
     The primary-nav demotion of Infrastructure / Workloads / Storage /
-    Recovery does not change Patrol or Assistant addressability: both
-    surfaces remain reachable through the utility tab strip in
-    `AppLayout.tsx` and via the canonical Patrol path, and platform pages
-    must not replicate Patrol findings, Assistant prompts, or AI launcher
-    affordances inside their own chrome.
+    Recovery does not change Patrol addressability: Patrol remains reachable
+    through the utility tab strip in `AppLayout.tsx` and via the canonical
+    Patrol path, and platform pages must not replicate Patrol findings, AI
+    prompts, or launcher affordances inside their own chrome.
     The vSphere Networks sub-route follows the same AI runtime boundary as the
-    vSphere overview, datastore, health, and activity routes. Network rows may
-    seed Assistant or Patrol context only as shared `network` unified-resource
-    references read through `/api/resources*` and the common handoff payloads;
-    the VMware page must not introduce VMware-local AI prompts, a provider
-    model picker, or a vSphere-specific chat/runtime route just because
-    networks are now rendered as a first-class API-native table.
+    vSphere overview, datastore, health, and activity routes. Network rows
+    reach Patrol only as shared `network` unified-resource references read
+    through `/api/resources*`; the VMware page must not introduce VMware-local
+    AI prompts, a provider model picker, or a vSphere-specific chat/runtime
+    route just because networks are now rendered as a first-class API-native
+    table.
     The frontend-primitives-owned Machines surface follows the same AI runtime
     boundary while retaining the internal `standalone` route/id contract: route
     registration and primary-tab chrome may expose the support-manifest `agent`
-    platform plus agentless availability endpoints, but the page must not add an
-    agent-specific Assistant prompt surface, AI launcher, model picker, or
-    browser-owned model context. Machine rows may seed Assistant or Patrol only
-    through the shared unified resource handoff contracts. Its IA, primary
-    shell position, and landing eligibility belong to `frontend-primitives`;
-    those changes must not alter Patrol or Assistant utility-tab ordering,
-    launcher visibility, or shared keyboard handling in
+    platform plus agentless availability endpoints, but the page must not add
+    an agent-specific AI prompt surface, launcher, model picker, or
+    browser-owned model context. Machine rows reach Patrol only through the
+    shared unified resource contracts. Its IA, primary shell position, and
+    landing eligibility belong to `frontend-primitives`; those changes must not
+    alter Patrol utility-tab ordering or shared keyboard handling in
     `frontend-modern/src/AppLayout.tsx`.
 
 ### Platform navigation admission
@@ -4561,11 +3249,12 @@ resolve canonical/source IDs and unique aliases before collection, reject
     but frontend comments, API denial messages, runtime logs, status labels,
     CLI help, and commercial prompts that describe the capability must use safe
     remediation or remediation wording.
-12. Keep AI control-level presentation runtime-owned rather than tier-owned.
-    `frontend-modern/src/utils/aiControlLevelPresentation.ts` and
+12. Keep AI runtime controls runtime-owned rather than tier-owned.
     `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
-    may describe approval posture, but must not add Pro-badge suffixes or
-    local commercial tracking around those runtime controls.
+    owns the cost budget and request timeout, and must not add Pro-badge
+    suffixes or local commercial tracking around those runtime controls. The
+    Assistant chat control level has no browser surface since the chat window
+    was retired; it remains an API setting for Pulse Mobile chat.
 13. Keep Assistant control and Patrol paid runtime settings entitlement-effective
     at every runtime boundary. Stored config may preserve autonomous, Patrol
     auto-remediation, and alert-triggered analysis preferences so they come
@@ -4843,55 +3532,24 @@ resolve canonical/source IDs and unique aliases before collection, reject
     approval states may set it, but approved, denied, rejected, executing,
     completed, failed, expired, or otherwise historical action references must
     remain action context without being relabeled as requiring approval.
-    When the Assistant drawer restores any session from that `handoff_summary`,
-    it must restore the scoped approval-required disclosure (the drawer-only
-    `autonomousMode:false` context flag) as well as the safe visible briefing,
-    even when the summary is context-only and has no queued action. The next
-    chat turn carries no execution-mode field; `/api/ai/chat` runs it
-    approval-required server-side. The visible badge/action copy must still reflect the
-    actual last-known action state or Patrol assessment context instead of
-    inventing a pending approval or restoring a Patrol recommendation. That
-    restoration is success-bound: if the underlying session message load fails,
-    the drawer must leave the current context untouched instead of applying
-    summary-derived Patrol or approval state for a session the operator is not
-    actually viewing.
     Before `/api/ai/sessions` returns summaries with stored handoff action
     references, the chat runtime must refresh their safe approval/action status
     from the canonical approval store and action-audit store. Session listing is
     an operator decision surface, so it must not leave stale pending/approval
-    labels in the drawer after the governed action moved on, and it must still
-    omit raw commands, preflight bodies, and execution output. That refresh is
-    bounded, not exhaustive: the list is newest-first and only the
-    `maxSessionHandoffRefreshPerList` (20) most recent action-carrying
-    sessions are re-checked per list call, which covers every summary the
-    recent-sessions surface and picker top present; deeper history self-heals
-    because the send path refreshes the active session's handoff actions on
-    load before the turn executes.
-    The Assistant drawer must also fetch that current session list before
-    opening the session picker instead of presenting mount-time cached
-    summaries as the operator's decision surface. For restored Patrol
-    assessment or finding sessions, that picker must present only the safe
-    handoff kind, source, resource/action counts, and approval/action status
-    from `handoff_summary`; it must not restore Patrol recommended
-    next-step title/detail/action labels, route-owned hrefs, or disabled-action
-    reasons as visible or hidden context.
-    Browser-originated `handoff_context`, `handoff_resources`, and
+    labels after the governed action moved on, and it must still omit raw
+    commands, preflight bodies, and execution output. That refresh is bounded,
+    not exhaustive: the list is newest-first and only the
+    `maxSessionHandoffRefreshPerList` (20) most recent action-carrying sessions
+    are re-checked per list call; deeper history self-heals because the send
+    path refreshes the active session's handoff actions on load before the
+    turn executes.
+    Client-originated `handoff_context`, `handoff_resources`, and
     `handoff_actions` plus safe `handoff_metadata` are one-shot request seeds
     for the first successful chat turn. Patrol next-step titles, details,
     labels, and route-owned hrefs do not belong in `handoff_metadata`, and
     model-context text parsing must not resurrect them as a legacy fallback.
-    After that send succeeds, the drawer
-    must clear those request payloads while preserving the safe visible
-    briefing and the drawer's
-    approval-required disclosure; later turns must rely on backend-owned session
-    model-context hydration and current canonical stores instead of resending
-    stale browser handoff payloads. Patrol approval-row Assistant entries are
-    still Patrol finding handoffs, not local prompt-only shortcuts: live
-    approval rows, expired action-artifact rows, and missing-detail queued-fix
-    recovery rows must route through the shared Patrol finding handoff builder
-    so the backend receives the same bounded model-only finding context,
-    resource reference, and safe action reference posture that the main finding
-    handoff uses.
+    Later turns rely on backend-owned session model-context hydration and
+    current canonical stores rather than resent handoff payloads.
     Proposed-fix command text must stay out of both the persisted chat message
     and the model-only handoff context, and command payloads remain
     approval-context data, not conversational copy.
@@ -4900,7 +3558,7 @@ resolve canonical/source IDs and unique aliases before collection, reject
     caller JSON (a stale client's `autonomous_mode:true` included) is dropped at
     decode, and `HandleChat` passes `AutonomousMode:false` into the chat service
     whether or not the request carries a `finding_id` or model-only briefing,
-    resource, or action context. The browser sends no execution-mode field.
+    resource, or action context. Clients send no execution-mode field.
     That clamp belongs to the
     backend/API execution boundary, does not mutate the user's persistent AI
     control setting, and prevents product-originated Patrol action context from
@@ -4914,22 +3572,6 @@ resolve canonical/source IDs and unique aliases before collection, reject
     effective control level to controlled for that request only, so even
     policy-allowed diagnostic commands require operator approval in public chat
     without mutating the user's saved setting.
-    The Assistant drawer may also render an attached context briefing for that
-    handoff, but the briefing is runtime context visibility only: it must not
-    mutate chat control settings, execute tools, or reveal raw command payloads.
-    Resource-drawer Assistant entries use that same briefing path with
-    `handoff_metadata.kind=resource_context`, a structured `handoff_resources`
-    reference, and the drawer-only `autonomousMode:false` approval disclosure;
-    they must not prefill or submit a
-    browser-authored prompt, and any rich resource facts must be hydrated by the
-    backend context-pack path rather than reconstructed in the browser.
-    Safe route-owned briefing actions may render as app links when the handoff
-    includes an `actionHref`, but those links are navigation guidance only and
-    do not grant tool execution or approval authority.
-    Scoped handoffs must present the approval-required boundary
-    through compact source-named drawer state and the effective control label,
-    so Patrol approval/finding handoffs and alert-investigation handoffs are
-    named by their source rather than as generic dashboard briefs.
 
 ### Operational attention projection boundary
 
@@ -5098,23 +3740,20 @@ diagnostic evidence only; the shared manifest remains the error-vocabulary
 owner, and canonical Actions remains the sole mutation plane for both human and
 automatic policy execution.
 
-First-session assistant discoverability is now a contract concern. Successful
-first-time provider setup (the Provider & Models setup modal) must open the
-Assistant drawer and refresh the session `assistantEnabled` capability in
-place, so the launcher and per-surface handoff buttons appear without a page
-reload; the enable/save toasts point at the Assistant rather than back at
-settings. The Assistant's empty transcript owns a plain-language welcome plus
-static suggested prompts (`ASSISTANT_SUGGESTED_PROMPTS` in `ChatMessages.tsx`)
-that dispatch as real chat turns; server-driven workflow starters remain a
-separate composer affordance. Patrol static readiness treats the blessed
-Ollama Patrol model (`config.OllamaSuggestedPatrolModel`) as Ready — the
-recommended free path must not report itself degraded — while other Ollama
-models keep the unverified-tool-support warning, which now names the selected
-model instead of instructing the operator to pull the model they already
-selected. `pulse_summarize` fleet-mode argument errors instruct the model to
-enumerate resources itself rather than interrogate the operator for resource
-IDs; assistant-facing tool errors must prefer self-recovery guidance over
-operator questions.
+First-session Patrol discoverability is a contract concern. Successful
+first-time provider setup (the Provider & Models setup modal) must refresh the
+session `assistantEnabled` capability in place through
+`frontend-modern/src/stores/aiAvailability.ts`, so the Patrol tab and alert
+Investigate actions appear without a page reload; the enable toast points at
+Patrol. Patrol static readiness treats the blessed Ollama Patrol model
+(`config.OllamaSuggestedPatrolModel`) as Ready — the recommended free path
+must not report itself degraded — while other Ollama models keep the
+unverified-tool-support warning, which names the selected model instead of
+instructing the operator to pull the model they already selected.
+`pulse_summarize` fleet-mode argument errors instruct the model to enumerate
+resources itself rather than interrogate the operator for resource IDs;
+assistant-facing tool errors must prefer self-recovery guidance over operator
+questions.
 
 Automatic Watch detection now carries a declining 7,000-token run allowance:
 normal structured turns receive at most 2,048 output tokens, terminal summaries
@@ -5218,7 +3857,7 @@ new Assistant provider-repair actions.
 
 Primary platform route memory in `frontend-modern/src/AppLayout.tsx` may
 preserve platform-local query state such as workload filters, but that memory
-remains navigation chrome only. It must not fork Assistant drawer state, Patrol
+remains navigation chrome only. It must not fork AI availability state, Patrol
 utility route state, prompt context, resource reads, commercial posture, or
 cross-platform query parameters.
 
@@ -5268,7 +3907,7 @@ spend for the session summed from the operator cost ledger
 turns, compaction, and title calls, all of which stamp `session_id` on
 their `cost.UsageEvent`. The figure is omitted whenever any of the
 session's events prices against an unknown model, and free local models
-(Ollama) price known-at-zero, so the drawer's last-turn summary appends
+(Ollama) price known-at-zero, so a client's last-turn summary may append
 "$0.12 session" only when the whole session is honestly priceable and
 non-zero. The summary never invents a client-side pricing table; the
 backend ledger is the only cost authority.
@@ -5366,62 +4005,6 @@ constructed at service start, so anything that must stay fresh per turn
 carries no PII and is therefore safe on cloud-routed turns regardless of the
 operational-context sharing opt-in.
 
-The streaming transcript list reconciles messages by `id` rather than rendering
-the raw message array by reference. `useChat` rebuilds its message array
-immutably on every stream event (each content chunk, workflow-status change, and
-tool update spreads a brand-new message object), so a reference-keyed `<For>`
-would tear down and recreate the whole `MessageItem` on every event — the
-visible flashing, rows popping in and out, and transcript jumping up and down
-during a turn. `ChatMessages` (`frontend-modern/src/components/AI/Chat/ChatMessages.tsx`)
-reconciles the incoming array into a keyed `solid-js/store` mirror so each
-message keeps a stable identity across updates; `MessageItem` already reads every
-field through accessors, so only the genuinely changed text/rows update in place.
-This keeps the live transcript stable the way OpenCode's timeline is.
-
-The same stability rule applies one level down, to the per-message
-stream-event/tool-row list inside `MessageItem`. `groupStreamEventsForDisplay`
-remaps blocks to fresh objects on every tick and `StreamDisplayEvent` carries no
-id, but the grouped list is strictly append-ordered (the grouper only pushes new
-blocks or mutates the open content/thinking block in place — it never inserts
-mid-list or reorders). It therefore renders through `<Index>` (positional
-keying), not a reference-keyed `<For>`: each row keeps its DOM node across
-event-object rebuilds at a stable position, so the streaming answer block and
-completed tool rows update in place instead of re-mounting (and re-parsing
-markdown) on every content delta. Positional keying is correct here precisely
-because the list is append-only; a list that could reorder or key by identity
-must not use `<Index>`.
-
-The streaming answer block itself renders by morphing the DOM, not by replacing
-`innerHTML` on every tick. `renderMarkdown` re-parses the full (DOMPurify-
-sanitized) answer on each paced reveal; assigning that to `innerHTML` rebuilds
-the entire prose subtree, so a multi-paragraph or list/table answer flickers and
-reflows every earlier line as it streams. `AssistantMarkdownBlock` instead feeds
-the sanitized HTML to `morphMarkdownInto`
-(`frontend-modern/src/components/AI/Chat/markdownMorph.ts`), which reconciles old
-and new trees in place: structurally-identical nodes are left untouched, same-tag
-nodes are morphed (recursing into children so a growing `<ol>`/`<table>` keeps
-its earlier `<li>`/`<tr>` and only the last one updates), and the growing tail
-block updates its text node rather than being rebuilt. The morph is a rendering
-optimization only — `renderMarkdown` remains the sole sanitization gate and the
-morph must never be fed unsanitized HTML.
-
-Live workflow status is footer-owned, not a transcript artifact (the OpenCode
-restraint model — see the canonical statement in Extension Points, which
-supersedes the older per-row transcript-status rules in this contract). Earlier
-Pulse rendered "Preparing context / Reading inventory / Counting / Waiting for
-assistant / retrying" both as transcript rows AND in the activity dock, so the
-chat narrated every internal step into the timeline. Now `MessageItem` never
-renders workflow status — neither the per-event `role="status"` row
-(`shouldRenderWorkflowStatusEvent` is `false`) nor the early-phase header chip
-(`shouldShowHeaderWorkflowStatus` is `false`). The transcript carries only
-durable artifacts (reasoning, tool calls, model-route rows, the answer). The
-single live "assistant is working" indicator is the activity dock above the
-composer, which shows a spinner + the current status + the model route + Stop.
-The dock is gated on `assistantTurnActive` (loading OR a streaming assistant
-message) rather than `chat.isLoading()` so it persists for the whole turn:
-`isLoading` flips false at visible-turn-complete, which previously made the dock
-flash its status for a frame and vanish.
-
 Prompt wording must not gate tool availability at all. The greeting/meta
 text-only classifier (`assistantPromptLooksConversational`) is removed along
 with the rest of the `assistantToolScopeForPrompt` keyword router: even "hi"
@@ -5485,82 +4068,12 @@ The earlier form ("I completed N successful check(s) using call_27f0f389…, …
 automatic summary. Latest successful result snippet: {…raw JSON…}") is forbidden:
 provider call ids and raw tool JSON are not operator-facing answer content.
 
-Assistant slash-command availability is part of the command runtime contract,
-not only visual polish. The OpenCode reference at fetched `origin/dev` commit
-`c495635` filters prompt slash commands through the registered command catalog
-and omits disabled builtin commands from the prompt popover in
-`packages/app/src/components/prompt-input.tsx` (slash command list creation,
-lines 677-699), while command metadata owns `disabled` and `slash` in
-`packages/app/src/context/command.tsx`. Pulse adapts that by deriving command
-availability from the same predicates as the drawer toolbar: prompt slash
-autocomplete hides unavailable local commands, command help may show them
-disabled with a reason, and manual slash submissions respect the same
-availability before running local session actions.
 
-Assistant provider-route recovery must read as explicit operator action, not
-automatic fallback. The OpenCode reference at fetched `origin/dev` commit
-`914a643` retries the selected provider/model route through
-`packages/opencode/src/session/retry.ts` and
-`packages/opencode/src/session/processor.ts` by passing
-`input.model.providerID` into `SessionRetry.policy`, renders retry state in
-`packages/ui/src/components/session-retry.tsx`, and records provider/model
-changes as explicit `ModelSwitched` session events in
-`packages/core/src/session/event.ts` plus `packages/opencode/src/session/prompt.ts`.
-Pulse adapts that by keeping same-route retry visible, ignoring obsolete
-provider route-switch metadata without changing the selected route, and labeling
-failed-turn or readiness recovery buttons as explicit route/model-route choices
-instead of implying automatic route adoption.
-
-Assistant model-catalog failure is selector-local state, not a drawer
-initialization failure. The OpenCode reference at fetched `dev` commit
-`3867fa2bad0e644166e360e2e99cfe426fe71105`
-`packages/opencode/src/cli/error.ts` lines 58-69 formats missing model/catalog
-state as an operator-facing model-selection problem with a list-models hint,
-while `packages/opencode/src/session/llm.ts` lines 96-104 resolves the
-selected provider/model route independently for the stream. Pulse adapts that
-by letting Assistant sessions, settings, route health, and the composer finish
-opening when `/api/ai/models` fails; the catalog error stays attached to the
-model selector and may be refreshed explicitly, but startup must not log or
-render a broad Assistant initialization failure, and it must not replace the
-selected model route.
-
-Assistant completed-turn chrome is route-owned summary, not raw usage output.
-The OpenCode reference at fetched `dev` commit
-`3867fa2bad0e644166e360e2e99cfe426fe71105` imports `turnSummaryCommit` in
-`packages/opencode/src/cli/cmd/run/scrollback.surface.ts` lines 19-20, while
-`packages/opencode/src/cli/cmd/run/turn-summary.ts` lines 5-46 emits a final
-system summary with agent, model, and duration. Pulse adapts that by deriving
-the latest completed, non-streaming assistant turn and surfacing its effective
-provider/model route, duration, and backend-proven token total in low-priority
-composer chrome. Input/output usage remains title/accessibility detail only,
-missing provider usage does not hide route and duration, and active streaming
-turns never appear as the completed-turn summary.
-
-Assistant tool activity now follows an OpenCode-referenced chronological row
-model where appropriate for Pulse. Consecutive context/read/query tools render
-as visible transcript rows in arrival order instead of being replaced by a
-grouped context footer, while command previews, inputs, progress, and large
-outputs remain contained inside each tool row. This keeps the user-facing stream
-feeling active without dumping large command output into the default answer.
-Fast tool completions must also stay visibly live long enough to be perceived:
-the frontend stream reducer stamps sub-420ms successful tool completions with a
-transient settle deadline, and the row renders that deadline as a running state
-even if the turn's `done` event has already arrived. The referenced OpenCode
-source at fetched `dev` commit `e82542b8023a8374f29c23b70ec019c8f256354e`
-implements the same user-visible principle in
-`packages/opencode/src/cli/cmd/run/session-data.ts` by emitting a `start` commit
-for running tools and a later completed/error commit instead of only surfacing a
-batched terminal transcript. Pulse adapts that as an in-memory UI settle window
-because Pulse transcripts persist completed tool facts, not OpenCode scrollback
-commit phases.
-The 2026-06-08 live-tool-start slice rechecked OpenCode source at fetched `dev`
-commit `3867fa2bad0e644166e360e2e99cfe426fe71105`:
-`packages/opencode/src/session/processor.ts` creates the visible tool part in
-`ensureToolCall` (lines 299-349) and moves that same part to `running` on
-`tool-call` (lines 507-521). Pulse adapts that by making `ToolStartData`
-self-describing live activity: `tool_start` must carry a running phase when
-execution is visible, and the frontend must render a new start row as running
-immediately even if `tool_progress` arrives in a later paint.
+`tool_start` carries a running phase when execution is visible, so a client can
+render a new start row as running immediately even if `tool_progress` arrives
+later. This adapts OpenCode `packages/opencode/src/session/processor.ts`
+(`ensureToolCall`, dev commit `3867fa2bad0e644166e360e2e99cfe426fe71105`),
+which moves the visible tool part to `running` on `tool-call`.
 
 Assistant provider retries are a first-class visible workflow state, not a
 hidden server log. The referenced OpenCode source at fetched `dev` commit
@@ -5574,108 +4087,8 @@ hidden server log. The referenced OpenCode source at fetched `dev` commit
 that contract at the owning stream boundary: `WorkflowStateData` carries
 `attempt`, `max_attempts`, and `retry_after_ms`, and `AgenticLoop` emits
 `provider_retry` before sleeping between transient pre-output provider
-attempts. The frontend active-turn footer and live transcript workflow row
-render that same typed workflow state immediately as compact attempt/backoff
-progress, counting down `retry_after_ms` from `started_at` while the turn
-remains active, so the user sees Pulse moving through a retry instead of
-staring at an obsolete provider-wait message. Retry workflow states are not
-held behind workflow-history pacing.
-
-Assistant workflow progress is also a live typed activity row while a turn is
-in flight, not only hidden footer state. The referenced OpenCode source at
-fetched `dev` commit `7ae856a9e97130f664f6f11fa5871a2795de9902` stores
-session status separately from message parts in
-`packages/opencode/src/cli/cmd/tui/context/sync.tsx` (`session_status`,
-`session.status` event handling) and renders a session from live messages,
-permissions, questions, and running tool parts in
-`packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` (`Session`,
-`messages`, `permissions`, `questions`, foreground `ToolPart` selection, and
-`session.status` handling). Pulse adapts that source pattern with a transient
-frontend `workflow_status` display event: each incoming backend
-`workflow_state` replaces the prior workflow row, the active footer reads the
-same typed status, and visible assistant content, reasoning, tool,
-approval/question, terminal `done`, and terminal `error` events clear that row.
-The frontend now also keeps a bounded live-only `workflowStatusHistory` for the
-active assistant message so the reducer preserves state continuity while
-backend preparation, context, and provider-start labels are being replaced. The
-shared workflow-status presentation helper owns both the transcript row and the
-active-turn composer footer so the two live surfaces show the latest canonical
-workflow state immediately. Retry/backoff and stream-idle liveness states cut
-through pacing because they are current route health, not neutral setup motion.
-The transcript and footer therefore show current motion while the provider is
-starting, retrying, or reasoning, but completed answers do not retain stale
-internal-progress prose.
-Stream-idle heartbeats are part of that same visible workflow state. When the
-frontend knows the selected provider/model route from the backend workflow event
-or the streaming assistant message, the idle heartbeat must render as
-route-specific liveness such as `OpenRouter is still working; waiting for more
-response data.` instead of reverting to generic Assistant waiting copy.
-Prompt dispatch itself is also a visible live state: before any backend
-workflow event returns, the frontend seeds the active assistant turn with a
-local `request_send` / `Sending prompt.` workflow row after any selected-model
-row. That row is explicitly transient: it is the current live state but does
-not enter the paced backend workflow history, the first backend workflow state
-may replace it, and content, thinking, tool, approval, question, model-route,
-done, or error evidence removes it from the durable transcript. This adapts the
-referenced OpenCode source at fetched `dev` commit
-`e82542b8023a8374f29c23b70ec019c8f256354e`, where
-`packages/opencode/src/cli/cmd/run/runtime.queue.ts` emits `turn.send` with
-`sending prompt` at lines 174-184, `packages/opencode/src/cli/cmd/run/footer.ts`
-maps `turn.send` and `turn.wait` to live footer status at lines 133-145, and
-`packages/opencode/src/cli/cmd/run/stream.transport.ts` promotes quiet
-post-send periods to `waiting for assistant` at lines 1350-1357. Pulse keeps
-that send/wait distinction in the live chat turn by promoting an unreplaced
-local `request_send` status to local `request_wait` / `Waiting for assistant`
-when the browser API client receives an open SSE response but before any parsed
-backend-visible SSE activity arrives, while preserving the Pulse transcript
-rule that only backend workflow, route, content, and tool evidence remain once
-real activity exists.
-
-Assistant drawer shell status follows the same OpenCode-referenced separation
-between prompt-adjacent operational status and transcript content. The
-referenced OpenCode source at fetched `dev` commit
-`e82542b8023a8374f29c23b70ec019c8f256354e` renders agent/model metadata beneath
-the prompt and active/retry/interrupt state in the prompt footer in
-`packages/tui/src/component/prompt/index.tsx`, with broader system status kept
-in `packages/tui/src/routes/session/footer.tsx`. Pulse adapts that pattern for
-the web drawer by keeping model route, recent-route cycling, control mode,
-last-turn usage, active workflow progress, queued follow-ups, route-recovery
-notices, and the autonomous control warning in the input-adjacent
-composer/status rail.
-Those items stay visible and actionable, but they do not compete with the
-transcript as separate top-of-drawer banners unless they are provider readiness
-or scoped handoff context surfaces with their own governed content.
-Queued follow-up pressure is part of that active-turn state: the frontend
-derives the count from queued user transcript turns, appends it to the primary
-active Assistant headline while a turn is running, and keeps the separate
-queued-follow-up row actionable for reorder/cancel operations.
-That suffix must compose with live workflow pacing rather than disabling it:
-when backend workflow states arrive in a burst, the active headline still walks
-through the paced status sequence while retaining the queued follow-up count.
-This preserves the OpenCode-referenced live-part feel from
-`packages/tui/src/routes/session/index.tsx` lines 1492-1503 and the running
-tool metadata updates in `packages/opencode/src/session/tools.ts` lines 54-63,
-while adapting the interaction to Pulse's single active-turn plus queued
-follow-up safety model.
-
-Assistant chat actions follow the same OpenCode-referenced footer principle:
-actions are reachable from prompt-adjacent chrome, not only from a hidden slash
-draft. The referenced OpenCode source at fetched `dev` commit
-`e82542b8023a8374f29c23b70ec019c8f256354e` builds the direct command surface in
-`packages/opencode/src/cli/cmd/run/footer.command.tsx` (`RunCommandMenuBody`
-with suggested actions, slash commands, and search) and keeps the footer command
-entry discoverable from `packages/opencode/src/cli/cmd/run/footer.view.tsx`.
-Pulse adapts that pattern for the web drawer by exposing the existing Assistant
-commands dialog from the composer chrome and making that dialog searchable and
-keyboard-selectable. The button, slash-triggered help, dialog search, and
-keyboard selection must use the same `ASSISTANT_SLASH_COMMANDS` registry,
-`filterAssistantSlashCommands`, `AssistantCommandHelpDialog`, and
-`executeSlashCommand` path as `/help` and `/commands`; they must not introduce
-a second command registry or a separate provider-bound prompt path. The command
-dialog search box must compose the frontend-primitives `SearchField` so the
-shared search-control registry owns clear-button behavior, input chrome,
-keyboard forwarding, and native-search-input drift prevention while AI runtime
-keeps ownership of command filtering and execution semantics.
+attempts, so a client can show attempt/backoff progress instead of an obsolete
+provider-wait message.
 
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 and 2026-06-25 through `frontend-modern/src/App.tsx` and
@@ -5697,14 +4110,13 @@ was retired alongside its page wrapper, and `/workloads`, `/storage`,
 top-level routes. Primary platform tab `settingsRoute` handoffs must also point
 to the canonical `/settings/infrastructure` workspace rather than retired
 settings aliases such as `/settings/workloads/docker` or nested
-`/settings/infrastructure/platforms/*` paths. The AI Chat launcher, Patrol surfaces, and
-`AssistantHandoffPayload` deep links must use canonical platform or runtime
+`/settings/infrastructure/platforms/*` paths. Patrol surfaces and their deep links must use canonical platform or runtime
 routes (`/proxmox/overview`, `/proxmox/storage`, `/kubernetes/workloads`, etc.)
 rather than reviving retired Infrastructure or aggregate workspace paths;
-adding a platform tab through the same shell files must not fork Assistant or
-Patrol shell state or smuggle in AI-owned platform reads.
+adding a platform tab through the same shell files must not fork AI availability
+or Patrol shell state or smuggle in AI-owned platform reads.
 Post-auth `/` and `/login` resolution follows the frontend-primitives-owned
-provider-first platform landing contract, so the assistant-capable shell never
+provider-first platform landing contract, so the authenticated shell never
 overrides Machines-surface eligibility or revives legacy Infrastructure as the
 default estate surface. The user-facing Machines label is an app-shell
 presentation label for the existing `standalone` route/id and must not create a
@@ -6090,103 +4502,76 @@ That same runtime-backed contract now governs AI settings enablement too:
 unconfigured installs open provider setup, while stale managed-credit or
 activation-required states are treated as compatibility metadata rather than a
 direct-enable path.
-That same AI/runtime boundary now also owns the server-side assistant
-availability fact used by the app shell. `internal/api/ai_handlers.go`,
+That same AI/runtime boundary now also owns the server-side AI availability
+fact used by the app shell. `internal/api/ai_handlers.go`,
 `internal/api/security_status_capabilities.go`, and
 `internal/api/router_routes_auth_security.go` must expose one canonical
 `/api/security/status.sessionCapabilities.assistantEnabled` signal for the
-closed assistant affordance, so unrelated shells do not probe
-`/api/settings/ai` or `/api/ai/sessions` during ordinary route bootstrap just
-to decide whether the assistant drawer may be opened.
+shell's AI entry points, so unrelated shells do not probe `/api/settings/ai`
+or `/api/ai/sessions` during ordinary route bootstrap just to decide whether
+Patrol entry points render.
 That same frontend runtime boundary now also owns the shared AI read model for
 AI-owned surfaces. `frontend-modern/src/stores/aiRuntimeState.ts` is the
 canonical frontend owner for shared `/api/settings/ai` and `/api/ai/models`
-reads used by chat, Patrol, and AI usage surfaces, while
+reads used by Patrol and AI usage surfaces, while
 `frontend-modern/src/components/Settings/useAISettingsState.ts` remains the
 write-side settings owner. AI-owned surfaces must not fork their own mount-time
 settings/model fetch loops once this store exists.
-The assistant drawer/session shell is a separate shared boundary:
-`frontend-modern/src/stores/aiChat.ts` owns open state, focused-input handoff,
-context accumulation, and org-switch clearing for the assistant drawer, while
+The AI availability fact is a separate shared boundary:
+`frontend-modern/src/stores/aiAvailability.ts` holds the session
+`assistantEnabled` capability for the shell, while
 `frontend-modern/src/stores/aiRuntimeState.ts` owns the shared backend-backed
-settings and model catalog reads. AI runtime consumers must not move drawer
-shell state into page-local signals or teach `aiChat.ts` to bootstrap its own
+settings and model catalog reads. Consumers must not move that fact into
+page-local signals or teach `aiAvailability.ts` to bootstrap its own
 `/api/settings/ai` or `/api/ai/models` reads.
-That same drawer boundary owns responsive presentation too. The canonical
-assistant drawer may dock and push the authenticated shell only when the
-viewport is wide enough to preserve a usable primary operating surface; once
-the available viewport drops below that shell threshold, the drawer must
-become an overlay owned by `frontend-modern/src/components/AI/Chat/index.tsx`
-instead of compressing Infrastructure, Workloads, Storage, or other primary
-runtime pages into an unusable narrow column or forking page-local layout
-exceptions.
-On that mobile overlay path, both the drawer and its backdrop must stop above
-the mobile navigation safe-area boundary so closing or changing routes remains
-available; the full-height desktop drawer boundary resumes only with the
-desktop shell.
-The closed assistant launcher follows the same shared-shell rule. While the
-mobile navigation shell is active, `frontend-modern/src/AppLayout.tsx` must
-present the launcher in the authenticated header flow, where it cannot cover
-the operating surface or the mobile nav, instead of restoring the desktop
-right-edge rail at an earlier breakpoint. The edge-mounted launcher is only
-valid at the desktop shell breakpoint where the primary navigation and page
-chrome are also desktop-mode.
 Non-AI shell notices may coexist in `frontend-modern/src/AppLayout.tsx`, but
 they must remain presentation-only. Prerelease banners, billing callouts, or
-other header-adjacent notices must not fork assistant open state, gate on AI
-runtime fetches, or move assistant availability logic out of
-`frontend-modern/src/stores/aiChat.ts` and `frontend-modern/src/useAppRuntimeState.ts`
-just because they share the same authenticated shell. The remaining
-prerelease-shell treatment is the compact `Preview` badge on rc-channel
-builds; `frontend-modern/src/AppLayout.tsx` must not revive a standalone
-release-candidate banner, release-notes CTA, or feedback CTA that starts
-participating in assistant-shell state or modal ownership.
+other header-adjacent notices must not gate on AI runtime fetches or move AI
+availability logic out of `frontend-modern/src/stores/aiAvailability.ts` and
+`frontend-modern/src/useAppRuntimeState.ts` just because they share the same
+authenticated shell. The remaining prerelease-shell treatment is the compact
+`Preview` badge on rc-channel builds; `frontend-modern/src/AppLayout.tsx` must
+not revive a standalone release-candidate banner, release-notes CTA, or
+feedback CTA that starts participating in AI availability state or modal
+ownership.
 The retired monitored-system capacity banner follows the same shell rule:
 `frontend-modern/src/App.tsx` must not reintroduce app-shell commercial
 volume warnings just because settings or support surfaces still expose
-monitored-system grouping data. Assistant state and shell notices stay
+monitored-system grouping data. AI availability and shell notices stay
 independent from retired infrastructure-volume commerce.
 The global update progress watcher in `frontend-modern/src/App.tsx` is
-likewise server-updater shell chrome, not assistant surface: its in-progress
+likewise server-updater shell chrome, not an AI surface: its in-progress
 stage vocabulary mirrors the backend updater pipeline (including the
-`restoring` stage emitted by update rollback), and assistant state, drawer
-ownership, and AI runtime surfaces must not key off those update stages.
+`restoring` stage emitted by update rollback), and AI availability and AI
+runtime surfaces must not key off those update stages.
 On authenticated installations that watcher also mounts only when the served
 `settingsCapabilities.systemSettingsRead` value mirrors the update-status
 route's `RequireAdmin` plus `settings:read` gate. Auth-free installations keep
 the watcher because those routes remain reachable there. Neither branch may
-become an Assistant capability, provider-readiness signal, or AI bootstrap
+become an AI availability signal, provider-readiness signal, or AI bootstrap
 probe.
-That same shared shell boundary must respect blocking modal ownership.
-`frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` may use
-the shared dialog runtime to hide the closed assistant launcher and close the
-drawer while a blocking shared dialog is open, but they must not leave Pulse
-Assistant interactive behind a modal or fork a second assistant-open state
-model to do it.
 That same shared shell rule applies when presentation policy suppresses hosted
 organization chrome: `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` may hide org switchers or demo-only org
-labels, but they must not couple assistant visibility, session reset, or
-drawer-open behavior to that organization presentation state.
+labels, but they must not couple AI availability or Patrol entry visibility
+to that organization presentation state.
 That same shell boundary also owns demo-only support-surface suppression:
 Pulse no longer exposes Operations as a top-level route. Demo-only support
-surfaces now hide inside the shared Settings navigation instead, and assistant
-availability plus reset behavior must stay independent of that settings-nav
-presentation choice.
+surfaces now hide inside the shared Settings navigation instead, and AI
+availability must stay independent of that settings-nav presentation choice.
 Authenticated `/login` recovery belongs to that same route shell boundary:
 once login succeeds, `frontend-modern/src/App.tsx` must resolve `/login`
 through the canonical provider-first post-auth landing route instead of leaving
-the assistant-capable authenticated shell stranded on a route that only exists
+the authenticated shell stranded on a route that only exists
 for logged-out presentation.
 App-shell route preloading may include the Patrol route module, but it must
-remain module-only. It must not prefetch AI settings, model state, findings,
-chat sessions, or assistant context while the drawer is closed.
+remain module-only. It must not prefetch AI settings, model state, findings, or
+chat sessions.
 `docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
-`frontend-modern/src/stores/aiRuntimeState.ts` and
-`frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof
-route, and keep `frontend-modern/src/stores/aiChat.ts` on the shared
-AI-runtime/frontend-primitives proof boundary instead of leaving the chat shell
-or assistant drawer state unowned.
+`frontend-modern/src/stores/aiRuntimeState.ts` on the explicit AI runtime proof
+route, and keep `frontend-modern/src/stores/aiAvailability.ts` on the shared
+AI-runtime/frontend-primitives proof boundary instead of leaving the AI
+availability fact unowned.
 That same settings/runtime boundary now also governs BYOK first-run setup:
 `frontend-modern/src/components/Settings/useAISettingsState.ts` may send only
 provider credentials or base URLs when the operator connects a provider, and
@@ -6226,48 +4611,26 @@ empty-state, and range-button presentation contract. Future cost-surface work
 must extend those owners instead of reintroducing inline AI usage copy or
 dashboard-local segmented-button styling.
 The same runtime boundary also owns the shared AI semantic presentation
-helpers used across chat, settings, and usage surfaces.
-`frontend-modern/src/utils/aiProviderPresentation.ts`,
-`frontend-modern/src/utils/aiProviderHealthPresentation.ts`,
-`frontend-modern/src/utils/aiControlLevelPresentation.ts`,
-`frontend-modern/src/utils/aiChatPresentation.ts` are the canonical owners
-for provider naming, provider health labels, control-level semantics,
-chat drawer title/subtitle, launcher title/aria copy, session-menu labeling,
-discovery hint framing, chat/session empty states, assistant message and
-question-card labels.
-Discovery hint framing must follow the Pulse Intelligence settings IA: use the
-simple `Discovery` label, and explain the concrete service context it unlocks,
-without promoting workload discovery as another first-class product surface.
-Settings and chat surfaces must consume those helpers instead of keeping local
-AI wording or model/provider inference branches.
-Assistant chat must not render Pulse-authored explore pre-pass cards or
-internal workflow-state cards as assistant output. The user-facing stream is
-model text, model thinking where supported, model-selected tool calls, governed
-approval requests, and model questions; internal runtime telemetry stays out of
-the chat transcript. The browser runtime may keep the latest `workflow_state`
-message on the in-flight assistant turn only as drawer status text while waiting
-for model content, so provider/session progress is visible without turning
-runtime telemetry into transcript content.
+helpers used across settings, Patrol, and usage surfaces.
+`frontend-modern/src/utils/aiProviderPresentation.ts` and
+`frontend-modern/src/utils/aiProviderHealthPresentation.ts` are the canonical
+owners for provider naming and provider health labels. Settings and Patrol
+surfaces must consume those helpers instead of keeping local AI wording or
+model/provider inference branches.
+The Assistant chat stream must not carry Pulse-authored explore pre-pass
+cards or internal workflow-state cards as assistant output. The user-facing
+stream is model text, model thinking where supported, model-selected tool
+calls, governed approval requests, and model questions; internal runtime
+telemetry stays out of the transcript.
 Cold-start Assistant chat session creation is also stream-owned. Ordinary first
 messages may call `/api/ai/chat` without a `session_id`; `chat.Service.ExecuteStream`
 must create or resolve the durable session before provider execution and emit a
-first-class `session` SSE event carrying `SessionData{ID: ...}`. The browser
-chat runtime binds its active session from that stream event, with `done` and
-`question` session identifiers retained only as compatible terminal/interactive
-payloads, rather than issuing a separate `/api/ai/sessions` preflight before
-the first user message. Explicit session-management actions may still create a
-session through the session endpoint.
-The Assistant drawer's `New` action is a local blank-conversation reset, not a
-backend session creation. It must clear the active transcript, scoped handoff
-context, and browser session ID immediately, leave the model selection intact,
-and avoid adding empty conversations to the session list; the next submitted
-message materializes the durable session through the stream-owned cold-start
-contract above.
-The drawer must also stay composer-first: when Assistant opens, starts a blank
-conversation, or loads an existing session, the textarea is registered with the
-shared `aiChatStore` focus owner and focused without requiring an extra click.
-Global shell shortcuts may use that store focus boundary, but drawer-local code
-must not fork a second input-focus registry.
+first-class `session` SSE event carrying `SessionData{ID: ...}`. Clients bind
+their active session from that stream event, with `done` and `question`
+session identifiers retained only as compatible terminal/interactive payloads,
+rather than issuing a separate `/api/ai/sessions` preflight before the first
+user message. Explicit session-management actions may still create a session
+through the session endpoint.
 
 The AI transport files are shared with `api-contracts`, not delegated away to
 it. `frontend-modern/src/api/ai.ts`,
@@ -7181,17 +5544,12 @@ operator paragraph. Future overview or brief surfaces need a governed product
 owner first, must pass fact-bound structured context from owning Infrastructure,
 Workloads, Patrol, storage, recovery, and alert summaries, and must not let an
 unbounded prompt become a route's source of truth.
-Future route-to-Assistant handoffs inherit the server-set execution mode
-instead of carrying one. When an overview brief opens Assistant, the drawer may
-prefill only governed prompt/context data; the submitted chat request carries
-no execution-mode field (`/api/ai/chat` runs every request approval-required),
-the operator's persistent Assistant control-level setting stays untouched, and
-the drawer discloses the approval-required mode through the
-`autonomousMode:false` context flag instead of showing the generic Autonomous
-warning.
-Scoped Assistant handoffs that originate in owned product surfaces may also
-send bounded `handoff_context` text, structured `handoff_resources`, and safe
-structured `handoff_actions` through `frontend-modern/src/api/aiChat.ts` and
+Any future route-to-chat handoff inherits the server-set execution mode
+instead of carrying one: the submitted chat request carries no execution-mode
+field (`/api/ai/chat` runs every request approval-required), and the
+operator's persistent Assistant control-level setting stays untouched.
+Scoped Assistant handoffs may also send bounded `handoff_context` text,
+structured `handoff_resources`, and safe structured `handoff_actions` through
 `/api/ai/chat`. That context is model-only session metadata, not saved
 user-authored message text, and the backend must clamp the exchange to
 approval-required mode whenever such scoped handoff context, resources, or
@@ -7201,8 +5559,8 @@ Patrol finding IDs remain stricter: when
 canonical authority; the handler may merge only a recognized same-finding
 Patrol product handoff section as secondary model-only briefing, and it must
 drop mismatched resource/action references plus raw command payload lines.
-Direct alert-investigation runtime handoffs follow the same rule even when
-they bypass the chat drawer. `/api/ai/investigate-alert` must set
+Direct alert-investigation runtime handoffs follow the same rule.
+`/api/ai/investigate-alert` must set
 `ai.ExecuteRequest.AutonomousMode` to false plus
 `ai.ExecuteRequest.RequireCommandApproval` to true, and
 `internal/ai/alert_provider.go` must frame diagnostics as approval-bound
@@ -8264,10 +6622,10 @@ authority. When the authenticated shell in `frontend-modern/src/App.tsx` and
 (a kiosk token carrying `monitoring:read` only), the Patrol utility tab route
 `/patrol` stays inside the shell's blocked-route redirect whether or not kiosk
 mode is currently on, and the Escape key must not be usable to leave kiosk into
-that chrome. Assistant and Patrol shell state stays owned by
-`frontend-modern/src/stores/aiChat.ts` and the canonical Patrol path as before;
-this containment is a shell-level authority rule and must not be forked into a
-second AI-side scope check.
+that chrome. AI availability and Patrol shell state stay owned by
+`frontend-modern/src/stores/aiAvailability.ts` and the canonical Patrol path as
+before; this containment is a shell-level authority rule and must not be forked
+into a second AI-side scope check.
 
 Application branding in `frontend-modern/src/AppLayout.tsx` is presentation
 only. A licensed custom name or logo may replace the default Pulse lockup and
@@ -8614,16 +6972,6 @@ real out-of-scope resource, an ambiguous name, a type mismatch, or a name that
 does not resolve inside the lifecycle scope remains rejected. No fuzzy name or
 ID matching is permitted at this boundary.
 
-The Assistant overlay clears the mobile navigation bar from the published bar
-height rather than a literal of its own. In overlay layout both the panel in
-`frontend-modern/src/components/AI/Chat/index.tsx` and its closing backdrop end
-at `--pulse-mobile-nav-height`, so the dimmed, click-blocking backdrop reaches
-the top edge of the bar with no gap. Reserving more than the bar's real height
-leaves page content visible and interactive below the backdrop while the
-Assistant is open, which is a modal-containment defect rather than a cosmetic
-one. The bar owns that value; see the frontend-primitives contract. Proofs live
-in `frontend-modern/src/components/AI/Chat/__tests__/AIChat.test.tsx`.
-
 ### Mobile destination links do not expand AI authority
 
 `AppLayout` supplies the same remembered primary route to desktop and mobile
@@ -8926,11 +7274,9 @@ is distinct from the earlier Gemini lab matrix and from wider rollout evidence.
 
 ### Compact shell Assistant coexistence
 
-The mobile Assistant launcher remains in shared header flow. That header and
-its controls may wrap at compact widths so an entitled Organization selector
-does not displace session actions or the connection indicator beyond the page.
-Keep desktop launcher placement and existing visibility decisions unchanged;
-wrapping must not introduce entitlement reads or alter Assistant authority.
+The mobile authenticated header may wrap at compact widths so an entitled
+Organization selector does not displace session actions or the connection
+indicator beyond the page; wrapping must not introduce entitlement reads.
 AppLayout component and architecture regressions preserve these boundaries;
 real-backend phone geometry proof is retained by the Organization mobile audit.
 
@@ -9000,17 +7346,18 @@ regression in `internal/ai/adapters/adapters_additional_test.go` enforce it.
 ### AI entry points follow the assistant session capability
 
 Every AI entry point in the app shell follows the `assistantEnabled` session
-capability (AI enabled and a provider configured, or mock mode). That covers
-the Assistant launcher and Assistant command-palette commands, and the Patrol
+capability (AI enabled and a provider configured, or mock mode), read through
+`frontend-modern/src/stores/aiAvailability.ts`. That covers the Patrol
 top-level tab, mobile bottom-bar slot, `g r` shortcut, shortcuts-help row and
-`Go to Patrol` palette command. Patrol cannot run without a configured
-provider, so an AI-off install no longer carries navigation that only reaches
-an "off" setup page, which restores the issue #905 behaviour for Patrol. The
-Settings Patrol and Assistant items and the `/patrol` route stay reachable, so
-turning AI back on needs no new path. This is presentation gating only: Patrol
-runtime, findings, schedules and the capability's server derivation are
-unchanged. `AppLayout.test.tsx`, `CommandPaletteModal.test.tsx`,
-`KeyboardShortcutsModal.test.tsx` and `App.architecture.test.ts` pin it.
+`Go to Patrol` palette command, plus alert Investigate actions. Patrol cannot
+run without a configured provider, so an AI-off install no longer carries
+navigation that only reaches an "off" setup page, which restores the issue
+#905 behaviour for Patrol. The Pulse Intelligence settings pages and the
+`/patrol` route stay reachable, so turning AI back on needs no new path. This
+is presentation gating only: Patrol runtime, findings, schedules and the
+capability's server derivation are unchanged. `AppLayout.test.tsx`,
+`KeyboardShortcutsModal.test.tsx`, `InvestigateAlertButton.test.tsx` and
+`App.architecture.test.ts` pin it.
 
 ### Prompt-cache usage is accounted, not just logged
 
@@ -9058,3 +7405,19 @@ diagnostics (`journalctl -u ... --since`, `dmesg -T`, `ss -tlnp`, `ip addr`,
 read-only. Proof: `TestExecutionIntent_ArgumentAwareReadCommands` and
 `TestExecutionIntent_RouteOperationBoundary` in
 `internal/ai/tools/tools_query_readonly_test.go`.
+
+The browser Assistant chat window was retired on 2026-10-22. Operators who
+want to talk to their infrastructure use Claude Code, Codex, and other MCP
+clients, which reach the same governed tools through Pulse MCP, so the drawer,
+its launcher and command-palette entries, and every "Open in Assistant" or
+"Discuss" hand-off left the web app. Alert Investigate now starts a targeted Patrol run
+(`POST /api/ai/patrol/run` with the alert's resource and identifier), is offered
+only to sessions whose `settingsCapabilities.patrolRun` says that admin route
+accepts them, and its findings land on the Patrol page. The External agents settings page moved to
+`/settings/pulse-intelligence/agents`; `/settings/pulse-intelligence/assistant`
+and its `?tab=` aliases redirect there with the hash preserved. The chat
+service in `internal/ai/chat` stays: Patrol investigations run on it and Pulse
+Mobile chat uses it until 31 March 2027, so `/api/ai/chat`, the session
+endpoints, and the stream contract keep their rules in this contract.
+`frontend-modern/src/stores/aiAvailability.ts` replaced the chat store as the
+owner of the shell's AI-enabled fact.

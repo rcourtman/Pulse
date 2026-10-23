@@ -14,7 +14,7 @@ const canonicalTabPaths = {
   'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/pulse-intelligence/provider',
   'system-ai-patrol': '/settings/pulse-intelligence/patrol',
-  'system-ai-assistant': '/settings/pulse-intelligence/assistant',
+  'system-ai-agents': '/settings/pulse-intelligence/agents',
   'system-relay': '/settings/system-relay',
   'system-billing': '/settings/pulse-intelligence/billing/plan',
   'support-diagnostics': '/settings/support/diagnostics',

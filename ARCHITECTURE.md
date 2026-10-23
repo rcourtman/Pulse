@@ -95,7 +95,7 @@ All backend code lives under `cmd/`, `internal/`, and `pkg/`. The binary is asse
    - Gated by the `relay` license feature.
 
 7. **AI Subsystem (`internal/ai`)**
-   - **Pulse Assistant (Chat)**: Interactive LLM-powered chat with infrastructure context. Supports bring-your-own-key (BYOK) providers (OpenAI, Anthropic, Ollama, etc.) plus Claude OAuth.
+   - **AI runtime (`internal/ai/chat`)**: The governed tool loop behind Patrol investigations and Pulse Mobile chat (the in-app chat window has been retired). Supports bring-your-own-key (BYOK) providers (OpenAI, Anthropic, Ollama, etc.) plus Claude OAuth. External agents reach the same tools through `pulse-mcp`.
    - **Pulse Patrol**: Scheduled background analysis that produces findings, predictions, and remediation plans. Autonomy levels: `monitor`, `approval`, `assisted`, `full`.
    - **Intelligence Services**: Patterns, correlations, anomalies, baselines, forecasts, and incident recording. All surfaced via `/api/ai/intelligence/*`.
    - **Safety gates**: Command execution disabled by default (`--enable-commands` opt-in); circuit breakers and scoped permissions at every layer.
@@ -174,7 +174,7 @@ contracts remain backend building blocks consumed inside platform pages.
 ### State Management
 - **WebSocket store** (`stores/websocket.ts`): Manages the live connection, reactive `State` object, reconnection logic, and per-org switching.
 - **Metrics collector** (`stores/metricsCollector.ts`): Buffers time-series data for sparklines and historical charts.
-- **AI stores** (`stores/aiChat.ts`, `stores/aiIntelligence.ts`): Manage chat sessions and patrol findings.
+- **AI stores** (`stores/aiAvailability.ts`, `stores/aiIntelligence.ts`): Hold whether AI is enabled for the session and the Patrol findings.
 - **License store** (`stores/license.ts`): Tracks plan tier, feature flags, and multi-tenant state.
 - **System settings store** (`stores/systemSettings.ts`): Caches server-side preferences (for example theme and feature toggles).
 

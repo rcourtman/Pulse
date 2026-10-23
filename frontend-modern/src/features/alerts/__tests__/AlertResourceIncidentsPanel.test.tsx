@@ -8,7 +8,7 @@ import { AlertsAPI } from '@/api/alerts';
 import type { Incident } from '@/types/api';
 import type { AlertHistoryState } from '../useAlertHistoryState';
 import { useAlertResourceIncidentsState } from '../useAlertResourceIncidentsState';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 
 vi.mock('@solidjs/router', () => ({
   A: (props: { href: string; children?: JSX.Element; [key: string]: unknown }) => (
@@ -20,9 +20,7 @@ vi.mock('@solidjs/router', () => ({
 
 describe('AlertResourceIncidentsPanel', () => {
   afterEach(() => {
-    aiChatStore.close();
-    aiChatStore.clearAllContext();
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
     cleanup();
     vi.restoreAllMocks();
   });
@@ -282,82 +280,6 @@ describe('AlertResourceIncidentsPanel', () => {
     expect(screen.getByText('Node temperature at 83.0°C')).toBeInTheDocument();
     expect(screen.getByText('Node temperature at 81.0°C')).toBeInTheDocument();
     expect(screen.getAllByText(/now, back under the 80°C alert level/)).toHaveLength(1);
-  });
-
-  it('opens Assistant from a resource incident without carrying raw command details', () => {
-    const openSpy = vi.spyOn(aiChatStore, 'open');
-    aiChatStore.setEnabled(true);
-
-    render(() => (
-      <AlertResourceIncidentsPanel
-        state={
-          {
-            resourceIncidentPanel: () => ({
-              resourceId: 'truenas-main',
-              resourceName: 'TrueNAS Main',
-            }),
-            resourceIncidents: () => ({
-              'truenas-main': [
-                {
-                  id: 'incident-1',
-                  alertIdentifier: 'storage:tank::zfs-pool-state',
-                  alertType: 'zfs-pool-state',
-                  level: 'critical',
-                  resourceId: 'storage:tank',
-                  resourceName: 'tank',
-                  resourceType: 'storage',
-                  status: 'open',
-                  acknowledged: false,
-                  openedAt: '2026-03-30T09:00:00Z',
-                  message: 'Pool tank is DEGRADED',
-                  events: [
-                    {
-                      id: 'event-1',
-                      type: 'command',
-                      timestamp: '2026-03-30T09:01:00Z',
-                      summary: 'zpool clear tank',
-                      details: {
-                        command: 'zpool clear tank',
-                        output_excerpt: 'secret-output',
-                      },
-                    },
-                  ],
-                },
-              ],
-            }),
-            resourceIncidentError: () => ({}),
-            resourceIncidentLoading: () => ({ 'truenas-main': false }),
-            expandedResourceIncidentIds: () => new Set<string>(),
-            resourceIncidentEventFilters: () => new Set<string>(['command']),
-            setResourceIncidentEventFilters: vi.fn(),
-            refreshResourceIncidentPanel: vi.fn(),
-            setResourceIncidentPanel: vi.fn(),
-            toggleResourceIncidentDetails: vi.fn(),
-          } as any
-        }
-        getResource={() => undefined}
-      />
-    ));
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Discuss incident incident-1 with Pulse Assistant',
-      }),
-    );
-
-    expect(openSpy).toHaveBeenCalledTimes(1);
-    const [context] = openSpy.mock.calls[0] as [Record<string, unknown>];
-    expect(context).toMatchObject({
-      targetType: 'storage',
-      targetId: 'storage:tank',
-      autonomousMode: false,
-      briefing: {
-        sourceLabel: 'Pulse Alerts',
-        title: 'Incident timeline attached',
-      },
-    });
-    expect(JSON.stringify(context)).not.toContain('zpool clear tank');
-    expect(JSON.stringify(context)).not.toContain('secret-output');
   });
 
   it('reactively reveals and hides the selected resource incident timeline', async () => {

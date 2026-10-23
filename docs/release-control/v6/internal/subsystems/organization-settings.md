@@ -438,3 +438,12 @@ store initialization, migration, and read failures stay visible as
 as an organization with no roles or users. Local identities and opaque stable
 SSO principals are both valid assignment subjects, including principals with
 an intentionally empty role set.
+
+The Pulse Intelligence settings panel that hosts Pulse MCP setup is the
+External agents panel since 2026-10-22: `settingsPanelRegistryContext.tsx`
+registers `AgentIntegrationsPanel` under the `system-ai-agents` tab at
+`/settings/pulse-intelligence/agents`, replacing the retired Assistant
+settings page. The old `system-ai-assistant` tab id and
+`/settings/pulse-intelligence/assistant` path redirect there, so saved links
+keep working. Organization-scoped settings ownership, RBAC gating, and the
+settings shell's organization presentation rules are unchanged.

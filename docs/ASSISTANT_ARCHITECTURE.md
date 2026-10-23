@@ -1,5 +1,10 @@
 # Pulse Assistant deep dive
 
+> **Status:** the in-app Assistant chat window has been retired. This runtime
+> still runs Patrol investigations, and Pulse Mobile's chat until the app
+> retires on 31 March 2027. External agents reach the same governed tools
+> through `pulse-mcp`.
+
 How the Assistant's agentic loop executes tool calls, for readers who want
 more than the overview in [AI features](AI.md).
 

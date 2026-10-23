@@ -2,7 +2,8 @@ import type { Accessor, Component, Setter } from 'solid-js';
 import type { VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
-import { AIAssistantSettings, AISettings, AIPatrolSettings } from './AISettings';
+import { AgentIntegrationsPanel } from './AgentIntegrationsPanel';
+import { AISettings, AIPatrolSettings } from './AISettings';
 import { ProLicensePanel } from './ProLicensePanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
@@ -54,7 +55,7 @@ export function buildSettingsPanelRegistryContext(
   );
 
   const systemAiPatrolPanel: Component = () => <AIPatrolSettings />;
-  const systemAiAssistantPanel: Component = () => <AIAssistantSettings />;
+  const systemAiAgentsPanel: Component = () => <AgentIntegrationsPanel />;
 
   const securitySsoPanel: Component = () => (
     <div class="space-y-6">
@@ -70,7 +71,7 @@ export function buildSettingsPanelRegistryContext(
     systemGeneralPanel: params.systemPanels.systemGeneralPanel,
     systemAiPanel,
     systemAiPatrolPanel,
-    systemAiAssistantPanel,
+    systemAiAgentsPanel,
     systemBillingPanel,
     securitySsoPanel,
     getNetworkPanelProps: params.systemPanels.getNetworkPanelProps,

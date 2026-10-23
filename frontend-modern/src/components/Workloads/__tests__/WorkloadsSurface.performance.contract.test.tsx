@@ -227,10 +227,6 @@ vi.mock('@/stores/alertsActivation', () => ({
   }),
 }));
 
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: { focusInput: () => false },
-}));
-
 vi.mock('@/utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   logError: vi.fn(),

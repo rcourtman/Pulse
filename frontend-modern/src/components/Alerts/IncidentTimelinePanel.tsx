@@ -2,7 +2,6 @@ import { Show, createMemo, type Accessor } from 'solid-js';
 import type { Incident } from '@/types/api';
 import { filterIncidentEvents } from '@/features/alerts/types';
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
-import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Button } from '@/components/shared/Button';
 import { FormTextarea } from '@/components/shared/FormTextarea';
@@ -46,7 +45,6 @@ export interface IncidentTimelinePanelProps {
   noteSaving: Accessor<boolean>;
   onSaveNote: () => void;
   onRetry: () => void;
-  onAssistantHandoff?: () => void;
 }
 
 export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
@@ -105,10 +103,6 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
                   </span>
                 </Show>
               </div>
-              <IncidentAssistantHandoffButton
-                incident={loadedTimeline()}
-                onAssistantHandoff={props.onAssistantHandoff}
-              />
             </div>
             <Show when={loadedTimeline().history?.hasMoreChanges}>
               <p class="text-xs text-muted" role="status">

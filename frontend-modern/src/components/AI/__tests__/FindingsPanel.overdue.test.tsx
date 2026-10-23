@@ -25,13 +25,10 @@ function makeFinding(overrides: Record<string, unknown>) {
 const mockState = vi.hoisted(() => {
   const loadFindings = vi.fn();
   const loadPatrolFindings = vi.fn();
-  const loadRemediationPlans = vi.fn();
   return {
     findings: [] as unknown[],
-    remediationPlans: [] as unknown[],
     loadFindings,
     loadPatrolFindings,
-    loadRemediationPlans,
   };
 });
 
@@ -57,18 +54,6 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     success: vi.fn(),
     error: vi.fn(),
-  },
-}));
-
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: {
-    open: vi.fn(),
-  },
-}));
-
-vi.mock('@/api/ai', () => ({
-  AIAPI: {
-    approveRemediationPlan: vi.fn(),
   },
 }));
 
@@ -110,23 +95,17 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get patrolFindingsWithPendingApprovals() {
       return [];
     },
-    get remediationPlans() {
-      return mockState.remediationPlans;
-    },
     findingsSignal: () => mockState.findings,
     patrolFindingsSignal: () => mockState.findings,
     loadFindings: mockState.loadFindings,
     loadPatrolFindings: mockState.loadPatrolFindings,
-    loadRemediationPlans: mockState.loadRemediationPlans,
   },
 }));
 
 beforeEach(() => {
   mockState.findings = [];
-  mockState.remediationPlans = [];
   mockState.loadFindings.mockClear();
   mockState.loadPatrolFindings.mockClear();
-  mockState.loadRemediationPlans.mockClear();
   if (typeof window.requestAnimationFrame !== 'function') {
     window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
       window.setTimeout(

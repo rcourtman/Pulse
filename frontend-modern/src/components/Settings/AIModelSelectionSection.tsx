@@ -24,25 +24,18 @@ interface AIModelSelectionSectionProps {
   state: AISettingsState;
 }
 
-type AIModelOverrideKind = 'assistant' | 'patrol';
+type AIModelOverrideKind = 'patrol';
 
 const MODEL_OVERRIDE_CONFIG: Record<
   AIModelOverrideKind,
   {
-    formKey: 'chatModel' | 'patrolModel';
+    formKey: 'patrolModel';
     label: string;
     description: string;
     ariaLabel: string;
     title: string;
   }
 > = {
-  assistant: {
-    formKey: 'chatModel',
-    label: 'Pulse Assistant model',
-    description: 'Used for chat, explanations, and review. Patrol handles infrastructure work.',
-    ariaLabel: 'Pulse Assistant model identifier',
-    title: 'Select Pulse Assistant model',
-  },
   patrol: {
     formKey: 'patrolModel',
     label: 'Patrol model',
@@ -719,7 +712,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           </p>
         </Show>
         <p class="text-[11px] text-muted mt-1">
-          Used by Pulse Assistant and Patrol unless you set a section-specific override.
+          Used by Patrol and report summaries unless Patrol settings choose another model.
         </p>
         <Show when={sharedDrivesPatrol()}>
           <PatrolCostPreview state={state} />

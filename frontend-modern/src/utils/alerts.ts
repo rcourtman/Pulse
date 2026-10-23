@@ -272,29 +272,3 @@ export function getOwnAlertsForUnifiedResource(
   const { exact } = getUnifiedResourceAlertKeys(resource);
   return Object.values(activeAlerts).filter((alert) => exact.has(alert.resourceId));
 }
-
-// Alert types representing binary or enumerated state conditions rather
-// than a metric crossing a threshold. For these, "current value vs
-// threshold" is meaningless (both come through as 0 from the backend) and
-// surfacing those fields in operator-facing copy is misleading. The
-// Assistant briefing and prompt builders omit the value/threshold lines
-// when the alert type is one of these.
-const STATE_ALERT_TYPES: ReadonlySet<string> = new Set([
-  'powered-off',
-  'unreachable',
-  'offline',
-  'host-offline',
-  'connectivity',
-  'docker-host-offline',
-  'docker-container-state',
-  'docker-container-health',
-]);
-
-export function isStateAlertType(alertType: string | undefined): boolean {
-  if (!alertType) return false;
-  return STATE_ALERT_TYPES.has(alertType);
-}
-
-export function isMetricAlertType(alertType: string | undefined): boolean {
-  return !isStateAlertType(alertType);
-}

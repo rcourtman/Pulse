@@ -1,7 +1,7 @@
 import type { HelpContent } from './types';
 
 /**
- * Help content for Pulse Assistant and Patrol features
+ * Help content for Pulse Intelligence (Patrol) features
  */
 export const aiHelpContent: HelpContent[] = [
   {
@@ -25,7 +25,7 @@ export const aiHelpContent: HelpContent[] = [
     id: 'ai.ollama.baseUrl',
     title: 'Ollama Server URL',
     description:
-      'Connect to a local or remote Ollama instance for Pulse Assistant and Patrol features.\n\n' +
+      'Connect to a local or remote Ollama instance for Patrol and other Pulse Intelligence features.\n\n' +
       'Ollama provides easy access to open-source models like Llama, Mistral, and CodeLlama ' +
       'without requiring cloud API keys.\n\n' +
       'Default: http://localhost:11434 (local Ollama installation)',
@@ -40,12 +40,11 @@ export const aiHelpContent: HelpContent[] = [
     id: 'ai.providers.overview',
     title: 'Provider Configuration',
     description:
-      'Configure one or more providers to enable Pulse Assistant and Patrol features:\n\n' +
+      'Configure one or more providers to enable Patrol:\n\n' +
       '- Anomaly detection and pattern recognition\n' +
-      '- Natural language infrastructure queries\n' +
       '- Automated troubleshooting suggestions\n' +
-      '- Alert investigation assistance\n\n' +
-      'You can configure multiple providers and choose the route for Assistant, Patrol, and discovery. ' +
+      '- Alert investigation\n\n' +
+      'You can configure multiple providers and choose the route Patrol uses. ' +
       'Pulse retries the selected route when appropriate and asks you to switch routes explicitly if that provider is unavailable.',
     related: ['ai.openai.baseUrl', 'ai.ollama.baseUrl', 'ai.ollama.keepAlive'],
     addedInVersion: 'v4.0.0',

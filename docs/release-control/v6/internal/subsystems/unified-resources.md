@@ -2700,9 +2700,7 @@ the route-backed Patrol control starter helpers, and the `buildStandalonePath`,
 Per-platform surfaces and tab specs must
 derive every internal link from those builders so the canonical resource
 URL vocabulary stays single-sourced; ad hoc string concatenation of
-platform routes inside feature directories is not permitted. The canonical
-Pulse Intelligence external-agent hash
-`/settings/pulse-intelligence/assistant#external-agent-setup` and legacy
+platform routes inside feature directories is not permitted. The canonical Pulse Intelligence external-agent hash `/settings/pulse-intelligence/agents#external-agent-setup` and legacy
 `/settings/security/api#external-agent-setup` /
 `/settings/security/api#pulse-mcp-setup` compatibility hashes may live in
 the shared route helper, but they are adjacent settings route state, not
@@ -8695,3 +8693,12 @@ ID within its vCenter connection so two vCenters' `host-12` stay apart; a host
 with no VMs gets a scope that names it and matches none. A host table with no
 workloads under it (Docker Swarm hosts) keeps opening the drawer on a row
 click. No resource identity, status or alert rule changes.
+
+Resource surfaces stopped handing context to the browser Assistant on
+2026-10-22, when the chat window was retired: the resource and guest drawer
+Assistant context models are gone, the operator lock copy in
+`ResourceOperatorStateSection.tsx` no longer names the Assistant, and
+`frontend-modern/src/pages/Actions.tsx` reads AI availability from
+`frontend-modern/src/stores/aiAvailability.ts`. The external-agent setup hash
+in `frontend-modern/src/routing/resourceLinks.ts` moved to the Agents route.
+Resource identity, policy, and drawer focus state are unchanged.

@@ -23,10 +23,8 @@ export const AI_SETTINGS_PANEL_TITLE = 'Provider & Models';
 export const AI_SETTINGS_PANEL_DESCRIPTION =
   'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.';
 export const AI_SETTINGS_MODEL_OVERRIDES_TITLE = 'Model Overrides';
-export const AI_SETTINGS_ASSISTANT_SESSIONS_TITLE = 'Pulse Assistant Sessions';
-export const AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE = 'Assistant chat actions';
 export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';
-export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat sessions.';
+export const AI_MODEL_PICKER_EMPTY_STATE = 'No matching models.';
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
   'Unable to load Provider & Models settings. Your configuration could not be retrieved.';
 export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
@@ -46,7 +44,7 @@ export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPre
   return {
     ariaLabel: 'Set up Pulse Intelligence',
     title: 'Set Up Pulse Intelligence',
-    description: 'Connect a provider to power Patrol and Assistant.',
+    description: 'Connect a provider to power Patrol.',
     submitLabel: 'Enable Pulse Intelligence',
   };
 }
@@ -67,7 +65,7 @@ export function getAISettingsReadinessPresentation(
   return {
     containerClassName: 'bg-amber-50 dark:bg-amber-900/25 text-amber-800 dark:text-amber-200',
     dotClassName: 'bg-amber-400',
-    summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
+    summary: 'Configure at least one provider above to enable Patrol.',
   };
 }
 
@@ -92,28 +90,6 @@ export function getAISettingsRetryLabel() {
 export function getAIModelsLoadErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
   return detail || AI_SETTINGS_LOAD_MODELS_ERROR;
-}
-
-export function getAIChatSessionsLoadErrorMessage(message?: string | null) {
-  const detail = (message || '').trim();
-  return detail || AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR;
-}
-
-export function getAIChatSessionsLoadingState() {
-  return {
-    text: 'Loading chat sessions...',
-  } as const;
-}
-
-export function getAIChatSessionsEmptyState() {
-  return {
-    text: 'No chat sessions yet. Start a chat to create one.',
-  } as const;
-}
-
-export function getAISessionSummarizeErrorMessage(message?: string | null) {
-  const detail = (message || '').trim();
-  return detail || 'Unable to summarize the session.';
 }
 
 export function getAISettingsSaveErrorMessage(

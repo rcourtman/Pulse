@@ -6,7 +6,6 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty, promoteLegacyAlertIdentifier } from './responseUtils';
 import type { InvestigationRecord } from './ai';
-import type { ToolCall } from './aiChat';
 import type { ResourceCriticality } from './resourceOperatorState';
 import type { PatrolActionReference } from '@/types/actionAudit';
 import type { PatrolModelReadinessSnapshot } from '@/types/ai';
@@ -307,9 +306,12 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-export interface ChatToolCall extends ToolCall {
+export interface ChatToolCall {
   id: string;
+  name: string;
   input: Record<string, unknown>;
+  output?: string;
+  success?: boolean;
 }
 
 export interface ChatToolResult {
