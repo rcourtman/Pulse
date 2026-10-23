@@ -1774,3 +1774,60 @@ for (const [filename, version] of [
     assert.equal(calls.getIssue.length, 2);
   });
 }
+
+test("declared versions use visible release-link text, including nested inline formatting", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const [value, expected] of [
+    ["[v6.5.0](https://github.com/rcourtman/Pulse/releases/tag/v6.4.5)", "6.5.0"],
+    ["**[6.5.0](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)**", "6.5.0"],
+    ["_[`v6.5.0`](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)_", "6.5.0"],
+    ["[6\\.5\\.0](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)", "6.5.0"],
+    ["[pulse-v6.6.0-beta.3-linux-amd64.tar.gz](https://github.com/rcourtman/Pulse/releases/tag/v6.6.0-beta.3)", "6.6.0-beta.3"],
+  ]) {
+    for (const body of [
+      `### Pulse version\n${value}\n### Agent version\n6.4.5`,
+      `Pulse version: ${value}`,
+      `- **Pulse version**: ${value}`,
+    ]) {
+      for (const newline of ["\n", "\r\n"]) {
+        assert.equal(extractPulseVersion("Upgrade from v6.4.5", body.replaceAll("\n", newline)), expected, body);
+      }
+    }
+  }
+});
+
+test("link targets, titles, images and literal Markdown cannot invent a declared version", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const value of [
+    "[unknown](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)",
+    '[unknown](https://github.com/rcourtman/Pulse "6.5.0")',
+    "![6.5.0](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)",
+    "~~[6.5.0](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)~~",
+    "`[6.5.0](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0)`",
+    "<span>6.5.0</span>",
+    "[release](https://github.com/rcourtman/Pulse/releases/tag/v6.5.0) 6.4.5",
+    "[6.5.0](unterminated",
+  ]) {
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5",
+      `### Pulse version\n${value}\n### Agent version\n6.5.0`), null, value);
+  }
+});
+
+test("the label consumer accepts a linked version without fetching links or contacting the reporter", async () => {
+  for (const [visible, expected] of [["**`v6.5.0`**", "6.5.0"], ["unknown", null]]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2922, title: "[Bug]: Upgrade from v6.4.5",
+      body: `### Pulse version\n[${visible}](https://github.com/rcourtman/Pulse/releases/tag/v6.6.0-rc.5)\n### Agent version\n6.4.5`,
+      labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-human", "release-blocker",
+        "needs-decomposition", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), expected ? [["affects-6.5.0"]] : []);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), expected
+      ? ["affects-6.4.5", "needs-version-info"] : ["affects-6.4.5"]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), expected ? ["affects-6.5.0"] : ["needs-version-info"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
