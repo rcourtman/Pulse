@@ -7150,6 +7150,27 @@ longer reaches the start of the window. Unknown model pricing is reported as
 `PatrolDigest`. Proofs: `internal/ai/patrol_digest_test.go` and
 `frontend-modern/src/api/__tests__/patrol.test.ts`.
 
+Since 23 October 2026 the digest counts investigation runs, not outcome rows.
+`digestInvestigationRuns` counts one investigation for each run that finished
+inside the window, from the lifecycle rows the findings store already writes
+for every run: the `investigation_updated` row that moves the status out of
+`running` (or out of the empty status a regression set while the run was
+open), or, for a run whose own fix was verified while it was open, the
+`verification_passed` row, after which a closing row belongs to the same run.
+Later `investigation_outcome` and `verification_passed` rows from the action
+lifecycle relabel the latest finished run with its fix's result instead of
+counting again, so a queued fix that is later run and verified is one
+investigation ending `fix_verified`. A run that failed with no outcome is
+`failed`, the bucket telemetry already uses. The summary-field
+(`LastInvestigatedAt`) fallback is gone: every run since the v6 release writes
+lifecycle rows, and the fallback could count one run in two adjacent weeks.
+Lifecycle rows carry no session ID, so a late end written by an older run reads
+as the end of the open run, and a run whose rows the 50-row lifecycle has
+dropped is not counted. Before this the digest counted only
+`investigation_outcome` rows and read their outcome from a `metadata["outcome"]`
+key the store never writes, so every one was `unknown`. Proof:
+`internal/ai/patrol_digest_test.go` drives the store's own writers.
+
 ### Patrol digest client is the only consumer path
 
 `getPatrolDigest(days)` in `frontend-modern/src/api/patrol.ts` is the single

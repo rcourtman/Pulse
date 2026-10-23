@@ -2,6 +2,7 @@ package ai
 
 import (
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -68,9 +69,7 @@ func TestBuildPatrolDigestRollsUpTheWeek(t *testing.T) {
 
 	findings := []*Finding{
 		{ID: "open-critical", Severity: FindingSeverityCritical, DetectedAt: now.Add(-1 * day)},
-		{ID: "open-warning", Severity: FindingSeverityWarning, DetectedAt: now.Add(-2 * day), Lifecycle: []FindingLifecycleEvent{
-			{At: investigatedAt, Type: "investigation_outcome", From: "investigating", To: "investigating", Metadata: map[string]string{"outcome": "needs_attention"}},
-		}},
+		{ID: "open-warning", Severity: FindingSeverityWarning, DetectedAt: now.Add(-2 * day)},
 		{ID: "old-open", Severity: FindingSeverityCritical, DetectedAt: now.Add(-20 * day)},
 		{ID: "manually-resolved", Severity: FindingSeverityWarning, DetectedAt: now.Add(-6 * day), ResolvedAt: &resolvedAt, AutoResolved: false},
 		{ID: "auto-resolved", Severity: FindingSeverityWarning, DetectedAt: now.Add(-6 * day), ResolvedAt: &resolvedAt, AutoResolved: true},
@@ -130,7 +129,10 @@ func TestBuildPatrolDigestRollsUpTheWeek(t *testing.T) {
 	if got := digest.Findings.OpenBySeverity; got.Critical != 1 || got.Warning != 2 || got.Watch != 0 || got.Info != 0 {
 		t.Fatalf("open by severity = %+v", got)
 	}
-	if digest.Investigations.Total != 2 || digest.Investigations.ByOutcome["needs_attention"] != 1 || digest.Investigations.ByOutcome["fix_verified"] != 1 {
+	// Investigations are counted from the run rows the findings store writes
+	// (TestBuildPatrolDigestCountsEachInvestigationRunOnce). Summary fields
+	// with no run in the lifecycle, as on legacy-investigated, are not a run.
+	if digest.Investigations.Total != 0 || len(digest.Investigations.ByOutcome) != 0 {
 		t.Fatalf("investigations = %+v", digest.Investigations)
 	}
 	if got := digest.Actions; got.Proposed != 5 || got.Approved != 3 || got.Rejected != 1 || got.Executed != 3 || got.Verified != 1 || got.Failed != 1 || got.Pending != 2 {
@@ -142,6 +144,143 @@ func TestBuildPatrolDigestRollsUpTheWeek(t *testing.T) {
 	// gpt-4o-mini: 0.15 USD per million input, 0.60 per million output.
 	if want := 0.15*2 + 0.60*0.1; digest.Spend.EstimatedUSD < want-0.0001 || digest.Spend.EstimatedUSD > want+0.0001 {
 		t.Fatalf("estimated usd = %f, want %f", digest.Spend.EstimatedUSD, want)
+	}
+}
+
+// digestTestRuns drives investigation runs through the findings store's own
+// writers, the way the orchestrator does: a run is marked running with no
+// outcome, then its end records the status, outcome and time.
+type digestTestRuns struct {
+	store *FindingsStore
+}
+
+func newDigestTestRuns(ids ...string) digestTestRuns {
+	runs := digestTestRuns{store: NewFindingsStore()}
+	for _, id := range ids {
+		runs.store.Add(&Finding{ID: id, ResourceID: "vm-" + id, ResourceName: id, Severity: FindingSeverityWarning, Category: FindingCategoryReliability, Title: "Finding " + id})
+	}
+	return runs
+}
+
+func (r digestTestRuns) start(id, session string) {
+	f := r.store.Get(id)
+	r.store.UpdateInvestigation(id, session, string(InvestigationStatusRunning), "", f.LastInvestigatedAt, f.InvestigationAttempts+1)
+}
+
+func (r digestTestRuns) finish(id, session string, status InvestigationStatus, outcome InvestigationOutcome) {
+	f := r.store.Get(id)
+	ended := time.Now()
+	r.store.UpdateInvestigation(id, session, string(status), string(outcome), &ended, f.InvestigationAttempts)
+}
+
+func TestBuildPatrolDigestCountsEachInvestigationRunOnce(t *testing.T) {
+	t.Parallel()
+	runs := newDigestTestRuns("twice", "approved", "verified-in-run", "verified-then-done", "verified-then-error", "regressed-mid-run", "interrupted", "recovered-verified", "running")
+
+	// Two runs on one finding count twice: an answer, then a provider error
+	// that left no outcome.
+	runs.start("twice", "chat-1")
+	runs.finish("twice", "chat-1", InvestigationStatusCompleted, InvestigationOutcomeNeedsAttention)
+	runs.start("twice", "chat-2")
+	runs.finish("twice", "chat-2", InvestigationStatusFailed, "")
+
+	// A queued fix that is later run and verified is one investigation that
+	// ended fixed and verified, not one per action step.
+	runs.start("approved", "chat-3")
+	runs.finish("approved", "chat-3", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	runs.store.UpdateInvestigationOutcome("approved", string(InvestigationOutcomeFixExecuted))
+	runs.store.UpdateInvestigationOutcome("approved", string(InvestigationOutcomeFixVerified))
+
+	// A run whose own fix was verified, after an earlier run timed out.
+	runs.start("verified-in-run", "chat-4")
+	runs.finish("verified-in-run", "chat-4", InvestigationStatusFailed, InvestigationOutcomeTimedOut)
+	runs.start("verified-in-run", "chat-5")
+	runs.finish("verified-in-run", "chat-5", InvestigationStatusCompleted, InvestigationOutcomeFixVerified)
+
+	// The action lifecycle can verify a run's fix before the run itself ends.
+	// The run still counts once and keeps the verified result, whether its own
+	// end then succeeds or fails.
+	for _, ending := range []struct {
+		id, session string
+		status      InvestigationStatus
+		outcome     InvestigationOutcome
+	}{
+		{"verified-then-done", "chat-9", InvestigationStatusCompleted, InvestigationOutcomeFixVerified},
+		{"verified-then-error", "chat-10", InvestigationStatusFailed, ""},
+	} {
+		runs.start(ending.id, ending.session)
+		session := &InvestigationSession{FindingID: ending.id, SessionID: ending.session, StartedAt: time.Now()}
+		if applied, _ := runs.store.ReconcileInvestigationOutcome(ending.id, session, string(InvestigationOutcomeFixVerified)); !applied {
+			t.Fatalf("%s: verification of the running session was not applied", ending.id)
+		}
+		runs.finish(ending.id, ending.session, ending.status, ending.outcome)
+	}
+
+	// The finding is resolved and detected again while a run is in progress.
+	// The regression clears the run's status, and the run still counts when it
+	// ends.
+	runs.start("regressed-mid-run", "chat-11")
+	if !runs.store.Resolve("regressed-mid-run", false) {
+		t.Fatal("resolve the investigated finding")
+	}
+	runs.store.Add(&Finding{ID: "regressed-mid-run", ResourceID: "vm-regressed-mid-run", ResourceName: "regressed-mid-run", Severity: FindingSeverityWarning, Category: FindingCategoryReliability, Title: "Finding regressed-mid-run"})
+	if f := runs.store.Get("regressed-mid-run"); f.RegressionCount != 1 || f.InvestigationStatus != "" {
+		t.Fatalf("regression = %d, status %q; want the run's status cleared by one regression", f.RegressionCount, f.InvestigationStatus)
+	}
+	runs.finish("regressed-mid-run", "chat-11", InvestigationStatusCompleted, InvestigationOutcomeNeedsAttention)
+
+	// Stuck-run recovery closes runs the orchestrator lost, including one whose
+	// session already held a verified result.
+	runs.start("interrupted", "chat-6")
+	runs.store.RecoverStuckInvestigation("interrupted", "chat-6", time.Time{}, InvestigationStatusFailed, InvestigationOutcomeInterrupted, time.Now())
+	runs.start("recovered-verified", "chat-7")
+	runs.store.RecoverStuckInvestigation("recovered-verified", "chat-7", time.Time{}, InvestigationStatusCompleted, InvestigationOutcomeFixVerified, time.Now())
+
+	// A run still in progress has not finished, so it does not count yet.
+	runs.start("running", "chat-8")
+
+	digest := BuildPatrolDigest(PatrolDigestInput{Now: time.Now(), Days: 7, Findings: runs.store.GetAll(nil)})
+	want := map[string]int{"needs_attention": 2, "failed": 1, "fix_verified": 5, "timed_out": 1, "interrupted": 1}
+	if digest.Investigations.Total != 10 || !reflect.DeepEqual(digest.Investigations.ByOutcome, want) {
+		t.Fatalf("investigations = %+v, want 10 runs %v", digest.Investigations, want)
+	}
+
+	// A week on, every run finished before the window opened.
+	later := BuildPatrolDigest(PatrolDigestInput{Now: time.Now().Add(8 * 24 * time.Hour), Days: 7, Findings: runs.store.GetAll(nil)})
+	if later.Investigations.Total != 0 || len(later.Investigations.ByOutcome) != 0 {
+		t.Fatalf("investigations a week later = %+v, want none", later.Investigations)
+	}
+}
+
+func TestBuildPatrolDigestCountsARunInTheWindowItFinished(t *testing.T) {
+	t.Parallel()
+	runs := newDigestTestRuns("approved")
+	runs.start("approved", "chat-1")
+	runs.finish("approved", "chat-1", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	runs.store.UpdateInvestigationOutcome("approved", string(InvestigationOutcomeFixExecuted))
+
+	findings := runs.store.GetAll(nil)
+	if len(findings) != 1 {
+		t.Fatalf("findings = %d", len(findings))
+	}
+	// Move the run ten days back and leave its fix running inside the window.
+	// GetAll copies only the finding, so copy the lifecycle before editing it.
+	f := findings[0]
+	f.Lifecycle = append([]FindingLifecycleEvent(nil), f.Lifecycle...)
+	tenDays := 10 * 24 * time.Hour
+	for i := range f.Lifecycle {
+		if f.Lifecycle[i].Type != "investigation_outcome" {
+			f.Lifecycle[i].At = f.Lifecycle[i].At.Add(-tenDays)
+		}
+	}
+
+	digest := BuildPatrolDigest(PatrolDigestInput{Now: time.Now(), Days: 7, Findings: findings})
+	if digest.Investigations.Total != 0 || len(digest.Investigations.ByOutcome) != 0 {
+		t.Fatalf("investigations = %+v, want none: the run finished before the window and its fix is not another investigation", digest.Investigations)
+	}
+	digest = BuildPatrolDigest(PatrolDigestInput{Now: time.Now(), Days: 14, Findings: findings})
+	if digest.Investigations.Total != 1 || digest.Investigations.ByOutcome["fix_executed"] != 1 {
+		t.Fatalf("investigations = %+v, want the run once with its fix's latest outcome", digest.Investigations)
 	}
 }
 

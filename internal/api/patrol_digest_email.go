@@ -141,7 +141,7 @@ func patrolDigestEmailLines(digest ai.PatrolDigest) []patrolDigestEmailLine {
 	investigated := patrolDigestEmailLine{label: "Investigated", value: fmt.Sprintf("%d", digest.Investigations.Total)}
 	outcomeCopy := map[string]string{
 		"needs_attention": "need you", "fix_failed": "fix failed", "fix_verification_failed": "fix not confirmed",
-		"cannot_fix": "could not fix", "timed_out": "timed out", "fix_queued": "fix waiting for approval",
+		"cannot_fix": "could not fix", "timed_out": "timed out", "failed": "ended with an error", "fix_queued": "fix waiting for approval",
 		"fix_executed": "fix run", "fix_verification_unknown": "fix run, result unknown", "fix_verified": "fixed and verified",
 		"resolved": "resolved", "fix_rejected": "fix declined",
 		"unclassified": "finished without a clear conclusion", "interrupted": "interrupted by a restart",
@@ -160,6 +160,9 @@ func patrolDigestEmailLines(digest ai.PatrolDigest) []patrolDigestEmailLine {
 	switch {
 	case len(outcomeDetails) > 0:
 		investigated.details = []string{strings.Join(outcomeDetails, ", ") + "."}
+	case digest.Investigations.Total > 0:
+		// Runs whose outcome has no wording here still happened, so the line
+		// must not say that nothing was investigated.
 	case digest.Mode == config.PatrolAutonomyMonitor:
 		investigated.details = []string{"Patrol is watch only, so it reports issues without investigating them."}
 	default:

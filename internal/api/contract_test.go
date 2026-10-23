@@ -2438,6 +2438,43 @@ func TestContract_PatrolStatusMissingAssistantServiceUsesNativeSurfaceIdentity(t
 	}
 }
 
+// TestContract_PatrolDigestCountsEachFinishedRunFromTheFindingsStore follows
+// the scheduled Patrol summary's real path: runs recorded by the findings
+// store's own writers, the handler's digest assembly, then the email renderer.
+func TestContract_PatrolDigestCountsEachFinishedRunFromTheFindingsStore(t *testing.T) {
+	t.Parallel()
+	handler := createTestAIHandler(t)
+	findings := ai.NewFindingsStore()
+	findings.Add(&ai.Finding{ID: "disk", ResourceID: "vm-101", ResourceName: "web-01", Severity: ai.FindingSeverityWarning, Category: ai.FindingCategoryCapacity, Title: "Disk nearly full"})
+	// Each run is marked running with no outcome, then records how it ended,
+	// as the orchestrator does. The second run's queued fix then runs.
+	run := func(session string, status ai.InvestigationStatus, outcome ai.InvestigationOutcome) {
+		findings.UpdateInvestigation("disk", session, string(ai.InvestigationStatusRunning), "", nil, 1)
+		ended := time.Now()
+		findings.UpdateInvestigation("disk", session, string(status), string(outcome), &ended, 1)
+	}
+	run("chat-1", ai.InvestigationStatusFailed, "")
+	run("chat-2", ai.InvestigationStatusCompleted, ai.InvestigationOutcomeFixQueued)
+	findings.UpdateInvestigationOutcome("disk", string(ai.InvestigationOutcomeFixExecuted))
+
+	patrol := &ai.PatrolService{}
+	setUnexportedField(t, patrol, "runHistoryStore", ai.NewPatrolRunHistoryStore(10))
+	setUnexportedField(t, patrol, "findings", findings)
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	digest, available := handler.BuildPatrolDigest(context.Background(), 7)
+	if !available {
+		t.Fatal("digest must report available once a Patrol service exists")
+	}
+	want := map[string]int{"failed": 1, "fix_executed": 1}
+	if digest.Investigations.Total != 2 || !reflect.DeepEqual(digest.Investigations.ByOutcome, want) {
+		t.Fatalf("investigations = %+v, want two runs %v", digest.Investigations, want)
+	}
+	if _, _, textBody := renderPatrolDigestEmail(digest, ""); !strings.Contains(textBody, "Investigated: 2\n  1 ended with an error, 1 fix run.\n") {
+		t.Fatalf("email does not describe the two runs:\n%s", textBody)
+	}
+}
+
 func TestContract_AISettingsDoesNotExposeQuickstartActivation(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
