@@ -145,6 +145,7 @@ func TestClusterClient_GetVMConfig(t *testing.T) {
 }
 
 func TestClusterClient_GetVMAgentInfo(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -177,6 +178,7 @@ func TestClusterClient_GetVMAgentInfo(t *testing.T) {
 }
 
 func TestClusterClient_GetVMAgentVersion(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -209,6 +211,7 @@ func TestClusterClient_GetVMAgentVersion(t *testing.T) {
 }
 
 func TestClusterClient_GetVMNetworkInterfaces(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {

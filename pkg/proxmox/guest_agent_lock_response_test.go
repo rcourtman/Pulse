@@ -51,7 +51,7 @@ func TestGuestAgentConfigResponseMustBeComplete(t *testing.T) {
 							backupAgentPayload(w, r)
 						}))
 						defer server.Close()
-						c := backupTestClient(t, server.URL)
+						c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 						if err := read(context.Background(), c, 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 							t.Errorf("incomplete config was accepted: %v", err)
 						}
@@ -93,7 +93,7 @@ func TestGuestAgentConfigPrefixDoesNotAdmitCommand(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	if _, err := backupTestClient(t, server.URL).GetVMAgentInfo(ctx, "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
+	if _, err := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL)).GetVMAgentInfo(ctx, "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 		t.Errorf("stalled config admitted a command: %v", err)
 	}
 	if got := commands.Load(); got != 0 {
@@ -119,7 +119,7 @@ func TestGuestAgentAdmissionIncludesPostConfigBody(t *testing.T) {
 		backupAgentPayload(w, r)
 	}))
 	defer server.Close()
-	c1, c2 := backupTestClient(t, server.URL), backupTestClient(t, server.URL)
+	c1, c2 := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL)), backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	done := make(chan error, 1)

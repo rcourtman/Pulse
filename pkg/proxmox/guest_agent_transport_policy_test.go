@@ -92,6 +92,7 @@ func TestGuestAgentCommandClientRejectsUnverifiableTransports(t *testing.T) {
 }
 
 func TestGuestAgentCommandUsesTLSHTTP1AndSeparateConnections(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	for _, mode := range []string{"trusted CA", "pinned fingerprint"} {
 		t.Run(mode, func(t *testing.T) {
 			var configs, commands atomic.Int32

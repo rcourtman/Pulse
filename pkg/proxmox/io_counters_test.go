@@ -191,7 +191,7 @@ func TestUnverifiedVMConfigPreservesStatusCounterObservations(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "lock-unverified" {
 		t.Errorf("incomplete config did not defer the guest command: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestGuestAgentTransportDeferralPreservesLiveCounterReceipts(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client := backupTestClient(t, server.URL)
+			client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 			wantReason := "agent-timeout"
 			if kind == "redirect" {
 				wantReason = "agent-redirect"

@@ -130,6 +130,7 @@ func TestGuestAgentInvalidSuccessFixtureIsolation(t *testing.T) {
 }
 
 func TestGuestAgentInvalidSuccessSharesAliasesAndResumes(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	var calls, otherCalls atomic.Int32
 	var healthy atomic.Bool
 	handler := func(counter *atomic.Int32, broken bool) http.HandlerFunc {
@@ -216,7 +217,7 @@ func TestGuestAgentUnexpectedSuccessStatusDefersEveryRead(t *testing.T) {
 						backupAgentPayload(w, r)
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 					if err := first(context.Background(), c, 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Fatalf("unexpected status became completed reply: %v", err)
 					}

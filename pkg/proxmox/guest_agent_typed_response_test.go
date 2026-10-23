@@ -61,14 +61,14 @@ func TestGuestAgentTypedSuccessDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 					if err := first(context.Background(), c, 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Fatalf("typed reply released admission: %v", err)
 					}
 					if commands.Load() != 1 || configs.Load() != 1 {
 						t.Fatal("reply was treated as complete and received a postflight lock read")
 					}
-					diagnostic := backupTestClient(t, server.URL)
+					diagnostic := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 					for later, read := range backupAgentReads() {
 						if err := read(context.Background(), diagnostic, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s escaped uncertainty: %v", later, err)
@@ -195,7 +195,7 @@ func TestGuestAgentTypedSuccessPreservesFieldAndMeasurementSemantics(t *testing.
 				backupAgentPayload(w, r)
 			}))
 			defer server.Close()
-			c := backupTestClient(t, server.URL)
+			c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 			info, err := c.GetVMMemoryAvailabilityFromAgent(context.Background(), "node", 105)
 			if err == nil || GuestAgentDeferredReason(err) != "" || info != (LinuxMemoryAvailability{}) {
 				t.Fatalf("completed but unusable memory became telemetry or uncertainty: %+v %v", info, err)

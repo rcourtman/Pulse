@@ -132,6 +132,7 @@ func TestClientSnapshotsAndContent(t *testing.T) {
 }
 
 func TestClientClusterAndAgentInfo(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api2/json/cluster/status":
@@ -218,6 +219,7 @@ func TestClientClusterAndAgentInfo(t *testing.T) {
 }
 
 func TestClientGetVMNetworkInterfaces_ObjectAndPartialPayloads(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -346,6 +348,7 @@ func TestClientStatusAndResources(t *testing.T) {
 }
 
 func TestClientGetVMMemAvailableFromAgent(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {

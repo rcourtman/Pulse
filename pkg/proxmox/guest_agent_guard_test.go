@@ -13,6 +13,7 @@ import (
 )
 
 func TestGuestAgentClusterAliasesAndVMIsolation(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	entered, release := make(chan struct{}), make(chan struct{})
 	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -88,7 +89,7 @@ func TestGuestAgentLockAppearingInFlightDiscardsPayload(t *testing.T) {
 		backupAgentPayload(w, r)
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	if value, err := c.GetVMFSInfo(context.Background(), "node", 105); value != nil || GuestAgentDeferredReason(err) != "vm-locked" {
 		t.Fatalf("in-flight backup payload published: %#v %v", value, err)
 	}
@@ -121,7 +122,7 @@ func testGuestAgentIncompleteBodyBlocksWholeVM(t *testing.T, status int) {
 		fmt.Fprint(w, `{"data":{"result":[]}}`)
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); GuestAgentDeferredReason(err) != "agent-response-incomplete" {
 		t.Errorf("incomplete body not deferred: %v", err)
 	}
@@ -152,7 +153,7 @@ func TestGuestAgentDeferralDoesNotHideCompletedRefusal(t *testing.T) {
 		backupAgentPayload(w, r)
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	if _, err := c.GetVMFSInfo(context.Background(), "node", 105); err == nil || errors.Is(err, ErrGuestAgentDeferred) || !strings.Contains(err.Error(), "403") {
 		t.Fatalf("completed refusal hidden or lost: %v", err)
 	}
@@ -165,6 +166,7 @@ func TestGuestAgentDeferralDoesNotHideCompletedRefusal(t *testing.T) {
 }
 
 func TestGuestAgentClusterDoesNotReplayUncertainCall(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	var calls atomic.Int32
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -254,7 +256,7 @@ func TestGuestAgentPasswordSessionDoesNotReplayRefusedCommand(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client, err := NewClient(ClientConfig{Host: server.URL, User: "fixture@pam", Password: "fixture-password", Timeout: time.Second})
+			client, err := NewClient(ClientConfig{Host: guestAgentFixtureEndpoint(t, server.URL), User: "fixture@pam", Password: "fixture-password", Timeout: time.Second})
 			if err != nil {
 				t.Fatal(err)
 			}
