@@ -15,6 +15,25 @@
 
 ## Purpose
 
+### Listed backups need an observed success date to resolve age warnings
+
+The backup-age evaluator retains an existing subject's occurrence, severity,
+acknowledgement and last trusted evidence when its still-listed rollup has no
+success date, a zero date or a future date. Such a date supplies neither a new
+age nor recovery. For multiple provider rollups of one subject, the newest
+usable success date wins regardless of input order; an unobserved date cannot
+hide an older valid breach or displace a valid recent recovery. A fresh valid
+date still recovers normally. Explicit policy exclusions, disabled rules and
+removal from the supplied complete inventory keep their existing semantics.
+
+`TestCheckBackupsRequiresObservedSuccessDates` exercises the real manager with
+PVE/PBS linked guests, PBS orphans and PMG subjects, occurrence/event retention,
+provider ordering, same-VMID cross-instance isolation and policy/removal controls.
+Its opt-in browser frames come from `CheckBackups` and `GetActiveAlerts`.
+This is age-evidence handling only: no change to backup execution, source
+inventory readiness, snapshot alerts, native freeze/thaw safety or notification
+delivery, and no proof of a reported installation's recovery.
+
 ### Legacy alert-history compaction releases removed-row storage
 
 Expiry, duplicate-occurrence compaction and ID removal allocate backing storage
