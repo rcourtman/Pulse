@@ -26,9 +26,10 @@ func endpointDiagnosticMonitor() *Monitor {
 }
 
 // No workers, database, listener or appliance: token construction performs no
-// HTTP request. The existing config factories strip userinfo/query/fragment
-// from parseable URLs, but pass malformed syntax to the refusing constructors.
-// Neither those admission choices nor the original saved configuration change.
+// HTTP request. The config factories validate before removing anything, so
+// userinfo, a query or a fragment is refused like malformed syntax rather
+// than stripped into a usable credential destination. Every case here is a
+// refusal; the saved configuration never changes and no input is logged.
 // Non-parallel because these tests temporarily replace the global logger.
 func TestMonitorClientInitEndpointDiagnostics(t *testing.T) {
 	for index, host := range []string{
@@ -63,11 +64,8 @@ func TestMonitorClientInitEndpointDiagnostics(t *testing.T) {
 			if err != nil || !bytes.Equal(before, after) {
 				t.Fatal("display filtering changed saved configuration")
 			}
-			wantRefusal := index >= 6
-			wantClients := 3
-			if wantRefusal {
-				wantClients = 0
-			}
+			const wantRefusal = true
+			const wantClients = 0
 			if len(m.pveClients)+len(m.pbsClients)+len(m.pmgClients) != wantClients {
 				t.Fatal("display filtering changed the existing configuration/constructor admission")
 			}

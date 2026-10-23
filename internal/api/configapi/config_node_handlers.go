@@ -908,21 +908,21 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Past this point the request carries a target and credentials, so it is a
+	// real attempt by someone to reach a node. Requests that never carried them
+	// are rejected above and stay out of the tally, which is what keeps an
+	// incomplete form from counting as a node that could not be reached. A host
+	// string that turns out to be unusable still counts, including one the host
+	// validation below rejects: the attempt was made and it failed.
+	testRecorder := newNodeTestOutcomeRecorder(w)
+	w = testRecorder
+	defer func() { h.recordNodeTestOutcome(r.Context(), testRecorder.failed()) }()
+
 	normalizedHost, err := normalizeNodeHost(req.Host, req.Type)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
-	// Past this point the request carries a target and credentials, so it is a
-	// real attempt by someone to reach a node. Requests that never carried them
-	// are rejected above and stay out of the tally, which is what keeps an
-	// incomplete form from counting as a node that could not be reached. A host
-	// string that turns out to be unusable still counts: the attempt was made
-	// and it failed.
-	testRecorder := newNodeTestOutcomeRecorder(w)
-	w = testRecorder
-	defer func() { h.recordNodeTestOutcome(r.Context(), testRecorder.failed()) }()
 
 	// Test connection based on type
 	if req.Type == "pve" {

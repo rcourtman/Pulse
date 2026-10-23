@@ -127,7 +127,9 @@ func TestIssue1597UnifiedGuestCPUFeedsDashboardDetailsAndAlerts(t *testing.T) {
 		GuestDefaults: alerts.ThresholdConfig{
 			CPU: &alerts.HysteresisThreshold{Trigger: 10, Clear: 5},
 		},
-		TimeThresholds:       map[string]int{},
+		// This test is about which CPU value is authoritative, not delay: a
+		// system container honours the guest delay, so make it zero.
+		TimeThresholds:       map[string]int{"guest": 0},
 		MetricTimeThresholds: map[string]map[string]int{},
 	})
 	alertManager.CheckGuest(alertGuest, "connection-a")

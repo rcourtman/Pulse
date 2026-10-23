@@ -22,7 +22,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // Re-adding a PBS through a different address must not rotate a token used by
@@ -493,8 +492,8 @@ func TestNodeMutationEventsStayWithRequestOrganization(t *testing.T) {
 // its real error log must also keep provider echoes private. Use only an owned
 // pinned-TLS loopback fixture: no saved node, persistence or runtime is touched.
 func TestPBSConnectionFailureDiagnostics(t *testing.T) {
-	priorLogger, priorLevel := log.Logger, zerolog.GlobalLevel()
-	defer func() { log.Logger = priorLogger; zerolog.SetGlobalLevel(priorLevel) }()
+	priorLevel := zerolog.GlobalLevel()
+	defer zerolog.SetGlobalLevel(priorLevel)
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	for _, mode := range []string{"api", "auth"} {
 		for _, status := range []int{401, 403, 429, 503} {
@@ -535,8 +534,7 @@ func TestPBSConnectionFailureDiagnostics(t *testing.T) {
 					t.Fatal(err)
 				}
 				h := &ConfigHandlers{}
-				var captured bytes.Buffer
-				log.Logger = zerolog.New(&captured).Level(zerolog.ErrorLevel)
+				captured := captureLogs(t, zerolog.ErrorLevel)
 				rec := httptest.NewRecorder()
 				h.HandleTestConnection(rec, httptest.NewRequest(http.MethodPost, "/api/config/connection/test", bytes.NewReader(body)))
 				if rec.Code != 400 || !strings.Contains(rec.Body.String(), "Failed to initialize connection") && !strings.Contains(rec.Body.String(), "Connection failed. Please check your credentials and network settings") {

@@ -298,6 +298,11 @@ class ServiceStartDeadline(unittest.TestCase):
             env.update(SCRIPT=str(INSTALLER if kind == "installer" else UPDATER),
                        FIXTURE=str(f), KIND=kind, MODE=mode, BUDGET=str(budget),
                        READ_DELAY=str(delay), PATH=str(tools) + os.pathsep + os.environ["PATH"])
+            # Both scripts measure their budget with bash SECONDS, which steps on
+            # whole wall-clock seconds, so a budget really lasts between N-1
+            # and N seconds. Start just after a second boundary so each case
+            # gets its full budget and the read-timing assertions stay exact.
+            time.sleep(1 - time.time() % 1 + 0.05)
             started = time.monotonic()
             process = subprocess.Popen(["bash", "-c", DEADLINE_HARNESS], cwd=f, env=env,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,

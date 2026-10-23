@@ -20023,7 +20023,7 @@ func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
 		"`cmd/pulse-mcp`",
 		"projects each manifest capability into one MCP tool",
 		"`--emit-notifications`",
-		"The one-line installers `install-mcp.sh` and `install-mcp.ps1`",
+		"The release installers `install-mcp.sh` and `install-mcp.ps1`",
 		"verify the checksum manifest against Pulse's pinned release key",
 		"then verify the binary's checksum",
 		"refuse installation when any integrity evidence is unavailable or invalid",

@@ -190,12 +190,15 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	// Intent context: explicit metric policies replace the legacy delay.
 	var intent *reducer.DiscreteIntent
 	delaySeconds := 0
-	// resourceType is also a legacy display label (for example "Container").
-	// Policy lookup must use the typed spec, not an intentionally unsupported
-	// ambiguous label, or a system container silently loses its guest delay.
-	policyResourceType := string(spec.ResourceType)
-	if policyResourceType == "" {
-		policyResourceType = resourceType // Compatibility for untyped callers.
+	// resourceType is also a legacy display label. A label that names a
+	// supported policy type is used as is: it can be more specific than the
+	// typed spec, which records a TrueNAS system as an agent and would lose
+	// its own delay. An intentionally unsupported, ambiguous label (for
+	// example "Container") falls back to the typed spec, or a system
+	// container silently loses its guest delay.
+	policyResourceType := resourceType
+	if len(CanonicalResourceTypeKeys(resourceType)) == 0 && spec.ResourceType != "" {
+		policyResourceType = string(spec.ResourceType)
 	}
 	effectiveIntent := m.resolveEffectiveIntentPolicyNoLock(spec.ResourceID, policyResourceType, MetricAlertIntentSignal(metricType))
 	stability := metricStabilityPolicy{}

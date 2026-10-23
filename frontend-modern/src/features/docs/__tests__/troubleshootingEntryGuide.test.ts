@@ -330,7 +330,6 @@ describe('troubleshooting workflow entry', () => {
     expect(detail.querySelector('pre')).toBeNull();
   });
 
-
   it('keeps the source and shipped entry identical and preserves existing anchors', () => {
     const canonical = readFileSync(path.join(repoRoot, 'docs/TROUBLESHOOTING.md'), 'utf8');
     expect(source).toBe(canonical);

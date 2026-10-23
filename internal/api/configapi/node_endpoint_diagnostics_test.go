@@ -11,7 +11,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // Non-parallel. Drive the real ingress handlers, without credentials or any
@@ -30,10 +29,7 @@ func TestNodeRequestEndpointDiagnosticsExcludeRejectedInput(t *testing.T) {
 		} {
 			for _, operation := range []string{"add", "test"} {
 				t.Run(fmt.Sprintf("%s/%d/%s", nodeType, index, operation), func(t *testing.T) {
-					var captured bytes.Buffer
-					prior := log.Logger
-					log.Logger = zerolog.New(&captured).Level(zerolog.DebugLevel)
-					defer func() { log.Logger = prior }()
+					captured := captureLogs(t, zerolog.DebugLevel)
 					body, err := json.Marshal(NodeConfigRequest{Type: nodeType, Name: "fixture", Host: host})
 					if err != nil {
 						t.Fatal(err)
@@ -55,7 +51,7 @@ func TestNodeRequestEndpointDiagnosticsExcludeRejectedInput(t *testing.T) {
 						}
 					}
 					var event map[string]interface{}
-					if err := json.NewDecoder(&captured).Decode(&event); err != nil {
+					if err := json.NewDecoder(captured.Reader()).Decode(&event); err != nil {
 						t.Fatal(err)
 					}
 					if event["host"] != "[invalid endpoint]" || event["type"] != nodeType || event["name"] != "fixture" {
@@ -72,10 +68,7 @@ func TestNodeRequestAcceptedEndpointDiagnosticPreservesResponse(t *testing.T) {
 	for _, nodeType := range []string{"pve", "pbs", "pmg"} {
 		for _, operation := range []string{"add", "test"} {
 			t.Run(nodeType+"/"+operation, func(t *testing.T) {
-				var captured bytes.Buffer
-				prior := log.Logger
-				log.Logger = zerolog.New(&captured).Level(zerolog.DebugLevel)
-				defer func() { log.Logger = prior }()
+				captured := captureLogs(t, zerolog.DebugLevel)
 				body, err := json.Marshal(NodeConfigRequest{Type: nodeType, Name: "fixture", Host: "gateway.invalid:8443/tenant"})
 				if err != nil {
 					t.Fatal(err)
@@ -92,7 +85,7 @@ func TestNodeRequestAcceptedEndpointDiagnosticPreservesResponse(t *testing.T) {
 					t.Fatal("diagnostic filtering changed the HTTP response")
 				}
 				var event map[string]interface{}
-				if err := json.NewDecoder(&captured).Decode(&event); err != nil {
+				if err := json.NewDecoder(captured.Reader()).Decode(&event); err != nil {
 					t.Fatal(err)
 				}
 				if event["host"] != "https://gateway.invalid:8443/tenant" {
@@ -112,10 +105,7 @@ func TestSavedPMGRejectedEndpointDiagnosticsPreserveHTTPResponse(t *testing.T) {
 		"https://pmg.invalid/%invalid?token=synthetic-secret",
 	} {
 		t.Run(fmt.Sprintf("case-%d", index), func(t *testing.T) {
-			var captured bytes.Buffer
-			prior := log.Logger
-			log.Logger = zerolog.New(&captured).Level(zerolog.DebugLevel)
-			defer func() { log.Logger = prior }()
+			captured := captureLogs(t, zerolog.DebugLevel)
 			h := &ConfigHandlers{defaultConfig: &config.Config{PMGInstances: []config.PMGInstance{{Name: "fixture", Host: host, TokenName: "fixture@pmg!pulse", TokenValue: "synthetic-token"}}}}
 			w := httptest.NewRecorder()
 			h.HandleTestNode(w, httptest.NewRequest(http.MethodPost, "/api/config/nodes/pmg-0/test", nil))
