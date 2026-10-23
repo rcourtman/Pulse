@@ -2728,7 +2728,10 @@ func (s *FindingsStore) StartInvestigation(id, sessionID string, runStartedAt ti
 // cannot prove ownership once this process has seen an occurrence begin. A run
 // whose result does not count, but which the finding still shows as running,
 // is closed now through RecoverStuckInvestigation, as the stuck-run sweep would
-// later close it, rather than left running. It reports whether the run's
+// later close it, rather than left running. A run that reports its planned fix
+// as queued does not move the finding back from an outcome the fix's action
+// has reached since: a run starts with no outcome, so one already present came
+// from the action lifecycle during this run. It reports whether the run's
 // result was recorded.
 func (s *FindingsStore) CompleteInvestigation(id, sessionID string, runStartedAt time.Time, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool {
 	s.mu.Lock()
@@ -2745,6 +2748,9 @@ func (s *FindingsStore) CompleteInvestigation(id, sessionID string, runStartedAt
 		}
 		s.RecoverStuckInvestigation(id, sessionID, runStartedAt, InvestigationStatusFailed, InvestigationOutcomeInterrupted, closedAt)
 		return false
+	}
+	if outcome == string(InvestigationOutcomeFixQueued) && f.InvestigationOutcome != "" {
+		outcome = f.InvestigationOutcome
 	}
 	s.updateInvestigationLocked(f, sessionID, status, outcome, lastInvestigatedAt, attempts)
 	s.mu.Unlock()

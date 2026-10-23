@@ -945,6 +945,15 @@ func TestSetupInvestigationOrchestratorUsesSubscriptionAgentLimits(t *testing.T)
 // tenant's findings.
 func orchestratorFindingsFor(t *testing.T) (aicontracts.OrchestratorFindingsStore, aicontracts.InvestigationStore, *ai.FindingsStore) {
 	t.Helper()
+	findings, sessions, patrol := orchestratorPatrolFor(t, nil)
+	return findings, sessions, patrol.GetFindings()
+}
+
+// orchestratorPatrolFor is orchestratorFindingsFor with the tenant's Patrol
+// service instead of only its findings, and audits as the action audit store
+// when it is not nil.
+func orchestratorPatrolFor(t *testing.T, audits unifiedresources.ResourceStore) (aicontracts.OrchestratorFindingsStore, aicontracts.InvestigationStore, *ai.PatrolService) {
+	t.Helper()
 	prevStoreFactory := getCreateInvestigationStore()
 	SetCreateInvestigationStore(func(dataDir string) aicontracts.InvestigationStore {
 		return newTestInvestigationStore()
@@ -964,6 +973,9 @@ func orchestratorFindingsFor(t *testing.T) (aicontracts.OrchestratorFindingsStor
 	handler := &AISettingsHandler{
 		investigationStores: make(map[string]aicontracts.InvestigationStore),
 	}
+	if audits != nil {
+		handler.resourceStoreProvider = func(string) (unifiedresources.ResourceStore, error) { return audits, nil }
+	}
 	handler.chatHandler = &AIHandler{
 		services: map[string]AIService{
 			"tenant-1": chat.NewService(chat.Config{AIConfig: config.NewDefaultAIConfig()}),
@@ -973,7 +985,7 @@ func orchestratorFindingsFor(t *testing.T) (aicontracts.OrchestratorFindingsStor
 	if deps.FindingsStore == nil || deps.Store == nil {
 		t.Fatal("investigation orchestrator was not wired")
 	}
-	return deps.FindingsStore, deps.Store, tenantSvc.GetPatrolService().GetFindings()
+	return deps.FindingsStore, deps.Store, tenantSvc.GetPatrolService()
 }
 
 func investigatedFinding(id string) *ai.Finding {

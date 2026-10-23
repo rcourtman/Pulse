@@ -1932,7 +1932,18 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for orchestrator")
 		return
 	}
-	findingsAdapter := &orchestratorFindingsAdapter{store: &findingsStoreWrapper{store: findingsStore}, sessions: store}
+	// A closed run's action is reconciled from the action audit before the run
+	// is finalized: the orchestrator writes the action back as it was planned,
+	// which an approval or rejection during the run may have overtaken.
+	closeRun := func(findingID string, session *aicontracts.InvestigationSession) {
+		patrol.FinalizeInvestigationRun(findingID, h.hydratePatrolInvestigationAction(orgID, session))
+	}
+	patrol.SetInvestigationRunCloser(closeRun)
+	findingsAdapter := &orchestratorFindingsAdapter{
+		store:    &findingsStoreWrapper{store: findingsStore},
+		sessions: store,
+		closed:   closeRun,
+	}
 
 	// Get config for investigation settings
 	cfg := svc.GetConfig()
@@ -2114,6 +2125,8 @@ type orchestratorFindingsAdapter struct {
 	// sessions is the orchestrator's session store, which records when each
 	// run started.
 	sessions aicontracts.InvestigationStore
+	// closed finalizes a run once its close has landed on the finding.
+	closed func(findingID string, session *aicontracts.InvestigationSession)
 }
 
 func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
@@ -2147,7 +2160,9 @@ func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
 // a run installs it, unless the run was started for an earlier occurrence of
 // the finding. Every other write closes a run and lands only while the finding
 // still names that run, so a run that ends after its finding was re-detected,
-// or after a newer run took over, cannot overwrite the newer state.
+// or after a newer run took over, cannot overwrite the newer state. A close
+// that lands finalizes the run, whether it succeeded or failed and whether
+// Patrol or an operator started it.
 func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 	if a.store == nil || f == nil {
 		return false
@@ -2165,7 +2180,7 @@ func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 			f.InvestigationAttempts,
 		)
 	}
-	return a.store.CompleteInvestigation(
+	if !a.store.CompleteInvestigation(
 		f.ID,
 		f.InvestigationSessionID,
 		runStartedAt,
@@ -2173,19 +2188,36 @@ func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 		f.InvestigationOutcome,
 		f.LastInvestigatedAt,
 		f.InvestigationAttempts,
-	)
+	) {
+		return false
+	}
+	if a.closed != nil {
+		if session := a.session(f.ID, f.InvestigationSessionID); session != nil {
+			a.closed(f.ID, session)
+		}
+	}
+	return true
+}
+
+// session returns the orchestrator's session for a run, or nil when its
+// session store holds no record of the run.
+func (a *orchestratorFindingsAdapter) session(findingID, sessionID string) *aicontracts.InvestigationSession {
+	if a.sessions == nil {
+		return nil
+	}
+	for _, session := range a.sessions.GetByFinding(findingID) {
+		if session != nil && session.SessionID == sessionID {
+			return session
+		}
+	}
+	return nil
 }
 
 // runStartedAt returns when the orchestrator's session for a run started, or
 // zero when its session store holds no record of the run.
 func (a *orchestratorFindingsAdapter) runStartedAt(findingID, sessionID string) time.Time {
-	if a.sessions == nil {
-		return time.Time{}
-	}
-	for _, session := range a.sessions.GetByFinding(findingID) {
-		if session != nil && session.SessionID == sessionID {
-			return session.StartedAt
-		}
+	if session := a.session(findingID, sessionID); session != nil {
+		return session.StartedAt
 	}
 	return time.Time{}
 }

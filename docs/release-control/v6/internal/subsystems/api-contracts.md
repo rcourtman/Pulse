@@ -12519,3 +12519,29 @@ affordance fields keep their shape. The browser normalizer's fallback for an
 undeclared Assistant surface (`frontend-modern/src/api/agentCapabilities.ts`)
 now matches the backend default of tools only, so the External agents settings
 panel never shows an "Interactive questions" badge.
+
+### Closed runs are finalized and swept expiries published (23 October 2026)
+
+`orchestratorFindingsAdapter.Update` finalizes a run when the write that closes
+it lands, after reconciling the run's action from the action audit. The record,
+the unified finding and the approval request that only a successful automatic
+run got before now follow every closed run, failed or successful, automatic or
+manual, and a run the stuck-run sweep recovers once its session has closed (see
+the AI runtime contract). An action's outcome keeps one push, from transition
+reconciliation, and an approval request is sent once per action. A close that
+reports a planned fix as queued no longer moves the finding back from an
+outcome the action reached during the run. The adapter takes the run's session
+from the orchestrator's session store, so the Pulse–enterprise boundary is
+unchanged: no `aicontracts` type, field or method is added. The
+transport-independent action lifecycle's `List` and `DecisionQueue` now publish
+each plan their expiry sweep expires through `OnActionTransition`, including
+plans expired before a sweep fails, as `materializeExpiry` already did for one
+action. `actionlifecycle.RefreshedActionID` names the action a refresh's
+replacement replaced, from the `refresh:` request ID `Refresh` already gives
+it, and Patrol reconciliation ignores a transition for a plan that the
+investigation's current action replaced. No route, payload or action state
+changes. Proofs: `internal/actionlifecycle/service_test.go`
+(`TestExpirySweepsPublishEachExpiredPlan`,
+`TestRefreshedActionIDNamesTheReplacedAction`),
+`internal/api/patrol_action_expiry_sweep_test.go` and
+`internal/api/ai_handlers_investigation_finalize_test.go`.

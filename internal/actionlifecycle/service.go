@@ -557,6 +557,17 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 	return plan, nil
 }
 
+// refreshRequestPrefix starts the request ID a refresh plans its replacement
+// under; the replaced action's ID follows it.
+const refreshRequestPrefix = "refresh:"
+
+// RefreshedActionID returns the action that a refresh replaced with record,
+// when record is such a replacement.
+func RefreshedActionID(record unified.ActionAuditRecord) (string, bool) {
+	replaced, ok := strings.CutPrefix(strings.TrimSpace(record.Request.RequestID), refreshRequestPrefix)
+	return replaced, ok && replaced != ""
+}
+
 // Refresh creates a fresh immutable plan for an expired or drifted action.
 // The previous record remains historical (and an unexpired drifted record
 // naturally expires at its original short TTL); callers always receive the
@@ -583,7 +594,7 @@ func (s *Service) Refresh(ctx context.Context, orgID, actionID string, actor uni
 	if !refreshable {
 		return unified.ActionAuditRecord{}, ErrActionRefreshNotAllowed
 	}
-	requestID := "refresh:" + previous.ID
+	requestID := refreshRequestPrefix + previous.ID
 	req := previous.Request
 	req.RequestID = requestID
 	req.RequestedBy = ""
@@ -667,8 +678,8 @@ func (s *Service) List(orgID string, view ActionListView, limit int) ([]unified.
 	if err != nil {
 		return nil, err
 	}
-	if _, err := store.ExpireActionAudits(s.now(), 500); err != nil {
-		return nil, &PersistError{Op: "action expiry sweep", Err: err}
+	if err := s.sweepExpiry(orgID, store); err != nil {
+		return nil, err
 	}
 	var states []unified.ActionState
 	switch view {
@@ -693,14 +704,29 @@ func (s *Service) DecisionQueue(orgID string, limit int) ([]unified.ActionAuditR
 	if err != nil {
 		return nil, err
 	}
-	if _, err := store.ExpireActionAudits(s.now(), 500); err != nil {
-		return nil, &PersistError{Op: "action expiry sweep", Err: err}
+	if err := s.sweepExpiry(orgID, store); err != nil {
+		return nil, err
 	}
 	records, err := store.GetPendingActionAudits(limit)
 	if err != nil {
 		return nil, &QueryError{Op: "pending action queue", Err: err}
 	}
 	return records, nil
+}
+
+// sweepExpiry materializes every plan past its expiry and publishes each one,
+// as a single action's expiry is published, so surfaces that project actions,
+// such as the queued fix on a Patrol finding, learn of it. Plans the sweep
+// expired before failing are published too.
+func (s *Service) sweepExpiry(orgID string, store Store) error {
+	expired, err := store.ExpireActionAudits(s.now(), 500)
+	for _, record := range expired {
+		s.publishTransition(orgID, record)
+	}
+	if err != nil {
+		return &PersistError{Op: "action expiry sweep", Err: err}
+	}
+	return nil
 }
 
 // ResourceOperatorState returns the authoritative per-resource policy used by

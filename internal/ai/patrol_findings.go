@@ -1594,6 +1594,12 @@ func (p *PatrolService) recoverStuckInvestigations() {
 			Str("resource", f.ResourceName).
 			Str("outcome", string(result.outcome)).
 			Msg("AI Patrol: Recovered stuck investigation")
+		// A run whose session closed without its close reaching the finding,
+		// such as one a restart interrupted after it planned a fix, is
+		// finalized here. A run still going finalizes when its close lands.
+		if result.session != nil {
+			p.closeInvestigationRun(f.ID, result.session)
+		}
 	}
 	if recovered > 0 {
 		log.Info().Int("recovered", recovered).
@@ -1604,11 +1610,13 @@ func (p *PatrolService) recoverStuckInvestigations() {
 // stuckInvestigation is how to close a run that is no longer live.
 // runStartedAt is the start of the run's session, zero when the orchestrator
 // holds none, so the store can check the run belongs to the finding's current
-// occurrence before it applies the session's result.
+// occurrence before it applies the session's result. session is the run's
+// session once it has closed, which finalizes the run after recovery.
 type stuckInvestigation struct {
 	status       InvestigationStatus
 	outcome      InvestigationOutcome
 	runStartedAt time.Time
+	session      *InvestigationSession
 }
 
 // stuckInvestigationResult reports whether a finding marked as running has a
@@ -1647,6 +1655,7 @@ func stuckInvestigationResult(f *Finding, orchestrator InvestigationOrchestrator
 		}
 		return closed, true
 	}
+	closed.session = session
 	if session.Outcome == aicontracts.OutcomeInterrupted {
 		// Closed when the orchestrator restarted, or cancelled by shutdown.
 		closed.outcome = InvestigationOutcomeInterrupted
@@ -1880,57 +1889,15 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 		// cutting longer configured or subscription-agent runs short.
 		ctx, cancel := context.WithTimeout(context.Background(), currentCfg.GetPatrolInvestigationTimeout()+investigationRunGrace)
 		defer cancel()
+		// The run is finalized when it closes, successfully or not, through
+		// the orchestrator's findings store (FinalizeInvestigationRun), not
+		// here: a failed run that planned a fix still needs its record, its
+		// unified finding and the approval push.
 		if err := orchestrator.InvestigateFinding(ctx, invFinding, currentAutonomy); err != nil {
 			log.Error().
 				Err(err).
 				Str("finding_id", f.ID).
-				Msg("Failed to start investigation")
-			return
-		}
-
-		// The orchestrator updates the patrol findings store; sync the latest state to the unified store.
-		// This makes fix verification and resolution visible as an actual closed loop in the UI.
-		var pushUnified UnifiedFindingCallback
-		var resolveUnified func(string)
-		var pushCb PushNotifyCallback
-		p.mu.RLock()
-		pushUnified = p.unifiedFindingCallback
-		resolveUnified = p.unifiedFindingResolver
-		pushCb = p.pushNotifyCallback
-		p.mu.RUnlock()
-		if latest := p.findings.Get(f.ID); latest != nil {
-			var latestInvestigation *InvestigationSession
-			if orchestrator != nil {
-				latestInvestigation = orchestrator.GetInvestigationByFinding(latest.ID)
-			}
-			if p.storeFindingInvestigationRecord(latest.ID, latestInvestigation, false) {
-				if refreshed := p.findings.Get(latest.ID); refreshed != nil {
-					latest = refreshed
-				}
-			}
-			if pushUnified != nil {
-				pushUnified(latest)
-			}
-			if latest.ResolvedAt != nil && resolveUnified != nil {
-				resolveUnified(latest.ID)
-			}
-
-			// Send push notifications for investigation outcomes
-			if pushCb != nil {
-				switch latest.InvestigationOutcome {
-				case string(InvestigationOutcomeFixQueued):
-					if latestInvestigation != nil && latestInvestigation.Action != nil && latestInvestigation.Action.State == "pending_approval" {
-						pushCb(relay.NewActionDecisionNotification(
-							latestInvestigation.Action.ActionID,
-							latest.Title,
-						))
-					}
-				case string(InvestigationOutcomeFixExecuted), string(InvestigationOutcomeFixVerified):
-					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, true))
-				case string(InvestigationOutcomeFixFailed), string(InvestigationOutcomeFixVerificationFailed):
-					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, false))
-				}
-			}
+				Msg("Investigation ended with an error")
 		}
 
 		// Typed remediation now flows exclusively through the action
@@ -1945,6 +1912,96 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 		Str("resource", f.ResourceName).
 		Str("autonomy_level", autonomyLevel).
 		Msg("Triggered autonomous investigation for finding")
+	return true
+}
+
+// SetInvestigationRunCloser sets how a closed run is finalized. Pulse's API
+// layer reconciles the run's action from the action audit, then calls
+// FinalizeInvestigationRun. Without a closer a run is finalized as it is.
+func (p *PatrolService) SetInvestigationRunCloser(closer func(findingID string, session *InvestigationSession)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.investigationRunCloser = closer
+}
+
+func (p *PatrolService) closeInvestigationRun(findingID string, session *InvestigationSession) {
+	p.mu.RLock()
+	closer := p.investigationRunCloser
+	p.mu.RUnlock()
+	if closer != nil {
+		closer(findingID, session)
+		return
+	}
+	p.FinalizeInvestigationRun(findingID, session)
+}
+
+// FinalizeInvestigationRun projects a run that has just closed, successfully or
+// not, onto the finding: it rebuilds the durable record from the run's final
+// session, publishes the unified finding and, when the run left a planned fix
+// awaiting approval, asks the operator to approve it, once per action. It runs
+// when the run's close lands on the finding or the stuck-run sweep recovers a
+// run whose session closed, so a manual re-investigation and a run that failed
+// after planning are finalized like any other run. A run the finding no longer
+// names, because a newer run or occurrence took it over, is not finalized.
+func (p *PatrolService) FinalizeInvestigationRun(findingID string, session *InvestigationSession) {
+	if p == nil || p.findings == nil || session == nil {
+		return
+	}
+	latest := p.findings.Get(findingID)
+	if latest == nil || latest.InvestigationSessionID != session.SessionID || !latest.IsCurrentInvestigation(session) {
+		return
+	}
+	p.storeFindingInvestigationRecord(latest.ID, session, false)
+	// A newer run or occurrence can take the finding while the record is
+	// written, and the store then refuses this run's record.
+	latest = p.findings.Get(findingID)
+	if latest == nil || latest.InvestigationSessionID != session.SessionID || !latest.IsCurrentInvestigation(session) {
+		return
+	}
+	p.mu.RLock()
+	pushUnified := p.unifiedFindingCallback
+	resolveUnified := p.unifiedFindingResolver
+	pushCb := p.pushNotifyCallback
+	p.mu.RUnlock()
+	// Sync the closed run to the unified store, so fix verification and
+	// resolution show as a closed loop in the UI.
+	if pushUnified != nil {
+		pushUnified(latest)
+	}
+	if latest.ResolvedAt != nil && resolveUnified != nil {
+		resolveUnified(latest.ID)
+	}
+	// An action's outcome, such as a verified fix, is pushed once when its
+	// transition is reconciled (PublishFindingLifecycleUpdate), not here.
+	if pushCb != nil && latest.InvestigationOutcome == string(InvestigationOutcomeFixQueued) &&
+		session.Action != nil && session.Action.State == "pending_approval" &&
+		p.claimApprovalRequest(session.Action.ActionID, time.Now()) {
+		pushCb(relay.NewActionDecisionNotification(session.Action.ActionID, latest.Title))
+	}
+}
+
+// approvalRequestMemory is how long an action's approval request is
+// remembered, comfortably past any plan's expiry.
+const approvalRequestMemory = 24 * time.Hour
+
+// claimApprovalRequest reports whether an approval request for actionID may be
+// sent: once per action, so a run finalized again, as when a late close lands
+// after the stuck-run sweep recovered the run, does not ask twice.
+func (p *PatrolService) claimApprovalRequest(actionID string, now time.Time) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for id, at := range p.approvalRequests {
+		if now.Sub(at) > approvalRequestMemory {
+			delete(p.approvalRequests, id)
+		}
+	}
+	if _, requested := p.approvalRequests[actionID]; requested {
+		return false
+	}
+	if p.approvalRequests == nil {
+		p.approvalRequests = make(map[string]time.Time)
+	}
+	p.approvalRequests[actionID] = now
 	return true
 }
 

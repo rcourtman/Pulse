@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rs/zerolog/log"
@@ -90,6 +91,9 @@ func (h *AISettingsHandler) applyPatrolActionAudit(orgID string, audit unifiedre
 	if investigation == nil || strings.TrimSpace(investigation.FindingID) != origin.FindingID {
 		return
 	}
+	if h.patrolActionSuperseded(orgID, investigation.Action, audit) {
+		return
+	}
 	reference := actionReferenceFromAudit(audit)
 	changed := false
 	if !reflect.DeepEqual(investigation.Action, reference) {
@@ -111,6 +115,40 @@ func (h *AISettingsHandler) applyPatrolActionAudit(orgID string, audit unifiedre
 	if changed {
 		store.Update(investigation)
 	}
+}
+
+// maxPatrolActionRefreshLineage bounds the walk back through refreshes.
+const maxPatrolActionRefreshLineage = 32
+
+// patrolActionSuperseded reports whether audit is for a plan that the
+// investigation's current action replaced through one or more refreshes. A
+// refresh plans the replacement under the same origin and leaves the replaced
+// plan to expire on its own; that plan's later transitions, such as its
+// expiry, must not take the investigation back from its replacement.
+func (h *AISettingsHandler) patrolActionSuperseded(orgID string, current *aicontracts.ActionReference, audit unifiedresources.ActionAuditRecord) bool {
+	if current == nil || strings.TrimSpace(current.ActionID) == "" || current.ActionID == audit.ID {
+		return false
+	}
+	store, err := h.actionAuditStore(orgID)
+	if err != nil {
+		return false
+	}
+	actionID := current.ActionID
+	for range maxPatrolActionRefreshLineage {
+		record, found, err := store.GetActionAudit(actionID)
+		if err != nil || !found {
+			return false
+		}
+		replaced, ok := actionlifecycle.RefreshedActionID(record)
+		if !ok {
+			return false
+		}
+		if replaced == audit.ID {
+			return true
+		}
+		actionID = replaced
+	}
+	return false
 }
 
 func (h *AISettingsHandler) actionAuditStore(orgID string) (unifiedresources.ResourceStore, error) {

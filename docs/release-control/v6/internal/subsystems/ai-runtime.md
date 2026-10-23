@@ -7590,3 +7590,48 @@ affordances for an undeclared Assistant surface in
 `frontend-modern/src/api/agentCapabilities.ts` no longer include interactive
 questions, matching `DefaultSurfaceAffordancesForID`. Surface IDs, labels,
 tools, and approval boundaries are unchanged.
+
+### Investigation runs are finalized when they close (23 October 2026)
+
+A Patrol investigation run is finalized when it closes, however it ended and
+whoever started it: when the private orchestrator's write that closes the run
+lands on the finding through `orchestratorFindingsAdapter.Update`, or when the
+stuck-run sweep recovers a run whose session has already closed, such as one a
+restart interrupted. Core first reconciles the run's action from the action
+audit (`hydratePatrolInvestigationAction`), then calls
+`PatrolService.FinalizeInvestigationRun`. That rebuilds the durable
+investigation record from the run's final session, publishes the finding to the
+unified store, resolving it there when a verified fix resolved it, and asks the
+operator to approve a planned fix that still awaits approval, once per action.
+It finalizes only a run the finding still names, checked again after the record
+is written. An action's outcome, such as a verified fix, is pushed once, when
+its transition is reconciled (`PublishFindingLifecycleUpdate`); a close no
+longer sends a second fix-completed push.
+
+Before this, only an automatic investigation that returned without an error
+was finalized, by the goroutine that started it, which now only logs a run's
+error. A run that planned a fix and then failed, normally on its final model
+call, kept the record core projected when the plan was recorded, which showed
+the run as still running, and the operator was never asked to approve the
+queued fix. A manual re-investigation was never finalized, even when it
+succeeded. The action is reconciled first because the orchestrator writes it
+back as it was planned, which an approval, rejection or expiry during the final
+model call may have overtaken. For the same reason `CompleteInvestigation` no
+longer moves a finding back to `fix_queued` from an outcome the plan's action
+reached during the run: a run starts with no outcome, so one present at its
+close came from the action lifecycle. Proofs:
+`internal/ai/patrol_investigation_finalize_test.go` and
+`internal/api/ai_handlers_investigation_finalize_test.go`.
+
+The action inbox and decision queue expire every plan past its expiry, and now
+publish each one through the lifecycle's transition callback, as a single
+action's expiry already was. `ReconcilePatrolActionTransition` therefore moves a
+Patrol investigation and its finding from `fix_queued` to `needs_attention` when
+the plan expires in a sweep, rather than when someone next opens the
+investigation. Reconciliation ignores a transition for a plan that the
+investigation's current action replaced through one or more refreshes, which it
+follows through `actionlifecycle.RefreshedActionID` rather than the clock: a
+refresh plans a replacement under the same investigation and leaves the
+replaced plan to expire on its own, and that expiry must not take the
+investigation back from its replacement. Proof:
+`internal/api/patrol_action_expiry_sweep_test.go`.
