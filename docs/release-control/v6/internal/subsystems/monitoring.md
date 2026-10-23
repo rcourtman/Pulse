@@ -2622,7 +2622,14 @@ the newest bounded set of real fetched snapshots, and the per-instance PBS
 backup list must not grow without an explicit monitoring-owned limit. Bounding
 must never synthesize placeholder backup entries from group metadata: a
 placeholder drops verification, size, file, and per-snapshot time data, which
-users read as broken discovery and failed verification. PBS backup group cache metadata
+users read as broken discovery and failed verification. Reusing a PBS snapshot
+cache requires the group's newest backup time to equal the cached newest time,
+not merely be no later. Pruning the newest snapshot can move that time backwards
+while both the old and new inventories still fill the capped cache; the ordinary
+poll must refresh then, withdraw the deleted archive after an accepted read and
+derive posture from the remaining backups. Failed refreshes retain the existing
+partial/unavailable evidence rules, and unchanged groups retain bounded TTL reuse.
+PBS backup group cache metadata
 must be pruned to the retained group set after a completed poll, while
 preserving cache metadata only for groups still observed or intentionally reused
 after transient datastore failures. Recovery-point ingestion started by backup
