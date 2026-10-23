@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "86ff402d118f3fc1010acfe04a4d8fcc9cbe5d9e",
+  "verified_at": "2026-10-22T23:20:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/RecordOwnerLink.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/RecordOwnerLink.tsx": "40ab34adea57d54c1f62d2d93f79295ad3e1e23265e7b31d93516a9bd1e330d6"
+  },
+  "routes": [
+    "/kubernetes/events",
+    "/truenas/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this change on the full mock estate, signed in through the real login, compared with a build of main",
+    "390px Kubernetes event drawer for Pod/payments-worker-58484d44f7-f6gzh: the owner link reads \"Open\" (70px, was 192px) with accessible name and title \"Open payments-worker-58484d44f7-f6gzh\"; the heading widens from 98px to 220px and wraps once at a hyphen instead of breaking mid-word across four lines",
+    "390px TrueNAS alert drawer for disk sdc: the owner link reads \"Open\" with accessible name \"Open sdc\"",
+    "1440px: both drawers keep the full \"Open <name>\" label, unchanged from main",
+    "No console or page errors at either width"
+  ],
+  "interactions": [
+    "Tapping or clicking a record row opens its drawer with the owner link in the header"
+  ],
+  "browser": {
+    "client": "playwright 1.62.1",
+    "engine": "Chromium",
+    "version": "chromium-1234 headless"
+  },
+  "scope": "Full authenticated application on a mock estate; mock data, not live provider connections."
+}

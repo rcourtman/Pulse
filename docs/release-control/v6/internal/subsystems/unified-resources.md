@@ -8626,6 +8626,13 @@ Secret's key names and values are never shown. Namespaces keep the object
 drawer because they carry alerts. No resource identity, status or alert rule
 changes.
 
+A record drawer's owner link (`RecordOwnerLink`) reads "Open" alone below the
+`sm` breakpoint and "Open <name>" above it, with the full label kept as its
+accessible name and tooltip. The drawer heading beside it already names the
+object; on a phone the repeated name took about half the header and broke a
+long heading (a Kubernetes pod's) mid-word across four lines. Where it links
+and when it appears are unchanged.
+
 The remaining bespoke object drawers follow the guest drawer. The Proxmox Mail
 Gateway row opens the shared resource drawer (row status, Overview, Manage)
 with mail flow as its headless Mail tab, so a PMG has one drawer instead of

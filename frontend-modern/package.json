@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "@solidjs/router": "^0.10.10",
-    "dompurify": "^3.4.15",
+    "dompurify": "^3.4.17",
     "lucide-solid": "^0.577.0",
     "marked": "^17.0.1",
     "qrcode": "^1.5.4",
@@ -79,7 +79,7 @@
     "@types/qrcode": "^1.5.6",
     "@typescript-eslint/eslint-plugin": "^8.71.1",
     "@typescript-eslint/parser": "^8.71.1",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^9.20.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-solid": "^0.18.1",
@@ -93,6 +93,6 @@
     "vite": "^6.4.5",
     "vite-plugin-solid": "^2.11.14",
     "vite-plugin-sri-gen": "^1.7.4",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }

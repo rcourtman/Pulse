@@ -4120,6 +4120,27 @@ release-selection, promotion or rollback boundary is introduced. Full exact-grap
 checks, the strict full-graph audit and fresh representative browser rendering
 remain necessary before acceptance; a prepared lock or acquisition is not proof.
 
+### Reviewed DOMPurify and Vitest advisory floors (22 Oct 2026)
+
+`frontend-modern/package.json` moves `dompurify` to `^3.4.17` and `vitest` and
+`@vitest/coverage-v8` to `^4.1.12`, and `frontend-modern/package-lock.json`
+locks those versions. `GHSA-cg2g-xh64-v4q7` (critical `SAFE_FOR_TEMPLATES`
+bypass through attached shadow roots), `GHSA-mrv2-3pqr-j5jr` (an `IN_PLACE`
+hook that removes a parent or sibling left detached handlers armed) and
+`GHSA-c6gr-qvv4-5v3f` (SMIL `attributeName=href` guard skipped under
+`application/xhtml+xml`) affect DOMPurify up to 3.4.16, and
+`GHSA-qxg6-89mg-rqv8` and `GHSA-xp26-3454-mjgp` affect `@vitest/mocker` below
+4.1.12. Published on 22 October 2026, they failed the required frontend
+dependency audit on every pull request. DOMPurify ships in the frontend bundle
+and the change is a patch release inside the reviewed `^3` range; Vitest is
+development-only. The lock also takes the `chai`, `obug`, `std-env` and
+`tinyrainbow` versions the new Vitest ranges resolve and one deduplicated
+`picomatch` 4.0.7, and leaves the installer, artifact, signing, promotion and
+rollback boundary unchanged.
+`frontend-modern/src/security/__tests__/dependencySecurity.test.ts` raises the
+Vitest floor to 4.1.12 and the reviewed `dompurify` floor to 3.4.17, so a later
+downgrade is rejected.
+
 ### Reviewed @types/node 26.6.2 refresh
 
 The 2026-09-23 `npm-minor-patch` group (Dependabot #2189) advances the

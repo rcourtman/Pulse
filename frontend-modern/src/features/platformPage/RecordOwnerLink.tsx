@@ -52,7 +52,11 @@ export const RecordOwnerLink: Component<{
   name?: string;
 }> = (props) => {
   const href = () => buildRecordOwnerPath(props.subject);
-  const label = () => `Open ${props.name?.trim() || props.subject?.name?.trim() || 'resource'}`;
+  const name = () => props.name?.trim() || props.subject?.name?.trim() || 'resource';
+  const label = () => `Open ${name()}`;
+  // The drawer heading already names the object. On a phone, repeating it here
+  // took half the header and broke the heading mid-word, so the button reads
+  // "Open" there and keeps the full label for screen readers and the tooltip.
   return (
     <Show when={href()}>
       {(path) => (
@@ -60,10 +64,13 @@ export const RecordOwnerLink: Component<{
           href={path()}
           class={getDrawerHeaderActionButtonClass('max-w-48 sm:max-w-64')}
           title={label()}
+          aria-label={label()}
           data-record-owner-link
         >
           <ArrowUpRightIcon class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span class="truncate">{label()}</span>
+          <span class="truncate">
+            Open<span class="hidden sm:inline">{` ${name()}`}</span>
+          </span>
         </A>
       )}
     </Show>
