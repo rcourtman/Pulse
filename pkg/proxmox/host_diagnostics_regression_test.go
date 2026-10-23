@@ -167,6 +167,10 @@ func TestClientConstructionHonoursClientTimeout(t *testing.T) {
 	testClientConstructionHonoursContext(t, "client-timeout")
 }
 
+func TestClientEndedAuthResponseOwnsErrorAndSession(t *testing.T) {
+	testClientEndedAuthResponseOwnsErrorAndSession(t)
+}
+
 func TestClusterCancelledCallerStartsNoSession(t *testing.T) {
 	testClusterCancelledCallerStartsNoSession(t)
 }

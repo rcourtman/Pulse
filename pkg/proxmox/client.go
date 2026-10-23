@@ -446,10 +446,17 @@ func (c *Client) authenticate(ctx context.Context) error {
 	return c.authenticatePassword(loginCtx, auth.user+"@"+auth.realm)
 }
 
+// A response can finish just as ctx ends. The server's answer to that
+// abandoned exchange, such as an empty or refused response, is not a
+// credential diagnosis: an ended exchange tries no other encoding and reports
+// the ending, keeping a transport error that already carries it.
 func (c *Client) authenticatePassword(ctx context.Context, username string) error {
 	err := c.authenticateJSON(ctx, username, c.config.Password)
-	if shouldFallbackToForm(err) {
+	if ctx.Err() == nil && shouldFallbackToForm(err) {
 		err = c.authenticateForm(ctx, username, c.config.Password)
+	}
+	if ended := ctx.Err(); err != nil && ended != nil && !errors.Is(err, ended) {
+		return ended
 	}
 	return err
 }

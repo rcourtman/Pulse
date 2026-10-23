@@ -4260,6 +4260,26 @@ during response reading for JSON/form, complete and incomplete success,
 encoding and credential refusal, and body-read failure. The real TLS
 constructor cancellation/deadline and shared-renewal controls remain separate.
 
+### PVE authentication keeps an ended login's outcome
+
+When a PVE password exchange ends while its response is being read (the caller
+cancels, the caller's deadline passes, or the client's own login timeout
+expires), the login now reports that context error. The server's answer to the
+abandoned exchange, such as an empty 200 or a refusal, is no longer reported as
+a malformed session or a credential refusal, and an ended JSON refusal does not
+start a form attempt. Transport errors that already report the ending keep
+their wording. A complete session is still accepted, and construction still
+discards a client whose caller has ended. Shared renewal gets the same rule
+through the common password exchange, where only its own bounded timeout can
+end the detached login. `TestClientEndedAuthResponseOwnsErrorAndSession` ends
+the login during response reading, by caller cancellation and by a simulated
+login deadline, for JSON/form, empty and invalid success, encoding and
+credential refusal, and body-read failure. It also checks that both encoding
+attempts carry the one login budget. The real TLS construction fixture now
+aborts a request whose client has left instead of answering it with an empty
+200; reading that answer as a malformed session is what made
+`TestClientConstructionHonoursContext` fail intermittently in CI.
+
 ### AI Discovery removed (2026-10-11)
 
 The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)
