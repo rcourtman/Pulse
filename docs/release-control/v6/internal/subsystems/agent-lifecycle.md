@@ -10204,3 +10204,9 @@ The `internal/api` change of 2026-10-23 removes browser-only chat routes
 `/redo`, `/steer`, `/diff`, `/revert`, and `/unrevert` session sub-resources). The adjacent-boundary notes above that name those routes are now
 history; none of them was agent-lifecycle state. No agent enrollment,
 command, update, identity, or credential path changes.
+
+The `internal/api` change of 2026-10-23 that finalizes Patrol investigation
+runs when they close, failed runs included, and publishes the action plans the
+inbox expiry sweep expires, enrols, commands, updates or removes no agent and
+touches no agent identity or credential. Investigations still reach hosts only
+through the read-only evidence tools and the governed action lifecycle.

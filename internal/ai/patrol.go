@@ -551,6 +551,11 @@ type PatrolService struct {
 	// Investigation orchestrator for autonomous investigation of findings
 	investigationOrchestrator InvestigationOrchestrator
 	investigationWg           sync.WaitGroup // Tracks in-flight investigation goroutines
+	// investigationRunCloser finalizes a closed run; see SetInvestigationRunCloser.
+	investigationRunCloser func(findingID string, session *InvestigationSession)
+	// approvalRequests holds when each action's approval was last requested,
+	// so a run finalized twice does not ask twice; see claimApprovalRequest.
+	approvalRequests map[string]time.Time
 
 	// Unified findings callback - pushes findings to unified store
 	unifiedFindingCallback UnifiedFindingCallback

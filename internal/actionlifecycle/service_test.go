@@ -2123,3 +2123,81 @@ func TestIssue1649ForceFailRefusesTerminalAndUndispatchedActions(t *testing.T) {
 		t.Fatalf("missing action ForceFail error=%v", err)
 	}
 }
+
+// A refresh's replacement names the action it replaced, which is how a
+// surface that projects actions tells the replaced plan's later transitions
+// from its replacement's.
+func TestRefreshedActionIDNamesTheReplacedAction(t *testing.T) {
+	now := time.Date(2026, 10, 23, 18, 0, 0, 0, time.UTC)
+	store := unified.NewMemoryStore()
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
+	service.Now = func() time.Time { return now }
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Now = func() time.Time { return plan.ExpiresAt.Add(time.Second) }
+	replacement, err := service.Refresh(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced, ok := RefreshedActionID(replacement); !ok || replaced != plan.ActionID {
+		t.Fatalf("RefreshedActionID(replacement) = %q, %v, want %q", replaced, ok, plan.ActionID)
+	}
+	original, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found {
+		t.Fatalf("original: found=%v err=%v", found, err)
+	}
+	if replaced, ok := RefreshedActionID(original); ok {
+		t.Fatalf("a first plan names a replaced action: %q", replaced)
+	}
+}
+
+// The inbox and decision-queue sweeps publish each plan they expire, as a
+// single action's expiry is published, so a surface that projects the action,
+// such as a Patrol finding's queued fix, does not outlive the plan. Each expiry
+// is published once.
+func TestExpirySweepsPublishEachExpiredPlan(t *testing.T) {
+	sweeps := map[string]func(*Service) error{
+		"inbox": func(s *Service) error {
+			_, err := s.List("default", ActionListPending, 100)
+			return err
+		},
+		"decision queue": func(s *Service) error {
+			_, err := s.DecisionQueue("default", 100)
+			return err
+		},
+	}
+	for name, sweep := range sweeps {
+		t.Run(name, func(t *testing.T) {
+			now := time.Date(2026, 10, 23, 18, 0, 0, 0, time.UTC)
+			store := unified.NewMemoryStore()
+			service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
+			service.Now = func() time.Time { return now }
+			plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var published []unified.ActionAuditRecord
+			var orgs []string
+			service.OnActionTransition = func(orgID string, record unified.ActionAuditRecord) {
+				published = append(published, record)
+				orgs = append(orgs, orgID)
+			}
+
+			if err := sweep(service); err != nil || len(published) != 0 {
+				t.Fatalf("a sweep before expiry: err=%v published=%+v", err, published)
+			}
+			service.Now = func() time.Time { return plan.ExpiresAt.Add(time.Second) }
+			if err := sweep(service); err != nil {
+				t.Fatal(err)
+			}
+			if len(published) != 1 || published[0].ID != plan.ActionID || published[0].State != unified.ActionStateExpired || orgs[0] != "default" {
+				t.Fatalf("published = %+v for orgs %v, want one expiry of %s", published, orgs, plan.ActionID)
+			}
+			if err := sweep(service); err != nil || len(published) != 1 {
+				t.Fatalf("a later sweep published the expiry again: err=%v published=%+v", err, published)
+			}
+		})
+	}
+}

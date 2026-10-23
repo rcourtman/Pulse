@@ -7193,3 +7193,8 @@ name those routes are now history. Persisted chat session files no longer
 carry `turn_redo_stack` or the `steered` message flag; older files that still
 have them load unchanged and drop them on the next write. No backup, restore,
 or recovery path changes.
+
+The `internal/api` change of 2026-10-23 that finalizes Patrol investigation
+runs when they close and publishes the action plans the inbox expiry sweep
+expires opens no storage, backup or recovery path. Recovery evidence, restore
+rules and storage capabilities are unchanged.
