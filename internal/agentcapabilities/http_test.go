@@ -103,48 +103,39 @@ func TestBuildCapabilityHTTPRequestProjectsPathBodyAndAuth(t *testing.T) {
 }
 
 func TestBuildCapabilityHTTPRequestForwardsGETFiltersAsQuery(t *testing.T) {
-	// A GET capability with non-path arguments must forward them as URL query
-	// parameters (not a body, not dropped) so filter-style tools like
-	// get_fleet_context can receive agent-supplied filters through the MCP
-	// tools/call path.
-	cap := Capability{
-		Name:   FleetContextCapabilityName,
-		Method: http.MethodGet,
-		Path:   FleetContextCapabilityPath,
-	}
-	req, projected, err := BuildCapabilityHTTPRequest(context.Background(), "http://pulse.local/", "token", cap, map[string]any{
-		"hasFindings": "true",
-		"technology":  "docker",
-	})
-	if err != nil {
-		t.Fatalf("BuildCapabilityHTTPRequest: %v", err)
-	}
-	if req.Method != http.MethodGet {
-		t.Fatalf("method = %q, want GET", req.Method)
-	}
-	if projected.HasBody {
-		t.Fatalf("GET projection must not produce a body; projected = %+v", projected)
-	}
-	if projected.Query == nil {
-		t.Fatal("projected.Query must be populated for a GET with filter args")
-	}
-	if got := projected.Query.Get("hasFindings"); got != "true" {
-		t.Errorf("query hasFindings = %q, want true", got)
-	}
-	if got := projected.Query.Get("technology"); got != "docker" {
-		t.Errorf("query technology = %q, want docker", got)
-	}
-	// The query must land on the request URL encoded.
-	if req.URL.RawQuery == "" {
-		t.Fatalf("RawQuery empty; url = %q", req.URL.String())
-	}
-	gotFindings := req.URL.Query().Get("hasFindings")
-	gotTech := req.URL.Query().Get("technology")
-	if gotFindings != "true" || gotTech != "docker" {
-		t.Errorf("url query = hasFindings=%q technology=%q", gotFindings, gotTech)
-	}
-	if req.Body != nil {
-		t.Fatalf("GET request must not carry a body; got %+v", req.Body)
+	cap := Capability{Name: FleetContextCapabilityName, Method: http.MethodGet, Path: FleetContextCapabilityPath}
+	for _, tc := range []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"boolean_true", true, "true"},
+		{"boolean_false", false, "false"},
+		{"legacy_string", "true", "true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, projected, err := BuildCapabilityHTTPRequest(context.Background(), "http://pulse.local/", "fixture-token", cap, map[string]any{
+				"hasFindings":       tc.value,
+				"technology":        "qemu & lxc",
+				ApprovalArgumentKey: "private-approval",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if req.Method != http.MethodGet || req.Body != nil || projected.HasBody {
+				t.Fatalf("GET must retain its method and no body: %s %+v", req.Method, projected)
+			}
+			wantQuery := "hasFindings=" + tc.want + "&technology=qemu+%26+lxc"
+			if req.URL.RawQuery != wantQuery || projected.Query.Encode() != wantQuery {
+				t.Errorf("encoded query = %q, projection = %q, want %q", req.URL.RawQuery, projected.Query.Encode(), wantQuery)
+			}
+			if req.URL.Query().Get("technology") != "qemu & lxc" {
+				t.Error("query encoding changed the string filter")
+			}
+			if req.Header.Get(AgentAPITokenHeader) != "fixture-token" {
+				t.Error("filter projection lost authentication header")
+			}
+		})
 	}
 }
 

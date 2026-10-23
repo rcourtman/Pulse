@@ -809,3 +809,60 @@ func TestProjectCapabilityCallReadCapabilityHasNoBody(t *testing.T) {
 		t.Fatalf("GET capability must not project body, got hasBody=%v body=%s", got.HasBody, got.Body)
 	}
 }
+
+// GET/DELETE filters share the manifest projection. Keep boolean zero values,
+// existing strings and the path/private-argument boundary without broadening
+// unsupported values into arbitrary query text.
+func TestProjectCapabilityCallGETDELETEPreservesTypedFilters(t *testing.T) {
+	cases := []struct {
+		name    string
+		filters map[string]any
+		want    string
+	}{
+		{"true", map[string]any{"hasFindings": true}, "hasFindings=true"},
+		{"false", map[string]any{"hasFindings": false}, "hasFindings=false"},
+		{"legacy_string", map[string]any{"hasFindings": "true"}, "hasFindings=true"},
+		{"mixed", map[string]any{"hasFindings": true, "technology": "qemu & lxc"}, "hasFindings=true&technology=qemu+%26+lxc"},
+		{"empty_string", map[string]any{"technology": ""}, "technology="},
+		{"unsupported", map[string]any{"null": nil, "number": float64(1), "integer": 1, "array": []any{true}, "object": map[string]any{"x": true}}, ""},
+		{"private_boolean", map[string]any{ApprovalArgumentKey: true}, ""},
+		{"omitted", nil, ""},
+	}
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		for _, tc := range cases {
+			t.Run(method+"/"+tc.name, func(t *testing.T) {
+				args := map[string]any{ResourceIDArgumentName: "vm:101/console", ApprovalArgumentKey: "private-approval"}
+				for key, value := range tc.filters {
+					args[key] = value
+				}
+				before, err := json.Marshal(args)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := ProjectCapabilityCall(Capability{Method: method, Path: ResourceContextCapabilityPath}, args)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got.Path != "/api/agent/resource-context/vm%3A101%2Fconsole" {
+					t.Fatalf("path = %q", got.Path)
+				}
+				if got.HasBody || len(got.Body) != 0 {
+					t.Fatalf("%s projected a body: %+v", method, got)
+				}
+				if got.Query.Encode() != tc.want {
+					t.Errorf("query = %q, want %q", got.Query.Encode(), tc.want)
+				}
+				if tc.want == "" && got.Query != nil {
+					t.Errorf("empty projection must retain nil query: %+v", got.Query)
+				}
+				after, err := json.Marshal(args)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(after) != string(before) {
+					t.Errorf("projection mutated caller arguments: %s -> %s", before, after)
+				}
+			})
+		}
+	}
+}
