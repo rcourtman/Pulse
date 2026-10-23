@@ -107,6 +107,7 @@ BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
 UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
 UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))
+SERVER_STAGING_STALE_MINUTES=360
 CONFIG_BACKUP_MIN_EXTRA_BYTES=$((64 * 1024 * 1024))
 
 release_signature_key_available() {
@@ -150,11 +151,6 @@ verify_release_signature() {
     rm -f "$allowed_signers"
     return 0
 }
-
-# All direct HTTP clients ignore ambient curl/wget configuration. Saved
-# defaults must not weaken TLS, rewrite read-only requests, add transfers or
-# trace an installer request. Keep caller trust/proxy settings and each
-# transfer's existing timeout, redirect and signature policy unchanged.
 
 # Installer version - the major version this script is bundled with
 INSTALLER_MAJOR_VERSION=5
@@ -308,7 +304,7 @@ get_latest_release_from_redirect() {
     # tolerates intermediate redirects that omit /tag/ (issue #698).
     local target_url="${1:-https://github.com/$GITHUB_REPO/releases/latest}"
     local effective_url=""
-    local curl_cmd=(curl --disable -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
+    local curl_cmd=(curl -fsSL --connect-timeout 5 --max-time 10 -o /dev/null -w '%{url_effective}' "$target_url")
 
     if command -v timeout >/dev/null 2>&1; then
         effective_url=$(timeout 10 "${curl_cmd[@]}" 2>/dev/null || true)
@@ -601,12 +597,11 @@ handle_install_interrupt() {
     exit 1
 }
 
-# Bound each systemctl command even when it ignores TERM. A timeout remains
-# an uncertain manager result, never evidence that a service stopped.
+# Wrapper for systemctl commands that might hang in unprivileged containers
 safe_systemctl() {
     local action="$1"
     shift
-    timeout -k 1 5 systemctl "$action" "$@" 2>/dev/null || {
+    timeout 5 systemctl "$action" "$@" 2>/dev/null || {
         if [[ "$action" == "daemon-reload" ]]; then
             # daemon-reload hanging is common in unprivileged containers, silent fail is OK
             return 0
@@ -625,7 +620,7 @@ safe_systemctl() {
 stop_pulse_for_replacement() {
     local service_name="$1"
     local state=""
-    if ! state=$(timeout -k 1 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
         print_error "Could not read Pulse service state ($service_name); refusing binary replacement"
         return 1
     fi
@@ -644,7 +639,7 @@ stop_pulse_for_replacement() {
         print_error "Could not stop Pulse ($service_name); refusing binary replacement. Check service state before retrying."
         return 1
     fi
-    if ! state=$(timeout -k 1 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
+    if ! state=$(timeout 5 systemctl show "$service_name" --property=ActiveState --value 2>/dev/null); then
         print_error "Could not confirm Pulse stopped ($service_name); refusing binary replacement"
         return 1
     fi
@@ -963,7 +958,7 @@ wait_for_pulse_ready() {
     local api_endpoint="${pulse_url%/}/api/health"
     print_info "Waiting for Pulse API at ${api_endpoint}..."
     for attempt in $(seq 1 "$retries"); do
-        if curl --disable -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
+        if curl -fsS --max-time 2 "$api_endpoint" >/dev/null 2>&1; then
             print_info "Pulse API is reachable"
             return 0
         fi
@@ -1106,11 +1101,11 @@ resolve_latest_release_tag_for_channel() {
 
     [[ "$channel" == stable || "$channel" == rc ]] || return 1
     if command -v timeout >/dev/null 2>&1; then
-        if ! releases_json=$(timeout 15 curl --disable -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+        if ! releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
             releases_json=""
         fi
     else
-        if ! releases_json=$(curl --disable -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
+        if ! releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null); then
             releases_json=""
         fi
     fi
@@ -2087,7 +2082,7 @@ create_lxc_container() {
         sysctl -p >/dev/null 2>&1
         
         # Note: We don't create /usr/local/bin/update to avoid conflicts with Community Scripts
-        # Native installations should update using: curl --disable -fsSL ... | bash
+        # Native installations should update using: curl -fsSL ... | bash
         
         # Ensure /usr/local/bin is in PATH for all users
         if ! grep -q '/usr/local/bin' /etc/profile 2>/dev/null; then
@@ -2316,102 +2311,46 @@ create_pve_auto_register_token() {
     local token_name="$1"
     local token_output_var="$2"
     local token_status_var="$3"
-    local created_token_output=""
-    local created_token_status=0
+    local token_output=""
+    local token_status=0
 
     set +e
-    created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
-    created_token_status=$?
+    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
+    token_status=$?
     set -e
 
     # Older pveum builds reject --output-format; fall back to the legacy table form.
-    if [[ $created_token_status -ne 0 ]] && printf '%s\n' "$created_token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
+    if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
         set +e
-        created_token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
-        created_token_status=$?
+        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+        token_status=$?
         set -e
     fi
 
-    printf -v "$token_output_var" '%s' "$created_token_output"
-    printf -v "$token_status_var" '%s' "$created_token_status"
-}
-
-pve_auto_register_api_status() {
-    local host_url="$1"
-    local token_id="${2:-}"
-    local token_value="${3:-}"
-    # This runs on the PVE host. Its existing cluster CA authenticates the
-    # self-signed API without accepting an arbitrary peer's certificate. With
-    # no cluster CA, keep curl's normal system trust; never retry insecurely.
-    local curl_args=(--disable --silent --show-error --proto '=https'
-        --noproxy '*' --connect-timeout 5 --max-time 15
-        --capath /etc/ssl/certs
-        --output /dev/null --write-out '%{http_code}')
-    if [[ -f /etc/pve/pve-root-ca.pem ]]; then
-        # Retain Debian's system CA directory too, for an ACME-issued PVE
-        # certificate. The cluster CA augments trust; it does not replace it.
-        curl_args+=(--cacert /etc/pve/pve-root-ca.pem)
-    fi
-    # No redirects, ambient curl config, provider body or stderr. The caller
-    # accepts only the expected HTTP status, not untrusted diagnostic text.
-    if [[ -n "$token_id" ]]; then
-        printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" |
-            curl "${curl_args[@]}" --header @- --url "${host_url%/}/api2/json/nodes" 2>/dev/null
-    else
-        curl "${curl_args[@]}" --url "${host_url%/}/api2/json/nodes" 2>/dev/null
-    fi
-}
-
-preflight_pve_auto_register_api() {
-    local api_status=""
-    # Establish TLS and API availability before creating a token.
-    # A 401/403 is expected from this deliberately credential-free request.
-    if ! api_status=$(pve_auto_register_api_status "$1"); then
-        api_status=""
-    fi
-    case "$api_status" in
-        200|401|403) return 0 ;;
-    esac
-    AUTO_NODE_REGISTER_ERROR="Proxmox API trust or availability check failed"
-    print_warn "Could not verify the Proxmox HTTPS API; skipping automatic node registration. Check its address, certificate name and the host's existing CA trust."
-    print_warn "Monitoring credentials have not been changed."
-    return 1
+    printf -v "$token_output_var" '%s' "$token_output"
+    printf -v "$token_status_var" '%s' "$token_status"
 }
 
 smoke_test_pve_auto_register_token() {
+    local host_url="$1"
+    local token_id="$2"
+    local token_value="$3"
     local smoke_output=""
     local smoke_status=0
 
     set +e
-    smoke_output=$(pve_auto_register_api_status "$1" "$2" "$3")
+    smoke_output=$(printf 'Authorization: PVEAPIToken=%s=%s\n' "$token_id" "$token_value" | curl --retry 2 --retry-delay 1 -kfsS -H @- "${host_url%/}/api2/json/nodes" 2>&1)
     smoke_status=$?
     set -e
 
-    if [[ $smoke_status -ne 0 || "$smoke_output" != "200" ]]; then
+    if [[ $smoke_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="token smoke check failed"
         print_warn "Created Proxmox monitoring token, but a local API smoke check failed; skipping automatic node registration"
-        print_warn "Check the Proxmox API certificate and monitoring-token permissions; no TLS bypass was attempted."
+        print_warn "Smoke check error: ${smoke_output}"
         return 1
     fi
 
     return 0
-}
-
-pve_auto_register_pulse_post() {
-    local url="$1"
-    local response=""
-    # Both bootstrap calls mutate state; a lost/error response is not permission
-    # to replay them. This is the existing direct HTTP hop to the new local
-    # container, not the separate HTTPS Proxmox API probe. Ignore ambient curl
-    # configuration/proxies, never follow redirects and keep credentials on stdin.
-    if ! response=$(curl --disable --silent --show-error --proto '=http' \
-        --noproxy '*' --connect-timeout 5 --max-time 15 --retry 0 \
-        --request POST --header 'Content-Type: application/json' \
-        --data-binary @- --write-out $'\n%{http_code}' --url "$url" 2>/dev/null); then
-        return 1
-    fi
-    [[ "$response" == *$'\n200' ]] || return 1
-    printf '%s' "${response%$'\n200'}"
 }
 
 auto_register_pve_node() {
@@ -2456,32 +2395,28 @@ auto_register_pve_node() {
 import sys, urllib.parse
 raw = sys.argv[1].strip()
 default_port = sys.argv[2]
-try:
-    if not raw or any(c.isspace() or ord(c) < 32 for c in raw):
-        raise ValueError("invalid host")
-    parsed = urllib.parse.urlsplit(raw if "://" in raw else f"https://{raw}")
-    host = parsed.hostname
-    if (parsed.scheme != "https" or not host or parsed.username is not None
-            or parsed.password is not None or parsed.path not in ("", "/")
-            or parsed.query or parsed.fragment or any(c in host for c in "\\%")):
-        raise ValueError("invalid API origin")
-    port = parsed.port if parsed.port is not None else int(default_port)
-    if not 1 <= port <= 65535:
-        raise ValueError("invalid port")
-    authority = f"[{host}]" if ":" in host else host
-    print(f"https://{authority}:{port}")
-except ValueError:
+if not raw:
     print("")
+    sys.exit(0)
+if "://" not in raw:
+    raw = f"https://{raw}"
+parsed = urllib.parse.urlparse(raw)
+scheme = parsed.scheme or "https"
+netloc = parsed.netloc or parsed.path
+path = parsed.path if parsed.netloc else ""
+if not netloc:
+    print("")
+    sys.exit(0)
+host = netloc.split('@', 1)[-1]
+if ':' not in host:
+    netloc = f"{netloc}:{default_port}"
+print(urllib.parse.urlunparse((scheme, netloc, path, "", "", "")))
 PY
 ) || normalized_host_url=""
 
     if [[ -z "$normalized_host_url" ]]; then
         AUTO_NODE_REGISTER_ERROR="invalid host URL"
-        print_warn "Use a Proxmox HTTPS hostname or address without credentials, path, query or fragment; skipping automatic node registration"
-        return
-    fi
-
-    if ! preflight_pve_auto_register_api "$normalized_host_url"; then
+        print_warn "Unable to determine Proxmox API URL; skipping automatic node registration"
         return
     fi
 
@@ -2513,7 +2448,7 @@ PY
     set +xv
 
     local setup_response
-    if ! setup_response=$(printf %s "$setup_payload" | pve_auto_register_pulse_post "$pulse_url/api/setup-script-url"); then
+    if ! setup_response=$(curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"); then
         AUTO_NODE_REGISTER_ERROR="setup token request failed"
         print_warn "Unable to request setup token from Pulse (${pulse_url}); skipping automatic node registration"
         return
@@ -2738,12 +2673,13 @@ PY
     local token_status=0
     create_pve_auto_register_token "$token_name" token_output token_status
     if [[ $token_status -ne 0 ]] && pve_token_already_exists_error "$token_output"; then
-        # A previous installation or an unconfirmed registration can still be
-        # using this secret. Its one-time value cannot be recovered here, and
-        # replacing it before Pulse confirms registration would break that node.
-        AUTO_NODE_REGISTER_ERROR="existing monitoring token preserved"
-        print_warn "Existing Proxmox monitoring token '${token_name}' was preserved; skipping automatic node registration. Check the node in Pulse; a separate installation needs its own token."
-        return
+        print_info "Existing Proxmox monitoring token '${token_name}' found; rotating it so Pulse receives a fresh secret"
+        if ! pveum user token remove pulse-monitor@pve "$token_name" >/dev/null 2>&1; then
+            AUTO_NODE_REGISTER_ERROR="failed to rotate existing token"
+            print_warn "Unable to remove existing monitoring API token; skipping automatic node registration"
+            return
+        fi
+        create_pve_auto_register_token "$token_name" token_output token_status
     fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"
@@ -2789,44 +2725,45 @@ PY
 )
 
     local register_response
-    if ! register_response=$(printf %s "$register_payload" | pve_auto_register_pulse_post "$pulse_url/api/auto-register"); then
+    if ! register_response=$(printf %s "$register_payload" | curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-); then
         AUTO_NODE_REGISTER_ERROR="auto-register request failed"
-        print_warn "Pulse auto-registration could not be confirmed; check the node in Pulse before trying again"
+        print_warn "Pulse auto-registration request failed; skipping automatic node registration"
         return
     fi
 
-    # Both objects contain credentials. Keep them off process arguments and
-    # validate the entire confirmation before returning only a safe node name.
+    local register_status
+    local register_action
+    local register_type
+    local register_source
+    local register_host
+    local register_token_id
+    local register_token_value
+    local register_node_id
     local register_node_name
-    if ! register_node_name=$(python3 - 3<<<"$register_response" 4<<<"$register_payload" <<'PY_REGISTER'
-import json, os, sys
+    IFS=$'\t' read -r register_status register_action register_type register_source register_host register_token_id register_token_value register_node_id register_node_name <<<"$(python3 - "$register_response" <<'PY'
+import json, sys
 try:
-    data = json.load(os.fdopen(3))
-    request = json.load(os.fdopen(4))
-    if not isinstance(data, dict) or not isinstance(request, dict):
-        sys.exit(1)
-    expected = {
-        "status": "success", "action": "use_token", "type": "pve", "source": "script",
-        "host": request["host"], "tokenId": request["tokenId"], "tokenValue": request["tokenValue"],
-    }
-    if not all(isinstance(data.get(field), str) and data[field] == value
-               for field, value in expected.items()):
-        sys.exit(1)
-    node_name = data.get("nodeName")
-    if (not isinstance(node_name, str) or not node_name.strip()
-            or data.get("nodeId") != node_name
-            or not all(c.isprintable() for c in node_name)
-            or any(secret and secret in node_name
-                   for secret in (request["tokenValue"], request["authToken"]))):
-        sys.exit(1)
-    print(node_name)
+    data = json.loads(sys.argv[1])
 except Exception:
-    # Malformed/unexpected replies must not become Python or shell diagnostics.
-    sys.exit(1)
-PY_REGISTER
-); then
+    print("\t\t\t\t\t\t\t\t")
+    sys.exit(0)
+print("\t".join([
+    str(data.get("status", "")),
+    str(data.get("action", "")),
+    str(data.get("type", "")),
+    str(data.get("source", "")),
+    str(data.get("host", "")),
+    str(data.get("tokenId", "")),
+    str(data.get("tokenValue", "")),
+    str(data.get("nodeId", "")),
+    str(data.get("nodeName", "")),
+]))
+PY
+)" || register_status=""
+
+    if [[ "$register_status" != "success" ]] || [[ "$register_action" != "use_token" ]] || [[ "$register_type" != "pve" ]] || [[ "$register_source" != "script" ]] || [[ "$register_host" != "$normalized_host_url" ]] || [[ "$register_token_id" != "$token_id" ]] || [[ "$register_token_value" != "$token_value" ]] || [[ -z "$register_node_id" ]] || [[ -z "$register_node_name" ]] || [[ "$register_node_id" != "$register_node_name" ]]; then
         AUTO_NODE_REGISTER_ERROR="auto-register unsuccessful"
-        print_warn "Pulse auto-registration could not be confirmed; check the node in Pulse before trying again"
+        print_warn "Pulse auto-registration reported an error: $register_response"
         return
     fi
 
@@ -3057,7 +2994,6 @@ check_existing_installation() {
     local BINARY_PATH=""
     local detected_service="$SERVICE_NAME"
     local service_available=false
-    local service_state=""
 
     # Check for the binary in expected locations
     if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
@@ -3077,37 +3013,12 @@ check_existing_installation() {
         service_available=true
     fi
 
-    # Observe before version execution or any main-flow mutation. A failed
-    # is-active exit cannot distinguish an inactive unit from a failed read.
-    if [[ "$service_available" == true ]]; then
-        if ! service_state=$(timeout -k 1 5 systemctl show "$detected_service" --property=ActiveState --value 2>/dev/null); then
-            print_error "Cannot observe a settled Pulse service state ($detected_service); installation unchanged. Check the service manager before retrying."
-            return 2
-        fi
-        case "$service_state" in
-            active|inactive|failed) ;;
-            *)
-                print_error "Cannot observe a settled Pulse service state ($detected_service); installation unchanged. Check the service manager before retrying."
-                return 2
-                ;;
-        esac
-    fi
-
-    # Bound the installed executable too, and never accept plausible output
-    # from a failed/timed-out probe. Keep damaged-binary repair available.
+    # Try to get version if binary exists
     if [[ -n "$BINARY_PATH" ]]; then
-        local version_output=""
-        CURRENT_VERSION="unknown"
-        if version_output=$(timeout -k 1 5 "$BINARY_PATH" --version 2>/dev/null); then
-            CURRENT_VERSION=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1) || CURRENT_VERSION="unknown"
-        fi
-        if [[ -z "$CURRENT_VERSION" || "$CURRENT_VERSION" == "unknown" ]]; then
-            CURRENT_VERSION="unknown"
-            print_warn "Could not determine the installed Pulse version; version is unknown. Existing-install repair remains available."
-        fi
+        CURRENT_VERSION=$($BINARY_PATH --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || echo "unknown")
     fi
     
-    if [[ "$service_state" == active ]]; then
+    if [[ "$service_available" == true ]] && systemctl is-active --quiet "$detected_service" 2>/dev/null; then
         if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
             print_info "Pulse $CURRENT_VERSION is currently running"
         else
@@ -3115,16 +3026,10 @@ check_existing_installation() {
         fi
         return 0
     elif [[ -n "$BINARY_PATH" ]]; then
-        local installed_status="installed but not running"
-        if [[ "$service_state" == failed ]]; then
-            installed_status="installed; service is failed"
-        elif [[ "$service_available" != true ]]; then
-            installed_status="installed; service state is unavailable"
-        fi
         if [[ -n "$CURRENT_VERSION" && "$CURRENT_VERSION" != "unknown" ]]; then
-            print_info "Pulse $CURRENT_VERSION is $installed_status"
+            print_info "Pulse $CURRENT_VERSION is installed but not running"
         else
-            print_info "Pulse is $installed_status"
+            print_info "Pulse is installed but not running"
         fi
         return 0
     else
@@ -3394,117 +3299,49 @@ create_temp_archive_path() {
     printf '%s/%s.tar.gz\n' "$temp_dir" "$archive_name"
 }
 
-# A root-owned sticky directory protects root-created staging entries while
-# still letting pulse create its CLI/cache home entries. Mode 0700 on a child
-# alone is insufficient when pulse owns (and can rename entries in) its parent.
-root_directory_protects_entries() {
-    local directory="$1" facts="" owner="" mode=""
-    [[ -d "$directory" && ! -L "$directory" ]] || return 1
-    facts=$(stat -c '%u %a' -- "$directory") || return 1
-    read -r owner mode <<< "$facts"
-    [[ "$owner" == 0 && "$mode" =~ ^[0-7]{3,4}$ ]] || return 1
-    (( (8#$mode & 0022) == 0 || (8#$mode & 01000) != 0 ))
-}
-
-protect_server_install_parent() {
-    # Walk from the filesystem root without following symlinks. Every ancestor
-    # must prevent an unprivileged account replacing the next root-owned entry.
-    # Refuse unsafe custom paths; never change ownership of a shared ancestor.
-    case "$INSTALL_DIR" in
-        /*) ;;
-        *) print_error "Pulse install directory must be an absolute path; Pulse has not been stopped"; return 1 ;;
-    esac
-    case "$INSTALL_DIR" in
-        /|*/|*//*|*/./*|*/.|*/../*|*/..|*$'\n'*)
-            print_error "Pulse install directory must be a normalised non-root path; Pulse has not been stopped"
-            return 1 ;;
-    esac
-    local parent="/" component="" index=0
-    local -a components=()
-    IFS=/ read -r -a components <<< "${INSTALL_DIR#/}"
-    if ! root_directory_protects_entries "$parent"; then
-        print_error "Cannot establish trusted install ancestry; Pulse has not been stopped"
-        return 1
-    fi
-    for ((index=0; index<${#components[@]}-1; index++)); do
-        component="${components[index]}"
-        parent="${parent%/}/$component"
-        if [[ ! -e "$parent" && ! -L "$parent" ]]; then
-            mkdir -m 0755 -- "$parent" || return 1
-        fi
-        if ! root_directory_protects_entries "$parent"; then
-            print_error "Unsafe Pulse install ancestor: $parent; Pulse has not been stopped"
-            return 1
-        fi
-    done
-    if [[ ! -e "$INSTALL_DIR" && ! -L "$INSTALL_DIR" ]]; then
-        mkdir -m 0755 -- "$INSTALL_DIR" || return 1
-    fi
-    if [[ ! -d "$INSTALL_DIR" || -L "$INSTALL_DIR" ]]; then
-        print_error "Pulse install directory is not a real directory; Pulse has not been stopped"
-        return 1
-    fi
-    local previous_owner="" previous_group="" previous_mode="" protected_mode="" facts=""
-    if ! facts=$(stat -c '%u %g %a' -- "$INSTALL_DIR"); then
-        print_error "Cannot read install directory permissions; Pulse has not been stopped"
-        return 1
-    fi
-    read -r previous_owner previous_group previous_mode <<< "$facts"
-    if [[ ! "$previous_owner" =~ ^[0-9]+$ || ! "$previous_group" =~ ^[0-9]+$ || ! "$previous_mode" =~ ^[0-7]{3,4}$ ]]; then
-        print_error "Invalid install directory permissions; Pulse has not been stopped"
-        return 1
-    fi
-    # Preserve the operator's existing other-account read/search restriction.
-    # Pulse moves from directory owner to its service group; no public access
-    # is added when adopting an existing private (for example 0700) install.
-    printf -v protected_mode '%o' "$((01770 | (8#$previous_mode & 0005)))"
-    # -h prevents a substituted final symlink changing its target's owner.
-    # Once root owns the entry, its verified parent protects it from replacement.
-    if ! chown -h root:pulse -- "$INSTALL_DIR" ||
-       [[ -L "$INSTALL_DIR" ]] ||
-       [[ "$(stat -c '%u' -- "$INSTALL_DIR")" != 0 ]] ||
-       ! chmod "$protected_mode" -- "$INSTALL_DIR" ||
-       [[ "$(stat -c '%a' -- "$INSTALL_DIR")" != "$protected_mode" ]] ||
-       ! root_directory_protects_entries "$INSTALL_DIR"; then
-        # No scratch has been allocated by this caller. Restore the previous
-        # HOME permissions/owner after a failed adoption, without following a
-        # substituted link or relinquishing root ownership before chmod.
-        if [[ -d "$INSTALL_DIR" && ! -L "$INSTALL_DIR" && "$(stat -c '%u' -- "$INSTALL_DIR")" == 0 ]]; then
-            chmod "$previous_mode" -- "$INSTALL_DIR" || print_warn "Could not restore install directory mode"
-            chown -h "$previous_owner:$previous_group" -- "$INSTALL_DIR" || print_warn "Could not restore install directory owner"
-        fi
-        print_error "Could not protect Pulse update staging; Pulse has not been stopped"
-        return 1
-    fi
-}
-
-# Archive and extraction bytes stay on the install filesystem, not tmpfs-prone
-# /tmp. This uses the existing update sandbox grant, not a wider writable path.
+# Server archives are staged and extracted on the install filesystem. /tmp is
+# tmpfs on Debian 13 and many LXC templates, where staged bytes count against
+# the container's memory limit rather than its disk (#2785).
 prepare_server_staging_parent() {
-    protect_server_install_parent || return 1
+    if ! mkdir -p -- "$INSTALL_DIR"; then
+        print_error "Could not prepare $INSTALL_DIR for staging the Pulse update; Pulse has not been stopped"
+        return 1
+    fi
+    sweep_stale_server_staging
     printf '%s\n' "$INSTALL_DIR"
 }
 
-server_staging_matches_install_device() {
-    local staging_device="" install_device=""
-    staging_device=$(stat -c '%d' -- "$1") || return 1
-    install_device=$(stat -c '%d' -- "$INSTALL_DIR/bin") || return 1
-    [[ "$staging_device" =~ ^[0-9]+$ && "$staging_device" == "$install_device" ]]
-}
-
+# Owner-only staging names created under $INSTALL_DIR by create_temp_archive_path
+# and install_pulse_archive (mktemp's six-character suffix).
 is_server_staging_name() {
     case "$1" in
-        .pulse-stage-??????|.pulse-extract-??????|.pulse-v*-linux-*-??????) return 0 ;;
+        .pulse-extract-??????|.pulse-v*-linux-*-??????) return 0 ;;
     esac
     return 1
 }
 
-# Do not sweep by age: an old directory can still belong to a live installer.
-# Each run cleans only its own reserved paths. Interrupted leftovers remain
-# subject to the normal disk-headroom refusal, never guessed safe to delete.
+# Unlike /tmp, the install filesystem keeps an interrupted run's staging
+# (~1 GB) across reboots. No installer lock exists, so remove only real
+# directories (never symlinks or files) unchanged for longer than any live run
+# takes. ctime, unlike mtime, cannot be carried back by extraction.
+sweep_stale_server_staging() {
+    local entry=""
+    for entry in "$INSTALL_DIR"/.pulse-extract-* "$INSTALL_DIR"/.pulse-v*-linux-*; do
+        [[ -d "$entry" && ! -L "$entry" ]] || continue
+        is_server_staging_name "${entry##*/}" || continue
+        if [[ -n "$(find "$entry" -maxdepth 0 -cmin "+${SERVER_STAGING_STALE_MINUTES}" -print 2>/dev/null)" ]]; then
+            rm -rf -- "$entry" 2>/dev/null || print_warn "Could not remove stale update staging at $entry"
+        fi
+    done
+    return 0
+}
+
+# Recursive pulse ownership for the install directory, excluding root-consumed
+# update staging so the extracted payload and archive are never handed to the
+# service account while the installer still reads them.
 chown_install_dir_for_pulse() {
     local entry="" rc=0
-    protect_server_install_parent || return 1
+    chown pulse:pulse "$INSTALL_DIR" || rc=1
     for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.[!.]* "$INSTALL_DIR"/..?*; do
         [[ -e "$entry" || -L "$entry" ]] || continue
         is_server_staging_name "${entry##*/}" && continue
@@ -3562,11 +3399,11 @@ download_container_installer() {
             sleep 2
         fi
         if command -v timeout >/dev/null 2>&1; then
-            if timeout 30 curl --disable -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+            if timeout 30 curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
                 download_success=true
                 break
             fi
-        elif curl --disable -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
+        elif curl -fsSL --connect-timeout 10 --max-time 30 "$download_url" > "$staged_installer" 2>"$staging_dir/curl-error"; then
             download_success=true
             break
         fi
@@ -3577,7 +3414,7 @@ download_container_installer() {
         [[ -z "$download_error" ]] || print_error "Error: $download_error"
         return 1
     fi
-    if ! curl --disable -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
+    if ! curl -fsSL --connect-timeout 10 --max-time 30 "${download_url}.sshsig" > "$staged_signature" 2>"$staging_dir/curl-error"; then
         print_error "Failed to download container installer signature; refusing to copy or run the installer"
         return 1
     fi
@@ -3597,11 +3434,11 @@ resolve_target_release() {
         print_info "Installing specific version: $LATEST_RELEASE"
 
         if command -v timeout >/dev/null 2>&1; then
-            if ! timeout 15 curl --disable -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+            if ! timeout 15 curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
                 print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
             fi
         else
-            if ! curl --disable -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
+            if ! curl -fsS --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$LATEST_RELEASE" > /dev/null 2>&1; then
                 print_warn "Could not verify version $LATEST_RELEASE, proceeding anyway..."
             fi
         fi
@@ -3666,14 +3503,14 @@ download_release_archive() {
         return 1
     fi
 
-    if ! wget --no-config -q --timeout=60 --tries=2 -O "$archive_path" "$download_url"; then
+    if ! wget -q --timeout=60 --tries=2 -O "$archive_path" "$download_url"; then
         print_error "Failed to download Pulse release"
         print_info "This can happen due to network issues or GitHub rate limiting"
         print_info "You can try downloading manually from: $download_url"
         return 1
     fi
 
-    if ! wget --no-config -q --timeout=60 --tries=2 -O "$signature_file" "$signature_url"; then
+    if ! wget -q --timeout=60 --tries=2 -O "$signature_file" "$signature_url"; then
         rm -f "$signature_file" "$archive_path"
         print_error "Failed to download signature for Pulse release"
         print_info "Refusing to install without signature verification"
@@ -3790,9 +3627,7 @@ install_pulse_archive() {
     # Prepare the final executable on the destination filesystem while the old
     # service keeps running. Copy/permissions/version failures must not create
     # an outage, and rename must never expose a partially copied live binary.
-    if ! mkdir -p "$INSTALL_DIR/bin" ||
-       ! server_staging_matches_install_device "$staging_parent" ||
-       ! binary_stage=$(mktemp -d "$staging_parent/.pulse-stage-XXXXXX"); then
+    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
         print_error "Could not stage the Pulse binary; Pulse has not been stopped"
         rm -rf "$temp_extract"
         return 1
@@ -3802,9 +3637,7 @@ install_pulse_archive() {
         rm -rf "$binary_stage" "$temp_extract"
         return 1
     fi
-    # TERM alone does not bound an unresponsive executable. Keep the same
-    # pre-stop admission deadline, with one second to terminate before KILL.
-    if ! version_output=$(timeout -k 1 5 "$binary_stage/pulse" --version 2>/dev/null); then
+    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null); then
         print_error "Staged Pulse binary could not report its version; Pulse has not been stopped"
         rm -rf "$binary_stage" "$temp_extract"
         return 1
@@ -3879,9 +3712,11 @@ download_pulse() {
         local inferred_release=""
         local staging_parent=""
 
-        # Keep archive and extraction bytes on the install filesystem rather
-        # than implicitly charging them to memory when /tmp is tmpfs. This
-        # does not diagnose the cause of a particular interrupted update.
+        # The archive download and its extraction live on the install
+        # filesystem, never /tmp. Debian 13 and many LXC templates mount /tmp
+        # as tmpfs, which the kernel charges to the container's memory limit:
+        # a ~280 MB archive plus its ~750 MB extracted tree OOM-killed a 1 GiB
+        # LXC's init mid-update and Proxmox stopped the container (#2785).
         if ! staging_parent=$(prepare_server_staging_parent) ||
            ! ensure_update_disk_headroom "$staging_parent" "$INSTALL_DIR"; then
             # The configuration snapshot taken earlier is not needed: the update
@@ -4177,7 +4012,7 @@ build_from_source() {
             return 1
         fi
 
-        if ! wget --no-config -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
+        if ! wget -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to download Go toolchain"
             cd "$original_dir" >/dev/null 2>&1 || true
             return 1
@@ -4252,10 +4087,7 @@ build_from_source() {
     # A successful build command alone does not admit its executable. Prepare
     # it on the destination filesystem before stopping the running service,
     # just as for signed archives. Source versions may be development builds.
-    local staging_parent=""
-    if ! staging_parent=$(prepare_server_staging_parent) || ! mkdir -p "$INSTALL_DIR/bin" ||
-       ! server_staging_matches_install_device "$staging_parent" ||
-       ! binary_stage=$(mktemp -d "$staging_parent/.pulse-stage-XXXXXX"); then
+    if ! mkdir -p "$INSTALL_DIR/bin" || ! binary_stage=$(mktemp -d "$INSTALL_DIR/bin/.pulse-stage-XXXXXX"); then
         print_error "Could not stage the built Pulse binary; Pulse has not been stopped"
         cd "$original_dir" >/dev/null 2>&1 || true
         rm -rf "$temp_build"
@@ -4267,7 +4099,7 @@ build_from_source() {
         rm -rf "$binary_stage" "$temp_build"
         return 1
     fi
-    if ! version_output=$(timeout -k 1 5 "$binary_stage/pulse" --version 2>/dev/null) || [[ -z "${version_output//[[:space:]]/}" ]]; then
+    if ! version_output=$(timeout 5 "$binary_stage/pulse" --version 2>/dev/null) || [[ -z "${version_output//[[:space:]]/}" ]]; then
         print_error "Built Pulse binary could not report its version; Pulse has not been stopped"
         cd "$original_dir" >/dev/null 2>&1 || true
         rm -rf "$binary_stage" "$temp_build"
@@ -4496,23 +4328,14 @@ if [[ \${#helper_args[@]} -gt 0 ]]; then
 fi
 
 echo "Updating Pulse..."
-tmp_installer=""
-tmp_signature=""
+tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX)
+tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
 trap 'rm -f "\$tmp_installer" "\$tmp_signature"' EXIT
-if ! tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX) ||
-   ! tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX); then
-    echo "Could not create installer verification files; no update attempted." >&2
-    exit 1
-fi
-# Bound both reads before any installer can run. Ignore ambient curl settings
-# and never follow a redirect from the signed HTTPS delivery path to HTTP.
-if ! curl --disable -fsSL --connect-timeout 5 --max-time 60 \\
-    --proto '=https' --proto-redir '=https' "\$INSTALLER_URL" -o "\$tmp_installer"; then
+if ! curl -fsSL "\$INSTALLER_URL" -o "\$tmp_installer"; then
     echo "Failed to download Pulse installer from \$INSTALLER_URL" >&2
     exit 1
 fi
-if ! curl --disable -fsSL --connect-timeout 5 --max-time 60 \\
-    --proto '=https' --proto-redir '=https' "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
+if ! curl -fsSL "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
     echo "Failed to download Pulse installer signature from \$INSTALLER_SIG_URL" >&2
     exit 1
 fi
@@ -4571,13 +4394,13 @@ download_auto_update_script() {
         local signature_file=""
 
         if command -v timeout >/dev/null 2>&1; then
-            if timeout $((max_time + 10)) curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+            if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
                 :
             else
                 curl_status=$?
             fi
         else
-            if curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
+            if curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
                 :
             else
                 curl_status=$?
@@ -4587,9 +4410,9 @@ download_auto_update_script() {
         if [[ $curl_status -eq 0 ]]; then
             signature_file=$(mktemp /tmp/pulse-auto-update-signature.XXXXXX)
             if command -v timeout >/dev/null 2>&1; then
-                timeout $((max_time + 10)) curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
+                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             else
-                curl --disable -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
+                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             fi
 
             if [[ $curl_status -ne 0 ]]; then
@@ -4811,17 +4634,6 @@ auto_update_units_refreshable() {
     return 0
 }
 
-# Unlike the legacy service wrapper, asset refresh must not hide a failed
-# reload. The files are already installed at this point, but the manager may
-# still be using the old units. Do not retry an uncertain operation or undo
-# installed files: leave reconciliation to the operator before activation.
-reload_auto_update_manager() {
-    if ! timeout -k 1 5 systemctl daemon-reload >/dev/null 2>&1; then
-        print_warn "Auto-update files were installed, but systemd reload was not confirmed. No settings write or timer enable/start was attempted; check systemd before retrying."
-        return 1
-    fi
-}
-
 # Installs the auto-update helper script and rewrites the systemd
 # service/timer units. Shared by setup_auto_updates (first-time enable) and
 # refresh_auto_updates (updates/reinstalls where the timer already exists).
@@ -5018,7 +4830,8 @@ EOF
         return 1
     fi
 
-    reload_auto_update_manager
+    # Reload systemd daemon
+    safe_systemctl daemon-reload
 }
 
 setup_auto_updates() {
@@ -5044,68 +4857,45 @@ setup_auto_updates() {
     fi
 
     if ! install_auto_update_assets; then
-        print_warn "Automatic-update setup is incomplete. Review the reported unit state or asset error before retrying."
+        print_warn "Continuing without automatic updates. Review the reported unit state or asset error before retrying."
         ENABLE_AUTO_UPDATES=false
         return 0
     fi
 
-    # Never copy saved settings through a predictable shared /tmp pathname or
-    # edit JSON using text substitution. Stage privately beside the destination
-    # and publish only a complete single object; unrelated values are retained.
-    # The subshell owns cleanup even when this optional setup is in an OR-list.
-    if ! (
-        temp_file=""
-        trap '[[ -z "$temp_file" ]] || rm -f -- "$temp_file"' EXIT
-        [[ ! -L "$config_dir/system.json" ]] || exit 1
-        [[ ! -e "$config_dir/system.json" || -f "$config_dir/system.json" ]] || exit 1
-        temp_file=$(mktemp "$config_dir/.system.json.XXXXXX") || exit 1
-        if [[ -f "$config_dir/system.json" ]]; then
-            command -v jq >/dev/null 2>&1 || exit 1
-            jq -e -s --arg channel "$desired_channel" '
-                if length == 1 and (.[0] | type) == "object" then
-                    .[0] | .autoUpdateEnabled = true | .updateChannel = $channel
-                else error("one settings object required") end
-            ' "$config_dir/system.json" > "$temp_file" 2>/dev/null || exit 1
+    # Enable timer but don't start it yet
+    safe_systemctl enable "$update_timer_unit" || true
+
+    # Update system.json to enable auto-updates
+    if [[ -f "$config_dir/system.json" ]]; then
+        # Update existing file
+        local temp_file="/tmp/system_$$.json"
+        if command -v jq &> /dev/null; then
+            jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$config_dir/system.json" > "$temp_file" && mv "$temp_file" "$config_dir/system.json"
         else
-            printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$temp_file" || exit 1
+            # Fallback to sed if jq not available
+            # First check if autoUpdateEnabled already exists in the file
+            if grep -q '"autoUpdateEnabled"' "$config_dir/system.json"; then
+                # Field exists, update its value
+                sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$config_dir/system.json"
+            else
+                # Field doesn't exist, add it after the opening brace
+                sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$config_dir/system.json"
+            fi
+            if grep -q '"updateChannel"' "$config_dir/system.json"; then
+                sed -i "s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/" "$config_dir/system.json"
+            else
+                sed -i "s/^{/{\"updateChannel\":\"$desired_channel\",/" "$config_dir/system.json"
+            fi
         fi
-        chmod 0600 "$temp_file" || exit 1
-        chown pulse:pulse "$temp_file" 2>/dev/null || exit 1
-        # Linux-only installer: -T refuses a destination raced into a directory
-        # rather than placing the staged settings inside it.
-        mv -T -- "$temp_file" "$config_dir/system.json" || exit 1
-        temp_file=""
-    ); then
-        print_warn "Automatic-update settings could not be saved safely; the timer was not enabled or started. Existing settings are retained. Check system.json and jq before retrying."
-        ENABLE_AUTO_UPDATES=false
-        return 0
+    else
+        # Create new file with auto-updates enabled
+        printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$config_dir/system.json"
     fi
-
-    # Settings record the user's choice, not proof that systemd accepted it.
-    # Stop after an unconfirmed operation: it may have taken effect despite
-    # the failed response, so neither retry nor disable/stop it as rollback.
-    if ! safe_systemctl enable "$update_timer_unit"; then
-        print_warn "Automatic-update settings were saved, but timer enablement was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
-        ENABLE_AUTO_UPDATES=false
-        return 0
-    fi
-    local timer_state=""
-    if ! timer_state=$(timeout -k 1 5 systemctl is-enabled -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "enabled" ]]; then
-        print_warn "Automatic-update settings were saved, but persistent timer enablement was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
-        ENABLE_AUTO_UPDATES=false
-        return 0
-    fi
-
-    if ! safe_systemctl start "$update_timer_unit"; then
-        print_warn "Automatic-update settings were saved, but timer startup was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
-        ENABLE_AUTO_UPDATES=false
-        return 0
-    fi
-    if ! timer_state=$(timeout -k 1 5 systemctl is-active -- "$update_timer_unit" 2>/dev/null) || [[ "$timer_state" != "active" ]]; then
-        print_warn "Automatic-update settings were saved, but timer activity was not confirmed for ${update_timer_unit}. Check its systemd state before retrying."
-        ENABLE_AUTO_UPDATES=false
-        return 0
-    fi
+    
+    chown pulse:pulse "$config_dir/system.json" 2>/dev/null || true
+    
+    # Start the timer
+    safe_systemctl start "$update_timer_unit" || true
 
     print_success "Automatic updates enabled (daily check between 02:00 and 06:00)"
 }
@@ -5210,23 +5000,17 @@ ensure_systemd_service_installed() {
 # (#1323: on unprivileged LXC the installer's restart can silently fail).
 PULSE_WAS_ACTIVE="false"
 
-# One wall-clock budget includes manager reads AND polling sleeps. A stalled
-# final read gets only the remaining budget, plus the one-second kill backstop.
+# Poll until the service is active, up to timeout_seconds (default 20).
 wait_for_service_active() {
     local service_name=$1
     local timeout_seconds="${2:-20}"
-    [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 1
-    local deadline=$((SECONDS + timeout_seconds)) remaining=0 probe_seconds=0
-    while (( (remaining = deadline - SECONDS) > 0 )); do
-        probe_seconds=$remaining
-        (( probe_seconds <= 5 )) || probe_seconds=5
-        if timeout -k 1 "$probe_seconds" systemctl is-active --quiet "$service_name" 2>/dev/null; then
-            # A late answer is not completion within the startup budget.
-            (( SECONDS < deadline )) || return 1
+    local elapsed=0
+    while (( elapsed < timeout_seconds )); do
+        if timeout 5 systemctl is-active --quiet "$service_name" 2>/dev/null; then
             return 0
         fi
-        (( SECONDS < deadline )) || break
         sleep 1
+        ((elapsed += 1))
     done
     return 1
 }
@@ -5273,33 +5057,40 @@ start_pulse() {
     # cat covers units living elsewhere.
     if command -v systemctl >/dev/null 2>&1 \
         && [[ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]] \
-        && ! timeout -k 1 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+        && ! timeout 5 systemctl cat "${SERVICE_NAME}.service" >/dev/null 2>&1; then
         print_error "systemd unit ${SERVICE_NAME}.service does not exist; Pulse was not started"
         print_info "Re-run the installer to recreate the service unit"
         return 1
     fi
 
-    if ! safe_systemctl enable "$SERVICE_NAME"; then
-        print_warn "Automatic startup could not be enabled; check systemctl is-enabled $SERVICE_NAME."
+    # Try to enable/start service (may fail in unprivileged containers)
+    if ! safe_systemctl enable $SERVICE_NAME; then
+        print_info "Note: systemctl enable failed (common in unprivileged containers)"
+    fi
+    
+    if ! safe_systemctl start $SERVICE_NAME; then
+        print_info "Note: systemctl start failed (common in unprivileged containers)"
+        if [[ "$PULSE_WAS_ACTIVE" != "true" ]]; then
+            print_info "The service will start automatically when the container starts"
+            return 0
+        fi
+        # An update stopped a running Pulse; do not accept a silent start failure
+        # here — fall through to the active-state verification below (#1323).
+    fi
+    
+    # Wait for service to start
+    sleep 3
+    
+    if timeout 5 systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
+        print_success "Pulse started successfully"
+    else
+        print_error "Failed to start Pulse"
+        journalctl -u $SERVICE_NAME -n 20 2>/dev/null || true
+        # Don't exit, just warn
+        print_info "Service may not be running. You might need to start it manually."
     fi
 
-    if ! safe_systemctl start "$SERVICE_NAME"; then
-        print_warn "The Pulse start command failed; checking whether the service became active."
-    fi
-
-    # A successful command is not a running service, and an unsuccessful one
-    # can still have started it. Require the active read in either case. Keep
-    # the existing single retry only for a previously active update (#1323).
-    if [[ "$PULSE_WAS_ACTIVE" == "true" ]]; then
-        ensure_pulse_running_after_update || return 1
-    elif ! wait_for_service_active "$SERVICE_NAME" 20; then
-        print_error "Pulse files are installed, but service startup could not be confirmed; installation is incomplete."
-        print_info "Configuration and data are retained. Check service state before retrying:"
-        print_info "  systemctl status $SERVICE_NAME"
-        print_info "  journalctl -u $SERVICE_NAME -n 50"
-        return 1
-    fi
-    print_success "Pulse started successfully"
+    ensure_pulse_running_after_update
 }
 
 create_marker_file() {
@@ -5463,7 +5254,7 @@ main() {
                 refresh_auto_updates
             fi
 
-            start_pulse || return 1
+            start_pulse
             create_marker_file
             print_completion
             exit 0
@@ -5511,7 +5302,7 @@ main() {
                 refresh_auto_updates
             fi
 
-            start_pulse || return 1
+            start_pulse
             create_marker_file
             print_completion
             return 0
@@ -5718,7 +5509,7 @@ main() {
                     refresh_auto_updates
                 fi
                 
-                start_pulse || return 1
+                start_pulse
                 create_marker_file
                 print_completion
                 exit 0
@@ -5746,7 +5537,7 @@ main() {
                     refresh_auto_updates
                 fi
                 
-                start_pulse || return 1
+                start_pulse
                 create_marker_file
                 print_completion
                 exit 0
@@ -5869,7 +5660,7 @@ main() {
             refresh_auto_updates
         fi
         
-        start_pulse || return 1
+        start_pulse
         create_marker_file
         print_completion
     fi
@@ -5961,7 +5752,7 @@ cleanup_local_sensor_proxy() {
     echo "Removed legacy pulse-sensor-proxy footprint from this host."
     echo "If this host belongs to a Proxmox cluster, run the full cleanup on the"
     echo "other nodes (and to remove the pulse-monitor@pam API user):"
-    echo "  curl --disable -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
+    echo "  curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/uninstall-sensor-proxy.sh | bash -s -- --purge --remove-proxmox-access --local-only"
 }
 
 

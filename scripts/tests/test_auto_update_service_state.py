@@ -34,12 +34,6 @@ after = (f / "installer-ran").exists()
 stopped = (f / "stop-ran").exists()
 state = (f / "state").read_text().strip()
 if args[0] == "show":
-    if after and mode == "wait-read-hang":
-        p = f / "wait-reads"
-        count = int(p.read_text()) + 1 if p.exists() else 1
-        p.write_text(str(count))
-        if count == 2:
-            time.sleep(8)  # Finite; the remaining one-second read must time out.
     if not after and mode == "initial-hang": time.sleep(30)
     if not after and mode == "initial-error":
         print("LoadState=loaded\nActiveState=inactive")
@@ -142,12 +136,7 @@ verify_update_running_executable() {
     return "$RUNTIME_EXIT"
 }
 detect_service_name() { printf '%s\n' "$SERVICE_NAME"; }
-sleep() {
-    # The deadline consumer control advances to the final second of the real
-    # twenty-second wait. Manager execution and timeout remain real.
-    if [[ "$MODE" == wait-read-hang ]]; then SECONDS=$((SECONDS + 19))
-    else SECONDS=$((SECONDS + $1)); fi
-}
+sleep() { :; } # Only the liveness wait; timeout/manager deadlines are real.
 verify_release_signature() { :; }
 mktemp() {
     local -a args=("$@")
@@ -558,22 +547,6 @@ class UpdateServiceState(UpdaterFixture):
                 self.assertIn("Running Pulse executable is unverified; backup retained", r["output"])
                 self.assertNotIn("Update successfully installed and verified", r["output"])
                 self.assertNotIn("Restoring from backup", r["output"])
-
-    def test_startup_deadline_uncertainty_preserves_completed_install_and_backup(self):
-        r = self.run_fixture(mode="wait-read-hang", state="active", success=True)
-        self.assertEqual(r["exit"], 1, r)
-        self.assertLess(r["elapsed"], 4, r)
-        self.assertTrue(r["installed"] and r["installer_finished"], r)
-        self.assertFalse(r["started"] or r["stopped"], r)
-        self.assertEqual(len(r["calls"]), 3, r)  # Initial state and two wait reads; no replay.
-        self.assertEqual(r["runtime_probes"], [], r)
-        self.assertEqual(r["state"], "inactive", r)
-        self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.6.0'\n", r)
-        self.assertEqual(r["version"], "v6.6.0\n", r)
-        self.assertEqual(r["backups"], [b"#!/bin/sh\necho 'Pulse v6.5.0'\n"], r)
-        self.assertIn("Update service state is uncertain; backup retained", r["output"])
-        self.assertNotIn("Update successfully installed and verified", r["output"])
-        self.assertNotIn("Restoring from backup", r["output"])
 
     def test_rollback_keeps_backup_until_restored_running_executable_matches(self):
         r = self.run_fixture(state="active", success=False, runtime_exit=2)

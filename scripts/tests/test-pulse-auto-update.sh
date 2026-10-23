@@ -45,7 +45,7 @@ test_wait_for_service_active_succeeds_after_retry() {
     printf 'LoadState=loaded\n'
     if (( count >= 3 )); then echo ActiveState=active; else echo ActiveState=activating; fi
   }
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
   local result=0
   wait_for_service_active pulse 5 || result=$?
   command rm "$counter"
@@ -54,7 +54,7 @@ test_wait_for_service_active_succeeds_after_retry() {
 
 test_wait_for_service_active_times_out_when_never_active() {
   systemctl() { [[ "$1" == show ]] || return 1; printf 'LoadState=loaded\nActiveState=inactive\n'; }
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
   local result=0
   wait_for_service_active pulse 3 || result=$?
   [[ "$result" == 1 ]] || { echo "expected settled inactive timeout, got $result" >&2; return 1; }
@@ -201,7 +201,7 @@ INSTALLER
     esac
   }
 
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
 
   if perform_update "v5.1.25"; then
     echo "perform_update unexpectedly succeeded while service stayed down" >&2
@@ -228,7 +228,7 @@ test_ensure_service_restarted_noops_when_service_was_inactive() {
     fi
     return 1
   }
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
 
   ensure_service_restarted pulse "false" || return 1
   if (( ENSURE_TEST_STARTS != 0 )); then
@@ -259,7 +259,7 @@ test_ensure_service_restarted_starts_stopped_service() {
     esac
     return 1
   }
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
 
   ensure_service_restarted pulse "true" || return 1
   if (( ENSURE_TEST_STARTS != 1 )); then
@@ -358,7 +358,7 @@ INSTALLER
     return 1
   }
 
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
 
   if perform_update "v5.1.25"; then
     echo "perform_update unexpectedly succeeded when the installer failed" >&2
@@ -441,7 +441,7 @@ INSTALLER
     if [[ "$1" == show ]]; then printf 'LoadState=loaded\nActiveState=active\n'; fi
     return 0
   }
-  sleep() { SECONDS=$((SECONDS + $1)); }
+  sleep() { :; }
 
   # This is a RETURN-trap control with a simulated manager and script binary,
   # not a Linux process-identity test. Supply its verification handoff explicitly

@@ -64,8 +64,6 @@ if [[ "$FAULT" == verifier ]]; then
 fi
 INSTALL_DIR="$FIXTURE/install"
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
-# The UID/ancestor boundary has separate adversarial policy fixtures.
-protect_server_install_parent() { return 0; }
 CURRENT_VERSION=v6.5.0
 LATEST_RELEASE=v6.6.0
 detect_pulse_architecture() { echo amd64; }
@@ -263,7 +261,7 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
                 self.assertEqual(o["calls"], ["INSTALL"] if fault in ("", "archive_admission") else [])
 
     def test_download_stages_archive_on_the_install_filesystem(self):
-        # /tmp can be tmpfs on Debian 13 and LXC templates, where a staged
+        # /tmp is tmpfs on Debian 13 and many LXC templates, where a staged
         # release is charged to the container's memory limit (#2785).
         r, o = self.exercise("download")
         self.assertEqual(r.returncode, 0, r.stderr)

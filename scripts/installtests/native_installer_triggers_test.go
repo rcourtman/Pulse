@@ -20,7 +20,6 @@ var nativeServerUpgradeInputs = []string{
 	"scripts/tests/test_auto_update_service_state.py",
 	"scripts/tests/test_auto_update_systemd.py",
 	"scripts/tests/test_server_service_discovery.py",
-	"scripts/tests/test_server_installer_start.py",
 	"scripts/tests/test_server_update_repair.py",
 }
 

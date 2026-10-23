@@ -169,8 +169,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         -o) dest="$2"; shift 2 ;;
         https://github.com/rcourtman/Pulse/releases/latest/download/install.sh*) url="$1"; shift ;;
-        --disable|-fsSL) shift ;;
-        --connect-timeout|--max-time|--proto|--proto-redir) shift 2 ;;
+        -fsSL) shift ;;
         *) exit 98 ;;
     esac
 done

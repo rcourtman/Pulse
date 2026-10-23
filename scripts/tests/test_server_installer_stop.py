@@ -5,14 +5,11 @@ These are ordinary-user installer controls, not native systemd acceptance.
 """
 
 from pathlib import Path
-import json
 import os
 import itertools
 import subprocess
-import sys
 import tempfile
 import tarfile
-import time
 import unittest
 
 
@@ -74,16 +71,6 @@ detect_service_name() { echo pulse-custom; }
 # No network, package installation, signature bypass in production or root writes:
 # these fixture-only producers supply the inputs to the actual replacement path.
 ensure_update_disk_headroom() { return 0; }
-# Parent UID/sticky policy is exercised separately without privileged host writes.
-protect_server_install_parent() { [[ "$FAULT" != staging_parent ]]; }
-stat() {
-    [[ "$FAULT" != device_read ]] || return 1
-    if [[ "$FAULT" == cross_device && "${@: -1}" == "$INSTALL_DIR/bin" && "$*" == *'%d'* ]]; then
-        echo 999999
-    else
-        command stat "$@"
-    fi
-}
 detect_pulse_architecture() { echo amd64; }
 run_upgrade_readiness_preflight() { return 0; }
 resolve_target_release() { LATEST_RELEASE=v6.6.0; }
@@ -205,22 +192,7 @@ class ServerInstallerStopTest(unittest.TestCase):
                 path.write_bytes(content)
                 path.chmod(0o600)
             new_binary = b"#!/bin/sh\necho VERSION_PROBE >> \"$FIXTURE/calls\"\n"
-            if fault == "version_ignores_term":
-                # Real single-process executable, not a timeout double. The
-                # finite twelve-second life also lets the unchanged parent
-                # finish the adverse control without leaving a live process.
-                new_binary = ("#!" + sys.executable + " -I\n" + r'''
-import os, signal, time
-from pathlib import Path
-signal.signal(signal.SIGTERM, signal.SIG_IGN)
-root = Path(os.environ["FIXTURE"])
-with (root / "calls").open("a") as calls:
-    calls.write("VERSION_PROBE\n")
-(root / "version-probe-pid").write_text(str(os.getpid()))
-print("v6.6.0", flush=True)
-time.sleep(12)
-''').encode()
-            elif fault == "version_timeout":
+            if fault == "version_timeout":
                 new_binary += b"sleep 10\n"
             elif fault == "version_exit":
                 new_binary += b"echo v6.6.0; exit 1\n"
@@ -246,23 +218,12 @@ time.sleep(12)
             env = {**os.environ, "FIXTURE": str(fixture), "CASE": case,
                    "FLOW": flow, "INSTALLER": str(INSTALLER), "FAULT": fault,
                    "PATH": str(fixture / "bin") + ":" + os.environ["PATH"]}
-            started = time.monotonic()
             result = subprocess.run(["bash", "-c", script], env=env,
                                     capture_output=True, text=True, timeout=30)
-            elapsed = time.monotonic() - started
-            probe_state = None
-            if (fixture / "version-probe-pid").exists():
-                pid = int((fixture / "version-probe-pid").read_text())
-                try:
-                    probe_state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-                except FileNotFoundError:
-                    probe_state = "absent"
             return {
                 "result": result,
-                "elapsed_seconds": elapsed,
-                "probe_state": probe_state,
                 "new_binary": new_binary,
-                "stage_paths": list(installed.glob(".pulse-stage-*")),
+                "stage_paths": list(installed.glob("bin/.pulse-stage-*")),
                 "temporary_paths_remaining": [p for p in (fixture / "temporary-paths").read_text().splitlines() if Path(p).exists()] if (fixture / "temporary-paths").exists() else [],
                 "local_archive_retained": (fixture / "input.tgz").exists(),
                 "files": {str(p.relative_to(fixture)): p.read_bytes() if p.exists() else None for p in originals},
@@ -308,7 +269,7 @@ time.sleep(12)
 
     def test_archive_admission_failures_never_stop_or_mutate_pulse(self):
         for flow in ("archive", "local_archive"):
-            for fault in ("staging_parent", "device_read", "cross_device", "missing_signature", "signature", "extract_directory", "extraction",
+            for fault in ("missing_signature", "signature", "extract_directory", "extraction",
                           "missing_binary", "architecture", "stage_directory", "copy",
                           "permissions", "ownership", "version_exit", "version_timeout",
                           "version_unknown", "version_mismatch"):
@@ -322,32 +283,6 @@ time.sleep(12)
                     self.assertEqual(observation["temporary_paths_remaining"], [])
                     self.assertFalse(observation["archive_retained"])
                     self.assertTrue(observation["local_archive_retained"])
-
-    def test_term_resistant_staged_versions_finish_before_service_mutation(self):
-        for flow in ("archive", "local_archive", "source"):
-            with self.subTest(flow=flow):
-                observation = self.exercise(REPLACEMENT, flow, "active", "version_ignores_term")
-                result = observation["result"]
-                print("Staged version deadline: " + json.dumps({
-                    "flow": flow, "exit": result.returncode,
-                    "elapsed_seconds": round(observation["elapsed_seconds"], 6),
-                    "probe_state": observation["probe_state"],
-                }, sort_keys=True), flush=True)
-                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-                self.assertIn("could not report its version; Pulse has not been stopped", result.stderr)
-                self.assertEqual(observation["calls"].count("VERSION_PROBE"), 1)
-                # Five seconds to TERM and one to KILL, with scheduling/setup
-                # allowance. The unmodified parent takes twelve seconds.
-                self.assertGreaterEqual(observation["elapsed_seconds"], 5)
-                self.assertLess(observation["elapsed_seconds"], 10)
-                self.assertIn(observation["probe_state"], ("absent", "Z", "X"))
-                self.assertEqual(observation["files"], observation["originals"])
-                self.assertTrue(all(m == 0o600 for m in observation["modes"].values()))
-                self.assertNotRegex(observation["calls"], r"(?m)^(show|stop|start|restart|RENAME|AGENTS|SCRIPTS|REPLACED)\b")
-                self.assertEqual(observation["stage_paths"], [])
-                self.assertEqual(observation["temporary_paths_remaining"], [])
-                self.assertFalse(observation["archive_retained"])
-                self.assertTrue(observation["local_archive_retained"])
 
     def test_atomic_rename_failure_restores_only_a_previously_active_service(self):
         for flow, state, fault in itertools.product(
@@ -373,7 +308,7 @@ time.sleep(12)
                 self.assertFalse(observation["archive_retained"])
 
     def test_source_admission_failures_never_stop_or_mutate_pulse(self):
-        for fault in ("staging_parent", "device_read", "cross_device", "missing_binary", "stage_directory", "copy", "permissions",
+        for fault in ("missing_binary", "stage_directory", "copy", "permissions",
                       "ownership", "version_exit", "version_timeout", "version_empty",
                       "source_revision", "source_revision_empty"):
             with self.subTest(fault=fault):
@@ -421,8 +356,9 @@ time.sleep(12)
         self.assertNotIn("start pulse-custom", calls)
 
     def test_archive_extraction_stages_on_the_install_filesystem(self):
-        # Staging no longer implicitly selects tmpfs-prone /tmp. This is a
-        # path/lifecycle proof, not a reproduction of #2785 or a native LXC.
+        # /tmp is tmpfs on Debian 13 and many LXC templates: an extracted
+        # release there is charged to the container's memory limit and
+        # OOM-killed a 1 GiB LXC mid-update (#2785).
         for flow in ("archive", "local_archive"):
             with self.subTest(flow=flow):
                 observation = self.exercise(REPLACEMENT, flow, "active")
@@ -430,9 +366,6 @@ time.sleep(12)
                 extracts = [Path(p) for p in observation["temporary_paths"] if "pulse-extract-" in p]
                 self.assertEqual(len(extracts), 1, observation["temporary_paths"])
                 self.assertEqual(extracts[0].parent, observation["install_dir"])
-                binary_stages = [Path(p) for p in observation["temporary_paths"] if ".pulse-stage-" in p]
-                self.assertEqual(len(binary_stages), 1)
-                self.assertEqual(binary_stages[0].parent, observation["install_dir"])
                 self.assertEqual(observation["temporary_paths_remaining"], [])
 
     def test_all_manual_update_flows_leave_service_running_when_staging_fails(self):

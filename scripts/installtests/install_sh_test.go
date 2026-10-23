@@ -3491,13 +3491,12 @@ func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 // install_auto_update_assets delegates its writability probe, its staged-helper
 // sanity check and the sandbox-escape migration to sibling functions, so every
 // harness that executes it has to pull those in alongside it. These isolated
-// asset-rendering tests admit an unmasked inventory and a confirmed manager
-// reload; the connected Python controls exercise the real guard and reload.
+// asset-rendering tests admit an unmasked inventory; the whole-installer Python
+// controls below exercise the actual effective-mask guard and all its callers.
 func extractInstallAutoUpdateAssetsShellFunctions(t *testing.T) string {
 	t.Helper()
 
 	return "auto_update_units_refreshable() { return 0; }\n" +
-		"reload_auto_update_manager() { return 0; }\n" +
 		extractRootInstallShellFunction(t, "auto_update_dir_writable") + "\n" +
 		extractRootInstallShellFunction(t, "auto_update_helper_is_sane") + "\n" +
 		extractRootInstallShellFunction(t, "migrate_auto_update_assets_outside_sandbox") + "\n" +
@@ -4631,31 +4630,6 @@ func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
 	}
 }
 
-// Exercise the generated command, real curl HTTPS/protocol/time limits and SSH
-// verification against an inert private listener, never an installed service.
-func TestManualUpdateTransportRemainsBoundedAndAuthenticated(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "installtests", "manual_update_transport.py"), "-v")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generated manual update transport controls: %v\n%s", err, out)
-	}
-	for _, name := range []string{
-		"test_real_https_ignores_ambient_curl_config",
-		"test_http_failures_never_execute_the_installer",
-		"test_partial_transfers_never_execute_the_installer",
-		"test_http_downgrades_never_reach_the_destination",
-		"test_stalled_tls_handshakes_obey_each_connect_budget",
-		"test_real_signature_verification_still_refuses_unknown_content",
-		"test_allocation_failures_leave_no_download_or_staged_file",
-	} {
-		if !strings.Contains(string(out), name+" (__main__.ManualUpdateTransport."+name+")") {
-			t.Fatalf("missing manual update transport control %s:\n%s", name, out)
-		}
-	}
-}
-
 func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	updatePath := filepath.Join(tmpDir, "update")
@@ -4906,15 +4880,6 @@ func TestRootInstallServiceDiscoveryFailsClosedWithoutShortReads(t *testing.T) {
 		"test_first_inventory_failure_is_not_replaced_by_silent_absence",
 		"test_only_silent_exit_one_is_admitted_as_absence",
 		"test_blank_line_output_is_not_a_silent_failed_inventory",
-		"test_replacement_manager_deadlines_kill_term_resistant_reads_and_stop",
-		"test_every_installer_systemctl_timeout_has_a_kill_backstop",
-		"test_existing_installation_uses_complete_settled_state_before_version",
-		"test_existing_detection_without_systemd_does_not_invent_inactivity",
-		"test_existing_state_failure_or_transition_stops_main_before_mutation",
-		"test_existing_state_deadline_refuses_plausible_partial_output",
-		"test_failed_or_empty_version_is_unknown_without_losing_repair_detection",
-		"test_version_deadline_does_not_accept_plausible_failed_bytes",
-		"test_missing_binary_distinguishes_inactive_fresh_host_from_running_install",
 	} {
 		if !strings.Contains(string(out), name+" (__main__.ServiceDiscovery."+name+") ... ok") {
 			t.Fatalf("required service inventory control %s did not pass:\n%s", name, out)

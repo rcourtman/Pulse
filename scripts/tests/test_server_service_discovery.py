@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 import time
@@ -27,40 +26,14 @@ QUERY = ["list-unit-files", "--no-legend", "--no-pager", "--full", "--",
          "pulse-backend.service", "pulse.service"]
 # What systemctl prints when the listing itself fails, as opposed to matching nothing.
 FAILED_LISTING = "Failed to get unit file list: No such file or directory\n"
-MANAGER_DEADLINE_TRACES = []
-
-
-def private_process_state(pid):
-    if not sys.platform.startswith("linux"):
-        return "not-observed-on-this-platform"
-    try:
-        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-    except FileNotFoundError:
-        return "absent"
-
 
 SYSTEMCTL = r'''#!/usr/bin/env python3
-import json, os, signal, sys, time
+import json, os, sys, time
 from pathlib import Path
 f = Path(os.environ["FIXTURE"])
 args = sys.argv[1:]
 with (f / "calls").open("a") as stream:
     stream.write(json.dumps(args) + "\n")
-if args[0] == "show":
-    count = int((f / "state-reads").read_text()) + 1 if (f / "state-reads").exists() else 1
-    (f / "state-reads").write_text(str(count))
-    phase = "initial" if count == 1 else "readback"
-else:
-    phase = args[0]
-if os.environ.get("MANAGER_FAULT") == phase:
-    # A TERM-only timeout cannot bound this manager. It emits plausible state
-    # before hanging, so the caller must also refuse its incomplete result.
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    if args[0] == "show":
-        print("inactive" if (f / "stopped").exists() else "active", flush=True)
-    (f / "blocked-manager.pid").write_text(str(os.getpid()))
-    # Finite even on the broken parent, leaving no unbounded fixture process.
-    time.sleep(10)
 if args[0] == "list-unit-files":
     mode = os.environ["MODE"]
     if mode == "real":
@@ -90,17 +63,14 @@ if args[0] == "list-unit-files":
         os.write(2, os.environ["ERR"].encode())
     sys.exit(int(os.environ["QUERY_EXIT"]))
 if args[0] == "show":
-    state = "inactive" if (f / "stopped").exists() else os.environ.get("SERVICE_STATE", "active")
+    state = "inactive" if (f / "stopped").exists() else "active"
     if "--value" in args:
         print(state)
     else:
         print("LoadState=loaded\nActiveState=" + state)
-    sys.exit(int(os.environ.get("STATE_EXIT", "0")))
+    sys.exit(0)
 if args[0] == "is-active":
-    if int(os.environ.get("STATE_EXIT", "0")):
-        sys.exit(1)
-    state = "inactive" if (f / "stopped").exists() else os.environ.get("SERVICE_STATE", "active")
-    sys.exit(0 if state == "active" else 3)
+    sys.exit(1 if (f / "stopped").exists() else 0)
 if args[0] == "stop":
     (f / "stopped").write_text(args[1])
     sys.exit(0)
@@ -135,7 +105,7 @@ IN_CONTAINER=true
 IN_DOCKER=false
 mark_mutation() { echo "$*" >> "$FIXTURE/mutations"; return 97; }
 case "$FLOW" in
-    unavailable|existing-no-manager)
+    unavailable)
         command() {
             [[ "$*" != '-v systemctl' ]] || return 1
             builtin command "$@"
@@ -215,7 +185,7 @@ status=0
 case "$FLOW" in
     query|unavailable) selected=$(detect_service_name) || status=$?
         [[ "$status" -ne 0 ]] || printf 'SERVICE=%s\n' "$selected" ;;
-    existing|existing-no-manager) check_existing_installation || status=$?
+    existing) check_existing_installation || status=$?
         [[ "$status" -ne 0 ]] || printf 'SERVICE=%s\n' "$SERVICE_NAME" ;;
     main|late-main) main || status=$? ;;
     archive) install_pulse_archive "$FIXTURE/pulse-v6.6.0-linux-amd64.tar.gz" v6.6.0 || status=$? ;;
@@ -227,44 +197,23 @@ case "$FLOW" in
     ensure-unit) ensure_systemd_service_installed || status=$? ;;
     *) exit 98 ;;
 esac
-printf '%s' "${CURRENT_VERSION:-}" > "$FIXTURE/observed-version"
 exit "$status"
 '''
 
 
 class ServiceDiscovery(unittest.TestCase):
     def run_fixture(self, *, rows="", mode="rows", query_exit=0, flow="query", explicit=None,
-                    producer="installer", err="", units_present=True, manager_fault="",
-                    service_state="active", state_exit=0, version_mode="normal",
-                    install_name="install", binary_present=True):
+                    producer="installer", err="", units_present=True):
         with tempfile.TemporaryDirectory(prefix="pulse-service-discovery-") as directory:
             f = Path(directory)
-            install = f / install_name
-            for name in ["bin", install_name + "/bin", "config", "units", "root/etc/systemd/system"]:
+            for name in ["bin", "install/bin", "config", "units", "root/etc/systemd/system"]:
                 (f / name).mkdir(parents=True)
             (f / "bin/systemctl").write_text(SYSTEMCTL)
             (f / "bin/systemctl").chmod(0o755)
             old = b"#!/bin/sh\necho 'Pulse v6.5.0'\n"
-            if version_mode != "normal":
-                old = ('''#!/usr/bin/env python3
-import json, os, signal, sys, time
-from pathlib import Path
-f = Path(os.environ["FIXTURE"])
-(f / "version-argv").write_text(json.dumps(sys.argv[1:]))
-mode = os.environ["VERSION_MODE"]
-if mode == "hang":
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    (f / "blocked-version.pid").write_text(str(os.getpid()))
-if mode != "empty":
-    print("Pulse v6.5.0", flush=True)
-if mode == "hang":
-    time.sleep(10)  # Finite on the broken predecessor too.
-sys.exit(1 if mode == "failed" else 0)
-''').encode()
             new = b"#!/bin/sh\necho 'Pulse v6.6.0'\n"
-            if binary_present:
-                (install / "bin/pulse").write_bytes(old)
-                (install / "bin/pulse").chmod(0o755)
+            (f / "install/bin/pulse").write_bytes(old)
+            (f / "install/bin/pulse").chmod(0o755)
             (f / "new-pulse").write_bytes(new)
             (f / "new-pulse").chmod(0o755)
             (f / "served-installer.sh").write_text(
@@ -289,11 +238,10 @@ sys.exit(1 if mode == "failed" else 0)
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
             env.update(FIXTURE=str(f), INSTALLER=str(INSTALLER), UPDATER=str(UPDATER),
                        PRODUCER=producer, FLOW=flow, MODE=mode,
-                       ROWS=rows, QUERY_EXIT=str(query_exit), ERR=err, MANAGER_FAULT=manager_fault,
-                       SERVICE_STATE=service_state, STATE_EXIT=str(state_exit), VERSION_MODE=version_mode,
+                       ROWS=rows, QUERY_EXIT=str(query_exit), ERR=err,
                        REAL_SYSTEMCTL=REAL_SYSTEMCTL or "",
                        PATH=str(f / "bin") + os.pathsep + os.environ["PATH"],
-                       PULSE_INSTALL_DIR=str(install), PULSE_CONFIG_DIR=str(f / "config"),
+                       PULSE_INSTALL_DIR=str(f / "install"), PULSE_CONFIG_DIR=str(f / "config"),
                        PULSE_BINARY_LINK_PATH=str(f / "pulse-link"))
             if explicit is not None:
                 env["PULSE_SERVICE_NAME"] = explicit
@@ -304,22 +252,13 @@ sys.exit(1 if mode == "failed" else 0)
                         calls=[json.loads(line) for line in (f / "calls").read_text().splitlines()]
                         if (f / "calls").exists() else [],
                         mutations=(f / "mutations").read_text() if (f / "mutations").exists() else "",
-                        binary=(install / "bin/pulse").read_bytes() if (install / "bin/pulse").exists() else None,
-                        old=old, new=new,
-                        version=(f / "observed-version").read_text() if (f / "observed-version").exists() else None,
-                        version_argv=json.loads((f / "version-argv").read_text())
-                        if (f / "version-argv").exists() else None,
+                        binary=(f / "install/bin/pulse").read_bytes(), old=old, new=new,
                         units=[p.name for p in (f / "units").iterdir()],
                         installer_service=(f / "installer-service").read_text()
                         if (f / "installer-service").exists() else None,
                         process_readback_service=(f / "process-readback-service").read_text()
                         if (f / "process-readback-service").exists() else None,
-                        broken_pipe=(f / "broken-pipe").exists(),
-                        blocked_pid=int((f / "blocked-manager.pid").read_text())
-                        if (f / "blocked-manager.pid").exists() else None,
-                        blocked_version_pid=int((f / "blocked-version.pid").read_text())
-                        if (f / "blocked-version.pid").exists() else None,
-                        staging=[p.name for p in install.rglob(".pulse-*")])
+                        broken_pipe=(f / "broken-pipe").exists())
 
     def assert_refused(self, e):
         self.assertNotEqual(e["result"].returncode, 0, e["result"])
@@ -426,99 +365,6 @@ sys.exit(1 if mode == "failed" else 0)
         self.assertEqual(e["result"].returncode, 0, e["result"].stderr)
         self.assertEqual(e["result"].stdout, "SERVICE=pulse-backend\n")
 
-    def test_existing_installation_uses_complete_settled_state_before_version(self):
-        for state in ("active", "inactive", "failed"):
-            with self.subTest(state=state):
-                e = self.run_fixture(flow="existing", explicit="pulse.department",
-                                     service_state=state, version_mode="track", install_name="install with spaces")
-                self.assertEqual(e["result"].returncode, 0, e["result"])
-                self.assertEqual(e["calls"], [["show", "pulse.department", "--property=ActiveState", "--value"]])
-                self.assertEqual(e["version"], "v6.5.0")
-                self.assertEqual(e["version_argv"], ["--version"])
-                expected = {"active": "currently running", "inactive": "installed but not running",
-                            "failed": "installed; service is failed"}[state]
-                self.assertIn(expected,
-                              e["result"].stderr)
-                self.assertEqual(e["binary"], e["old"])
-                self.assertEqual(e["mutations"], "")
-
-    def test_existing_detection_without_systemd_does_not_invent_inactivity(self):
-        for binary_present, code in ((True, 0), (False, 1)):
-            with self.subTest(binary_present=binary_present):
-                e = self.run_fixture(flow="existing-no-manager", binary_present=binary_present)
-                self.assertEqual(e["result"].returncode, code, e["result"])
-                self.assertEqual(e["calls"], [])
-                self.assertEqual(e["mutations"], "")
-                self.assertNotIn("not running", e["result"].stderr)
-                if binary_present:
-                    self.assertEqual(e["version"], "v6.5.0")
-                    self.assertIn("service state is unavailable", e["result"].stderr)
-
-    def test_existing_state_failure_or_transition_stops_main_before_mutation(self):
-        for state, code in (("active", 1), ("", 0), ("active\ninactive", 0),
-                            ("activating", 0), ("deactivating", 0), ("unknown", 0)):
-            with self.subTest(state=state, code=code):
-                e = self.run_fixture(flow="main", explicit="pulse-backend", service_state=state,
-                                     state_exit=code, version_mode="track")
-                self.assertEqual(e["result"].returncode, 2, e["result"])
-                self.assertIn("Cannot observe a settled Pulse service state", e["result"].stderr)
-                self.assertNotIn("installed but not running", e["result"].stderr)
-                self.assertEqual(e["calls"], [["show", "pulse-backend", "--property=ActiveState", "--value"]])
-                self.assertIsNone(e["version_argv"])
-                self.assertEqual(e["mutations"], "")
-                self.assertEqual(e["binary"], e["old"])
-
-    def test_existing_state_deadline_refuses_plausible_partial_output(self):
-        e = self.run_fixture(flow="main", explicit="pulse-backend", manager_fault="initial", version_mode="track")
-        state = private_process_state(e["blocked_pid"]) if e["blocked_pid"] else "unrecorded"
-        MANAGER_DEADLINE_TRACES.append(dict(control="existing-state-deadline", seconds=e["seconds"],
-                                           exit_code=e["result"].returncode, calls=e["calls"],
-                                           mutations=e["mutations"], binary_unchanged=e["binary"] == e["old"],
-                                           private_process_state=state))
-        self.assertEqual(e["result"].returncode, 2, e["result"])
-        self.assertGreaterEqual(e["seconds"], 5.5)
-        self.assertLess(e["seconds"], 8.5)
-        self.assertIsNotNone(e["blocked_pid"])
-        self.assertIsNone(e["version_argv"])
-        self.assertEqual(e["calls"], [["show", "pulse-backend", "--property=ActiveState", "--value"]])
-        self.assertEqual(e["mutations"], "")
-        self.assertEqual(e["binary"], e["old"])
-        self.assertIn(state, ("absent", "Z", "not-observed-on-this-platform"))
-
-    def test_failed_or_empty_version_is_unknown_without_losing_repair_detection(self):
-        for mode in ("failed", "empty"):
-            with self.subTest(mode=mode):
-                e = self.run_fixture(flow="existing", version_mode=mode)
-                self.assertEqual(e["result"].returncode, 0, e["result"])
-                self.assertEqual(e["version"], "unknown")
-                self.assertIn("Could not determine the installed Pulse version", e["result"].stderr)
-                self.assertEqual(e["version_argv"], ["--version"])
-                self.assertEqual(e["binary"], e["old"])
-                self.assertEqual(e["mutations"], "")
-
-    def test_version_deadline_does_not_accept_plausible_failed_bytes(self):
-        e = self.run_fixture(flow="existing", explicit="pulse", version_mode="hang")
-        state = private_process_state(e["blocked_version_pid"]) if e["blocked_version_pid"] else "unrecorded"
-        MANAGER_DEADLINE_TRACES.append(dict(control="existing-version-deadline", seconds=e["seconds"],
-                                           exit_code=e["result"].returncode, version=e["version"],
-                                           binary_unchanged=e["binary"] == e["old"], private_process_state=state))
-        self.assertEqual(e["result"].returncode, 0, e["result"])
-        self.assertGreaterEqual(e["seconds"], 5.5)
-        self.assertLess(e["seconds"], 8.5)
-        self.assertEqual(e["version"], "unknown")
-        self.assertIsNotNone(e["blocked_version_pid"])
-        self.assertEqual(e["binary"], e["old"])
-        self.assertEqual(e["mutations"], "")
-        self.assertIn(state, ("absent", "Z", "not-observed-on-this-platform"))
-
-    def test_missing_binary_distinguishes_inactive_fresh_host_from_running_install(self):
-        for state, code in (("inactive", 1), ("active", 0)):
-            with self.subTest(state=state):
-                e = self.run_fixture(flow="existing", service_state=state, binary_present=False)
-                self.assertEqual(e["result"].returncode, code, e["result"])
-                self.assertEqual(e["mutations"], "")
-                self.assertIsNone(e["binary"])
-
     def test_failed_discovery_is_distinct_from_no_installation(self):
         e = self.run_fixture(flow="existing", query_exit=1,
                              err="Failed to get unit file list: No such file or directory\n")
@@ -539,49 +385,6 @@ sys.exit(1 if mode == "failed" else 0)
                 self.assertIn(["stop", "pulse-backend"], e["calls"])
                 self.assertNotIn(["stop", "pulse"], e["calls"])
                 self.assertFalse(e["broken_pipe"])
-
-    def test_replacement_manager_deadlines_kill_term_resistant_reads_and_stop(self):
-        for flow in ("archive", "build"):
-            for phase in ("initial", "stop", "readback"):
-                with self.subTest(flow=flow, phase=phase):
-                    e = self.run_fixture(flow=flow, explicit="pulse-backend", manager_fault=phase)
-                    # Read only the disposable manager's PID, not the host
-                    # manager. A zombie is no longer executing; native service
-                    # recovery and descendant cleanup are not claimed here.
-                    self.assertIsNotNone(e["blocked_pid"])
-                    try:
-                        state = Path(f"/proc/{e['blocked_pid']}/stat").read_text().rsplit(")", 1)[1].split()[0]
-                    except FileNotFoundError:
-                        state = "absent"
-                    MANAGER_DEADLINE_TRACES.append(dict(control="installer-manager-deadline", flow=flow,
-                                                       phase=phase, seconds=e["seconds"],
-                                                       exit_code=e["result"].returncode,
-                                                       binary_unchanged=e["binary"] == e["old"],
-                                                       staging=e["staging"], calls=e["calls"],
-                                                       manager_state=state))
-                    self.assertEqual(e["result"].returncode, 1, e["result"])
-                    self.assertGreaterEqual(e["seconds"], 5.5, e["result"])
-                    self.assertLess(e["seconds"], 8.5, e["result"])
-                    self.assertEqual(e["binary"], e["old"])
-                    self.assertEqual(e["staging"], [])
-                    self.assertEqual(e["mutations"], "")
-                    expected = [["show", "pulse-backend", "--property=ActiveState", "--value"]]
-                    if phase != "initial":
-                        expected.append(["stop", "pulse-backend"])
-                    if phase == "readback":
-                        expected.append(expected[0])
-                    self.assertEqual(e["calls"], expected)
-                    self.assertIn(state, ("absent", "Z"))
-
-    def test_every_installer_systemctl_timeout_has_a_kill_backstop(self):
-        reads = [line.strip() for line in INSTALLER.read_text().splitlines()
-                 if not line.lstrip().startswith("#") and "timeout " in line and " systemctl " in line]
-        self.assertGreaterEqual(len(reads), 10)
-        for line in reads:
-            with self.subTest(command=line):
-                self.assertTrue("timeout -k 1 5 systemctl " in line or
-                                'timeout -k 1 "$probe_seconds" systemctl is-active --quiet "$service_name"' in line,
-                                line)
 
     @unittest.skipUnless(REAL_SYSTEMCTL, "systemctl unavailable")
     def test_real_systemctl_on_a_host_without_pulse_units_selects_the_default(self):
@@ -639,9 +442,4 @@ sys.exit(1 if mode == "failed" else 0)
 
 
 if __name__ == "__main__":
-    program = unittest.main(exit=False)
-    # Emit after unittest's result lines: the Go caller requires each mandatory
-    # method's complete "... ok" record, including in combined output.
-    for trace in MANAGER_DEADLINE_TRACES:
-        print(json.dumps(trace), flush=True)
-    raise SystemExit(0 if program.result.wasSuccessful() else 1)
+    unittest.main()
