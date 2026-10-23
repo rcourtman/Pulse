@@ -1699,6 +1699,10 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 	}
 }
 
+func TestCheckBackupsRequiresObservedSuccessDates(t *testing.T) {
+	testBackupDateObservations(t)
+}
+
 func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()
