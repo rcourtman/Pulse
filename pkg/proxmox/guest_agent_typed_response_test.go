@@ -61,14 +61,18 @@ func TestGuestAgentTypedSuccessDefersEveryRead(t *testing.T) {
 						}
 					}))
 					defer server.Close()
-					c := backupTestClient(t, server.URL)
+					// A recycled listener port must not inherit another synthetic
+					// guest's still-live uncertainty fence. Keep both clients in
+					// this case on the same namespaced endpoint.
+					host := guestAgentFixtureEndpoint(t, server.URL)
+					c := backupTestClient(t, host)
 					if err := first(context.Background(), c, 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
 						t.Fatalf("typed reply released admission: %v", err)
 					}
 					if commands.Load() != 1 || configs.Load() != 1 {
 						t.Fatal("reply was treated as complete and received a postflight lock read")
 					}
-					diagnostic := backupTestClient(t, server.URL)
+					diagnostic := backupTestClient(t, host)
 					for later, read := range backupAgentReads() {
 						if err := read(context.Background(), diagnostic, 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
 							t.Errorf("next %s escaped uncertainty: %v", later, err)
@@ -84,6 +88,43 @@ func TestGuestAgentTypedSuccessDefersEveryRead(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestGuestAgentTypedSuccessFixtureIsolation(t *testing.T) {
+	var commands, configs atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			configs.Add(1)
+			fmt.Fprint(w, `{"data":{}}`)
+			return
+		}
+		commands.Add(1)
+		fmt.Fprint(w, invalidGuestAgentTypedReplies()["empty-text-result"])
+	}))
+	defer server.Close()
+	// Force listener reuse instead of waiting for the OS to recycle a port.
+	// Neither admitting the next fixture nor constructing a diagnostic client
+	// may erase, renew or bypass the first fixture's uncertainty.
+	var hosts []string
+	for _, name := range []string{"first", "second"} {
+		t.Run(name, func(t *testing.T) {
+			host := guestAgentFixtureEndpoint(t, server.URL)
+			hosts = append(hosts, host)
+			if err := backupAgentReads()["network"](context.Background(), backupTestClient(t, host), 105); GuestAgentDeferredReason(err) != "agent-completion-unverified" {
+				t.Fatalf("independent fixture did not admit its first typed reply: %v", err)
+			}
+			for _, previous := range hosts {
+				for reader, read := range backupAgentReads() {
+					if err := read(context.Background(), backupTestClient(t, previous), 105); GuestAgentDeferredReason(err) != "agent-cooldown" {
+						t.Errorf("retained fixture's %s lost its uncertainty fence: %v", reader, err)
+					}
+				}
+			}
+		})
+	}
+	if commands.Load() != 2 || configs.Load() != 2 {
+		t.Fatalf("independent fixture command/config counts=%d/%d, want 2/2", commands.Load(), configs.Load())
 	}
 }
 
