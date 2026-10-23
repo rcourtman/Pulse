@@ -7174,3 +7174,8 @@ private orchestrator, make investigation concurrency and timeout follow the
 Patrol provider, and label the `unclassified` and `interrupted` outcomes in the
 digest email. Recovery evidence, restore rules and storage capabilities are
 unchanged, and Patrol gains no storage remediation capability.
+
+The `internal/api` change that makes the investigation orchestrator's finding
+writes check run ownership opens no storage, backup or recovery path. It decides
+only whether a run's start or result is recorded on a Patrol finding. Recovery
+evidence, restore rules and storage capabilities are unchanged.

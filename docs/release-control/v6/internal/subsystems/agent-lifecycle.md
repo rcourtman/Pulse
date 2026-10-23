@@ -10185,3 +10185,10 @@ and `interrupted` outcomes. None of this enrols, commands, updates or removes an
 agent, or touches agent identity or credentials. Investigations still reach
 hosts only through the existing read-only evidence tools and the governed
 action lifecycle.
+
+The investigation orchestrator's findings adapter in `internal/api/ai_handlers.go`
+now refuses a closing write from a run the finding no longer names, and a
+starting write from a run whose session began before a regression this process
+observed, so a run that finishes after its finding was detected again or
+re-investigated leaves the newer state alone. It enrols, commands, updates or
+removes no agent and touches no agent identity or credential.

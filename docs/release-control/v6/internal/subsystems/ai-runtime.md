@@ -7527,3 +7527,75 @@ Proofs:
 This changes outcome recording and run limits only. It widens no mutation,
 approval or execution boundary, and it is not measured improvement on
 installed systems.
+
+### Orchestrator writes land only on the run's own occurrence (23 October 2026)
+
+The private orchestrator writes a finding's investigation fields through
+`orchestratorFindingsAdapter.Update` in `internal/api/ai_handlers.go`, which now
+takes each run's start from the orchestrator's own session store. A write that
+closes a run goes through `FindingsStore.CompleteInvestigation`. That records
+the run's status, outcome, close time and attempt count only while the finding
+still names the run: its session must be the finding's current
+`InvestigationSessionID`, and its start must not predate the finding's latest
+regression. A write that starts a run (`pending` or `running`) goes through
+`FindingsStore.StartInvestigation`. That installs the run as before, unless its
+session started before the finding's latest regression, which means the run was
+started for an earlier occurrence.
+
+Before this, a run still in flight when its finding was resolved and detected
+again, or when the stuck-run sweep gave it up and a retry started another run,
+could overwrite the newer state with its own session, status, outcome and
+attempts. A stale `resolved` then closed the new occurrence's investigation and
+stopped Patrol investigating it again. A regression that landed between a run
+recording its session and marking the finding as running let that run install
+the earlier occurrence's attempt count, or replace a newer run. A late result
+from the run the finding still names still lands after the sweep gave it up, so
+the run's real result replaces the sweep's `timed_out`.
+
+Starts and closes compare a run's start only with an occurrence start this
+process observed: a regression, or the finding's removal by `ClearAll` or
+`Cleanup`, after which the same ID detected again is a new finding. The store
+keeps these, unpersisted and with the clock's monotonic reading, for a day,
+and refuses a start from a session older than that, which could predate one it
+has forgotten. A regression an earlier process recorded predates every run of
+this one, so it orders none of them, even when the clock was set back across a
+restart. Comparing wall times there would refuse every new run until the clock
+caught up, starting a run every Patrol cycle or exhausting the attempt limit.
+Investigation records and action outcomes keep comparing with
+`LastRegressionAt`, because they also arrive for sessions of earlier processes,
+stamped by the same clock. After a clock set back across a restart they can
+still refuse a newer run's results, as before.
+
+A run whose result does not count, but which the finding still shows as
+running, is closed at once through `RecoverStuckInvestigation`, the way the
+sweep would close it later: as `interrupted`, or completed with an outcome the
+action lifecycle recorded during the run, which is kept. Its attempt count
+stays as its admission wrote it. Through the adapter this is rare, because the
+start check keeps a run from an earlier occurrence off the finding: it takes a
+run with no recorded start, or findings reloaded from disk that still name an
+earlier run. A run that records its session after a regression, from a
+snapshot taken before it, is still installed with that snapshot's attempt
+count. When two runs are dispatched for one finding at once, the run whose
+start lands last is the finding's run and only its result is recorded, where
+before the run that closed last won. The `aicontracts` boundary is unchanged,
+and the orchestrator needs no change.
+
+Proofs:
+- `findings_test.go`: `StartInvestigation` skips a run from an earlier
+  occurrence or from before the finding was cleared or cleaned up, and installs
+  one with no recorded start or against a regression an earlier process
+  recorded; occurrence starts past the retention window are forgotten, and a
+  session older than that window is refused.
+  `CompleteInvestigation` refuses another session, an unnamed run and an
+  unknown finding; records the finding's own run, including a late result, a
+  run with no recorded start before any regression, and a regression an
+  earlier process recorded; and closes a run from before a regression the way
+  the sweep does, without projecting its verified fix and keeping a queued fix.
+  An earlier process's action outcome stays refused against `LastRegressionAt`.
+- `ai_handlers_investigation_additional_test.go`: through the adapter the
+  orchestrator receives, a run's result skips a later occurrence and a newer
+  run, a run started for an earlier occurrence is not installed and does not
+  replace the current run, and the current run's result lands.
+
+This changes which writes land, not what they record. It widens no mutation,
+approval or execution boundary.

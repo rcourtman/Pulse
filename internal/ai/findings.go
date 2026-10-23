@@ -20,6 +20,9 @@ const (
 	investigationTimeoutCooldown  = 10 * time.Minute // Shorter cooldown for timeout failures
 	investigationFixRetryCooldown = 20 * time.Minute // Retry faster after failed fix attempts
 	maxInvestigationAttempts      = 3                // Maximum number of investigation retries
+	// How long occurrence starts are kept. StartInvestigation refuses a run
+	// whose session is older, so a forgotten start cannot let one in.
+	occurrenceStartRetention = 24 * time.Hour
 )
 
 // FindingSeverity represents how urgent a finding is
@@ -841,6 +844,9 @@ type FindingsStore struct {
 	activeCounts map[FindingSeverity]int
 	// User-defined suppression rules (separate from dismissed findings)
 	suppressionRules map[string]*SuppressionRule
+	// When this process last saw each finding begin a new occurrence, with the
+	// clock's monotonic reading. Never persisted: see liveRunOccurrenceLocked.
+	occurrenceStarts map[string]time.Time
 	// Persistence layer (optional)
 	persistence FindingsPersistence
 	// Debounce save operations
@@ -965,6 +971,7 @@ func NewFindingsStore() *FindingsStore {
 		byResource:       make(map[string][]string),
 		activeCounts:     make(map[FindingSeverity]int),
 		suppressionRules: make(map[string]*SuppressionRule),
+		occurrenceStarts: make(map[string]time.Time),
 		saveDebounce:     5 * time.Second, // Debounce saves by 5 seconds
 	}
 }
@@ -2097,6 +2104,7 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			existing.RegressionCount++
 			now := time.Now()
 			existing.LastRegressionAt = &now
+			s.occurrenceStarts[existing.ID] = now
 			meta := map[string]string{}
 			if prevResolvedAt != nil {
 				meta["previous_resolved_at"] = prevResolvedAt.Format(time.RFC3339)
@@ -2636,6 +2644,19 @@ func (f *Finding) acceptsInvestigationResult(sessionID string, startedAt time.Ti
 	return f.LastRegressionAt == nil || (!startedAt.IsZero() && !startedAt.Before(*f.LastRegressionAt))
 }
 
+// liveRunOccurrenceLocked returns when the finding's current occurrence began,
+// as far as a run of this process can tell: the latest regression this process
+// saw, or the finding's removal, after which the same ID detected again is a new
+// finding. The monotonic clock orders it exactly against the run's start. A
+// regression an earlier process recorded predates every run of this one, so it
+// orders none of them, whatever the clock now reads. A result for a session of
+// an earlier process, such as an action outcome, is still judged against
+// LastRegressionAt.
+func (s *FindingsStore) liveRunOccurrenceLocked(id string) (time.Time, bool) {
+	startedAt, ok := s.occurrenceStarts[id]
+	return startedAt, ok
+}
+
 func (s *FindingsStore) updateInvestigationOutcomeLocked(f *Finding, outcome string) {
 	prevOutcome := f.InvestigationOutcome
 	f.InvestigationOutcome = outcome
@@ -2665,6 +2686,73 @@ func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome strin
 		return false
 	}
 
+	s.updateInvestigationLocked(f, sessionID, status, outcome, lastInvestigatedAt, attempts)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// StartInvestigation installs a run that is starting on a finding. A run whose
+// session started before the finding's current occurrence began, as
+// liveRunOccurrenceLocked tells it, was started for an earlier occurrence, so
+// it is not installed: it would replace the current occurrence's investigation
+// state, or a newer run's. Neither is a run whose session started longer ago
+// than the store keeps occurrence starts, since it could predate one already
+// forgotten. runStartedAt is the start of the run's session, or zero when the
+// orchestrator holds none; such a run is installed as before.
+func (s *FindingsStore) StartInvestigation(id, sessionID string, runStartedAt time.Time, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool {
+	s.mu.Lock()
+	f, exists := s.findings[id]
+	if !exists {
+		s.mu.Unlock()
+		return false
+	}
+	occurrenceAt, ok := s.liveRunOccurrenceLocked(id)
+	if !runStartedAt.IsZero() && ((ok && runStartedAt.Before(occurrenceAt)) || time.Since(runStartedAt) > occurrenceStartRetention) {
+		s.mu.Unlock()
+		return false
+	}
+	s.updateInvestigationLocked(f, sessionID, status, outcome, lastInvestigatedAt, attempts)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+// CompleteInvestigation records how a run of this process ended: its status,
+// outcome, close time and attempt count. It records them only while the finding
+// still names that run, so a run that ends after its finding moved on cannot
+// overwrite the newer state: the run's session must be the finding's current
+// one, and the run must not have started before the finding's current
+// occurrence began, as liveRunOccurrenceLocked tells it. runStartedAt is the
+// start of the run's session, or zero when the orchestrator holds none, which
+// cannot prove ownership once this process has seen an occurrence begin. A run
+// whose result does not count, but which the finding still shows as running,
+// is closed now through RecoverStuckInvestigation, as the stuck-run sweep would
+// later close it, rather than left running. It reports whether the run's
+// result was recorded.
+func (s *FindingsStore) CompleteInvestigation(id, sessionID string, runStartedAt time.Time, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool {
+	s.mu.Lock()
+	f, exists := s.findings[id]
+	if !exists || sessionID == "" || f.InvestigationSessionID != sessionID {
+		s.mu.Unlock()
+		return false
+	}
+	if occurrenceAt, ok := s.liveRunOccurrenceLocked(id); ok && (runStartedAt.IsZero() || runStartedAt.Before(occurrenceAt)) {
+		s.mu.Unlock()
+		closedAt := time.Now()
+		if lastInvestigatedAt != nil {
+			closedAt = *lastInvestigatedAt
+		}
+		s.RecoverStuckInvestigation(id, sessionID, runStartedAt, InvestigationStatusFailed, InvestigationOutcomeInterrupted, closedAt)
+		return false
+	}
+	s.updateInvestigationLocked(f, sessionID, status, outcome, lastInvestigatedAt, attempts)
+	s.mu.Unlock()
+	s.scheduleSave()
+	return true
+}
+
+func (s *FindingsStore) updateInvestigationLocked(f *Finding, sessionID, status, outcome string, lastInvestigatedAt *time.Time, attempts int) {
 	prevStatus := f.InvestigationStatus
 	prevOutcome := f.InvestigationOutcome
 	f.InvestigationSessionID = sessionID
@@ -2683,9 +2771,6 @@ func (s *FindingsStore) UpdateInvestigation(id, sessionID, status, outcome strin
 		})
 	}
 	s.syncLoopStateLocked(f)
-	s.mu.Unlock()
-	s.scheduleSave()
-	return true
 }
 
 // RecoverStuckInvestigation closes a run that is no longer live with the given
@@ -2911,6 +2996,10 @@ func (s *FindingsStore) GetAll(startTime *time.Time) []*Finding {
 func (s *FindingsStore) ClearAll() int {
 	s.mu.Lock()
 	count := len(s.findings)
+	now := time.Now()
+	for id := range s.findings {
+		s.occurrenceStarts[id] = now
+	}
 	s.findings = make(map[string]*Finding)
 	s.byResource = make(map[string][]string)
 	s.activeCounts = make(map[FindingSeverity]int)
@@ -2944,6 +3033,7 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 
 		if shouldRemove {
 			delete(s.findings, id)
+			s.occurrenceStarts[id] = now
 			// Clean up resource index
 			ids := s.byResource[f.ResourceID]
 			for i, fid := range ids {
@@ -2953,6 +3043,11 @@ func (s *FindingsStore) Cleanup(maxAge time.Duration) int {
 				}
 			}
 			removed++
+		}
+	}
+	for id, startedAt := range s.occurrenceStarts {
+		if startedAt.Before(now.Add(-occurrenceStartRetention)) {
+			delete(s.occurrenceStarts, id)
 		}
 	}
 
