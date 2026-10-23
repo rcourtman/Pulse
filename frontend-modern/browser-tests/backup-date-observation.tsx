@@ -5,11 +5,11 @@ import { Route, Router } from '@solidjs/router';
 import { AlertsAPI } from '../src/api/alerts';
 import { OverviewTab } from '../src/features/alerts/OverviewTab';
 import { DarkModeContext } from '../src/contexts/appRuntime';
-import { syncAIRuntimeSettings } from '../src/stores/aiRuntimeState';
+import { aiAvailabilityStore } from '../src/stores/aiAvailability';
 import type { Alert } from '../src/types/api';
 import '../src/index.css';
 
-syncAIRuntimeSettings({ discovery_enabled: false });
+aiAvailabilityStore.setEnabled(false);
 
 function Fixture() {
   const [active, setActive] = createSignal<Record<string, Alert>>({});
