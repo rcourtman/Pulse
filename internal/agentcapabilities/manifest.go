@@ -723,7 +723,7 @@ var canonicalManifest = Manifest{
 			{
 				ID:              SurfaceIDPulseAssistant,
 				Label:           "Pulse Assistant",
-				Description:     "The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions.",
+				Description:     "The chat surface Pulse Mobile uses for operator questions over the same governed tools, approvals, and verification; the in-app web chat window is retired.",
 				Native:          true,
 				ExternalAdapter: false,
 				// No interactive questions: no Pulse client can answer

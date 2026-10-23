@@ -1735,8 +1735,9 @@ slot it returns an honest typed conflict; automatic scoped triggers retain
 their bounded internal requeue path.
 
 Pulse Intelligence presents Patrol as the primary first-party operations
-surface. Pulse Assistant is the in-app contextual explanation, approval-card,
-governed-action, verification, and handoff access path over Patrol work.
+surface. Pulse Assistant is now only the chat surface Pulse Mobile uses over
+the same governed tools; its in-app chat window and Patrol-work handoffs were
+retired on 2026-10-22.
 `cmd/pulse-mcp/` is the external-agent adapter for MCP-speaking clients. The
 adapter must stay thin: it fetches `/api/agent/capabilities`, projects that
 canonical manifest as MCP tools, and forwards calls to the declared API routes.
@@ -7578,3 +7579,14 @@ fallback governance names drop it; the shared `pulse_question` declaration in
 `agentcapabilities` is unchanged. Patrol investigations, provider routing, model-boundary
 sanitizing, approvals, and the Pulse Mobile chat contract are unchanged.
 Proof: `agentic_question_tool_test.go` and the interaction scenario corpus.
+
+The canonical manifest's Pulse Assistant surface description now names its
+remaining role (2026-10-23): the chat surface Pulse Mobile uses over the same
+governed tools, approvals, and verification, with the in-app web chat window
+retired. It no longer calls the surface a handoff surface for Patrol findings,
+which the retired window was. The generated `docs/AI.md` overview and
+`cmd/pulse-mcp/README.md` surface block follow it, and the browser's fallback
+affordances for an undeclared Assistant surface in
+`frontend-modern/src/api/agentCapabilities.ts` no longer include interactive
+questions, matching `DefaultSurfaceAffordancesForID`. Surface IDs, labels,
+tools, and approval boundaries are unchanged.

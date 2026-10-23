@@ -338,9 +338,9 @@ func TestCanonicalManifestPinsPulseIntelligenceSurfaceContract(t *testing.T) {
 	if assistant.Label != "Pulse Assistant" || !assistant.Native || assistant.ExternalAdapter {
 		t.Fatalf("Pulse Assistant surface contract = %+v", assistant)
 	}
-	if !strings.Contains(assistant.Description, "contextual explanation") ||
-		!strings.Contains(assistant.Description, "Patrol findings") {
-		t.Fatalf("Pulse Assistant description must preserve contextual access-path role, got %q", assistant.Description)
+	if !strings.Contains(assistant.Description, "Pulse Mobile") ||
+		!strings.Contains(assistant.Description, "web chat window is retired") {
+		t.Fatalf("Pulse Assistant description must name its Pulse Mobile-only role, got %q", assistant.Description)
 	}
 	// No interactive questions: no Pulse client can answer pulse_question.
 	if !assistant.Affordances.Tools || assistant.Affordances.InteractiveQuestions ||
