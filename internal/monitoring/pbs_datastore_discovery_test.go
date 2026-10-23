@@ -155,7 +155,9 @@ func TestPBSDatastoreDiscoverySkippedScopeIsNotEmpty(t *testing.T) {
 			case "global disabled":
 				f.m.SetBackupPollingEnabled(false)
 			case "not due":
-				f.m.SetBackupPollingInterval(time.Hour)
+				// Model an already-configured cadence. Changing cadence via the
+				// live setter deliberately clears timestamps for a catch-up poll.
+				f.m.config.BackupPollingInterval = time.Hour
 			case "in flight":
 				f.m.pbsBackupPollers["pbs-main"] = true
 			case "cancelled cycle":
