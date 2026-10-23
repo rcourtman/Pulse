@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "base_sha": "c18bf1e8f9aec43a6eb9e85087e102f1f1455c7c",
+  "verified_at": "2026-10-23T11:05:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
+    "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "efdf29548d7471b0e04dc5af309c7b89fab28bc8c286aa7200d0920d2fd136fe",
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "3bcc5b6d39ab9b1ed64b39b3faf6f4b10031754fa1b7d02b452c9a15d621da09",
+    "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx": "946ef0b6666d0dde8da0894c34b8cb0ddbca625ee77523873935a60cdc11868f",
+    "frontend-modern/src/components/patrol/RunHistoryEntry.tsx": "7c0878031f807893d6f1034e534f4a35d1f5c6f3eee4502957e2b0ac9340726d",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "3aba3fe8e908573ffbfebf024f5e9e92d1b28337bcbddc64c49865fab71a588c",
+    "frontend-modern/src/i18n/messages.de.ts": "21fd4a35283c8e84721abe525ea1b5bb232f522dc5e8ff7c032f89eef988ce51",
+    "frontend-modern/src/i18n/messages.es.ts": "106c51e4bcbf575033fdbde221e963544c9835f7cec97b6d01094a209854543d",
+    "frontend-modern/src/i18n/messages.ts": "c27a64aa4cba18065fc00895538ac264832f7a98067a3f150f58170377a2db3d",
+    "frontend-modern/src/useAppRuntimeState.ts": "6483fbc1142ebc887dab880e019958cdc49f60334dcfa58115cb5d104085d20d"
+  },
+  "routes": [
+    "/",
+    "/actions",
+    "/alerts",
+    "/alerts/history",
+    "/alerts/overview",
+    "/alerts/thresholds",
+    "/docker/overview",
+    "/docs",
+    "/docs/PBS",
+    "/docs/TROUBLESHOOTING",
+    "/kubernetes/overview",
+    "/patrol",
+    "/proxmox/backups/date",
+    "/proxmox/ceph",
+    "/proxmox/mail",
+    "/proxmox/overview",
+    "/proxmox/replication",
+    "/proxmox/storage",
+    "/settings",
+    "/settings/api-keys",
+    "/settings/infrastructure",
+    "/settings/integrations",
+    "/settings/monitoring",
+    "/settings/operations",
+    "/settings/organization",
+    "/settings/pulse-intelligence",
+    "/settings/security-audit",
+    "/settings/security-auth",
+    "/settings/security-data-handling",
+    "/settings/security-overview",
+    "/settings/security-roles",
+    "/settings/security-sso",
+    "/settings/security-users",
+    "/settings/security-webhooks",
+    "/settings/support",
+    "/settings/system-ai",
+    "/settings/system-general",
+    "/settings/system-network",
+    "/settings/system-pro",
+    "/settings/system-recovery",
+    "/settings/system-relay",
+    "/settings/system-updates",
+    "/settings/workloads",
+    "/standalone/machines",
+    "/truenas/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "embedded production build of the backlog after merging main's Assistant retirement, against a mock DEMO_MODE backend (5 PVE nodes, Docker, Kubernetes, TrueNAS, vSphere, PBS, PMG), compared route by route with a build of current main on the same estate",
+    "files whose merged content differs from both parents: app layout and mobile navigation, Settings AI runtime controls, Patrol run history, infrastructure operator state, i18n messages and app runtime state; checked on every route at both widths, with Settings, Patrol and the mobile navigation screenshots reviewed side by side",
+    "every route above at desktop and phone width: no console error, page error or failed request that the parent build did not also show, and no new horizontal overflow",
+    "first expandable row expanded, with each drawer tab opened, on: /, /actions, /alerts, /alerts/history, /alerts/overview, /alerts/thresholds, /docker/overview, /kubernetes/overview, /patrol, /proxmox/backups/date, /proxmox/ceph, /proxmox/mail, /proxmox/overview, /proxmox/replication, /proxmox/storage, /settings, /settings/api-keys, /settings/infrastructure, /settings/integrations, /settings/monitoring, /settings/operations, /settings/organization, /settings/pulse-intelligence, /settings/security-audit, /settings/security-auth, /settings/security-data-handling, /settings/security-overview, /settings/security-roles, /settings/security-sso, /settings/security-users, /settings/security-webhooks, /settings/support, /settings/system-ai, /settings/system-general, /settings/system-network, /settings/system-pro, /settings/system-recovery, /settings/system-relay, /settings/system-updates, /settings/workloads, /standalone/machines, /truenas/overview, /vmware/overview",
+    "Settings Updates, Recovery (backup polling safety notice), Infrastructure, Workloads and Security panels; Alerts overview, history and thresholds; docs viewer for Troubleshooting and PBS",
+    "full-resolution side-by-side review of the drawers, platform overviews, Proxmox backups, Alerts, Settings Updates and Recovery, and the troubleshooting docs at phone width",
+    "screenshot and error checks only, because the probe's generic disclosure locator matched a control it could not click in either build: / (desktop), /actions (desktop), /alerts (desktop), /alerts/overview (desktop), /alerts/thresholds (desktop), /kubernetes/overview (phone), /patrol (desktop), /proxmox/backups/date (phone), /proxmox/mail (phone), /proxmox/replication (phone), /settings (desktop), /settings/api-keys (desktop), /settings/infrastructure (desktop), /settings/integrations (desktop), /settings/monitoring (desktop), /settings/operations (desktop), /settings/organization (desktop), /settings/security-audit (desktop), /settings/security-auth (desktop), /settings/security-data-handling (desktop), /settings/security-overview (desktop), /settings/security-roles (desktop), /settings/security-sso (desktop), /settings/security-users (desktop), /settings/security-webhooks (desktop), /settings/support (desktop), /settings/system-general (desktop), /settings/system-network (desktop), /settings/system-pro (desktop), /settings/system-recovery (desktop), /settings/system-relay (desktop), /settings/system-updates (desktop), /settings/workloads (desktop), /truenas/overview (phone), /vmware/overview (phone)"
+  ],
+  "interactions": [
+    "navigated by URL to each route",
+    "opened first expandable row",
+    "signed in",
+    "tab Manage",
+    "tab Overview"
+  ]
+}
