@@ -26,14 +26,19 @@ const usdFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
+// Besides the investigation outcomes, the digest counts a run that ended on an
+// error with no outcome as "failed", the bucket telemetry uses for that state.
+type DigestOutcomeKey = InvestigationOutcome | 'failed';
+
 // Same order and wording as the digest email (PatrolDigestOutcomeOrder and
 // internal/api/patrol_digest_email.go), most actionable first.
-const INVESTIGATION_OUTCOME_COPY: Array<{ key: InvestigationOutcome; label: string }> = [
+const INVESTIGATION_OUTCOME_COPY: Array<{ key: DigestOutcomeKey; label: string }> = [
   { key: 'needs_attention', label: 'need you' },
   { key: 'fix_failed', label: 'fix failed' },
   { key: 'fix_verification_failed', label: 'fix not confirmed' },
   { key: 'cannot_fix', label: 'could not fix' },
   { key: 'timed_out', label: 'timed out' },
+  { key: 'failed', label: 'ended with an error' },
   { key: 'unclassified', label: 'finished without a clear conclusion' },
   { key: 'fix_queued', label: 'fix waiting for approval' },
   { key: 'fix_executed', label: 'fix run' },
@@ -112,15 +117,17 @@ export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
   }
 
   const investigationDetails = describeDigestInvestigationOutcomes(investigations.by_outcome);
-  if (investigationDetails.length === 0) {
+  if (investigationDetails.length > 0) {
+    investigationDetails[investigationDetails.length - 1] += '.';
+    if (investigationDetails.length > 1) investigationDetails[0] += ',';
+  } else if (investigations.total === 0) {
+    // Runs whose outcome has no wording here still happened, so only an empty
+    // week may say that nothing was investigated.
     investigationDetails.push(
       digest.mode === 'monitor'
         ? 'Patrol is watch only, so it reports issues without investigating them.'
         : 'No issues needed a closer look.',
     );
-  } else {
-    investigationDetails[investigationDetails.length - 1] += '.';
-    if (investigationDetails.length > 1) investigationDetails[0] += ',';
   }
 
   const actionDetails: string[] = [];

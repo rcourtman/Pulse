@@ -226,4 +226,31 @@ describe('PatrolWeeklyDigestCard', () => {
     expect(await screen.findByText('4 finished without a clear conclusion,')).toBeInTheDocument();
     expect(screen.getByText('1 interrupted by a restart.')).toBeInTheDocument();
   });
+
+  it('names runs that ended with an error between timeouts and unclear runs', () => {
+    expect(
+      describeDigestInvestigationOutcomes({ unclassified: 3, failed: 2, interrupted: 1 }),
+    ).toEqual(['2 ended with an error', '3 finished without a clear conclusion']);
+    expect(describeDigestInvestigationOutcomes({ failed: 1, timed_out: 2 })).toEqual([
+      '2 timed out',
+      '1 ended with an error',
+    ]);
+  });
+
+  it('never says nothing was investigated under a non-zero count', () => {
+    const investigated = (
+      investigations: PatrolDigest['investigations'],
+      mode: PatrolDigest['mode'] = 'approval',
+    ) =>
+      buildDigestTiles(digest({ mode, investigations })).find((tile) => tile.id === 'investigated');
+    // A run whose outcome has no wording on the card still happened.
+    expect(investigated({ total: 3, by_outcome: { unknown: 3 } })).toMatchObject({
+      value: '3',
+      details: [],
+    });
+    expect(investigated({ total: 2, by_outcome: { unknown: 2 } }, 'monitor')?.details).toEqual([]);
+    expect(investigated({ total: 0, by_outcome: {} })?.details).toEqual([
+      'No issues needed a closer look.',
+    ]);
+  });
 });

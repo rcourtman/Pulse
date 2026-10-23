@@ -2782,10 +2782,14 @@ short, reads "Interrupted — will retry" in the neutral tone. It stays out of
 the attention queue, its collapsed row says "Will retry" rather than "Needs
 review", and its run note renders as information, not as an error. Neither
 counts as a failed fix. The This week card names both with the digest email's
-wording and order. The Patrol record's outcome badge uses the shared outcome
-label, and like the investigation header the record shows its run status only
-until the run has an outcome, so an interrupted run no longer shows "Failed"
-beside "will retry". Proofs:
+wording and order, along with the digest's `failed` bucket for a run that
+ended on an error with no outcome ("ended with an error"). When a week's
+investigations have no worded outcome, the Investigated tile shows the count
+alone: "No issues needed a closer look" and the watch-only sentence are kept
+for a week with no investigations. The Patrol record's outcome badge uses the
+shared outcome label, and like the investigation header the record shows its
+run status only until the run has an outcome, so an interrupted run no longer
+shows "Failed" beside "will retry". Proofs:
 `frontend-modern/src/stores/__tests__/aiIntelligence.test.ts`,
 `frontend-modern/src/components/patrol/__tests__/InvestigationSection.test.tsx`,
 `frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts`
