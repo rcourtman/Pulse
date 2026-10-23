@@ -5,6 +5,7 @@ import { AlertsAPI } from '@/api/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { eventBus } from '@/stores/events';
 import type { AlertConfig } from '@/types/alerts';
+import { temperatureStore } from '@/utils/temperature';
 
 import {
   TrueNASStorageTopologyTable,
@@ -27,9 +28,53 @@ const makeStorageResource = (overrides: Partial<Resource> & Pick<Resource, 'id'>
 
 afterEach(() => {
   cleanup();
+  temperatureStore.setUnit('celsius');
 });
 
 describe('TrueNASStorageTopologyTable', () => {
+  it('converts both current and last-known disk readings without losing their observation state', async () => {
+    const disk = (id: string, state: 'available' | 'unavailable') =>
+      makeStorageResource({
+        id,
+        type: 'physical_disk',
+        storage: undefined,
+        physicalDisk: {
+          devPath: `/dev/${id}`,
+          diskType: 'sata',
+          temperature: 40,
+          collection: {
+            temperature: { state, source: 'agent', reason: 'host agent stopped reporting' },
+          },
+        },
+      });
+    const resources = [disk('current', 'available'), disk('retained', 'unavailable')];
+    temperatureStore.setUnit('fahrenheit');
+    const { container } = render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+        showToolbar={false}
+        kindFilter="disks"
+      />
+    ));
+
+    expect(screen.getAllByText('104.0°F')).toHaveLength(2);
+    const retained = container.querySelector('[data-temperature-reading="last-known"]');
+    expect(retained).toHaveTextContent('104.0°F, last known');
+    expect(retained).toHaveAttribute(
+      'title',
+      'Last known reading, not current: host agent stopped reporting',
+    );
+    expect(retained).toHaveClass('text-muted');
+    expect(resources.map((resource) => resource.physicalDisk?.temperature)).toEqual([40, 40]);
+    temperatureStore.setUnit('celsius');
+    expect(await screen.findAllByText('40.0°C')).toHaveLength(2);
+    expect(retained).toHaveTextContent('40.0°C, last known');
+  });
+
   it('renders nested dataset depth with distinct row indentation', () => {
     const pool = makeStorageResource({
       id: 'pool-tank',

@@ -6926,7 +6926,8 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('export function PlatformTablePercentValue');
     expect(sharedPlatformPageSource).toContain('export const formatPlatformTablePercentValue');
     expect(sharedPlatformPageSource).toContain('export function PlatformTableTemperatureValue');
-    expect(sharedPlatformPageSource).toContain('formatOneDecimalCelsius');
+    expect(sharedPlatformPageSource).toContain('formatOneDecimalTemperature');
+    expect(sharedPlatformPageSource).toContain('formatTemperature(value, { decimals: 1 })');
 
     for (const [path, source] of percentConsumers) {
       expect(source).toMatch(/PlatformTablePercentValue|formatPlatformTablePercentValue/);
