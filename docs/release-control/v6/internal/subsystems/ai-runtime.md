@@ -7635,3 +7635,30 @@ refresh plans a replacement under the same investigation and leaves the
 replaced plan to expire on its own, and that expiry must not take the
 investigation back from its replacement. Proof:
 `internal/api/patrol_action_expiry_sweep_test.go`.
+
+### Patrol action projection is serialized and hung runs are finalized (23 October 2026)
+
+Every projection of a Patrol investigation's canonical action reads the action
+audit and applies it under that investigation's lock: the lifecycle's
+transition callback (`ReconcilePatrolActionTransition`), a read that hydrates
+the investigation, and a run's close (`closePatrolInvestigationRun`), which
+also finalizes the run before it releases the lock. A projection read from an
+older state therefore cannot land after one read from a newer state, and no
+approval or rejection lands between a run's reconciliation and its
+finalization. The projection writes only the changed action and outcome when
+the investigation store offers `aicontracts.InvestigationActionStore`, so it
+cannot undo run progress the orchestrator saved after the projection read the
+session; the orchestrator in turn saves its progress without replacing the
+action Pulse recorded. The action reference carries the canonical result and
+verification status the broker reports (`dispositionFromRecord`) and keeps the
+model's causal attribution, which the action audit does not hold.
+
+The stuck-run sweep now also finalizes a run that ran past its limit without
+closing, with a copy of its session marked failed at the sweep ("Patrol stopped
+waiting for this investigation after it ran past its time limit."). The
+orchestrator's own session is left as it is. If the run closes later, its own
+close is finalized, and a close finalizes the stored session rather than the
+copy once the orchestrator has closed it. A refresh of the record from a
+session that has not closed no longer reopens a record that finalization
+closed. Proofs: `internal/api/ai_handlers_investigation_additional_test.go` and
+`internal/ai/patrol_investigation_finalize_test.go`.

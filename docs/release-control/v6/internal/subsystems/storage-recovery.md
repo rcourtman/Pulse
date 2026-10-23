@@ -7198,3 +7198,7 @@ The `internal/api` change of 2026-10-23 that finalizes Patrol investigation
 runs when they close and publishes the action plans the inbox expiry sweep
 expires opens no storage, backup or recovery path. Recovery evidence, restore
 rules and storage capabilities are unchanged.
+
+The `internal/api` change of 2026-10-23 that serializes the projection of a
+Patrol investigation's action and finalizes Patrol runs that ran past their
+limit opens no storage, backup or recovery path.

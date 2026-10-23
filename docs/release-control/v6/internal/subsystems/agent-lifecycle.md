@@ -10210,3 +10210,8 @@ runs when they close, failed runs included, and publishes the action plans the
 inbox expiry sweep expires, enrols, commands, updates or removes no agent and
 touches no agent identity or credential. Investigations still reach hosts only
 through the read-only evidence tools and the governed action lifecycle.
+
+The `internal/api` change of 2026-10-23 that serializes the projection of a
+Patrol investigation's action and finalizes Patrol runs that ran past their
+limit enrols, commands, updates or removes no agent and touches no agent
+identity or credential.

@@ -1594,9 +1594,11 @@ func (p *PatrolService) recoverStuckInvestigations() {
 			Str("resource", f.ResourceName).
 			Str("outcome", string(result.outcome)).
 			Msg("AI Patrol: Recovered stuck investigation")
-		// A run whose session closed without its close reaching the finding,
-		// such as one a restart interrupted after it planned a fix, is
-		// finalized here. A run still going finalizes when its close lands.
+		// The recovered run is finalized here: a run whose session closed
+		// without its close reaching the finding, such as one a restart
+		// interrupted after it planned a fix, and a run that ran past its limit
+		// without closing. If that run does close later, its close lands and
+		// finalizes it again with its own result.
 		if result.session != nil {
 			p.closeInvestigationRun(f.ID, result.session)
 		}
@@ -1611,7 +1613,8 @@ func (p *PatrolService) recoverStuckInvestigations() {
 // runStartedAt is the start of the run's session, zero when the orchestrator
 // holds none, so the store can check the run belongs to the finding's current
 // occurrence before it applies the session's result. session is the run's
-// session once it has closed, which finalizes the run after recovery.
+// session as it is finalized after recovery: closed, or failed as of the sweep
+// for a run that ran past its limit.
 type stuckInvestigation struct {
 	status       InvestigationStatus
 	outcome      InvestigationOutcome
@@ -1653,6 +1656,7 @@ func stuckInvestigationResult(f *Finding, orchestrator InvestigationOrchestrator
 		if now.Before(limit) {
 			return stuckInvestigation{}, false
 		}
+		closed.session = abandonedInvestigationSession(session, now)
 		return closed, true
 	}
 	closed.session = session
@@ -1677,6 +1681,22 @@ func stuckInvestigationResult(f *Finding, orchestrator InvestigationOrchestrator
 		closed.outcome = InvestigationOutcome(session.Outcome)
 	}
 	return closed, true
+}
+
+// abandonedRunError is the error a run the stuck-run sweep gave up on shows.
+const abandonedRunError = "Patrol stopped waiting for this investigation after it ran past its time limit."
+
+// abandonedInvestigationSession is a run's session as the stuck-run sweep gives
+// the run up at now: failed, because it ran past its limit without closing.
+// The orchestrator's own session is left as it is.
+func abandonedInvestigationSession(session *InvestigationSession, now time.Time) *InvestigationSession {
+	abandoned := *session
+	abandoned.Status = aicontracts.InvestigationStatusFailed
+	abandoned.CompletedAt = &now
+	if strings.TrimSpace(abandoned.Error) == "" {
+		abandoned.Error = abandonedRunError
+	}
+	return &abandoned
 }
 
 // investigationStoreProvider is implemented by orchestrators that expose their
@@ -2025,7 +2045,12 @@ func (p *PatrolService) storeFindingInvestigationRecord(findingID string, sessio
 	// may no longer retain all of that original context after restart.
 	if previous := finding.InvestigationRecord; preserveEvidence && previous != nil && previous.ID == record.ID {
 		retained := previous.NormalizeCollections()
-		retained.Status = record.Status
+		// A record its run's close finalized stays closed: a later projection
+		// of the action, read from a session the orchestrator has not closed,
+		// such as one the stuck-run sweep gave up on, must not reopen it.
+		if !investigationRecordStatusIsTerminal(retained.Status) || investigationRecordStatusIsTerminal(record.Status) {
+			retained.Status = record.Status
+		}
 		retained.Outcome = record.Outcome
 		retained.Action = record.Action
 		retained.Verification = record.Verification

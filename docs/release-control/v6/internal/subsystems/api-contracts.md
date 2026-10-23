@@ -12545,3 +12545,18 @@ changes. Proofs: `internal/actionlifecycle/service_test.go`
 `TestRefreshedActionIDNamesTheReplacedAction`),
 `internal/api/patrol_action_expiry_sweep_test.go` and
 `internal/api/ai_handlers_investigation_finalize_test.go`.
+
+### Field-level action writes and serialized Patrol action projection (23 October 2026)
+
+`aicontracts.InvestigationActionStore` is a new optional interface on the
+Pulse–enterprise boundary: an investigation store that offers
+`SetAction(id, action)` lets Pulse record an action lifecycle transition
+without replacing the session. Pulse's Patrol action projection uses it with
+`SetOutcome` when the store offers it and falls back to `Update` for a store
+without it, so an older store keeps working. Projections of one investigation,
+and a run's close, are serialized under that investigation's lock. The
+investigation's action reference now includes `action_result_v2` and
+`verification_status`, the projection the broker's disposition already
+carries, and keeps `causal_resource_id` for the same action, so investigation
+payloads may carry these optional fields where they were empty before. No route
+changes. Proof: `internal/api/ai_handlers_investigation_additional_test.go`.

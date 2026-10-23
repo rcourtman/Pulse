@@ -1932,11 +1932,12 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for orchestrator")
 		return
 	}
-	// A closed run's action is reconciled from the action audit before the run
-	// is finalized: the orchestrator writes the action back as it was planned,
-	// which an approval or rejection during the run may have overtaken.
+	// A closed run's action is reconciled from the action audit, and the run
+	// finalized, under the investigation's lock (closePatrolInvestigationRun).
 	closeRun := func(findingID string, session *aicontracts.InvestigationSession) {
-		patrol.FinalizeInvestigationRun(findingID, h.hydratePatrolInvestigationAction(orgID, session))
+		h.closePatrolInvestigationRun(orgID, session, func(closed *aicontracts.InvestigationSession) {
+			patrol.FinalizeInvestigationRun(findingID, closed)
+		})
 	}
 	patrol.SetInvestigationRunCloser(closeRun)
 	findingsAdapter := &orchestratorFindingsAdapter{

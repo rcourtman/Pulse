@@ -126,6 +126,32 @@ func TestCompleteInvestigationKeepsAnOutcomeTheActionReached(t *testing.T) {
 	assertInvestigationState(t, findings, "unplanned", InvestigationStatusFailed, InvestigationOutcomeTimedOut)
 }
 
+// A projection of the action that reads a session the orchestrator has not
+// closed, such as one the stuck-run sweep gave up on, records the action's new
+// state without reopening the record that run's finalization closed.
+func TestRefreshDoesNotReopenAFinalizedRecord(t *testing.T) {
+	run := newFinalizedRun(t, InvestigationOutcomeFixQueued)
+	closed := time.Now()
+	running := &InvestigationSession{ID: "investigation-1", FindingID: "finding-1", SessionID: "chat-1",
+		Status: aicontracts.InvestigationStatusRunning, StartedAt: closed.Add(-time.Hour),
+		Action: &aicontracts.ActionReference{ActionID: "action-1", State: "pending_approval"}}
+	abandoned := *running
+	abandoned.Status = aicontracts.InvestigationStatusFailed
+	abandoned.CompletedAt = &closed
+	abandoned.Error = abandonedRunError
+	run.patrol.FinalizeInvestigationRun("finding-1", &abandoned)
+
+	approved := *running
+	approved.Action = &aicontracts.ActionReference{ActionID: "action-1", State: "approved"}
+	run.patrol.RefreshFindingInvestigationRecord("finding-1", &approved)
+
+	record := run.store.Get("finding-1").InvestigationRecord
+	if record == nil || record.Status != aicontracts.InvestigationStatusFailed || record.Error != abandonedRunError ||
+		record.CompletedAt == nil || record.Action == nil || record.Action.State != "approved" {
+		t.Fatalf("record = %#v, want it still closed, with the approval recorded", record)
+	}
+}
+
 // An action's outcome is pushed when its transition is reconciled
 // (PublishFindingLifecycleUpdate), so a run that closes on a verified fix is
 // published without a second push.
@@ -143,11 +169,12 @@ func TestFinalizeInvestigationRunLeavesActionOutcomePushesToReconciliation(t *te
 	}
 }
 
-// The stuck-run sweep finalizes a run it recovers once the run's session has
-// closed without its close reaching the finding, such as a run a restart
-// interrupted after it planned a fix. A run still going past its limit is not
-// finalized: it finalizes when its own close lands.
-func TestRecoverStuckInvestigationsFinalizesAClosedRun(t *testing.T) {
+// The stuck-run sweep finalizes each run it recovers: one whose session closed
+// without its close reaching the finding, such as a run a restart interrupted
+// after it planned a fix, and one still going past its limit, as failed. The
+// orchestrator's own session for a run past its limit is left as it is, so the
+// run's real close can still land and finalize it again.
+func TestRecoverStuckInvestigationsFinalizesTheRunsItRecovers(t *testing.T) {
 	now := time.Now()
 	closedAt := now.Add(-time.Second)
 	findings := NewFindingsStore()
@@ -164,16 +191,26 @@ func TestRecoverStuckInvestigationsFinalizesAClosedRun(t *testing.T) {
 		"hung": {ID: "inv-hung", FindingID: "hung", SessionID: "chat-hung", Status: aicontracts.InvestigationStatusRunning, StartedAt: now.Add(-time.Hour)},
 	}}
 	patrol := &PatrolService{findings: findings, investigationOrchestrator: orchestrator}
-	var closed []string
+	closed := map[string]*InvestigationSession{}
 	patrol.SetInvestigationRunCloser(func(findingID string, session *InvestigationSession) {
-		closed = append(closed, findingID+"/"+session.SessionID)
+		closed[findingID] = session
 	})
 
 	patrol.recoverStuckInvestigations()
 
 	assertInvestigationState(t, findings, "restarted", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
 	assertInvestigationState(t, findings, "hung", InvestigationStatusFailed, InvestigationOutcomeTimedOut)
-	if len(closed) != 1 || closed[0] != "restarted/chat-restarted" {
-		t.Fatalf("closed runs = %v, want only the restarted run's closed session", closed)
+	if len(closed) != 2 {
+		t.Fatalf("closed runs = %v, want both recovered runs", closed)
+	}
+	if restarted := closed["restarted"]; restarted == nil || restarted.SessionID != "chat-restarted" || restarted.Outcome != aicontracts.OutcomeInterrupted {
+		t.Fatalf("restarted run closed with %+v, want its closed session", restarted)
+	}
+	if hung := closed["hung"]; hung == nil || hung.SessionID != "chat-hung" || hung.Status != aicontracts.InvestigationStatusFailed ||
+		hung.CompletedAt == nil || hung.Error != abandonedRunError {
+		t.Fatalf("hung run closed with %+v, want a failed session past its limit", hung)
+	}
+	if own := orchestrator.sessions["hung"]; own.Status != aicontracts.InvestigationStatusRunning || own.CompletedAt != nil {
+		t.Fatalf("the sweep changed the orchestrator's own session: %+v", own)
 	}
 }
