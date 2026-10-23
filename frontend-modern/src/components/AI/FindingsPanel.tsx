@@ -83,6 +83,8 @@ import {
   getInvestigationStatusBadgeTone,
   getPatrolFindingActionableState,
   getPatrolFindingQueueSummary,
+  reuseIdenticalPatrolFindingDisplayGroups,
+  type PatrolFindingDisplayGroup,
 } from '@/utils/aiFindingPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -384,7 +386,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
       const aRecency = getFindingRecencyPresentation(a);
       const bRecency = getFindingRecencyPresentation(b);
-      return new Date(bRecency.timestamp).getTime() - new Date(aRecency.timestamp).getTime();
+      const recencyOrder =
+        new Date(bRecency.timestamp).getTime() - new Date(aRecency.timestamp).getTime();
+      if (recencyOrder) return recencyOrder;
+
+      // The API returns tied findings in no fixed order (a Patrol run stamps
+      // the same time on every finding it sees), so the id settles ties and
+      // rows hold their places from one refresh to the next.
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     });
 
     // Limit items
@@ -457,22 +466,27 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       props.runSnapshot === undefined &&
       props.resourceId === undefined,
   );
-  const patrolFindingDisplayGroups = createMemo(() => {
-    const findings = patrolFindings();
-    if (!shouldGroupActivePatrolFindings()) {
-      return findings.map((finding) => ({
-        id: `finding:${finding.id}`,
-        affectedResourceCount: 1,
-        kind: 'finding' as const,
-        label: getFindingSubjectPresentation(finding).label,
-        primaryFinding: finding,
-        relatedFindings: [],
-        findings: [finding],
-      }));
-    }
-
-    return buildPatrolFindingDisplayGroups(findings);
-  });
+  // Rows and the open review are keyed by group, so a group whose findings did
+  // not change is kept: a refresh that touches other findings leaves its row,
+  // and the review open beside it, in place.
+  const patrolFindingDisplayGroups = createMemo<PatrolFindingDisplayGroup<UnifiedFinding>[]>(
+    (previous) => {
+      const findings = patrolFindings();
+      const groups: PatrolFindingDisplayGroup<UnifiedFinding>[] = shouldGroupActivePatrolFindings()
+        ? buildPatrolFindingDisplayGroups(findings)
+        : findings.map((finding) => ({
+            id: `finding:${finding.id}`,
+            affectedResourceCount: 1,
+            kind: 'finding' as const,
+            label: getFindingSubjectPresentation(finding).label,
+            primaryFinding: finding,
+            relatedFindings: [],
+            findings: [finding],
+          }));
+      return reuseIdenticalPatrolFindingDisplayGroups(previous, groups);
+    },
+    [],
+  );
   const selectedPatrolGroup = createMemo(() => {
     if (!isPatrolFindingsSource() || !expandedId()) return undefined;
     return patrolFindingDisplayGroups().find((group) =>
@@ -823,7 +837,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
   };
 
-  const formatTime = (isoString: string) => formatRelativeTime(isoString, { compact: true });
+  // Rows and the open review stay mounted across refreshes, so their ages read
+  // the shared clock to keep moving.
+  const formatTime = (isoString: string) =>
+    formatRelativeTime(isoString, { compact: true, now: now() });
 
   // Mirror the backend's DefaultWillFixLaterRemindAfter (7 days) so the dismiss
   // confirmation panel can preview the remind-at date before the operator
@@ -1363,7 +1380,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   ) => {
     const primaryAction = getFindingPrimaryActionPresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
-    const relatedFindings = options.relatedFindings ?? [];
+    // Read where it renders: the review passes a getter, so a change to a
+    // related finding updates this list without redrawing the review.
+    const relatedFindings = () => options.relatedFindings ?? [];
     const proHandoff = !primaryAction ? props.patrolProHandoff?.(finding) : undefined;
     const modeNudge = !primaryAction ? props.patrolModeNudge?.(finding) : undefined;
     const shouldShowExpandedManageMenu =
@@ -1439,16 +1458,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             Regressions: {finding.regressionCount}
             <Show when={finding.lastRegressionAt}>
               {' '}
-              (last {formatRelativeTime(finding.lastRegressionAt)})
+              (last {formatRelativeTime(finding.lastRegressionAt, { now: now() })})
             </Show>
           </p>
         </Show>
 
-        <Show when={relatedFindings.length > 0}>
+        <Show when={relatedFindings().length > 0}>
           <div class="mt-3 rounded-sm border border-border bg-surface-alt p-2">
             <div class="text-xs font-medium text-base-content">Related issues</div>
             <div class="mt-2 space-y-1">
-              <For each={relatedFindings}>
+              <For each={relatedFindings()}>
                 {(relatedFinding) => {
                   const relatedSeverity = getFindingSeverityPresentation(relatedFinding);
                   const relatedTitle = getFindingTitlePresentation(relatedFinding);
@@ -1509,7 +1528,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                           </span>
                         </Show>
                       </span>
-                      <span class="shrink-0">{formatRelativeTime(event.at)}</span>
+                      <span class="shrink-0">{formatRelativeTime(event.at, { now: now() })}</span>
                     </div>
                   );
                 }}
@@ -2156,7 +2175,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   </div>
                   <div class="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 pb-4">
                     {renderExpandedContent(finding(), {
-                      relatedFindings: group()?.relatedFindings ?? [],
+                      // A getter, so the review is redrawn only when its own
+                      // finding changes, not when a related one does.
+                      get relatedFindings() {
+                        return group()?.relatedFindings ?? [];
+                      },
                     })}
                   </div>
                 </aside>

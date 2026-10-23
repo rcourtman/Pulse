@@ -7,7 +7,9 @@ interface CreateNonSuspendingQueryOptions<T, K> {
   fetcher: (key: K, signal: AbortSignal) => Promise<T>;
   initialValue: T;
   cacheKey?: (key: K) => string | null;
-  pollMs?: number;
+  // A fixed interval, or an accessor when the cadence follows state (polling
+  // faster while a job runs); an accessor that returns undefined stops polling.
+  pollMs?: number | Accessor<number | undefined>;
   retainPreviousValueOnSourceChange?: boolean;
 }
 
@@ -307,26 +309,38 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     return run(key, runOptions);
   };
 
-  if (typeof options.pollMs === 'number' && options.pollMs > 0) {
-    const interval = setInterval(() => {
-      if (activeAbortController !== null && activeRequestIsPoll) {
-        if (Date.now() - activeRequestStartedAt < STALLED_QUERY_READ_MS) return;
-        // The stalled read is abandoned and settles as a failure: its
-        // replacement runs in the background and may hang too, so nothing
-        // else would clear a spinner or a never-loaded state.
-        batch(() => {
-          setLoading(false);
-          setError(new Error('The request timed out.'));
-          setResolvedOnce(true);
-        });
-      }
-      const key = options.source();
-      if (key === null) {
-        reset();
-        return;
-      }
-      void run(key, { background: true }, true);
-    }, options.pollMs);
+  const poll = () => {
+    if (activeAbortController !== null && activeRequestIsPoll) {
+      if (Date.now() - activeRequestStartedAt < STALLED_QUERY_READ_MS) return;
+      // The stalled read is abandoned and settles as a failure: its
+      // replacement runs in the background and may hang too, so nothing
+      // else would clear a spinner or a never-loaded state.
+      batch(() => {
+        setLoading(false);
+        setError(new Error('The request timed out.'));
+        setResolvedOnce(true);
+      });
+    }
+    const key = options.source();
+    if (key === null) {
+      reset();
+      return;
+    }
+    void run(key, { background: true }, true);
+  };
+
+  const pollMs = options.pollMs;
+  if (typeof pollMs === 'function') {
+    // A new cadence restarts the interval. A read already in flight keeps its
+    // protection, which belongs to the request rather than the timer.
+    createEffect(() => {
+      const ms = pollMs();
+      if (typeof ms !== 'number' || ms <= 0) return;
+      const interval = setInterval(poll, ms);
+      onCleanup(() => clearInterval(interval));
+    });
+  } else if (typeof pollMs === 'number' && pollMs > 0) {
+    const interval = setInterval(poll, pollMs);
     onCleanup(() => clearInterval(interval));
   }
 

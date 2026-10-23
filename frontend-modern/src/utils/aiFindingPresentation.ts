@@ -648,6 +648,27 @@ export function buildPatrolFindingDisplayGroups<
   });
 }
 
+/**
+ * Keeps each group from the previous build whose findings are the same
+ * objects in the same order. A group's fields derive only from its findings,
+ * so the kept group is current, and rows keyed by group stay mounted when a
+ * refresh changes other findings.
+ */
+export function reuseIdenticalPatrolFindingDisplayGroups<TFinding>(
+  previous: readonly PatrolFindingDisplayGroup<TFinding>[],
+  next: PatrolFindingDisplayGroup<TFinding>[],
+): PatrolFindingDisplayGroup<TFinding>[] {
+  const previousById = new Map(previous.map((group) => [group.id, group]));
+  return next.map((group) => {
+    const prior = previousById.get(group.id);
+    return prior &&
+      prior.findings.length === group.findings.length &&
+      prior.findings.every((finding, index) => finding === group.findings[index])
+      ? prior
+      : group;
+  });
+}
+
 export type PatrolFindingWorkType = 'approval' | 'failed' | 'in_progress' | 'recurring' | 'new';
 
 const isFailedFixOutcome = (outcome: string | undefined): boolean =>

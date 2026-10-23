@@ -1,5 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import { getToolCallsLoadingState } from '@/utils/patrolRunPresentation';
 import runToolCallTraceSource from '../RunToolCallTrace.tsx?raw';
 import { RunToolCallTrace } from '../RunToolCallTrace';
 
@@ -11,7 +14,50 @@ vi.mock('@/api/patrol', () => ({
 
 describe('RunToolCallTrace', () => {
   beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     getPatrolRunWithToolCallsMock.mockReset();
+  });
+
+  it('reads tool calls through the non-suspending query', () => {
+    // The nearest Suspense boundary above Patrol history is the app's route
+    // boundary, whose fallback replaces the page and loses the reader's place.
+    expect(runToolCallTraceSource).not.toContain('createResource');
+    expect(runToolCallTraceSource).toContain('createNonSuspendingQuery');
+  });
+
+  it('keeps the page around the run history while tool calls load', async () => {
+    let finishRead: (value: unknown) => void = () => {};
+    getPatrolRunWithToolCallsMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRead = resolve;
+      }),
+    );
+
+    render(() => (
+      <Suspense fallback={<div>Loading view...</div>}>
+        <RunToolCallTrace runId="run-pending" toolCallCount={1} />
+      </Suspense>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Tool calls \(1\)/ }));
+
+    expect(screen.getByText(getToolCallsLoadingState())).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+
+    finishRead({
+      id: 'run-pending',
+      tool_calls: [
+        {
+          id: 'call-1',
+          tool_name: 'ssh_execute',
+          input: '{"command":"uptime"}',
+          output: 'ok',
+          success: true,
+          duration_ms: 42,
+        },
+      ],
+    });
+    expect(await screen.findByText('ssh_execute')).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
   });
 
   afterEach(() => {

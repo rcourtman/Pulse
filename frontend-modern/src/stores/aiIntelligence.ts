@@ -337,6 +337,48 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
   };
 }
 
+// Findings are plain JSON from the API, so two reads of an unchanged finding
+// are equal key by key.
+function isSameFindingValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) {
+    return false;
+  }
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  if (leftKeys.length !== Object.keys(rightRecord).length) return false;
+  return leftKeys.every(
+    (key) =>
+      Object.prototype.hasOwnProperty.call(rightRecord, key) &&
+      isSameFindingValue(leftRecord[key], rightRecord[key]),
+  );
+}
+
+// Findings are re-read every few seconds (the open-work badges every 30s,
+// the Patrol page every 60s), and every read parses new objects. Lists render
+// findings with <For>, which keys rows by object, so each poll rebuilt every
+// row and remounted an open review. A finding that comes back unchanged keeps
+// its object, and a read that changes nothing keeps the list.
+function reuseIdenticalFindings(
+  previous: UnifiedFinding[],
+  next: UnifiedFinding[],
+): UnifiedFinding[] {
+  const previousById = new Map(previous.map((finding) => [finding.id, finding]));
+  let changed = next.length !== previous.length;
+  const merged = next.map((finding, index) => {
+    const prior = previousById.get(finding.id);
+    if (prior && isSameFindingValue(prior, finding)) {
+      if (prior !== previous[index]) changed = true;
+      return prior;
+    }
+    changed = true;
+    return finding;
+  });
+  return changed ? merged : previous;
+}
+
 // ============================================
 // Pending Approvals
 // ============================================
@@ -493,8 +535,11 @@ export const aiIntelligenceStore = {
       if (!resp) return;
       const now = Date.now();
 
-      setUnifiedFindings(
-        (resp.findings || []).map((item) => normalizeUnifiedFindingRecord(item, now)),
+      setUnifiedFindings((previous) =>
+        reuseIdenticalFindings(
+          previous,
+          (resp.findings || []).map((item) => normalizeUnifiedFindingRecord(item, now)),
+        ),
       );
     } catch (e) {
       logger.error('Failed to load unified findings:', e);
@@ -524,7 +569,12 @@ export const aiIntelligenceStore = {
           : undefined,
       );
       const now = Date.now();
-      setPatrolFindings(findings.map((item) => normalizePatrolFindingRecord(item, now)));
+      setPatrolFindings((previous) =>
+        reuseIdenticalFindings(
+          previous,
+          findings.map((item) => normalizePatrolFindingRecord(item, now)),
+        ),
+      );
     } catch (e) {
       logger.error('Failed to load Patrol findings:', e);
       setPatrolFindingsError(e instanceof Error ? e.message : 'Failed to load Patrol findings');

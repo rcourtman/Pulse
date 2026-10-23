@@ -6,17 +6,16 @@
  * a collapsible investigation thread.
  */
 
+import { Component, createSignal, createMemo, Show, For } from 'solid-js';
 import {
-  Component,
-  createSignal,
-  createResource,
-  createEffect,
-  createMemo,
-  onCleanup,
-  Show,
-  For,
-} from 'solid-js';
-import { getInvestigation, reinvestigateFinding, formatTimestamp } from '@/api/patrol';
+  getInvestigation,
+  reinvestigateFinding,
+  formatTimestamp,
+  type Investigation,
+} from '@/api/patrol';
+import { withAPIErrorStatusNull } from '@/api/responseUtils';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   getInvestigationConfidenceBadgeTone,
   getInvestigationOutcomeBadgeTone,
@@ -40,6 +39,9 @@ const INVESTIGATION_BADGE_PROPS = {
   size: 'xs',
   shape: 'rounded',
 } as const;
+
+const ACTIVE_INVESTIGATION_POLL_MS = 5_000;
+const INVESTIGATION_REVALIDATE_MS = 30_000;
 
 const summaryClass =
   'text-sm prose prose-slate prose-sm dark:prose-invert max-w-none wrap-break-word prose-headings:my-2 prose-p:my-2 prose-pre:overflow-x-auto prose-code:break-all prose-code:before:content-none prose-code:after:content-none';
@@ -68,37 +70,54 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
     buildPatrolInvestigationRecordPresentation(props.investigationRecord),
   );
 
-  const [investigation, { refetch }] = createResource(
-    () => props.findingId,
-    async (findingId) => {
-      try {
-        return await getInvestigation(findingId);
-      } catch {
-        return null;
-      }
-    },
-  );
+  // Reads stay out of the app's route Suspense boundary, whose fallback
+  // replaces the whole page: a read while someone reads this review (opening
+  // it, polling, Re-investigate) dropped them back to the top. The last answer
+  // stays on screen while the next loads, and a remounted review shows the
+  // retained answer at once. The review also stays mounted across findings
+  // refreshes, which used to remount it and so re-read it every 30s, so it
+  // re-reads on that cadence itself, and every 5s while the run is active.
+  const investigationQuery = createNonSuspendingQuery<Investigation | null, string>({
+    source: () => props.findingId,
+    cacheKey: (findingId) => `patrol-investigation:${findingId}`,
+    retainPreviousValueOnSourceChange: false,
+    // A finding Patrol has not investigated answers 404. Any other failure
+    // keeps the last answer on screen for the next read to replace.
+    fetcher: (findingId) => withAPIErrorStatusNull(getInvestigation(findingId), 404),
+    initialValue: null,
+    pollMs: (): number =>
+      investigationActive() ? ACTIVE_INVESTIGATION_POLL_MS : INVESTIGATION_REVALIDATE_MS,
+  });
+  const investigation = investigationQuery.value;
+  const refreshInvestigation = () => investigationQuery.refetch({ background: true });
+  // The review stays mounted across refreshes, so its ages re-read on each
+  // tick of the shared clock to keep moving.
+  const now = useRelativeTimeNow();
+  const formatAge = (timestamp: string) => {
+    now();
+    return formatTimestamp(timestamp);
+  };
   const hasInvestigationContext = createMemo(
     () => Boolean(investigation()) || investigationRecord().hasRecord,
   );
   const investigationSectionState = createMemo(() =>
-    getInvestigationSectionState(investigation.loading, hasInvestigationContext()),
+    getInvestigationSectionState(!investigationQuery.resolvedOnce(), hasInvestigationContext()),
   );
-
-  // Auto-poll while investigation is active
-  createEffect(() => {
+  const investigationActive = createMemo<boolean>(() => {
     const inv = investigation();
-    const isActive =
+    return (
       inv?.status === 'running' ||
       inv?.status === 'pending' ||
-      props.investigationStatus === 'running';
-    if (!isActive) return;
-
-    const interval = setInterval(() => refetch(), 5000);
-    onCleanup(() => clearInterval(interval));
+      props.investigationStatus === 'running'
+    );
   });
+  // The thread follows the run's session id, not each re-read of the run.
+  const sessionId = createMemo(() => investigation()?.session_id ?? '');
 
   const canReinvestigate = () => {
+    // Until the first read answers, a running investigation or a queued fix
+    // looks like no investigation at all, which would offer another run.
+    if (!investigationQuery.resolvedOnce()) return false;
     if (Date.now() < cooldownUntil()) return false;
     const inv = investigation();
     if (!inv) return true; // No investigation yet
@@ -127,7 +146,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       await reinvestigateFinding(props.findingId);
       notificationStore.success('Re-investigation started');
       setCooldownUntil(Date.now() + 60000);
-      refetch();
+      void refreshInvestigation();
       aiIntelligenceStore.loadFindings();
     } catch (err) {
       notificationStore.error((err as Error).message || 'Failed to start re-investigation');
@@ -347,7 +366,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       </Show>
 
       {/* Investigation details */}
-      <Show when={!investigation.loading && investigation()}>
+      <Show when={investigation()}>
         {(inv) => (
           <div class="space-y-2">
             {/* Error message for failed investigations */}
@@ -402,9 +421,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 {inv().turn_count} turn{inv().turn_count === 1 ? '' : 's'}
               </span>
               <Show when={inv().started_at}>
-                <span class="text-[10px] text-muted">
-                  started {formatTimestamp(inv().started_at)}
-                </span>
+                <span class="text-[10px] text-muted">started {formatAge(inv().started_at)}</span>
               </Show>
             </div>
 
@@ -435,7 +452,11 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
 
             {/* Investigation messages (lazy loaded) */}
             <Show when={showThread()}>
-              <InvestigationMessages findingId={props.findingId} />
+              <InvestigationMessages
+                findingId={props.findingId}
+                sessionId={sessionId()}
+                live={investigationActive()}
+              />
             </Show>
           </div>
         )}

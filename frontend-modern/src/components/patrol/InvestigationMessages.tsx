@@ -5,9 +5,12 @@
  * Lazy-loads messages when rendered.
  */
 
-import { Component, createResource, Show, For } from 'solid-js';
+import { Component, createEffect, createMemo, on, Show, For } from 'solid-js';
 import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/api/patrol';
+import { withAPIErrorStatusNull } from '@/api/responseUtils';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
@@ -19,47 +22,97 @@ const investigationMarkdownClass =
 
 interface InvestigationMessagesProps {
   findingId: string;
+  // The run whose thread this is: a new run reads its own thread instead of
+  // showing the last one's.
+  sessionId?: string;
+  // While the run is active, the thread is read again as it grows.
+  live?: boolean;
 }
+
+const LIVE_THREAD_POLL_MS = 5_000;
+const FAILED_THREAD_RETRY_MS = 30_000;
 
 /** Returns true if a message has no displayable content */
 function isEmptyMessage(msg: ChatMessage): boolean {
   return !msg.content && !msg.reasoning_content && !msg.tool_calls?.length && !msg.tool_result;
 }
 
+// Each read parses new objects. A message that comes back unchanged keeps its
+// object, so its row, and any tool output expanded in it, stays as it was.
+function reuseIdenticalMessages(previous: ChatMessage[], next: ChatMessage[]): ChatMessage[] {
+  const previousById = new Map(previous.map((message) => [message.id, message]));
+  return next.map((message) => {
+    const prior = previousById.get(message.id);
+    return prior && JSON.stringify(prior) === JSON.stringify(message) ? prior : message;
+  });
+}
+
 export const InvestigationMessages: Component<InvestigationMessagesProps> = (props) => {
-  const [messages] = createResource(
-    () => props.findingId,
-    async (findingId) => {
-      try {
-        const result = await getInvestigationMessages(findingId);
-        return result.messages || [];
-      } catch {
-        return [];
-      }
-    },
+  // The thread is read again only when its run changes, so a finished thread
+  // keeps its rows, and any expanded tool output, across re-reads of the run.
+  const thread = createMemo(
+    () => ({ findingId: props.findingId, sessionId: props.sessionId ?? '' }),
+    undefined,
+    { equals: (a, b) => a.findingId === b.findingId && a.sessionId === b.sessionId },
   );
+  // As in InvestigationSection, reads stay out of the app's route Suspense
+  // boundary, whose fallback replaces the page and loses the reader's place.
+  // The open thread is no longer remounted by findings refreshes, so it reads
+  // itself again every 5s while its run is live, and 30s after a failed read.
+  const messagesQuery = createNonSuspendingQuery<
+    ChatMessage[],
+    { findingId: string; sessionId: string }
+  >({
+    source: thread,
+    cacheKey: ({ findingId, sessionId }) =>
+      `patrol-investigation-messages:${findingId}:${sessionId}`,
+    retainPreviousValueOnSourceChange: false,
+    fetcher: async ({ findingId }): Promise<ChatMessage[]> => {
+      const read = await withAPIErrorStatusNull(getInvestigationMessages(findingId), 404);
+      // Read after the await: outside the query's source effect, so the
+      // thread on screen is not tracked as a reason to read again.
+      return reuseIdenticalMessages(messagesQuery.value(), read?.messages || []);
+    },
+    initialValue: [],
+    pollMs: (): number | undefined =>
+      props.live ? LIVE_THREAD_POLL_MS : messagesQuery.error() ? FAILED_THREAD_RETRY_MS : undefined,
+  });
+  // A run that finishes between two live reads gets one more, so the thread
+  // ends with the run's last messages.
+  createEffect(
+    on(
+      () => Boolean(props.live),
+      (live, wasLive) => {
+        if (wasLive && !live) void messagesQuery.refetch({ background: true });
+      },
+    ),
+  );
+  const messages = messagesQuery.value;
+  const messagesState = createMemo(() =>
+    getInvestigationMessagesState(!messagesQuery.resolvedOnce(), messages().length > 0),
+  );
+  // The thread stays mounted across refreshes, so its ages re-read on each
+  // tick of the shared clock to keep moving.
+  const now = useRelativeTimeNow();
+  const formatAge = (timestamp: string) => {
+    now();
+    return formatTimestamp(timestamp);
+  };
 
   return (
     <div class="mt-2">
-      <Show
-        when={
-          !getInvestigationMessagesState(messages.loading, !!messages()?.length).empty &&
-          getInvestigationMessagesState(messages.loading, !!messages()?.length).text
-        }
-      >
+      <Show when={!messagesState().empty && messagesState().text}>
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <LoadingSpinner size="sm" />
-          {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
+          {messagesState().text}
         </div>
       </Show>
 
-      <Show when={getInvestigationMessagesState(messages.loading, !!messages()?.length).empty}>
-        <p class="text-xs text-muted py-1">
-          {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
-        </p>
+      <Show when={messagesState().empty}>
+        <p class="text-xs text-muted py-1">{messagesState().text}</p>
       </Show>
 
-      <Show when={!messages.loading && messages() && messages()!.length > 0}>
+      <Show when={messages().length > 0}>
         <div class="space-y-2 max-h-80 overflow-y-auto rounded-sm border border-border p-2 bg-surface-alt">
           <For each={messages()}>
             {(msg: ChatMessage) => {
@@ -171,7 +224,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       </div>
                     </Show>
 
-                    <div class="text-[10px] text-muted mt-1">{formatTimestamp(msg.timestamp)}</div>
+                    <div class="text-[10px] text-muted mt-1">{formatAge(msg.timestamp)}</div>
                   </div>
                 </div>
               );

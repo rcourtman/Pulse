@@ -7,9 +7,10 @@
  */
 
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
-import { Component, For, Show, createMemo, createResource } from 'solid-js';
-import { AIAPI } from '@/api/ai';
+import { Component, For, Show, createMemo } from 'solid-js';
+import { AIAPI, type InvestigationSession } from '@/api/ai';
 import { ButtonLink } from '@/components/shared/Button';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { buildActionReviewPath } from '@/features/actions/actionRouting';
@@ -33,6 +34,8 @@ const FIX_RELATED_OUTCOMES = new Set([
 ]);
 
 const BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
+
+const ACTION_REVALIDATE_MS = 30_000;
 
 function statePresentation(state: ActionAuditState): {
   label: string;
@@ -79,21 +82,27 @@ function capabilityLabel(value: string): string {
 }
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
-  const [investigation] = createResource(
-    () => ({
-      findingId: props.findingId,
-      outcome: props.investigationOutcome,
-      hasAction: props.hasAction,
-    }),
-    async ({ findingId, outcome, hasAction }) => {
-      if (!hasAction && (!outcome || !FIX_RELATED_OUTCOMES.has(outcome))) return null;
-      try {
-        return await AIAPI.getInvestigation(findingId);
-      } catch {
-        return null;
-      }
-    },
+  const shouldShow = createMemo(() =>
+    Boolean(
+      props.hasAction ||
+      (props.investigationOutcome && FIX_RELATED_OUTCOMES.has(props.investigationOutcome)),
+    ),
   );
+  // As in InvestigationSection, reads stay out of the app's route Suspense
+  // boundary, whose fallback replaces the page and loses the reader's place,
+  // and the mounted review re-reads its action on the cadence at which
+  // findings refreshes used to remount it. A finding without an investigation
+  // reads null; any other failure keeps the last answer for the next read to
+  // replace.
+  const investigationQuery = createNonSuspendingQuery<InvestigationSession | null, string>({
+    source: () => (shouldShow() ? props.findingId : null),
+    cacheKey: (findingId) => `patrol-action-investigation:${findingId}`,
+    retainPreviousValueOnSourceChange: false,
+    fetcher: (findingId) => AIAPI.getInvestigation(findingId),
+    initialValue: null,
+    pollMs: ACTION_REVALIDATE_MS,
+  });
+  const investigation = investigationQuery.value;
 
   const action = createMemo<PatrolActionReference | null>(() => investigation()?.action ?? null);
   const verificationStatus = createMemo(() => {
@@ -108,18 +117,11 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
         return 'unknown';
     }
   });
-  const shouldShow = createMemo(() =>
-    Boolean(
-      props.hasAction ||
-      (props.investigationOutcome && FIX_RELATED_OUTCOMES.has(props.investigationOutcome)),
-    ),
-  );
-
   return (
     <Show when={shouldShow()}>
       <div class="mt-3 border-t border-border-subtle pt-3">
         <Show
-          when={!investigation.loading}
+          when={investigationQuery.resolvedOnce()}
           fallback={
             <div class="flex items-center gap-2 text-sm text-muted">
               <LoadingSpinner size="sm" />

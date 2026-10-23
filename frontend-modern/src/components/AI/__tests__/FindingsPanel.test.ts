@@ -48,6 +48,7 @@ import {
   getInvestigationStatusBadgeTone,
   getInvestigationConfidenceBadgeTone,
   doesFindingNeedAttention,
+  reuseIdenticalPatrolFindingDisplayGroups,
 } from '@/utils/aiFindingPresentation';
 import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
 
@@ -1479,6 +1480,45 @@ describe('aiFindingPresentation', () => {
   });
 
   describe('Patrol finding display groups', () => {
+    it('keeps a group across rebuilds while its findings are the same objects', () => {
+      const usage = {
+        id: 'usage',
+        resourceId: 'storage:tower-array',
+        resourceName: 'Tower Array',
+        resourceType: 'storage',
+        title: 'High usage',
+      };
+      const parity = { ...usage, id: 'parity', title: 'No parity protection' };
+      const provider = {
+        id: 'provider',
+        resourceId: 'ai-service',
+        resourceName: 'Pulse Patrol service',
+        resourceType: 'service',
+        title: 'Provider connection issue',
+      };
+      const first = buildPatrolFindingDisplayGroups([usage, parity, provider]);
+
+      // Rows are keyed by group, so a refresh that changed only the provider
+      // finding leaves the storage group, and its rows, as they were.
+      const changedProvider = { ...provider, title: 'Provider rejected the API key' };
+      const second = reuseIdenticalPatrolFindingDisplayGroups(
+        first,
+        buildPatrolFindingDisplayGroups([usage, parity, changedProvider]),
+      );
+      expect(second[0]).toBe(first[0]);
+      expect(second[1]).not.toBe(first[1]);
+      expect(second[1].primaryFinding).toBe(changedProvider);
+
+      // A group whose members changed is rebuilt.
+      const third = reuseIdenticalPatrolFindingDisplayGroups(
+        second,
+        buildPatrolFindingDisplayGroups([usage, changedProvider]),
+      );
+      expect(third[0]).not.toBe(second[0]);
+      expect(third[0].findings).toEqual([usage]);
+      expect(third[1]).toBe(second[1]);
+    });
+
     it('groups findings with the same resource identity while preserving sorted order', () => {
       const groups = buildPatrolFindingDisplayGroups([
         {
