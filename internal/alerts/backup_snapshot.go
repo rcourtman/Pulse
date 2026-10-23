@@ -362,16 +362,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		if instanceName != "" && snapshot.Instance != "" && snapshot.Instance != instanceName {
 			continue
 		}
-		if snapshot.Time.IsZero() {
-			continue
-		}
-
-		ageHours := now.Sub(snapshot.Time).Hours()
-		if ageHours < 0 {
-			continue
-		}
-		ageDays := ageHours / 24
-
 		const gib = 1024.0 * 1024 * 1024
 		sizeGiB := 0.0
 		if snapshot.SizeBytes > 0 {
@@ -421,6 +411,19 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		if !currentSnapshotCfg.Enabled {
 			continue
 		}
+
+		// The listing still contains this snapshot. An unusable creation time
+		// is not evidence of deletion or recovery: keep the last trusted
+		// occurrence unchanged, without refreshing its evidence or age. Do
+		// this after policy resolution so exclusions and disablement still win.
+		// Proxmox's absent snaptime arrives as Unix epoch, not Go's zero time.
+		if snapshot.Time.IsZero() || snapshot.Time.Unix() <= 0 || snapshot.Time.After(now) {
+			validAlerts[buildCanonicalStateID(resourceID, resourceID+"/snapshot:"+snapshot.ID)] = struct{}{}
+			continue
+		}
+
+		ageHours := now.Sub(snapshot.Time).Hours()
+		ageDays := ageHours / 24
 
 		var ageLevel AlertLevel
 		var ageThreshold int
