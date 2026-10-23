@@ -163,6 +163,29 @@ describe('InvestigationSection', () => {
     expect(screen.getByRole('button', { name: 'Re-investigate' })).toBeInTheDocument();
   });
 
+  it('does not offer another run while a planned fix is queued', async () => {
+    getInvestigationMock.mockResolvedValue({
+      id: 'inv-queued',
+      finding_id: 'finding-queued',
+      session_id: 'session-queued',
+      status: 'failed',
+      outcome: 'fix_queued',
+      started_at: '2026-10-23T10:00:00.000Z',
+      turn_count: 6,
+      error: 'The provider stopped responding.',
+    } satisfies Investigation);
+
+    render(() => <InvestigationSection findingId="finding-queued" investigationStatus="failed" />);
+
+    // The run failed after planning a fix; the fix is still waiting for approval.
+    await screen.findByText(getInvestigationOutcomeLabel('fix_queued'));
+    expect(screen.queryByRole('button', { name: 'Re-investigate' })).not.toBeInTheDocument();
+    // The run's note is information beside the queued fix, not an alarm.
+    const noteBox = screen.getByText('The provider stopped responding.');
+    expect(noteBox.className).toContain('text-muted');
+    expect(noteBox.className).not.toContain('bg-red-50');
+  });
+
   it('keeps a failed run error in the error style', async () => {
     getInvestigationMock.mockResolvedValue({
       id: 'inv-failed',
