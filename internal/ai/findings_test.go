@@ -2443,3 +2443,43 @@ func TestFindingsStore_OperatorStateProjectionFor_RejectsEmptyResourceID(t *test
 		t.Error("expected false on empty resource id")
 	}
 }
+
+func newEligibleInvestigationFinding(status InvestigationStatus, outcome InvestigationOutcome, lastInvestigated time.Time) *Finding {
+	return &Finding{
+		ID:                    "eligible-" + string(outcome),
+		Severity:              FindingSeverityWarning,
+		InvestigationStatus:   string(status),
+		InvestigationOutcome:  string(outcome),
+		InvestigationAttempts: 1,
+		LastInvestigatedAt:    &lastInvestigated,
+	}
+}
+
+func TestInterruptedAndUnclassifiedInvestigationsStayEligible(t *testing.T) {
+	now := time.Now()
+
+	interrupted := newEligibleInvestigationFinding(InvestigationStatusFailed, InvestigationOutcomeInterrupted, now)
+	if !interrupted.ShouldInvestigate("approval") || !interrupted.CanRetryInvestigation() {
+		t.Fatal("a run cut short by a restart must be retried at the next scheduled check")
+	}
+	if got := deriveLoopState(interrupted); got != FindingLoopStateDetected {
+		t.Fatalf("interrupted loop state = %q, want %q", got, FindingLoopStateDetected)
+	}
+
+	unclassified := newEligibleInvestigationFinding(InvestigationStatusCompleted, InvestigationOutcomeUnclassified, now)
+	if got := deriveLoopState(unclassified); got != FindingLoopStateNeedsAttention {
+		t.Fatalf("unclassified loop state = %q, want %q", got, FindingLoopStateNeedsAttention)
+	}
+	if unclassified.ShouldInvestigate("approval") {
+		t.Fatal("an unclassified run must still respect the normal cooldown")
+	}
+	unclassified = newEligibleInvestigationFinding(InvestigationStatusCompleted, InvestigationOutcomeUnclassified, now.Add(-2*time.Hour))
+	if !unclassified.ShouldInvestigate("approval") || !unclassified.CanRetryInvestigation() {
+		t.Fatal("an unreadable conclusion must not become terminal the way needs_attention is")
+	}
+
+	needsAttention := newEligibleInvestigationFinding(InvestigationStatusCompleted, InvestigationOutcomeNeedsAttention, now.Add(-2*time.Hour))
+	if needsAttention.ShouldInvestigate("approval") {
+		t.Fatal("a real needs_attention conclusion stays terminal")
+	}
+}

@@ -49,4 +49,10 @@ const (
 	// model choose an action target from evidence instead of pinning
 	// remediation to the finding's initial resource.
 	PatrolActionCapabilitiesToolName = "patrol_action_capabilities"
+	// PatrolConcludeInvestigationToolName is the investigation-only,
+	// side-effect-free conclusion capture. It records one typed zero-action
+	// conclusion (resolved, cannot_fix or needs_attention) in the
+	// request-local capture sink so the orchestrator never has to infer the
+	// outcome from prose. It grants no planning, approval or execution.
+	PatrolConcludeInvestigationToolName = "patrol_conclude_investigation"
 )

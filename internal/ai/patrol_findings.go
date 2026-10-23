@@ -1551,46 +1551,154 @@ func normalizeFindingKey(key string) string {
 	return normalized
 }
 
-// recoverStuckInvestigations detects findings stuck in "running" state for longer than
-// the investigation timeout and resets them to "failed/timed_out" so they can be retried.
-// This handles the case where an investigation goroutine panics or is killed without
-// properly updating the finding status.
+// investigationRunGrace covers work after the orchestrator's own deadline,
+// such as recording the failure, before Patrol treats a run as abandoned.
+const investigationRunGrace = 5 * time.Minute
+
+// investigationRunCeiling is the longest one investigation may legitimately
+// run: the effective configured timeout plus grace.
+func (p *PatrolService) investigationRunCeiling() time.Duration {
+	timeout := aicontracts.DefaultInvestigationConfig().Timeout
+	if p.aiService != nil {
+		if cfg := p.aiService.GetConfig(); cfg != nil {
+			timeout = cfg.GetPatrolInvestigationTimeout()
+		}
+	}
+	return timeout + investigationRunGrace
+}
+
+// recoverStuckInvestigations releases findings left in "running" by a run that
+// is no longer live, so they can be investigated again. This handles an
+// investigation goroutine that panicked or hung, and a run cut short by a
+// restart before it could update the finding.
 func (p *PatrolService) recoverStuckInvestigations() {
 	if p.findings == nil {
 		return
 	}
-	const stuckThreshold = 15 * time.Minute // investigation timeout is 10min; allow 5min grace
+	ceiling := p.investigationRunCeiling()
+	orchestrator := p.GetInvestigationOrchestrator()
+	now := time.Now()
 	active := p.findings.GetActive(FindingSeverityWarning)
 	recovered := 0
 	for _, f := range active {
 		if f.InvestigationStatus != string(InvestigationStatusRunning) {
 			continue
 		}
-		if f.LastInvestigatedAt == nil {
+		result, stuck := stuckInvestigationResult(f, orchestrator, ceiling, now)
+		if !stuck || !p.findings.RecoverStuckInvestigation(f.ID, f.InvestigationSessionID, result.runStartedAt, result.status, result.outcome, now) {
 			continue
 		}
-		if time.Since(*f.LastInvestigatedAt) < stuckThreshold {
-			continue
-		}
-		// This finding has been "running" for too long — reset it
-		p.findings.UpdateInvestigation(
-			f.ID,
-			f.InvestigationSessionID,
-			string(InvestigationStatusFailed),
-			string(InvestigationOutcomeTimedOut),
-			f.LastInvestigatedAt,
-			f.InvestigationAttempts,
-		)
 		recovered++
 		log.Warn().
 			Str("finding_id", f.ID).
 			Str("resource", f.ResourceName).
-			Time("last_investigated", *f.LastInvestigatedAt).
-			Msg("AI Patrol: Recovered stuck investigation (exceeded timeout)")
+			Str("outcome", string(result.outcome)).
+			Msg("AI Patrol: Recovered stuck investigation")
 	}
 	if recovered > 0 {
 		log.Info().Int("recovered", recovered).
 			Msg("AI Patrol: Recovered stuck investigations")
+	}
+}
+
+// stuckInvestigation is how to close a run that is no longer live.
+// runStartedAt is the start of the run's session, zero when the orchestrator
+// holds none, so the store can check the run belongs to the finding's current
+// occurrence before it applies the session's result.
+type stuckInvestigation struct {
+	status       InvestigationStatus
+	outcome      InvestigationOutcome
+	runStartedAt time.Time
+}
+
+// stuckInvestigationResult reports whether a finding marked as running has a
+// run that is no longer live, and how to close it. The orchestrator's session
+// for that run decides liveness and, once the run is closed, its result.
+// Restarts are recorded as interrupted rather than timed out, but the run
+// still spends its attempt: a run that crashes Pulse must not retry forever.
+func stuckInvestigationResult(f *Finding, orchestrator InvestigationOrchestrator, ceiling time.Duration, now time.Time) (stuckInvestigation, bool) {
+	if orchestrator == nil {
+		// No session to consult: measure from the last recorded investigation.
+		if f.LastInvestigatedAt == nil || now.Sub(*f.LastInvestigatedAt) < ceiling {
+			return stuckInvestigation{}, false
+		}
+		return stuckInvestigation{status: InvestigationStatusFailed, outcome: InvestigationOutcomeTimedOut}, true
+	}
+	session, known := recordedInvestigationSession(orchestrator, f)
+	if !known {
+		return stuckInvestigation{}, false
+	}
+	if session == nil {
+		// The orchestrator records its session before it marks the finding as
+		// running, so a run it holds no record of ended with an earlier process.
+		return stuckInvestigation{status: InvestigationStatusFailed, outcome: InvestigationOutcomeInterrupted}, true
+	}
+	closed := stuckInvestigation{status: InvestigationStatusFailed, outcome: InvestigationOutcomeTimedOut, runStartedAt: session.StartedAt}
+	switch session.Status {
+	case aicontracts.InvestigationStatusPending, aicontracts.InvestigationStatusRunning:
+		// A live run keeps the timeout it started with, so a timeout lowered
+		// since then does not cut it short.
+		limit := session.StartedAt.Add(ceiling)
+		if session.Deadline != nil {
+			limit = session.Deadline.Add(investigationRunGrace)
+		}
+		if now.Before(limit) {
+			return stuckInvestigation{}, false
+		}
+		return closed, true
+	}
+	if session.Outcome == aicontracts.OutcomeInterrupted {
+		// Closed when the orchestrator restarted, or cancelled by shutdown.
+		closed.outcome = InvestigationOutcomeInterrupted
+		return closed, true
+	}
+	// The orchestrator closed the run without updating the finding. Its own
+	// update follows the close at once, so give it time to land first.
+	closedAt := session.StartedAt
+	if session.CompletedAt != nil {
+		closedAt = *session.CompletedAt
+	}
+	if now.Sub(closedAt) < investigationRunGrace {
+		return stuckInvestigation{}, false
+	}
+	if session.Outcome != "" {
+		// The session holds the run's result; the finding never received it.
+		// Without one the run closed with no result, such as past its limit.
+		closed.status = InvestigationStatus(session.Status)
+		closed.outcome = InvestigationOutcome(session.Outcome)
+	}
+	return closed, true
+}
+
+// investigationStoreProvider is implemented by orchestrators that expose their
+// session store, which holds every recorded run of a finding.
+type investigationStoreProvider interface {
+	GetStore() aicontracts.InvestigationStore
+}
+
+// recordedInvestigationSession returns the orchestrator's session for the run
+// a finding names, or nil when the orchestrator holds no record of it. known
+// is false when the orchestrator cannot tell: it does not expose its store,
+// and a different run is the finding's latest.
+func recordedInvestigationSession(orchestrator InvestigationOrchestrator, f *Finding) (session *InvestigationSession, known bool) {
+	if provider, ok := orchestrator.(investigationStoreProvider); ok {
+		if store := provider.GetStore(); store != nil {
+			for _, recorded := range store.GetByFinding(f.ID) {
+				if recorded != nil && recorded.SessionID == f.InvestigationSessionID {
+					return recorded, true
+				}
+			}
+			return nil, true
+		}
+	}
+	latest := orchestrator.GetInvestigationByFinding(f.ID)
+	switch {
+	case latest == nil:
+		return nil, true
+	case latest.SessionID == f.InvestigationSessionID:
+		return latest, true
+	default:
+		return nil, false
 	}
 }
 
@@ -1767,7 +1875,10 @@ func (p *PatrolService) maybeInvestigateFinding(f *Finding) bool {
 		}
 		currentAutonomy := aiService.GetEffectivePatrolAutonomyLevel()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		// The orchestrator enforces the configured investigation timeout; this
+		// outer deadline is a safety net, so it follows that timeout rather than
+		// cutting longer configured or subscription-agent runs short.
+		ctx, cancel := context.WithTimeout(context.Background(), currentCfg.GetPatrolInvestigationTimeout()+investigationRunGrace)
 		defer cancel()
 		if err := orchestrator.InvestigateFinding(ctx, invFinding, currentAutonomy); err != nil {
 			log.Error().

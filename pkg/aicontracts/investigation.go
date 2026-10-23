@@ -46,7 +46,25 @@ const (
 	OutcomeNeedsAttention         InvestigationOutcome = "needs_attention"
 	OutcomeCannotFix              InvestigationOutcome = "cannot_fix"
 	OutcomeTimedOut               InvestigationOutcome = "timed_out"
+	// OutcomeUnclassified records a completed run whose conclusion could
+	// not be read: it recorded no structured conclusion and its summary has
+	// no recognisable conclusion marker. It is not a request for human
+	// intervention, so the finding stays eligible for another run.
+	OutcomeUnclassified InvestigationOutcome = "unclassified"
+	// OutcomeInterrupted records a run cancelled before its deadline, for
+	// example by a Pulse restart or shutdown. It is neither a timeout nor a
+	// conclusion, so the finding stays eligible for another run.
+	OutcomeInterrupted InvestigationOutcome = "interrupted"
 )
+
+// InvestigationConclusion is the structured zero-action conclusion a Patrol
+// investigation records with patrol_conclude_investigation. Outcome is
+// OutcomeResolved, OutcomeCannotFix or OutcomeNeedsAttention. Remediation
+// still travels only as a typed action proposal.
+type InvestigationConclusion struct {
+	Outcome InvestigationOutcome `json:"outcome"`
+	Reason  string               `json:"reason"`
+}
 
 // ErrVerificationUnknown indicates the verifier could not conclusively determine
 // whether a fix resolved the underlying issue. Callers may treat this as a
@@ -187,6 +205,10 @@ type InvestigationSession struct {
 	EvidenceIDs    []string         `json:"evidence_ids"`
 	Summary        string           `json:"summary,omitempty"`
 	Error          string           `json:"error,omitempty"`
+	// Deadline is when this run's own execution timeout expires. A run keeps
+	// the timeout it started with, so recovery measures a live run against
+	// this deadline rather than the timeout configured now.
+	Deadline *time.Time `json:"deadline,omitempty"`
 }
 
 func EmptyInvestigationSession() InvestigationSession {

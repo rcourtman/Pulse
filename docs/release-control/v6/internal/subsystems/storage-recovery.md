@@ -7167,3 +7167,10 @@ and carries no recovery or storage meaning. The same change adds the read-only
 `settingsCapabilities.patrolRun` security-status field in `internal/api`, a
 projection of the Patrol run route's admin gate that opens no storage or
 recovery path.
+
+The `internal/api` changes for typed Patrol investigation conclusions open no
+storage, backup or recovery path. They hand the run's typed conclusion to the
+private orchestrator, make investigation concurrency and timeout follow the
+Patrol provider, and label the `unclassified` and `interrupted` outcomes in the
+digest email. Recovery evidence, restore rules and storage capabilities are
+unchanged, and Patrol gains no storage remediation capability.

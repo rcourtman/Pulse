@@ -179,6 +179,11 @@ const (
 	InvestigationCooldownHours           = 1   // Hours before re-investigating same finding
 )
 
+// DefaultPatrolSubscriptionInvestigationTimeoutSec is the default when Patrol
+// runs on a subscription agent CLI, which starts a new process and resends
+// the conversation on every turn (25 minutes).
+const DefaultPatrolSubscriptionInvestigationTimeoutSec = 1500
+
 const (
 	// DefaultAIModelQuickstart is retained only to recognize and retire legacy
 	// Pulse-hosted model aliases from pre-GA config.
@@ -1093,9 +1098,32 @@ func (c *AIConfig) GetPatrolInvestigationBudget() int {
 	return c.PatrolInvestigationBudget
 }
 
-// GetPatrolInvestigationTimeout returns the investigation timeout as a duration
+// PatrolUsesSubscriptionAgent reports whether Patrol runs on a local
+// subscription agent CLI (Codex or Claude). Such an agent serves one call at
+// a time for all of Patrol and starts a new process for every turn.
+func (c *AIConfig) PatrolUsesSubscriptionAgent() bool {
+	provider, _ := ParseModelString(c.GetPatrolModel())
+	return provider == AIProviderCodexSubscription || provider == AIProviderClaudeSubscription
+}
+
+// GetPatrolInvestigationConcurrency returns how many investigations may run
+// at once. A subscription agent serves one call at a time, so parallel
+// investigations would only queue against each other's deadlines.
+func (c *AIConfig) GetPatrolInvestigationConcurrency() int {
+	if c.PatrolUsesSubscriptionAgent() {
+		return 1
+	}
+	return MaxConcurrentInvestigations
+}
+
+// GetPatrolInvestigationTimeout returns the investigation timeout as a
+// duration. Without an explicit setting, a subscription agent gets the longer
+// default because each of its turns takes minutes rather than seconds.
 func (c *AIConfig) GetPatrolInvestigationTimeout() time.Duration {
 	if c.PatrolInvestigationTimeoutSec <= 0 {
+		if c.PatrolUsesSubscriptionAgent() {
+			return time.Duration(DefaultPatrolSubscriptionInvestigationTimeoutSec) * time.Second
+		}
 		return time.Duration(DefaultPatrolInvestigationTimeoutSec) * time.Second
 	}
 	// Clamp to reasonable range (60-1800 seconds / 30 minutes)

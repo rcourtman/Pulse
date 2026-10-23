@@ -85,6 +85,9 @@ type ProposalCapture struct {
 	catalog  ProposalCatalog
 	planner  ProposalPlanner
 	proposal *CapturedProposal
+	// conclusion is the run's one typed zero-action conclusion, recorded
+	// by patrol_conclude_investigation (see tools_conclude.go).
+	conclusion *CapturedConclusion
 }
 
 func (i ProposalIdentity) clone() ProposalIdentity {

@@ -253,6 +253,15 @@ func PatrolInvestigationOutcomeBucket(outcome, status string) string {
 		return PatrolInvestigationOutcomeCannotFix
 	case "timed_out":
 		return PatrolInvestigationOutcomeTimedOut
+	case "unclassified":
+		// A finished run whose conclusion could not be read. Every other
+		// outcome the orchestrator writes has its own bucket, so "other"
+		// effectively isolates these runs.
+		return PatrolInvestigationOutcomeOther
+	case "interrupted":
+		// A restart cut the run short and the finding awaits another run,
+		// so it is not yet concluded.
+		return PatrolInvestigationOutcomeInProgress
 	case "":
 		switch strings.ToLower(strings.TrimSpace(status)) {
 		case "pending", "running":
