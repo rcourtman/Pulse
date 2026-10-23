@@ -10,6 +10,8 @@ dev-docs/
 !docs/**
 !SECURITY.md
 !TERMS.md
+!ARCHITECTURE.md
+!CONTRIBUTING.md
 
 # Binaries and build artifacts
 pulse

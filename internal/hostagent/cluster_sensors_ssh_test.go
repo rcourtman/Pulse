@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,11 @@ import (
 // All key bytes are generated here. Production root paths are translated by the
 // collector double; no real root key, pvesh, customer peer or host sshd is used.
 func TestClusterPeerSSHNative(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Proxmox cluster peers are Linux hosts; a Windows agent never runs
+		// the peer collector, and OpenSSH there refuses these key files.
+		t.Skip("cluster peer sensors run only on Proxmox (Linux) hosts")
+	}
 	sshPath, err := exec.LookPath("ssh")
 	if err != nil {
 		t.Fatal("native peer proof needs the OpenSSH client:", err)

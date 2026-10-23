@@ -6265,7 +6265,8 @@ if [[ -n "$ACTION_TOKEN_FILE_PATH" ]]; then
     if [[ ! -f "$ACTION_TOKEN_FILE_PATH" || -L "$ACTION_TOKEN_FILE_PATH" ]]; then
         fail "Action token file must be a regular non-symlink file: ${ACTION_TOKEN_FILE_PATH}" "$EXIT_MISSING_ARGS"
     fi
-    ACTION_TOKEN_MODE=$(stat -c '%a' "$ACTION_TOKEN_FILE_PATH" 2>/dev/null || true)
+    # GNU and BSD stat differ; a GNU-only read refused every action token on macOS.
+    ACTION_TOKEN_MODE=$(portable_path_mode "$ACTION_TOKEN_FILE_PATH" || true)
     if [[ ! "$ACTION_TOKEN_MODE" =~ ^[0-7]{3,4}$ ]] || (( (8#$ACTION_TOKEN_MODE & 8#077) != 0 )); then
         fail "Action token file must be inaccessible to group and other users (mode 0600 or stricter)" "$EXIT_MISSING_ARGS"
     fi

@@ -2759,13 +2759,37 @@ func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 	}
 
 	dockerfile := string(dockerfileBytes)
-	required := []string{
-		`COPY docs/ /app/docs/`,
-		`COPY SECURITY.md TERMS.md /app/`,
+	if !strings.Contains(dockerfile, `COPY docs/ /app/docs/`) {
+		t.Fatal("Dockerfile missing shipped-doc build input: COPY docs/ /app/docs/")
 	}
-	for _, needle := range required {
-		if !strings.Contains(dockerfile, needle) {
-			t.Fatalf("Dockerfile missing shipped-doc build input: %s", needle)
+
+	// The docs sync declares which root documents it ships. Derive the build
+	// inputs from that list so the image cannot drift from it again.
+	syncBytes, err := os.ReadFile(repoFile("frontend-modern/scripts/sync-public-docs.mjs"))
+	if err != nil {
+		t.Fatalf("read docs sync: %v", err)
+	}
+	declared := regexp.MustCompile(`rootSourcedDocs = new Set\(\[([^\]]*)\]\)`).FindSubmatch(syncBytes)
+	if declared == nil {
+		t.Fatal("docs sync no longer declares rootSourcedDocs")
+	}
+	var rootDocs []string
+	for _, quoted := range regexp.MustCompile(`'([^']+)'`).FindAllSubmatch(declared[1], -1) {
+		rootDocs = append(rootDocs, string(quoted[1]))
+	}
+	if len(rootDocs) == 0 {
+		t.Fatal("docs sync declares no root documents")
+	}
+	copyLine := regexp.MustCompile(`(?m)^COPY ([^\n]+) /app/$`).FindAllStringSubmatch(dockerfile, -1)
+	copied := map[string]bool{}
+	for _, line := range copyLine {
+		for _, name := range strings.Fields(line[1]) {
+			copied[name] = true
+		}
+	}
+	for _, name := range rootDocs {
+		if !copied[name] {
+			t.Fatalf("Dockerfile frontend stage does not copy %s, which the docs sync ships", name)
 		}
 	}
 
@@ -2778,8 +2802,9 @@ func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 	requiredAllowlist := []string{
 		`!docs/`,
 		`!docs/**`,
-		`!SECURITY.md`,
-		`!TERMS.md`,
+	}
+	for _, name := range rootDocs {
+		requiredAllowlist = append(requiredAllowlist, "!"+name)
 	}
 	for _, needle := range requiredAllowlist {
 		if !strings.Contains(dockerignore, needle) {
