@@ -1,8 +1,6 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-
-import { aiChatStore } from '@/stores/aiChat';
 import { AlertHistoryMobileList } from '../AlertHistoryMobileList';
 import type { AlertHistoryState } from '../useAlertHistoryState';
 
@@ -248,15 +246,9 @@ describe('AlertHistoryMobileList changing history', () => {
       if (kind === 'timeline') await state.toggleIncidentTimeline('alert-1-row', 'alert-1');
       else await state.openResourceIncidentPanel('node-1', 'pve-production-01', 'alert-1-row');
       const mounted = render(() => <AlertHistoryMobileList state={state} active={cardsShown} />);
-      const assistantOpen = vi.spyOn(aiChatStore, 'isOpen', 'get').mockReturnValue(false);
       try {
         expect(screen.queryByRole('dialog')).toBeNull();
         expect(screen.getByRole('button', { name: /^Timeline for / })).toBeVisible();
-        assistantOpen.mockReturnValue(true);
-        setCardsShown(true);
-        expect(screen.queryByRole('dialog')).toBeNull();
-        setCardsShown(false);
-        assistantOpen.mockReturnValue(false);
         setCardsShown(true);
         expect(
           screen.getByRole('dialog', {
@@ -287,7 +279,6 @@ describe('AlertHistoryMobileList changing history', () => {
             : state.resourceIncidentPanel() !== null,
         ).toBe(false);
       } finally {
-        assistantOpen.mockRestore();
         mounted.unmount();
       }
     },
@@ -355,47 +346,5 @@ describe('AlertHistoryMobileList changing history', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(closeResourceIncidentPanel).toHaveBeenCalledOnce();
     expect(screen.getByTestId('alert-history-mobile-list')).toHaveFocus();
-  });
-});
-
-describe('history handoff focus ownership', () => {
-  it('leaves focus with Assistant after the source drawer closes', async () => {
-    const { state } = createState();
-    state.incidentTimelines = () =>
-      ({
-        'alert-1-row': {
-          id: 'incident-focus',
-          alertType: 'backup',
-          level: 'warning',
-          openedAt: '2026-09-07T12:00:00Z',
-          resourceId: 'node-1',
-          resourceName: 'Backup',
-          status: 'resolved',
-          events: [],
-        },
-      }) as any;
-    aiChatStore.setEnabled(true);
-    const composer = document.createElement('textarea');
-    document.body.append(composer);
-    const open = vi.spyOn(aiChatStore, 'open').mockImplementation(() => composer.focus());
-    try {
-      render(() => <AlertHistoryMobileList state={state} />);
-      await fireEvent.click(screen.getByRole('button', { name: /^Timeline for / }));
-      await fireEvent.click(
-        screen.getByRole('button', {
-          name: 'Discuss incident incident-focus with Pulse Assistant',
-        }),
-      );
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      );
-      expect(screen.queryByRole('dialog')).toBeNull();
-      expect(open).toHaveBeenCalledOnce();
-      expect(composer).toHaveFocus();
-    } finally {
-      open.mockRestore();
-      composer.remove();
-      aiChatStore.setEnabled(false);
-    }
   });
 });

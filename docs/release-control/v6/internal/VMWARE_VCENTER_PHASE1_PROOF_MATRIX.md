@@ -116,20 +116,16 @@ If the automated floor is missing, the manual drill may inform implementation,
 but it must not be used as the sole basis for a support claim.
 
 Current repo-local automated proof already covers part of the read-only
-boundary:
+boundary. The browser chat specs `38-vmware-ai-chat-mentions` and
+`42-vmware-ai-chat-read-recovery` were retired with the Assistant chat window
+on 2026-10-22; the Go proofs below still cover the backend chat path.
 
-1. `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts` proves
-   canonical VMware-backed Assistant mentions stay on shared resource IDs and
-   shared Assistant routes.
-2. `tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts` proves a
-   failed VMware `pulse_read action=logs resource_id=...` path can recover onto
-   shared `pulse_query` behavior without VMware-local routes.
-3. `internal/ai/chat/context_prefetch_additional_test.go` proves VMware-backed
+1. `internal/ai/chat/context_prefetch_additional_test.go` proves VMware-backed
    guest mentions stay read-only in Assistant context summaries.
-4. `internal/ai/chat/service_tooling_test.go` and
+2. `internal/ai/chat/service_tooling_test.go` and
    `internal/ai/tools/control_resource_test.go` prove shared Assistant/tool
    wording stays capability-gated instead of claiming blanket VM control.
-5. `internal/api/route_inventory_test.go` and
+3. `internal/api/route_inventory_test.go` and
    `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
    prove the shipped route and browser surface stay out of direct `ESXi`,
    recovery, and VMware admin-plane territory.
@@ -292,13 +288,13 @@ Pass when:
 3. no control capability or VMware-specific action metadata is exposed as part
    of the VMware phase-1 floor
 
-Current automated coverage:
+Current automated coverage (the browser chat specs `38-vmware-ai-chat-mentions` and
+`42-vmware-ai-chat-read-recovery` were retired with the Assistant chat window
+on 2026-10-22; the Go proofs below still cover the backend chat path):
 
-1. `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts`
-2. `tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts`
-3. `internal/ai/chat/context_prefetch_additional_test.go`
-4. `internal/ai/chat/service_tooling_test.go`
-5. `internal/ai/tools/control_resource_test.go`
+1. `internal/ai/chat/context_prefetch_additional_test.go`
+2. `internal/ai/chat/service_tooling_test.go`
+3. `internal/ai/tools/control_resource_test.go`
 
 ### `VC-7` Exclusion Integrity
 

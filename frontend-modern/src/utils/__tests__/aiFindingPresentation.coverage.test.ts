@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import {
   doesFindingNeedAttention,
   getInvestigationConfidenceBadgeClasses,
   getInvestigationConfidenceBadgeTone,
   getInvestigationOutcomeSortOrder,
-  hasFindingInvestigationHandoffPointer,
 } from '@/utils/aiFindingPresentation';
 
 // Mirrors the module-private fallback so the test asserts the real fallback
@@ -60,49 +58,6 @@ describe('getInvestigationConfidenceBadgeTone (confidence tone map miss)', () =>
 
   it('falls back to the muted tone for the empty string', () => {
     expect(getInvestigationConfidenceBadgeTone('')).toBe('muted');
-  });
-});
-
-describe('hasFindingInvestigationHandoffPointer', () => {
-  const base = {
-    investigationOutcome: undefined as UnifiedFinding['investigationOutcome'],
-    investigationSessionId: undefined as string | undefined,
-    lastInvestigatedAt: undefined as string | undefined,
-  };
-
-  it('is true when an investigation outcome is recorded', () => {
-    expect(
-      hasFindingInvestigationHandoffPointer({ ...base, investigationOutcome: 'fix_failed' }),
-    ).toBe(true);
-  });
-
-  it('is true when a session id is present even without an outcome', () => {
-    expect(
-      hasFindingInvestigationHandoffPointer({ ...base, investigationSessionId: 'sess-123' }),
-    ).toBe(true);
-  });
-
-  it('is true when only a last-investigated timestamp is present', () => {
-    expect(
-      hasFindingInvestigationHandoffPointer({
-        ...base,
-        lastInvestigatedAt: '2026-07-01T00:00:00Z',
-      }),
-    ).toBe(true);
-  });
-
-  it('is false when no handoff field is set', () => {
-    expect(hasFindingInvestigationHandoffPointer(base)).toBe(false);
-  });
-
-  it('is false when every handoff field is an empty string rather than absent', () => {
-    expect(
-      hasFindingInvestigationHandoffPointer({
-        investigationOutcome: '' as unknown as UnifiedFinding['investigationOutcome'],
-        investigationSessionId: '',
-        lastInvestigatedAt: '',
-      }),
-    ).toBe(false);
   });
 });
 

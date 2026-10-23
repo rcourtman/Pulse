@@ -51,7 +51,7 @@ import {
   runtimeCapabilitiesLoaded,
   loadRuntimeCapabilities,
 } from '@/stores/license';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import {
   presentationPolicyHidesOrganizationSurfaces,
@@ -342,7 +342,7 @@ export const useAppRuntimeState = () => {
       syncSessionPresentationPolicy(securityData);
     }
     setSecurityStatus(securityData);
-    aiChatStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true);
+    aiAvailabilityStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true);
   };
 
   // Probes the session against the same auth and scope checks as `/api/state`
@@ -400,6 +400,17 @@ export const useAppRuntimeState = () => {
     }
   };
 
+  // The security status bootstrap read AI availability for the organization
+  // the page started with; when loading settles on another one, re-read it.
+  const activateLoadedOrg = (orgID: string) => {
+    const changed = orgID !== activeOrgID();
+    setSelectedOrgID(orgID);
+    setActiveOrgID(orgID);
+    if (changed) {
+      void aiAvailabilityStore.refreshEnabledFromServer();
+    }
+  };
+
   const loadOrganizations = async () => {
     setOrgsLoading(true);
     try {
@@ -436,8 +447,7 @@ export const useAppRuntimeState = () => {
             displayName: hostedOrgID === 'default' ? 'Default Organization' : hostedOrgID,
           },
         ]);
-        setSelectedOrgID(hostedOrgID);
-        setActiveOrgID(hostedOrgID);
+        activateLoadedOrg(hostedOrgID);
         return;
       }
 
@@ -454,15 +464,13 @@ export const useAppRuntimeState = () => {
         organizationList[0]?.id ||
         'default';
 
-      setSelectedOrgID(selectedOrg);
-      setActiveOrgID(selectedOrg);
+      activateLoadedOrg(selectedOrg);
     } catch (error) {
       logger.warn('Failed to load organizations, falling back to default org', error);
       showToast('error', 'Failed to load organizations. Using default.');
       const fallback = [{ id: 'default', displayName: 'Default Organization' }];
       setOrganizations(fallback);
-      setSelectedOrgID('default');
-      setActiveOrgID('default');
+      activateLoadedOrg('default');
     } finally {
       setOrgsLoading(false);
     }
@@ -486,6 +494,10 @@ export const useAppRuntimeState = () => {
     // new runtime state arrives.
     setPlatformAdmission(null);
     void loadPlatformAdmission();
+    // AI availability is organization-scoped: the new tenant may have a
+    // different provider setup, so Patrol entry points follow its answer.
+    aiAvailabilityStore.clear();
+    void aiAvailabilityStore.refreshEnabledFromServer();
     eventBus.emit('org_switched', target);
 
     try {
@@ -686,7 +698,7 @@ export const useAppRuntimeState = () => {
         } catch (clearError) {
           logger.warn('[App] Failed to clear stored auth after 401', clearError);
         }
-        aiChatStore.setEnabled(false);
+        aiAvailabilityStore.setEnabled(false);
         setHasAuth(false);
         setNeedsAuth(true);
         setIsLoading(false);
@@ -787,7 +799,7 @@ export const useAppRuntimeState = () => {
       } catch (clearError) {
         logger.warn('[App] Failed to clear stored auth after auth check error', clearError);
       }
-      aiChatStore.setEnabled(false);
+      aiAvailabilityStore.setEnabled(false);
       setHasAuth(false);
       setNeedsAuth(true);
     } finally {
@@ -834,7 +846,7 @@ export const useAppRuntimeState = () => {
       // Storage may be unavailable; the demo login page then simply signs in again.
     }
     localStorage.setItem('just_logged_out', 'true');
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
 
     if (wsStore()) {
       setWsStore(null);

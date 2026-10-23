@@ -6,7 +6,8 @@ import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.t
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import { buildPrimaryPlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
-import { aiChatStore } from '@/stores/aiChat';
+import { buildDockerPath } from '@/routing/resourceLinks';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 
 const navigateMock = vi.fn();
 
@@ -50,12 +51,12 @@ describe('CommandPaletteModal', () => {
     cleanup();
     navigateMock.mockReset();
     vi.restoreAllMocks();
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
   });
 
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/overview');
-    aiChatStore.setEnabled(true);
+    aiAvailabilityStore.setEnabled(true);
   });
 
   it('keeps the command palette on shell, runtime, and model owners', () => {
@@ -69,7 +70,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteStateSource).toContain('buildStandalonePath');
     expect(commandPaletteStateSource).toContain('buildProxmoxPath');
     expect(commandPaletteStateSource).toContain('export function useCommandPaletteState');
-    expect(commandPaletteStateSource).toContain('aiChatStore.requestCommand');
+    expect(commandPaletteStateSource).not.toContain('aiChatStore');
 
     // Infrastructure and aggregate workspaces are not command-palette routes;
     // platform/runtime pages own those workflows.
@@ -89,14 +90,7 @@ describe('CommandPaletteModal', () => {
     expect(commandPaletteModelSource).toContain("id: 'nav-truenas'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware'");
     expect(commandPaletteModelSource).toContain("id: 'nav-vmware-networks'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-open'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-help'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-switch-session'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-switch-model'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-provider-settings'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-status'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-undo-last-turn'");
-    expect(commandPaletteModelSource).toContain("id: 'assistant-redo-last-turn'");
+    expect(commandPaletteModelSource).not.toContain("id: 'assistant-");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-infrastructure'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-workloads'");
     expect(commandPaletteModelSource).not.toContain("id: 'nav-storage'");
@@ -112,15 +106,7 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
-    expect(screen.getByText('Ask about Proxmox')).toBeInTheDocument();
-    expect(screen.getByText('Show Assistant commands')).toBeInTheDocument();
-    expect(screen.getByText('New Assistant session')).toBeInTheDocument();
-    expect(screen.getByText('Switch Assistant session')).toBeInTheDocument();
-    expect(screen.getByText('Switch Assistant model')).toBeInTheDocument();
-    expect(screen.getByText('Open Assistant provider settings')).toBeInTheDocument();
-    expect(screen.getByText('Check Assistant status')).toBeInTheDocument();
-    expect(screen.getByText('Undo last Assistant turn')).toBeInTheDocument();
-    expect(screen.getByText('Redo last Assistant turn')).toBeInTheDocument();
+    expect(screen.queryByText('Ask about Proxmox')).not.toBeInTheDocument();
     expect(screen.getByText('Go to Machines')).toBeInTheDocument();
     expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
@@ -140,7 +126,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
 
     const commandLabels = screen.getAllByRole('option').map((button) => button.textContent ?? '');
-    expect(commandLabels.findIndex((label) => label.includes('Ask about Proxmox'))).toBe(0);
+    expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBe(0);
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
       commandLabels.findIndex((label) => label.includes('Go to Machines')),
     );
@@ -148,8 +134,6 @@ describe('CommandPaletteModal', () => {
 
   it('moves the selected command before Enter selection', async () => {
     const onClose = vi.fn();
-    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
     render(() => (
       <CommandPaletteModal
         isOpen={true}
@@ -159,7 +143,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     const input = screen.getByPlaceholderText('Type a command or search...');
-    const firstOption = screen.getByRole('option', { name: /Ask about Proxmox/ });
+    const firstOption = screen.getByRole('option', { name: /Go to Proxmox/ });
     expect(input).toHaveAttribute('role', 'combobox');
     expect(input).toHaveAttribute('aria-autocomplete', 'list');
     expect(input).toHaveAttribute('aria-controls', 'command-palette-results');
@@ -170,7 +154,7 @@ describe('CommandPaletteModal', () => {
 
     await fireEvent.keyDown(input, { key: 'ArrowDown' });
 
-    const secondOption = screen.getByRole('option', { name: /Show Assistant commands/ });
+    const secondOption = screen.getByRole('option', { name: /Go to Docker/ });
     expect(secondOption).toHaveAttribute('aria-selected', 'true');
     expect(input).toHaveFocus();
     expect(input).toHaveAttribute('aria-activedescendant', secondOption.id);
@@ -178,10 +162,7 @@ describe('CommandPaletteModal', () => {
     await fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('help');
-    });
-    expect(openAssistant).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith(buildDockerPath());
   });
 
   it('keeps the active command visible while keyboard focus remains on the combobox', async () => {
@@ -194,7 +175,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     const input = screen.getByRole('combobox', { name: 'Type a command or search...' });
-    const secondOption = screen.getByRole('option', { name: /Show Assistant commands/ });
+    const secondOption = screen.getByRole('option', { name: /Go to Docker/ });
     const scrollIntoView = vi.fn();
     Object.defineProperty(secondOption, 'scrollIntoView', {
       configurable: true,
@@ -228,8 +209,6 @@ describe('CommandPaletteModal', () => {
 
   it('keeps the selected command across command-list recomputes before Enter selection', async () => {
     const onClose = vi.fn();
-    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
     const [visibilityVersion, setVisibilityVersion] = createSignal(0);
     const dynamicPlatformVisibility = () => {
       visibilityVersion();
@@ -246,7 +225,7 @@ describe('CommandPaletteModal', () => {
     const input = screen.getByPlaceholderText('Type a command or search...');
     await fireEvent.keyDown(input, { key: 'ArrowDown' });
 
-    expect(screen.getByRole('option', { name: /Show Assistant commands/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /Go to Docker/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -254,7 +233,7 @@ describe('CommandPaletteModal', () => {
     setVisibilityVersion(1);
 
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: /Show Assistant commands/ })).toHaveAttribute(
+      expect(screen.getByRole('option', { name: /Go to Docker/ })).toHaveAttribute(
         'aria-selected',
         'true',
       );
@@ -263,10 +242,7 @@ describe('CommandPaletteModal', () => {
     await fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('help');
-    });
-    expect(openAssistant).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith(buildDockerPath());
   });
 
   it('wraps command palette keyboard movement', async () => {
@@ -289,7 +265,7 @@ describe('CommandPaletteModal', () => {
 
     await fireEvent.keyDown(input, { key: 'Home' });
 
-    expect(screen.getByRole('option', { name: /Ask about Proxmox/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /Go to Proxmox/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -300,135 +276,6 @@ describe('CommandPaletteModal', () => {
       'aria-selected',
       'true',
     );
-  });
-
-  it('routes Assistant model workflow commands through the Assistant store', async () => {
-    const onClose = vi.fn();
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
-    render(() => (
-      <CommandPaletteModal
-        isOpen={true}
-        onClose={onClose}
-        platformVisibility={platformVisibility}
-      />
-    ));
-
-    await fireEvent.click(screen.getByText('Switch Assistant model'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('models');
-    });
-  });
-
-  it('routes Assistant help workflow commands through the Assistant store', async () => {
-    const onClose = vi.fn();
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
-    render(() => (
-      <CommandPaletteModal
-        isOpen={true}
-        onClose={onClose}
-        platformVisibility={platformVisibility}
-      />
-    ));
-
-    await fireEvent.click(screen.getByText('Show Assistant commands'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('help');
-    });
-  });
-
-  it('routes Assistant status workflow commands through the Assistant store', async () => {
-    const onClose = vi.fn();
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
-    render(() => (
-      <CommandPaletteModal
-        isOpen={true}
-        onClose={onClose}
-        platformVisibility={platformVisibility}
-      />
-    ));
-
-    await fireEvent.click(screen.getByText('Check Assistant status'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('status');
-    });
-  });
-
-  it('routes Assistant provider settings commands through the Assistant store', async () => {
-    const onClose = vi.fn();
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
-    render(() => (
-      <CommandPaletteModal
-        isOpen={true}
-        onClose={onClose}
-        platformVisibility={platformVisibility}
-      />
-    ));
-
-    await fireEvent.click(screen.getByText('Open Assistant provider settings'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('providers');
-    });
-  });
-
-  it('routes Assistant undo workflow commands through the Assistant store', async () => {
-    const onClose = vi.fn();
-    const requestCommand = vi.spyOn(aiChatStore, 'requestCommand').mockImplementation(() => {});
-    render(() => (
-      <CommandPaletteModal
-        isOpen={true}
-        onClose={onClose}
-        platformVisibility={platformVisibility}
-      />
-    ));
-
-    await fireEvent.click(screen.getByText('Undo last Assistant turn'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(requestCommand).toHaveBeenCalledWith('undo');
-    });
-  });
-
-  it('opens Pulse Assistant with current view context after closing the palette', async () => {
-    const onClose = vi.fn();
-    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
-    render(() => (
-      <CommandPaletteModal
-        isOpen={true}
-        onClose={onClose}
-        platformVisibility={platformVisibility}
-      />
-    ));
-
-    await fireEvent.click(screen.getByText('Ask about Proxmox'));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => {
-      expect(openAssistant).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targetType: 'pulse-view',
-          targetId: '/proxmox/overview',
-          context: expect.objectContaining({
-            name: 'Proxmox',
-            route: '/proxmox/overview',
-            surface: 'proxmox',
-          }),
-          briefing: expect.objectContaining({
-            sourceLabel: 'Current view',
-            title: 'Proxmox attached',
-            statusLabel: 'Context only',
-          }),
-        }),
-      );
-    });
   });
 
   it('navigates to the Kubernetes workloads tab', async () => {
@@ -481,8 +328,8 @@ describe('CommandPaletteModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('offers neither Patrol nor Assistant commands while AI is off (#905)', () => {
-    aiChatStore.setEnabled(false);
+  it('does not offer Patrol while AI is off (#905)', () => {
+    aiAvailabilityStore.setEnabled(false);
     render(() => (
       <CommandPaletteModal
         isOpen={true}
@@ -494,7 +341,6 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('Go to Alerts')).toBeInTheDocument();
     expect(screen.getByText('Go to Settings')).toBeInTheDocument();
     expect(screen.queryByText('Go to Patrol')).not.toBeInTheDocument();
-    expect(screen.queryByText('Show Assistant commands')).not.toBeInTheDocument();
   });
 
   it('hides platform commands without supported infrastructure evidence', () => {

@@ -10166,6 +10166,16 @@ facts as a `DetailSectionTable`; the connection id and identity evidence sit
 in a closed Details disclosure. No diagnosis, repair or credential flow
 changes: this is presentation only.
 
+The agent profiles settings panel reads AI availability from
+`frontend-modern/src/stores/aiAvailability.ts` since 2026-10-22, when the
+browser Assistant chat window and its store were retired.
+`useAgentProfilesPanelState.ts` still gates only its AI-backed profile
+suggestions on that session fact; agent enrolment, profile assignment, and
+lifecycle behaviour are unchanged. The same change adds the read-only
+`settingsCapabilities.patrolRun` security-status field in
+`internal/api/security_status_capabilities.go`, a projection of the Patrol run
+route's admin gate; it opens no agent enrolment, command, or lifecycle path.
+
 The Patrol investigation wiring in `internal/api/ai_handlers.go` now passes the
 typed conclusion an investigation records with `patrol_conclude_investigation`
 to the private orchestrator. It also seeds the orchestrator's concurrency and

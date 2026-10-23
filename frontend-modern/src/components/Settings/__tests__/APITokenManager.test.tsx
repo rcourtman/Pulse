@@ -581,9 +581,9 @@ describe('APITokenManager', () => {
 
     fireEvent.click(screen.getByText('Custom scopes'));
     expect(screen.getByText('AI')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Pulse Assistant chat' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'Pulse Mobile chat' })).toHaveAttribute(
       'title',
-      'Use interactive Pulse Assistant sessions, models, and read knowledge.',
+      'Use Pulse Mobile chat sessions, models, and read knowledge.',
     );
     expect(screen.getByRole('button', { name: 'Pulse Intelligence actions' })).toHaveAttribute(
       'title',

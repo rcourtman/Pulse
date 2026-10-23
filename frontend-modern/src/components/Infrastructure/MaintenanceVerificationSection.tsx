@@ -27,11 +27,6 @@ import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
  *   - Mark a report as reviewed (without changing the underlying
  *     status / evidence — those stay immutable)
  *   - Rerun verification now (writes a new -rerun-N report)
- *
- * The "open Assistant with this report context" action is intentionally
- * omitted from this first pass — see Status: missing-actions note at
- * the bottom. The other two actions (mark reviewed, rerun verification)
- * are sufficient for the MVP review loop.
  */
 interface MaintenanceVerificationSectionProps {
   resourceId: string;
@@ -282,14 +277,6 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
           </For>
         </ul>
       </Show>
-
-      {/*
-        MVP omission: "Open Assistant with this report context" is the
-        third action called out in the product brief. Wiring it requires
-        a stable Assistant deep-link contract for report payloads which
-        is not yet implemented — left as a follow-up so the surface
-        does not ship a button that does nothing.
-      */}
     </section>
   );
 };

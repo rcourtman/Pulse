@@ -5,6 +5,7 @@ const [sessionSettingsCapabilities, setSessionSettingsCapabilities] =
   createSignal<SecurityStatusSettingsCapabilities | null>(null);
 const [sessionSettingsCapabilitiesResolved, setSessionSettingsCapabilitiesResolved] =
   createSignal(false);
+const [sessionRequiresAuth, setSessionRequiresAuth] = createSignal(true);
 
 /**
  * Publishes the session's Settings capabilities from `/api/security/status` so
@@ -14,10 +15,11 @@ const [sessionSettingsCapabilitiesResolved, setSessionSettingsCapabilitiesResolv
  * no help to a page deciding whether to link there in the first place.
  */
 export function syncSessionSettingsCapabilities(
-  status?: Pick<SecurityStatus, 'settingsCapabilities'> | null,
+  status?: (Pick<SecurityStatus, 'settingsCapabilities'> & { requiresAuth?: boolean }) | null,
 ): SecurityStatusSettingsCapabilities | null {
   const next = status?.settingsCapabilities ?? null;
   setSessionSettingsCapabilities(next);
+  setSessionRequiresAuth(status?.requiresAuth !== false);
   setSessionSettingsCapabilitiesResolved(true);
   return next;
 }
@@ -38,6 +40,23 @@ export function sessionCanReadInfrastructureSettings(): boolean {
     return true;
   }
   return sessionSettingsCapabilities()?.infrastructureRead === true;
+}
+
+/**
+ * Mirrors the RequireAdmin + ai:execute gate on POST /api/ai/patrol/run, so a
+ * surface that starts a Patrol run never offers one the route would refuse.
+ * Auth-free installs pass: RequireAdmin leaves their routes reachable even
+ * though security status carries no capabilities there. An unresolved session
+ * withholds it, like the AI availability fact read from the same status.
+ */
+export function sessionCanRunPatrol(): boolean {
+  if (!sessionSettingsCapabilitiesResolved()) {
+    return false;
+  }
+  if (!sessionRequiresAuth()) {
+    return true;
+  }
+  return sessionSettingsCapabilities()?.patrolRun === true;
 }
 
 export { sessionSettingsCapabilities, sessionSettingsCapabilitiesResolved };

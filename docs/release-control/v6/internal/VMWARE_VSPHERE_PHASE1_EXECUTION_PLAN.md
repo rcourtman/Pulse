@@ -190,10 +190,10 @@ Required proof:
 - assistant control remains read-only in both product wording and runtime
   capability exposure
 
-Automated proof already landed for part of this slice:
+Automated proof already landed for part of this slice. The browser chat specs `38-vmware-ai-chat-mentions` and
+`42-vmware-ai-chat-read-recovery` were retired with the Assistant chat window
+on 2026-10-22; the Go proofs below still cover the backend chat path.
 
-- `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts`
-- `tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts`
 - `internal/ai/chat/context_prefetch_additional_test.go`
 - `internal/ai/chat/service_tooling_test.go`
 - `internal/ai/tools/control_resource_test.go`

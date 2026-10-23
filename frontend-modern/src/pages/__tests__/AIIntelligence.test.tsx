@@ -201,12 +201,9 @@ vi.mock('@/api/ai', () => ({
   },
 }));
 
-vi.mock('@/api/aiChat', () => ({
-  AIChatAPI: {
-    recordWorkflowPromptActivity: (...args: unknown[]) => recordWorkflowPromptActivityMock(...args),
-  },
+vi.mock('@/api/workflowPrompts', () => ({
+  recordWorkflowPromptActivity: (...args: unknown[]) => recordWorkflowPromptActivityMock(...args),
   PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME: 'pulse_operations_loop',
-  PULSE_PATROL_WORKFLOW_PROMPT_SURFACE: 'pulse_patrol',
   PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE: 'patrol_control',
 }));
 

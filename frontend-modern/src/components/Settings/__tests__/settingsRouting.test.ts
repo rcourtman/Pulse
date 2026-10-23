@@ -26,7 +26,7 @@ const canonicalTabPaths = {
   'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/pulse-intelligence/provider',
   'system-ai-patrol': '/settings/pulse-intelligence/patrol',
-  'system-ai-assistant': '/settings/pulse-intelligence/assistant',
+  'system-ai-agents': '/settings/pulse-intelligence/agents',
   'system-relay': '/settings/system-relay',
   'system-billing': '/settings/pulse-intelligence/billing/plan',
   'support-diagnostics': '/settings/support/diagnostics',
@@ -154,6 +154,7 @@ describe('settingsNavigationModel', () => {
     expect(isRouteableSettingsPath('/settings/pulse-intelligence/provider')).toBe(true);
     expect(isRouteableSettingsPath('/settings/system-ai')).toBe(true);
     expect(isRouteableSettingsPath('/settings/pulse-intelligence/patrol')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/agents')).toBe(true);
     expect(isRouteableSettingsPath('/settings/pulse-intelligence/assistant')).toBe(true);
     expect(isRouteableSettingsPath('/settings/pulse-intelligence/discovery')).toBe(true);
     expect(isRouteableSettingsPath('/settings/pulse-intelligence/billing/plan')).toBe(true);
@@ -203,8 +204,8 @@ describe('settingsNavigationModel', () => {
       ['?tab=monitoring-availability', 'monitoring-availability'],
       ['?tab=system-ai', 'system-ai'],
       ['?tab=patrol', 'system-ai-patrol'],
-      ['?tab=assistant', 'system-ai-assistant'],
-      ['?tab=discovery', 'system-ai-assistant'],
+      ['?tab=assistant', 'system-ai-agents'],
+      ['?tab=discovery', 'system-ai-agents'],
       ['?ai_oauth_error=unsupported', 'system-ai'],
       ['?ai_oauth_success=true', 'system-ai'],
       ['?tab=system-relay', 'system-relay'],

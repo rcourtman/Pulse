@@ -8,7 +8,6 @@ import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
 const mockState = vi.hoisted(() => {
   const loadFindings = vi.fn();
   const loadPatrolFindings = vi.fn();
-  const getRemediationPlans = vi.fn().mockResolvedValue({ plans: [] });
   const getResource = vi.fn((resourceId: string) =>
     resourceId === 'app-container:truenas-main:nextcloud'
       ? ({
@@ -82,7 +81,6 @@ const mockState = vi.hoisted(() => {
       expiresAt?: string;
     }>,
     getResource,
-    getRemediationPlans,
     loadFindings,
     loadPatrolFindings,
   };
@@ -110,18 +108,6 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     success: vi.fn(),
     error: vi.fn(),
-  },
-}));
-
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: {
-    open: vi.fn(),
-  },
-}));
-
-vi.mock('@/api/ai', () => ({
-  AIAPI: {
-    getRemediationPlans: mockState.getRemediationPlans,
   },
 }));
 
@@ -178,14 +164,10 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get patrolPendingApprovals() {
       return mockState.patrolPendingApprovals;
     },
-    get remediationPlans() {
-      return [];
-    },
     findingsSignal: () => mockState.findings,
     patrolFindingsSignal: () => mockState.patrolFindings,
     loadFindings: mockState.loadFindings,
     loadPatrolFindings: mockState.loadPatrolFindings,
-    loadRemediationPlans: vi.fn(),
   },
 }));
 
@@ -233,7 +215,6 @@ describe('FindingsPanel resource links', () => {
     mockState.patrolFindings = [...mockState.initialPatrolFindings];
     mockState.loadFindings.mockClear();
     mockState.loadPatrolFindings.mockClear();
-    mockState.getRemediationPlans.mockClear();
     mockState.getResource.mockClear();
     mockState.findingsLoading = false;
     mockState.findingsError = null;
@@ -365,8 +346,7 @@ describe('FindingsPanel resource links', () => {
       screen.getByRole('complementary', { name: 'Review Provider connection issue' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Resolve or dismiss')).toBeInTheDocument();
-    const assistantHandoff = screen.getByRole('button', { name: 'Open in Assistant' });
-    expect(assistantHandoff.closest('details')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open in Assistant' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Snooze 24h' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Dismiss: Later' })).toBeInTheDocument();

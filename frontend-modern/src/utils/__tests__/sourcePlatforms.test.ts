@@ -303,4 +303,26 @@ describe('sourcePlatforms', () => {
     expect(auditedPaths.length).toBeGreaterThan(0);
     expect(auditedPaths.filter((path) => !(`/${path}` in sources))).toEqual([]);
   });
+
+  // Rule messages send contributors to an owning module ("Use
+  // @/utils/aiSettingsPresentation instead"); that module has to exist too.
+  it('points rule messages only at modules that still exist', () => {
+    const sources = Object.keys(import.meta.glob('/src/**/*.{ts,tsx}'));
+    const named = [
+      ...new Set(
+        [...canonicalPlatformAuditSource.matchAll(/@\/([\w/.-]+?)\.?(?=[\s'"`]|$)/g)].map(
+          (match) => match[1],
+        ),
+      ),
+    ];
+    const exists = (path: string) =>
+      sources.some(
+        (source) =>
+          source === `/src/${path}` ||
+          source.startsWith(`/src/${path}.`) ||
+          source.startsWith(`/src/${path}/`),
+      );
+    expect(named.length).toBeGreaterThan(0);
+    expect(named.filter((path) => !exists(path))).toEqual([]);
+  });
 });

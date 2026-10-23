@@ -1,27 +1,9 @@
 import { Component, Show } from 'solid-js';
-import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
-import { FormSelect } from '@/components/shared/FormSelect';
-import {
-  getAIControlLevelBadgeClass,
-  getAIControlLevelDescription,
-  getAIControlLevelPanelClass,
-} from '@/utils/aiControlLevelPresentation';
-import { AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE } from '@/utils/aiSettingsPresentation';
 
 interface AIRuntimeControlsSectionProps {
   state: AISettingsState;
 }
-
-export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> = (props) => {
-  const { state } = props;
-  return (
-    <>
-      <AIProviderRuntimeControlsSection state={state} />
-      <AIAssistantCommandAccessSection state={state} />
-    </>
-  );
-};
 
 export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> = (
   props,
@@ -114,79 +96,10 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
           </Show>
         </div>
         <p class="text-[10px] text-muted ml-1">
-          Applies to chat, patrol, and discovery AI calls. Increase for slower Ollama hardware
-          (default: 300s / 5 min)
+          Applies to Patrol and every other AI call. Increase for slower Ollama hardware (default:
+          300s / 5 min)
         </p>
       </div>
     </div>
-  );
-};
-
-export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSectionProps> = (
-  props,
-) => {
-  const { state } = props;
-  return (
-    <>
-      <div
-        class={`space-y-3 p-4 rounded-md border ${getAIControlLevelPanelClass(state.form.controlLevel)}`}
-      >
-        <div class="flex items-center gap-2">
-          <svg
-            class="w-4 h-4 text-blue-600 dark:text-blue-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-            />
-          </svg>
-          <span class="text-sm font-medium text-base-content">
-            {AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE}
-          </span>
-          <Show when={state.form.controlLevel !== 'read_only'}>
-            <span
-              class={`px-1.5 py-0.5 text-[10px] font-medium rounded-sm ${getAIControlLevelBadgeClass(state.form.controlLevel)}`}
-            >
-              Ask first
-            </span>
-          </Show>
-        </div>
-        <p class="text-[10px] text-muted">
-          This sets what Assistant chat may plan. Patrol's own mode is set on the Patrol page.
-        </p>
-
-        <FormSelect
-          id="ai-control-mode-select"
-          label="Chat action mode"
-          value={state.form.controlLevel}
-          onChange={(e) => state.setForm('controlLevel', e.currentTarget.value as AIControlLevel)}
-          disabled={state.saving()}
-          fieldBaseClass="flex flex-col gap-2 sm:flex-row"
-          fieldClass="sm:items-center sm:gap-3"
-          labelClass="text-xs font-medium text-muted sm:w-28 sm:shrink-0"
-          selectBaseClass="w-full min-w-0 min-h-10 px-2 py-2 text-sm border border-border rounded-sm bg-surface sm:min-h-9 sm:flex-1"
-        >
-          <option value="read_only">Read-only - Assistant queries and explains only</option>
-          <option value="controlled">Ask first - Assistant plans actions for your review</option>
-        </FormSelect>
-        <p class="text-[10px] text-muted sm:ml-30">
-          {getAIControlLevelDescription(state.form.controlLevel)}
-        </p>
-        <Show when={state.form.controlLevel !== 'read_only'}>
-          <p
-            class="pt-2 border-t border-blue-200 dark:border-blue-700 text-[10px] text-muted"
-            data-testid="ai-never-auto-remediate-hint"
-          >
-            To keep Assistant away from a guest, open it, choose Manage, turn on Never
-            auto-remediate, and save. Pulse then refuses typed actions on that guest.
-          </p>
-        </Show>
-      </div>
-    </>
   );
 };

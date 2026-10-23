@@ -13,7 +13,7 @@ import { DemoBanner } from './components/DemoBanner';
 import { CommercialMigrationBanner } from './components/CommercialMigrationBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
 // Modals are only mounted when opened, so their code can stay out of the
-// entry bundle until first use (same pattern as AIChat below).
+// entry bundle until first use.
 const KeyboardShortcutsModal = lazy(() =>
   import('./components/shared/KeyboardShortcutsModal').then((m) => ({
     default: m.KeyboardShortcutsModal,
@@ -24,7 +24,6 @@ const CommandPaletteModal = lazy(() =>
     default: m.CommandPaletteModal,
   })),
 );
-import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';
 import { createTooltipSystem } from './components/shared/Tooltip';
 const TokenRevealDialog = lazy(() =>
   import('./components/TokenRevealDialog').then((m) => ({ default: m.TokenRevealDialog })),
@@ -34,11 +33,7 @@ const UpdateProgressModal = lazy(() =>
   import('./components/UpdateProgressModal').then((m) => ({ default: m.UpdateProgressModal })),
 );
 import { UpdatesAPI, type UpdateStatus } from './api/updates';
-// AIChat is the side-panel chat UI plus its store deps (markdown rendering,
-// tool-call formatting, prompt scaffolding). Lazy-load behind aiChatStore.isOpen
-// so the entry bundle stays out of "everything users might ever click."
-const AIChat = lazy(() => import('./components/AI/Chat').then((m) => ({ default: m.AIChat })));
-import { aiChatStore } from './stores/aiChat';
+import { aiAvailabilityStore } from './stores/aiAvailability';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
@@ -460,7 +455,7 @@ function App() {
     useKeyboardShortcuts({
       enabled: () => !runtime.needsAuth(),
       platformVisibility: platformNavigationVisibility,
-      patrolVisible: () => aiChatStore.enabled === true,
+      patrolVisible: () => aiAvailabilityStore.enabled === true,
       isShortcutsOpen: shortcutsOpen,
       isCommandPaletteOpen: commandPaletteOpen,
       onToggleShortcuts: () => {
@@ -473,35 +468,6 @@ function App() {
         setCommandPaletteOpen((prev) => !prev);
       },
       onCloseCommandPalette: () => setCommandPaletteOpen(false),
-    });
-
-    createEffect(() => {
-      if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {
-        aiChatStore.close();
-      }
-    });
-
-    // Setup escape handling for the assistant drawer.
-    onMount(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        // Escape closes the drawer only after mounted drawer controls have had
-        // a chance to claim the key for local flows such as interrupt confirm.
-        if (e.key === 'Escape' && aiChatStore.isOpen) {
-          const escapeTarget = e.target instanceof Element ? e.target : null;
-          const isModelPickerEscape = Boolean(escapeTarget?.closest('[data-ai-model-picker]'));
-
-          window.setTimeout(() => {
-            if (!e.defaultPrevented && !isModelPickerEscape && aiChatStore.isOpen) {
-              aiChatStore.close();
-            }
-          }, 0);
-        }
-      };
-
-      document.addEventListener('keydown', handleKeyDown);
-      onCleanup(() => {
-        document.removeEventListener('keydown', handleKeyDown);
-      });
     });
 
     onCleanup(() => {
@@ -554,9 +520,8 @@ function App() {
                           <GlobalUpdateProgressWatcher />
                         </Show>
                       </Show>
-                      {/* Main layout container - flexbox to allow AI panel to push content */}
+                      {/* Main layout container: the content area scrolls independently */}
                       <div class="flex h-screen overflow-hidden">
-                        {/* Main content area - shrinks when AI panel is open, scrolls independently */}
                         <div
                           ref={setAppScrollShellRef}
                           class={`app-scroll-shell isolate flex-1 min-w-0 overflow-y-scroll text-base-content font-sans py-1 sm:py-6 transition-all duration-300`}
@@ -581,19 +546,13 @@ function App() {
                             <RouteErrorBoundary>{props.children}</RouteErrorBoundary>
                           </AppLayout>
                         </div>
-                        {/* AI Panel - slides in from right, pushes content.
-                            Mounted only when open so the lazy chunk only
-                            downloads on first chat-open click. */}
-                        <Show when={aiChatStore.isOpenSignal()}>
-                          <AIChat onClose={() => aiChatStore.close()} />
-                        </Show>
                       </div>
                       <Show when={shortcutsOpen()}>
                         <KeyboardShortcutsModal
                           isOpen={shortcutsOpen()}
                           onClose={() => setShortcutsOpen(false)}
                           platformVisibility={platformNavigationVisibility}
-                          patrolVisible={() => aiChatStore.enabled === true}
+                          patrolVisible={() => aiAvailabilityStore.enabled === true}
                         />
                       </Show>
                       <Show when={commandPaletteOpen()}>
@@ -606,7 +565,6 @@ function App() {
                       <Show when={tokenRevealStore.state() !== null}>
                         <TokenRevealDialog />
                       </Show>
-                      {/* AI Assistant Button moved to AppLayout to access kioskMode state */}
                       <TooltipRoot />
                     </DarkModeContext.Provider>
                   </WebSocketContext.Provider>

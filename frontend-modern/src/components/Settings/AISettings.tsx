@@ -1,16 +1,11 @@
 import { Component, For, createMemo, createUniqueId, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { AIChatMaintenanceSection } from '@/components/Settings/AIChatMaintenanceSection';
 import { AISettingsDialogs } from '@/components/Settings/AISettingsDialogs';
-import AgentIntegrationsPanel from '@/components/Settings/AgentIntegrationsPanel';
 import {
   AIModelOverrideField,
   AIModelSelectionSection,
 } from '@/components/Settings/AIModelSelectionSection';
-import {
-  AIAssistantCommandAccessSection,
-  AIProviderRuntimeControlsSection,
-} from '@/components/Settings/AIRuntimeControlsSection';
+import { AIProviderRuntimeControlsSection } from '@/components/Settings/AIRuntimeControlsSection';
 import { AISettingsStatusAndActions } from '@/components/Settings/AISettingsStatusAndActions';
 import { useAISettingsState } from '@/components/Settings/useAISettingsState';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -38,7 +33,7 @@ import {
   getAISettingsRetryLabel,
 } from '@/utils/aiSettingsPresentation';
 
-type AISettingsPage = 'provider' | 'patrol' | 'assistant';
+type AISettingsPage = 'provider' | 'patrol';
 
 const AI_SETTINGS_PAGE_META: Record<
   AISettingsPage,
@@ -66,14 +61,6 @@ const AI_SETTINGS_PAGE_META: Record<
     saveLabel: 'Save Patrol settings',
     savingLabel: 'Saving Patrol settings...',
     title: 'Patrol',
-  },
-  assistant: {
-    resetLabel: 'Reset Assistant settings',
-    saveErrorFallback: 'Unable to save Assistant settings.',
-    savedLabel: 'Assistant settings saved',
-    saveLabel: 'Save Assistant settings',
-    savingLabel: 'Saving Assistant settings...',
-    title: 'Assistant',
   },
 };
 
@@ -366,31 +353,11 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
   );
 };
 
-const AssistantSettingsContent: Component<{ state: ReturnType<typeof useAISettingsState> }> = (
-  props,
-) => (
-  <div class="space-y-6 p-4 sm:p-6">
-    <AIModelOverrideField state={props.state} kind="assistant" />
-    <AIAssistantCommandAccessSection state={props.state} />
-    <AIChatMaintenanceSection state={props.state} />
-  </div>
-);
-
 const AISettingsPageContent: Component<{
   page: AISettingsPage;
   state: ReturnType<typeof useAISettingsState>;
 }> = (props) => (
-  <Show
-    when={props.page === 'provider'}
-    fallback={
-      <Show
-        when={props.page === 'patrol'}
-        fallback={<AssistantSettingsContent state={props.state} />}
-      >
-        <PatrolSettingsContent state={props.state} />
-      </Show>
-    }
-  >
+  <Show when={props.page === 'provider'} fallback={<PatrolSettingsContent state={props.state} />}>
     <ProviderSettingsContent state={props.state} />
   </Show>
 );
@@ -407,7 +374,6 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
     },
   });
   const isProviderPage = () => page() === 'provider';
-  const showExternalAgentAccess = () => page() === 'assistant';
 
   return (
     <>
@@ -488,10 +454,6 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
             </Show>
           </form>
         </SettingsPanel>
-
-        <Show when={showExternalAgentAccess()}>
-          <AgentIntegrationsPanel />
-        </Show>
       </div>
 
       <AISettingsDialogs
@@ -511,6 +473,5 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
 };
 
 export const AIPatrolSettings: Component = () => <AISettings page="patrol" />;
-export const AIAssistantSettings: Component = () => <AISettings page="assistant" />;
 
 export default AISettings;

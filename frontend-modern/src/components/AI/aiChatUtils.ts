@@ -1,24 +1,5 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import type { ModelInfo } from '@/types/ai';
-export { getProviderFromModelId } from '@/utils/aiProviderPresentation';
-import { getProviderFromModelId } from '@/utils/aiProviderPresentation';
-
-// Group models by provider for grouped rendering
-export function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
-  const grouped = new Map<string, ModelInfo[]>();
-
-  for (const model of models) {
-    // Prefer the server-supplied provider; fall back to the id heuristic for
-    // models that predate the field or have an opaque id (#1320).
-    const provider = model.provider?.trim() || getProviderFromModelId(model.id);
-    const existing = grouped.get(provider) || [];
-    existing.push(model);
-    grouped.set(provider, existing);
-  }
-
-  return grouped;
-}
 
 // Configure marked for safe rendering.
 //
@@ -44,19 +25,6 @@ const configureDOMPurify = () => {
     if (!element || element.tagName !== 'A') return;
     element.setAttribute('target', '_blank');
     element.setAttribute('rel', 'noopener noreferrer');
-  });
-
-  // 'class' stays out of ALLOWED_ATTR (UI-redressing surface — see the
-  // hardening notes in renderMarkdown). The single carve-out is marked's
-  // fence-language hint on <code>, pattern-pinned so only `language-x`
-  // survives; the lazy syntax highlighter needs it to pick a grammar.
-  DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-    const element = node as Element | null;
-    if (!element || element.tagName !== 'CODE') return;
-    if (data.attrName !== 'class') return;
-    if (/^language-[a-z0-9+#_-]{1,30}$/i.test(data.attrValue)) {
-      data.forceKeepAttr = true;
-    }
   });
 };
 
@@ -163,33 +131,4 @@ export const renderMarkdown = (content: unknown): string => {
       return entities[char];
     });
   }
-};
-
-// Helper to sanitize thinking/reasoning content for display
-// Removes raw network errors with IP addresses that are not user-friendly
-export const sanitizeThinking = (content: string): string => {
-  // Replace raw TCP connection details like "write tcp 192.168.0.123:7655->192.168.0.134:58004: i/o timeout"
-  // with friendlier messages
-  // Replace "failed to send command: <raw error>" patterns first so follow-on replacements
-  // don't partially sanitize the error and prevent the higher-level pattern from matching.
-  let sanitized = content.replace(
-    /failed to send command: write tcp [\d.:->\s]+/g,
-    'failed to send command: connection error',
-  );
-
-  sanitized = sanitized.replace(
-    /write tcp [\d.:]+->[\d.:]+: i\/o timeout/g,
-    'connection timed out',
-  );
-  sanitized = sanitized.replace(/read tcp [\d.:]+: i\/o timeout/g, 'connection timed out');
-  sanitized = sanitized.replace(/dial tcp [\d.:]+: connection refused/g, 'connection refused');
-  return sanitized;
-};
-
-// Extract guest name from context if available
-export const getGuestName = (context?: Record<string, unknown>): string | undefined => {
-  if (!context) return undefined;
-  if (typeof context.guestName === 'string') return context.guestName;
-  if (typeof context.name === 'string') return context.name;
-  return undefined;
 };

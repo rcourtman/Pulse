@@ -485,8 +485,8 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                   <Sparkles class="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h4 class="text-sm font-semibold text-base-content">Pulse Assistant</h4>
-                  <p class="text-xs text-muted">Pulse Assistant Service</p>
+                  <h4 class="text-sm font-semibold text-base-content">AI runtime</h4>
+                  <p class="text-xs text-muted">Runs Patrol investigations</p>
                 </div>
                 <div class="ml-auto">
                   <StatusIndicatorBadge
@@ -519,7 +519,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 />
               </div>
               <div class="mt-3 flex items-center justify-between border-t border-border-subtle pt-3 text-xs">
-                <span class="text-muted">Assistant runtime</span>
+                <span class="text-muted">Runtime connection</span>
                 <div class="flex items-center gap-1.5">
                   <Show
                     when={props.diagnosticsData?.aiChat?.assistantRuntimeConnected}

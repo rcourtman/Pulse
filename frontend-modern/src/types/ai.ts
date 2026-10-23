@@ -320,12 +320,6 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   'claude-subscription': 'Models through a locally authenticated Claude CLI',
 };
 
-// Conversation history for multi-turn chats
-export interface AIConversationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 // Tool execution info
 export interface AIToolExecution {
   name: string; // "run_command", "read_file"
@@ -499,67 +493,6 @@ export interface AICostSummary {
   targets: AICostTargetSummary[];
   daily_totals: AICostDailySummary[];
   totals: AICostProviderModelSummary;
-}
-
-// ============================================
-// AI Chat Session Types (server-synced)
-// ============================================
-
-export interface AIChatMessageTokens {
-  input: number;
-  output: number;
-}
-
-export interface AIChatToolCall {
-  name: string;
-  input: string;
-  output: string;
-  success: boolean;
-}
-
-export interface AIChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  model?: string;
-  tokens?: AIChatMessageTokens;
-  toolCalls?: AIChatToolCall[];
-}
-
-// Summary returned by list endpoint (no messages)
-export interface AIChatSessionHandoffResource {
-  id?: string;
-  name?: string;
-  type?: string;
-  node?: string;
-}
-
-export interface AIChatSessionHandoffSummary {
-  kind?: string;
-  finding_id?: string;
-  run_id?: string;
-  run_type?: string;
-  run_status?: string;
-  runtime_failure?: boolean;
-  has_model_context: boolean;
-  resource_count?: number;
-  primary_resource?: AIChatSessionHandoffResource;
-  action_count?: number;
-  requires_approval?: boolean;
-  last_known_approval_status?: string;
-  last_known_action_state?: string;
-  last_known_action_risk?: string;
-  updated_at?: string;
-}
-
-export interface AIChatSessionSummary {
-  id: string;
-  title: string;
-  message_count: number;
-  created_at: string;
-  updated_at: string;
-  handoff_summary?: AIChatSessionHandoffSummary;
 }
 
 // ============================================

@@ -12,7 +12,7 @@ import {
 } from '@/AppLayout';
 import { isKioskMode, setKioskMode } from '@/utils/url';
 import type { PlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { clearRuntimeBranding, updateRuntimeBrandingFromResponse } from '@/stores/systemSettings';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -148,13 +148,11 @@ describe('AppLayout navigation icons', () => {
     preloadRouteModuleMock.mockReset();
     preloadRouteModuleMock.mockResolvedValue(undefined);
     clearRuntimeBranding();
-    aiChatStore.close();
-    aiChatStore.setEnabled(true);
+    aiAvailabilityStore.setEnabled(true);
   });
 
   afterEach(() => {
-    aiChatStore.close();
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
     clearRuntimeBranding();
     cleanup();
   });
@@ -292,7 +290,7 @@ describe('AppLayout navigation icons', () => {
   });
 
   it('hides the Patrol tab on desktop and mobile while AI is off (#905)', () => {
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
     renderLayout();
 
     const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
@@ -512,18 +510,14 @@ describe('AppLayout navigation icons', () => {
     expect(document.title).toBe('Settings · Acme Operations');
   });
 
-  it('keeps the mobile Assistant launcher in header flow instead of covering page content', () => {
+  it('renders no Assistant launcher with AI enabled on desktop or phone', () => {
+    renderLayout();
+    expect(screen.queryByRole('button', { name: /Ask Pulse Assistant/ })).toBeNull();
+    cleanup();
+
     setViewportWidth(390);
     renderLayout();
-
-    const launcher = screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' });
-    const launcherClass = launcher.getAttribute('class') ?? '';
-
-    expect(launcherClass).toContain('h-11');
-    expect(launcherClass).toContain('w-11');
-    expect(launcherClass).toContain('rounded-full');
-    expect(launcherClass).not.toContain('fixed');
-    expect(launcher.closest('.header-controls')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ask Pulse Assistant/ })).toBeNull();
   });
 
   it('allows mobile header controls to wrap without hiding organization or session actions', () => {
@@ -536,71 +530,6 @@ describe('AppLayout navigation icons', () => {
       'sm:flex-nowrap',
     );
     expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument();
-  });
-
-  it('preserves the Assistant edge launcher on desktop', () => {
-    setViewportWidth(1440);
-    renderLayout();
-
-    const launcher = screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' });
-    expect(launcher).toHaveClass('fixed');
-    expect(launcher).toHaveClass('right-0');
-    expect(launcher).toHaveClass('top-1/2');
-    expect(launcher).toHaveClass('-translate-y-1/2');
-    expect(launcher.closest('.header-controls')).toBeNull();
-  });
-
-  it('opens Assistant with the current route attached', async () => {
-    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
-    renderLayout();
-
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' }),
-    );
-
-    await waitFor(() => {
-      expect(openAssistant).toHaveBeenCalledWith(
-        expect.objectContaining({
-          targetType: 'pulse-view',
-          targetId: '/settings/infrastructure',
-          context: expect.objectContaining({
-            name: 'Settings',
-            route: '/settings/infrastructure',
-            surface: 'settings',
-          }),
-          briefing: expect.objectContaining({
-            sourceLabel: 'Current view',
-            title: 'Settings attached',
-            statusLabel: 'Context only',
-          }),
-        }),
-      );
-    });
-    openAssistant.mockRestore();
-  });
-
-  it('returns focus to the Assistant launcher after chat closes', async () => {
-    renderLayout();
-
-    const launcher = screen.getByRole('button', {
-      name: 'Ask Pulse Assistant about Settings',
-    });
-    launcher.focus();
-    await fireEvent.click(launcher);
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('button', { name: 'Ask Pulse Assistant about Settings' }),
-      ).not.toBeInTheDocument();
-    });
-
-    aiChatStore.close();
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' }),
-      ).toHaveFocus();
-    });
   });
 });
 
@@ -623,8 +552,7 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
     patrolAttentionMockState.activeCount = 0;
-    aiChatStore.close();
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
   });
 
   afterEach(() => {

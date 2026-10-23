@@ -172,8 +172,7 @@ then checks explicit read-only opt-out and later opt-in remain possible.
 field dating `Alert.value`. Older servers and restart-before-evaluation may
 omit it. Consumers validate it, then a valid legacy `lastSeen`, without
 creating a date from start/poll time. Frontend type and consumer regression
-controls are in `types/api.ts`, `features/alerts/__tests__/helpers.test.ts`
-and `components/Alerts/__tests__/alertAssistantHandoffModel.test.ts`.
+controls are in `types/api.ts` and `features/alerts/__tests__/helpers.test.ts`.
 No endpoint, required field or mobile capability changes.
 
 ### PMG scope readback preserves explicit all-off settings
@@ -925,11 +924,8 @@ failure retention require their own owner result, not source acceptance.
     66b. `pkg/aicontracts/fix_execution.go`
 76. `internal/api/ai_intelligence_handlers.go`
 77. `frontend-modern/src/api/ai.ts`
-78. `frontend-modern/src/api/aiChat.ts`
-    69a. `frontend-modern/src/api/aiChatDevStreamFixture.ts`
 79. `frontend-modern/src/api/patrol.ts`
     79a. `internal/api/patrol_objectives.go`
-80. `frontend-modern/src/api/generated/aiChatEvents.ts`
 81. `internal/api/agent_exec_token_binding.go`
     81a. `internal/api/agentbinding/policy.go`
     81b. `internal/api/agenttokens/install.go`
@@ -1187,11 +1183,10 @@ candidate or call node setup/save APIs until the operator has approved the
 current endpoint, credential path, and collection scope.
 
 Assistant chat `workflow_state` events are a shared AI/API payload boundary.
-The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
-to `frontend-modern/src/api/generated/aiChatEvents.ts` by
-`scripts/generate-types.go` and pinned by `internal/api/contract_test.go`.
-The done event (`internal/ai/chat.DoneData`) follows the same generated
-contract and carries, alongside token usage and `context_limit_tokens`, an
+The backend source of truth is `internal/ai/chat.WorkflowStateData`, pinned by
+`internal/api/contract_test.go`; the browser's generated TypeScript projection
+left with the Assistant chat window on 2026-10-22. The done event
+(`internal/ai/chat.DoneData`) follows the same contract and carries, alongside token usage and `context_limit_tokens`, an
 optional `session_cost_usd`: the backend-estimated cumulative session spend
 summed from the operator cost ledger. It is omitted (not zero) whenever any
 of the session's recorded models has unknown pricing, so clients must treat
@@ -1241,13 +1236,11 @@ that same manifest. `POST /api/ai/workflow-prompts/render` is an authenticated
 `internal/api/router_routes_ai_relay.go`; it accepts the manifest prompt name
 plus argument map, validates them against the manifest-owned workflow prompt
 catalogue through `internal/agentcapabilities`, and returns only the rendered
-Assistant prompt text plus description. Browser
-clients must read prompt names, display labels, presentation kind hints,
-descriptions, and arguments through the generated `workflowPrompts` manifest
-type and call `AIChatAPI.renderWorkflowPrompt` rather than rendering prompt
-templates locally. Browser context may carry a preferred workflow prompt name
-only as a request to render one manifest-owned starter through that API route;
-it is not a transport for prompt text or a reason to bypass argument resolution.
+Assistant prompt text plus description. Clients must read prompt names,
+display labels, presentation kind hints, descriptions, and arguments through
+the generated `workflowPrompts` manifest type and call this route rather than
+rendering prompt templates locally. No first-party browser surface renders
+starters since the Assistant chat window was retired on 2026-10-22.
 MCP `prompts/list` projects those same labels as protocol prompt titles and MCP
 `prompts/get` remains the protocol-edge projection over the same shared
 workflow-prompt core. Route inventory and AI chat scope tests must pin that
@@ -1452,10 +1445,10 @@ tool availability from local tool-name lists. Do not expose live Assistant
 registry availability through the public, cacheable `/api/agent/capabilities`
 manifest; that runtime inventory belongs behind the authenticated
 `GET /api/ai/assistant/surface-tools` Assistant surface endpoint when the UI
-needs it. The Pulse Assistant shell may render a runtime tool-posture chip, but
-it must call `AIChatAPI.getAssistantSurfaceTools()` and
-`getAgentSurfaceToolPosturePresentation` instead of hard-coding registry tool
-names or treating MCP capability names as native Assistant tools. The Agent
+needs it. A client that renders runtime tool posture must read that endpoint and
+format it through `getAgentSurfaceToolPosturePresentation` instead of
+hard-coding registry tool names or treating MCP capability names as native
+Assistant tools. The Agent
 integrations panel may render MCP tool posture from the static public manifest,
 but the request/response capability filtering and `SurfaceToolContract`
 construction must be backend-owned in `Manifest.SurfaceToolContracts`; the
@@ -1499,8 +1492,8 @@ filters non-request/response capabilities, and enforces the resolved surface
 `tools` affordance before docs, adapters, or UI projections see any tools.
 Provider retry progress must use typed fields (`attempt`, `max_attempts`,
 `retry_after_ms`) on that same event instead of frontend-only string parsing or
-provider-specific ad hoc events; the Assistant UI may format those fields, but
-must not invent retry progress that the stream contract did not carry. Assistant
+provider-specific ad hoc events; clients may format those fields, but must not invent retry progress that the
+stream contract did not carry. Assistant
 `provider_start` status text must remain route-neutral (`Waiting for
 assistant.`) while selected route identity travels through the typed `provider`
 and `model` fields. `provider_retry` status text must describe a selected-route
@@ -1508,45 +1501,9 @@ retry, not a provider fallback or hidden route switch. Assistant chat stream
 payloads must not expose automatic provider fallback metadata:
 `workflow_state` may carry the selected `provider` and `model` plus same-route
 retry fields, but `provider_fallback`, `failed_provider`, `failed_model`,
-`next_provider`, and `next_model` are retired from the generated stream event
+`next_provider`, and `next_model` are retired from the stream event
 contract. Cross-route recovery belongs to explicit failed-turn actions, not
 hidden `/api/ai/chat` stream mutation.
-The frontend chat stream client may expose a local stream-open lifecycle hook
-for UI state, but that hook is not a backend `workflow_state` payload. It must
-fire only after `/api/ai/chat` returns an OK event-stream response and before
-the first parsed SSE event is delivered to the reducer, allowing the Assistant
-drawer to promote local `request_send` status to local `request_wait` without
-inventing provider activity.
-Assistant local stream fixtures are part of the same frontend API contract:
-`frontend-modern/src/api/aiChatDevStreamFixture.ts` may short-circuit only
-explicit `/fixture ...` prompts in development or test mode, must emit the same
-typed stream event sequence as live chat, and must never open a provider request.
-That helper also owns the exported fixture-name and alias catalog consumed by
-Assistant command discovery; frontend command surfaces may search and insert
-`/fixture` from those exports, but they must not duplicate the fixture registry
-or advertise fixture commands in production.
-Fixtures used for visible stream proof must pace status/tool/content events
-enough for the browser to paint the intermediate state, including keeping the
-`/fixture tool-burst` running tool row visible before the matching `tool_end`;
-unit tests may explicitly disable that pace, but the live dev fixture must not
-collapse to the terminal row.
-The `/fixture tool-chain` stream must pace consecutive
-`tool_start`/`tool_progress`/`tool_end` transitions across at least two tools,
-so browser proof can stop on a completed compact row plus the next live running
-row without a provider request.
-Fixtures that emit consecutive context/read/query tool events must keep those
-events as ordinary typed `tool_start` / `tool_end` activity and must not encode
-obsolete grouped-context wording in fixture answer content. The fixture payload
-contract proves the stream reducer and transcript renderer against the same
-chronological event order a live provider would produce; UI grouping or footer
-summaries are not part of the fixture contract.
-The provider-retry fixture must exercise selected-route retry by emitting
-`provider_retry` for the selected route and completing with that same model; it
-must not simulate an automatic switch to a configured gateway or alternate
-provider route.
-Queue verification fixtures must cover both the active hold turn and the queued
-drain turn so UX proof can exercise queued follow-up ordering and tool rows
-without consuming external model quota.
 Assistant session summarization is a typed compaction API contract, not a
 free-form helper response. `POST /api/ai/sessions/{id}/summarize` returns a
 browser-safe `ChatSessionCompactionResult` with stable fields for `success`,
@@ -1556,10 +1513,9 @@ browser-safe `ChatSessionCompactionResult` with stable fields for `success`,
 `success=false` with `status=not_needed`; transport failures, missing sessions,
 provider errors, or active-running sessions remain normal API errors. The
 payload must not include the raw transcript, raw provider response, raw tool
-input/output, hidden reasoning, secrets, or token values. Frontend consumers
-under `frontend-modern/src/api/aiChat.ts` must preserve that typed response and
-let the Assistant drawer reload canonical session state instead of rebuilding a
-compacted transcript from local browser state.
+input/output, hidden reasoning, secrets, or token values. Clients must
+preserve that typed response and reload canonical session state instead of
+rebuilding a compacted transcript locally.
 
 Infrastructure settings copied agent commands are a shared API/payload boundary
 even when the final command string is assembled in the browser. Selected-row
@@ -1895,7 +1851,6 @@ payload shape change when the portal presents compact client rows.
    `protected_guests` key from an older client is ignored. Guests Pulse must
    not act on are locked through the resource operator state
    (`neverAutoRemediate`), which the Assistant honours at planning.
-6. `frontend-modern/src/api/aiChat.ts` shared with `ai-runtime`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
 7. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `ai-runtime`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 9. `frontend-modern/src/api/notifications.ts` shared with `notifications`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
@@ -1956,6 +1911,7 @@ payload shape change when the portal presents compact client rows.
     update checks without rebuilding upgrade state locally. The frontend may
     disable blocked installs, but the backend apply route remains authoritative
     and must reject a recomputed `blocked` readiness verdict.
+14. `frontend-modern/src/api/workflowPrompts.ts` shared with `ai-runtime`: the workflow prompt activity client is both the AI runtime workflow-prompt telemetry surface and a canonical API payload contract boundary.
 15. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `frontend-primitives`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
     The panel may own settings placement, copy composition, local fallback
     rendering, and the user-facing hierarchy that frames Patrol as the primary
@@ -1993,13 +1949,13 @@ payload shape change when the portal presents compact client rows.
     Client config follows the same product hierarchy: it may expose
     manifest-derived OpenCode and Claude-style wrappers, but the default panel
     must lead with Patrol control and scoped-token setup, not raw JSON blocks.
-    Direct `/settings/pulse-intelligence/assistant#external-agent-setup` links
+    Direct `/settings/pulse-intelligence/agents#external-agent-setup` links
     must scroll and briefly focus the External agents panel after the
-    Assistant settings layout settles, so the external-agent setup route lands
+    settings layout settles, so the external-agent setup route lands
     on the optional client setup boundary rather than generic token inventory.
     Legacy `/settings/security/api#external-agent-setup` and
     `/settings/security/api#pulse-mcp-setup` links must remain accepted and
-    redirect to the canonical Pulse Intelligence Assistant route. Normal API
+    redirect to the canonical Pulse Intelligence External agents route. Normal API
     Access visits keep token management first; token-preset links may still
     land on API Access because credential minting remains the API token
     contract, not a separate credential or execution surface.
@@ -2322,18 +2278,15 @@ payload shape change when the portal presents compact client rows.
     before optional `limit` truncation, and matching may use only safe session
     identity, title, timestamps, and handoff-summary fields. Search must not
     expose provider-bound model context, stored prompts, raw tool output, or
-    remediation details, and frontend clients must route searchable picker
-    requests through the shared `AIChatAPI.listSessions({ search, limit })`
-    helper rather than inventing a parallel local history endpoint.
+    remediation details, and clients must search through this endpoint rather
+    than inventing a parallel history endpoint.
     `PATCH /api/ai/sessions/{id}` owns the Assistant session-title mutation
     contract. The request body is limited to a user-visible `title`; the
     handler must reject empty titles, the chat store must normalize whitespace
     and bound persisted title length, and the response must be the updated
     browser-safe `ChatSession` projection. Rename must not expose or mutate
     stored prompts, messages, provider reasoning, model handoff context,
-    approvals, action state, or tool evidence. Browser clients must call the
-    shared `AIChatAPI.renameSession(sessionId, title)` helper so path encoding
-    and JSON body shape stay canonical.
+    approvals, action state, or tool evidence.
     `POST /api/ai/sessions/{id}/undo` and
     `POST /api/ai/sessions/{id}/redo` own the Assistant turn-repair API
     contract. Undo removes the latest user-authored turn and all later
@@ -2344,7 +2297,7 @@ payload shape change when the portal presents compact client rows.
     undone turn and returns `restored_messages` plus the remaining `can_redo`
     state. `GET /api/ai/sessions` and other `ChatSession` projections may
     expose only the boolean `can_redo` hint alongside safe title/timestamp,
-    count, and handoff-summary fields so the drawer can re-enable redo after a
+    count, and handoff-summary fields so a client can re-enable redo after a
     reload without reading the redo stack itself. The projection also carries
     a boolean `system` flag for Pulse-owned background sessions (Patrol
     detection `patrol-main`, `patrol-eval`, and `investigation-*` runs),
@@ -2358,11 +2311,7 @@ payload shape change when the portal presents compact client rows.
     prompt being re-run; retry/regenerate flows send it so a stale retry can
     never remove a different turn, and a guard mismatch returns
     `success:false` with a browser-safe message rather than an error status.
-    An absent or empty body preserves the unguarded undo shape. Browser
-    clients must use the shared
-    `AIChatAPI.undoLastTurn(sessionId, { expectedPrompt })` and
-    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding, guard
-    trimming, and response shape stay canonical.
+    An absent or empty body preserves the unguarded undo shape.
     `POST /api/ai/sessions/{id}/steer` owns the mid-turn steering API
     contract (`chat.SessionSteerRequest` -> `chat.SessionSteerResult`). The
     request carries `prompt` plus an optional `client_message_id`; the
@@ -2373,12 +2322,10 @@ payload shape change when the portal presents compact client rows.
     follow-up on the ordinary queue-drain path. Steering cannot carry model
     route, control level, or autonomous-mode changes. Confirmation of
     delivery arrives only on the session's existing chat stream as a
-    generated `steer_applied` event (`chat.SteerAppliedData`, in
-    `aiChatEvents.ts` and the `AIChatStreamEvent` union) echoing
+    `steer_applied` event (`chat.SteerAppliedData`) echoing
     `client_message_id`, the server message id, the prompt, and the turn
     index; clients must treat the endpoint's `accepted:true` as inbox
-    receipt, not delivery. Browser clients must use the shared
-    `AIChatAPI.steerSession(sessionId, { prompt, clientMessageId })` helper.
+    receipt, not delivery.
     Every Assistant session mutation sub-resource under
     `/api/ai/sessions/{id}` (`/abort`, `/summarize`, `/fork`, `/undo`,
     `/redo`, `/steer`) accepts only `POST`. Any other method that reaches the
@@ -2421,21 +2368,15 @@ payload shape change when the portal presents compact client rows.
     `success` state while keeping internal `tool_result` records out of the
     browser transcript. Assistant message history must also preserve the
     effective `model` route that produced the answer, including local runtime
-    routes such as `pulse:local-inventory`. Frontend API types must accept
-    restored `tool_calls[].input` from backend history as a structured object
-    as well as legacy/display strings, then normalize it before rendering.
-    Chat stream events are generated from `internal/ai/chat` payload structs
-    into `frontend-modern/src/api/generated/aiChatEvents.ts`; agent capability
-    manifest types are generated from `internal/agentcapabilities` payload
-    structs into `frontend-modern/src/api/generated/agentCapabilities.ts`.
-    Those generated projections must stay derived through
-    `scripts/generate-types.go`, and the chat event union must not include the
-    retired `explore_status` pre-pass event. Runtime
-    workflow telemetry may remain a transport event, but browser Assistant
+    routes such as `pulse:local-inventory`. Agent capability manifest types are
+    generated from `internal/agentcapabilities` payload structs into
+    `frontend-modern/src/api/generated/agentCapabilities.ts` and must stay
+    derived through `scripts/generate-types.go`. The chat stream must not
+    carry the retired `explore_status` pre-pass event. Runtime workflow
+    telemetry may remain a transport event, but client-bound Assistant
     streams must use `chat.StreamEvent.ClientSafe()` so raw provider
     `thinking` payloads and serialized tool-call prose cannot cross the API
-    boundary. Browser Assistant output is owned by the AI runtime presentation
-    contract rather than by API-client event typing.
+    boundary.
     Tool execution progress is part of this SSE contract: `tool_start`,
     `tool_progress`, `tool_cancel`, and `tool_end` must carry typed payloads
     generated from `internal/ai/chat` structs so the frontend can mutate one
@@ -2491,52 +2432,6 @@ payload shape change when the portal presents compact client rows.
     fixture must pace its browser-facing status/tool/content events enough to
     prove the visible stream contract, while tests may disable that pace to keep
     backend proof fast.
-    The frontend API client may also own an explicit local dev/test Assistant
-    stream fixture at `frontend-modern/src/api/aiChatDevStreamFixture.ts` for
-    fast UX iteration against the real stream reducer. That fixture may
-    short-circuit `frontend-modern/src/api/aiChat.ts` only in Vite dev or test
-    mode, only for reserved `/fixture ...` prompts, and only by calling the
-    normal `AIChatAPI.chat` event callback with the generated
-    `AIChatStreamEvent` union (`session`, `workflow_state`, `thinking`,
-    `tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
-    `done`). It must not open a backend session, mutate persisted chat history,
-    add browser-only stream event shapes, or become a production fallback for
-    provider or VPN failures. At least one fixture-backed Assistant tool
-    sequence must exercise the OpenCode-parity raw tool-input path by starting
-    with incomplete provider-style `raw_input`, then mutating the same tool row
-    with completed arguments through the normal `tool_progress` event.
-    At least one fixture-backed Assistant tool sequence must exercise the
-    skipped-tool lifecycle by resolving a visible `tool_start` row through
-    `tool_cancel` instead of hiding the activity. At least one fixture-backed
-    Assistant tool sequence must exercise live pending/running tool evidence by
-    emitting placeholder structured input plus raw provider-style input on
-    `tool_start`, mutating that same row through `tool_progress`, and pacing the
-    running state long enough for browser proof to inspect and copy both the
-    completed input and current progress before `tool_end`. At least one
-    fixture-backed Assistant tool sequence must exercise successful long
-    plain-text tool output by emitting enough output lines to prove the browser
-    drawer renders a bounded collapsed preview, avoids an opaque output badge,
-    and preserves the full output in expandable details. At least one
-    fixture-backed Assistant tool sequence must exercise compacted provider artifact
-    suppression by emitting compacted pre-tool content before a governed tool row
-    and final normal answer content. At least one fixture-backed Assistant tool
-    sequence must exercise a buffered `tool_start` -> `tool_end` burst with no
-    provider delay between the two events, followed by a paced content/terminal
-    step, so browser proof can verify that fast command activity remains
-    perceptible without a real provider request. At least one fixture-backed
-    Assistant tool sequence must exercise consecutive multi-tool activity with a
-    paced completed first row followed by a live second row, so browser proof can
-    verify replacement/compaction motion without provider timing. At least one
-    fixture-backed Assistant sequence must exercise `provider_retry` with `attempt`,
-    `max_attempts`, and `retry_after_ms` metadata plus a paced retry window, so
-    browser proof can verify visible retry countdown behavior without a real
-    provider request, VPN dependency, or API spend. At least one fixture-backed
-    Assistant sequence must exercise `stream_idle` after selected-provider
-    startup, so browser proof can verify visible idle liveness without forcing a
-    real provider to pause on demand. At least one fixture-backed Assistant
-    sequence must exercise the local prompt-send state by emitting `session`,
-    then pacing the first backend `workflow_state` long enough for browser proof
-    to verify immediate visible activity without opening a provider request.
 65. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     The AI settings payload on `/api/settings/ai` carries no cloud-context-privacy
     field: cloud context behavior is a fixed posture (real context to cloud, with
@@ -2582,8 +2477,8 @@ payload shape change when the portal presents compact client rows.
     Assistant and settings readiness; Patrol-specific wording is reserved for
     Patrol preflight, Patrol findings, and Patrol run records. Raw details stay
     available only to server logs or redacted governed internal Patrol
-    evidence. The frontend API client, settings shell, and Assistant drawer
-    must treat this payload as the canonical provider health contract rather
+    evidence. The frontend API client and settings shell must treat this
+    payload as the canonical provider health contract rather
     than parsing free-form provider error strings.
 66. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 67. `internal/api/alerting/notification_queue.go` shared with `notifications`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
@@ -3748,9 +3643,7 @@ a new API state machine, queue contract, or verification-accounting field.
     selected-route `provider_start` message is operator
     progress copy and must be active/in-progress wording such as
     `<Provider> is starting the response.` while the typed `provider` and `model`
-    fields carry the exact route identity. The generated
-    `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
-    from `internal/ai/chat/types.go` through `scripts/generate-types.go`;
+    fields carry the exact route identity.
     `frontend-modern/src/api/generated/agentCapabilities.ts` must stay
     derived from `internal/agentcapabilities`, including manifest surface
     contract fields; and frontend API tests must pin
@@ -4797,9 +4690,8 @@ the authoritative analysis outcome.
 26. Keep shared AI runtime reads centralized on that same governed contract:
     `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
     read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers
-    such as `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
-    `frontend-modern/src/components/AI/Chat/index.tsx`, and
-    `frontend-modern/src/components/AI/AICostDashboard.tsx` must reuse that
+    such as `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`
+    and `frontend-modern/src/components/AI/AICostDashboard.tsx` must reuse that
     shared store for read-side runtime truth, while
     `frontend-modern/src/components/Settings/useAISettingsState.ts` remains
     the write-side settings owner. Non-AI settings surfaces such as
@@ -7826,8 +7718,8 @@ provider-local routes. Phase 1 must not add public `/api/vmware/resources`,
 transport just because the internal poller now projects VMware-backed
 resources into the shared canonical inventory.
 That same shared API contract now also owns Assistant mention transport for
-those canonical resources. `frontend-modern/src/api/aiChat.ts`,
-`internal/api/ai_handler.go`, and `internal/api/ai_handlers.go` must preserve
+those canonical resources. `internal/api/ai_handler.go`
+and `internal/api/ai_handlers.go` must preserve
 structured mention payloads for canonical `agent`, `vm`, `storage`, and
 `network` resources as shared unified-resource IDs plus shared mention types,
 so VMware-backed reads stay on `/api/ai/*` and `/api/resources*` instead of
@@ -9432,10 +9324,8 @@ Pulse-authored attention reason, operator decision, or recommended next step. An
 action note from a durable investigation record is context, not remediation
 guidance. That governed action artifact metadata must come from the same
 structured action reference sent to chat execution, including any recovered live
-Patrol approval, so visible and model-only handoffs stay consistent. Patrol's
-frontend Assistant drawer briefing must use that same factual frame for
-visible handoffs from findings, while the downstream chat
-service hydrates live resource state, timeline, and action audit context around
+Patrol approval, so visible and model-only handoffs stay consistent. The downstream chat service
+hydrates live resource state, timeline, and action audit context around
 that same handoff. Backend chat handling must treat matching frontend Patrol
 handoff context as secondary to durable finding context, not a replacement for
 server-refreshed approval, resource, action, or requester authority. Frontend Patrol
@@ -9453,9 +9343,7 @@ paste raw approval or action command text into a chat prompt.
 Patrol remediation-plan or action-artifact Assistant handoffs must pass only safe
 status, risk, description, and command-count posture as non-authoritative context
 for the configured LLM to critique; raw plan command and rollback command
-payloads remain owned by the governed remediation/action APIs and panels. The
-frontend Assistant drawer must not turn those artifacts into visible Patrol step
-lists, suggested-prompt chips, or a "plan attached" answer. Evidence,
+payloads remain owned by the governed remediation/action APIs and panels. Evidence,
 confidence, approval risk, prerequisites, recurrence, rollback, and verification
 belong in model-only context or governed approval surfaces unless the operator
 explicitly asks the LLM for them.
@@ -12586,6 +12474,36 @@ Routes, caller scope/token filtering, cache policy and probe count are unchanged
 `TestContract_DiagnosticsAPIRejectionGuidanceSurvivesSerialization` cover real
 HTTP statuses, private-body controls, same-credential fixture recovery and wire
 attribution. They are not installed permission or guest-recovery acceptance.
+
+The browser Assistant chat window was retired on 2026-10-22. Its frontend
+client (`frontend-modern/src/api/aiChat.ts`), the dev stream fixture, and the
+generated TypeScript chat event projection left with it; `scripts/generate-types.go`
+no longer emits chat stream types. `/api/ai/chat`, the session endpoints, and
+the chat stream payloads keep their contracts because Patrol investigations
+and Pulse Mobile chat still use them, pinned server-side by
+`internal/api/contract_test.go`. The alert Investigate action now calls
+`POST /api/ai/patrol/run` with `resource_ids`, `alert_identifier`, and
+`alert_type`, and the External agents settings route is
+`/settings/pulse-intelligence/agents`.
+
+`/api/security/status` `settingsCapabilities` gained `patrolRun` on 2026-10-22.
+`securityStatusCanRunPatrol` answers that route's RequireAdmin + `ai:execute`
+gate from the security status snapshot, like the other admin capabilities, so
+it validates no token and has no side effect. Where `ensureAdminSession`
+differs from `canAccessAdminSurface` it follows the route: an instance
+administrator on an org-scoped session is admitted, an organization-bound
+token is refused whatever its scopes, and a session cookie beside a token must
+belong to an instance administrator. The snapshot's remaining gaps
+(recovery-session binding, proxy-over-token precedence, Bearer-only tokens,
+the dev bypass beside an explicit token) are shared with every settings
+capability. The browser offers alert Investigate only where the field is true. Auth-free installs report no capability
+set and the frontend treats them as allowed, as it already does for update
+status. `TestContract_SecurityStatusPatrolRunTracksRunRouteGate` keeps the
+field and the route in agreement, including a non-admin cookie beside a token;
+`TestSecurityStatusPatrolRunRefusesOrgBoundToken` and
+`TestSecurityStatusPatrolRunFollowsInstanceAdminOnOrgScopedSession` compare it
+with `ensureAdminSession` directly, and the capability enforcement tests list it
+with the other admin-only fields.
 
 ### Typed investigation conclusion tool (22 October 2026)
 

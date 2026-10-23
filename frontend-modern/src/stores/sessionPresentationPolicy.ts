@@ -41,10 +41,12 @@ function normalizeSessionPresentationPolicy(
 }
 
 export function syncSessionPresentationPolicy(
-  status?: Pick<
-    SecurityStatus,
-    'sessionCapabilities' | 'presentationPolicy' | 'settingsCapabilities' | 'tokenScopes'
-  > | null,
+  status?:
+    | (Pick<
+        SecurityStatus,
+        'sessionCapabilities' | 'presentationPolicy' | 'settingsCapabilities' | 'tokenScopes'
+      > & { requiresAuth?: boolean })
+    | null,
 ): SecurityStatusPresentationPolicy {
   syncSessionCapabilities(status);
   syncSessionSettingsCapabilities(status);

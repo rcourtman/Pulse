@@ -21,21 +21,8 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
-import { aiChatStore } from '@/stores/aiChat';
-import {
-  buildPatrolAssistantApprovalBriefingInput,
-  buildPatrolAssistantFindingHandoffFromUnifiedFinding,
-  buildPatrolAssistantProposedFixBriefingInput,
-  buildPatrolAssistantProposedFixBriefingInputFromApproval,
-  buildPatrolRemediationPlanAssistantBriefing,
-  buildPatrolRemediationPlanAssistantModelContext,
-  patrolAssistantFindingHandoffRequiresApprovalMode,
-  type PatrolAssistantApprovalBriefingInput,
-  type PatrolAssistantProposedFixBriefingInput,
-} from '@/features/patrol/patrolInvestigationContextModel';
 import { getFlappingPresentation } from '@/features/patrol/patrolHomePresentation';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
-import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState, PatrolAutonomyLevel } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
@@ -56,7 +43,6 @@ import { getPatrolFindingsEmptyState } from '@/utils/patrolEmptyStatePresentatio
 import { presentCapacityForecast } from '@/utils/patrolCapacityForecastPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
-import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import InfoIcon from 'lucide-solid/icons/info';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
@@ -89,7 +75,6 @@ import {
   getFindingSnoozePresentation,
   getFindingEvidencePresentation,
   hasFindingInvestigationDetails,
-  hasFindingInvestigationHandoffPointer,
   getInvestigationConfidenceBadgeTone,
   getInvestigationOutcomeBadgeTone,
   getInvestigationOutcomeLabel,
@@ -153,7 +138,6 @@ interface FindingsPanelProps {
   coverageStale?: boolean;
   patrolRuns?: PatrolRunRecord[];
   findingsSource?: 'unified' | 'patrol';
-  onAssistantHandoff?: (finding: UnifiedFinding) => void;
   patrolProHandoff?: (
     finding: UnifiedFinding,
   ) => { detail: string; actionLabel?: string; destination?: UpgradeDestination } | undefined;
@@ -171,16 +155,6 @@ interface FindingsPanelProps {
     | 'status'
     | 'error_count'
   >;
-}
-
-function getPrimaryAssistantFindingAction(_finding: UnifiedFinding): {
-  label: string;
-  title: string;
-} {
-  return {
-    label: 'Open in Assistant',
-    title: 'Open Pulse Assistant with this finding attached',
-  };
 }
 
 function getFindingSuppressionRuleScope(finding: UnifiedFinding) {
@@ -229,7 +203,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   >('will_fix_later');
   const [dismissNote, setDismissNote] = createSignal('');
 
-  const [dismissedPlanIds, setDismissedPlanIds] = createSignal<string[]>([]);
   const isPatrolFindingsSource = createMemo(() => props.findingsSource === 'patrol');
   const hasUnknownRunSnapshot = createMemo(
     () => props.runSnapshot !== undefined && props.filterFindingIds === undefined,
@@ -289,40 +262,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       : aiIntelligenceStore.findingsWithPendingApprovals,
   );
 
-  const handleDismissPlan = async (plan: RemediationPlan, e: Event) => {
-    e.stopPropagation();
-    setDismissedPlanIds((prev) => [...prev, plan.id]);
-    notificationStore.success('Remediation plan dismissed');
-  };
-
-  // Map of finding_id -> latest remediation plan artifact
-  const plansByFindingId = createMemo(() => {
-    const dismissedPlanIdsSet = new Set(dismissedPlanIds());
-    const map = new Map<string, RemediationPlan>();
-    for (const plan of aiIntelligenceStore.remediationPlans) {
-      if (dismissedPlanIdsSet.has(plan.id)) continue;
-      const existing = map.get(plan.finding_id);
-      if (!existing) {
-        map.set(plan.finding_id, plan);
-        continue;
-      }
-      const a = Date.parse(plan.created_at);
-      const b = Date.parse(existing.created_at);
-      if (!Number.isNaN(a) && !Number.isNaN(b) && a > b) {
-        map.set(plan.finding_id, plan);
-      }
-    }
-    return map;
-  });
-
-  // Load findings and remediation plans on mount
+  // Load findings on mount
   createEffect(() => {
     if (isPatrolFindingsSource()) {
       aiIntelligenceStore.loadPatrolFindings();
     } else {
       aiIntelligenceStore.loadFindings();
     }
-    aiIntelligenceStore.loadRemediationPlans();
   });
 
   createEffect(() => {
@@ -744,10 +690,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   };
 
   // Start (or re-start) Patrol's investigation of a finding. This is the
-  // forward path for an un-investigated finding on the Patrol surface, where
-  // the Assistant primary action is intentionally suppressed: it moves the
-  // row from a triage dead-end into the detect → investigate → propose →
-  // approve → verify loop, reusing the existing reinvestigate endpoint.
+  // forward path for an un-investigated finding on the Patrol surface: it
+  // moves the row from a triage dead-end into the detect → investigate →
+  // propose → approve → verify loop, reusing the existing reinvestigate
+  // endpoint.
   const handleInvestigate = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     setActionLoading(finding.id);
@@ -791,58 +737,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const handleCancelNote = (e: Event) => {
     e.stopPropagation();
     setEditingNoteId(null);
-  };
-
-  const loadLatestInvestigationProposedFixBriefing = async (
-    finding: UnifiedFinding,
-    pendingApprovalBriefing: PatrolAssistantApprovalBriefingInput | undefined,
-  ): Promise<PatrolAssistantProposedFixBriefingInput | undefined> => {
-    if (finding.investigationRecord?.proposed_fix) {
-      return undefined;
-    }
-    const hasInvestigationPointer =
-      hasFindingInvestigationHandoffPointer(finding) || Boolean(pendingApprovalBriefing?.id);
-    if (!hasInvestigationPointer) {
-      return undefined;
-    }
-    if (
-      !patrolAssistantFindingHandoffRequiresApprovalMode({
-        investigationOutcome: finding.investigationOutcome,
-        remediationId: finding.remediationPlanId,
-        pendingApproval: pendingApprovalBriefing,
-        investigationRecord: finding.investigationRecord,
-      })
-    ) {
-      return undefined;
-    }
-
-    try {
-      const investigation = await AIAPI.getInvestigation(finding.id);
-      return buildPatrolAssistantProposedFixBriefingInput(investigation?.proposed_fix);
-    } catch {
-      return undefined;
-    }
-  };
-
-  const openFindingInAssistant = async (finding: UnifiedFinding) => {
-    await aiIntelligenceStore.loadPendingApprovals();
-    const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
-      (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
-    );
-    const pendingApprovalBriefing = buildPatrolAssistantApprovalBriefingInput(pendingApproval);
-    const latestInvestigationProposedFix = await loadLatestInvestigationProposedFixBriefing(
-      finding,
-      pendingApprovalBriefing,
-    );
-    const proposedFix =
-      latestInvestigationProposedFix ||
-      buildPatrolAssistantProposedFixBriefingInputFromApproval(pendingApproval);
-    const handoff = buildPatrolAssistantFindingHandoffFromUnifiedFinding(finding, {
-      pendingApproval: pendingApprovalBriefing,
-      proposedFix,
-    });
-    aiChatStore.open(handoff.context);
-    props.onAssistantHandoff?.(finding);
   };
 
   // Create rule from this is the promotion path: take the operator's
@@ -917,8 +811,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   // the seven-question schema (title + impact + recommendation + trust
   // signals) so a teammate seeing the finding cold has the operator-facing
   // context they need without opening Pulse. Investigation evidence and
-  // rollback plans are deferred to Discuss with Assistant — they're
-  // conversation context, not "share this finding" context.
+  // rollback plans stay out: they are not "share this finding" context.
   const handleCopyFindingSummary = async (finding: UnifiedFinding, e: Event) => {
     e.stopPropagation();
     const text = formatFindingForClipboard(finding);
@@ -928,27 +821,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     } else {
       notificationStore.error('Could not copy finding summary');
     }
-  };
-
-  const handleOpenPlanInAssistant = (finding: UnifiedFinding, plan: RemediationPlan, e: Event) => {
-    e.stopPropagation();
-    const subject = getFindingSubjectPresentation(finding).label;
-    const title = getFindingTitlePresentation(finding).label;
-    const briefing = buildPatrolRemediationPlanAssistantBriefing({ title, subject, plan });
-    const handoffContext = buildPatrolRemediationPlanAssistantModelContext({
-      title,
-      subject,
-      plan,
-    });
-
-    aiChatStore.open({
-      targetType: finding.resourceType,
-      targetId: finding.resourceId,
-      findingId: finding.id,
-      handoffContext,
-      briefing,
-      autonomousMode: false,
-    });
   };
 
   const formatTime = (isoString: string) => formatRelativeTime(isoString, { compact: true });
@@ -1492,8 +1364,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const primaryAction = getFindingPrimaryActionPresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
     const relatedFindings = options.relatedFindings ?? [];
-    const shouldShowAssistantPrimaryAction = !isPatrolFindingsSource();
-    const shouldShowAssistantManageAction = isPatrolFindingsSource() && !primaryAction;
     const proHandoff = !primaryAction ? props.patrolProHandoff?.(finding) : undefined;
     const modeNudge = !primaryAction ? props.patrolModeNudge?.(finding) : undefined;
     const shouldShowExpandedManageMenu =
@@ -1729,31 +1599,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </a>
             )}
           </Show>
-          <Show when={!primaryAction && shouldShowAssistantPrimaryAction}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void openFindingInAssistant(finding);
-              }}
-              class="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
-              title={getPrimaryAssistantFindingAction(finding).title}
-            >
-              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
-              {getPrimaryAssistantFindingAction(finding).label}
-            </button>
-          </Show>
           <Show
             when={
               !primaryAction &&
-              !shouldShowAssistantPrimaryAction &&
+              isPatrolFindingsSource() &&
               finding.status === 'active' &&
               !finding.investigationStatus &&
               !finding.investigationOutcome &&
@@ -1813,19 +1662,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 Resolve or dismiss
               </summary>
               <div class="mt-1 flex min-w-48 flex-col gap-1 rounded-sm border border-border bg-surface p-1 shadow-xs">
-                <Show when={shouldShowAssistantManageAction}>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void openFindingInAssistant(finding);
-                    }}
-                    class="rounded-sm px-2 py-1 text-left hover:bg-surface-hover"
-                    title={getPrimaryAssistantFindingAction(finding).title}
-                  >
-                    {getPrimaryAssistantFindingAction(finding).label}
-                  </button>
-                </Show>
                 <Show when={editingNoteId() !== finding.id && !finding.userNote}>
                   <button
                     type="button"
@@ -2112,46 +1948,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         >
           <ApprovalSection
             findingId={finding.id}
-            findingStatus={finding.status}
             hasAction={Boolean(finding.investigationRecord?.action)}
             investigationOutcome={finding.investigationOutcome}
-            findingTitle={getFindingTitlePresentation(finding).label}
             resourceName={finding.resourceName}
-            resourceType={finding.resourceType}
-            resourceId={finding.resourceId}
           />
-        </Show>
-
-        {/* Existing model-owned action artifact: compact Assistant review entry. */}
-        <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
-          {(plan) => {
-            return (
-              <div class="mt-3 pt-3 border-t border-border-subtle">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div class="flex min-w-0 items-center gap-2">
-                    <AlertCircleIcon class="h-4 w-4 shrink-0 text-muted" />
-                    <span class="text-sm font-medium text-base-content">Assistant context</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
-                      class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-sm flex items-center justify-center gap-1.5"
-                    >
-                      Ask Assistant
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDismissPlan(plan(), e)}
-                      class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded-sm"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          }}
         </Show>
       </div>
     );

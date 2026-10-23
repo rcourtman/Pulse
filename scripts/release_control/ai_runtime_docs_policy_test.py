@@ -66,10 +66,6 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("The proposal boundary is intentionally not an execution boundary", normalized_content)
         self.assertIn("Coverage remains `uncovered` until a core-owned validator", normalized_content)
         self.assertIn(
-            "it cannot create lifecycle truth, invent action authority, or hide uncertainty",
-            normalized_content,
-        )
-        self.assertIn(
             "Suppression is temporary and requires an operator reason plus a bounded expiry",
             normalized_content,
         )
@@ -81,46 +77,36 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             "The Assistant model matrix below proves Assistant orchestration only",
             normalized_content,
         )
-        self.assertIn("### Tool Inventory", content)
-        self.assertIn("The Assistant tool list is registry-owned at runtime", content)
+        # The in-app Assistant chat is retired: external agents use pulse-mcp
+        # over the same canonical manifest, and Pulse Mobile keeps its chat tab
+        # until the app retires.
+        self.assertIn("### Using Pulse from Claude Code, Codex, and other agents", content)
+        self.assertIn("Pulse has no in-app chat window", normalized_content)
+        self.assertIn("Settings → Pulse Intelligence → External agents", normalized_content)
+        self.assertIn("The tool list is registry-owned at runtime", content)
         self.assertIn(
-            "Each turn receives an available-tool manifest generated from Pulse's governed tool registry",
+            "the live `/api/agent/capabilities` manifest or `pulse-mcp` `tools/list`",
             normalized_content,
         )
+        self.assertIn("The same manifest carries reusable `workflowPrompts` metadata", normalized_content)
         self.assertIn(
-            "tool-result handling, approval boundaries, and Patrol-only tool filtering",
-            normalized_content,
-        )
-        self.assertIn(
-            "use the live `/api/agent/capabilities` manifest or `pulse-mcp` `tools/list`",
-            normalized_content,
-        )
-        self.assertIn(
-            "The same manifest also carries reusable `workflowPrompts` metadata",
-            normalized_content,
-        )
-        self.assertIn(
-            "Pulse Assistant-compatible starters and MCP `prompts/list` clients discover the same fleet triage, resource investigation, and Patrol finding review workflows",
-            normalized_content,
-        )
-        self.assertIn(
-            "Pulse Assistant and `pulse-mcp` are sibling surfaces over Pulse Intelligence",
+            "MCP `prompts/list` clients discover the fleet triage, resource investigation, and Patrol finding review workflows",
             normalized_content,
         )
         self.assertIn("Patrol mode and governed Pulse Intelligence operations", normalized_content)
-        self.assertIn("not competing implementations, and neither replaces the other", normalized_content)
         self.assertIn(
-            "New operational capabilities should be added to the canonical API manifest first",
+            "New operational capabilities are added to the canonical API manifest first",
             normalized_content,
         )
+        self.assertIn("MCP-only copies of the same business logic are drift", normalized_content)
+        self.assertIn("## Pulse Assistant chat (retired)", content)
         self.assertIn(
-            "MCP-only actions and Assistant-only copies of the same business logic are drift",
+            "Pulse Mobile keeps its chat tab until the app retires on 31 March 2027",
             normalized_content,
         )
-        self.assertNotIn("two supported operator-facing surfaces", normalized_content)
-        self.assertNotIn("Pulse Assistant should be replaced by", normalized_content)
-        self.assertNotIn("MCP replaces Pulse Assistant", normalized_content)
-        self.assertNotIn("Assistant can be removed", normalized_content)
+        self.assertNotIn("Explain with Assistant", content)
+        self.assertNotIn("Open in Assistant", content)
+        self.assertNotIn("sibling surfaces", normalized_content)
         # The Patrol summary card and its supporting-context section are gone,
         # so the docs point at where check history actually lives.
         self.assertIn("Activity > Finding options and history", normalized_content)
@@ -327,16 +313,26 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
 
 
     def test_existing_help_matches_planning_boundary(self):
-        for name in ("AI.md", "AI_AUTONOMY.md"):
+        sections = {
+            "AI.md": (
+                "## Pulse Assistant chat (retired)",
+                ("pulse-mcp", "Have Patrol investigate", "Pulse Mobile", "31 March 2027", "Never auto-remediate"),
+            ),
+            "AI_AUTONOMY.md": (
+                "## Pulse Mobile chat control level",
+                ("Read-only", "Ask first", "Actions", "does not execute", "stored", "entitlement", "Patrol", "verification", "Never auto-remediate", "31 March 2027"),
+            ),
+        }
+        for name, (heading, retained_terms) in sections.items():
             with self.subTest(name=name):
                 text = read_repo_text("docs/" + name)
                 self.assertEqual(text, read_repo_text("frontend-modern/public/docs/" + name))
-                start = text.index("## Assistant Control Levels" if name == "AI_AUTONOMY.md" else "### Control Levels")
+                start = text.index(heading)
                 end = text.index("\n---", start)
                 section = " ".join(text[start:end].split())
-                for retained in ("Read-only", "Ask first", "Actions", "does not execute", "stored", "entitlement", "Patrol", "verification", "Never auto-remediate", "has been removed"):
+                for retained in retained_terms:
                     self.assertIn(retained, section)
-                for retired in ("executes commands without prompting", "AI executes actions without prompting", "APPROVAL_REQUIRED", "Approve** to execute"):
+                for retired in ("executes commands without prompting", "AI executes actions without prompting", "APPROVAL_REQUIRED", "Approve** to execute", "Chat action mode"):
                     self.assertNotIn(retired, section)
 
 

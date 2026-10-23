@@ -10,10 +10,10 @@ import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/a
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
-import { ToolExecutionBlock } from '@/components/AI/Chat/ToolExecutionBlock';
+import { ToolExecutionBlock } from './ToolExecutionBlock';
 
-// Compact variant of the Assistant chat's markdown styling, scaled for the
-// investigation thread's text-xs bubbles.
+// Compact markdown styling, scaled for the investigation thread's text-xs
+// bubbles.
 const investigationMarkdownClass =
   'text-xs prose prose-slate prose-sm dark:prose-invert max-w-none wrap-break-word prose-p:leading-relaxed prose-p:my-1.5 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:rounded-md prose-pre:text-[10px] prose-pre:border prose-pre:border-slate-800 prose-code:text-blue-700 dark:prose-code:text-blue-300 prose-code:bg-blue-50 dark:prose-code:bg-blue-900/25 prose-code:px-1 prose-code:py-0.5 prose-code:rounded-sm prose-code:font-mono prose-code:text-[0.9em] prose-code:before:content-none prose-code:after:content-none prose-headings:font-semibold prose-headings:my-2 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5';
 
@@ -88,9 +88,9 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                       </details>
                     </Show>
 
-                    {/* Text content: assistant turns carry markdown (same model
-                        output as the Assistant chat); render it through the
-                        shared sanitizing renderer instead of raw text. */}
+                    {/* Text content: assistant turns carry model markdown;
+                        render it through the shared sanitizing renderer
+                        instead of raw text. */}
                     <Show when={msg.content}>
                       <Show
                         when={msg.role === 'assistant'}

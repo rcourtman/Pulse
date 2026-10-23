@@ -1,5 +1,10 @@
 # Pulse Assistant safety architecture
 
+> **Status:** the in-app Assistant chat window has been retired. This runtime
+> still runs Patrol investigations, and Pulse Mobile's chat until the app
+> retires on 31 March 2027. External agents reach the same governed tools
+> through `pulse-mcp`.
+
 Pulse enforces authority at the shared tool and action boundaries. The model
 owns interpretation, investigation and action judgment within those boundaries.
 A sequence of tool calls cannot establish that a diagnosis is correct.

@@ -206,7 +206,7 @@ describe('AIAPI', () => {
     );
   });
 
-  it('encodes dynamic provider, approval, finding, and plan identifiers', async () => {
+  it('encodes dynamic provider, approval, and finding identifiers', async () => {
     apiFetchJSONMock.mockResolvedValue({} as any);
 
     await AIAPI.testProvider('openai/internal');
@@ -219,11 +219,6 @@ describe('AIAPI', () => {
       method: 'POST',
       body: JSON.stringify({ model: 'deepseek:deepseek-v4-pro' }),
     });
-
-    await AIAPI.getRemediationPlan('plan/1?x=1');
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/ai/remediation/plan?plan_id=plan%2F1%3Fx%3D1',
-    );
 
     await AIAPI.approveInvestigationFix('approval/root');
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/approvals/approval%2Froot/approve', {
@@ -278,9 +273,6 @@ describe('AIAPI', () => {
 
     apiFetchJSONMock.mockRejectedValueOnce(paymentRequiredError);
     await expect(AIAPI.getPendingApprovals()).resolves.toEqual([]);
-
-    apiFetchJSONMock.mockRejectedValueOnce(paymentRequiredError);
-    await expect(AIAPI.getRemediationPlans()).resolves.toEqual({ plans: [] });
   });
 
   it('does not treat status text without canonical error status as payment required', async () => {
@@ -311,16 +303,6 @@ describe('AIAPI', () => {
         requestedBy: 'pulse_patrol',
       }),
     ]);
-  });
-
-  it('normalizes remediation plans from optional or legacy collection payloads', async () => {
-    apiFetchJSONMock.mockResolvedValueOnce({ plans: [{ id: 'plan-1' }] } as any);
-    await expect(AIAPI.getRemediationPlans()).resolves.toEqual({
-      plans: [{ id: 'plan-1' }],
-    });
-
-    apiFetchJSONMock.mockResolvedValueOnce({ executions: [{ id: 'exec-1' }] } as any);
-    await expect(AIAPI.getRemediationPlans()).resolves.toEqual({ plans: [] });
   });
 
   it('returns null only for canonical not-found investigation lookups', async () => {
