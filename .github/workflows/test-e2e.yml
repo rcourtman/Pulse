@@ -14,6 +14,8 @@ on:
       - '.github/workflows/test-e2e.yml'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
+      - 'scripts/browser_os_packages.py'
+      - 'scripts/tests/test_browser_os_packages.py'
       - 'scripts/e2e_test_images.py'
       - 'scripts/tests/test_e2e_test_images.py'
       - 'scripts/collect_e2e_container_logs.py'
@@ -34,6 +36,8 @@ on:
       - '.github/workflows/test-e2e.yml'
       - 'scripts/playwright-apt.conf'
       - 'scripts/tests/test_playwright_acquisition.py'
+      - 'scripts/browser_os_packages.py'
+      - 'scripts/tests/test_browser_os_packages.py'
       - 'scripts/e2e_test_images.py'
       - 'scripts/tests/test_e2e_test_images.py'
       - 'scripts/collect_e2e_container_logs.py'
@@ -107,6 +111,9 @@ jobs:
       - name: Validate browser dependency acquisition policy
         run: python3 scripts/tests/test_playwright_acquisition.py
 
+      - name: Validate verified browser OS package reuse
+        run: python3 scripts/tests/test_browser_os_packages.py
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -174,6 +181,25 @@ jobs:
       - name: Bound browser OS dependency acquisition
         run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
 
+      # The browser OS packages (about 120 MB for Chromium plus WebKit) come
+      # from the runner's Azure Ubuntu mirror, which since 22 October 2026
+      # serves some runners at tens of kB/s (actions/runner-images#14823 and
+      # #15040). Reuse the newest saved package set. apt would accept a cached
+      # file on size alone, so scripts/browser_os_packages.py admits only files
+      # whose SHA256 matches the freshly fetched signed index.
+      - name: Restore browser OS packages
+        id: browser-os-packages
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pulse-browser-os-packages
+          key: browser-os-packages-${{ runner.os }}-chromium-${{ hashFiles('tests/integration/package-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            browser-os-packages-${{ runner.os }}-chromium-${{ hashFiles('tests/integration/package-lock.json') }}-
+            browser-os-packages-${{ runner.os }}-chromium-
+
+      - name: Admit verified browser OS packages
+        run: python3 scripts/browser_os_packages.py seed "$HOME/.cache/pulse-browser-os-packages"
+
       - name: Install locked dependencies
         run: |
           npm ci --prefix tests/integration
@@ -184,6 +210,17 @@ jobs:
         timeout-minutes: 10
         working-directory: tests/integration
         run: npx playwright install --with-deps chromium
+
+      - name: Collect browser OS packages
+        id: browser-os-collect
+        run: python3 scripts/browser_os_packages.py collect "$HOME/.cache/pulse-browser-os-packages"
+
+      - name: Save browser OS packages
+        if: steps.browser-os-collect.outputs.changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pulse-browser-os-packages
+          key: ${{ steps.browser-os-packages.outputs.cache-primary-key }}
       - name: Validate offline issuer boundaries
         working-directory: tests/integration
         run: >-
@@ -284,6 +321,25 @@ jobs:
       - name: Bound browser OS dependency acquisition
         run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
 
+      # The browser OS packages (about 120 MB for Chromium plus WebKit) come
+      # from the runner's Azure Ubuntu mirror, which since 22 October 2026
+      # serves some runners at tens of kB/s (actions/runner-images#14823 and
+      # #15040). Reuse the newest saved package set. apt would accept a cached
+      # file on size alone, so scripts/browser_os_packages.py admits only files
+      # whose SHA256 matches the freshly fetched signed index.
+      - name: Restore browser OS packages
+        id: browser-os-packages
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pulse-browser-os-packages
+          key: browser-os-packages-${{ runner.os }}-chromium-webkit-${{ hashFiles('tests/integration/package-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            browser-os-packages-${{ runner.os }}-chromium-webkit-${{ hashFiles('tests/integration/package-lock.json') }}-
+            browser-os-packages-${{ runner.os }}-chromium-webkit-
+
+      - name: Admit verified browser OS packages
+        run: python3 scripts/browser_os_packages.py seed "$HOME/.cache/pulse-browser-os-packages"
+
       - name: Install Playwright dependencies
         # Chromium + WebKit requested 116 MB of authenticated OS packages in
         # the retained setup failure. Active downloads near 90 kB/s need over
@@ -295,6 +351,17 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium webkit
+
+      - name: Collect browser OS packages
+        id: browser-os-collect
+        run: python3 scripts/browser_os_packages.py collect "$HOME/.cache/pulse-browser-os-packages"
+
+      - name: Save browser OS packages
+        if: steps.browser-os-collect.outputs.changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pulse-browser-os-packages
+          key: ${{ steps.browser-os-packages.outputs.cache-primary-key }}
 
       - name: Install Pulse Account frontend dependencies
         working-directory: internal/cloudcp/portal/frontend
@@ -493,12 +560,42 @@ jobs:
       - name: Bound browser OS dependency acquisition
         run: sudo install -m 0644 scripts/playwright-apt.conf /etc/apt/apt.conf.d/99pulse-playwright-acquire
 
+      # The browser OS packages (about 120 MB for Chromium plus WebKit) come
+      # from the runner's Azure Ubuntu mirror, which since 22 October 2026
+      # serves some runners at tens of kB/s (actions/runner-images#14823 and
+      # #15040). Reuse the newest saved package set. apt would accept a cached
+      # file on size alone, so scripts/browser_os_packages.py admits only files
+      # whose SHA256 matches the freshly fetched signed index.
+      - name: Restore browser OS packages
+        id: browser-os-packages
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pulse-browser-os-packages
+          key: browser-os-packages-${{ runner.os }}-chromium-${{ hashFiles('tests/integration/package-lock.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            browser-os-packages-${{ runner.os }}-chromium-${{ hashFiles('tests/integration/package-lock.json') }}-
+            browser-os-packages-${{ runner.os }}-chromium-
+
+      - name: Admit verified browser OS packages
+        run: python3 scripts/browser_os_packages.py seed "$HOME/.cache/pulse-browser-os-packages"
+
       - name: Install Playwright dependencies
         timeout-minutes: 10
         working-directory: tests/integration
         run: |
           npm ci
           npx playwright install --with-deps chromium
+
+      - name: Collect browser OS packages
+        id: browser-os-collect
+        run: python3 scripts/browser_os_packages.py collect "$HOME/.cache/pulse-browser-os-packages"
+
+      - name: Save browser OS packages
+        if: steps.browser-os-collect.outputs.changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pulse-browser-os-packages
+          key: ${{ steps.browser-os-packages.outputs.cache-primary-key }}
 
       - name: Install Pulse Account frontend dependencies
         working-directory: internal/cloudcp/portal/frontend

@@ -323,6 +323,17 @@ class E2EImageWorkflowTest(unittest.TestCase):
             for ignored in ("continue-on-error", "if:", "||"):
                 self.assertNotIn(ignored, admission)
             self.assertLess(start, consumer.index("- name: Start "))
+            # Images arrive only as this run's artifact. The browser OS
+            # package cache is the job's only Actions cache and must never
+            # become a second, cross-run image channel.
+            cache_steps = re.findall(
+                r"(?ms)^        uses: actions/cache/(?:restore|save)@.*?(?=^      - name:|\Z)", consumer
+            )
+            self.assertEqual(len(cache_steps), 2)
+            for step in cache_steps:
+                self.assertIn("path: ~/.cache/pulse-browser-os-packages\n", step)
+                self.assertNotIn("pulse-e2e-images", step)
+                self.assertNotIn("docker", step.lower())
         self.assertIn("timeout-minutes: 60", job_block(workflow, "e2e"))
         self.assertIn("shard: [1, 2, 3, 4, 5, 6, 7, 8]", job_block(workflow, "e2e"))
         self.assertIn("timeout-minutes: 30", job_block(workflow, "agent-registration"))
@@ -354,6 +365,7 @@ class E2EImageWorkflowTest(unittest.TestCase):
             ('python3 scripts/e2e_test_images.py load "$RUNNER_TEMP/pulse-e2e-images"', 'python3 scripts/e2e_test_images.py load "$RUNNER_TEMP/pulse-e2e-images" || true'),
             ("PULSE_E2E_MANIFEST_SHA256: ${{ needs.test-images.outputs.manifest-sha256 }}", "PULSE_E2E_MANIFEST_SHA256: unchecked"),
             ("      - test-images\n", ""),
+            ("path: ~/.cache/pulse-browser-os-packages\n", "path: ${{ runner.temp }}/pulse-e2e-images\n"),
         ):
             with self.subTest(mutation=new):
                 with self.assertRaises(AssertionError):
