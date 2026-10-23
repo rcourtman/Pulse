@@ -9452,6 +9452,11 @@ Persisted report attempts and email retries retain that boundary. Recovery of a
 report delivery never replays an infrastructure action or grants an agent new
 execution authority.
 
+The 23 October 2026 change to how the digest counts investigation runs, and to
+how `internal/api/patrol_digest_email.go` words their outcomes, is read-only
+counting and copy. The email still renders the digest and issues no agent
+command, plan, capability, token, or binding change.
+
 ### Independent module CPU sampling baselines
 
 The host default system collector retains its own `hostmetrics.Collector` for

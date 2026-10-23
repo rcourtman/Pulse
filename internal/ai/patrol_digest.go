@@ -81,7 +81,9 @@ type PatrolDigestFindings struct {
 	Suppressed   int `json:"suppressed"`
 }
 
-// PatrolDigestInvestigations summarises completed investigations by outcome.
+// PatrolDigestInvestigations summarises the investigation runs that finished
+// in the window, one per run, by how each ended. A run whose fix later ran or
+// was verified carries that later outcome.
 type PatrolDigestInvestigations struct {
 	Total     int            `json:"total"`
 	ByOutcome map[string]int `json:"by_outcome"`
@@ -314,7 +316,6 @@ func summarizeDigestFindings(digest *PatrolDigest, findings []*Finding, inWindow
 		if f.ResolvedAt != nil && inWindow(*f.ResolvedAt) && !f.AutoResolved {
 			manualResolved++
 		}
-		investigationEvents := 0
 		for _, event := range f.Lifecycle {
 			if !inWindow(event.At) {
 				continue
@@ -324,37 +325,93 @@ func summarizeDigestFindings(digest *PatrolDigest, findings []*Finding, inWindow
 				digest.Findings.Dismissed++
 			case "suppressed":
 				digest.Findings.Suppressed++
-			case "investigation_outcome":
-				investigationEvents++
-				digest.Investigations.Total++
-				digest.Investigations.ByOutcome[digestOutcomeLabel("", event.Metadata)]++
 			}
 		}
-		// Findings that predate lifecycle logging, or were investigated through a
-		// path that only stamps the summary fields, still count once.
-		if investigationEvents == 0 && f.LastInvestigatedAt != nil && inWindow(*f.LastInvestigatedAt) {
+		for _, outcome := range digestInvestigationRuns(f.Lifecycle, inWindow) {
 			digest.Investigations.Total++
-			digest.Investigations.ByOutcome[digestOutcomeLabel(f.InvestigationOutcome, nil)]++
+			digest.Investigations.ByOutcome[outcome]++
 		}
 	}
 	digest.Findings.Resolved = digest.Findings.AutoResolved + manualResolved
 }
 
-// digestOutcomeLabel reads the investigation outcome from a lifecycle event.
-// The "investigation_outcome" event stores the outcome in metadata and keeps
-// From/To for the loop state, so metadata wins and To is only a fallback.
-func digestOutcomeLabel(fallback string, metadata map[string]string) string {
-	outcome := ""
-	if metadata != nil {
-		outcome = strings.TrimSpace(metadata["outcome"])
+// digestInvestigationRuns returns how each investigation run recorded in a
+// finding's lifecycle ended, for the runs that finished inside the window.
+// Each run counts once, in the window it finished. The lifecycle keeps a
+// finding's latest 50 rows, so a run whose rows it has already dropped is not
+// counted.
+//
+// A run's start and end are "investigation_updated" rows that move the status
+// into and out of running; a regression clears the status of a run still in
+// progress, so its end can also start from an empty status. A run whose own
+// fix is verified while it is open logs "verification_passed" at that
+// verification and no closing row, unless stuck-run recovery closes it or its
+// own end records a different outcome. The digest counts such a run at the
+// verification, keeps the verified result, and treats a closing row that
+// follows as the same run. A run whose end the store never records stays open
+// here until the next run starts, and a verification of its fix in that time
+// finishes it. After a run finishes, its fix can still move through the action
+// lifecycle ("investigation_outcome", then "verification_passed" once
+// verified); those rows relabel the latest finished run rather than counting
+// as another investigation. Rows carry no session ID, so the walker relies on
+// their order: a late end written by an older run reads as the end of
+// whichever run is open.
+func digestInvestigationRuns(lifecycle []FindingLifecycleEvent, inWindow func(time.Time) bool) []string {
+	running := string(InvestigationStatusRunning)
+	var finished []*string
+	var latest *string
+	open, closedByVerification := false, false
+	finish := func(outcome string, at time.Time) {
+		latest = &outcome
+		if inWindow(at) {
+			finished = append(finished, latest)
+		}
 	}
-	if outcome == "" {
-		outcome = strings.TrimSpace(fallback)
+	for _, event := range lifecycle {
+		switch event.Type {
+		case "investigation_updated":
+			prev := strings.TrimSpace(event.Metadata["prev_status"])
+			next := strings.TrimSpace(event.Metadata["next_status"])
+			switch {
+			case next == running:
+				open, closedByVerification = true, false
+			case next != "" && (prev == running || open):
+				if !closedByVerification {
+					finish(digestRunOutcome(event.Metadata["next_outcome"], next), event.At)
+				}
+				open, closedByVerification = false, false
+			}
+		case "investigation_outcome":
+			// While a run is open its closing row carries the result.
+			if outcome := strings.TrimSpace(event.Metadata["next_outcome"]); !open && latest != nil && outcome != "" {
+				*latest = strings.ToLower(outcome)
+			}
+		case "verification_passed":
+			if open {
+				open, closedByVerification = false, true
+				finish(string(InvestigationOutcomeFixVerified), event.At)
+			} else if latest != nil {
+				*latest = string(InvestigationOutcomeFixVerified)
+			}
+		}
 	}
-	if outcome == "" {
-		return "unknown"
+	outcomes := make([]string, len(finished))
+	for i, outcome := range finished {
+		outcomes[i] = *outcome
 	}
-	return strings.ToLower(outcome)
+	return outcomes
+}
+
+// digestRunOutcome names how a run ended. A run that failed before reaching
+// any outcome is "failed", the same bucket telemetry uses for that state.
+func digestRunOutcome(outcome, status string) string {
+	if outcome = strings.ToLower(strings.TrimSpace(outcome)); outcome != "" {
+		return outcome
+	}
+	if strings.EqualFold(strings.TrimSpace(status), string(InvestigationStatusFailed)) {
+		return "failed"
+	}
+	return "unknown"
 }
 
 func summarizeDigestActions(records []unifiedresources.ActionAuditRecord, inWindow func(time.Time) bool) PatrolDigestActions {
@@ -430,14 +487,15 @@ func PatrolDigestOutcomeOrder(byOutcome map[string]int) []string {
 		"fix_verification_failed":  2,
 		"cannot_fix":               3,
 		"timed_out":                4,
-		"unclassified":             5,
-		"fix_queued":               6,
-		"fix_executed":             7,
-		"fix_verification_unknown": 8,
-		"fix_verified":             9,
-		"resolved":                 10,
-		"fix_rejected":             11,
-		"interrupted":              12,
+		"failed":                   5,
+		"unclassified":             6,
+		"fix_queued":               7,
+		"fix_executed":             8,
+		"fix_verification_unknown": 9,
+		"fix_verified":             10,
+		"resolved":                 11,
+		"fix_rejected":             12,
+		"interrupted":              13,
 	}
 	keys := make([]string, 0, len(byOutcome))
 	for key := range byOutcome {

@@ -55,6 +55,36 @@ func TestRenderPatrolDigestEmailMirrorsTheCardInPlainLanguage(t *testing.T) {
 	}
 }
 
+func TestRenderPatrolDigestEmailNamesHowInvestigationsEnded(t *testing.T) {
+	digest := ai.PatrolDigest{
+		Window:         ai.PatrolDigestWindow{Days: 7, HistoryComplete: true},
+		Mode:           config.PatrolAutonomyApproval,
+		Runs:           ai.PatrolDigestRuns{Total: 6},
+		Investigations: ai.PatrolDigestInvestigations{Total: 3, ByOutcome: map[string]int{"interrupted": 1, "failed": 2}},
+		Spend:          ai.PatrolDigestSpend{PricingKnown: true},
+	}
+	_, _, textBody := renderPatrolDigestEmail(digest, "")
+	if !strings.Contains(textBody, "Investigated: 3\n  2 ended with an error, 1 interrupted by a restart.\n") {
+		t.Fatalf("text body does not name how the runs ended:\n%s", textBody)
+	}
+
+	// A counted run whose outcome has no wording here must not turn the line
+	// into "nothing was investigated", in any mode.
+	for _, mode := range []string{config.PatrolAutonomyApproval, config.PatrolAutonomyMonitor} {
+		digest.Mode = mode
+		digest.Investigations = ai.PatrolDigestInvestigations{Total: 1, ByOutcome: map[string]int{"unknown": 1}}
+		_, _, textBody = renderPatrolDigestEmail(digest, "")
+		if !strings.Contains(textBody, "Investigated: 1\n\n") {
+			t.Fatalf("%s: text body = \n%s", mode, textBody)
+		}
+		for _, contradiction := range []string{"No issues needed a closer look.", "reports issues without investigating them"} {
+			if strings.Contains(textBody, contradiction) {
+				t.Fatalf("%s: one investigation reported as none (%q):\n%s", mode, contradiction, textBody)
+			}
+		}
+	}
+}
+
 func TestRenderPatrolDigestEmailHandlesQuietWatchOnlyWeeks(t *testing.T) {
 	since := time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC)
 	digest := ai.PatrolDigest{

@@ -12028,6 +12028,16 @@ an error so clients can render an honest "Patrol has not run" state, and
 `frontend-modern/src/api/__tests__/patrol.test.ts`, and
 `frontend-modern/src/utils/__tests__/docsLinks.test.ts`.
 
+Since 23 October 2026 `investigations.total` counts investigation runs that
+finished in the window, one per run, and `investigations.by_outcome` keys are
+investigation outcomes plus `failed`, a run that ended on an error with no
+outcome, and `unknown`, a finished run with no recorded outcome. The field set
+is unchanged. The weekly email words `failed` as "ended with an error", and when
+no outcome in the breakdown has wording it shows the count without a detail line
+rather than "No issues needed a closer look." Proofs:
+`internal/api/contract_test.go` (findings store writers through
+`BuildPatrolDigest` to the email) and `internal/api/patrol_digest_email_test.go`.
+
 ### Patrol digest client mirrors the endpoint exactly
 
 The `PatrolDigest` types and `getPatrolDigest` client in

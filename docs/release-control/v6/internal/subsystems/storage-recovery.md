@@ -6624,6 +6624,11 @@ file under the tenant `reports` directory and never calls the retention prune;
 the email body is the only artifact. Recovery and retention state are
 unaffected.
 
+The 23 October 2026 change to how the digest counts investigation runs, and to
+how `internal/api/patrol_digest_email.go` words their outcomes, reads the same
+in-memory findings store and writes nothing. It opens no backup, snapshot,
+retention, cleanup or recovery path.
+
 Legacy `incident_windows.json` recovery is read-only through
 `internal/metrics/incident_archive.go`. Construction does not read the file, and
 explicit reads neither expire records nor rewrite contents or permissions.
