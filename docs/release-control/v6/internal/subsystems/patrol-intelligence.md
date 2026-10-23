@@ -1164,9 +1164,9 @@ horizontally scrolling rail that leaves a lifecycle view clipped or hidden.
 The default view owns only the ordered action queue. Legacy Patrol checks,
 investigations, and run history remain available under collapsed supporting
 context. The selected detail owns impact, related resources, evidence quality,
-protection posture, timeline, next step, resource navigation, and the
-contextual Assistant handoff. Assistant is absent before selection and receives
-explanation-only typed context without action or approval authority. Browser
+protection posture, timeline, next step, and resource navigation. Its
+contextual Assistant handoff was removed with the retired chat window on
+2026-10-22. Browser
 proof is `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
 The scan row must reduce evidence freshness/completeness into one plain phrase,
 omit protection posture when its state is unavailable, and use operator language

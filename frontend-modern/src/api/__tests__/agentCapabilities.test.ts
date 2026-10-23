@@ -59,12 +59,11 @@ const surfaceContract = {
       id: 'pulse_assistant',
       label: 'Pulse Assistant',
       description:
-        'The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions.',
+        'The chat surface Pulse Mobile uses for operator questions over the same governed tools, approvals, and verification; the in-app web chat window is retired.',
       native: true,
       externalAdapter: false,
       affordances: {
         tools: true,
-        interactiveQuestions: true,
       },
     },
     {
@@ -222,9 +221,10 @@ describe('agent capabilities API client', () => {
       registryToolNames: ['pulse_query'],
       nativeToolNames: ['pulse_question'],
       capabilityNames: undefined,
+      // The fallback for an undeclared Assistant surface offers no
+      // interactive questions: no Pulse client can answer them.
       affordances: {
         tools: true,
-        interactiveQuestions: true,
       },
     });
   });
@@ -248,7 +248,7 @@ describe('agent capabilities API client', () => {
     expect(presentation?.title).toContain('Source: Assistant registry');
     expect(presentation?.detail).toContain('1 registry capability');
     expect(presentation?.detail).toContain('1 native capability');
-    expect(presentation?.detail).toContain('Interactive questions');
+    expect(presentation?.detail).not.toContain('Interactive questions');
   });
 
   it('uses manifest-owned external-adapter surface tool contracts before local fallback', () => {
@@ -520,10 +520,10 @@ describe('agent capabilities API client', () => {
     expect(entries.map((entry) => entry.description)).toEqual([
       'Canonical context, governed actions, safety gates, approval state, action audit, and verification.',
       'Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.',
-      'The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions.',
+      'The chat surface Pulse Mobile uses for operator questions over the same governed tools, approvals, and verification; the in-app web chat window is retired.',
       'The external-agent adapter.',
     ]);
-    expect(entries[2]?.badges).toEqual(['Native surface', 'Actions', 'Interactive questions']);
+    expect(entries[2]?.badges).toEqual(['Native surface', 'Actions']);
     expect(entries[3]?.badges).toEqual([
       'External adapter',
       'Actions',

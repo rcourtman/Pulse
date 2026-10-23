@@ -20066,7 +20066,7 @@ func TestContract_PulseIntelligenceOverviewPinsPatrolPrimaryCore(t *testing.T) {
 		"Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened",
 		"Pulse Assistant",
 		"Pulse MCP",
-		"contextual explanation, approval, and handoff surface for Patrol findings",
+		"The chat surface Pulse Mobile uses for operator questions",
 		"Pulse has no in-app chat window",
 		"connect an MCP client such as Claude Code, Codex, or OpenCode to `pulse-mcp`",
 		"New operational capabilities are added to the canonical API manifest first",

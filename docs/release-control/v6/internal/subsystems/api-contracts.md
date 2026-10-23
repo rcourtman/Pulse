@@ -12511,3 +12511,11 @@ surface blocks follow it. `/api/ai/status` stays for the dev
 health check. Proof: `route_inventory_test.go`,
 `router_routes_additional_test.go`, `security_regression_test.go`, and
 `frontend-modern/src/utils/__tests__/docsLinks.test.ts`.
+
+The `/api/agent/capabilities` manifest's Pulse Assistant surface description
+changed on 2026-10-23 to describe the Pulse Mobile chat surface instead of the
+retired web chat's Patrol-finding handoff role. The surface ID, label, and
+affordance fields keep their shape. The browser normalizer's fallback for an
+undeclared Assistant surface (`frontend-modern/src/api/agentCapabilities.ts`)
+now matches the backend default of tools only, so the External agents settings
+panel never shows an "Interactive questions" badge.

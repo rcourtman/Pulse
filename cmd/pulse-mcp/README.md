@@ -12,7 +12,7 @@ governed actions.
 <!-- pulse-mcp-surface-contract:start -->
 - **Pulse Intelligence Core**: Canonical context, governed actions, safety gates, approval state, action audit, and verification shared by Pulse Assistant, Pulse MCP, and Pulse Patrol.
 - **Pulse Patrol**: Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.
-- **Pulse Assistant** (the native Pulse surface): The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools.
+- **Pulse Assistant** (the native Pulse surface): The chat surface Pulse Mobile uses for operator questions over the same governed tools, approvals, and verification; the in-app web chat window is retired. Affordances: tools.
 - **Pulse MCP**: The external-agent adapter that projects canonical Pulse Intelligence capabilities as MCP tools. Affordances: tools, resources, prompts, and capability metadata.
 <!-- pulse-mcp-surface-contract:end -->
 
@@ -424,6 +424,6 @@ The companion worked example, `cmd/agent-probe`, walks the same
 substrate as a plain HTTP client and is a useful reference for anyone
 building a non-MCP integration. Together the two binaries demonstrate
 Pulse Intelligence's external-agent profiles: stdio MCP and direct HTTP
-API. Pulse Assistant remains the first-party in-app surface over the
-same governed contracts; `pulse-mcp` is the adapter for users who prefer
-an external agent host.
+API. Pulse Patrol is the first-party operations surface over the same
+governed contracts, and Pulse has no in-app chat window; `pulse-mcp` is
+how you ask about your infrastructure from an external agent host.

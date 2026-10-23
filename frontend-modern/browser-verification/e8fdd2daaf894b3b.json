@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "070d2a0e53b8080d038ee0615393604a55a31b02",
+  "verified_at": "2026-10-23T15:05:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/agentCapabilities.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/agentCapabilities.ts": "af6bad03be959413da872305a3ccacda054bd7105b4c0dd40ce66111639514a9"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/agents"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Private mock stack (embedded build of this change, mock mode, admin session) at 1280x800 and 390x844",
+    "External agents > Show connector setup > Developer details > Patrol access model lists Pulse Intelligence Core, Pulse Patrol, Pulse Assistant and External agents",
+    "Pulse Assistant entry shows Native surface and Actions badges only, with the description \"The chat surface Pulse Mobile uses for operator questions over the same governed tools, approvals, and verification; the in-app web chat window is retired.\"",
+    "No \"Interactive questions\" badge anywhere on the page; External agents entry keeps External adapter, Actions, Resources, Prompts and Capability metadata",
+    "Phone width: badges wrap inside their cards, document width equals the 390px viewport, no console errors"
+  ],
+  "interactions": [
+    "Opened /settings/pulse-intelligence/agents with the existing dev-credential session on the localhost stack",
+    "Clicked Show connector setup, then expanded Developer details and Patrol access model",
+    "Reloaded at 390x844 and expanded the same disclosures"
+  ]
+}

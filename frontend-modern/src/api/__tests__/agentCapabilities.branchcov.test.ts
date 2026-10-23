@@ -125,7 +125,7 @@ describe('agentCapabilities branch coverage', () => {
         toolCount: 2,
       });
       expect(presentation?.detail).toBe(
-        '2 registry capabilities, 2 published capabilities, 2 native capabilities, Actions, Interactive questions',
+        '2 registry capabilities, 2 published capabilities, 2 native capabilities, Actions',
       );
       expect(presentation?.title).toContain('Source: Assistant registry');
     });
@@ -368,7 +368,7 @@ describe('agentCapabilities branch coverage', () => {
         affordances: { tools: false, resources: false },
       });
 
-      expect(normalized?.affordances).toEqual({ tools: true, interactiveQuestions: true });
+      expect(normalized?.affordances).toEqual({ tools: true });
     });
   });
 
@@ -497,7 +497,9 @@ describe('agentCapabilities branch coverage', () => {
         }),
       );
 
-      expect(entries[2]?.badges).toEqual(['Native surface', 'Actions', 'Interactive questions']);
+      // The Assistant default offers no interactive questions: no Pulse
+      // client can answer them since the web chat window was retired.
+      expect(entries[2]?.badges).toEqual(['Native surface', 'Actions']);
     });
 
     it('projects only declared affordance badges for an external adapter surface', () => {

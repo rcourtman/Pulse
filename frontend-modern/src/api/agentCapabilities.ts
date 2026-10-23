@@ -179,9 +179,10 @@ const DEFAULT_AGENT_MCP_ADAPTER: AgentMCPAdapterContract = {
 };
 
 const DEFAULT_AGENT_SURFACE_AFFORDANCES_BY_ID: Record<string, AgentSurfaceAffordanceContract> = {
+  // No interactive questions: no Pulse client can answer pulse_question
+  // since the web chat window was retired.
   pulse_assistant: {
     tools: true,
-    interactiveQuestions: true,
   },
   pulse_mcp: {
     tools: true,

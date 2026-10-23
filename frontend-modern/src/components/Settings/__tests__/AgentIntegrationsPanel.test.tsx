@@ -48,7 +48,6 @@ const manifest: AgentCapabilitiesManifest = {
         externalAdapter: false,
         affordances: {
           tools: true,
-          interactiveQuestions: true,
         },
       },
       {
@@ -316,7 +315,9 @@ describe('AgentIntegrationsPanel', () => {
     expect(screen.queryByText('Pulse MCP')).not.toBeInTheDocument();
     expect(screen.getByText('External adapter')).toBeInTheDocument();
     expect(screen.getAllByText('Actions').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Interactive questions')).toBeInTheDocument();
+    // No Pulse client can answer interactive questions since the web chat
+    // window was retired, so no surface advertises them.
+    expect(screen.queryByText('Interactive questions')).not.toBeInTheDocument();
     expect(screen.getByText('Capability metadata')).toBeInTheDocument();
     expect(screen.getByText('Live manifest details')).toBeInTheDocument();
     expect(screen.getByText('Manifest scopes:', { exact: false })).toBeInTheDocument();
