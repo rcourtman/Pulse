@@ -65,6 +65,11 @@ func TestCollectorTokenReaderInstallerIngress(t *testing.T) {
 		for _, option := range []string{"collector", "action"} {
 			t.Run(name+"/"+option, func(t *testing.T) {
 				directory := t.TempDir()
+				// The installer distrusts group-writable parents; a 0002 umask
+				// would otherwise make the fixture fail on the host, not the code.
+				if err := os.Chmod(directory, 0700); err != nil {
+					t.Fatal(err)
+				}
 				path := filepath.Join(directory, "selected.token")
 				if err := os.WriteFile(path, []byte(encoded), 0600); err != nil {
 					t.Fatal(err)
