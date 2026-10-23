@@ -103,6 +103,14 @@ describe('patrol utilities', () => {
       expect(investigationOutcomeLabels.timed_out).toBe('Timed Out — Will Retry');
     });
 
+    it('has correct label for unclassified', () => {
+      expect(investigationOutcomeLabels.unclassified).toBe('No Clear Conclusion');
+    });
+
+    it('has correct label for interrupted', () => {
+      expect(investigationOutcomeLabels.interrupted).toBe('Interrupted — Will Retry');
+    });
+
     it('has correct label for fix_verified', () => {
       expect(investigationOutcomeLabels.fix_verified).toBe('Fix Verified');
     });
@@ -139,6 +147,16 @@ describe('patrol utilities', () => {
 
     it('has slate colors for cannot_fix', () => {
       expect(investigationOutcomeColors.cannot_fix).toContain('slate');
+    });
+
+    it('has amber colors for unclassified, which still needs a read', () => {
+      expect(investigationOutcomeColors.unclassified).toContain('amber');
+    });
+
+    it('has neutral colors for interrupted, which Patrol retries on its own', () => {
+      expect(investigationOutcomeColors.interrupted).toBe(
+        'border-border bg-surface-alt text-base-content',
+      );
     });
   });
 

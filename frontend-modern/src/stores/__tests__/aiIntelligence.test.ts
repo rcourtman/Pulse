@@ -174,6 +174,57 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('keeps the unclassified and interrupted outcomes on both finding feeds', async () => {
+    const outcomes = { 'run-unclassified': 'unclassified', 'run-interrupted': 'interrupted' };
+    const finding = (id: string, outcome: string) => ({
+      id,
+      severity: 'warning',
+      category: 'reliability',
+      resource_id: `instance:node:${id}`,
+      resource_name: id,
+      resource_type: 'vm',
+      title: 'Service keeps restarting',
+      description: 'Patrol investigated the restarts.',
+      detected_at: '2026-10-22T00:00:00Z',
+      last_seen_at: '2026-10-22T00:05:00Z',
+      auto_resolved: false,
+      times_raised: 1,
+      suppressed: false,
+      investigation_attempts: 1,
+      investigation_status: outcome === 'interrupted' ? 'failed' : 'completed',
+      investigation_outcome: outcome,
+    });
+    const findings = [
+      ...Object.entries(outcomes).map(([id, outcome]) => finding(id, outcome)),
+      finding('run-unknown', 'not_an_outcome'),
+    ];
+    vi.mocked(AIAPI.getUnifiedFindings).mockResolvedValueOnce({
+      findings: findings.map((item) => ({ ...item, source: 'ai-patrol', status: 'active' })),
+      count: findings.length,
+    } as never);
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce(findings as never);
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([]);
+
+    await aiIntelligenceStore.loadFindings();
+    await aiIntelligenceStore.loadPatrolFindings();
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    const expected = { ...outcomes, 'run-unknown': undefined };
+    for (const feed of [aiIntelligenceStore.findings, aiIntelligenceStore.patrolFindings]) {
+      expect(Object.fromEntries(feed.map((item) => [item.id, item.investigationOutcome]))).toEqual(
+        expected,
+      );
+    }
+    // An unclassified run left a summary to read; an interrupted run is
+    // rerun by Patrol, so it never joins the attention queue.
+    expect(aiIntelligenceStore.findingsNeedingAttention.map((item) => item.id)).toEqual([
+      'run-unclassified',
+    ]);
+    expect(aiIntelligenceStore.patrolFindingsNeedingAttention.map((item) => item.id)).toEqual([
+      'run-unclassified',
+    ]);
+  });
+
   it('counts open Patrol work from active findings and live Patrol approvals once', async () => {
     vi.mocked(getPatrolFindings).mockResolvedValueOnce([
       {

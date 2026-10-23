@@ -807,6 +807,34 @@ describe('getFindingPatrolWorkflowPresentation', () => {
     expect(result?.stage).toBe('attention');
   });
 
+  it('asks the operator to read the summary of an unclassified run', () => {
+    expect(
+      getFindingPatrolWorkflowPresentation(
+        makeFinding({
+          source: 'ai-patrol',
+          status: 'active',
+          resourceId: 'vm:1',
+          investigationStatus: 'completed',
+          investigationOutcome: 'unclassified',
+        }),
+      ),
+    ).toMatchObject({ stage: 'attention', label: 'Read summary', tone: 'warning' });
+  });
+
+  it('leaves an interrupted run with Patrol, which runs it again', () => {
+    expect(
+      getFindingPatrolWorkflowPresentation(
+        makeFinding({
+          source: 'ai-patrol',
+          status: 'active',
+          resourceId: 'vm:1',
+          investigationStatus: 'failed',
+          investigationOutcome: 'interrupted',
+        }),
+      ),
+    ).toMatchObject({ stage: 'investigating', label: 'Will retry', tone: 'neutral' });
+  });
+
   it('returns undefined for an active finding with an unrecognised outcome and no investigation status', () => {
     expect(
       getFindingPatrolWorkflowPresentation(
@@ -1009,6 +1037,15 @@ describe('getFindingResolutionReason', () => {
         ),
       ).toBe('Resolved now');
     });
+
+    it.each(['unclassified', 'interrupted'] as const)(
+      'does not infer who resolved the finding from %s',
+      (outcome) => {
+        expect(
+          getFindingResolutionReason({ ...patrolBase, investigationOutcome: outcome }, 'now'),
+        ).toBe('Resolved now');
+      },
+    );
 
     it('returns "Fix applied by Patrol" for fix_executed even when autoResolved is false', () => {
       expect(

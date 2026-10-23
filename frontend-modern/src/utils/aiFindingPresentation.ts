@@ -182,6 +182,8 @@ const INVESTIGATION_OUTCOME_LABELS: Record<InvestigationOutcome, string> = {
   needs_attention: 'Needs attention',
   cannot_fix: 'Cannot remediate',
   timed_out: 'Timed out',
+  unclassified: 'No clear conclusion',
+  interrupted: 'Interrupted — will retry',
   fix_verified: 'Fix verified',
   fix_verification_failed: 'Verification failed',
   fix_verification_unknown: 'Verification unknown',
@@ -202,6 +204,9 @@ const INVESTIGATION_OUTCOME_CLASSES: Record<InvestigationOutcome, string> = {
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300',
   cannot_fix: 'border-border bg-surface-alt text-muted',
   timed_out: 'border-border bg-surface-alt text-base-content',
+  unclassified:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300',
+  interrupted: 'border-border bg-surface-alt text-base-content',
   fix_verified:
     'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900/25 dark:text-green-300',
   fix_verification_failed:
@@ -219,6 +224,8 @@ const INVESTIGATION_OUTCOME_TONES: Record<InvestigationOutcome, MetadataBadgeTon
   needs_attention: 'warning',
   cannot_fix: 'muted',
   timed_out: 'neutral',
+  unclassified: 'warning',
+  interrupted: 'neutral',
   fix_verified: 'success',
   fix_verification_failed: 'danger',
   fix_verification_unknown: 'warning',
@@ -253,6 +260,7 @@ const INVESTIGATION_OUTCOME_SORT_ORDER: Record<string, number> = {
   timed_out: 1,
   needs_attention: 1,
   cannot_fix: 1,
+  unclassified: 1,
   fix_queued: 2,
 };
 
@@ -811,6 +819,12 @@ export function getPatrolFindingActionableState(
     return { label: 'Verifying fix', tone: 'info' };
   }
 
+  // A restart cut the last run short. Patrol runs it again by itself, so the
+  // row must not ask the operator to review anything.
+  if (finding.investigationOutcome === 'interrupted') {
+    return { label: 'Will retry', tone: 'neutral' };
+  }
+
   return undefined;
 }
 
@@ -1039,6 +1053,7 @@ const ATTENTION_OUTCOMES = new Set([
   'timed_out',
   'needs_attention',
   'cannot_fix',
+  'unclassified',
 ]);
 
 export const hasPendingInvestigationFixApproval = (
@@ -1242,6 +1257,22 @@ export const getFindingPatrolWorkflowPresentation = (
         detail: 'Patrol needs operator context before continuing.',
         tone: 'warning',
       };
+    case 'unclassified':
+      return {
+        stage: 'attention',
+        label: 'Read summary',
+        detail:
+          'Patrol finished without a clear conclusion. Read its summary. Patrol looks again on a later run.',
+        tone: 'warning',
+      };
+    case 'interrupted':
+      return {
+        stage: 'investigating',
+        label: 'Will retry',
+        detail:
+          'The last run was cut short, usually by a Pulse restart. Patrol runs it again on its next pass.',
+        tone: 'neutral',
+      };
     default:
       return undefined;
   }
@@ -1321,6 +1352,8 @@ export const getFindingResolutionReason = (
         return `Resolved after investigation timeout ${resolvedTime}`;
       case 'cannot_fix':
       case 'needs_attention':
+      case 'unclassified':
+      case 'interrupted':
         // An investigation outcome does not identify who later resolved the
         // finding. Explicit operator resolution is handled above.
         return `Resolved ${resolvedTime}`;

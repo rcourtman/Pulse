@@ -1,4 +1,5 @@
 import type { InvestigationRecord, InvestigationRecordFix } from '@/api/ai';
+import { getInvestigationOutcomeLabel } from '@/utils/aiFindingPresentation';
 
 export interface PatrolInvestigationRecordPresentation {
   hasRecord: boolean;
@@ -42,7 +43,7 @@ export function buildPatrolInvestigationRecordPresentation(
   return {
     hasRecord: true,
     statusLabel: formatIdentifierLabel(record.status) || 'Investigation recorded',
-    outcomeLabel: formatIdentifierLabel(record.outcome),
+    outcomeLabel: formatOutcomeLabel(record.outcome),
     confidenceLabel: record.confidence
       ? `${formatIdentifierLabel(record.confidence)} confidence`
       : undefined,
@@ -111,6 +112,13 @@ function formatIdentifierLabel(value?: string | null): string | undefined {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+// The record's outcome badge sits beside the investigation's own outcome
+// badge, so both use the shared outcome labels.
+function formatOutcomeLabel(value?: string | null): string | undefined {
+  const normalized = normalizeText(value);
+  return normalized ? getInvestigationOutcomeLabel(normalized) : undefined;
 }
 
 function formatToolLabel(value?: string | null): string {
