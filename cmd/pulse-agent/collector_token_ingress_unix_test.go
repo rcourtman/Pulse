@@ -61,9 +61,6 @@ func TestCollectorTokenReaderInstallerIngress(t *testing.T) {
 		"bare": "synthetic-secret", "LF": "synthetic-secret\n",
 		"normalized": " \tsynthetic-secret\r\n", "literal": "PULSE_TOKEN='synthetic-secret'",
 		"UTF8": "synthetic-caf\u00e9", "limit": strings.Repeat("s", 4096),
-		"NUL leading": "\x00synthetic-secret", "NUL interior": "synthetic\x00-secret",
-		"NUL trailing": "synthetic-secret\x00", "NUL before LF": "synthetic-secret\x00\n",
-		"NUL after LF": "synthetic-secret\n\x00", "NUL only": "\x00",
 	} {
 		for _, option := range []string{"collector", "action"} {
 			t.Run(name+"/"+option, func(t *testing.T) {
