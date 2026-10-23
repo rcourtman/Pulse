@@ -348,7 +348,7 @@ func TestPollPBSBackupsFetchesRealSnapshotsForLargeGroups(t *testing.T) {
 	}
 
 	m := &Monitor{state: models.NewState()}
-	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}}, nil)
 
 	if got := atomic.LoadInt64(&snapshotCalls); got != 1 {
 		t.Fatalf("large PBS backup group fetched snapshots %d times, want 1", got)
@@ -383,7 +383,7 @@ func TestPollPBSBackupsFetchesRealSnapshotsForLargeGroups(t *testing.T) {
 	}
 
 	// A second poll must reuse the bounded cache instead of refetching.
-	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}}, nil)
 	if got := atomic.LoadInt64(&snapshotCalls); got != 1 {
 		t.Fatalf("second poll refetched snapshots (%d calls), want cached reuse", got)
 	}
@@ -448,7 +448,7 @@ func TestPollPBSBackupsBoundsLargeTopologyAcrossPolls(t *testing.T) {
 
 	m := &Monitor{state: models.NewState()}
 	for cycle := 0; cycle < 3; cycle++ {
-		m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+		m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}}, nil)
 
 		snapshot := m.state.GetSnapshot()
 		if got := len(snapshot.PBSBackups); got != pbsBackupLiveStateLimit {
@@ -615,7 +615,7 @@ func TestPollPBSBackupsPrunesCacheTimesForDeletedGroups(t *testing.T) {
 
 	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{
 		{Name: "archive"},
-	})
+	}, nil)
 
 	m.mu.RLock()
 	perGroup := m.pbsBackupCacheTime["pbs1"]
@@ -1039,7 +1039,7 @@ func TestPollPBSBackups_DropsStaleCacheOnTerminalDatastoreError(t *testing.T) {
 
 			m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{
 				{Name: "archive"},
-			})
+			}, nil)
 
 			snapshot := m.state.GetSnapshot()
 			for _, backup := range snapshot.PBSBackups {
@@ -1097,7 +1097,7 @@ func TestPollPBSBackups_PreservesCacheOnTransientDatastoreError(t *testing.T) {
 
 			m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{
 				{Name: "archive"},
-			})
+			}, nil)
 
 			snapshot := m.state.GetSnapshot()
 			var found bool

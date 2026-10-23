@@ -358,6 +358,9 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			Msg("PBS node status retrieved")
 	}
 
+	// Keep discovery quality with the immutable input to the background backup
+	// poll. Public datastore presentation is not an authoritative scope receipt.
+	namespaceErrors := make(map[string]error)
 	// Poll datastores if enabled
 	if instanceCfg.MonitorDatastores {
 		datastores, err := client.GetDatastoresFiltered(ctx, includeDatastore)
@@ -417,6 +420,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 				namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
 				if err != nil {
+					namespaceErrors[ds.Store] = err
 					log.Warn().Err(err).
 						Str("instance", instanceName).
 						Str("datastore", ds.Store).
@@ -570,7 +574,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 					m.lastPBSBackupPoll[instanceName] = newLast
 					m.mu.Unlock()
 
-					go func(ds []models.PBSDatastore, inst string, start time.Time, pbsClient *pbs.Client) {
+					go func(ds []models.PBSDatastore, discoveryErrors map[string]error, inst string, start time.Time, pbsClient *pbs.Client) {
 						defer recoverFromPanic(fmt.Sprintf("pollPBSBackups-%s", inst))
 						defer func() {
 							m.mu.Lock()
@@ -593,13 +597,13 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 						backupCtx, cancel := context.WithTimeout(parentCtx, 5*time.Minute)
 						defer cancel()
 
-						m.pollPBSBackups(backupCtx, inst, pbsClient, ds)
+						m.pollPBSBackups(backupCtx, inst, pbsClient, ds, discoveryErrors)
 
 						log.Info().
 							Str("instance", inst).
 							Dur("duration", time.Since(start)).
 							Msg("Completed background PBS backup polling")
-					}(datastoreSnapshot, instanceName, now, client)
+					}(datastoreSnapshot, namespaceErrors, instanceName, now, client)
 				}
 			}
 		}

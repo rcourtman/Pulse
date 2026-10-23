@@ -74,7 +74,7 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			case "during-task-correlation":
 				datastores = []models.PBSDatastore{{Name: "archive"}}
 			}
-			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores)
+			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores, nil)
 			f.wait(t)
 			f.assertProtected(t, "pbs-main")
 			key := pbsBackupGroupKey{datastore: "archive", backupType: "vm", backupID: "100"}
@@ -86,7 +86,7 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
-				f.m.pollPBSBackups(ctx, "pbs-main", f.client, datastores)
+				f.m.pollPBSBackups(ctx, "pbs-main", f.client, datastores, nil)
 			}()
 			select {
 			case <-blocked:
@@ -116,7 +116,7 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			// Do not clear or expire cache again. The next ordinary poll must
 			// independently fetch the verification change the aborted poll lost.
 			phase.Store(2)
-			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores)
+			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores, nil)
 			f.wait(t)
 			raw = f.m.state.GetSnapshot().PBSBackups
 			mapped, err := proxmoxmapper.FromPBSBackupsWithEvidence(raw, buildPBSGuestCandidates(f.m.GetUnifiedReadStateOrSnapshot()), time.Now())
@@ -137,7 +137,7 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			}
 			// Once the matching failed row has been published, normal TTL reuse
 			// must avoid an unnecessary fourth read without restoring verified.
-			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores)
+			f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, datastores, nil)
 			f.wait(t)
 			if snapshotReads.Load() != 3 || !f.m.pbsBackupCacheTimeFor("pbs-main", key).Equal(publishedAt) || f.postures(t)[0].Verification != recovery.ProtectionVerificationUnverified {
 				t.Error("cache-hit poll reread or renewed snapshots, or restored stale verification")
