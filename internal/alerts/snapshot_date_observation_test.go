@@ -103,6 +103,7 @@ func TestSnapshotDateObservations(t *testing.T) {
 			if len(m.GetActiveAlerts()) != 1 {
 				t.Fatal("control must establish an incident")
 			}
+			before := snapshotDateJSON(t, m.GetActiveAlerts())
 			s.Time = time.Time{}
 			snapshots := []models.GuestSnapshot{s}
 			cfg := m.GetConfig()
@@ -126,6 +127,14 @@ func TestSnapshotDateObservations(t *testing.T) {
 			}
 			m.UpdateConfig(cfg)
 			m.CheckSnapshotsForInstance("east", snapshots, guests)
+			if policy == "global-disabled" {
+				// The global switch pauses evaluation; it is not snapshot
+				// recovery or per-resource disablement. Preserve that contract.
+				if !bytes.Equal(before, snapshotDateJSON(t, m.GetActiveAlerts())) {
+					t.Fatal("global evaluation pause changed the trusted occurrence")
+				}
+				return
+			}
 			if len(m.GetActiveAlerts()) != 0 {
 				t.Fatal("unknown date overrode explicit policy or authoritative removal")
 			}

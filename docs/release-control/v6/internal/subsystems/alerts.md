@@ -24,6 +24,7 @@ only that snapshot's existing canonical occurrence, including its trusted
 age/size evidence, acknowledgement and observation time. It neither creates a
 new occurrence nor refreshes old evidence. A trustworthy dated observation,
 authoritative removal, exclusion or disablement still follows normal recovery.
+The global alerting switch remains an evaluation pause, not evidence of recovery.
 
 This is deliberately conservative for both age and size warnings: an incomplete
 snapshot observation does not independently update either metric. It introduces
