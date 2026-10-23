@@ -4412,3 +4412,18 @@ handler in `useWorkloadsControlsState.ts` no longer checks for a focused chat
 composer. `.bundlesize.json` drops the retired chunks; `useUnifiedResources`
 grew to about 10 kB gzipped because Rollup moved the shared filter toolbar
 modules into it once the `Chat` chunk stopped sharing them.
+
+### Hosted workload-chart observations keep three distinct outcomes
+
+The optional hosted job reports an invalidated measurement as inconclusive:
+exit 78 is neutral, not a passed 90 ms budget. Valid capacity still requires a
+single executed passing test at that budget. A contended FAIL can be neutral
+only when its sole test diagnostic is the budget violation; skips, missing or
+duplicate reports, wrong budgets, cleanup and child errors remain failures.
+The private disposable-worker route continues to reject every nonzero exit,
+including 78. Raw return codes, logs, digests and competing-capacity evidence
+remain intact; invalid timings do not demonstrate absence of regression.
+The registered API CLI and installtest workflow controls execute synthetic
+children/telemetry and the actual evidence/writer shells, not a latency
+workload. See `workload-chart-reporting-completion-2026-10-21.md` in `../records/`
+for the source proposal, adverse governance result and available hosted sample.

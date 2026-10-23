@@ -3764,6 +3764,22 @@ artifact-selection behaviour.
 
 ## Current State
 
+### Hosted chart verdict writer has no proposed executable
+
+Build and Test's optional workload-chart evidence job retains a read-only
+repository token while running the PR-built executable. Its proof maps only
+exit 0 to success and 78 to neutral; any other exit fails. The separate check
+writer has only `checks: write`, no checkout or proposed executable, uses the
+exact PR head and defaults missing proof output to failure. The raw timing and
+capacity artifact and evidence summary remain necessary: a neutral check
+establishes neither the 90 ms budget nor release or installed acceptance.
+Dependabot/fork token limitations remain explicit, not alternate credentials.
+`TestChartSLOWorkflowPreservesInconclusiveAndFailure` executes the actual YAML
+shells with a synthetic proof exit and a credential-free capturing provider,
+covering success, neutral, budget failure and a broken proof. It checks the
+read-only evidence/separate-writer admission and missing-output failure path.
+No real check is created, workflow dispatched or latency workload executed.
+
 ### Registered Windows native-exit completion proof (8 October 2026)
 
 The workflow's seven immediate native exit checks and the lifecycle harness's

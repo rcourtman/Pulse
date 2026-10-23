@@ -7198,3 +7198,14 @@ The `internal/api` change of 2026-10-23 that finalizes Patrol investigation
 runs when they close and publishes the action plans the inbox expiry sweep
 expires opens no storage, backup or recovery path. Recovery evidence, restore
 rules and storage capabilities are unchanged.
+
+### Capacity-invalid chart evidence is not storage recovery
+
+The hosted workload-chart proof may call a complete, contended measurement
+inconclusive without clearing its raw budget failure. It must not turn a
+cleanup/child error, absent report or skipped test into neutral evidence.
+Neither neutrality nor synthetic CLI classification establishes a valid
+History latency result, intact stored data, guest liveness or installed
+recovery. `TestContractChartSLOProofCLIClassifiesExecution` preserves child
+exit, output and executable identity across those distinctions; the 90 ms
+valid-capacity requirement and independent native recovery remain unchanged.
