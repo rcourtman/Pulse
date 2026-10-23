@@ -169,11 +169,11 @@ func TestFinalizeInvestigationRunLeavesActionOutcomePushesToReconciliation(t *te
 	}
 }
 
-// The stuck-run sweep finalizes each run it recovers: one whose session closed
-// without its close reaching the finding, such as a run a restart interrupted
-// after it planned a fix, and one still going past its limit, as failed. The
-// orchestrator's own session for a run past its limit is left as it is, so the
-// run's real close can still land and finalize it again.
+// The stuck-run sweep finalizes each run it recovers, both as failed: one whose
+// session closed without its close reaching the finding, such as a run a
+// restart interrupted after it planned a fix, and one still going past its
+// limit. The orchestrator's own session for a run past its limit is left as it
+// is, so the run's real close can still land and finalize it again.
 func TestRecoverStuckInvestigationsFinalizesTheRunsItRecovers(t *testing.T) {
 	now := time.Now()
 	closedAt := now.Add(-time.Second)
@@ -198,7 +198,7 @@ func TestRecoverStuckInvestigationsFinalizesTheRunsItRecovers(t *testing.T) {
 
 	patrol.recoverStuckInvestigations()
 
-	assertInvestigationState(t, findings, "restarted", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	assertInvestigationState(t, findings, "restarted", InvestigationStatusFailed, InvestigationOutcomeFixQueued)
 	assertInvestigationState(t, findings, "hung", InvestigationStatusFailed, InvestigationOutcomeTimedOut)
 	if len(closed) != 2 {
 		t.Fatalf("closed runs = %v, want both recovered runs", closed)

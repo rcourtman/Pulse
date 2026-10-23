@@ -7440,9 +7440,11 @@ so a result or a newer run that landed after the sweep looked is kept. A run
 that started before the finding's current occurrence is recorded only as
 `interrupted`, never with its session's result. An outcome the action
 lifecycle recorded on the finding during the run, such as
-`fix_queued`, is kept and the run completes, so a queued fix still blocks
-another investigation. The close stamps `LastInvestigatedAt` like any other
-closed run.
+`fix_queued`, is kept, so a queued fix still blocks another investigation.
+The run keeps the status it closed with: a run that a restart or its limit
+cut short after it planned a fix is `failed`, as the orchestrator records a
+run that fails after planning, not `completed`. The close stamps
+`LastInvestigatedAt` like any other closed run.
 
 Two outcomes join the vocabulary. `unclassified` records a completed run that
 left neither a typed conclusion nor a recognisable marker. The private

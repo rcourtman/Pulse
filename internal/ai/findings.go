@@ -2786,9 +2786,10 @@ func (s *FindingsStore) updateInvestigationLocked(f *Finding, sessionID, status,
 // when the orchestrator holds none. A run that started before the finding's
 // current occurrence is only recorded as interrupted: its result is not this
 // occurrence's. A run starts with no outcome, so an outcome already present
-// came from the action lifecycle during this run; it is kept, and the run
-// completes, so a queued fix still blocks another investigation. The close
-// becomes the finding's latest investigation time.
+// came from the action lifecycle during this run; it is kept, so a queued fix
+// still blocks another investigation. The run still closes with its own status:
+// one cut short after it planned a fix failed, as it reads when it closes
+// itself. The close becomes the finding's latest investigation time.
 func (s *FindingsStore) RecoverStuckInvestigation(id, sessionID string, runStartedAt time.Time, status InvestigationStatus, outcome InvestigationOutcome, at time.Time) bool {
 	s.mu.Lock()
 	f, exists := s.findings[id]
@@ -2801,9 +2802,7 @@ func (s *FindingsStore) RecoverStuckInvestigation(id, sessionID string, runStart
 	}
 	prevStatus := f.InvestigationStatus
 	prevOutcome := f.InvestigationOutcome
-	if prevOutcome != "" {
-		status = InvestigationStatusCompleted
-	} else {
+	if prevOutcome == "" {
 		f.InvestigationOutcome = string(outcome)
 		if outcome == InvestigationOutcomeFixVerified {
 			s.resolveVerifiedFindingLocked(f, prevOutcome)
