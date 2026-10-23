@@ -12526,3 +12526,21 @@ payloads gain one optional field. An older orchestrator ignores the conclusion
 and keeps reading prose markers, and records no deadline, so core measures its
 runs from their start. Proofs: `patrol_scope_tools_test.go`, `names_test.go`,
 `tools_conclude_test.go` and `contracts_test.go`.
+
+### Orchestrator finding writes check run ownership (23 October 2026)
+
+`orchestratorFindingsAdapter.Update`, the `aicontracts.OrchestratorFindingsStore`
+the private orchestrator receives, now returns false for a write that the
+finding's current occurrence does not own, and the newer state stays. A write
+that closes a run is refused when another session is current, or when the run
+cannot be shown to have started after the finding's current occurrence began:
+a regression this process observed, or the finding's removal by `ClearAll` or
+`Cleanup`, after which the same ID detected again is a new finding. If the
+finding still shows such a run as running, the run is closed the way the
+stuck-run sweep closes it, not with its own result. A write that starts a run
+is refused when the run's session started before that occurrence began, or
+more than a day ago, and applies as before otherwise. A regression an earlier
+process recorded refuses neither. The adapter takes each run's start from the
+orchestrator's session store, so the Pulse–enterprise boundary is unchanged: no
+`aicontracts` type, field or method is added, and no route or payload changes.
+Proof: `ai_handlers_investigation_additional_test.go`.

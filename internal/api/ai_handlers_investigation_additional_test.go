@@ -530,6 +530,12 @@ func TestFindingsStoreWrapper_GetAndUpdate(t *testing.T) {
 	if nilWrapper.UpdateInvestigation("finding-1", "session-1", "running", "outcome", nil, 1) {
 		t.Fatalf("expected nil store update to return false")
 	}
+	if nilWrapper.StartInvestigation("finding-1", "session-1", time.Time{}, "running", "", nil, 1) {
+		t.Fatalf("expected nil store start to return false")
+	}
+	if nilWrapper.CompleteInvestigation("finding-1", "session-1", time.Time{}, "completed", "outcome", nil, 1) {
+		t.Fatalf("expected nil store completion to return false")
+	}
 }
 
 func TestHandleClearAllFindings(t *testing.T) {
@@ -932,4 +938,196 @@ func TestSetupInvestigationOrchestratorUsesSubscriptionAgentLimits(t *testing.T)
 	if want := time.Duration(config.DefaultPatrolSubscriptionInvestigationTimeoutSec) * time.Second; created[0].Timeout != want {
 		t.Fatalf("Timeout = %s, want %s", created[0].Timeout, want)
 	}
+}
+
+// orchestratorFindingsFor wires a tenant's investigation orchestrator and
+// returns the findings and session stores it was built with, plus the
+// tenant's findings.
+func orchestratorFindingsFor(t *testing.T) (aicontracts.OrchestratorFindingsStore, aicontracts.InvestigationStore, *ai.FindingsStore) {
+	t.Helper()
+	prevStoreFactory := getCreateInvestigationStore()
+	SetCreateInvestigationStore(func(dataDir string) aicontracts.InvestigationStore {
+		return newTestInvestigationStore()
+	})
+	t.Cleanup(func() { SetCreateInvestigationStore(prevStoreFactory) })
+
+	var deps aicontracts.OrchestratorDeps
+	prevOrchestratorFactory := getCreateInvestigationOrchestrator()
+	SetCreateInvestigationOrchestrator(func(d aicontracts.OrchestratorDeps) aicontracts.InvestigationOrchestrator {
+		deps = d
+		return &stubInvestigationOrchestrator{}
+	})
+	t.Cleanup(func() { SetCreateInvestigationOrchestrator(prevOrchestratorFactory) })
+
+	tenantSvc := ai.NewService(nil, nil)
+	tenantSvc.SetStateProvider(&MockStateProvider{})
+	handler := &AISettingsHandler{
+		investigationStores: make(map[string]aicontracts.InvestigationStore),
+	}
+	handler.chatHandler = &AIHandler{
+		services: map[string]AIService{
+			"tenant-1": chat.NewService(chat.Config{AIConfig: config.NewDefaultAIConfig()}),
+		},
+	}
+	handler.setupInvestigationOrchestrator("tenant-1", tenantSvc)
+	if deps.FindingsStore == nil || deps.Store == nil {
+		t.Fatal("investigation orchestrator was not wired")
+	}
+	return deps.FindingsStore, deps.Store, tenantSvc.GetPatrolService().GetFindings()
+}
+
+func investigatedFinding(id string) *ai.Finding {
+	return &ai.Finding{
+		ID:           id,
+		Severity:     ai.FindingSeverityWarning,
+		Category:     ai.FindingCategoryPerformance,
+		ResourceID:   "vm-" + id,
+		ResourceName: "vm-" + id,
+		ResourceType: "vm",
+		Title:        "Memory pressure on vm-" + id,
+		Description:  "Memory usage is above 90%",
+	}
+}
+
+// startOrchestratorRun does what the orchestrator does when it starts a run:
+// it records the run's session, then marks the finding as running under it.
+func startOrchestratorRun(t *testing.T, findings aicontracts.OrchestratorFindingsStore, sessions aicontracts.InvestigationStore, findingID, chatSessionID string) aicontracts.Finding {
+	t.Helper()
+	run := findings.Get(findingID)
+	if run == nil {
+		t.Fatalf("finding %s not found", findingID)
+	}
+	sessions.Create(findingID, chatSessionID)
+	run.InvestigationSessionID = chatSessionID
+	run.InvestigationStatus = string(aicontracts.InvestigationStatusRunning)
+	run.InvestigationOutcome = ""
+	run.InvestigationAttempts++
+	if !findings.Update(run) {
+		t.Fatalf("starting run %s was not recorded", chatSessionID)
+	}
+	return *run
+}
+
+// finishOrchestratorRun is the orchestrator's finding write when a run ends.
+func finishOrchestratorRun(findings aicontracts.OrchestratorFindingsStore, run aicontracts.Finding, status aicontracts.InvestigationStatus, outcome aicontracts.InvestigationOutcome) bool {
+	now := time.Now()
+	run.InvestigationStatus = string(status)
+	run.InvestigationOutcome = string(outcome)
+	run.LastInvestigatedAt = &now
+	return findings.Update(&run)
+}
+
+func assertOrchestratorRunState(t *testing.T, findings *ai.FindingsStore, id, sessionID string, status aicontracts.InvestigationStatus, outcome aicontracts.InvestigationOutcome, attempts int) {
+	t.Helper()
+	got := findings.Get(id)
+	if got == nil {
+		t.Fatalf("finding %s not found", id)
+	}
+	if got.InvestigationSessionID != sessionID || got.InvestigationStatus != string(status) ||
+		got.InvestigationOutcome != string(outcome) || got.InvestigationAttempts != attempts {
+		t.Fatalf("%s investigation = session %q %s/%s, %d attempts; want session %q %s/%s, %d attempts",
+			id, got.InvestigationSessionID, got.InvestigationStatus, got.InvestigationOutcome, got.InvestigationAttempts,
+			sessionID, status, outcome, attempts)
+	}
+}
+
+func TestOrchestratorRunResultSkipsALaterOccurrence(t *testing.T) {
+	orchestratorFindings, sessions, findings := orchestratorFindingsFor(t)
+	findings.Add(investigatedFinding("finding-1"))
+	runA := startOrchestratorRun(t, orchestratorFindings, sessions, "finding-1", "chat-a")
+
+	// While A is in flight the finding resolves and is detected again.
+	findings.Resolve("finding-1", true)
+	findings.Add(investigatedFinding("finding-1"))
+
+	// A concludes for the occurrence it investigated, not the current one.
+	applied := finishOrchestratorRun(orchestratorFindings, runA, aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeResolved)
+	assertOrchestratorRunState(t, findings, "finding-1", "", "", "", 0)
+	if applied {
+		t.Fatal("a run of the earlier occurrence reported closing the current one")
+	}
+	if got := findings.Get("finding-1"); got.LastInvestigatedAt != nil || !got.ShouldInvestigate("approval") {
+		t.Fatalf("the earlier occurrence's result kept the current one from being investigated: %+v", got)
+	}
+
+	// Nor does it land once a run of the current occurrence has started.
+	runB := startOrchestratorRun(t, orchestratorFindings, sessions, "finding-1", "chat-b")
+	if finishOrchestratorRun(orchestratorFindings, runA, aicontracts.InvestigationStatusFailed, aicontracts.OutcomeTimedOut) {
+		t.Fatal("a run of the earlier occurrence overwrote the current run")
+	}
+	assertOrchestratorRunState(t, findings, "finding-1", "chat-b", aicontracts.InvestigationStatusRunning, "", 1)
+
+	if !finishOrchestratorRun(orchestratorFindings, runB, aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeNeedsAttention) {
+		t.Fatal("the current run's result was refused")
+	}
+	assertOrchestratorRunState(t, findings, "finding-1", "chat-b", aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeNeedsAttention, 1)
+}
+
+func TestOrchestratorRunFromAnEarlierOccurrenceIsNotInstalled(t *testing.T) {
+	orchestratorFindings, sessions, findings := orchestratorFindingsFor(t)
+	findings.Add(investigatedFinding("finding-1"))
+
+	// A records its session for the first occurrence, with that occurrence's
+	// attempt count; the finding resolves and is detected again before A marks
+	// it as running.
+	runA := orchestratorFindings.Get("finding-1")
+	sessions.Create("finding-1", "chat-a")
+	findings.Resolve("finding-1", true)
+	findings.Add(investigatedFinding("finding-1"))
+	runA.InvestigationSessionID = "chat-a"
+	runA.InvestigationStatus = string(aicontracts.InvestigationStatusRunning)
+	runA.InvestigationAttempts = 3
+	if orchestratorFindings.Update(runA) {
+		t.Fatal("a run started for the earlier occurrence was installed on the current one")
+	}
+	assertOrchestratorRunState(t, findings, "finding-1", "", "", "", 0)
+
+	// Nor does A's admission replace a run of the current occurrence.
+	runB := startOrchestratorRun(t, orchestratorFindings, sessions, "finding-1", "chat-b")
+	if orchestratorFindings.Update(runA) {
+		t.Fatal("a run started for the earlier occurrence replaced the current run")
+	}
+	assertOrchestratorRunState(t, findings, "finding-1", "chat-b", aicontracts.InvestigationStatusRunning, "", 1)
+	if finishOrchestratorRun(orchestratorFindings, *runA, aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeFixVerified) {
+		t.Fatal("a run of the earlier occurrence recorded its result on the current one")
+	}
+
+	if !finishOrchestratorRun(orchestratorFindings, runB, aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeCannotFix) {
+		t.Fatal("the current run's result was refused")
+	}
+	assertOrchestratorRunState(t, findings, "finding-1", "chat-b", aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeCannotFix, 1)
+	if findings.Get("finding-1").ResolvedAt != nil {
+		t.Fatal("the earlier occurrence's verified fix resolved the current one")
+	}
+}
+
+func TestOrchestratorRunResultSkipsANewerRun(t *testing.T) {
+	orchestratorFindings, sessions, findings := orchestratorFindingsFor(t)
+	findings.Add(investigatedFinding("retried"))
+	findings.Add(investigatedFinding("late"))
+	retriedA := startOrchestratorRun(t, orchestratorFindings, sessions, "retried", "chat-retried-a")
+	lateA := startOrchestratorRun(t, orchestratorFindings, sessions, "late", "chat-late-a")
+
+	// The stuck-run sweep gave both runs up as timed out, and the retry
+	// started another run for one of them.
+	now := time.Now()
+	findings.RecoverStuckInvestigation("retried", "chat-retried-a", time.Time{}, ai.InvestigationStatusFailed, ai.InvestigationOutcomeTimedOut, now)
+	findings.RecoverStuckInvestigation("late", "chat-late-a", time.Time{}, ai.InvestigationStatusFailed, ai.InvestigationOutcomeTimedOut, now)
+	retriedB := startOrchestratorRun(t, orchestratorFindings, sessions, "retried", "chat-retried-b")
+
+	// The first runs report back after all.
+	if finishOrchestratorRun(orchestratorFindings, retriedA, aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeResolved) {
+		t.Fatal("an earlier run overwrote the run that replaced it")
+	}
+	assertOrchestratorRunState(t, findings, "retried", "chat-retried-b", aicontracts.InvestigationStatusRunning, "", 2)
+	// With no newer run, the run the finding still names has the real result.
+	if !finishOrchestratorRun(orchestratorFindings, lateA, aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeCannotFix) {
+		t.Fatal("a late result from the finding's own run was refused")
+	}
+	assertOrchestratorRunState(t, findings, "late", "chat-late-a", aicontracts.InvestigationStatusCompleted, aicontracts.OutcomeCannotFix, 1)
+
+	if !finishOrchestratorRun(orchestratorFindings, retriedB, aicontracts.InvestigationStatusFailed, aicontracts.OutcomeTimedOut) {
+		t.Fatal("the newer run's result was refused")
+	}
+	assertOrchestratorRunState(t, findings, "retried", "chat-retried-b", aicontracts.InvestigationStatusFailed, aicontracts.OutcomeTimedOut, 2)
 }

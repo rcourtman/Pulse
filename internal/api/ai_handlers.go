@@ -1932,7 +1932,7 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for orchestrator")
 		return
 	}
-	findingsAdapter := &orchestratorFindingsAdapter{store: &findingsStoreWrapper{store: findingsStore}}
+	findingsAdapter := &orchestratorFindingsAdapter{store: &findingsStoreWrapper{store: findingsStore}, sessions: store}
 
 	// Get config for investigation settings
 	cfg := svc.GetConfig()
@@ -2111,6 +2111,9 @@ func (a *orchestratorChatAdapter) ListInvestigationTools(ctx context.Context) []
 // aicontracts.OrchestratorFindingsStore.
 type orchestratorFindingsAdapter struct {
 	store *findingsStoreWrapper
+	// sessions is the orchestrator's session store, which records when each
+	// run started.
+	sessions aicontracts.InvestigationStore
 }
 
 func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
@@ -2140,18 +2143,51 @@ func (a *orchestratorFindingsAdapter) Get(id string) *aicontracts.Finding {
 	}
 }
 
+// Update applies the orchestrator's investigation fields to a finding. Starting
+// a run installs it, unless the run was started for an earlier occurrence of
+// the finding. Every other write closes a run and lands only while the finding
+// still names that run, so a run that ends after its finding was re-detected,
+// or after a newer run took over, cannot overwrite the newer state.
 func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 	if a.store == nil || f == nil {
 		return false
 	}
-	return a.store.UpdateInvestigation(
+	runStartedAt := a.runStartedAt(f.ID, f.InvestigationSessionID)
+	switch aicontracts.InvestigationStatus(f.InvestigationStatus) {
+	case aicontracts.InvestigationStatusPending, aicontracts.InvestigationStatusRunning:
+		return a.store.StartInvestigation(
+			f.ID,
+			f.InvestigationSessionID,
+			runStartedAt,
+			f.InvestigationStatus,
+			f.InvestigationOutcome,
+			f.LastInvestigatedAt,
+			f.InvestigationAttempts,
+		)
+	}
+	return a.store.CompleteInvestigation(
 		f.ID,
 		f.InvestigationSessionID,
+		runStartedAt,
 		f.InvestigationStatus,
 		f.InvestigationOutcome,
 		f.LastInvestigatedAt,
 		f.InvestigationAttempts,
 	)
+}
+
+// runStartedAt returns when the orchestrator's session for a run started, or
+// zero when its session store holds no record of the run.
+func (a *orchestratorFindingsAdapter) runStartedAt(findingID, sessionID string) time.Time {
+	if a.sessions == nil {
+		return time.Time{}
+	}
+	for _, session := range a.sessions.GetByFinding(findingID) {
+		if session != nil && session.SessionID == sessionID {
+			return session.StartedAt
+		}
+	}
+	return time.Time{}
 }
 
 // patrolMetricsCallbackAdapter implements aicontracts.OrchestratorMetricsCallback
@@ -2187,6 +2223,20 @@ func (w *findingsStoreWrapper) UpdateInvestigation(id, sessionID, status, outcom
 		return false
 	}
 	return w.store.UpdateInvestigation(id, sessionID, status, outcome, lastInvestigatedAt, attempts)
+}
+
+func (w *findingsStoreWrapper) StartInvestigation(id, sessionID string, runStartedAt time.Time, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool {
+	if w.store == nil {
+		return false
+	}
+	return w.store.StartInvestigation(id, sessionID, runStartedAt, status, outcome, lastInvestigatedAt, attempts)
+}
+
+func (w *findingsStoreWrapper) CompleteInvestigation(id, sessionID string, runStartedAt time.Time, status, outcome string, lastInvestigatedAt *time.Time, attempts int) bool {
+	if w.store == nil {
+		return false
+	}
+	return w.store.CompleteInvestigation(id, sessionID, runStartedAt, status, outcome, lastInvestigatedAt, attempts)
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai

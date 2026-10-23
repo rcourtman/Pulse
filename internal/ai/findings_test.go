@@ -2483,3 +2483,259 @@ func TestInterruptedAndUnclassifiedInvestigationsStayEligible(t *testing.T) {
 		t.Fatal("a real needs_attention conclusion stays terminal")
 	}
 }
+
+// regressHere resolves a finding and detects it again, a regression this
+// process observes, and returns when it happened.
+func regressHere(t *testing.T, findings *FindingsStore, id string) time.Time {
+	t.Helper()
+	f := findings.Get(id)
+	if f == nil || !findings.Resolve(id, true) {
+		t.Fatalf("could not resolve %s", id)
+	}
+	findings.Add(&Finding{ID: id, ResourceID: f.ResourceID, ResourceType: f.ResourceType, Title: f.Title, Severity: f.Severity, Category: f.Category})
+	got := findings.Get(id)
+	if got.LastRegressionAt == nil {
+		t.Fatalf("%s did not regress", id)
+	}
+	return *got.LastRegressionAt
+}
+
+func TestStartInvestigationSkipsARunFromAnEarlierOccurrence(t *testing.T) {
+	findings := NewFindingsStore()
+	for _, id := range []string{"regressed", "unrecorded", "first", "recorded-earlier"} {
+		f := runningInvestigationFinding(id, "", nil)
+		f.InvestigationStatus = ""
+		f.InvestigationAttempts = 0
+		if id == "recorded-earlier" {
+			// Loaded after a restart, with the clock since set back.
+			recordedAt := time.Now().Add(time.Hour)
+			f.LastRegressionAt = &recordedAt
+		}
+		findings.Add(f)
+	}
+	regressedAt := regressHere(t, findings, "regressed")
+	regressHere(t, findings, "unrecorded")
+	start := func(id, sessionID string, runStartedAt time.Time) bool {
+		return findings.StartInvestigation(id, sessionID, runStartedAt, string(InvestigationStatusRunning), "", nil, 3)
+	}
+
+	if start("regressed", "chat-earlier", regressedAt.Add(-time.Minute)) {
+		t.Fatal("a run started for the earlier occurrence was installed")
+	}
+	if got := findings.Get("regressed"); got.InvestigationSessionID != "" || got.InvestigationStatus != "" || got.InvestigationAttempts != 0 {
+		t.Fatalf("regressed = session %q %s, %d attempts; want the current occurrence untouched", got.InvestigationSessionID, got.InvestigationStatus, got.InvestigationAttempts)
+	}
+	if !start("regressed", "chat-current", time.Now()) {
+		t.Fatal("a run of the current occurrence was refused")
+	}
+	assertInvestigationState(t, findings, "regressed", InvestigationStatusRunning, "")
+	// A run with no recorded start, or on a finding that never regressed, is
+	// installed as before.
+	if !start("unrecorded", "chat-unrecorded", time.Time{}) {
+		t.Fatal("a run with no recorded start was refused")
+	}
+	if !start("first", "chat-first", time.Now().Add(-time.Hour)) {
+		t.Fatal("a run on a finding that never regressed was refused")
+	}
+	// A regression an earlier process recorded predates every run of this one,
+	// however the clock now reads; refusing would start a run every cycle.
+	if !start("recorded-earlier", "chat-recorded-earlier", time.Now()) {
+		t.Fatal("a run was refused against a regression an earlier process recorded")
+	}
+	if start("missing", "chat-missing", time.Now()) {
+		t.Fatal("a run was installed on an unknown finding")
+	}
+}
+
+func TestCompleteInvestigationRecordsOnlyTheRunTheFindingNames(t *testing.T) {
+	started := time.Now().Add(-time.Minute)
+	findings := NewFindingsStore()
+	findings.Add(runningInvestigationFinding("current", "chat-current", nil))
+	findings.Add(runningInvestigationFinding("unrecorded", "chat-unrecorded", nil))
+	findings.Add(runningInvestigationFinding("replaced", "chat-newer", nil))
+	idle := runningInvestigationFinding("idle", "", nil)
+	idle.InvestigationStatus = ""
+	findings.Add(idle)
+	// The stuck-run sweep gave this run up as timed out; it reports back after all.
+	late := runningInvestigationFinding("late", "chat-late", nil)
+	late.InvestigationStatus = string(InvestigationStatusFailed)
+	late.InvestigationOutcome = string(InvestigationOutcomeTimedOut)
+	findings.Add(late)
+	// Loaded after a restart, with the clock since set back.
+	recordedEarlier := runningInvestigationFinding("recorded-earlier", "chat-recorded-earlier", nil)
+	recordedAt := time.Now().Add(time.Hour)
+	recordedEarlier.LastRegressionAt = &recordedAt
+	findings.Add(recordedEarlier)
+
+	closedAt := time.Now()
+	complete := func(id, sessionID string, runStartedAt time.Time, status InvestigationStatus, outcome InvestigationOutcome, attempts int) bool {
+		return findings.CompleteInvestigation(id, sessionID, runStartedAt, string(status), string(outcome), &closedAt, attempts)
+	}
+	if complete("replaced", "chat-older", started, InvestigationStatusCompleted, InvestigationOutcomeResolved, 1) {
+		t.Fatal("an older run's result overwrote the run that replaced it")
+	}
+	assertInvestigationState(t, findings, "replaced", InvestigationStatusRunning, "")
+	if complete("idle", "chat-other", started, InvestigationStatusCompleted, InvestigationOutcomeResolved, 1) {
+		t.Fatal("a run the finding does not name recorded its result")
+	}
+	assertInvestigationState(t, findings, "idle", "", "")
+	if complete("missing", "chat-missing", started, InvestigationStatusCompleted, InvestigationOutcomeResolved, 1) {
+		t.Fatal("a result was recorded for an unknown finding")
+	}
+
+	if !complete("current", "chat-current", started, InvestigationStatusCompleted, InvestigationOutcomeCannotFix, 2) {
+		t.Fatal("the finding's own run was refused")
+	}
+	assertInvestigationState(t, findings, "current", InvestigationStatusCompleted, InvestigationOutcomeCannotFix)
+	if got := findings.Get("current"); got.InvestigationAttempts != 2 || got.LastInvestigatedAt == nil || !got.LastInvestigatedAt.Equal(closedAt) {
+		t.Fatalf("current = %d attempts, last investigated %v; want 2 at %v", got.InvestigationAttempts, got.LastInvestigatedAt, closedAt)
+	}
+	// With no regression on record, a run with no recorded start still owns
+	// the only occurrence there has been.
+	if !complete("unrecorded", "chat-unrecorded", time.Time{}, InvestigationStatusFailed, InvestigationOutcomeTimedOut, 1) {
+		t.Fatal("a run with no recorded start was refused before any regression")
+	}
+	assertInvestigationState(t, findings, "unrecorded", InvestigationStatusFailed, InvestigationOutcomeTimedOut)
+	if !complete("late", "chat-late", started, InvestigationStatusCompleted, InvestigationOutcomeFixVerified, 1) {
+		t.Fatal("a late result from the finding's own run was refused")
+	}
+	assertInvestigationState(t, findings, "late", InvestigationStatusCompleted, InvestigationOutcomeFixVerified)
+	if findings.Get("late").ResolvedAt == nil {
+		t.Fatal("a verified fix from the finding's own run did not resolve it")
+	}
+	// A regression an earlier process recorded predates every run of this one.
+	if !complete("recorded-earlier", "chat-recorded-earlier", started, InvestigationStatusCompleted, InvestigationOutcomeNeedsAttention, 1) {
+		t.Fatal("a run's result was refused against a regression an earlier process recorded")
+	}
+	assertInvestigationState(t, findings, "recorded-earlier", InvestigationStatusCompleted, InvestigationOutcomeNeedsAttention)
+	// An action outcome for a session of an earlier process is still judged
+	// against LastRegressionAt, which the same clock stamped.
+	earlier := &aicontracts.InvestigationSession{ID: "inv-earlier", FindingID: "recorded-earlier", SessionID: "chat-earlier", StartedAt: recordedAt.Add(-time.Minute)}
+	findings.UpdateInvestigation("recorded-earlier", "", "", "", nil, 0) // as the regression left it
+	if applied, _ := findings.ReconcileInvestigationOutcome("recorded-earlier", earlier, string(InvestigationOutcomeFixVerified)); applied {
+		t.Fatal("an earlier process's action outcome landed on the current occurrence")
+	}
+}
+
+func TestCompleteInvestigationClosesARunFromAnEarlierOccurrenceAsTheSweepWould(t *testing.T) {
+	ids := []string{"stale", "unrecorded", "settled", "queued", "current"}
+	findings := NewFindingsStore()
+	for _, id := range ids {
+		findings.Add(runningInvestigationFinding(id, "", nil))
+	}
+	var regressedAt time.Time
+	for _, id := range ids {
+		regressedAt = regressHere(t, findings, id)
+		// The run is installed on the current occurrence, as through a path
+		// that does not check when it started.
+		status, outcome := InvestigationStatusRunning, InvestigationOutcome("")
+		switch id {
+		case "settled":
+			// The stuck-run sweep already closed it.
+			status, outcome = InvestigationStatusFailed, InvestigationOutcomeInterrupted
+		case "queued":
+			// The action lifecycle recorded a queued fix during the run.
+			outcome = InvestigationOutcomeFixQueued
+		}
+		findings.UpdateInvestigation(id, "chat-"+id, string(status), string(outcome), nil, 1)
+	}
+	beforeRegression := regressedAt.Add(-time.Minute)
+
+	closedAt := time.Now()
+	complete := func(id string, runStartedAt time.Time) bool {
+		return findings.CompleteInvestigation(id, "chat-"+id, runStartedAt, string(InvestigationStatusCompleted), string(InvestigationOutcomeFixVerified), &closedAt, 2)
+	}
+	// The run started before the finding's current occurrence: its verified
+	// fix was for the earlier one.
+	if complete("stale", beforeRegression) {
+		t.Fatal("a run from before the regression recorded its result")
+	}
+	assertInvestigationState(t, findings, "stale", InvestigationStatusFailed, InvestigationOutcomeInterrupted)
+	stale := findings.Get("stale")
+	if stale.ResolvedAt != nil {
+		t.Fatal("an earlier occurrence's verified fix resolved the current one")
+	}
+	if stale.LastInvestigatedAt == nil || !stale.LastInvestigatedAt.Equal(closedAt) || stale.InvestigationAttempts != 1 {
+		t.Fatalf("stale = %d attempts, last investigated %v; want 1 at the close %v", stale.InvestigationAttempts, stale.LastInvestigatedAt, closedAt)
+	}
+	if !stale.ShouldInvestigate("approval") {
+		t.Fatal("the current occurrence must be free for another run")
+	}
+	// Without a recorded start the run cannot be shown to belong to the
+	// current occurrence.
+	if complete("unrecorded", time.Time{}) {
+		t.Fatal("a run with no recorded start recorded its result after a regression")
+	}
+	assertInvestigationState(t, findings, "unrecorded", InvestigationStatusFailed, InvestigationOutcomeInterrupted)
+	if complete("settled", beforeRegression) {
+		t.Fatal("a run from before the regression recorded its result")
+	}
+	assertInvestigationState(t, findings, "settled", InvestigationStatusFailed, InvestigationOutcomeInterrupted)
+	// The close keeps an outcome the action lifecycle recorded, as the sweep
+	// does, so the queued fix still blocks another investigation.
+	if complete("queued", beforeRegression) {
+		t.Fatal("a run from before the regression recorded its result")
+	}
+	assertInvestigationState(t, findings, "queued", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	if findings.Get("queued").ShouldInvestigate("approval") {
+		t.Fatal("a queued fix must keep blocking another investigation")
+	}
+
+	if !complete("current", time.Now()) {
+		t.Fatal("a run of the current occurrence was refused")
+	}
+	assertInvestigationState(t, findings, "current", InvestigationStatusCompleted, InvestigationOutcomeFixVerified)
+	if current := findings.Get("current"); current.ResolvedAt == nil || current.InvestigationAttempts != 2 {
+		t.Fatalf("current = resolved at %v, %d attempts; want resolved with the run's 2 attempts", current.ResolvedAt, current.InvestigationAttempts)
+	}
+}
+
+func TestStartInvestigationSkipsARunFromBeforeTheFindingWasRemoved(t *testing.T) {
+	start := func(findings *FindingsStore, id, sessionID string, runStartedAt time.Time) bool {
+		return findings.StartInvestigation(id, sessionID, runStartedAt, string(InvestigationStatusRunning), "", nil, 1)
+	}
+
+	// Cleared by the operator, then detected again: the same ID, a new finding.
+	cleared := NewFindingsStore()
+	cleared.Add(runningInvestigationFinding("cleared", "", nil))
+	runStartedAt := time.Now()
+	cleared.ClearAll()
+	cleared.Add(runningInvestigationFinding("cleared", "", nil))
+	if start(cleared, "cleared", "chat-before-clear", runStartedAt) {
+		t.Fatal("a run from before the finding was cleared was installed on the new one")
+	}
+	if !start(cleared, "cleared", "chat-after-clear", time.Now()) {
+		t.Fatal("a run of the new finding was refused")
+	}
+
+	// Removed as an old resolved finding, then detected again.
+	cleaned := NewFindingsStore()
+	cleaned.Add(runningInvestigationFinding("cleaned", "", nil))
+	runStartedAt = time.Now()
+	cleaned.Resolve("cleaned", true)
+	if removed := cleaned.Cleanup(0); removed != 1 {
+		t.Fatalf("Cleanup removed %d findings, want 1", removed)
+	}
+	cleaned.Add(runningInvestigationFinding("cleaned", "", nil))
+	if start(cleaned, "cleaned", "chat-before-cleanup", runStartedAt) {
+		t.Fatal("a run from before the finding was removed was installed on the new one")
+	}
+
+	// An occurrence start no live run can predate is forgotten.
+	cleaned.occurrenceStarts["long-gone"] = time.Now().Add(-occurrenceStartRetention - time.Minute)
+	cleaned.Cleanup(0)
+	if _, ok := cleaned.occurrenceStarts["long-gone"]; ok {
+		t.Fatal("an occurrence start past the retention window was kept")
+	}
+
+	// So a session older than that could predate an occurrence start the store
+	// no longer holds, even where none is on record.
+	fresh := NewFindingsStore()
+	fresh.Add(runningInvestigationFinding("fresh", "", nil))
+	if start(fresh, "fresh", "chat-ancient", time.Now().Add(-occurrenceStartRetention-time.Minute)) {
+		t.Fatal("a run from a session older than the retention window was installed")
+	}
+	if !start(fresh, "fresh", "chat-recent", time.Now().Add(-time.Hour)) {
+		t.Fatal("a run from a recent session was refused")
+	}
+}
