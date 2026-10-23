@@ -85,13 +85,14 @@ let browser, server;
     for (phase of ['observed', 'warm-partial', 'partial', 'denied', 'recovered', 'confirmed-empty']) {
       if (phase === 'observed') await page.goto(origin + '/proxmox/backups/coverage');
       else await page.reload();
-      const expand = page.getByRole('button', { name: 'Expand details for guest-102', exact: true });
+      const expand = page.getByRole('button', { name: 'Expand details for guest-102 (VM 102)', exact: true });
       await expand.waitFor();
       await expand.focus();
       await expand.press('Enter');
       const panel = page.getByTestId('proxmox-coverage-detail');
       const posture = producer.frames[phase].postures.data.find((item) => item.subjectResourceId === producer.resource_ids[1]);
       await panel.getByText(posture.explanation, { exact: true }).waitFor();
+      await panel.scrollIntoViewIfNeeded();
       await page.waitForFunction(() => document.fonts.status === 'loaded');
       const body = await panel.innerText();
       for (const provider of posture.providerStates) {
@@ -111,7 +112,7 @@ let browser, server;
       await page.screenshot({ path: file, fullPage: true });
       result.captures.push({ name, phase, file: path.relative(root, file), sha256: hash(fs.readFileSync(file)) });
       record.phases.push({ phase, state: posture.state, body, overflow });
-      await page.getByRole('button', { name: 'Collapse details for guest-102', exact: true }).press('Enter');
+      await page.getByRole('button', { name: 'Collapse details for guest-102 (VM 102)', exact: true }).press('Enter');
       await panel.waitFor({ state: 'hidden' });
     }
     assert.deepEqual(record.errors, []);
