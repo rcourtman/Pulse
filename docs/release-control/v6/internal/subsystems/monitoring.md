@@ -17,6 +17,25 @@
 
 ## Purpose
 
+### Failed guest snapshot reads do not establish removal
+
+A snapshot listing is accepted only when its API call succeeds. In particular,
+LXC errors containing `596` or `not available` retain the last accepted listing
+just like other VM/container read errors; they are not successful empty replies.
+Any partial result returned with an error is discarded. Other guests in the
+same cycle still accept fresh or empty listings normally, and another instance's
+inventory is untouched. A later successful empty reply still establishes removal.
+
+`TestSnapshotCollectionFailureIsNotRemoval` exercises both guest kinds, repeated
+errors, partial replies, independent guest/instance membership and warning
+occurrence/acknowledgement continuity through the actual poller and served state.
+The first-read and explicit-alert-disable controls prevent fabricated evidence
+or retention overriding policy. `TestSnapshotCollectionBrowserProducer` emits
+synthetic poller/manager frames for the real AlertsAPI and Overview consumer.
+No guest-agent command, backup operation, provider retry, schema, identity or
+policy change is introduced. Retained membership is not proof of a fresh read,
+artifact availability, guest thaw, filesystem liveness or installed recovery.
+
 ### Locally built images report an uncheckable update state (21 October 2026)
 
 An image with no RepoDigest was built or loaded on its host, so no registry
