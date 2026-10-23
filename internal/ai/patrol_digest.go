@@ -430,12 +430,14 @@ func PatrolDigestOutcomeOrder(byOutcome map[string]int) []string {
 		"fix_verification_failed":  2,
 		"cannot_fix":               3,
 		"timed_out":                4,
-		"fix_queued":               5,
-		"fix_executed":             6,
-		"fix_verification_unknown": 7,
-		"fix_verified":             8,
-		"resolved":                 9,
-		"fix_rejected":             10,
+		"unclassified":             5,
+		"fix_queued":               6,
+		"fix_executed":             7,
+		"fix_verification_unknown": 8,
+		"fix_verified":             9,
+		"resolved":                 10,
+		"fix_rejected":             11,
+		"interrupted":              12,
 	}
 	keys := make([]string, 0, len(byOutcome))
 	for key := range byOutcome {

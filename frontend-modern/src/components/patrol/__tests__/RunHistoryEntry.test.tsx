@@ -5,11 +5,10 @@ import runHistoryEntrySource from '../RunHistoryEntry.tsx?raw';
 import { RunHistoryEntry } from '../RunHistoryEntry';
 import dockerHistory from '../__fixtures__/dockerPatrolHistory.json';
 
-const { findingsPanelState, openMock } = vi.hoisted(() => ({
+const { findingsPanelState } = vi.hoisted(() => ({
   findingsPanelState: {
     latestProps: null as Record<string, unknown> | null,
   },
-  openMock: vi.fn(),
 }));
 
 vi.mock('@/components/AI/FindingsPanel', () => ({
@@ -40,12 +39,6 @@ vi.mock('../RunToolCallTrace', () => ({
 
 vi.mock('@/components/AI/aiChatUtils', () => ({
   renderMarkdown: (content: string) => content,
-}));
-
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: {
-    open: openMock,
-  },
 }));
 
 describe('RunHistoryEntry', () => {
@@ -98,7 +91,6 @@ describe('RunHistoryEntry', () => {
 
   beforeEach(() => {
     findingsPanelState.latestProps = null;
-    openMock.mockReset();
   });
 
   afterEach(() => {
@@ -316,64 +308,6 @@ describe('RunHistoryEntry', () => {
     ));
 
     expect(screen.queryByRole('link', { name: 'Check Patrol model' })).toBeNull();
-  });
-
-  it('opens Assistant with structured run history context', () => {
-    render(() => (
-      <RunHistoryEntry
-        run={{
-          ...run,
-          id: 'run-runtime-error',
-          effective_scope_resource_ids: ['vm-100'],
-          scope_resource_types: ['vm'],
-          resources_checked: 1,
-          guests_checked: 1,
-          error_count: 1,
-          status: 'error',
-          tool_call_count: 1,
-          error_summary: 'Selected model does not support Patrol tools',
-          error_detail:
-            "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
-        }}
-        isLive={false}
-        patrolStream={patrolStream}
-        selected={true}
-        onSelect={vi.fn()}
-      />
-    ));
-
-    fireEvent.click(screen.getByRole('button', { name: /discuss/i }));
-
-    expect(openMock).toHaveBeenCalledTimes(1);
-    const [context] = openMock.mock.calls[0];
-    expect(JSON.stringify(context)).not.toContain('tool_choice');
-    expect(JSON.stringify(context)).not.toContain('No endpoints found');
-    expect(context).toMatchObject({
-      targetType: 'patrol-run',
-      targetId: 'run-runtime-error',
-      autonomousMode: false,
-      handoffMetadata: {
-        kind: 'patrol_run',
-        runId: 'run-runtime-error',
-        runType: 'Targeted check',
-        runStatus: 'error',
-        runtimeFailure: true,
-      },
-      context: {
-        source: 'pulse-patrol-run',
-        runId: 'run-runtime-error',
-        errorCount: 1,
-        handoffResourceCount: 1,
-      },
-    });
-    expect(context.handoffContext).toBeUndefined();
-    expect(context.handoffResources).toBeUndefined();
-    expect(context.briefing).toMatchObject({
-      title: 'Patrol run attached',
-      actionLabel: 'Review Patrol runtime failure',
-    });
-    expect(JSON.stringify(context)).not.toContain('tool_choice');
-    expect(JSON.stringify(context)).not.toContain('No endpoints found');
   });
 
   it('keeps zero-coverage scoped runs on the shared coverage narrative', () => {

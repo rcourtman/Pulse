@@ -30,7 +30,6 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
     "tests/integration/tests/18-patrol-runtime-state.spec.ts",
-    "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts",
     "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
     "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts",
 ]
@@ -946,8 +945,8 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], lane_id)
             self.assertEqual(match["verification_requirement"]["id"], requirement_id)
 
-    def test_lookup_paths_reports_assistant_chat_frontend_client_as_shared_boundary(self) -> None:
-        result = lookup_paths(["frontend-modern/src/api/aiChat.ts"])
+    def test_lookup_paths_reports_workflow_prompts_client_as_shared_boundary(self) -> None:
+        result = lookup_paths(["frontend-modern/src/api/workflowPrompts.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -2622,7 +2621,6 @@ class SubsystemLookupTest(unittest.TestCase):
     def test_lookup_paths_assigns_remaining_settings_shell_panels_to_frontend_primitives(self) -> None:
         runtime_files = [
             "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
-            "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
             "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
             "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
             "frontend-modern/src/components/Settings/AISettings.tsx",
@@ -4624,7 +4622,7 @@ class SubsystemLookupTest(unittest.TestCase):
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-                "3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`",
+                "3. Add or change Assistant chat request flow through `internal/api/ai_handler.go`",
                 "internal/api/ai_handler.go",
             ),
         ]

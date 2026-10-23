@@ -40,8 +40,8 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   },
   {
     value: AI_CHAT_SCOPE,
-    label: 'Pulse Assistant chat',
-    description: 'Use interactive Pulse Assistant sessions, models, and read knowledge.',
+    label: 'Pulse Mobile chat',
+    description: 'Use Pulse Mobile chat sessions, models, and read knowledge.',
     group: 'AI',
   },
   {

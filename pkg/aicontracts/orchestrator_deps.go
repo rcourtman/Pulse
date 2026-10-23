@@ -69,6 +69,9 @@ type OrchestratorInvestigationResult struct {
 	ModelTurns    int              `json:"model_turns"`
 	EvidenceCalls int              `json:"evidence_calls"`
 	ToolCalls     int              `json:"tool_calls"`
+	// Conclusion is the model's structured zero-action conclusion, nil when
+	// the run recorded none. It carries no remediation authority.
+	Conclusion *InvestigationConclusion `json:"conclusion,omitempty"`
 }
 
 // OrchestratorFindingsStore provides access to patrol findings for the orchestrator.

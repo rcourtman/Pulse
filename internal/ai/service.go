@@ -903,6 +903,7 @@ func (s *Service) ApplyPatrolAutonomyConfig(cfg *config.AIConfig) error {
 	if s == nil || cfg == nil {
 		return fmt.Errorf("Pulse Patrol config is unavailable")
 	}
+	orchestrator := s.liveInvestigationOrchestrator()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cfg == nil {
@@ -920,16 +921,40 @@ func (s *Service) ApplyPatrolAutonomyConfig(cfg *config.AIConfig) error {
 		activation := *cfg.PatrolAutopilotActivation
 		s.cfg.PatrolAutopilotActivation = &activation
 	}
-	if s.patrolService != nil {
-		orchestrator := s.patrolService.GetInvestigationOrchestrator()
-		if updater, ok := orchestrator.(aicontracts.InvestigationExecutionLimitUpdater); ok {
-			updater.SetInvestigationExecutionLimits(
-				s.cfg.GetPatrolInvestigationBudget(),
-				s.cfg.GetPatrolInvestigationTimeout(),
-			)
-		}
-	}
+	publishInvestigationExecutionLimits(orchestrator, s.cfg)
 	return nil
+}
+
+// liveInvestigationOrchestrator returns the Patrol investigation orchestrator
+// without holding s.mu while it takes the Patrol lock: PatrolService takes its
+// own lock before s.mu (GetIntelligence), so the reverse order could deadlock.
+func (s *Service) liveInvestigationOrchestrator() InvestigationOrchestrator {
+	s.mu.RLock()
+	patrol := s.patrolService
+	s.mu.RUnlock()
+	if patrol == nil {
+		return nil
+	}
+	return patrol.GetInvestigationOrchestrator()
+}
+
+// publishInvestigationExecutionLimits publishes the configured evidence
+// budget, timeout and concurrency to a live investigation orchestrator. The
+// timeout default and the concurrency follow the Patrol provider, so a
+// provider change applies without rebuilding the orchestrator.
+func publishInvestigationExecutionLimits(orchestrator InvestigationOrchestrator, cfg *config.AIConfig) {
+	if orchestrator == nil || cfg == nil {
+		return
+	}
+	if updater, ok := orchestrator.(aicontracts.InvestigationExecutionLimitUpdater); ok {
+		updater.SetInvestigationExecutionLimits(
+			cfg.GetPatrolInvestigationBudget(),
+			cfg.GetPatrolInvestigationTimeout(),
+		)
+	}
+	if updater, ok := orchestrator.(aicontracts.InvestigationConcurrencyLimitUpdater); ok {
+		updater.SetInvestigationConcurrencyLimit(cfg.GetPatrolInvestigationConcurrency())
+	}
 }
 
 func clonePatrolAutopilotAcknowledgements(records []unifiedresources.PatrolAutopilotAcknowledgement) []unifiedresources.PatrolAutopilotAcknowledgement {
@@ -1564,10 +1589,12 @@ func (s *Service) LoadConfig() error {
 		providerClient, providerInitErr = buildConfiguredProvider(context.Background(), cfg, orgID, true)
 	}
 
+	orchestrator := s.liveInvestigationOrchestrator()
 	s.mu.Lock()
 	s.cfg = cfg
 	s.provider = providerClient
 	s.providerInitErr = providerInitErr
+	publishInvestigationExecutionLimits(orchestrator, cfg)
 	s.mu.Unlock()
 
 	return nil

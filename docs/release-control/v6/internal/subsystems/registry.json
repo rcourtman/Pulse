@@ -50,14 +50,6 @@
       ]
     },
     {
-      "path": "frontend-modern/src/api/aiChat.ts",
-      "rationale": "the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary",
-      "subsystems": [
-        "ai-runtime",
-        "api-contracts"
-      ]
-    },
-    {
       "path": "frontend-modern/src/api/generated/agentCapabilities.ts",
       "rationale": "the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary",
       "subsystems": [
@@ -127,6 +119,14 @@
       "subsystems": [
         "api-contracts",
         "deployment-installability"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/workflowPrompts.ts",
+      "rationale": "the workflow prompt activity client is both the AI runtime workflow-prompt telemetry surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
       ]
     },
     {
@@ -420,8 +420,8 @@
       ]
     },
     {
-      "path": "frontend-modern/src/stores/aiChat.ts",
-      "rationale": "the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary",
+      "path": "frontend-modern/src/stores/aiAvailability.ts",
+      "rationale": "the AI availability store is both the AI runtime session capability and the app-shell gate for Patrol entry points",
       "subsystems": [
         "ai-runtime",
         "frontend-primitives"
@@ -2008,7 +2008,6 @@
       "owned_prefixes": [
         "cmd/patrol-qualify/",
         "cmd/pulse-mcp/",
-        "frontend-modern/src/components/AI/Chat/",
         "internal/agentcapabilities/",
         "internal/ai/",
         "internal/mutationregistry/",
@@ -2021,15 +2020,13 @@
         "docs/AI_PATROL_QUALIFICATION.md",
         "frontend-modern/src/api/agentCapabilities.ts",
         "frontend-modern/src/api/ai.ts",
-        "frontend-modern/src/api/aiChat.ts",
         "frontend-modern/src/api/generated/agentCapabilities.ts",
         "frontend-modern/src/api/patrol.ts",
+        "frontend-modern/src/api/workflowPrompts.ts",
         "frontend-modern/src/components/AI/AICostDashboard.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
-        "frontend-modern/src/stores/aiChat.ts",
+        "frontend-modern/src/stores/aiAvailability.ts",
         "frontend-modern/src/stores/aiRuntimeState.ts",
-        "frontend-modern/src/utils/aiChatPresentation.ts",
-        "frontend-modern/src/utils/aiControlLevelPresentation.ts",
         "frontend-modern/src/utils/aiCostPresentation.ts",
         "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
         "frontend-modern/src/utils/aiProviderPresentation.ts",
@@ -2168,8 +2165,8 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/ai.ts",
-              "frontend-modern/src/api/aiChat.ts",
               "frontend-modern/src/api/patrol.ts",
+              "frontend-modern/src/api/workflowPrompts.ts",
               "internal/api/ai_handler.go",
               "internal/api/ai_handlers.go",
               "internal/api/ai_intelligence_handlers.go"
@@ -2210,22 +2207,17 @@
           },
           {
             "id": "ai-chat-runtime-read-model",
-            "label": "AI chat and shared runtime read model proof",
-            "match_prefixes": [
-              "frontend-modern/src/components/AI/Chat/"
-            ],
+            "label": "AI availability and shared runtime read model proof",
+            "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/stores/aiChat.ts",
+              "frontend-modern/src/stores/aiAvailability.ts",
               "frontend-modern/src/stores/aiRuntimeState.ts"
             ],
             "allow_same_subsystem_tests": false,
-            "test_prefixes": [
-              "frontend-modern/src/components/AI/Chat/__tests__/"
-            ],
+            "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
-              "frontend-modern/src/stores/__tests__/aiChat.test.ts",
-              "tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts"
+              "frontend-modern/src/stores/__tests__/aiAvailability.test.ts"
             ]
           },
           {
@@ -2233,16 +2225,12 @@
             "label": "AI presentation helper proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/utils/aiChatPresentation.ts",
-              "frontend-modern/src/utils/aiControlLevelPresentation.ts",
               "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
               "frontend-modern/src/utils/aiProviderPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/utils/__tests__/aiChatPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/aiControlLevelPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderHealthPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
@@ -2421,7 +2409,6 @@
         "frontend-modern/src/utils/alertSchedulePresentation.ts",
         "frontend-modern/src/utils/alertSeverityPresentation.ts",
         "frontend-modern/src/utils/alertTabsPresentation.ts",
-        "frontend-modern/src/utils/alertTargetTypes.ts",
         "frontend-modern/src/utils/alertThresholdDefaults.ts",
         "frontend-modern/src/utils/alertThresholdsPresentation.ts",
         "frontend-modern/src/utils/alertThresholdsSectionPresentation.ts",
@@ -2562,21 +2549,7 @@
               "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
               "frontend-modern/src/pages/__tests__/Alerts.readOnly.test.tsx",
               "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/alertTargetTypes.test.ts",
               "scripts/check-incident-request-ownership.mjs"
-            ]
-          },
-          {
-            "id": "alert-target-type-resolution",
-            "label": "alert target type resolver proof",
-            "match_prefixes": [],
-            "match_files": [
-              "frontend-modern/src/utils/alertTargetTypes.ts"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "frontend-modern/src/utils/__tests__/alertTargetTypes.test.ts"
             ]
           },
           {
@@ -3030,17 +3003,15 @@
             ]
           },
           {
-            "id": "ai-chat-stream-event-types",
-            "label": "AI chat SSE generated type proof",
+            "id": "generated-api-types",
+            "label": "generated API type proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/api/generated/aiChatEvents.ts",
               "scripts/generate-types.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/api/__tests__/aiChatEvents.test.ts",
               "internal/api/contract_test.go"
             ]
           },
@@ -5463,7 +5434,6 @@
         "frontend-modern/src/components/Infrastructure/useTableWindowing.ts",
         "frontend-modern/src/components/Login.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
-        "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
         "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
         "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
@@ -5556,7 +5526,7 @@
         "frontend-modern/src/index.css",
         "frontend-modern/src/pages/Docs.tsx",
         "frontend-modern/src/routing/routePreload.ts",
-        "frontend-modern/src/stores/aiChat.ts",
+        "frontend-modern/src/stores/aiAvailability.ts",
         "frontend-modern/src/stores/updates.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/diagnosticsPresentation.ts",
@@ -5739,7 +5709,6 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
-              "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
               "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
               "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
               "frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx",
@@ -5917,13 +5886,13 @@
             "label": "assistant app-shell bootstrap proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/stores/aiChat.ts"
+              "frontend-modern/src/stores/aiAvailability.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
-              "frontend-modern/src/stores/__tests__/aiChat.test.ts",
+              "frontend-modern/src/stores/__tests__/aiAvailability.test.ts",
               "tests/integration/tests/11-first-session.spec.ts"
             ]
           },
@@ -7363,7 +7332,6 @@
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
               "tests/integration/tests/18-patrol-runtime-state.spec.ts",
-              "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts",
               "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
               "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts"
             ]

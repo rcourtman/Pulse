@@ -5,8 +5,6 @@ import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
-import { buildPatrolRunAssistantHandoff } from '@/features/patrol/patrolInvestigationContextModel';
-import { aiChatStore } from '@/stores/aiChat';
 import { RunToolCallTrace } from './RunToolCallTrace';
 import {
   formatDurationMs,
@@ -45,7 +43,6 @@ import FilterXIcon from 'lucide-solid/icons/filter-x';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import MailIcon from 'lucide-solid/icons/mail';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
-import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import SettingsIcon from 'lucide-solid/icons/settings';
 
 interface PatrolStreamState {
@@ -167,11 +164,6 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const runErrorDetail = formatPatrolRuntimeFailureDetail(run.error_detail);
   const hasRunErrorDetail = run.error_count > 0 && (runErrorSummary || runErrorDetail);
   const primaryAction = getPatrolRunPrimaryActionPresentation(run);
-  const handleDiscussRun = (event: Event) => {
-    event.stopPropagation();
-    const handoff = buildPatrolRunAssistantHandoff(run);
-    aiChatStore.open(handoff.context);
-  };
 
   return (
     <div
@@ -207,23 +199,11 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
       <Show when={props.selected}>
         <div class="px-3 pb-3 border-t border-blue-200 dark:border-blue-800 mt-0">
           {/* Section 1: Narrative Summary */}
-          <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 flex-1 items-start gap-2 text-sm text-base-content">
-              <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 shrink-0" />
-              <p>
-                <strong>{operatorRecord.headline}.</strong> {operatorRecord.detail}
-              </p>
-            </div>
-            <button
-              type="button"
-              data-testid="patrol-run-assistant-button"
-              onClick={handleDiscussRun}
-              class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content shadow-xs transition-colors hover:bg-surface-hover focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
-              title="Discuss this Patrol run with Assistant"
-            >
-              <MessageSquareIcon class="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Discuss</span>
-            </button>
+          <div class="mt-3 flex min-w-0 items-start gap-2 text-sm text-base-content">
+            <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 shrink-0" />
+            <p>
+              <strong>{operatorRecord.headline}.</strong> {operatorRecord.detail}
+            </p>
           </div>
 
           <Show when={hasRunErrorDetail}>

@@ -6,8 +6,6 @@ import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
 import reportingResourceTypesUtilSource from '@/utils/reportingResourceTypes.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
 import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
-import alertAssistantHandoffModelSource from '@/components/Alerts/alertAssistantHandoffModel.ts?raw';
-import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
@@ -65,7 +63,6 @@ import statusBadgeStateSource from '@/components/shared/useStatusBadgeState.ts?r
 import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
-import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import resourceBadgePresentationSource from '@/utils/resourceBadgePresentation.ts?raw';
 import workloadTypeBadgesSource from '@/components/shared/workloadTypeBadges.ts?raw';
@@ -180,15 +177,8 @@ import resourceChangePresentationSource from '@/utils/resourceChangePresentation
 import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPresentation.ts?raw';
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
 import textPresentationSource from '@/utils/textPresentation.ts?raw';
-import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
-import activeTurnStatusSource from '@/components/AI/Chat/activeTurnStatus.ts?raw';
-import toolPresentationSource from '@/components/AI/Chat/toolPresentation.ts?raw';
-import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
-import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
-import useChatSource from '@/components/AI/Chat/hooks/useChat.ts?raw';
 import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
 import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
-import chatIdentifiersSource from '@/utils/chatIdentifiers.ts?raw';
 import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
 import stringUtilsSource from '@/utils/stringUtils.ts?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
@@ -441,7 +431,6 @@ import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw
 import diagnosticsPanelSource from '@/components/Settings/DiagnosticsPanel.tsx?raw';
 import diagnosticsPresentationSource from '@/utils/diagnosticsPresentation.ts?raw';
 import aiSettingsShellSource from '@/components/Settings/AISettings.tsx?raw';
-import aiChatMaintenanceSectionSource from '@/components/Settings/AIChatMaintenanceSection.tsx?raw';
 import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import aiModelSelectionSectionSource from '@/components/Settings/AIModelSelectionSection.tsx?raw';
@@ -469,17 +458,14 @@ import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresenta
 import approvalRiskPresentationSource from '@/utils/approvalRiskPresentation.ts?raw';
 import patrolRunPresentationSource from '@/utils/patrolRunPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
-import modelSelectorSource from '@/components/AI/Chat/ModelSelector.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import remediationStatusSource from '@/components/patrol/RemediationStatus.tsx?raw';
 import remediationPresentationSource from '@/utils/remediationPresentation.ts?raw';
-import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
 
 const aiSettingsSource = [
   aiSettingsShellSource,
   aiModelSelectionSectionSource,
   aiRuntimeControlsSectionSource,
-  aiChatMaintenanceSectionSource,
   aiSettingsStatusAndActionsSource,
   aiProviderConfigurationSectionSource,
   aiSettingsDialogsSource,
@@ -591,15 +577,7 @@ describe('frontend resource type boundaries', () => {
     expect(chartsApiSource).toContain(
       "guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>",
     );
-
-    // resolveAlertTargetType moved from InvestigateAlertButton into the
-    // alert handoff model when the button was refactored to delegate via
-    // buildAlertAssistantHandoff. The button no longer reaches into the
-    // canonical resolver directly; the model owns that boundary.
-    expect(alertAssistantHandoffModelSource).toContain('resolveAlertTargetType');
     expect(investigateAlertButtonSource).not.toContain('canonicalizeFrontendResourceType');
-    expect(alertAssistantHandoffModelSource).not.toContain('canonicalizeFrontendResourceType');
-    expect(alertTargetTypesSource).toContain('canonicalizeFrontendResourceType');
     expect(resourceBadgePresentationSource).toContain('getResourceTypePresentation');
     expect(workloadTypePresentationSource).toContain('canonicalizeFrontendResourceType');
     expect(workloadTypePresentationSource).toContain('titleCaseDelimitedLabel');
@@ -2128,15 +2106,9 @@ describe('frontend resource type boundaries', () => {
     expect(k8sNamespacesDrawerSource).not.toContain(
       "const normalize = (value?: string | null) => (value || '').trim();",
     );
-    expect(activeTurnStatusSource).toContain('formatIdentifierLabel');
-    expect(toolPresentationSource).toContain('formatIdentifierLabel');
-    expect(aiChatSource).toContain('formatIdentifierLabel');
     expect(findingsPanelSource).toContain('formatIdentifierLabel');
     expect(patrolFormatSource).toContain('formatIdentifierLabel');
     expect(aiFindingPresentationSource).toContain('formatIdentifierLabel');
-    expect(messageItemSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
-    expect(toolExecutionBlockSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
-    expect(aiChatSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
     expect(findingsPanelSource).not.toContain("replace(/_/g, ' ')");
     expect(patrolFormatSource).not.toContain("replace(/_/g, ' ') : 'Unknown'");
     expect(aiFindingPresentationSource).not.toContain("replace(/_/g, ' ')");
@@ -2145,12 +2117,6 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).not.toContain(
       "normalized ? normalized.replace(/_/g, ' ') : 'unknown'",
     );
-    expect(useChatSource).toContain('normalizeChatToolName');
-    expect(useChatSource).not.toContain("replace(/^(pulse_)+/, '')");
-    expect(aiChatSource).toContain('normalizeChatMentionKeyPart');
-    expect(aiChatSource).not.toContain('const normalizeMentionKeyPart =');
-    expect(chatIdentifiersSource).toContain('normalizeChatMentionKeyPart');
-    expect(chatIdentifiersSource).toContain('normalizeChatToolName');
     expect(stringUtilsSource).toContain('export const asTrimmedString');
     expect(resourceIdentitySource).not.toContain(
       'const asTrimmedString = (value: unknown): string | undefined => {',
@@ -2235,9 +2201,6 @@ describe('frontend resource type boundaries', () => {
     expect(upgradeLinkSource).toContain('destination.external');
     expect(upgradeLinkSource).not.toContain('window.open');
     expect(upgradeLinkSource).not.toContain('useNavigate(');
-    expect(upgradeNavigationHookSource).toContain('useNavigate()');
-    expect(upgradeNavigationHookSource).toContain('navigateToUpgradeDestination');
-    expect(upgradeNavigationHookSource).not.toContain('window.open');
     expect(upgradeNavigationSource).toContain('isExternalUpgradeHref');
     expect(upgradeNavigationSource).toContain('resolveUpgradeDestination');
     expect(upgradeNavigationSource).toContain('navigateToUpgradeDestination');
@@ -3376,18 +3339,14 @@ describe('frontend resource type boundaries', () => {
     expect(aiSettingsSource).toContain('getAISettingsLoadingState');
     expect(aiSettingsSource).toContain('getAISettingsLoadErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsRetryLabel');
-    expect(aiSettingsSource).toContain('getAIChatSessionsLoadingState');
-    expect(aiSettingsSource).toContain('getAIChatSessionsEmptyState');
     expect(aiSettingsSource).toContain('getAIModelsLoadErrorMessage');
-    expect(aiSettingsSource).toContain('getAIChatSessionsLoadErrorMessage');
-    expect(aiSettingsSource).toContain('getAISessionSummarizeErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsSaveErrorMessage');
     expect(aiSettingsSource).toContain('getAICredentialsClearErrorMessage');
     expect(aiSettingsSource).toContain('getAISettingsToggleErrorMessage');
     expect(aiSettingsShellSource).toContain('@/components/Settings/useAISettingsState');
     expect(aiSettingsShellSource).toContain('@/components/Settings/AIModelSelectionSection');
     expect(aiSettingsShellSource).toContain('@/components/Settings/AIRuntimeControlsSection');
-    expect(aiSettingsShellSource).toContain('@/components/Settings/AIChatMaintenanceSection');
+    expect(aiSettingsShellSource).not.toContain('AIChatMaintenanceSection');
     expect(aiSettingsShellSource).toContain('@/components/Settings/AISettingsStatusAndActions');
     expect(aiSettingsSource).not.toContain('Loading Pulse Assistant settings...');
     expect(aiSettingsSource).not.toContain('Loading chat sessions...');
@@ -3488,8 +3447,8 @@ describe('frontend resource type boundaries', () => {
     expect(aiIntelligenceSummaryModelSource).toContain(
       'export function normalizeIntelligenceSummary',
     );
-    // FindingsPanel owns the Patrol finding to Assistant handoff; the page
-    // state hook must not carry a second, unwired copy of it.
+    // The Assistant chat window is retired, so no Patrol surface builds an
+    // Assistant finding handoff any more.
     expect(patrolIntelligenceStateSource).not.toContain(
       'buildPatrolAssistantFindingHandoffFromUnifiedFinding',
     );
@@ -3497,21 +3456,11 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
     expect(patrolInvestigationContextModelSource).toContain(
-      'export function buildPatrolAssistantFindingHandoffFromUnifiedFinding',
-    );
-    expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationRecordPresentation',
     );
-    expect(patrolInvestigationContextModelSource).not.toContain(
-      'export function buildPatrolAssistantFindingPrompt',
-    );
-    expect(patrolInvestigationContextModelSource).toContain(
-      'export function buildPatrolAssistantFindingBriefing',
-    );
-    // formatCommandSummary is the canonical helper for command-count copy.
-    // The model now passes a precomputed commandCount through
-    // normalizeNonNegativeCount instead of computing from a commands array,
-    // so assert the helper is used and the legacy join path is not.
+    expect(patrolInvestigationContextModelSource).not.toContain('buildPatrolAssistant');
+    // formatCommandSummary is the canonical helper for command-count copy;
+    // the legacy join path must not come back.
     expect(patrolInvestigationContextModelSource).toContain('formatCommandSummary(');
     expect(patrolInvestigationContextModelSource).not.toContain(
       'record.proposed_fix.commands.join',
@@ -3645,18 +3594,8 @@ describe('frontend resource type boundaries', () => {
     expect(aiCostPresentationSource).toContain(
       'export function getAICostExportHistoryErrorMessage',
     );
-    expect(aiModelPickerSource).toContain('AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
+    expect(aiModelPickerSource).toContain('AI_MODEL_PICKER_EMPTY_STATE');
     expect(aiModelPickerSource).not.toContain('No matching models.');
-    expect(modelSelectorSource).not.toContain('No matching models.');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_EMPTY_STATE');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_MENU_TITLE');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_DRAWER_TITLE');
-    expect(aiChatPresentationSource).not.toContain('AI_CHAT_DISCOVERY_HINT_TITLE');
-    expect(aiChatPresentationSource).toContain('export const AI_CHAT_QUESTION_CARD_TITLE');
-    expect(aiChatPresentationSource).toContain('export function getAIChatLauncherTitle');
-    expect(aiChatPresentationSource).not.toContain('AI_CHAT_SUGGESTIONS_LABEL');
-    expect(aiChatPresentationSource).not.toContain('getAIChatEmptyStateSuggestions');
     expect(remediationStatusSource).toContain('getRemediationPresentation');
     expect(remediationStatusSource).not.toContain(
       "'bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-800'",

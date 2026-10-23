@@ -7,7 +7,6 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { blurFocusedTypeToSearch } from '@/hooks/useTypeToSearch';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { aiChatStore } from '@/stores/aiChat';
 import type { ViewMode, WorkloadType } from '@/types/workloads';
 
 import {
@@ -504,7 +503,6 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   };
 
   const handleBeforeAutoFocus = () => {
-    if (aiChatStore.focusInput()) return true;
     if (!options.showFilters()) options.setShowFilters(true);
     return false;
   };

@@ -28,8 +28,10 @@ vi.mock('@/api/aiPatrolCost', () => ({
 }));
 vi.mock('@/api/patrol', () => ({ runPatrolModelReadiness: mocks.runPatrolModelReadiness }));
 vi.mock('@/stores/aiRuntimeState', () => ({ syncAIRuntimeSettings: mocks.syncAIRuntimeSettings }));
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: { refreshEnabledFromServer: mocks.refreshEnabledFromServer },
+vi.mock('@/stores/aiAvailability', () => ({
+  aiAvailabilityStore: {
+    refreshEnabledFromServer: mocks.refreshEnabledFromServer,
+  },
 }));
 
 const haikuProjection = {

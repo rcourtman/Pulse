@@ -23,7 +23,6 @@ import {
 } from '@/api/patrol';
 import type { ResourceCriticality } from '@/api/resourceOperatorState';
 import type {
-  RemediationPlan,
   UnifiedFindingRecord,
   InvestigationRecord,
   ApprovalRequest,
@@ -344,14 +343,6 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
 }
 
 // ============================================
-// Remediation Plans
-// ============================================
-
-const [remediationPlans, setRemediationPlans] = createSignal<RemediationPlan[]>([]);
-const [plansLoading, setPlansLoading] = createSignal(false);
-const [plansError, setPlansError] = createSignal<string | null>(null);
-
-// ============================================
 // Pending Approvals
 // ============================================
 
@@ -467,9 +458,6 @@ eventBus.on('org_switched', () => {
   setPatrolFindingsLoading(false);
   setPatrolFindingsError(null);
   patrolFindingsIncludeResolvedPreference = false;
-  setRemediationPlans([]);
-  setPlansLoading(false);
-  setPlansError(null);
   setPendingApprovalsWithExpiryTracking([]);
   setApprovalsError(null);
   setIntelligenceSummary(null);
@@ -547,70 +535,6 @@ export const aiIntelligenceStore = {
       setPatrolFindingsError(e instanceof Error ? e.message : 'Failed to load Patrol findings');
     } finally {
       setPatrolFindingsLoading(false);
-    }
-  },
-
-  // Remediation Plans
-  get remediationPlans() {
-    return remediationPlans();
-  },
-  get plansLoading() {
-    return plansLoading();
-  },
-  get plansError() {
-    return plansError();
-  },
-  remediationPlansSignal: remediationPlans,
-
-  async loadRemediationPlans() {
-    setPlansLoading(true);
-    setPlansError(null);
-    if (presentationPolicyIsDemoMode()) {
-      setRemediationPlans([]);
-      setPlansLoading(false);
-      return;
-    }
-    try {
-      const resp = await AIAPI.getRemediationPlans();
-      setRemediationPlans(resp?.plans || []);
-    } catch (e) {
-      logger.error('Failed to load remediation plans:', e);
-      setPlansError(e instanceof Error ? e.message : 'Failed to load remediation plans');
-    } finally {
-      setPlansLoading(false);
-    }
-  },
-
-  async approvePlan(planId: string) {
-    try {
-      await AIAPI.approveRemediationPlan(planId);
-      await this.loadRemediationPlans();
-      return true;
-    } catch (e) {
-      logger.error('Failed to approve plan:', e);
-      return false;
-    }
-  },
-
-  async executePlan(planId: string) {
-    try {
-      const result = await AIAPI.executeRemediationPlan(planId);
-      await this.loadRemediationPlans();
-      return result;
-    } catch (e) {
-      logger.error('Failed to execute plan:', e);
-      throw e;
-    }
-  },
-
-  async rollbackPlan(executionId: string) {
-    try {
-      await AIAPI.rollbackRemediationPlan(executionId);
-      await this.loadRemediationPlans();
-      return true;
-    } catch (e) {
-      logger.error('Failed to rollback plan:', e);
-      return false;
     }
   },
 
@@ -810,16 +734,6 @@ export const aiIntelligenceStore = {
       setIntelligenceSummary(null);
       return null;
     }
-  },
-
-  // Initialize - load all data
-  async initialize() {
-    await Promise.all([this.loadDashboardData(), this.loadRemediationPlans()]);
-  },
-
-  // Refresh all data
-  async refresh() {
-    await this.initialize();
   },
 };
 

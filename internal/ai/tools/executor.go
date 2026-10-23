@@ -1161,10 +1161,11 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.GetPatrolFindingCreator() != nil
 	case agentcapabilities.PatrolProposeObserverToolName:
 		return e.GetPatrolObserverProposer() != nil
-	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
+	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName, agentcapabilities.PatrolConcludeInvestigationToolName:
 		// These investigation-only tools share the request-local proposal
-		// capture: it supplies both trusted correlation and the tenant-bound
-		// capability catalog. They must never appear without that boundary.
+		// capture: it supplies trusted correlation, the tenant-bound
+		// capability catalog and the run's conclusion sink. They must never
+		// appear without that boundary.
 		return e.proposalCapture != nil
 	default:
 		return e.hasReadState()
@@ -1229,6 +1230,9 @@ func (e *PulseToolExecutor) registerTools() {
 	e.registerPatrolTools()
 
 	e.registerProposeTools()
+
+	// patrol_conclude_investigation - typed zero-action investigation conclusion
+	e.registerConcludeTool()
 
 	// pulse_summarize - retrospective synthesis for one resource or a fleet
 	e.registerSummarizeTools()

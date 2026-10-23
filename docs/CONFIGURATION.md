@@ -1282,7 +1282,7 @@ verification enabled and do not share verbose or trace output.
 | `agent:config:read` | Read agent config payloads |
 | `agent:manage` | Agent lifecycle/configuration changes and unregistering; not needed by the reporting preset |
 | `agent:exec` | Establish agent command WebSocket connections; not a reporting permission |
-| `ai:chat` | Use Pulse Assistant chat and read knowledge |
+| `ai:chat` | Use Pulse Mobile chat and read knowledge |
 | `ai:execute` | Use governed Patrol plans, approvals, actions, and history |
 | `settings:read` | Read configuration |
 | `settings:write` | Modify configuration, manage tokens and trigger updates |

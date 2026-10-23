@@ -29,122 +29,14 @@ export type CommandPaletteCommandPaths = {
   vmwareNetworksPath: string;
 };
 
-export type CommandPaletteAssistantActions = {
-  open: () => void;
-  help: () => void;
-  newSession: () => void;
-  sessions: () => void;
-  models: () => void;
-  providers: () => void;
-  status: () => void;
-  undo: () => void;
-  redo: () => void;
-};
-
-export type CommandPaletteAssistantOpenPresentation = {
-  description: string;
-  label: string;
-};
-
 export function buildCommandPaletteCommands(options: {
   paths: CommandPaletteCommandPaths;
   platformVisibility: PlatformNavigationVisibility;
   // Omitted means visible, for callers that do not gate Patrol.
   patrolVisible?: boolean;
   navigate: (path: string) => void;
-  assistantActions?: CommandPaletteAssistantActions;
-  assistantOpenPresentation?: CommandPaletteAssistantOpenPresentation;
 }): CommandPaletteModalCommand[] {
   const commands: CommandPaletteModalCommand[] = [];
-
-  if (options.assistantActions) {
-    const assistantOpenPresentation = options.assistantOpenPresentation ?? {
-      label: 'Ask about this view',
-      description: 'Use the current Pulse view as context',
-    };
-    commands.push(
-      {
-        id: 'assistant-open',
-        label: assistantOpenPresentation.label,
-        description: assistantOpenPresentation.description,
-        keywords: ['assistant', 'ai', 'chat', 'ask', 'pulse', 'view', 'context'],
-        action: options.assistantActions.open,
-      },
-      {
-        id: 'assistant-help',
-        label: 'Show Assistant commands',
-        description: '/help',
-        keywords: ['assistant', 'help', 'commands', 'slash', 'palette'],
-        action: options.assistantActions.help,
-      },
-      {
-        id: 'assistant-new-session',
-        label: 'New Assistant session',
-        description: '/new',
-        keywords: ['assistant', 'chat', 'new', 'clear', 'session'],
-        action: options.assistantActions.newSession,
-      },
-      {
-        id: 'assistant-switch-session',
-        label: 'Switch Assistant session',
-        description: '/sessions',
-        keywords: ['assistant', 'sessions', 'resume', 'continue', 'history'],
-        action: options.assistantActions.sessions,
-      },
-      {
-        id: 'assistant-switch-model',
-        label: 'Switch Assistant model',
-        description: '/models',
-        keywords: ['assistant', 'models', 'model', 'provider', 'openrouter', 'deepseek'],
-        action: options.assistantActions.models,
-      },
-      {
-        id: 'assistant-provider-settings',
-        label: 'Open Assistant provider settings',
-        description: '/providers',
-        keywords: [
-          'assistant',
-          'providers',
-          'provider',
-          'connect',
-          'settings',
-          'keys',
-          'openrouter',
-          'deepseek',
-        ],
-        action: options.assistantActions.providers,
-      },
-      {
-        id: 'assistant-status',
-        label: 'Check Assistant status',
-        description: '/status',
-        keywords: [
-          'assistant',
-          'status',
-          'runtime',
-          'health',
-          'provider',
-          'openrouter',
-          'deepseek',
-        ],
-        action: options.assistantActions.status,
-      },
-      {
-        id: 'assistant-undo-last-turn',
-        label: 'Undo last Assistant turn',
-        description: '/undo',
-        keywords: ['assistant', 'undo', 'edit', 'prompt', 'last', 'turn'],
-        action: options.assistantActions.undo,
-      },
-      {
-        id: 'assistant-redo-last-turn',
-        label: 'Redo last Assistant turn',
-        description: '/redo',
-        keywords: ['assistant', 'redo', 'restore', 'prompt', 'last', 'turn'],
-        action: options.assistantActions.redo,
-      },
-    );
-  }
 
   if (primaryPlatformNavigationIsVisible(options.platformVisibility, 'proxmox')) {
     commands.push({

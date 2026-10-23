@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { IncidentTimelinePanel } from '../IncidentTimelinePanel';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import type { Incident } from '@/types/api';
 
 function makeTimeline(overrides: Partial<Incident> = {}): Incident {
@@ -34,9 +34,7 @@ function makeTimeline(overrides: Partial<Incident> = {}): Incident {
 
 describe('IncidentTimelinePanel', () => {
   afterEach(() => {
-    aiChatStore.close();
-    aiChatStore.clearAllContext();
-    aiChatStore.setEnabled(false);
+    aiAvailabilityStore.setEnabled(false);
     cleanup();
     vi.restoreAllMocks();
   });
@@ -149,47 +147,6 @@ describe('IncidentTimelinePanel', () => {
     expect(saveNote).toHaveClass('min-h-11', 'focus:ring-2');
     fireEvent.click(saveNote);
     expect(handleSave).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens Assistant with a sanitized incident briefing from the loaded timeline', () => {
-    const [filters, setFilters] = createSignal(new Set(['command']));
-    const openSpy = vi.spyOn(aiChatStore, 'open');
-    aiChatStore.setEnabled(true);
-
-    render(() => (
-      <IncidentTimelinePanel
-        loading={() => false}
-        error={() => false}
-        timeline={() => makeTimeline()}
-        filters={filters}
-        setFilters={setFilters}
-        filterVariant="compact"
-        eventCardVariant="surface"
-        noteDraft={() => ''}
-        onNoteDraftChange={vi.fn()}
-        noteSaving={() => false}
-        onSaveNote={vi.fn()}
-        onRetry={vi.fn()}
-      />
-    ));
-
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Discuss incident incident-1 with Pulse Assistant',
-      }),
-    );
-
-    expect(openSpy).toHaveBeenCalledTimes(1);
-    const [context] = openSpy.mock.calls[0] as [Record<string, unknown>];
-    expect(context).toMatchObject({
-      autonomousMode: false,
-      briefing: {
-        sourceLabel: 'Pulse Alerts',
-        title: 'Incident timeline attached',
-        actionLabel: 'Discuss incident incident-1',
-      },
-    });
-    expect(JSON.stringify(context)).not.toContain('systemctl status pulse');
   });
   it('discloses a capped history without inventing its opening time', () => {
     const [filters, setFilters] = createSignal(new Set(['command']));

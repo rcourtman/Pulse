@@ -1,5 +1,4 @@
 import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { A, useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -7,7 +6,6 @@ import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
-import SparklesIcon from 'lucide-solid/icons/sparkles';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import {
   MobileNavBar,
@@ -27,7 +25,6 @@ import {
   type PlatformNavigationVisibility,
   type PrimaryPlatformNavId,
 } from '@/features/platformNavigation/platformNavigationModel';
-import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -36,7 +33,6 @@ import type { Organization } from '@/api/orgs';
 import type { VersionInfo } from '@/api/updates';
 import type { Alert, State } from '@/types/api';
 import { useKioskMode } from '@/hooks/useKioskMode';
-import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { layoutStore } from '@/utils/layout';
 import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
@@ -57,14 +53,13 @@ import {
 } from '@/routing/resourceLinks';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { getActionApprovalBadgePresentation } from '@/features/actions/actionPresentation';
 import { actionInboxStore } from '@/stores/actionInbox';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import { isPro } from '@/stores/licenseCommercial';
 import { runtimeBranding } from '@/stores/systemSettings';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { getAssistantPageContext } from '@/utils/assistantPageContext';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 
@@ -136,10 +131,6 @@ export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean 
   return scopes.includes('*') || scopes.includes(SETTINGS_READ_SCOPE);
 }
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
-const AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS =
-  'group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-surface-hover text-blue-600 transition-colors hover:bg-border hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
-const AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS =
-  'fixed right-0 top-1/2 z-40 flex min-h-9 min-w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-border bg-surface px-2.5 py-2.5 text-blue-600 transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300';
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
@@ -234,7 +225,6 @@ export function AppLayout(props: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const kioskMode = useKioskMode();
-  const viewport = useBreakpoint();
   const brandMotionActive = createMemo(() => props.connectionStatus().tone === 'healthy');
   const customBrandLogo = createMemo(() =>
     runtimeBranding().enabled ? runtimeBranding().logoDataUrl : '',
@@ -247,8 +237,6 @@ export function AppLayout(props: AppLayoutProps) {
   const [headerVisible, setHeaderVisible] = createSignal(true);
   const [primaryRouteMemoryVersion, setPrimaryRouteMemoryVersion] = createSignal(0);
   let headerEl: HTMLDivElement | undefined;
-  let assistantLauncherEl: HTMLButtonElement | undefined;
-  let restoreAssistantLauncherFocus = false;
   let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const clearHeaderHideTimeout = () => {
@@ -439,37 +427,6 @@ export function AppLayout(props: AppLayoutProps) {
   const getNavigationActiveTab = () => getActiveTabForPath(location.pathname);
   const getActiveTabDesktop = getNavigationActiveTab;
   const getActiveTabMobile = getNavigationActiveTab;
-  const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
-  const openAssistantFromLauncher = () => {
-    restoreAssistantLauncherFocus = true;
-    aiChatStore.open(assistantPageContext().context);
-  };
-  const assistantLauncherVisible = createMemo(
-    () =>
-      aiChatStore.enabled === true &&
-      !aiChatStore.isOpenSignal() &&
-      !kioskMode() &&
-      !dialogStackHasBlockingDialog(),
-  );
-  const renderAssistantLauncher = (className: string) => (
-    <button
-      ref={assistantLauncherEl}
-      type="button"
-      onClick={openAssistantFromLauncher}
-      class={className}
-      title={assistantPageContext().title}
-      aria-label={assistantPageContext().ariaLabel}
-    >
-      <SparklesIcon class="h-5 w-5 shrink-0" />
-    </button>
-  );
-  createEffect(() => {
-    if (aiChatStore.isOpenSignal() || !restoreAssistantLauncherFocus) return;
-    restoreAssistantLauncherFocus = false;
-    queueMicrotask(() => {
-      if (assistantLauncherEl?.isConnected) assistantLauncherEl.focus();
-    });
-  });
   const actionApprovalBadge = createMemo(() =>
     getActionApprovalBadgePresentation(actionInboxStore.pendingActionCount),
   );
@@ -594,10 +551,10 @@ export function AppLayout(props: AppLayoutProps) {
         icon: BellIcon,
       },
       // Patrol cannot run without an enabled, configured AI provider, so its
-      // tab follows the same session capability as the Assistant launcher.
-      // Turning AI off in Settings hides every AI entry point (#905); the
-      // route itself stays reachable for links and the settings handoff.
-      ...(aiChatStore.enabled === true
+      // tab follows that session capability. Turning AI off in Settings hides
+      // every AI entry point (#905); the route itself stays reachable for
+      // links and the settings handoff.
+      ...(aiAvailabilityStore.enabled === true
         ? [
             {
               id: 'ai' as const,
@@ -808,9 +765,6 @@ export function AppLayout(props: AppLayoutProps) {
         <div
           class={`header-controls flex max-w-full flex-wrap items-center gap-1 sm:flex-nowrap sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
-          <Show when={assistantLauncherVisible() && viewport.isBelow('lg')}>
-            {renderAssistantLauncher(AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS)}
-          </Show>
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-1 sm:gap-2">
               <Show when={props.showOrgSwitcher()}>
@@ -1034,13 +988,6 @@ export function AppLayout(props: AppLayoutProps) {
             </Show>
           </div>
         </footer>
-      </Show>
-
-      <Show when={assistantLauncherVisible() && viewport.isAtLeast('lg')}>
-        {/* Portaled out of .app-scroll-shell: as a descendant the scroll
-            container's own scrollbar hit-tests above the tab's right edge,
-            leaving the screen-edge click zone dead. */}
-        <Portal>{renderAssistantLauncher(AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS)}</Portal>
       </Show>
     </div>
   );

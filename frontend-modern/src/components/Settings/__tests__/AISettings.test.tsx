@@ -2,11 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
-import { PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
-import { aiChatStore } from '@/stores/aiChat';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AISettings as AISettingsType } from '@/types/ai';
-import { AIAssistantSettings, AISettings, AIPatrolSettings } from '../AISettings';
+import { AISettings, AIPatrolSettings } from '../AISettings';
 
 const getSettingsMock = vi.fn();
 const updateSettingsMock = vi.fn();
@@ -17,8 +15,6 @@ const runPatrolModelReadinessMock = vi.fn();
 const getPatrolCostPreviewMock = vi.fn();
 const getPatrolModelGuidanceMock = vi.fn();
 const fetchAgentCapabilitiesManifestMock = vi.fn();
-const listSessionsMock = vi.fn();
-const summarizeSessionMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
@@ -33,6 +29,15 @@ const entitlementsMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
 const getRuntimeCapabilityBlockMock = vi.fn();
+const refreshAIAvailabilityMock = vi.fn();
+
+vi.mock('@/stores/aiAvailability', () => ({
+  aiAvailabilityStore: {
+    enabled: true,
+    setEnabled: vi.fn(),
+    refreshEnabledFromServer: (...args: unknown[]) => refreshAIAvailabilityMock(...args),
+  },
+}));
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -41,13 +46,6 @@ vi.mock('@/api/ai', () => ({
     getModels: (...args: unknown[]) => getModelsMock(...args),
     testProvider: (...args: unknown[]) => testProviderMock(...args),
     testConnection: (...args: unknown[]) => testConnectionMock(...args),
-  },
-}));
-
-vi.mock('@/api/aiChat', () => ({
-  AIChatAPI: {
-    listSessions: (...args: unknown[]) => listSessionsMock(...args),
-    summarizeSession: (...args: unknown[]) => summarizeSessionMock(...args),
   },
 }));
 
@@ -124,14 +122,12 @@ const baseSettings = (): AISettingsType => ({
   configured_providers: [],
 });
 
-type AISettingsTestPage = 'provider' | 'patrol' | 'assistant';
+type AISettingsTestPage = 'provider' | 'patrol';
 
 const getTestComponent = (page: AISettingsTestPage) => {
   switch (page) {
     case 'patrol':
       return AIPatrolSettings;
-    case 'assistant':
-      return AIAssistantSettings;
     default:
       return AISettings;
   }
@@ -147,6 +143,7 @@ const renderComponent = (page: AISettingsTestPage = 'provider') => {
 };
 
 const resetAllMocks = () => {
+  refreshAIAvailabilityMock.mockReset();
   getSettingsMock.mockReset();
   updateSettingsMock.mockReset();
   getModelsMock.mockReset();
@@ -156,8 +153,6 @@ const resetAllMocks = () => {
   getPatrolCostPreviewMock.mockReset();
   getPatrolModelGuidanceMock.mockReset();
   fetchAgentCapabilitiesManifestMock.mockReset();
-  listSessionsMock.mockReset();
-  summarizeSessionMock.mockReset();
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
@@ -190,8 +185,6 @@ const setupDefaultMocks = () => {
     provider: 'openrouter',
   });
   fetchAgentCapabilitiesManifestMock.mockResolvedValue(null);
-  listSessionsMock.mockResolvedValue([]);
-  summarizeSessionMock.mockResolvedValue(undefined);
   presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
   presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
   getRuntimeCapabilityBlockMock.mockReturnValue(undefined);
@@ -206,81 +199,6 @@ describe('AISettings model loading error states', () => {
 
   afterEach(() => {
     cleanup();
-  });
-
-  it('separates Patrol mode from Assistant chat actions on the settings page', async () => {
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      enabled: true,
-      configured: true,
-      patrol_interval_minutes: 180,
-      control_level: 'controlled',
-    });
-
-    renderComponent('assistant');
-
-    expect(await screen.findByText('Assistant chat actions')).toBeInTheDocument();
-    expect(
-      screen.getByText('This sets what Assistant chat may plan', { exact: false }),
-    ).toBeInTheDocument();
-    const chatActionMode = screen.getByLabelText('Chat action mode');
-    expect(chatActionMode).toBeInTheDocument();
-    expect(chatActionMode).toHaveClass('w-full', 'min-w-0', 'sm:flex-1');
-    expect(chatActionMode.parentElement).toHaveClass('flex-col', 'sm:flex-row');
-    expect(
-      screen.getByText('Assistant can plan infrastructure actions', { exact: false }),
-    ).toHaveClass('sm:ml-30');
-    expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'External agents' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Connect external tools to read Pulse context and request Patrol work.', {
-        exact: false,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Show connector setup' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Connector setup' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Create token' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show connector setup' }));
-
-    expect(screen.getByRole('link', { name: 'Create token' })).toHaveAttribute(
-      'href',
-      PULSE_MCP_TOKEN_SETUP_PATH,
-    );
-  });
-
-  it('points Assistant protection at the per-guest lock and never sends a protected guests list', async () => {
-    // An older backend may still echo the retired list; it must not surface or round-trip.
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      enabled: true,
-      configured: true,
-      control_level: 'controlled',
-      protected_guests: ['101', 'prod-db'],
-    });
-    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
-      ...baseSettings(),
-      enabled: true,
-      configured: true,
-      ...payload,
-    }));
-
-    renderComponent('assistant');
-
-    const hint = await screen.findByTestId('ai-never-auto-remediate-hint');
-    expect(hint).toHaveTextContent('Never auto-remediate');
-    expect(screen.queryByLabelText(/Protected guests/i)).not.toBeInTheDocument();
-    expect(screen.queryByDisplayValue('101, prod-db')).not.toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('Chat action mode'), { target: { value: 'read_only' } });
-    expect(screen.queryByTestId('ai-never-auto-remediate-hint')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
-    await waitFor(() => {
-      expect(updateSettingsMock).toHaveBeenCalledTimes(1);
-    });
-    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
   });
 
   it('keeps Provider & Models focused on provider setup and runtime cost controls', async () => {
@@ -906,45 +824,9 @@ describe('AISettings model loading error states', () => {
       screen.getByText(/Default: DeepSeek: DeepSeek V4 Pro via OpenRouter/),
     ).toBeInTheDocument();
   });
-
-  it('hides autonomous controls when auto-fix is locked and upgrade prompts are hidden', async () => {
-    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
-    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
-
-    renderComponent('assistant');
-
-    await waitFor(() => {
-      expect(getSettingsMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(
-      screen.queryByRole('option', { name: /Allow chat-only actions/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('presents an existing autonomous preference as Ask first even without upgrade prompts', async () => {
-    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
-    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
-    getSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      control_level: 'autonomous',
-    });
-
-    renderComponent('assistant');
-
-    await waitFor(() => {
-      expect(getSettingsMock).toHaveBeenCalledTimes(1);
-    });
-
-    expect(
-      screen.queryByRole('option', { name: /Allow chat-only actions/i }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Chat action mode')).toHaveValue('controlled');
-    expect(screen.queryByText('(Pro)')).not.toBeInTheDocument();
-  });
 });
 
-describe('Assistant saved-control compatibility', () => {
+describe('saved chat control level compatibility', () => {
   beforeEach(() => {
     resetAllMocks();
     setupDefaultMocks();
@@ -953,8 +835,10 @@ describe('Assistant saved-control compatibility', () => {
     cleanup();
   });
 
+  // Pulse Mobile's chat still reads the saved control level, so web settings
+  // saves must leave it (and the chat model) exactly as stored.
   it.each(['autonomous', 'suggest', 'controlled', 'read_only', 'unknown'])(
-    'does not rewrite the saved %s preference on an unrelated save',
+    'leaves the saved %s control level alone when provider settings save',
     async (level) => {
       const saved = {
         ...baseSettings(),
@@ -963,39 +847,24 @@ describe('Assistant saved-control compatibility', () => {
       };
       getSettingsMock.mockResolvedValue(saved);
       updateSettingsMock.mockResolvedValue(saved);
-      renderComponent('assistant');
-      const mode = await screen.findByLabelText('Chat action mode');
-      await waitFor(() =>
-        expect(mode).toHaveValue(
-          ['autonomous', 'suggest', 'controlled'].includes(level) ? 'controlled' : 'read_only',
-        ),
-      );
-      expect(within(mode).getAllByRole('option')).toHaveLength(2);
-      fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
+      renderComponent();
+      fireEvent.click(await screen.findByRole('button', { name: /Save provider settings/i }));
       await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
       expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('control_level');
-      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
+      expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('chat_model');
       expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('patrol_autonomy_level');
     },
   );
 
-  it('explicitly opts out of legacy action planning without changing Patrol', async () => {
-    const saved = { ...baseSettings(), control_level: 'autonomous' };
-    getSettingsMock.mockResolvedValue(saved);
-    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
-      ...saved,
-      ...payload,
-    }));
-    renderComponent('assistant');
-    const mode = await screen.findByLabelText('Chat action mode');
-    await waitFor(() => expect(mode).toHaveValue('controlled'));
-    fireEvent.change(mode, { target: { value: 'read_only' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save Assistant settings/i }));
-    await waitFor(() => expect(updateSettingsMock).toHaveBeenCalledTimes(1));
-    expect(updateSettingsMock.mock.calls[0][0]).toHaveProperty('control_level', 'read_only');
-    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('protected_guests');
-    expect(updateSettingsMock.mock.calls[0][0]).not.toHaveProperty('patrol_autonomy_level');
-  });
+  it.each(['provider', 'patrol'] as const)(
+    'renders no chat action mode on the %s page',
+    async (page) => {
+      renderComponent(page);
+      await waitFor(() => expect(getSettingsMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText('Chat action mode')).toBeNull();
+      expect(screen.queryByText('Pulse Assistant model')).toBeNull();
+    },
+  );
 });
 
 describe('AISettings load failure error state', () => {
@@ -1319,6 +1188,8 @@ describe('AISettings OpenAI-compatible provider lifecycle', () => {
         remove_providers: ['openai'],
       });
     });
+    // AI is now off, so Patrol entry points must re-read availability.
+    await waitFor(() => expect(refreshAIAvailabilityMock).toHaveBeenCalled());
     expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('only configured provider'));
     confirmSpy.mockRestore();
   });
@@ -1621,7 +1492,6 @@ describe('AISettings provider setup flow', () => {
 
   afterEach(() => {
     cleanup();
-    aiChatStore.close();
   });
 
   it('warns from setup when the saved provider leaves Patrol not ready', async () => {
@@ -1682,48 +1552,6 @@ describe('AISettings provider setup flow', () => {
     );
   });
 
-  it('opens the Assistant and points at it after a successful first-time setup', async () => {
-    updateSettingsMock.mockResolvedValue({
-      ...baseSettings(),
-      enabled: true,
-      configured: true,
-      anthropic_configured: true,
-      configured_providers: ['anthropic'],
-      patrol_readiness: {
-        status: 'ready',
-        ready: true,
-        cause: 'none',
-        summary: 'Patrol is ready to run tool-backed verification.',
-        provider: 'anthropic',
-        model: 'anthropic:claude-sonnet-5',
-        checks: [],
-      },
-    });
-
-    renderComponent();
-
-    await waitFor(() => {
-      expect(getSettingsMock).toHaveBeenCalledTimes(1);
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
-    const setupDialog = await screen.findByRole('dialog', {
-      name: 'Set up Pulse Intelligence',
-    });
-    fireEvent.click(within(setupDialog).getByRole('button', { name: /Anthropic/i }));
-    fireEvent.input(within(setupDialog).getByPlaceholderText('sk-ant-...'), {
-      target: { value: 'sk-ant-test' },
-    });
-    fireEvent.click(within(setupDialog).getByRole('button', { name: 'Enable Pulse Intelligence' }));
-
-    await waitFor(() => {
-      expect(notificationSuccessMock).toHaveBeenCalledWith(
-        'Pulse Intelligence enabled. This is the Assistant — ask it anything about your infrastructure.',
-      );
-    });
-    expect(aiChatStore.isOpen).toBe(true);
-  });
-
   it('names the setup provider when provider setup save fails generically', async () => {
     updateSettingsMock.mockRejectedValue(new Error('Unable to save Provider & Models settings.'));
 
@@ -1773,9 +1601,7 @@ describe('AISettings provider setup flow', () => {
     expect(getModelsMock).not.toHaveBeenCalled();
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
-    expect(
-      screen.getByText('Connect a provider to power Patrol and Assistant.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Connect a provider to power Patrol.')).toBeInTheDocument();
     expect(
       screen.queryByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
     ).not.toBeInTheDocument();
@@ -1798,9 +1624,7 @@ describe('AISettings provider setup flow', () => {
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
-    expect(
-      screen.getByText('Connect a provider to power Patrol and Assistant.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Connect a provider to power Patrol.')).toBeInTheDocument();
     expect(
       screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
     ).not.toBeInTheDocument();
@@ -1825,9 +1649,7 @@ describe('AISettings provider setup flow', () => {
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
-    expect(
-      screen.getByText('Connect a provider to power Patrol and Assistant.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Connect a provider to power Patrol.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Hosted quickstart requires an activated entitlement/i),

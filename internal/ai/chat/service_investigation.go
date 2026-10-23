@@ -53,6 +53,10 @@ type InvestigationRunResult struct {
 	ModelTurns    int
 	EvidenceCalls int
 	ToolCalls     int
+	// Conclusion is the typed conclusion the model recorded with
+	// patrol_conclude_investigation, nil when it recorded none. It survives
+	// a later provider failure, like a persisted proposal.
+	Conclusion *tools.CapturedConclusion
 }
 
 // ExecuteInvestigationStream runs one Patrol investigation under the
@@ -193,6 +197,7 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 	result := &InvestigationRunResult{
 		Content:       content,
 		Proposal:      proposal,
+		Conclusion:    capture.Conclusion(),
 		InputTokens:   loop.GetTotalInputTokens(),
 		OutputTokens:  loop.GetTotalOutputTokens(),
 		ModelTurns:    loop.GetTotalModelTurns(),

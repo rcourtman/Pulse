@@ -71,7 +71,7 @@ func Test_w0716_budget_InvestigationTerminalTools(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := investigationTerminalTools(tt.available)
+			got := investigationTerminalTools(tt.available, true)
 			if !tt.wantFound {
 				if got != nil {
 					t.Fatalf("investigationTerminalTools() = %+v, want nil", got)

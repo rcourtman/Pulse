@@ -2597,16 +2597,6 @@ pipeline (downloading through restarting, including the `restoring` stage
 emitted by update rollback) and it carries no hosted entitlement, org, or
 paid-gating semantics; hosted and paid surfaces must not key tenant or
 billing behavior off update progress stages.
-That same authenticated shell split must also respect shared blocking dialogs:
-hosted chrome may not leave the Pulse Assistant launcher or an already-open
-assistant drawer interactive behind a modal that currently owns the viewport.
-That same hosted chrome rule also covers responsive launcher placement. While
-the authenticated shell is using mobile navigation, `frontend-modern/src/AppLayout.tsx`
-must keep the closed Pulse Assistant launcher in the authenticated header flow,
-where it cannot cover page content or compete with the mobile nav. It must not
-reintroduce the desktop right-edge launcher until the desktop shell breakpoint,
-otherwise hosted and self-hosted operators lose usable dashboard and
-billing-page edge space at tablet widths.
 That same authenticated shell contract now also has to distinguish backend
 availability from websocket-stream liveness. When hosted runtime health stays
 available during a stream reconnect or renegotiation window,
@@ -3779,13 +3769,13 @@ boundary without granting Community private RBAC or changing CI tier membership.
 
 ### AI navigation gating stays outside commercial scope
 
-The app shell hides Patrol navigation and Assistant palette commands while the
+The app shell hides Patrol navigation and alert Investigate actions while the
 `assistantEnabled` session capability is false. The gate reads only that AI
 capability: it does not consult entitlements, organization scope, hosted
 bootstrap or upgrade state, and it adds no commercial prompt. Paid Patrol
 modes stay governed on the Patrol and Actions surfaces, which remain
-reachable by route. `App.architecture.test.ts` pins that the gate reads the
-same capability as the Assistant launcher.
+reachable by route. `App.architecture.test.ts` pins that the shell reads that capability through
+`aiAvailabilityStore`.
 
 ### Relay retired inside the app
 
@@ -3836,6 +3826,13 @@ a runtime or change customer subscriptions. Private renderer tests cover formats
 missing/observed-zero distinction, formula-safe CSV and PDF generation. Runtime
 hook tests and final-source Pro browser delivery qualify registration/composition.
 
+The browser Assistant chat window was retired on 2026-10-22, so the hosted
+shell rules about its launcher placement and modal behaviour went with it.
+The chat was sold as a BYOK feature of the free tier ("Pulse Assistant (BYOK
+Chat)"), not as a Pro capability, so no paid entitlement changes. Paid Patrol
+capabilities stay as they were: Patrol modes, investigations, governed fixes,
+and history live on the Patrol and Actions surfaces, and alert Investigate now
+starts a targeted Patrol run instead of opening a chat.
 
 ### Portal dependency updates retain generated-source identity
 

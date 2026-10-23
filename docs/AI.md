@@ -18,24 +18,6 @@ That core is deliberately surfaced with Patrol as the primary built-in operator 
 
 These surfaces are built on the same action-driven architecture: the configured LLM owns diagnosis, prioritization, fix reasoning, and action choice; Pulse supplies context, capabilities, safety gates, approval state, and audit trails. Verification is part of the governed action lifecycle rather than a separate model-owned feature.
 
-### Not Just Another Chatbot
-
-Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
-
-- **Provides governed context** — attaches explicit resource mentions and recent session facts without rewriting user intent
-- **Caches session facts** — extracts bounded tool facts to avoid redundant queries during the current conversation
-- **Enforces tool authority** — execution profiles, permissions and the canonical action lifecycle limit available capabilities
-- **Supports parallel tool execution** — efficient batch operations with concurrency control
-- **Preserves outcome evidence** — action records keep planning, execution and verification separate, including the observer and recorded time
-- **Returns structured tool errors** — the model can recover from clear, machine-readable failures
-
-A visible tool trace or a completed chat is not proof of a correct diagnosis or
-a recovered workload. Review the [recorded action outcomes](AI_AUTONOMY.md#verification-after-write),
-not an assumed read-after-write sequence; do not repeat an uncertain operation
-to obtain confirmation.
-
-📖 **For a deep technical dive into the Assistant architecture, see [Assistant architecture](ASSISTANT_ARCHITECTURE.md).**
-
 ### Not Just Another Alerting System
 
 Pulse Patrol is a **scheduled and event-triggered governed operator** that:
@@ -46,31 +28,32 @@ Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 - **Routes governed actions** through approval, entitlement, policy, verification, and audit boundaries
 - **Preserves operator feedback** as context for future model runs without converting it into Pulse-authored fixes
 
-Patrol's monitoring and orchestration run on your Pulse server; model inference
-runs at the configured provider endpoint. **BYOK means using your own provider
-key, not keeping inference local.** Read [where AI context goes](#privacy)
-before enabling AI or choosing a model.
+All while running entirely on your infrastructure with BYOK for complete privacy.
 
 📖 **For a deep technical dive into the Patrol runtime, see [Patrol architecture](PATROL_ARCHITECTURE.md).**
 
 🧪 **For independent live-fault qualification, safety gates, model comparison,
 and release-claim rules, see [AI_PATROL_QUALIFICATION.md](AI_PATROL_QUALIFICATION.md).**
 
-See [Assistant safety architecture](ASSISTANT_SAFETY.md) for the enforced
-authority boundaries and verification limits.
+See [Assistant safety architecture](ASSISTANT_SAFETY.md) for the safety gates
+the shared AI runtime enforces.
 
-### Assistant And MCP
+### Using Pulse from Claude Code, Codex, and other agents
 
-Pulse Assistant and `pulse-mcp` are sibling surfaces over Pulse Intelligence,
-not competing implementations, and neither replaces the other. Assistant remains
-the in-app Pro surface for current resource/finding/run handoffs, approval
-cards, governed action status, and operator-friendly timelines. `pulse-mcp`
-owns the external-agent bridge: it fetches `/api/agent/capabilities`, projects
-those canonical API capabilities as MCP tools, and preserves the same stable
-error envelopes and approval/audit contracts. New operational capabilities
-should be added to the canonical API manifest first, then consumed by Assistant
-or MCP as appropriate; MCP-only actions and Assistant-only copies of the same
-business logic are drift.
+Pulse has no in-app chat window. To ask about your infrastructure in plain
+language, connect an MCP client such as Claude Code, Codex, or OpenCode to
+`pulse-mcp`: open **Settings → Pulse Intelligence → External agents** and
+choose **Show connector setup**. `pulse-mcp` fetches `/api/agent/capabilities`,
+projects those canonical API capabilities as MCP tools, and preserves the same
+stable error envelopes and approval/audit contracts as Patrol. New operational
+capabilities are added to the canonical API manifest first; MCP-only copies of
+the same business logic are drift.
+
+The tool list is registry-owned at runtime, not hand-maintained here. For the
+current inventory, read the live `/api/agent/capabilities` manifest or
+`pulse-mcp` `tools/list`. The same manifest carries reusable `workflowPrompts`
+metadata, so MCP `prompts/list` clients discover the fleet triage, resource
+investigation, and Patrol finding review workflows.
 
 ---
 
@@ -145,10 +128,7 @@ create a second finding lifecycle.
   explicitly.
 
 Select an item to see the affected resource, impact, next step, typed evidence,
-protection posture, and lifecycle timeline. **Explain with Assistant** appears
-only inside selected context and receives policy-shaped summaries and
-references. Assistant can explain the item, but it cannot create lifecycle
-truth, invent action authority, or hide uncertainty.
+protection posture, and lifecycle timeline.
 
 Open items can be acknowledged directly. Suppression is temporary and requires
 an operator reason plus a bounded expiry; it never resolves the detector's
@@ -237,7 +217,6 @@ Note: `info` and `watch` level findings are filtered out to reduce noise.
 
 Findings can be managed via the UI or API:
 
-- **Open in Assistant**: Open Pulse Assistant with the finding attached to troubleshoot the issue (on Patrol findings it appears under **Resolve or dismiss**)
 - **Resolve**: Mark as fixed (finding will reappear if the issue resurfaces)
 - **Dismiss**: Record feedback about this finding; use **Reopen** to undo its dismissal
 - **Create rule**: Permanently auto-dismiss future findings for the selected resource and category
@@ -443,74 +422,25 @@ MaybeInvestigateFinding()
 
 ---
 
-## Pulse Assistant (Chat)
+## Pulse Assistant chat (retired)
 
-Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system state — it calls live tools and reports their outputs.
+The in-app Pulse Assistant chat window and its Settings page have been retired.
+Patrol is the built-in operator, and the governed tools the chat used are
+available to external agents through `pulse-mcp` (see
+[Using Pulse from Claude Code, Codex, and other agents](#using-pulse-from-claude-code-codex-and-other-agents)).
+An alert's **Have Patrol investigate** button starts a targeted Patrol check on
+the alert's resource; its findings appear on the Patrol page.
 
-### The Model's Workflow (Discover → Investigate → Act)
+Pulse Mobile keeps its chat tab until the app retires on 31 March 2027. It uses
+the chat action level saved before the retirement, and the chat model override
+if one was saved, otherwise the default model from **Provider & Models**. The web
+settings no longer set the action level or the override; removing the provider
+an override names clears it, and Mobile chat then uses the default model.
 
-1. **Discover**: Uses `pulse_query` to find real resources and IDs
-2. **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs
-3. **Act** (optional): Uses `pulse_control` for changes, then verifies with a read
-
-### Tool Inventory
-
-The Assistant tool list is registry-owned at runtime, not hand-maintained in
-this public overview. Each turn receives an available-tool manifest generated
-from Pulse's governed tool registry, including action mode (`read`, `mixed`,
-`write`) and approval policy (`scope_only`, `action_plan`). That same registry
-feeds the Assistant system prompt, provider tool declarations, tool-result
-handling, approval boundaries, and Patrol-only tool filtering.
-
-For the current source-owned inventory, see the native tool registry and
-governance projection in `internal/ai/tools/` and
-`internal/agentcapabilities/`. For external agents, use the live
-`/api/agent/capabilities` manifest or `pulse-mcp` `tools/list`; those surfaces
-project the canonical agent capabilities rather than a separate MCP-only tool
-table.
-The same manifest also carries reusable `workflowPrompts` metadata so Pulse
-Assistant-compatible starters and MCP `prompts/list` clients discover the same
-fleet triage, resource investigation, and Patrol finding review workflows.
-
-### Safety Gates
-
-The assistant enforces multiple safety gates:
-
-1. **Resolve Before Action** — Action tools cannot operate on resources that weren't first resolved by a read tool
-2. **Verification After Write** — After any write, the model must perform a read/status check before providing a final answer
-3. **Read/Write Separation** — Read operations route through `pulse_read` (stays in READING state); write operations route through `pulse_control` (enters VERIFYING state)
-4. **Grounded Execution Guardrails** — Visible tool traces and read-after-write checks prevent unsupported execution claims from being treated as facts
-5. **Approval Mode** — In Controlled mode, every write requires explicit user approval
-6. **Execution Context Binding** — Commands execute within the resolved resource's context, not on parent hosts
-
-### Control Levels
-
-| Mode | Behaviour | Availability |
-|------|-----------|--------------|
-| **Read-only** | Assistant queries and explains; no infrastructure action planning | Community |
-| **Ask first** (`controlled`) | Assistant saves infrastructure action plans to **Actions** for your review | Community |
-
-Assistant chat does not execute these plans. Patrol's own mode and Autopilot
-policy are separate; changing Chat action mode grants no Patrol authority.
-Older saved `autonomous` preferences display as **Ask first**, not as permission
-to execute without approval. The stored preference and its existing entitlement
-checks are preserved for older clients.
-
-To keep Assistant away from a specific guest, lock it: open the guest, choose
-**Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
-Pulse then refuses typed actions that target that resource, including
-approved ones. Older versions also showed a **Protected guests** list here. It
-never excluded a guest from action plans, so it has been removed.
-
-### Reviewing an Assistant action plan
-
-1. Assistant submits a typed action for a resource advertising that capability.
-2. Pulse records the plan in **Actions**; planning is not execution.
-3. Open **Actions** to check the target, proposed operation, approval policy and expiry.
-4. An authorised operator reviews, approves where required, and runs the plan
-   through the existing action controls. Chat mode cannot bypass these checks.
-5. Read the recorded execution and independent verification result. A saved plan
-   or successful command alone does not establish recovery.
+To keep automated actions away from a specific guest, lock it: open the guest,
+choose **Manage**, turn on **Never auto-remediate** under Operator overrides,
+and save. Pulse then refuses typed actions that target that resource, including
+approved ones.
 
 ---
 
@@ -539,7 +469,7 @@ not run Patrol or recover missing history.
 | **Issues resolved** | Recorded automatic resolutions plus manual resolutions still retained. Dismissed and muted findings are described separately. A cleared finding does not establish that an action ran or was independently verified. |
 | **Investigated** | Recorded investigation outcomes on retained findings. “Fix run, result unknown” is not a verified fix; open the finding for its result and remaining work. |
 | **Fixes run** | Actions recorded as successfully executed. “Verified afterwards” is a separate count; review failed actions and waiting approvals in **Actions**. Do not run an action again merely to increase the count. |
-| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](#cost-tracking). |
+| **Estimated spend** | Recorded Patrol model calls and their estimated USD cost, not an invoice or all Assistant usage. If some calls have no known price, the displayed amount is incomplete, not a zero-cost result. Check [Cost Tracking](AI.md#cost-tracking). |
 
 The displayed mode is Patrol's **current** mode, not a history of mode changes.
 Watch-only mode can explain why investigations or fixes were not performed,
@@ -941,63 +871,8 @@ Use this only in trusted environments.
 
 ## Privacy
 
-### Where model context goes
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Outbound usage telemetry (a rotating pseudonymous install ID, counts, feature flags, and coarse Patrol mode and governed Pulse Intelligence operations adoption flags and counters only; no hostnames, credentials, prompts, chat messages, command text, action output, token values, IP addresses, or resource identifiers in the payload) is enabled by default and can be disabled any time. See [Privacy](PRIVACY.md) for details.
 
-For self-managed Pulse, the destination depends on the provider and client you
-actually configure, not where the Pulse server runs:
-
-- **Local model endpoint under your control:** context goes to that endpoint.
-  Check that it really runs locally and does not forward requests to a hosted
-  service; a provider name or local-looking address alone does not establish this.
-- **Hosted model with your own key or subscription:** the chosen provider receives
-  context from your Pulse instance. BYOK and a locally installed subscription CLI
-  do not make inference local or determine the provider's retention or training
-  policy.
-- **External agent using Pulse MCP:** the external client receives the Pulse
-  context its token permits. That client's own model, forwarding and retention
-  settings determine what it sends onwards; Pulse's built-in provider selection
-  does not configure that client.
-
-Provider-bound context can include your prompts, conversation and tool results,
-resource names and addresses, metrics, alerts, backup status, and applicable
-Patrol objective briefs and operator context. Self-managed AI prompts go directly
-to the configured provider, not through Pulse infrastructure. This is separate
-from the [outbound usage telemetry](#usage-telemetry-is-separate) described below.
-
-### Redaction and action permissions are different boundaries
-
-Pulse applies prompt-secret sanitation and resource-policy filtering on its
-non-local model path. Known **local-only** resource identifiers are redacted,
-and detailed resource sections can be omitted or replaced by policy-safe
-summaries. **Other infrastructure names and addresses can still be shared**;
-redaction is not blanket anonymisation. Review your resource privacy posture
-and the context you supply; never paste credentials, private keys or unreviewed
-logs into a prompt. Encryption of local settings or saved records does not
-prevent an authorised provider request from carrying context.
-
-**Watch-only Patrol and read-only Assistant limit actions, not model requests.**
-A model can receive context even when it cannot change infrastructure. The
-resource privacy posture is a read-only explanation, not a switch that makes
-all inference local. If a hosted provider must not receive your context, do not
-use it for that work; choose a verified local endpoint or leave built-in AI
-disabled in **Settings → Pulse Intelligence → Provider & Models**. Do not send
-a real prompt or run a provider test merely to check a privacy requirement.
-Review external MCP clients and their access separately.
-
-### Usage telemetry is separate
-
-Outbound usage telemetry is enabled by default and can be disabled any time.
-Its payload uses a rotating pseudonymous install ID, aggregate counts, feature
-flags, and coarse Patrol mode and governed Pulse Intelligence operations
-adoption buckets and counters. There are no hostnames, credentials, prompts,
-chat messages, command text, action output, token values, IP addresses, or
-resource identifiers in the payload. Disable it in **Settings → System →
-General → Outbound usage telemetry** or with `PULSE_TELEMETRY=false`.
-
-**Disabling usage telemetry does not disable AI provider requests or external
-MCP access.** Conversely, using a local model does not turn telemetry off.
-See the [Privacy disclosure](PRIVACY.md) for the full payload, controls and
-other outbound connections.
 ---
 
 ## Why Patrol Is Different From Traditional Alerts
@@ -1011,58 +886,11 @@ Alerts are threshold-based and narrow. Patrol gives the selected model a broader
 
 ## Cost Tracking
 
-Pulse estimates the cost of recorded Assistant and Patrol provider calls. This
-is **not a provider invoice or a guaranteed spending cap**: account-wide usage,
-provider discounts and unpriced calls can differ from Pulse's estimate. Use a
-provider-side spending limit, where supported, for independent cost control.
+Pulse tracks token usage and costs:
 
-### Read the same window before changing anything
-
-Open **Settings → Pulse Intelligence → Provider & Models** and find **Provider
-Usage & Spend**. Select **30d** when comparing it with the **30-day Budget**.
-The runtime checks retained usage in the preceding 30 days, not a calendar
-month. Other chart ranges show a **pro-rated** comparison; changing the chart
-range does not change the runtime budget or reset its window.
-
-Keep the selected range, any shorter-retention notice, provider/model rows,
-unknown-pricing warning and **Prices as of** date with an existing observation.
-The date identifies Pulse's price table, not verified billing accuracy. Retained
-token events are estimated using the table shipped with the running server;
-a pricing correction does not require deleting those events. Input, output and
-cache token buckets have different rates: total tokens alone cannot establish
-the expected cost or whether prompt caching saved money.
-
-### A budget refusal is not a provider failure
-
-| Existing observation | What it means and the safe next step |
-|----------------------|-------------------------------------|
-| Budget exceeded or Patrol paused for budget | Pulse has declined analysis against its estimated 30-day usage. Check that window and model pricing first; repeatedly testing credentials or resetting a circuit breaker does not repair a budget refusal. |
-| Estimated spend is partial, unknown pricing or a dash | Some cost is unavailable, not free. Known rows can contribute a partial total; missing prices do not guarantee that budget enforcement covers every call. |
-| Pulse and the provider show different totals | Compare the same period, account scope, model and token buckets using existing records. A newer server's table can change retained estimates; a smaller number alone does not prove billing or Patrol recovery. |
-| Provider authentication, connectivity or circuit-breaker error | Keep the exact redacted error separate from a budget refusal. A budget change does not repair provider access, and a cooldown ending does not prove analysis succeeded. |
-
-If the estimate and configured budget are intentional, the administrator can
-wait for older usage to leave the rolling window, or deliberately review the
-model, Patrol schedule or budget. A cheaper model or slower schedule affects
-future calls; it does not erase past usage. Raising or disabling the budget
-permits more spend, so do not use it merely to diagnose a discrepancy or run a
-test. A successful provider Test is not proof of a completed ordinary Patrol run.
-
-### Preserve usage history and keep exports private
-
-**Reset usage history clears retained events used by the budget check.** It
-does not refund provider charges, correct prices or verify recovery. Do not
-reset history, edit `ai_usage_history.json`, delete backups or replay model calls
-to investigate a cost discrepancy. An authorised, deliberate reset is an admin
-data-removal operation, not routine troubleshooting.
-
-Use the existing panel or read-only summary (`GET /api/ai/cost/summary`) first.
-Exports and backup files can identify tasks, resources and sessions even without
-prompts or API keys; keep them private. For an
-[existing report](TROUBLESHOOTING.md#-getting-help), share only the relevant,
-locally reviewed and redacted observation, running server version and original
-time/window. Unknown details are valid; no raw usage history, invoice, full
-export, credential, new diagnostic run or paid model call is required.
+- View usage summary: `GET /api/ai/cost/summary`
+- Reset counters: `POST /api/ai/cost/reset` (admin)
+- Set monthly budget limits in AI settings
 
 ---
 
@@ -1070,8 +898,7 @@ export, credential, new diagnostic run or paid model call is required.
 
 | Issue | Solution |
 |-------|----------|
-| Budget exceeded or an unexpected cost estimate | Use [Cost Tracking](#cost-tracking) before changing a budget, resetting usage or testing the provider |
-| Assistant or Patrol not responding | Verify provider credentials in **Settings → Pulse Intelligence → Provider & Models** |
+| Patrol not responding | Verify provider credentials in **Settings → Pulse Intelligence → Provider & Models** |
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
 | Too many findings | This shouldn't happen — please report if it does |
@@ -1082,11 +909,11 @@ export, credential, new diagnostic run or paid model call is required.
 
 ### Deep Dives (Recommended for Technical Audiences)
 
-- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)** — Tool permissions and run budgets, ordered and parallel calls, recorded action outcomes and structured errors
+- **[Pulse Assistant Deep Dive](ASSISTANT_ARCHITECTURE.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, grounded execution guardrails, structured errors
 - **[Pulse Patrol Deep Dive](PATROL_ARCHITECTURE.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
 
 ### Reference Documentation
 
-- [Assistant safety architecture](ASSISTANT_SAFETY.md) — Enforced authority, recorded outcomes and verification limits
+- [Architecture: Pulse Assistant (Safety Gates)](ASSISTANT_SAFETY.md) — Detailed FSM states, tool protocol, and invariants
 - [API Reference](API.md) — Complete API endpoint documentation
 - [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Cloud features and licensing

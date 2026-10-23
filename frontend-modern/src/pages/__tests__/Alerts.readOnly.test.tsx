@@ -64,8 +64,10 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: { enabled: false },
+vi.mock('@/stores/aiAvailability', () => ({
+  aiAvailabilityStore: {
+    enabled: false,
+  },
 }));
 
 vi.mock('@/stores/alertsActivation', () => ({

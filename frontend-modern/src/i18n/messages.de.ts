@@ -16,44 +16,14 @@ export const DE_MESSAGE_OVERRIDES = {
     'Benachrichtigungen pausiert. Pulse erkennt und zeigt aktive Warnmeldungen weiterhin an.',
   'alerts.activation.toast.deactivateFailed':
     'Benachrichtigungen konnten nicht pausiert werden. Bitte versuchen Sie es erneut.',
-  'alerts.assistant.action.investigate': 'Warnmeldung {alertIdentifier} untersuchen',
-  'alerts.assistant.button.full': 'Pulse Assistant zu dieser Warnmeldung fragen',
-  'alerts.assistant.button.text': 'Pulse Assistant fragen',
-  'alerts.assistant.detail.currentMetric':
-    'Aktueller Wert {currentValue} · Schwellwert {thresholdValue}',
-  'alerts.assistant.detail.message': 'Meldung: {message}',
-  'alerts.assistant.detail.node': 'Knoten: {node}',
-  'alerts.assistant.duration.hoursMinutes': '{hours}h {minutes}m',
-  'alerts.assistant.duration.minute': '{count} Min.',
-  'alerts.assistant.duration.minutes': '{count} Min.',
-  'alerts.assistant.duration.unknown': 'unbekannte Dauer',
-  'alerts.assistant.level.critical': 'Kritisch',
-  'alerts.assistant.level.info': 'Info',
-  'alerts.assistant.level.warning': 'Warnung',
-  'alerts.assistant.locked.proRequired':
-    'Pro erforderlich, um Pulse Assistant zu Warnmeldungen zu fragen',
-  'alerts.assistant.locked.unavailable':
-    'Pulse Assistant-Warnmeldungshilfe ist fuer diese Warnmeldung nicht verfuegbar',
-  'alerts.assistant.safetyNote':
-    'Diagnosen und Behebungen erfordern die Freigabe durch einen Operator.',
-  'alerts.assistant.sourceLabel': 'Pulse Alerts',
-  'alerts.assistant.statusLabel': '{level}-Warnmeldung · Aktiv seit {duration}',
-  'alerts.assistant.subject': '{level} {alertType} auf {resourceName}',
-  'alerts.assistant.title': 'Warnungsanalyse angehaengt',
-  'alerts.assistant.unlockedTitle': 'Pulse Assistant zu dieser Warnmeldung fragen',
-  'alerts.assistant.iconLabel': 'Pulse Assistant zu {alertType} auf {resourceName} fragen',
-  'alerts.assistant.iconLabelAt':
-    'Pulse Assistant zu {alertType} auf {resourceName} ({startedAt}) fragen',
-  'alerts.assistant.explain.menuLabel': 'Mit Assistant erklaeren',
-  'alerts.assistant.explain.menuHint': 'Diese Warnmeldung als reinen Kontext verwenden',
-  'alerts.assistant.patrol.chevron': 'Weitere Aktionen fuer diese Warnmeldung',
-  'alerts.assistant.patrol.menuLabel': 'Patrol ermitteln lassen',
-  'alerts.assistant.patrol.menuHint':
-    'Eine gezielte Patrol-Pruefung fuer diese Ressource ausfuehren',
-  'alerts.assistant.patrol.title': 'Patrol diese Warnmeldung untersuchen lassen',
-  'alerts.assistant.patrol.triggered': 'Patrol untersucht {resourceName}',
-  'alerts.assistant.patrol.noResource': 'Diese Warnmeldung hat keine zu untersuchende Ressource',
-  'alerts.assistant.patrol.failed': 'Patrol-Pruefung konnte nicht gestartet werden',
+  'alerts.investigate.failed': 'Patrol-Pruefung konnte nicht gestartet werden',
+  'alerts.investigate.iconLabel': 'Patrol {alertType} auf {resourceName} untersuchen lassen',
+  'alerts.investigate.iconLabelAt':
+    'Patrol {alertType} auf {resourceName} ({startedAt}) untersuchen lassen',
+  'alerts.investigate.label': 'Patrol ermitteln lassen',
+  'alerts.investigate.title': 'Patrol diese Warnmeldung untersuchen lassen',
+  'alerts.investigate.triggered':
+    'Patrol untersucht {resourceName}. Ergebnisse erscheinen auf der Patrol-Seite.',
   'alerts.nav.ariaLabel': 'Warnmeldungsnavigation',
   'alerts.nav.collapseSidebar': 'Seitenleiste einklappen',
   'alerts.nav.expandSidebar': 'Seitenleiste ausklappen',
@@ -500,9 +470,9 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.header.systemAi.description':
     'Konfigurieren Sie Anbieter, Standardmodelle, Anbieterzustand, Budget und Nutzung fuer Pulse Intelligence.',
   'settings.header.systemAi.title': 'Anbieter & Modelle',
-  'settings.header.systemAiAssistant.description':
-    'Konfigurieren Sie Chatverhalten, Aktionsrechte, Sitzungen und externe Agent-Verbindungen (MCP) des Assistant.',
-  'settings.header.systemAiAssistant.title': 'Assistant',
+  'settings.header.systemAiAgents.description':
+    'Verbinden Sie Claude Code, Codex und andere MCP-Clients mit den kontrollierten Tools von Pulse.',
+  'settings.header.systemAiAgents.title': 'Externe Agenten',
   'settings.header.systemAiPatrol.description':
     'Legen Sie fest, wann Patrol laeuft, was Patrol startet und welches Modell verwendet wird.',
   'settings.header.systemAiPatrol.title': 'Patrol',
@@ -548,7 +518,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.nav.item.billingAdmin': 'Abrechnungsadmin',
   'settings.nav.item.dataReports': 'Daten & Berichte',
   'settings.nav.item.diagnosticsHealth': 'Diagnose & Zustand',
-  'settings.nav.item.assistant': 'Assistant',
+  'settings.nav.item.externalAgents': 'Externe Agenten',
   'settings.nav.item.general': 'Allgemein',
   'settings.nav.item.infrastructure': 'Infrastruktur',
   'settings.nav.item.network': 'Netzwerk',

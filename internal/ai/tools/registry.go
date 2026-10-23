@@ -161,7 +161,7 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 
 func isPatrolInvestigationOnlyTool(toolName string) bool {
 	switch toolName {
-	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
+	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName, agentcapabilities.PatrolConcludeInvestigationToolName:
 		return true
 	default:
 		return false

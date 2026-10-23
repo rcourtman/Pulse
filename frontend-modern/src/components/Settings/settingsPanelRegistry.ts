@@ -29,7 +29,7 @@ export interface SettingsPanelRegistryContext {
   systemGeneralPanel: Component;
   systemAiPanel: Component;
   systemAiPatrolPanel: Component;
-  systemAiAssistantPanel: Component;
+  systemAiAgentsPanel: Component;
   systemBillingPanel: Component;
   securitySsoPanel: Component;
   getNetworkPanelProps: () => Parameters<typeof NetworkSettingsPanelType>[0];
@@ -77,8 +77,8 @@ export const createSettingsPanelRegistry = (
   'system-ai-patrol': {
     component: context.systemAiPatrolPanel,
   },
-  'system-ai-assistant': {
-    component: context.systemAiAssistantPanel,
+  'system-ai-agents': {
+    component: context.systemAiAgentsPanel,
   },
   'system-relay': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.RelaySettingsPanel,

@@ -11,7 +11,7 @@ import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { formControl, formHelpText, formLabel } from '@/components/shared/Form';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { SelectionCardGroup } from '@/components/shared/SelectionCardGroup';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { syncAIRuntimeSettings } from '@/stores/aiRuntimeState';
 import { splitModelRoute } from '@/utils/aiPatrolCostPresentation';
 import { logger } from '@/utils/logger';
@@ -110,7 +110,7 @@ export function PatrolSetupPanel(props: {
     try {
       const connected = await AIAPI.updateSettings(request);
       syncAIRuntimeSettings(connected);
-      void aiChatStore.refreshEnabledFromServer();
+      void aiAvailabilityStore.refreshEnabledFromServer();
       // The key is saved now; keep it out of the page.
       setApiKey('');
 

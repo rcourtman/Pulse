@@ -144,6 +144,7 @@ func patrolDigestEmailLines(digest ai.PatrolDigest) []patrolDigestEmailLine {
 		"cannot_fix": "could not fix", "timed_out": "timed out", "fix_queued": "fix waiting for approval",
 		"fix_executed": "fix run", "fix_verification_unknown": "fix run, result unknown", "fix_verified": "fixed and verified",
 		"resolved": "resolved", "fix_rejected": "fix declined",
+		"unclassified": "finished without a clear conclusion", "interrupted": "interrupted by a restart",
 	}
 	outcomeDetails := []string{}
 	for _, key := range ai.PatrolDigestOutcomeOrder(digest.Investigations.ByOutcome) {

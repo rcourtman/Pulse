@@ -87,8 +87,8 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         hideWhenCommercialHidden: true,
       },
       {
-        id: 'system-ai-assistant',
-        label: 'Assistant',
+        id: 'system-ai-agents',
+        label: 'External agents',
         keywords: [
           'mcp',
           'model context protocol',
@@ -344,7 +344,7 @@ const SETTINGS_NAV_ITEM_LABEL_KEYS = {
   'system-recovery': 'settings.nav.item.recovery',
   'system-ai': 'settings.nav.item.providerModels',
   'system-ai-patrol': 'settings.nav.item.patrol',
-  'system-ai-assistant': 'settings.nav.item.assistant',
+  'system-ai-agents': 'settings.nav.item.externalAgents',
   'system-relay': 'settings.nav.item.remoteAccess',
   'system-billing': 'settings.nav.item.plans',
   'support-diagnostics': 'settings.nav.item.diagnosticsHealth',

@@ -111,8 +111,9 @@ func PatrolDetectionToolNamesForResourceTypes(resourceTypes []string) ([]string,
 }
 
 // PatrolInvestigationToolNamesForResourceTypes composes scoped evidence with
-// the side-effect-free capability lookup and typed proposal sink. Planning,
-// approval, execution, and verification remain outside this surface.
+// the side-effect-free capability lookup, typed proposal sink and typed
+// conclusion capture. Planning, approval, execution, and verification remain
+// outside this surface.
 func PatrolInvestigationToolNamesForResourceTypes(resourceTypes []string) ([]string, bool) {
 	names, ok := PatrolEvidenceToolNamesForResourceTypes(resourceTypes)
 	if !ok {
@@ -121,5 +122,6 @@ func PatrolInvestigationToolNamesForResourceTypes(resourceTypes []string) ([]str
 	return append(names,
 		PatrolActionCapabilitiesToolName,
 		PatrolProposeActionToolName,
+		PatrolConcludeInvestigationToolName,
 	), true
 }

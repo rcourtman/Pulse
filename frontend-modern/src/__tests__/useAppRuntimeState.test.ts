@@ -66,7 +66,9 @@ describe('useAppRuntimeState', () => {
   let hasStoredAuthSessionMock: ReturnType<typeof vi.fn>;
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
-  let aiChatSetEnabledMock: ReturnType<typeof vi.fn>;
+  let aiAvailabilitySetEnabledMock: ReturnType<typeof vi.fn>;
+  let aiAvailabilityRefreshMock: ReturnType<typeof vi.fn>;
+  let aiAvailabilityClearMock: ReturnType<typeof vi.fn>;
   let getSystemSettingsMock: ReturnType<typeof vi.fn>;
   let getRuntimeDisplayMock: ReturnType<typeof vi.fn>;
   let applyServerModeMock: ReturnType<typeof vi.fn>;
@@ -140,7 +142,9 @@ describe('useAppRuntimeState', () => {
     hasStoredAuthSessionMock = vi.fn().mockReturnValue(true);
     setOrgIDMock = vi.fn();
     showToastMock = vi.fn();
-    aiChatSetEnabledMock = vi.fn();
+    aiAvailabilitySetEnabledMock = vi.fn();
+    aiAvailabilityRefreshMock = vi.fn().mockResolvedValue(undefined);
+    aiAvailabilityClearMock = vi.fn();
     getSystemSettingsMock = vi.fn().mockResolvedValue({ theme: '' });
     getRuntimeDisplayMock = vi.fn().mockResolvedValue({ theme: '', fullWidthMode: false });
     applyServerModeMock = vi.fn();
@@ -263,9 +267,11 @@ describe('useAppRuntimeState', () => {
       loadRuntimeCapabilities: loadLicenseStatusMock,
     }));
 
-    vi.doMock('@/stores/aiChat', () => ({
-      aiChatStore: {
-        setEnabled: aiChatSetEnabledMock,
+    vi.doMock('@/stores/aiAvailability', () => ({
+      aiAvailabilityStore: {
+        setEnabled: aiAvailabilitySetEnabledMock,
+        refreshEnabledFromServer: aiAvailabilityRefreshMock,
+        clear: aiAvailabilityClearMock,
       },
     }));
 
@@ -421,7 +427,7 @@ describe('useAppRuntimeState', () => {
 
     expect(presentationPolicyModule.sessionPresentationPolicyResolved()).toBe(true);
     expect(presentationPolicyModule.presentationPolicyIsDemoMode()).toBe(true);
-    expect(aiChatSetEnabledMock).toHaveBeenCalledWith(true);
+    expect(aiAvailabilitySetEnabledMock).toHaveBeenCalledWith(true);
     expect(orgsListMock).not.toHaveBeenCalled();
     expect(hookState.organizations()).toEqual([
       { id: 'default', displayName: 'Default Organization' },
@@ -943,12 +949,17 @@ describe('useAppRuntimeState', () => {
     // Switch to whichever tenant is not already active, so this exercises a
     // real switch rather than the no-op early return.
     const nextOrg = hookState.activeOrgID() === 'acme' ? 'default' : 'acme';
+    aiAvailabilityRefreshMock.mockClear();
     hookState.handleOrgSwitch(nextOrg);
 
     // Cleared synchronously, before the replacement can arrive: anything that
     // renders between the switch and the refetch must not see the outgoing
     // tenant's platform tabs.
     expect(hookState.platformAdmission()).toBeNull();
+    // The incoming tenant decides whether Patrol entry points show, and the
+    // outgoing tenant's answer is dropped first.
+    expect(aiAvailabilityClearMock).toHaveBeenCalledTimes(1);
+    expect(aiAvailabilityRefreshMock).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
       expect(hookState.platformAdmission()).toMatchObject({ docker: true, proxmox: false });

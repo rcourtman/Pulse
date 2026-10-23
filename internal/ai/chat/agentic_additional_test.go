@@ -137,9 +137,21 @@ func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 		{Name: agentcapabilities.PatrolProposeActionToolName},
 		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
 	}
-	terminal := investigationTerminalTools(available)
+	terminal := investigationTerminalTools(available, true)
 	if len(terminal) != 1 || terminal[0].Name != agentcapabilities.PatrolProposeActionToolName {
 		t.Fatalf("terminal tools = %+v, want only patrol_propose_action", terminal)
+	}
+	withConclusion := append(available, providers.Tool{Name: agentcapabilities.PatrolConcludeInvestigationToolName})
+	terminal = investigationTerminalTools(withConclusion, true)
+	if len(terminal) != 2 || terminal[0].Name != agentcapabilities.PatrolProposeActionToolName || terminal[1].Name != agentcapabilities.PatrolConcludeInvestigationToolName {
+		t.Fatalf("terminal tools = %+v, want patrol_propose_action then patrol_conclude_investigation", terminal)
+	}
+	terminal = investigationTerminalTools(withConclusion, false)
+	if len(terminal) != 1 || terminal[0].Name != agentcapabilities.PatrolConcludeInvestigationToolName {
+		t.Fatalf("final-turn terminal tools = %+v, want only patrol_conclude_investigation", terminal)
+	}
+	if isInvestigationEvidenceTool(agentcapabilities.PatrolConcludeInvestigationToolName) {
+		t.Fatal("recording a conclusion must not consume evidence budget")
 	}
 	if !isInvestigationEvidenceTool(agentcapabilities.PulseQueryToolName) {
 		t.Fatal("read-only query must consume evidence budget")

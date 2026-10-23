@@ -3367,7 +3367,7 @@ change. Fake persistent-logger controls in
 7. Letting storage `source` aliases or case drift survive in canonical route state; shared storage URLs must rewrite pasted values like `PVE`, `pbs`, or `ALL` to the owned source option values (for example `proxmox-pve`) or the canonical unset state so copied links match the same source filter values the storage toolbar presents
 8. Letting explicit storage `all` sentinels survive in canonical route state; shared storage URLs must collapse case- or whitespace-variant `all` values for the managed `node` filter back to the canonical unset state so copied links do not preserve a fake active node filter
 9. Reintroducing an aggregate cross-platform Recovery page, a recovery route-state owner, or a shared recovery query serializer in `frontend-modern/src/routing/resourceLinks.ts` without a governed product decision. The aggregate page (`frontend-modern/src/components/Recovery/` with its state owner `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`) was deleted on 2026-05-26, and `RECOVERY_QUERY_PARAMS`, `parseRecoveryLinkSearch`, and `buildRecoveryRouteSearch` were deleted once nothing read them. Recovery rows render in the platform-owned Proxmox Backups and TrueNAS Protection tabs; the Proxmox Backups tab owns its route state through the `/proxmox/backups/:view` segment and `PROXMOX_BACKUPS_QUERY_PARAMS`, and the TrueNAS Protection tab keeps its search and status filter in component state and its sort in local storage, outside the URL.
-10. Letting adjacent route state in shared `frontend-modern/src/routing/resourceLinks.ts` reuse storage or Proxmox Backups query names or alter their parse/build behavior. Workload platform scoping, unified-resource storage deep links, `buildStandalonePath()` platform paths, the Kubernetes page's route-local `KUBERNETES_QUERY_PARAMS.cluster` scope, the Patrol control starter (`patrolControlStarter=patrol_control`, with legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` as compatibility aliases only), and the Pulse Intelligence external-agent setup anchors (`/settings/pulse-intelligence/assistant#external-agent-setup`, with `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` as legacy compatibility hashes) share that module, and none of them is recovery state, storage focus, platform scope, or proof of backup or recovery posture.
+10. Letting adjacent route state in shared `frontend-modern/src/routing/resourceLinks.ts` reuse storage or Proxmox Backups query names or alter their parse/build behavior. Workload platform scoping, unified-resource storage deep links, `buildStandalonePath()` platform paths, the Kubernetes page's route-local `KUBERNETES_QUERY_PARAMS.cluster` scope, the Patrol control starter (`patrolControlStarter=patrol_control`, with legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` as compatibility aliases only), and the Pulse Intelligence external-agent setup anchors (`/settings/pulse-intelligence/agents#external-agent-setup`, with `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` as legacy compatibility hashes) share that module, and none of them is recovery state, storage focus, platform scope, or proof of backup or recovery posture.
 11. Letting recovery row details on the Proxmox Backups or TrueNAS Protection tabs lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, and readable metadata labels first, and raw JSON or provider-specific keys must not lead the primary detail.
 12. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
 13. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
@@ -8019,6 +8019,22 @@ The Proxmox page surface's Overview guest heading ("Guests on <node>", Show all
 nodes) now renders through the shared `PlatformHostScopedTableTitle` that the
 Docker and vSphere overviews also use; its Storage, Replication, Backups, Ceph
 and Mail Gateway tabs, and every storage and recovery rule, are unchanged.
+
+The Pulse Intelligence external-agent setup anchor named in Forbidden Path 10
+moved to `/settings/pulse-intelligence/agents#external-agent-setup` on
+2026-10-22, when the browser Assistant chat window was retired. It is still
+adjacent settings route state in `frontend-modern/src/routing/resourceLinks.ts`
+and carries no recovery or storage meaning. The same change adds the read-only
+`settingsCapabilities.patrolRun` security-status field in `internal/api`, a
+projection of the Patrol run route's admin gate that opens no storage or
+recovery path.
+
+The `internal/api` changes for typed Patrol investigation conclusions open no
+storage, backup or recovery path. They hand the run's typed conclusion to the
+private orchestrator, make investigation concurrency and timeout follow the
+Patrol provider, and label the `unclassified` and `interrupted` outcomes in the
+digest email. Recovery evidence, restore rules and storage capabilities are
+unchanged, and Patrol gains no storage remediation capability.
 ### Incomplete PBS namespace discovery cannot delete history (18 October 2026)
 
 A failed namespace listing is not a complete root-only inventory. Its result

@@ -234,15 +234,25 @@ describe('Global update progress authorization', () => {
 });
 
 describe('App architecture', () => {
-  it('gates Patrol navigation on the same AI capability as the Assistant launcher (#905)', () => {
-    expect(appSource).toContain('patrolVisible: () => aiChatStore.enabled === true');
-    expect(appSource).toContain('patrolVisible={() => aiChatStore.enabled === true}');
+  it('gates Patrol navigation on the AI availability session capability (#905)', () => {
+    expect(appSource).toContain('patrolVisible: () => aiAvailabilityStore.enabled === true');
+    expect(appSource).toContain('patrolVisible={() => aiAvailabilityStore.enabled === true}');
     expect(appLayoutSource).toMatch(
-      /\.\.\.\(aiChatStore\.enabled === true\s*\?\s*\[\s*\{\s*id: 'ai' as const/,
+      /\.\.\.\(aiAvailabilityStore\.enabled === true\s*\?\s*\[\s*\{\s*id: 'ai' as const/,
     );
     expect(appRuntimeStateSource).toContain(
-      'aiChatStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true)',
+      'aiAvailabilityStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true)',
     );
+  });
+
+  it('mounts no Assistant chat window or launcher now the chat is retired', () => {
+    for (const source of [appSource, appLayoutSource, appRuntimeStateSource]) {
+      expect(source).not.toContain('aiChatStore');
+      expect(source).not.toContain('@/stores/aiChat');
+      expect(source).not.toContain('components/AI/Chat');
+    }
+    expect(appLayoutSource).not.toContain('renderAssistantLauncher');
+    expect(appLayoutSource).not.toContain('getAssistantPageContext');
   });
 
   it('keeps first-load connection progress understandable and retryable', () => {
@@ -371,14 +381,11 @@ describe('App architecture', () => {
     expect(appSource).toContain(
       "import { AppLayout, sessionHasSettingsAccess } from '@/AppLayout';",
     );
-    expect(appSource).toContain("import { aiChatStore } from './stores/aiChat';");
+    expect(appSource).toContain("import { aiAvailabilityStore } from './stores/aiAvailability';");
     expect(appSource).toContain(
       "import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';",
     );
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
-    expect(appSource).toContain(
-      "import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';",
-    );
     expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
     expect(appSource).toContain('pendingAppShellRestoreTop');
@@ -556,16 +563,6 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
     expect(appSource).not.toContain("import('./api/ai')");
     expect(appSource).not.toContain('AIAPI.getSettings()');
-    expect(appSource).toContain(
-      'if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {',
-    );
-    expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
-    expect(appSource).toContain('window.setTimeout(() => {');
-    expect(appSource).toContain("closest('[data-ai-model-picker]')");
-    expect(appSource).toContain(
-      'if (!e.defaultPrevented && !isModelPickerEscape && aiChatStore.isOpen) {',
-    );
-    expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
     expect(appSource).toContain("import { WhatsNewCard } from './components/WhatsNewCard';");
     expect(appSource).toContain('<WhatsNewCard />');
@@ -670,9 +667,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "import { preloadRouteModule } from '@/routing/routePreload';",
     );
-    expect(appLayoutSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
     expect(appLayoutSource).toContain(
-      "import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';",
+      "import { aiAvailabilityStore } from '@/stores/aiAvailability';",
     );
     expect(appLayoutSource).toContain(
       "import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';",
@@ -837,15 +833,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('await preloadRouteModule(targetRoute);');
     expect(appLayoutSource).not.toContain('await preloadRouteModule(tab.route);');
     expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');
-    expect(appLayoutSource).toContain('aiChatStore.enabled === true &&');
-    expect(appLayoutSource).toContain('!dialogStackHasBlockingDialog()');
-    expect(appLayoutSource).toContain('onClick={openAssistantFromLauncher}');
-    expect(appLayoutSource).toContain('getAssistantPageContext');
-    expect(appLayoutSource).toContain('const AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS =');
-    expect(appLayoutSource).toContain('const AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS =');
-    expect(appLayoutSource).toContain("viewport.isBelow('lg')");
-    expect(appLayoutSource).toContain("viewport.isAtLeast('lg')");
-    expect(appLayoutSource).toContain('fixed right-0 top-1/2');
+    expect(appLayoutSource).not.toContain('AI_CHAT_MOBILE_LAUNCHER_BUTTON_CLASS');
+    expect(appLayoutSource).not.toContain('AI_CHAT_DESKTOP_LAUNCHER_BUTTON_CLASS');
     expect(appLayoutSource).not.toContain('Pulse Assistant (⌘K)');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
@@ -853,7 +842,9 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("eventBus.on('theme_changed'");
     expect(appLayoutSource).not.toContain("apiFetch('/api/security/status')");
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
-    expect(appRuntimeStateSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
+    expect(appRuntimeStateSource).toContain(
+      "import { aiAvailabilityStore } from '@/stores/aiAvailability';",
+    );
     expect(appRuntimeStateSource).toContain(
       'const connectionStatus = createMemo<AppConnectionStatus>(() => {',
     );
@@ -917,7 +908,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       'window.localStorage.getItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME)',
     );
-    expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
+    expect(appRuntimeStateSource).toContain('aiAvailabilityStore.setEnabled(');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
     expect(appRuntimeStateSource).toContain('actionInboxStore.loadPendingActionCount()');

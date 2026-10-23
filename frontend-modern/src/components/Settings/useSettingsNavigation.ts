@@ -14,6 +14,7 @@ import {
 import {
   EXTERNAL_AGENT_SETUP_PATH,
   SETTINGS_API_ACCESS_PATH,
+  SETTINGS_PULSE_INTELLIGENCE_AGENTS_PATH,
   isExternalAgentSetupHash,
 } from '@/routing/resourceLinks';
 import {
@@ -21,6 +22,7 @@ import {
   deriveTabFromPath,
   deriveTabFromQuery,
   isAISettingsOAuthCallbackQuery,
+  PULSE_INTELLIGENCE_LEGACY_ASSISTANT_PATH,
   resolveCanonicalSettingsPath,
   settingsTabPath,
   type AgentKey,
@@ -79,7 +81,9 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           const target = resolveTabPath(resolvedTab);
           const shouldPreserveQuery =
             resolvedTab === 'system-ai' && isAISettingsOAuthCallbackQuery(search);
-          const targetHref = shouldPreserveQuery ? `${target}${search}${hash}` : target;
+          // The hash is a deep-link anchor on the target page (for example
+          // `?tab=assistant#external-agent-setup` opening connector setup).
+          const targetHref = shouldPreserveQuery ? `${target}${search}${hash}` : `${target}${hash}`;
           const currentHref = `${path}${search}${hash}`;
 
           if (targetHref !== currentHref) {
@@ -97,6 +101,16 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         const canonicalBillingHref = resolveCanonicalSelfHostedBillingHref(path, search, hash);
         if (canonicalBillingHref && canonicalBillingHref !== currentHref) {
           navigate(canonicalBillingHref, {
+            replace: true,
+            scroll: false,
+          });
+          return;
+        }
+
+        // Settings > Assistant retired with the Assistant chat. Its links,
+        // including the external-agent setup anchor, land on External agents.
+        if (path.replace(/\/+$/, '') === PULSE_INTELLIGENCE_LEGACY_ASSISTANT_PATH) {
+          navigate(`${SETTINGS_PULSE_INTELLIGENCE_AGENTS_PATH}${search}${hash}`, {
             replace: true,
             scroll: false,
           });

@@ -176,7 +176,7 @@ keys and old 14-day limit remain in code without changing that policy.
 
 ## Patrol Modes
 
-Patrol mode decides how far Pulse can go after Patrol finds something that needs attention. Assistant chat command access is configured separately.
+Patrol mode decides how far Pulse can go after Patrol finds something that needs attention.
 
 | Mode | Behavior | Plan |
 |---|---|---|

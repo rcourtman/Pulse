@@ -1,5 +1,4 @@
 import { Show, createEffect, createMemo, createSignal, on, type Accessor } from 'solid-js';
-import { aiChatStore } from '@/stores/aiChat';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
 import { getAlertHistoryResourceTypeBadgeClass } from '@/utils/alertHistoryPresentation';
@@ -61,7 +60,7 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
   // cards' single drawer instead of leaving a hidden table expansion open.
   createEffect(
     on(active, (isActive) => {
-      if (!isActive || aiChatStore.isOpen) {
+      if (!isActive) {
         setInvestigation(null);
         return;
       }
@@ -95,7 +94,7 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
       (request) => {
         if (!request) return;
         props.state.takeFocusRequest();
-        if (!active() || aiChatStore.isOpen) return;
+        if (!active()) return;
         setInvestigation({ kind: 'timeline', alert: request.alert, rowKey: request.rowKey });
       },
     ),
@@ -114,20 +113,18 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
     return action ?? list;
   };
 
-  const closeInvestigation = (restoreFocus = true) => {
+  const closeInvestigation = () => {
     const current = investigation();
     if (!current) return;
     const currentFocusTarget = getInvestigationReturnFocusTarget(current);
     setInvestigation(null);
-    if (restoreFocus) {
-      currentFocusTarget?.focus({ preventScroll: true });
+    currentFocusTarget?.focus({ preventScroll: true });
 
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          getInvestigationReturnFocusTarget(current)?.focus({ preventScroll: true });
-        });
+        getInvestigationReturnFocusTarget(current)?.focus({ preventScroll: true });
       });
-    }
+    });
 
     if (current.kind === 'timeline') {
       if (props.state.expandedIncidents().has(current.rowKey)) {
@@ -323,7 +320,6 @@ export function AlertHistoryMobileList(props: AlertHistoryMobileListProps) {
             investigation={selectedInvestigation()}
             state={props.state}
             onClose={() => closeInvestigation()}
-            onAssistantHandoff={() => closeInvestigation(false)}
           />
         )}
       </Show>

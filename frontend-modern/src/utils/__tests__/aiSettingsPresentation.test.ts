@@ -1,18 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
-  AI_SETTINGS_ASSISTANT_SESSIONS_TITLE,
   AI_SETTINGS_MODEL_OVERRIDES_TITLE,
   AI_SETTINGS_PANEL_DESCRIPTION,
   AI_SETTINGS_PANEL_TITLE,
   getAICredentialsClearErrorMessage,
   getAIOAuthErrorMessage,
-  getAIChatSessionsEmptyState,
-  getAIChatSessionsLoadErrorMessage,
-  getAIChatSessionsLoadingState,
   getAIModelsLoadErrorMessage,
   getAIProviderTestResultTextClass,
-  getAISessionSummarizeErrorMessage,
   getAISettingsLoadErrorMessage,
   getAISettingsLoadingState,
   getAISettingsReadinessPresentation,
@@ -29,12 +23,10 @@ describe('aiSettingsPresentation', () => {
       'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.',
     );
     expect(AI_SETTINGS_MODEL_OVERRIDES_TITLE).toBe('Model Overrides');
-    expect(AI_SETTINGS_ASSISTANT_SESSIONS_TITLE).toBe('Pulse Assistant Sessions');
-    expect(AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE).toBe('Assistant chat actions');
     expect(getAISettingsSetupDialogPresentation()).toEqual({
       ariaLabel: 'Set up Pulse Intelligence',
       title: 'Set Up Pulse Intelligence',
-      description: 'Connect a provider to power Patrol and Assistant.',
+      description: 'Connect a provider to power Patrol.',
       submitLabel: 'Enable Pulse Intelligence',
     });
   });
@@ -63,7 +55,7 @@ describe('aiSettingsPresentation', () => {
     ).toEqual({
       containerClassName: 'bg-amber-50 dark:bg-amber-900/25 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
-      summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
+      summary: 'Configure at least one provider above to enable Patrol.',
     });
   });
 
@@ -97,21 +89,11 @@ describe('aiSettingsPresentation', () => {
       'Unable to load Provider & Models settings. Your configuration could not be retrieved.',
     );
     expect(getAISettingsRetryLabel()).toBe('Retry');
-    expect(getAIChatSessionsLoadingState()).toEqual({
-      text: 'Loading chat sessions...',
-    });
-    expect(getAIChatSessionsEmptyState()).toEqual({
-      text: 'No chat sessions yet. Start a chat to create one.',
-    });
     expect(getAIModelsLoadErrorMessage()).toBe('Unable to load models.');
     expect(getAIModelsLoadErrorMessage('Network request failed')).toBe('Network request failed');
-    expect(getAIChatSessionsLoadErrorMessage()).toBe('Unable to load chat sessions.');
-    expect(getAIChatSessionsLoadErrorMessage('Session API offline')).toBe('Session API offline');
   });
 
   it('returns canonical ai settings operational failure copy', () => {
-    expect(getAISessionSummarizeErrorMessage()).toBe('Unable to summarize the session.');
-    expect(getAISessionSummarizeErrorMessage('provider offline')).toBe('provider offline');
     expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Provider & Models settings.');
     expect(getAISettingsSaveErrorMessage(undefined, 'Unable to save Patrol settings.')).toBe(
       'Unable to save Patrol settings.',

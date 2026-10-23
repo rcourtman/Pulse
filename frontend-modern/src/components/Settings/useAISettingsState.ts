@@ -1,7 +1,6 @@
 import { createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
-import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { runPatrolModelReadiness, type PatrolModelReadinessResponse } from '@/api/patrol';
 import { getPatrolCostPreview, getPatrolModelGuidance } from '@/api/aiPatrolCost';
 import {
@@ -22,7 +21,7 @@ import {
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { notificationStore } from '@/stores/notifications';
 import type {
   AISettings as AISettingsType,
@@ -36,13 +35,10 @@ import {
   getPatrolIntervalAutoAdjust,
   type PatrolIntervalAutoAdjust,
 } from '@/utils/aiPatrolCostPresentation';
-import { normalizeAIControlLevel, type AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
   getAICredentialsClearErrorMessage,
   getAIOAuthErrorMessage,
-  getAIChatSessionsLoadErrorMessage,
-  getAISessionSummarizeErrorMessage,
   getAIModelsLoadErrorMessage,
   getAISettingsReadinessPresentation,
   getAISettingsSaveErrorMessage,
@@ -256,12 +252,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [modelsLoading, setModelsLoading] = createSignal(false);
   const [modelsError, setModelsError] = createSignal('');
 
-  const [chatSessions, setChatSessions] = createSignal<ChatSession[]>([]);
-  const [chatSessionsLoading, setChatSessionsLoading] = createSignal(false);
-  const [chatSessionsError, setChatSessionsError] = createSignal('');
-  const [selectedSessionId, setSelectedSessionId] = createSignal('');
-  const [sessionActionLoading, setSessionActionLoading] = createSignal<string | null>(null);
-
   const [expandedProviders, setExpandedProviders] = createSignal<Set<AIProvider>>(
     new Set(['anthropic']),
   );
@@ -356,7 +346,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     }, 150);
   };
 
-  type ModelFormKey = 'model' | 'chatModel' | 'patrolModel';
+  type ModelFormKey = 'model' | 'patrolModel';
   // Model picks made by the operator (as opposed to loads and resets) are
   // the only moment the schedule may be defaulted for a per-token model.
   const handleModelSelection = (formKey: ModelFormKey, modelId: string) => {
@@ -372,12 +362,10 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
   const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
-  const [showChatMaintenance, setShowChatMaintenance] = createSignal(false);
 
   const [form, setForm] = createStore({
     enabled: false,
     model: '',
-    chatModel: '',
     patrolModel: '',
     autoFixModel: '',
     authMethod: 'api_key' as AuthMethod,
@@ -411,7 +399,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     claudeSubscriptionEnabled: false,
     costBudgetUSD30d: '',
     requestTimeoutSeconds: 300,
-    controlLevel: 'read_only' as AIControlLevel,
   });
 
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
@@ -428,11 +415,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const providerIssueCount = createMemo(
     () => AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error').length,
   );
-  const selectedChatSession = createMemo(() => {
-    const id = selectedSessionId();
-    if (!id) return null;
-    return chatSessions().find((session) => session.id === id) || null;
-  });
   const hasConfiguredProvider = createMemo(() => {
     const current = settings();
     return Boolean(
@@ -476,7 +458,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setForm({
         enabled: false,
         model: '',
-        chatModel: '',
         patrolModel: '',
         autoFixModel: '',
         authMethod: 'api_key',
@@ -510,7 +491,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         claudeSubscriptionEnabled: false,
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
-        controlLevel: 'read_only',
       });
       return;
     }
@@ -521,7 +501,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     setForm({
       enabled: data.enabled,
       model: data.model || '',
-      chatModel: data.chat_model || '',
       patrolModel: data.patrol_model || '',
       autoFixModel: data.auto_fix_model || '',
       authMethod: data.auth_method || 'api_key',
@@ -560,7 +539,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           ? String(data.cost_budget_usd_30d)
           : '',
       requestTimeoutSeconds: data.request_timeout_seconds ?? 300,
-      controlLevel: normalizeAIControlLevel(data.control_level),
     });
 
     const configured = new Set<AIProvider>();
@@ -614,38 +592,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     }
   };
 
-  const loadChatSessions = async () => {
-    setChatSessionsLoading(true);
-    setChatSessionsError('');
-    try {
-      const sessions = await AIChatAPI.listSessions();
-      setChatSessions(sessions);
-      const current = selectedSessionId();
-      if (!Array.isArray(sessions) || sessions.length === 0) {
-        setSelectedSessionId('');
-      } else if (!current || !sessions.some((session) => session.id === current)) {
-        setSelectedSessionId(sessions[0].id);
-      }
-    } catch (error) {
-      logger.error('[AISettings] Failed to load chat sessions:', error);
-      setChatSessions([]);
-      setChatSessionsError(
-        getAIChatSessionsLoadErrorMessage(error instanceof Error ? error.message : ''),
-      );
-    } finally {
-      setChatSessionsLoading(false);
-    }
-  };
-
-  const formatSessionLabel = (session: ChatSession) => {
-    const updatedAt = new Date(session.updated_at);
-    const dateLabel = updatedAt.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    const timeLabel = updatedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${session.title || 'Untitled'} - ${session.message_count} msgs - ${dateLabel} ${timeLabel}`;
-  };
-
   const selectedModelForProviderTest = (provider: AIProvider): string | undefined =>
-    compactUnique([form.patrolModel, form.chatModel, form.autoFixModel, form.model]).find(
+    compactUnique([form.patrolModel, form.autoFixModel, form.model]).find(
       (model) => getProviderFromModelId(model) === provider,
     );
 
@@ -947,12 +895,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       hydratePatrolModelReadinessFromSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
-      // First-time configuration is the moment of maximum intent:
-      // reveal the assistant entry points (the bootstrap only reads
-      // the capability on page load) and open the Assistant so the
-      // user meets the feature they just enabled.
-      void aiChatStore.refreshEnabledFromServer();
-      aiChatStore.open();
+      // Reveal the Patrol entry points without a reload (the bootstrap only
+      // reads the capability on page load).
+      void aiAvailabilityStore.refreshEnabledFromServer();
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,
         'Pulse Intelligence enabled',
@@ -961,7 +906,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         notificationStore.warning(patrolReadinessMessage);
       } else {
         notificationStore.success(
-          'Pulse Intelligence enabled. This is the Assistant — ask it anything about your infrastructure.',
+          'Pulse Intelligence enabled. Patrol is ready to check your infrastructure.',
         );
       }
     } catch (error) {
@@ -970,7 +915,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         error,
         payload,
         providerHealth,
-        models: [form.model, form.chatModel, form.patrolModel, form.autoFixModel],
+        models: [form.model, form.patrolModel, form.autoFixModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -980,27 +925,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       );
     } finally {
       setSetupSaving(false);
-    }
-  };
-
-  const handleSessionSummarize = async () => {
-    const sessionId = selectedSessionId();
-    if (!sessionId) {
-      notificationStore.info('Select a chat session first.');
-      return;
-    }
-
-    setSessionActionLoading('summarize');
-    try {
-      await AIChatAPI.summarizeSession(sessionId);
-      notificationStore.success('Session summarized.');
-    } catch (error) {
-      logger.error('[AISettings] Failed to summarize session:', error);
-      notificationStore.error(
-        getAISessionSummarizeErrorMessage(error instanceof Error ? error.message : ''),
-      );
-    } finally {
-      setSessionActionLoading(null);
     }
   };
 
@@ -1090,9 +1014,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (form.patrolAutoFix !== settings()?.patrol_auto_fix) {
         payload.patrol_auto_fix = form.patrolAutoFix;
       }
-      if (form.chatModel !== (settings()?.chat_model || '')) {
-        payload.chat_model = form.chatModel;
-      }
       if (form.patrolModel !== (settings()?.patrol_model || '')) {
         payload.patrol_model = form.patrolModel;
       }
@@ -1176,9 +1097,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (form.requestTimeoutSeconds !== (settings()?.request_timeout_seconds ?? 300)) {
         payload.request_timeout_seconds = form.requestTimeoutSeconds;
       }
-      if (form.controlLevel !== normalizeAIControlLevel(settings()?.control_level)) {
-        payload.control_level = form.controlLevel;
-      }
 
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
@@ -1186,7 +1104,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       syncModelCatalogForSettings(updated);
       hydratePatrolModelReadinessFromSettings(updated);
       void runProviderPreflight(updated);
-      void aiChatStore.refreshEnabledFromServer();
+      void aiAvailabilityStore.refreshEnabledFromServer();
       const savedLabel = options.savedLabel ?? 'Provider & Models settings saved';
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,
@@ -1203,7 +1121,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         error,
         payload,
         providerHealth,
-        models: [selectedModel, form.chatModel, form.patrolModel, form.autoFixModel],
+        models: [selectedModel, form.patrolModel, form.autoFixModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -1275,7 +1193,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     let confirmMessage = `Remove ${getAIProviderDisplayName(provider) || provider} and its saved settings?`;
     if (isLastProvider) {
       confirmMessage =
-        'Warning: this is your only configured provider. Removing it will disable Pulse Assistant and clear its selected models until you configure another provider. Continue?';
+        'Warning: this is your only configured provider. Removing it will stop Patrol and clear its selected models until you configure another provider. Continue?';
     } else if (modelUsesProvider) {
       confirmMessage = `Your current model uses ${getAIProviderDisplayName(provider) || provider}. Removing it will clear provider-owned model selections. Continue?`;
     } else {
@@ -1293,6 +1211,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       resetForm(newSettings);
       syncModelCatalogForSettings(newSettings);
       void runProviderPreflight(newSettings);
+      // Removing the last provider disables AI, so Patrol entry points and
+      // alert Investigate must drop without a reload.
+      void aiAvailabilityStore.refreshEnabledFromServer();
 
       notificationStore.success(`${getAIProviderDisplayName(provider) || provider} removed`);
     } catch (error) {
@@ -1313,10 +1234,10 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setSettings(updated);
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
-      void aiChatStore.refreshEnabledFromServer();
+      void aiAvailabilityStore.refreshEnabledFromServer();
       notificationStore.success(
         newValue
-          ? 'Pulse Intelligence enabled. Ask the Assistant anything from the sparkles button on the right edge.'
+          ? 'Pulse Intelligence enabled. Patrol is ready to check your infrastructure.'
           : 'Pulse Intelligence disabled',
       );
     } catch (error) {
@@ -1380,25 +1301,19 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     alertAnalysisLocked,
     autoFixLocked,
     availableModels,
-    chatSessions,
-    chatSessionsError,
-    chatSessionsLoading,
     effectivePatrolModel,
     expandedProviders,
     form,
     handleModelSelection,
-    formatSessionLabel,
     handleClearProvider,
     handleCloseSetupModal,
     handleEnableRequest,
     handleEnabledToggle,
     handleSave,
-    handleSessionSummarize,
     handleSetupSubmit,
     handleTest,
     handleTestProvider,
     hasConfiguredProvider,
-    loadChatSessions,
     loading,
     loadError,
     loadModels,
@@ -1421,17 +1336,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     runPatrolModelReadinessAdvisor,
     cancelPatrolModelReadinessAdvisor,
     saving,
-    selectedChatSession,
-    selectedSessionId,
-    sessionActionLoading,
     setExpandedProviders,
     setForm,
-    setSelectedSessionId,
     setSetupApiKey,
     setSetupOllamaUrl,
     setSetupProvider,
     setShowAdvancedModels,
-    setShowChatMaintenance,
     setShowSetupModal,
     settings,
     settingsReadiness,
@@ -1440,7 +1350,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     setupProvider,
     setupSaving,
     showAdvancedModels,
-    showChatMaintenance,
     showSetupModal,
     showUpgradePrompts,
     testing,

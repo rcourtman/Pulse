@@ -616,7 +616,7 @@ async function mockMonitorFirstPatrolWorkbench(
 test.describe("Monitor-first Patrol workbench browser contract", () => {
   test.setTimeout(180_000);
 
-  test("legacy infrastructure launch opens the monitor lens before Patrol or Assistant chrome", async ({
+  test("legacy infrastructure launch opens the monitor lens before Patrol chrome", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -645,8 +645,8 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Ask Pulse Assistant about Proxmox" }),
-    ).toBeVisible();
+      page.getByRole("button", { name: /Ask Pulse Assistant/ }),
+    ).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Open work" })).toHaveCount(
       0,
     );
@@ -706,8 +706,8 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(page.getByText("No recurring issues")).toHaveCount(0);
     await expect(page.getByText("No verification waiting")).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Ask Pulse Assistant about Patrol" }),
-    ).toBeVisible();
+      page.getByRole("button", { name: /Ask Pulse Assistant/ }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("list", { name: "Patrol attention items" }),
     ).toHaveCount(0);

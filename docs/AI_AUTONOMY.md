@@ -1,24 +1,20 @@
 # Pulse Intelligence Modes and Safety Configuration
 
-This guide covers Patrol mode, Assistant action planning and
-[what the guardrails establish](#safety-guardrails). Permission to plan or run
-an action is not a guarantee of a correct diagnosis or a recovered workload.
+This guide covers how to configure Patrol mode and the safety guardrails that apply before Pulse can change infrastructure.
 
 For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level feature availability, see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
-## Two Axes of Control
+## Patrol Mode Is the Control
 
-Pulse separates AI permissions into two independent axes:
+**Patrol Mode** decides what Patrol may handle automatically after it finds an
+issue: watch only, ask before changes, handle safe fixes, or use policy
+autopilot. Patrol mode is configured on the **Patrol** page.
 
-1. **Patrol Mode** — What Patrol may handle automatically after it finds an issue: watch only, ask before changes, handle safe fixes, or use policy autopilot.
-2. **Assistant Action Planning** — Whether the interactive chat assistant may
-   plan infrastructure actions for review in **Actions**. Chat does not execute
-   those plans.
-
-Patrol mode is configured on the **Patrol** page. Assistant action planning is
-configured in **Settings → Pulse Intelligence → Assistant → Chat action mode**.
+The in-app Pulse Assistant chat, and its separate chat action setting, have been
+retired. Pulse Mobile's chat keeps the level saved before then until the app
+retires on 31 March 2027 (see [Pulse Mobile chat control level](#pulse-mobile-chat-control-level)).
 
 ---
 
@@ -100,43 +96,41 @@ Without the `ai_autofix` capability, the effective Patrol mode is clamped to `mo
 
 ---
 
-## Assistant Control Levels
+## Pulse Mobile chat control level
 
-Control levels govern interactive Assistant queries and action planning, not
-Patrol's autonomy or permission to execute infrastructure work.
+The control level governs Pulse Mobile chat queries and action planning, not
+Patrol's autonomy or permission to execute infrastructure work. The web
+settings page that edited it was retired with the in-app chat; the saved value
+still applies to Pulse Mobile until the app retires on 31 March 2027.
 
 | Mode | Key | Query | Plan infrastructure actions | Availability |
 |------|-----|:-----:|:---------------------------:|--------------|
 | **Read-only** | `read_only` | Yes | No | Community |
 | **Ask first** | `controlled` | Yes | For operator review in **Actions** | Community |
 
-Assistant chat does not execute the plans it saves. A legacy saved `autonomous`
-preference displays as **Ask first** and keeps its stored value and existing
-entitlement checks for older clients. It does not bypass approval. An unrelated
-settings save does not rewrite that preference. Unknown values fail closed to
-read-only. Patrol mode and Autopilot acknowledgements remain separate.
+Chat does not execute the plans it saves. A legacy saved `autonomous`
+preference acts as **Ask first** and keeps its stored value and existing
+entitlement checks for older clients. It does not bypass approval. Web settings
+saves never rewrite that preference. Unknown values fail closed to read-only.
+Patrol mode and Autopilot acknowledgements remain separate.
 
-To keep Assistant away from a specific guest, lock it: open the guest, choose
-**Manage**, turn on **Never auto-remediate** under Operator overrides, and save.
-Pulse then refuses typed actions that target that resource, including
+To keep chat and Patrol away from a specific guest, lock it: open the guest,
+choose **Manage**, turn on **Never auto-remediate** under Operator overrides,
+and save. Pulse then refuses typed actions that target that resource, including
 approved ones (see [Keep a Resource Off-Limits](#keep-a-resource-off-limits)).
-Older versions also showed a **Protected guests** list here. It never excluded a
-guest from action plans, so it has been removed.
 
 ### Configuration
 
-**UI:** Settings → Pulse Intelligence → Assistant → Chat action mode
-
-**API:** This intentionally changes Assistant action planning access. Use the same private
-administrator header file with `settings:write`; the token must also have
-permission to change settings. Prefer the UI for one-off changes, and verify
-the saved **Chat action mode** there afterwards. Do not use a write as an
-authentication test.
+**API only.** This intentionally changes Pulse Mobile chat action planning
+access. Use the same private administrator header file with `settings:write`;
+the token must also have permission to change settings. Read
+`control_level` from `GET /api/settings/ai` afterwards to confirm the saved
+value. Do not use a write as an authentication test.
 
 Use the same `pulse_api` helper defined above, with its private response file
 and request limits. Supporting PUT in the helper grants no additional access.
-If the response is lost, check the saved **Chat action mode** in the UI before
-deciding whether another change is needed; do not repeat the write blindly.
+If the response is lost, read the saved `control_level` before deciding
+whether another change is needed; do not repeat the write blindly.
 
 ```bash
 pulse_api PUT /api/settings/ai/update <<'JSON'
@@ -146,12 +140,12 @@ JSON
 
 ### Reviewing plans (Ask first)
 
-1. Assistant requests a typed action for an explicitly identified resource with
+1. Chat requests a typed action for an explicitly identified resource with
    the advertised capability.
 2. Pulse saves the canonical plan in **Actions** without requesting execution.
 3. Review the target, operation, approval policy and expiry in **Actions**.
-4. Use the existing authorised approval and run controls; Chat action mode grants
-   no additional access or automatic approval.
+4. Use the existing authorised approval and run controls; the chat control
+   level grants no additional access or automatic approval.
 5. Read the recorded execution and independent verification outcome before
    concluding that the operation worked. Do not repeat an uncertain operation.
 
@@ -172,72 +166,34 @@ The following limits are fixed and cannot be changed: up to 3 investigations run
 
 ## Safety Guardrails
 
-These controls constrain authority; they do not establish that a proposed fix
-is appropriate or that the original problem is resolved. Review the existing
-action and its evidence before relying on a success message. Do not run a
-command, change mode or provoke a failure just to test a safety claim.
+Regardless of Patrol mode, Pulse enforces multiple safety layers:
 
 ### Blocked Commands
 
-Command-policy paths use a fixed list of blocked patterns, including disk
-formatting and destructive cluster commands. This is not a proof that every
-other operation is safe. Typed lifecycle capabilities have their own target,
-permission and policy checks: an authorised action can intentionally stop or
-restart a workload. A blocked shell-command pattern is not a promise that the
-corresponding typed capability can never run.
+Certain destructive commands are always blocked (defined in `pkg/aicontracts/safety.go`):
+- Disk format/partition operations
+- Cluster-wide destructive operations
+- Commands that could cause data loss
 
 ### Risk Classification
 
-Review the target, capability, parameters, risk and applicable approval policy
-in **Actions**. A low-risk classification or approval is not an execution
-receipt, a recovery guarantee or permission to bypass a resource lock. A
-Patrol mode that allows automatic fixes does not turn Assistant chat into an
-execution path.
+Proposed fixes are classified by risk level in the approval system. Risk classification is surfaced in approval requests so operators can make informed decisions.
 
 ### Circuit Breaker
 
-Consecutive AI-provider failures can trip the provider circuit breaker and
-temporarily prevent further model requests until its cooldown permits another
-attempt. This does not reverse an action already dispatched or establish the
-workload's current state.
+If the AI provider experiences consecutive failures, the circuit breaker (`internal/ai/circuit/breaker.go`) trips and temporarily disables AI operations. It auto-resets after a cooldown period.
 
 ### Discovery-Before-Action
 
-Pulse resolves action targets to canonical resources and advertised
-capabilities; the action lifecycle checks current authority before execution.
-A discovered name or an earlier read is not permission to act, proof of the
-right diagnosis or a guarantee that the recorded state is still current.
+The AI runtime cannot operate on resources it hasn't first discovered. This prevents hallucinated resource IDs from reaching infrastructure commands.
 
 ### Verification-After-Write
 
-**Execution and verification are separate results.** A completed chat, saved
-plan, approval or successful executor result does not establish independent
-verification. Reading something after a write does not by itself verify that
-write either; Pulse does not enforce a blanket chat-state-machine sequence
-that guarantees recovery.
-
-Review the existing action in **Actions**, keeping these observations separate:
-
-| Recorded observation | What it establishes |
-| --- | --- |
-| Plan or approval | An intended operation or authority decision, not proof that it ran. |
-| Execution succeeded | The executor reported success; check verification separately. |
-| **Confirmed by independent observer** | The recorded postcondition at its observation time, not current health or resolution of every original symptom. |
-| **Confirmed by executing agent** | The executing agent's observation, not an independent observer's confirmation. |
-| **Outcome not verified** or **Outcome inconclusive** | Verification is absent or cannot establish the postcondition; unknown is not success. |
-| **Outcome contradicted** | The recorded observation does not confirm the intended postcondition, even if execution succeeded. |
-
-Use the existing outcome's target, evidence source and time, alongside safe
-observations of the original problem. Do not repeat an uncertain operation or
-send a new infrastructure probe merely to obtain a green result. Missing access
-or an unavailable action record leaves the outcome unknown; a quiet timeline
-does not prove that nothing ran. See the
-[Assistant safety architecture](ASSISTANT_SAFETY.md) for the recorded boundaries
-and their limits.
+After executing any control action, the AI runtime must verify the result with a read operation before reporting success. This is enforced by the FSM — the runtime cannot return to idle state without verification.
 
 ### Keep a Resource Off-Limits
 
-To stop Pulse acting on a specific guest, host or container, open its drawer, choose **Manage**, turn on **Never auto-remediate** under Operator overrides, confirm the prompt, and click **Save overrides**. Pulse then refuses typed actions that target that exact resource: the Assistant declines to plan one when it can read the lock, Patrol will not run one, and the action lifecycle checks the lock again before it runs an action that was already planned, even when approved. The lock covers that resource only, not its host or other resources, and it does not stop read-only investigation. Turn it off and save again when you want Pulse to act on the resource again. A resource whose lifecycle is Retired is blocked the same way until the lifecycle is set back to Active.
+To stop Pulse acting on a specific guest, host or container, open its drawer, choose **Manage**, turn on **Never auto-remediate** under Operator overrides, confirm the prompt, and click **Save overrides**. Pulse then refuses typed actions that target that exact resource: chat declines to plan one when it can read the lock, Patrol will not run one, and the action lifecycle checks the lock again before it runs an action that was already planned, even when approved. The lock covers that resource only, not its host or other resources, and it does not stop read-only investigation. Turn it off and save again when you want Pulse to act on the resource again. A resource whose lifecycle is Retired is blocked the same way until the lifecycle is set back to Active.
 
 ---
 

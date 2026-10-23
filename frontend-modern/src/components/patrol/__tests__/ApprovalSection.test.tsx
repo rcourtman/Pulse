@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationSession } from '@/api/ai';
@@ -7,12 +7,8 @@ import approvalSectionSource from '../ApprovalSection.tsx?raw';
 import ApprovalSection from '../ApprovalSection';
 
 const getInvestigationMock = vi.hoisted(() => vi.fn());
-const openMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/ai', () => ({ AIAPI: { getInvestigation: getInvestigationMock } }));
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: { open: (...args: unknown[]) => openMock(...args) },
-}));
 
 function actionReference(state: PatrolActionReference['state']): PatrolActionReference {
   return {
@@ -59,7 +55,6 @@ function investigation(action?: PatrolActionReference): InvestigationSession {
 describe('ApprovalSection typed action handoff', () => {
   beforeEach(() => {
     getInvestigationMock.mockReset();
-    openMock.mockReset();
   });
 
   afterEach(() => {
@@ -67,11 +62,7 @@ describe('ApprovalSection typed action handoff', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  const renderSection = (
-    investigationOutcome: string,
-    findingStatus = 'active',
-    hasAction = false,
-  ) =>
+  const renderSection = (investigationOutcome: string, hasAction = false) =>
     render(() => (
       <Router>
         <Route
@@ -79,7 +70,6 @@ describe('ApprovalSection typed action handoff', () => {
           component={() => (
             <ApprovalSection
               findingId="finding-1"
-              findingStatus={findingStatus}
               hasAction={hasAction}
               investigationOutcome={investigationOutcome}
             />
@@ -113,37 +103,14 @@ describe('ApprovalSection typed action handoff', () => {
   it('routes terminal action history to the exact recorded outcome', async () => {
     getInvestigationMock.mockResolvedValue(investigation(actionReference('completed')));
 
-    renderSection('fix_verified', 'resolved');
+    renderSection('fix_verified');
 
     expect(await screen.findByRole('link', { name: /view outcome in actions/i })).toHaveAttribute(
       'href',
       '/actions?action=act-1',
     );
     expect(screen.getByText('Outcome verified')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
-    expect(openMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        handoffContext: expect.stringContaining('Resolved'),
-        autonomousMode: false,
-      }),
-    );
-  });
-
-  it('preserves unknown risk and canonical state without synthesizing a legacy fix', async () => {
-    getInvestigationMock.mockResolvedValue(investigation(actionReference('completed')));
-    renderSection('fix_verified', 'resolved');
-    await screen.findByRole('link', { name: /view outcome in actions/i });
-    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
-    const context = openMock.mock.calls[0][0];
-    expect(context.handoffActions).toHaveLength(1);
-    expect(context.handoffActions[0]).toMatchObject({
-      actionId: 'act-1',
-      actionState: 'completed',
-    });
-    expect(context.handoffActions[0].destructive).toBeUndefined();
-    expect(context.handoffActions[0].fixId).toBeUndefined();
-    expect(context.handoffActions[0].approvalStatus).toBeUndefined();
-    expect(context.briefing.statusLabel).toContain('Completed action');
+    expect(screen.queryByRole('button', { name: /discuss with assistant/i })).toBeNull();
   });
 
   it('keeps missing plan identity visible while leaving replan guidance to Actions', async () => {
@@ -160,13 +127,13 @@ describe('ApprovalSection typed action handoff', () => {
     );
   });
 
-  it('retains an expired action and Assistant handoff when the issue needs attention', async () => {
+  it('retains an expired action when the issue needs attention', async () => {
     getInvestigationMock.mockResolvedValue({
       ...investigation(actionReference('expired')),
       outcome: 'needs_attention',
     });
 
-    renderSection('needs_attention', 'active', true);
+    renderSection('needs_attention', true);
 
     expect(await screen.findByRole('link', { name: /view outcome in actions/i })).toHaveAttribute(
       'href',
@@ -174,13 +141,6 @@ describe('ApprovalSection typed action handoff', () => {
     );
     expect(screen.getByText('Expired')).toBeInTheDocument();
     expect(screen.queryByText('Outcome verified')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
-    expect(openMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        handoffContext: expect.stringContaining('expired'),
-        autonomousMode: false,
-      }),
-    );
   });
 
   it('fails closed when only a legacy investigation artifact remains', async () => {
@@ -200,8 +160,6 @@ describe('ApprovalSection typed action handoff', () => {
     expect(await screen.findByText('Action details unavailable')).toBeInTheDocument();
     expect(screen.queryByText('rm -rf /should-never-render')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /actions/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /discuss with assistant/i }));
-    expect(openMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

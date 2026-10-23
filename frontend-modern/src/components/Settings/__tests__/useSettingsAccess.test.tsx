@@ -45,7 +45,7 @@ vi.mock('../settingsNavVisibility', () => ({
       'monitoring-availability',
       'system-ai',
       'system-ai-patrol',
-      'system-ai-assistant',
+      'system-ai-agents',
       'support-diagnostics',
       'support-reporting',
       'support-logs',
@@ -162,7 +162,7 @@ describe('useSettingsAccess', () => {
       'monitoring-availability',
       'system-ai',
       'system-ai-patrol',
-      'system-ai-assistant',
+      'system-ai-agents',
       'support-diagnostics',
       'support-reporting',
       'support-logs',
@@ -251,7 +251,7 @@ describe('useSettingsAccess', () => {
       shouldHideSettingsNavItemMock.mockReturnValue(false);
       let access!: ReturnType<typeof useSettingsAccess>;
       render(() => {
-        const [activeTab, setActiveTab] = createSignal('system-ai-assistant' as never);
+        const [activeTab, setActiveTab] = createSignal('system-ai-agents' as never);
         access = useSettingsAccess({
           activeTab,
           setActiveTab: setActiveTab as never,
@@ -264,7 +264,7 @@ describe('useSettingsAccess', () => {
         const matchedIds = access
           .filteredTabGroups()
           .flatMap((group) => group.items.map((item) => item.id));
-        expect(matchedIds).toContain('system-ai-assistant');
+        expect(matchedIds).toContain('system-ai-agents');
       });
     },
   );

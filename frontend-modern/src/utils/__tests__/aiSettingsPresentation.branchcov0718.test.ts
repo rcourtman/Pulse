@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getAICredentialsClearErrorMessage,
-  getAIChatSessionsLoadErrorMessage,
   getAIModelsLoadErrorMessage,
-  getAISessionSummarizeErrorMessage,
   getAISettingsReadinessPresentation,
   getAISettingsSaveErrorMessage,
   getAISettingsToggleErrorMessage,
@@ -98,7 +96,7 @@ describe('getAISettingsReadinessPresentation — branch coverage', () => {
     ).toEqual({
       containerClassName: 'bg-amber-50 dark:bg-amber-900/25 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
-      summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
+      summary: 'Configure at least one provider above to enable Patrol.',
     });
   });
 });
@@ -120,44 +118,6 @@ describe('getAIModelsLoadErrorMessage — branch coverage', () => {
     expect(getAIModelsLoadErrorMessage('  Network request failed  ')).toBe(
       'Network request failed',
     );
-  });
-});
-
-describe('getAIChatSessionsLoadErrorMessage — branch coverage', () => {
-  it('falls back when message is null', () => {
-    expect(getAIChatSessionsLoadErrorMessage(null)).toBe('Unable to load chat sessions.');
-  });
-
-  it('falls back when message is the empty string', () => {
-    expect(getAIChatSessionsLoadErrorMessage('')).toBe('Unable to load chat sessions.');
-  });
-
-  it('falls back when message is whitespace-only', () => {
-    expect(getAIChatSessionsLoadErrorMessage('\n\t ')).toBe('Unable to load chat sessions.');
-  });
-
-  it('returns the trimmed detail for a padded non-empty message', () => {
-    expect(getAIChatSessionsLoadErrorMessage('  Session API offline  ')).toBe(
-      'Session API offline',
-    );
-  });
-});
-
-describe('getAISessionSummarizeErrorMessage — branch coverage', () => {
-  it('falls back when message is null', () => {
-    expect(getAISessionSummarizeErrorMessage(null)).toBe('Unable to summarize the session.');
-  });
-
-  it('falls back when message is the empty string', () => {
-    expect(getAISessionSummarizeErrorMessage('')).toBe('Unable to summarize the session.');
-  });
-
-  it('falls back when message is whitespace-only', () => {
-    expect(getAISessionSummarizeErrorMessage('   ')).toBe('Unable to summarize the session.');
-  });
-
-  it('returns the trimmed detail for a padded non-empty message', () => {
-    expect(getAISessionSummarizeErrorMessage('  provider offline  ')).toBe('provider offline');
   });
 });
 

@@ -117,34 +117,15 @@ describe('configureDOMPurify branch coverage', () => {
     expect(out).not.toContain('rel=');
   });
 
-  it('keeps a valid language-x class on <code> (uponSanitizeAttribute code+class+regex-true arm)', () => {
-    const out = utils.renderMarkdown(['```ts', 'const x = 1;', '```'].join('\n'));
-    expect(out).toContain('<code');
-    expect(out).toContain('language-ts');
-  });
-
-  it('drops an invalid class on <code> (uponSanitizeAttribute code+class+regex-false arm)', () => {
-    // 'highlight' fails ^language-[a-z0-9+#_-]{1,30}$ -> forceKeepAttr stays
-    // unset -> DOMPurify strips 'class' (not in ALLOWED_ATTR).
-    const out = utils.renderMarkdown('<code class="highlight">x</code>');
-    expect(out).toContain('<code>x</code>');
-    expect(out).not.toContain('class=');
-    expect(out).not.toContain('highlight');
-  });
-
-  it('drops a language-x class on a non-code element (uponSanitizeAttribute non-CODE arm)', () => {
-    const out = utils.renderMarkdown('<div class="language-bash">z</div>');
-    expect(out).toContain('>z<');
-    expect(out).not.toContain('class=');
-    expect(out).not.toContain('language-bash');
-  });
-
-  it('ignores non-class attributes on <code> while still validating class (attrName !== class arm)', () => {
-    // The hook processes 'id' (attrName !== 'class' -> early return; the attr
-    // is then stripped by DOMPurify) and 'class' (validated + kept).
-    const out = utils.renderMarkdown('<code id="ignored" class="language-js">y</code>');
-    expect(out).toContain('language-js');
-    expect(out).not.toContain('id=');
-    expect(out).not.toContain('ignored');
+  it('strips every class from rendered markup, fence language hints included', () => {
+    // The fence-language carve-out existed for the retired Assistant code
+    // highlighter; with no highlighter reading it, <code> keeps no class.
+    const fenced = utils.renderMarkdown(['```ts', 'const x = 1;', '```'].join('\n'));
+    expect(fenced).toContain('<code');
+    expect(fenced).not.toContain('class=');
+    const raw = utils.renderMarkdown('<code id="ignored" class="language-js">y</code>');
+    expect(raw).toContain('<code>y</code>');
+    expect(raw).not.toContain('language-js');
+    expect(raw).not.toContain('id=');
   });
 });

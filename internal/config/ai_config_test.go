@@ -1410,3 +1410,54 @@ func TestResolvedPatrolAutonomyLevelDefaultsOnlyNeverChosenLicensedInstalls(t *t
 		})
 	}
 }
+
+func TestPatrolSubscriptionAgentGetsLongerTimeoutAndOneInvestigationAtATime(t *testing.T) {
+	cases := []struct {
+		name            string
+		cfg             AIConfig
+		subscription    bool
+		wantTimeout     time.Duration
+		wantConcurrency int
+	}{
+		{
+			name:            "codex subscription patrol model",
+			cfg:             AIConfig{PatrolModel: AIProviderCodexSubscription + ":gpt-5.6-luna"},
+			subscription:    true,
+			wantTimeout:     DefaultPatrolSubscriptionInvestigationTimeoutSec * time.Second,
+			wantConcurrency: 1,
+		},
+		{
+			name:            "claude subscription inherited from the main model",
+			cfg:             AIConfig{Model: AIProviderClaudeSubscription + ":sonnet"},
+			subscription:    true,
+			wantTimeout:     DefaultPatrolSubscriptionInvestigationTimeoutSec * time.Second,
+			wantConcurrency: 1,
+		},
+		{
+			name:            "api key provider",
+			cfg:             AIConfig{PatrolModel: AIProviderAnthropic + ":claude-sonnet-4-5"},
+			wantTimeout:     DefaultPatrolInvestigationTimeoutSec * time.Second,
+			wantConcurrency: MaxConcurrentInvestigations,
+		},
+		{
+			name:            "explicit timeout wins over the subscription default",
+			cfg:             AIConfig{PatrolModel: AIProviderCodexSubscription + ":gpt-5.6-luna", PatrolInvestigationTimeoutSec: 900},
+			subscription:    true,
+			wantTimeout:     900 * time.Second,
+			wantConcurrency: 1,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.PatrolUsesSubscriptionAgent(); got != tc.subscription {
+				t.Fatalf("PatrolUsesSubscriptionAgent() = %v, want %v", got, tc.subscription)
+			}
+			if got := tc.cfg.GetPatrolInvestigationTimeout(); got != tc.wantTimeout {
+				t.Fatalf("GetPatrolInvestigationTimeout() = %s, want %s", got, tc.wantTimeout)
+			}
+			if got := tc.cfg.GetPatrolInvestigationConcurrency(); got != tc.wantConcurrency {
+				t.Fatalf("GetPatrolInvestigationConcurrency() = %d, want %d", got, tc.wantConcurrency)
+			}
+		})
+	}
+}

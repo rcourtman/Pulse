@@ -812,6 +812,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// limit check below owns compaction when the request actually needs it.
 	currentTurnStartIndex := len(providerMessages)
 
+	// A Patrol investigation reserves time to conclude before its deadline.
+	// Once another evidence turn would leave too little for the conclusion
+	// and its summary, the current turn becomes the final turn, so the run
+	// ends with a recorded conclusion instead of a timeout.
+	investigationDeadline, investigationHasDeadline := ctx.Deadline()
+	investigationHasDeadline = investigationHasDeadline && isPatrolInvestigationExecution(a.currentExecutionProfile())
+	var investigationBudget, slowestInvestigationTurn time.Duration
+	var investigationTurnStartedAt time.Time
+	if investigationHasDeadline {
+		investigationBudget = time.Until(investigationDeadline)
+	}
+
 	for turn < maxTurns ||
 		(patrolOutputLimitRecoveryPending && !patrolOutputLimitRecoveryAttempted) ||
 		(investigationOutputLimitRecoveryPending && !investigationOutputLimitRecoveryAttempted) {
@@ -863,6 +875,24 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		default:
 		}
 
+		if investigationHasDeadline {
+			now := time.Now()
+			if !investigationTurnStartedAt.IsZero() {
+				slowestInvestigationTurn = max(slowestInvestigationTurn, now.Sub(investigationTurnStartedAt))
+			}
+			investigationTurnStartedAt = now
+			remaining := investigationDeadline.Sub(now)
+			if turn < maxTurns-1 && remaining <= investigationConclusionReserve(slowestInvestigationTurn, investigationBudget) {
+				log.Warn().
+					Int("turn", turn).
+					Dur("remaining", remaining).
+					Dur("slowest_turn", slowestInvestigationTurn).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Investigation deadline approaching — making this the final turn")
+				maxTurns = turn + 1
+			}
+		}
+
 		log.Info().
 			Int("turn", turn).
 			Int("messages", len(providerMessages)).
@@ -884,7 +914,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			SystemCacheablePrefix: stablePrompt,
 			Tools:                 tools,
 			ExecutionID:           a.executionID,
-			StreamIdleTimeout:     streamIdleTimeout,
+			StreamIdleTimeout:     investigationStreamIdleTimeout(a.currentExecutionProfile(), providerName, streamIdleTimeout),
 		}
 		if isPatrolDetectionExecution(a.currentExecutionProfile()) && patrolFindingsReadCompleted {
 			req.Tools = withoutProviderTool(req.Tools, agentcapabilities.PatrolGetFindingsToolName)
@@ -941,6 +971,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Int("max_turns", maxTurns).
 					Str("session_id", sessionID).
 					Msg("[AgenticLoop] Approaching max turns — restricting Watch to finding decisions")
+			} else if isPatrolInvestigationExecution(a.currentExecutionProfile()) && !investigationOutputLimitRecoveryTurn {
+				// The investigation block below restricts the final turn to the
+				// tools that conclude the run.
 			} else {
 				req.Tools = nil
 				textOnlySafetyBrake = true
@@ -964,8 +997,30 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			if a.maxEvidenceCalls > 0 {
 				req.System += fmt.Sprintf("\nEvidence-tool calls remaining within this run's configured limit: %d.", max(0, a.maxEvidenceCalls-a.totalEvidenceCalls))
 			}
-			if a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls {
-				req.Tools = investigationTerminalTools(tools)
+			evidenceBudgetSpent := a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls
+			switch {
+			case a.executor.InvestigationConcluded():
+				// The conclusion is recorded; the next response is its summary.
+				req.Tools = nil
+				textOnlySafetyBrake = true
+			case turn >= maxTurns-1:
+				// Final turn (turn limit or deadline reserve): record a typed
+				// conclusion rather than leave the outcome to be inferred from
+				// prose. A proposal stays available only once evidence is spent,
+				// as before.
+				req.Tools = investigationTerminalTools(tools, evidenceBudgetSpent)
+				textOnlySafetyBrake = len(req.Tools) == 0
+				if !textOnlySafetyBrake {
+					req.System += investigationFinalConclusionSystemNote
+				}
+				log.Warn().
+					Int("turn", turn).
+					Int("max_turns", maxTurns).
+					Int("tools", len(req.Tools)).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Final investigation turn — restricting tools to the conclusion")
+			case evidenceBudgetSpent:
+				req.Tools = investigationTerminalTools(tools, true)
 				textOnlySafetyBrake = len(req.Tools) == 0
 			}
 		}

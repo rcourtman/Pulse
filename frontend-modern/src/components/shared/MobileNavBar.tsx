@@ -106,7 +106,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
   // This bar's height is content-driven and includes the safe-area inset via
   // pb-safe, so anything that has to sit on top of it cannot hardcode a value.
   // Five call sites did, all at 5rem against a bar that measures ~45px, which
-  // left a band below the Assistant backdrop that was neither dimmed nor
+  // left a band below a drawer backdrop that was neither dimmed nor
   // click-blocked. Publish the measured height instead and let them read it.
   // Reports 0 when the bar is hidden at xl, which is the correct clearance
   // there.
