@@ -17,6 +17,10 @@ INSTALL_POLICY = (
     "sudo install -m 0644 scripts/playwright-apt.conf "
     "/etc/apt/apt.conf.d/99pulse-playwright-acquire"
 )
+# actions/cache v6.1.0 (Node 24). Restore and save are separate steps so a
+# successful install is cached even when later journeys fail.
+CACHE_PIN = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+CACHE_DIR = '"$HOME/.cache/pulse-browser-os-packages"'
 
 
 def job_block(workflow, job):
@@ -54,16 +58,58 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                 self.assertIn("working-directory: tests/integration", install)
                 browsers = "chromium webkit" if job == "e2e" else "chromium"
                 self.assertIn(f"npx playwright install --with-deps {browsers}\n", install)
-                # Browser setup must finish successfully before real journeys.
-                self.assertLess(i, next(
+                journey = next(
                     n for n, step in enumerate(steps)
                     if step.startswith("Run stable-tier E2E suite")
                     or step.startswith("Prove authenticated default")
                     or step.startswith("Run agent registration lifecycle")
-                ))
+                )
+                # Browser setup must finish successfully before real journeys.
+                self.assertLess(i, journey)
+                self.assert_package_cache(steps, policies[0], i, journey, browsers)
                 if job == "e2e":
                     self.assertRegex(block, r"(?m)^    timeout-minutes: 60$")
                     self.assertNotRegex(install, r"(?m)^        timeout-minutes: 10$")
+
+    def assert_package_cache(self, steps, policy, install, journey, browsers):
+        """Slow mirrors must not gate setup, and cached files must not bypass apt's authentication."""
+        def only(name):
+            found = [n for n, step in enumerate(steps) if step.startswith(name + "\n")]
+            self.assertEqual(len(found), 1, name)
+            return found[0]
+
+        restore = only("Restore browser OS packages")
+        admit = only("Admit verified browser OS packages")
+        collect = only("Collect browser OS packages")
+        save = only("Save browser OS packages")
+        # The bounded apt policy applies to the index refresh inside admission;
+        # packages are saved only after a successful install and before any
+        # journey can fail the job.
+        self.assertLess(policy, admit)
+        self.assertLess(restore, admit)
+        self.assertLess(admit, install)
+        self.assertLess(install, collect)
+        self.assertLess(collect, save)
+        self.assertLess(save, journey)
+        slug = browsers.replace(" ", "-")
+        prefix = "browser-os-packages-${{ runner.os }}-" + slug + "-"
+        lock = "${{ hashFiles('tests/integration/package-lock.json') }}"
+        self.assertIn(f"uses: actions/cache/restore@{CACHE_PIN} # v6.1.0\n", steps[restore])
+        # A run-unique key keeps saving possible as Ubuntu publishes new
+        # versions; restores take the newest entry by prefix.
+        self.assertIn(f"key: {prefix}{lock}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n", steps[restore])
+        self.assertIn(f"            {prefix}{lock}-\n            {prefix}\n", steps[restore])
+        # Admission and collection go through the verifying helper; a direct
+        # copy would let apt accept a same-size file without a hash check.
+        self.assertIn(f"run: python3 scripts/browser_os_packages.py seed {CACHE_DIR}\n", steps[admit])
+        self.assertIn("id: browser-os-collect\n", steps[collect])
+        self.assertIn(f"run: python3 scripts/browser_os_packages.py collect {CACHE_DIR}\n", steps[collect])
+        self.assertIn(f"uses: actions/cache/save@{CACHE_PIN} # v6.1.0\n", steps[save])
+        self.assertIn("if: steps.browser-os-collect.outputs.changed == 'true'\n", steps[save])
+        self.assertIn("key: ${{ steps.browser-os-packages.outputs.cache-primary-key }}\n", steps[save])
+        for n in (admit, collect):
+            for forbidden in ("${{", "continue-on-error", "if:", "||", " cp ", "install -m"):
+                self.assertNotIn(forbidden, steps[n])
 
     def test_all_browser_jobs_bound_setup_without_weakening_gates(self):
         self.assert_workflow_policy(WORKFLOW.read_text())
@@ -74,11 +120,14 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
             block = re.split(r"(?m)^  \S", workflow.split(f"  {event}:\n", 1)[1], maxsplit=1)[0]
             self.assertIn("'scripts/playwright-apt.conf'", block)
             self.assertIn("'scripts/tests/test_playwright_acquisition.py'", block)
+            self.assertIn("'scripts/browser_os_packages.py'", block)
+            self.assertIn("'scripts/tests/test_browser_os_packages.py'", block)
         selection = job_block(workflow, "tier-selection")
-        self.assertLess(
-            selection.index("python3 scripts/tests/test_playwright_acquisition.py"),
-            selection.index("npm ci"),
-        )
+        for test in ("test_playwright_acquisition.py", "test_browser_os_packages.py"):
+            self.assertLess(
+                selection.index(f"python3 scripts/tests/{test}"),
+                selection.index("npm ci"),
+            )
 
     def test_unbounded_and_ignored_setup_mutants_are_rejected(self):
         workflow = WORKFLOW.read_text()
@@ -90,6 +139,11 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
             (INSTALL_POLICY, "echo no acquisition policy"),
             ("run: npx playwright install --with-deps chromium\n",
              "run: npx playwright install --with-deps chromium || true\n"),
+            (f"actions/cache/restore@{CACHE_PIN}", "actions/cache/restore@v6"),
+            ("-${{ github.run_id }}-${{ github.run_attempt }}\n", "\n"),
+            (f"run: python3 scripts/browser_os_packages.py seed {CACHE_DIR}\n",
+             f"run: sudo cp {CACHE_DIR}/*.deb /var/cache/apt/archives/\n"),
+            ("if: steps.browser-os-collect.outputs.changed == 'true'\n", "if: always()\n"),
         ):
             with self.subTest(mutation=replacement):
                 # subTest failures cannot be caught as an ordinary assertion,

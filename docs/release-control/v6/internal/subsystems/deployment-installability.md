@@ -8117,6 +8117,31 @@ dependency floor in `dependencySecurity.test.ts` drops with it. The lockfile
 loses only that package entry. Installer, artifact, signing, promotion and
 rollback boundaries are unchanged.
 
+Browser OS packages for the E2E jobs are cached between runs (23 October
+2026). Each of the `offline-org-provisioning`, `e2e`, and `agent-registration`
+jobs in `.github/workflows/test-e2e.yml` installs about 120 MB of Ubuntu
+packages for Chromium and WebKit from the runner's Azure mirror. From
+22 October some GitHub-hosted runners received them at tens of kB/s
+(actions/runner-images#14823 and #15040), so installs that had taken under a
+minute ran past their 10 and 30 minute budgets before any test started. The
+jobs now restore the newest saved package set with `actions/cache/restore`
+(v6.1.0, pinned by SHA) and admit it through `scripts/browser_os_packages.py`:
+after a bounded `apt-get update`, a cached `.deb` reaches apt's archive
+directory only when the SHA256 of the private copy it installs equals a signed
+index value for the package, version, and architecture named by its filename.
+That check is ours, because apt reuses an archive-directory file after
+checking only its size.
+After a successful install, and before any journey runs, the helper rebuilds
+the cache from what apt holds and the job saves it under a run-unique key only
+when the verified set changed, so new Ubuntu versions refresh the cache and an
+empty or unchanged set is never saved. The `scripts/playwright-apt.conf`
+transport bounds and install budgets are unchanged, and these jobs hold no
+secrets or write tokens, which the workflow trust contract requires for any
+cache. Proof: `scripts/tests/test_browser_os_packages.py`,
+`scripts/tests/test_playwright_acquisition.py`, and
+`scripts/tests/test_e2e_test_images.py`, which also pins that this cache can
+never carry the E2E test images.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry
