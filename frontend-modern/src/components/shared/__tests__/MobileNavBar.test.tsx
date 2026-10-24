@@ -229,7 +229,11 @@ describe('MobileNavBar', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Mobile navigation' });
     const alertsLink = within(nav).getByRole('link', { name: 'Alerts 2 3' });
-    expect(alertsLink).toHaveTextContent('Alerts 2 3');
+    // The text icon is deliberately a stub: its hidden "Icon" text is not
+    // a visible label. Test label order/boundaries and badge contents directly.
+    expect(alertsLink.firstElementChild).toHaveClass('order-2');
+    expect(alertsLink.firstElementChild?.textContent).toBe('Alerts ');
+    expect(alertsLink.querySelector('.absolute')).toHaveTextContent('2 3');
     expect(alertsLink).toHaveAccessibleDescription('2 critical, 3 warning');
     expect(within(nav).getByRole('link', { name: 'Patrol: 2 open work items' })).toHaveTextContent(
       'Patrol 2',

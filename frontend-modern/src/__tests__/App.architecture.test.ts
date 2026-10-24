@@ -793,7 +793,8 @@ describe('App architecture', () => {
       'type MobileNavBarPrimaryTab as PrimaryTab,\n  type MobileNavBarUtilityTab as UtilityTab,',
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
-    expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
+    expect(appLayoutSource).toContain("} from '@/components/shared/mobileNavBarModel';");
+    expect(appLayoutSource).not.toContain('function getDesktopUtilityTabAriaLabel');
     expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
     expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");

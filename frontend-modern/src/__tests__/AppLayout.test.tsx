@@ -280,7 +280,11 @@ describe('AppLayout navigation icons', () => {
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
-    expect(desktopPatrolTab.textContent?.replace(/\s+/g, ' ').trim()).toBe('Patrol 2');
+    // jsdom includes the hidden compact label and SVG title in textContent.
+    // Assert the actual word boundary before the badge instead.
+    expect(desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(
+      ' ',
+    );
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -289,7 +293,9 @@ describe('AppLayout navigation icons', () => {
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
-    expect(mobilePatrolTab.textContent?.replace(/\s+/g, ' ').trim()).toBe('Patrol 2');
+    // The visible label precedes the icon/badge wrapper in DOM order.
+    expect(mobilePatrolTab.firstElementChild).toHaveClass('order-2');
+    expect(mobilePatrolTab.firstElementChild?.textContent).toBe('Patrol ');
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -322,7 +328,7 @@ describe('AppLayout navigation icons', () => {
     expect(actionsTab.className).toContain('text-blue-600');
     expect(actionsTab).toHaveAttribute('href', '/actions');
     expect(actionsTab).toHaveAttribute('aria-current', 'page');
-    expect(actionsTab.textContent?.replace(/\s+/g, ' ').trim()).toBe('Actions 3');
+    expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(' ');
     expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
