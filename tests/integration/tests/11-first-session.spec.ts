@@ -176,7 +176,7 @@ test.describe.serial("First-session experience", () => {
       { path: "/settings/system-updates", readyHeading: "Updates" },
       { path: "/settings/security-overview", readyHeading: "Security Overview" },
       { path: "/settings/security-auth", readyHeading: "Authentication" },
-      { path: "/settings/system-pro", readyHeading: "Current plan" },
+      { path: "/settings/system-billing", readyHeading: "Current plan" },
     ] as const;
 
     const consoleErrors: string[] = [];
@@ -207,19 +207,6 @@ test.describe.serial("First-session experience", () => {
         await page.waitForURL(/\/settings/, { timeout: 10_000 });
         await expect(page.locator("#root")).toBeVisible();
 
-        // Wait for the panel content to render. Scope to the settings content
-        // area (everything after the sidebar) to avoid matching sidebar labels.
-        // Fall back to a page-wide heading if the content area locator doesn't
-        // match — some layouts render headings differently.
-        const panelHeading = page
-          .locator('h1, h2, h3, [role="heading"]')
-          .filter({ hasNotText: "Settings" })
-          .first();
-        await expect(
-          panelHeading,
-          `Route ${route} did not render any panel content`,
-        ).toBeVisible({ timeout: 10_000 });
-
         // The outer page heading is present even while General remains on
         // "Loading configuration...". Require the consuming panel, not just
         // the Settings shell, before judging requests and console output.
@@ -230,7 +217,9 @@ test.describe.serial("First-session experience", () => {
           }),
           `Route ${route} did not finish loading a settings panel`,
         ).toBeVisible({ timeout: 10_000 });
-        await expect(page.getByText("Loading configuration...", { exact: true })).toHaveCount(0);
+        await expect(
+          page.getByText("Loading configuration...", { exact: true }),
+        ).toHaveCount(0);
 
         const unexpectedAIRequests = aiRequests
           .urls()
