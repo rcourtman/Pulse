@@ -115,9 +115,13 @@ if role == 'ps':
     if fault == 'relative-wrapper': print('103 1 sh sh start-pulse-agent.sh')
     if fault == 'deferred-bootstrap': print('104 1 sh /bin/sh /tmp/nasconfig_tmp/autorun.sh')
     if fault == 'live-go': print('105 1 bash /bin/bash ' + str(root / 'go'))
+    # rc.local executes its fromdos copy, so the kernel names the shell after it.
+    if fault == 'live-tmp-go': print('105 1 go /bin/bash /var/tmp/go')
+    if fault == 'live-tmp-go-safemode': print('105 1 go.safemode /bin/bash /var/tmp/go.safemode')
     print('200 1 vi vi ' + wrapper)  # Editor is not a watchdog or signal target.
     print('201 1 sh /bin/sh ' + wrapper + '.bak')
     print('202 1 pulse-agent-prod /other/pulse-agent-prod')
+    print('203 1 go /usr/local/go/bin/go build ./...')  # A Go toolchain is not a go shell.
     sys.exit(0)
 if role == 'kill':
     assert len(args) == 2 and args[0] == '-TERM', args
@@ -471,6 +475,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         self.assertEqual(r[0].returncode, 0, r[0].stderr)
         self.assertIn('100 1 watchdog\n', r[0].stdout); self.assertIn('101 100 collector\n', r[0].stdout)
         self.assertNotIn('/synthetic/private-only', r[0].stdout); self.assertIn('200 1 other\n', r[0].stdout)
+        self.assertIn('203 1 other\n', r[0].stdout)
         r = self.exercise('QNAP', 'timeout-process'); self.retained(r); self.assertTrue(r[9])
 
     def test_private_model_uses_selected_isolated_interpreter(self):
@@ -558,8 +563,10 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
         self.assertGreaterEqual(records[1]['control_seconds'], records[0]['control_seconds'])
 
     def test_live_unraid_boot_shell_is_unknown_not_a_signal_target(self):
-        r = self.exercise('Unraid', 'live-go'); events = self.retained(r)
-        self.assertEqual(r[6], r[7]); self.assertFalse(any(e.startswith('signal:') for e in events))
+        for fault in ('live-go', 'live-tmp-go', 'live-tmp-go-safemode'):
+            with self.subTest(fault=fault):
+                r = self.exercise('Unraid', fault); events = self.retained(r)
+                self.assertEqual(r[6], r[7]); self.assertFalse(any(e.startswith('signal:') for e in events))
 
     def test_recovered_ordinary_linux_state_is_not_qnap_platform_authority(self):
         r = self.exercise('QNAP', appliance=False)

@@ -4041,8 +4041,9 @@ nas_agent_boot_operation() {
 }
 
 # Read complete kernel evidence before signalling; expose only numeric IDs and
-# roles. Relative/foreign wrappers and QNAP deferred autorun shells have unknown
-# ownership, so retain recovery instead of signalling an unrelated boot owner.
+# roles. Relative/foreign wrappers, QNAP deferred autorun shells and live Unraid
+# go shells have unknown ownership, so retain recovery instead of signalling an
+# unrelated boot owner.
 read_nas_agent_removal_processes() {
     local platform="$1" observation="" line="" pid="" parent="" comm="" args="" role=""
     local wrapper="$STATE_DIR/start-pulse-agent.sh" runtime="$INSTALL_DIR/$BINARY_NAME"
@@ -4071,7 +4072,12 @@ read_nas_agent_removal_processes() {
                 if [[ "$args" == "$wrapper" || "$args" == "$wrapper "* ]]; then role=watchdog; fi
                 if [[ "$role" != watchdog && "$args" =~ start-pulse-agent\.sh([[:space:]]|$) ]]; then role=unknown; fi
                 if [[ "$platform" == QNAP && "$args" == *'/nasconfig_tmp/autorun.sh'* ]]; then role=unknown; fi
-                if [[ "$platform" == Unraid && "$args" == *'/boot/config/go'* ]]; then role=unknown; fi
+                if [[ "$platform" == Unraid && "$args" =~ (^|[[:space:]])('/boot/config/go'|'/var/tmp/go')(\.safemode)?([[:space:]]|$) ]]; then role=unknown; fi
+                ;;
+            # rc.local runs the fromdos copy /var/tmp/go (go.safemode in safe
+            # mode) directly, so the kernel names that shell after the script.
+            go|go.safemode)
+                if [[ "$platform" == Unraid && "$args" =~ (^|[[:space:]])('/boot/config/go'|'/var/tmp/go')(\.safemode)?([[:space:]]|$) ]]; then role=unknown; fi
                 ;;
         esac
         rows+=("$pid $parent $role"); count=$((count + 1))
