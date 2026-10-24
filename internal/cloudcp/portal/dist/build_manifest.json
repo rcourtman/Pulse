@@ -1,5 +1,5 @@
 {
-  "source_hash": "2fa7bbb64e7cb3e9e7e187a81019fdbb723c9591543e9905dba8cf2617d5c958",
+  "source_hash": "fcf3fb15171f5e088edb84875ec66c5c1f91fcbcac8366243794670e35f7e351",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -26,6 +26,7 @@
     "src/billing_controller.ts",
     "src/billing_view.test.ts",
     "src/billing_view.ts",
+    "src/dependency_security.test.ts",
     "src/index.ts",
     "src/provider_plan.test.ts",
     "src/provider_plan.ts",

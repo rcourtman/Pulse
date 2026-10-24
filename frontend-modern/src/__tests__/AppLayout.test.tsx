@@ -197,7 +197,9 @@ describe('AppLayout navigation icons', () => {
       name: 'Patrol',
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
-    expect(within(systemGroup as HTMLElement).getByRole('link', { name: '1 Alerts' })).toBeTruthy();
+    expect(
+      within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts 1' }),
+    ).toHaveAccessibleDescription('1 warning');
     expect(
       within(systemGroup as HTMLElement).queryByRole('link', {
         name: 'Pulse Patrol Patrol',
@@ -278,6 +280,7 @@ describe('AppLayout navigation icons', () => {
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
+    expect(desktopPatrolTab.textContent?.replace(/\s+/g, ' ').trim()).toBe('Patrol 2');
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -286,6 +289,7 @@ describe('AppLayout navigation icons', () => {
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
+    expect(mobilePatrolTab.textContent?.replace(/\s+/g, ' ').trim()).toBe('Patrol 2');
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -318,6 +322,7 @@ describe('AppLayout navigation icons', () => {
     expect(actionsTab.className).toContain('text-blue-600');
     expect(actionsTab).toHaveAttribute('href', '/actions');
     expect(actionsTab).toHaveAttribute('aria-current', 'page');
+    expect(actionsTab.textContent?.replace(/\s+/g, ' ').trim()).toBe('Actions 3');
     expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });

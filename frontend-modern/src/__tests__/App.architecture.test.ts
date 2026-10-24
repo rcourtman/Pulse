@@ -801,7 +801,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
     expect(appLayoutSource).toContain('aria-label={tab.label}');
-    expect(appLayoutSource).toContain('aria-label={getDesktopUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).toContain('aria-label={getMobileNavTabAriaLabel(tab)}');
+    expect(appLayoutSource).toContain('aria-description={getMobileNavTabAriaDescription(tab)}');
     expect(appLayoutSource).toContain(
       '<span aria-hidden="true" class="inline-flex items-center justify-center">',
     );
