@@ -2057,8 +2057,9 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		bucketCount = 0
 	}
 	var resourceID, metricType string
-	var resourceNumber int
-	var ts int64
+	var resourceNumber retainedInt64
+	var ts retainedInt64
+	var value retainedFloat64
 	var p MetricPoint
 	var low, high sql.NullFloat64
 	destinations := make([]interface{}, 0, 6)
@@ -2074,7 +2075,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	} else if !seriesOrdinals {
 		destinations = append(destinations, &metricType)
 	}
-	destinations = append(destinations, &ts, &p.Value)
+	destinations = append(destinations, &ts, &value)
 	if !projection.valuesOnly {
 		destinations = append(destinations, &low, &high)
 	}
@@ -2086,19 +2087,20 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		if resourceOrdinals {
 			resourceIndex := resourceNumber
 			if seriesOrdinals {
-				if resourceNumber < 0 || resourceNumber >= len(resourceIDs)*len(metricTypes) {
+				if resourceNumber < 0 || resourceNumber >= retainedInt64(len(resourceIDs)*len(metricTypes)) {
 					return nil, fmt.Errorf("invalid retained series number %d", resourceNumber)
 				}
 				if numberedSeries == nil {
-					resourceID = resourceIDs[resourceNumber/len(metricTypes)]
-					metricType = metricTypes[resourceNumber%len(metricTypes)]
+					resourceID = resourceIDs[resourceNumber/retainedInt64(len(metricTypes))]
+					metricType = metricTypes[resourceNumber%retainedInt64(len(metricTypes))]
 				}
-			} else if resourceIndex < 0 || resourceIndex >= len(resourceIDs) {
+			} else if resourceIndex < 0 || resourceIndex >= retainedInt64(len(resourceIDs)) {
 				return nil, fmt.Errorf("invalid retained resource number %d for %d resources", resourceIndex, len(resourceIDs))
 			} else {
 				resourceID = resourceIDs[resourceIndex]
 			}
 		}
+		p.Value = float64(value)
 		if !projection.valuesOnly {
 			p.Min, p.Max = p.Value, p.Value
 			if low.Valid {
@@ -2109,7 +2111,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 			}
 		}
 		if !streamBuckets {
-			p.Timestamp = time.Unix(ts, 0)
+			p.Timestamp = time.Unix(int64(ts), 0)
 			if numberedSeries != nil {
 				numberedSeries[resourceNumber] = append(numberedSeries[resourceNumber], projection.point(p))
 			} else {
@@ -2117,7 +2119,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 			}
 			continue
 		}
-		start := (ts / stepSecs) * stepSecs
+		start := (int64(ts) / stepSecs) * stepSecs
 		if bucketCount > 0 && (bucketResource != resourceID || bucketMetric != metricType || bucketStart != start) {
 			flushBucket()
 		}
