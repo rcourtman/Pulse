@@ -17,8 +17,31 @@
  * release (e.g. managed local backend without PULSE_UPDATE_SERVER).
  */
 
-import { expect, test, type Page } from "@playwright/test";
-import { apiRequest } from "./helpers";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect, test as base, type Page } from "@playwright/test";
+import { apiRequest, createAuthenticatedStorageState } from "./helpers";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const test = base.extend<{}, { authStorageStatePath: string }>({
+  storageState: async ({ authStorageStatePath }, use) => {
+    await use(authStorageStatePath);
+  },
+  authStorageStatePath: [async ({ browser }, use, workerInfo) => {
+    const storageStatePath = path.resolve(
+      __dirname, "..", "..", "tmp", "playwright-auth",
+      `update-flow-${workerInfo.project.name}.json`,
+    );
+    fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+    await createAuthenticatedStorageState(browser, storageStatePath);
+    try {
+      await use(storageStatePath);
+    } finally {
+      fs.rmSync(storageStatePath, { force: true });
+    }
+  }, { scope: "worker" }],
+});
 
 const MOCK_STABLE_VERSION = "99.0.0";
 const MOCK_RC_VERSION = "99.1.0-rc.1";
@@ -63,9 +86,9 @@ async function fetchUpdateStatus(page: Page): Promise<UpdateStatus> {
 
 test.describe.serial("update flow against the mock update server", () => {
   test.beforeEach(async ({ page }) => {
-    // This is an API contract. apiRequest carries the admitted primary token
-    // without mounting a dashboard and starting unrelated update polling for
-    // every case in the serial flow.
+    // Bootstrap one admitted cookie session per worker, including when CI
+    // retains no primary token. Individual API cases inherit it without
+    // mounting a dashboard and starting unrelated update polling each time.
     if (mockUpdateServerWired === null) {
       const res = await apiRequest(page, "/api/updates/check?channel=stable");
       expect(res.ok(), await res.text()).toBeTruthy();

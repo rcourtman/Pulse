@@ -285,6 +285,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     let staleProjectionResponses = 0;
     let deletionResponses = 0;
     let publishDeletion = false;
+    const retainedGuest = issue1611Container(102, "lxc-beta", "online", true);
 
     // The Proxmox surface owns a source-scoped canonical resource snapshot.
     // Intercept that REST sequence and prevent live inventory frames from
@@ -308,21 +309,21 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
       if (workloadRequests === 1) {
         data = [
           issue1611Container(101, "lxc-alpha", "online"),
-          issue1611Container(102, "lxc-beta", "online", true),
+          retainedGuest,
           issue1611Container(103, "lxc-gamma", "online"),
         ];
       } else if (!publishDeletion) {
         staleProjectionResponses += 1;
         data = [
           issue1611Container(101, "lxc-alpha", "warning"),
-          issue1611Container(102, "lxc-beta", "online", true),
+          retainedGuest,
           issue1611Container(103, "lxc-gamma", "warning"),
         ];
       } else {
         deletionResponses += 1;
         data = [
           issue1611Container(101, "lxc-alpha", "online"),
-          issue1611Container(102, "lxc-beta", "online", true),
+          retainedGuest,
         ];
       }
 
@@ -349,7 +350,7 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     const retainedRow = rows.filter({ hasText: "lxc-beta" });
     await retainedRow.click();
     const detailRow = page.locator(
-      'tr[data-inline-detail-for="lab:node-a:102"]',
+      `tr[data-inline-detail-for=${JSON.stringify(retainedGuest.id)}]`,
     );
     await expect(detailRow).toBeVisible();
 
@@ -357,12 +358,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     // frames rather than a timer-driven REST poll. Use the same forced
     // canonical refresh event as an in-app metadata update so this remains a
     // deterministic snapshot-reconciliation proof with WebSockets blocked.
-    await page.evaluate(() =>
+    await page.evaluate((metadataId) =>
       window.dispatchEvent(
         new CustomEvent("pulse:resource-metadata-changed", {
-          detail: { metadataKind: "guest", metadataId: "lab:node-a:102" },
+          detail: { metadataKind: "guest", metadataId },
         }),
       ),
+      retainedGuest.id,
     );
     await expect
       .poll(() => staleProjectionResponses, { timeout: 15_000 })
@@ -373,12 +375,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await expect(detailRow).toBeVisible();
 
     publishDeletion = true;
-    await page.evaluate(() =>
+    await page.evaluate((metadataId) =>
       window.dispatchEvent(
         new CustomEvent("pulse:resource-metadata-changed", {
-          detail: { metadataKind: "guest", metadataId: "lab:node-a:102" },
+          detail: { metadataKind: "guest", metadataId },
         }),
       ),
+      retainedGuest.id,
     );
     await expect
       .poll(() => deletionResponses, { timeout: 15_000 })

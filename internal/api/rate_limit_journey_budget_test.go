@@ -63,3 +63,60 @@ func TestJourneyGeneralAPIBudgetIsolation(t *testing.T) {
 		})
 	}
 }
+
+// Independent browser contexts share the Docker bridge address. Their update
+// banners must not consume one another's explicitly configured dev budget.
+func TestJourneyUpdateAPIBudgetIsolation(t *testing.T) {
+	for _, tc := range []struct {
+		name, dev, configured string
+		limit                 int
+	}{
+		{"production retains enforcement", "", "600", 60},
+		{"development retains default without opt-in", "true", "", 60},
+		{"development harness remains bounded", "true", "600", 600},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("PULSE_DEV", tc.dev)
+			t.Setenv("PULSE_DEV_GENERAL_API_RATE_LIMIT", "")
+			t.Setenv("PULSE_DEV_UPDATE_API_RATE_LIMIT", tc.configured)
+			cfg := newEndpointRateLimitConfig()
+			t.Cleanup(cfg.Stop)
+			handler := UniversalRateLimitMiddlewareWithConfig(cfg, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			request := func(endpoint, method string, n int) *httptest.ResponseRecorder {
+				r := httptest.NewRequest(method, endpoint, nil)
+				r.RemoteAddr = "192.0.2.17:12345"
+				r.AddCookie(&http.Cookie{Name: "pulse_session", Value: "synthetic-" + strconv.Itoa(n)})
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				return w
+			}
+			endpoints := []string{"/api/updates/plan?version=99.1.0-rc.1", "/api/updates/check"}
+			for i := 0; i < tc.limit; i++ {
+				if w := request(endpoints[i%2], http.MethodGet, i); w.Code != http.StatusNoContent {
+					t.Fatalf("request %d: status %d, want 204", i+1, w.Code)
+				}
+			}
+			for _, endpoint := range endpoints {
+				w := request(endpoint, http.MethodGet, tc.limit)
+				if w.Code != http.StatusTooManyRequests || w.Header().Get("Retry-After") != "60" ||
+					w.Header().Get("X-RateLimit-Limit") != strconv.Itoa(tc.limit) {
+					t.Fatalf("exhausted %s: status %d, headers %v", endpoint, w.Code, w.Header())
+				}
+			}
+			if cfg.GeneralAPI.limit != 500 {
+				t.Fatal("update override changed the general API budget")
+			}
+			for i := 0; i < 11; i++ {
+				want := http.StatusNoContent
+				if i == 10 {
+					want = http.StatusTooManyRequests
+				}
+				if w := request("/api/login", http.MethodPost, i); w.Code != want {
+					t.Fatalf("login request %d: status %d, want %d", i+1, w.Code, want)
+				}
+			}
+		})
+	}
+}

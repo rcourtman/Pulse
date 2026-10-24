@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
 import {
   createAuthenticatedStorageState,
-  E2E_CREDENTIALS,
+  apiRequest,
+  authenticateWithAPIToken,
   ensureAuthenticated,
 } from "./helpers";
 
@@ -109,12 +110,18 @@ test.describe("runtime-home onboarding contract", () => {
 
   test("waits for token bootstrap before navigating to the agent install handoff", async ({ page }) => {
     await ensureAuthenticated(page);
-    expect(E2E_CREDENTIALS.primaryApiToken, "the runtime fixture must retain its primary token").toBeTruthy();
+    const created = await apiRequest(page, "/api/security/tokens", {
+      method: "POST",
+      data: { name: "E2E browser bootstrap regression", scopes: ["*"] },
+    });
+    expect(created.ok()).toBeTruthy();
+    const { token, record } = await created.json() as { token: string; record: { id: string } };
+    expect(token).toBeTruthy();
+    expect(record.id).toBeTruthy();
     let tokenNavigationStarted = false;
     const onNavigation = () => {
       if (new URL(page.url()).searchParams.has("token")) tokenNavigationStarted = true;
     };
-    page.on("framenavigated", onNavigation);
     let releaseBootstrap!: () => void;
     const bootstrapHold = new Promise<void>(resolve => { releaseBootstrap = resolve; });
     let notifyBlocked!: () => void;
@@ -126,15 +133,16 @@ test.describe("runtime-home onboarding contract", () => {
       }
       await route.continue();
     };
-    await page.route("**/api/state/summary", holdState);
-    let authentication: Promise<void> | undefined;
+    let authentication: Promise<boolean> | undefined;
     try {
+      page.on("framenavigated", onNavigation);
+      await page.route("**/api/state/summary", holdState);
       let completed = false;
-      authentication = ensureAuthenticated(page).then(() => { completed = true; });
+      authentication = authenticateWithAPIToken(page, token).then(result => { completed = true; return result; });
       await Promise.race([blocked, authentication]);
       expect(completed, "token authentication must await protected browser bootstrap").toBe(false);
       releaseBootstrap();
-      await authentication;
+      expect(await authentication).toBe(true);
       await page.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
       await expect(page).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
       await expect(page.getByRole("dialog").getByRole("heading", {
@@ -145,6 +153,10 @@ test.describe("runtime-home onboarding contract", () => {
       await authentication?.catch(() => {});
       await page.unroute("**/api/state/summary", holdState);
       page.off("framenavigated", onNavigation);
+      const revoked = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(record.id)}`, {
+        method: "DELETE",
+      });
+      expect(revoked.ok(), "the test-owned bootstrap token must be revoked").toBeTruthy();
     }
   });
 

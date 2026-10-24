@@ -255,6 +255,19 @@ class E2EImageBundleTest(unittest.TestCase):
 
 
 class E2EImageWorkflowTest(unittest.TestCase):
+    def test_browser_fixture_budgets_are_explicit_bounded_and_dev_only(self):
+        source = IMAGES.COMPOSE.read_text().split("\n  pulse-test:\n", 1)[1]
+        source = source.split("\nvolumes:\n", 1)[0]
+        environment = dict(re.findall(r"(?m)^\s+- (PULSE_DEV[A-Z_]*)=([^\n]+)$", source))
+        self.assertEqual(environment["PULSE_DEV"], "true")
+        for name, production_limit in (("PULSE_DEV_GENERAL_API_RATE_LIMIT", 500),
+                                       ("PULSE_DEV_UPDATE_API_RATE_LIMIT", 60)):
+            with self.subTest(variable=name):
+                configured = int(environment[name])
+                self.assertGreater(configured, production_limit)
+                self.assertLessEqual(configured, 100000)
+                self.assertNotIn(name, (ROOT / "docker-compose.yml").read_text())
+
     def assert_fixture_admission(self, workflow):
         consumer = job_block(workflow, "e2e")
         image_admission = consumer.index("- name: Admit the source-bound test images")

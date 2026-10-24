@@ -294,18 +294,30 @@ test('primary-token fixtures keep their token auth and import no ambient cookie 
   assert.equal((await page.context().cookies()).length, 0);
 });
 
-function primaryBootstrapFixture({ rejected = false } = {}) {
+function primaryBootstrapFixture({ rejected = false, passwordLogin = false } = {}) {
+  const rememberedTokens = [];
   let currentURL = 'about:blank';
   let releaseBootstrap;
   const bootstrap = new Promise(resolve => { releaseBootstrap = resolve; });
   let notifyWaitStarted;
   const waitStarted = new Promise(resolve => { notifyWaitStarted = resolve; });
   let ready = false;
+  let submitted = false;
   const page = {
     goto: async target => { currentURL = new URL(target, 'http://127.0.0.1:7655').href; },
     url: () => currentURL,
-    waitForURL: async () => { currentURL = 'http://127.0.0.1:7655/infrastructure'; },
-    locator: () => ({ waitFor: () => new Promise(() => {}) }),
+    waitForURL: async () => {
+      if (passwordLogin && !submitted) return new Promise(() => {});
+      currentURL = 'http://127.0.0.1:7655/infrastructure';
+    },
+    locator: () => ({
+      waitFor: () => passwordLogin && !submitted ? Promise.resolve() : new Promise(() => {}),
+      first() { return this; },
+      isVisible: async () => false,
+    }),
+    fill: async () => {},
+    click: async () => { submitted = true; currentURL = 'http://127.0.0.1:7655/infrastructure'; },
+    waitForResponse: async () => response(200),
     waitForFunction: async predicate => {
       const evaluate = () => runInNewContext(`(${predicate.toString()})()`, {
         document: { querySelector: selector => {
@@ -321,20 +333,21 @@ function primaryBootstrapFixture({ rejected = false } = {}) {
       return { jsonValue: async () => evaluate(), dispose: async () => {} };
     },
   };
-  const authenticate = runInNewContext(stripTypeScriptTypes([
+  const { authenticate, authenticateExplicit, login } = runInNewContext(stripTypeScriptTypes([
     source.match(/const AUTHENTICATED_URL =[\s\S]*?;\n/)[0],
     fragment('async function waitForAuthenticatedAppShell(', 'export async function waitForPulseReady('),
-    fragment('async function authenticateWithPrimaryAPIToken(', 'export async function ensureAuthenticated('),
-    'authenticateWithPrimaryAPIToken;',
+    fragment('export async function login(', 'export async function authenticateWithAPIToken('),
+    fragment('export async function authenticateWithAPIToken(', 'export async function ensureAuthenticated('),
+    '({ authenticate: authenticateWithPrimaryAPIToken, authenticateExplicit: authenticateWithAPIToken, login });',
   ].join('\n')), {
     URL, encodeURIComponent,
     primaryAPITokenCandidates: () => [{ token: 'fixture-token' }],
     apiRequest: async () => response(200),
-    rememberPrimaryAPIToken: () => {},
+    rememberPrimaryAPIToken: token => { rememberedTokens.push(token); },
     waitForAppShell: async () => {},
   });
   return {
-    page, authenticate, waitStarted,
+    page, authenticate, authenticateExplicit, login, rememberedTokens, waitStarted,
     completeBootstrap: () => {
       ready = true;
       currentURL = 'http://127.0.0.1:7655/proxmox/overview';
@@ -362,6 +375,33 @@ test('a valid token probe cannot hide a rejected browser bootstrap', async () =>
   f.completeBootstrap();
   await assert.rejects(authentication, /Session was rejected by browser bootstrap/);
 });
+
+test('a test-owned token waits for bootstrap without replacing the primary fixture credential', async () => {
+  const f = primaryBootstrapFixture();
+  let completed = false;
+  const authentication = f.authenticateExplicit(f.page, 'test-owned-token').then(value => {
+    completed = true;
+    return value;
+  });
+  await Promise.race([f.waitStarted, authentication]);
+  assert.equal(completed, false);
+  f.completeBootstrap();
+  assert.equal(await authentication, true);
+  assert.deepEqual(f.rememberedTokens, []);
+});
+
+for (const passwordLogin of [false, true]) {
+  test(`${passwordLogin ? 'a submitted password' : 'an existing cookie'} login waits for mounted browser bootstrap`, async () => {
+    const f = primaryBootstrapFixture({ passwordLogin });
+    let completed = false;
+    const authentication = f.login(f.page, { username: 'fixture', password: 'fixture' }).then(() => { completed = true; });
+    await Promise.race([f.waitStarted, authentication]);
+    assert.equal(completed, false, 'a workspace URL alone must not finish login');
+    f.completeBootstrap();
+    await authentication;
+    assert.equal(completed, true);
+  });
+}
 
 test('explicit session fixtures still get independent password sessions', async t => {
   const f = fixture(t, { tokenAuth: true });

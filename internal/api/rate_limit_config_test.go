@@ -33,6 +33,36 @@ func TestGeneralAPIRateLimitDevelopmentOverride(t *testing.T) {
 	}
 }
 
+func TestUpdateAPIRateLimitDevelopmentOverride(t *testing.T) {
+	tests := []struct {
+		name, devMode, configured string
+		want                      int
+	}{
+		{name: "default", want: 60},
+		{name: "production ignores override", configured: "600", want: 60},
+		{name: "development requires explicit update override", devMode: "true", want: 60},
+		{name: "development accepts bounded override", devMode: "true", configured: "600", want: 600},
+		{name: "development rejects lower limit", devMode: "true", configured: "59", want: 60},
+		{name: "development rejects excessive limit", devMode: "true", configured: "100001", want: 60},
+		{name: "development rejects malformed limit", devMode: "true", configured: "many", want: 60},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("PULSE_DEV", tt.devMode)
+			t.Setenv("PULSE_DEV_GENERAL_API_RATE_LIMIT", "5000")
+			t.Setenv("PULSE_DEV_UPDATE_API_RATE_LIMIT", tt.configured)
+			cfg := newEndpointRateLimitConfig()
+			t.Cleanup(cfg.Stop)
+			if cfg.UpdateEndpoints.limit != tt.want {
+				t.Fatalf("update budget = %d, want %d", cfg.UpdateEndpoints.limit, tt.want)
+			}
+			if cfg.AuthEndpoints.limit != 10 || cfg.ConfigEndpoints.limit != 30 {
+				t.Fatal("update override changed an independent endpoint budget")
+			}
+		})
+	}
+}
+
 func TestGetRateLimiterForEndpoint(t *testing.T) {
 	isolateRateLimitFixture(t)
 	// Ensure rate limiters are initialized

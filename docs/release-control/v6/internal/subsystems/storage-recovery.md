@@ -7297,3 +7297,14 @@ reset. `TestContractSSOAmbiguousSavePreservesDetail` and the SSO/RBAC JSON
 admission tests preserve persisted settings, exact roles and token usability.
 No database schema, stored history, backup/thaw operation or native recovery
 route changes; parser admission does not establish those operational outcomes.
+
+### Browser fixture update budgets
+
+The Core E2E stack explicitly opts into a finite development update API budget
+so isolated browser sessions at one bridge IP can read the real update plan.
+`internal/api/rate_limit_config.go` keeps production at 60 update requests per
+minute and requires exact development mode plus a valid bounded override.
+`rate_limit_journey_budget_test.go` verifies exhaustion and unchanged login
+admission. This changes no storage history, backup, restore, migration or
+recovery contract. Request admission does not qualify stored-data preservation
+or a successful upgrade/recovery operation.

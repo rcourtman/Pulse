@@ -137,7 +137,7 @@ async function firstVisibleGrowthRow(
 
 // The retired /storage page paired the Growth column with a 1h/7d range
 // switch; on /proxmox/storage the column is fixed to a 24h window (the header
-// is a sort control, not a range control). The proof: the rendered Growth
+// labels that fixed window). The proof: the rendered Growth
 // (24h) label for a pool matches the delta derived from the same 24h
 // used-capacity history the /api/storage-charts endpoint serves.
 test.describe.serial('Storage growth column', () => {
@@ -158,9 +158,9 @@ test.describe.serial('Storage growth column', () => {
     await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/proxmox\/storage/);
     await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 60_000 });
-    await expect(
-      page.getByRole('button', { name: 'Sort Growth (24h) column' }).first(),
-    ).toBeVisible();
+    const growthHeader = page.locator('thead [data-storage-column="growth"]');
+    await expect(growthHeader).toBeVisible();
+    await expect(growthHeader).toHaveAttribute('aria-label', 'Growth (24h)');
     await expect(page.locator('tr[data-summary-series-id]').first()).toBeVisible({
       timeout: 30_000,
     });

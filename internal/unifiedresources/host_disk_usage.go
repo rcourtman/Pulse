@@ -5,10 +5,19 @@ import "github.com/rcourtman/pulse-go-rewrite/internal/models"
 // HostDiskUsagePercent uses the same first-filesystem admission as the
 // canonical host metric. Missing or unavailable inventory is not measured zero.
 func HostDiskUsagePercent(disks []models.Disk) (float64, bool) {
-	if len(disks) == 0 || !hasObservedDiskUsage(disks[0]) {
+	if len(disks) == 0 {
 		return 0, false
 	}
-	return disks[0].Usage, true
+	return DiskUsagePercent(disks[0])
+}
+
+// DiskUsagePercent applies canonical observation admission to one filesystem.
+// A listed filesystem can still have an unavailable or contradictory reading.
+func DiskUsagePercent(disk models.Disk) (float64, bool) {
+	if !hasObservedDiskUsage(disk) {
+		return 0, false
+	}
+	return disk.Usage, true
 }
 
 // DiskUsagePercent preserves canonical metric presence, including provider

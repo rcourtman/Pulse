@@ -1297,6 +1297,18 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_endpoint_budget_lookup_uses_middleware_proofs(self) -> None:
+        result = lookup_paths(["internal/api/rate_limit_config.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        matches = result["files"][0]["matches"]
+        self.assertEqual([entry["subsystem"] for entry in matches], ["api-contracts"])
+        requirement = matches[0]["verification_requirement"]
+        self.assertEqual(requirement["id"], "endpoint-rate-budgets")
+        self.assertEqual(requirement["exact_files"], [
+            "internal/api/rate_limit_config_test.go",
+            "internal/api/rate_limit_journey_budget_test.go",
+        ])
+
     def test_lookup_paths_accepts_docker_action_api_proofs(self) -> None:
         result = lookup_paths(["internal/api/docker_container_action_executor.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

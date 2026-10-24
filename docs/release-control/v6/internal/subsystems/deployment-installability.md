@@ -3017,13 +3017,20 @@ artifact-selection behaviour.
    API as a fallback only when the UI wizard fails to complete cleanly under the
    managed hot-dev runtime.
    A successful token probe and a protected workspace URL do not establish
-   completed browser bootstrap. Token and cookie reuse must wait for the mounted
+   completed browser bootstrap. Token, cookie reuse and password login wait for the mounted
    authenticated app shell before returning control to a journey, so a pending
    workspace redirect cannot overwrite its next deep link. Browser rejection
    remains an authentication failure rather than a reason to accept the URL or
    retry login. `tests/integration/scripts/fixture-auth.test.mjs` exercises the
    actual token helper with delayed and rejected bootstrap; the runtime-home
    onboarding browser contract also holds a real protected-state request.
+   That regression creates and revokes its own token through the admitted
+   session and shared browser-token helper. It must work with cookie-only and
+   primary-token fixtures without replacing their remembered credential.
+   The Core E2E Docker stack explicitly sets bounded development-only general
+   and update request budgets for isolated browser contexts sharing one bridge
+   IP. Production limits and authentication limits remain enforced. The API
+   contracts subsystem owns validation and exhaustion semantics.
    Settings browser audits scroll the actual application content owner to its
    observed bottom. Traversal must scale with the populated estate rather than
    stop after a fixed number of wheel steps. The browser geometry regression

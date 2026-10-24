@@ -52,7 +52,8 @@ function declarationLines(body) {
   for (const token of lexer(String(body || ""), { gfm: true })) {
     if (token.type === "heading") {
       const text = inlineProjection(token.tokens).trim();
-      lines.push({ text, metadata: text, delimiter: false, declaration: true, heading: text });
+      lines.push({ text, metadata: text, delimiter: false, declaration: true,
+        heading: text, headingDepth: token.depth });
     } else if (token.type === "paragraph") {
       append(inlineProjection(token.tokens), true, inlineProjection(token.tokens, true));
     } else if (token.type === "code") {
@@ -100,7 +101,8 @@ function extractSectionValue(body, heading, followingHeadings = []) {
     ? new RegExp(`^(?:${followingHeadings.map(escapeRegExp).join("|")})$`, "i") : null;
   let end = start + 1;
   while (end < lines.length && !(lines[end].heading !== null &&
-      (!boundary || boundary.test(lines[end].heading)))) {
+      (!boundary || (lines[end].headingDepth <= lines[start].headingDepth &&
+        boundary.test(lines[end].heading))))) {
     end += 1;
   }
   // An empty declared field differs from a legacy report with no field.
@@ -108,8 +110,28 @@ function extractSectionValue(body, heading, followingHeadings = []) {
 }
 
 function additionalActionableTopicsValue(body) {
+  // Edited reports can move this field beside any other form field. Context
+  // from those fields must not invent a topic or reopen a completed review.
+  // Deeper subheadings still belong to the topic, even with a familiar name.
   return extractSectionValue(body, "Additional actionable topics", [
+    "Describe the bug",
+    "Steps or original sequence",
+    "Expected behavior",
+    "Feedback type",
     "Pulse version",
+    "Last known working Pulse version",
+    "Agent version",
+    "Image tag or digest",
+    "Running Pulse container image tag or digest",
+    "Install path",
+    "Installation type",
+    "OS / environment",
+    "Installer or helper source",
+    "Upgrade attempt and recovery",
+    "License tier",
+    "What happened?",
+    "Steps or original sequence / usage context",
+    "What did you expect instead?",
     "Additional context",
     "Logs, screenshots, or diagnostics",
     "Confirmations",

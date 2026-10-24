@@ -10337,3 +10337,14 @@ requests and existing access, organization and Community SSO gates remain;
 `TestContractSSOAmbiguousSavePreservesDetail` and the SSO/RBAC JSON admission
 tests establish configuration/account preservation, not installed agent or
 guest recovery.
+
+### Browser fixture update budgets
+
+The development-only update API budget in `internal/api/rate_limit_config.go`
+admits aggregate update-banner traffic from isolated browser contexts sharing
+one test-stack IP. Production keeps 60 update requests per minute, while the
+test stack explicitly requests 600. The independent ten-attempt login budget,
+agent report admission, enrollment, credential revocation and installed updater
+contracts remain unchanged. The middleware exhaustion controls in
+`rate_limit_journey_budget_test.go` prove bounded HTTP admission, not an agent
+update, restart or recovery outcome.

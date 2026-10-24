@@ -3315,6 +3315,20 @@
             ]
           },
           {
+            "id": "endpoint-rate-budgets",
+            "label": "endpoint middleware rate budget and isolation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/rate_limit_config.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/rate_limit_config_test.go",
+              "internal/api/rate_limit_journey_budget_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [

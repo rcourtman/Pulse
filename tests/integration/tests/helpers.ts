@@ -931,6 +931,7 @@ export async function loginAsAdmin(page: Page) {
 
   // Wait for redirect to the authenticated application shell.
   await page.waitForURL(/\/(infrastructure|nodes|proxmox)/);
+  await waitForAuthenticatedAppShell(page);
 }
 
 export async function login(page: Page, credentials = E2E_CREDENTIALS) {
@@ -951,6 +952,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
   ]);
 
   if (state === "authenticated") {
+    await waitForAuthenticatedAppShell(page);
     return;
   }
 
@@ -987,6 +989,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
       if (AUTHENTICATED_URL.test(page.url())) {
+        await waitForAuthenticatedAppShell(page);
         return "authenticated";
       }
       const loginErrorVisible = await loginErrorText
@@ -1049,6 +1052,7 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
       await page.waitForTimeout(backoffMs);
       const retryState = await prepareFreshLoginAttempt();
       if (retryState === "authenticated") {
+        await waitForAuthenticatedAppShell(page);
         return;
       }
       if (retryState !== "login") {
@@ -1060,6 +1064,43 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     break;
   }
   throw new Error(`Login failed: ${lastOutcome}`);
+}
+
+// Both configured primary-token fixtures and tests with their own short-lived
+// token share this browser bootstrap boundary. Explicit tokens do not replace
+// the fixture's remembered primary credential.
+export async function authenticateWithAPIToken(page: Page, token: string): Promise<boolean> {
+  await page.goto(`/?token=${encodeURIComponent(token)}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await waitForAppShell(page);
+
+  const state = await Promise.race([
+    page
+      .waitForURL(AUTHENTICATED_URL, { timeout: 10_000 })
+      .then(() => "authenticated")
+      .catch(() => undefined),
+    page
+      .locator('input[name="username"]')
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => "login")
+      .catch(() => undefined),
+  ]);
+
+  if (state === "authenticated") {
+    // The workspace URL can appear before protected bootstrap has mounted
+    // the application. Its pending default-workspace redirect must finish
+    // before the caller navigates to a specific onboarding route.
+    await waitForAuthenticatedAppShell(page);
+    return true;
+  }
+
+  await page
+    .evaluate(() => {
+      window.sessionStorage.removeItem("pulse_auth");
+    })
+    .catch(() => {});
+  return false;
 }
 
 async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
@@ -1079,40 +1120,9 @@ async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
     }
 
     rememberPrimaryAPIToken(candidate.token);
-    await page.goto(`/?token=${encodeURIComponent(candidate.token)}`, {
-      waitUntil: "domcontentloaded",
-    });
-    await waitForAppShell(page);
-
-    const state = await Promise.race([
-      page
-        .waitForURL(AUTHENTICATED_URL, { timeout: 10_000 })
-        .then(() => "authenticated")
-        .catch(() => undefined),
-      page
-        .locator('input[name="username"]')
-        .waitFor({ state: "visible", timeout: 10_000 })
-        .then(() => "login")
-        .catch(() => undefined),
-    ]);
-
-    if (state === "authenticated") {
-      // The workspace URL can appear before protected bootstrap has mounted
-      // the application. Its pending default-workspace redirect must finish
-      // before the caller navigates to a specific onboarding route.
-      await waitForAuthenticatedAppShell(page);
-      return true;
-    }
-
-    // The probe above already proved this token is valid. A transient app
-    // navigation or websocket delay must not permanently evict it and force
-    // later fixtures through the rate-limited password login path. Only a
-    // definitive 401/403 from the token probe rejects a candidate.
-    await page
-      .evaluate(() => {
-        window.sessionStorage.removeItem("pulse_auth");
-      })
-      .catch(() => {});
+    if (await authenticateWithAPIToken(page, candidate.token)) return true;
+    // A transient navigation or websocket delay cannot evict an admitted
+    // credential. Only a definitive 401/403 from its probe rejects it.
   }
 
   return false;
