@@ -1,6 +1,9 @@
 import type { Resource } from '@/types/resource';
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
-import { isPulseAgentPlatformResource } from '@/utils/agentResources';
+import {
+  getAgentFirstReportStatusIndicator,
+  isPulseAgentPlatformResource,
+} from '@/utils/agentResources';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
 export interface StandalonePageModel {
@@ -28,6 +31,8 @@ export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
 const AGENT_REPORT_STALE_AFTER_MS = 5 * 60 * 1000;
 
 export const getStandaloneResourceStatusIndicator = (resource: Resource, nowMs = Date.now()) => {
+  const waiting = getAgentFirstReportStatusIndicator(resource);
+  if (waiting) return waiting;
   const indicator = getSimpleStatusIndicator(resource.status);
   if (indicator.variant === 'danger') return indicator;
   const availability = getAvailabilityProbePresentation(resource, new Date(nowMs));

@@ -80,6 +80,22 @@ afterEach(() => {
 
 describe('ResourceDetailDrawer machine inventory', () => {
   const gib = 1024 ** 3;
+  it('keeps startup waiting informational and withholds the current history fallback', () => {
+    const [machine, setMachine] = createStore(
+      resource({
+        status: 'unknown',
+        sourceStatus: { agent: { status: 'pending' } },
+        cpu: { current: 12 },
+      }),
+    );
+    render(() => <ResourceDetailDrawer resource={machine} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Waiting for first report');
+    expect(screen.queryByTestId('resource-drawer-exceptions')).toBeNull();
+    expect(screen.getByTestId('machine-history')).not.toHaveAttribute('data-cpu');
+    setMachine({ status: 'online', sourceStatus: { agent: { status: 'online' } } });
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByTestId('machine-history')).toHaveAttribute('data-cpu', '12');
+  });
   it('states one facts line and keeps the inventory under a closed Details', () => {
     render(() => (
       <ResourceDetailDrawer

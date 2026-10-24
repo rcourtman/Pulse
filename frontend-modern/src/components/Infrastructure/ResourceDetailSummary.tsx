@@ -17,6 +17,7 @@ import {
 import { TagBadges } from '@/components/shared/TagBadges';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
+import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
 import { getDockerImageRegistryLink } from '@/features/docker/dockerImageReference';
 import { getDockerContainerUpdateAction } from '@/features/docker/dockerContainerUpdateAction';
 import { getDockerImageOperationalPresentation } from '@/features/docker/dockerImagePresentation';
@@ -419,8 +420,10 @@ const dockerVolumeSection = (resource: Resource, now: number): DetailSection | n
 // A resource that is not reporting must say so in front, not only in Details:
 // offline is danger-toned (with when it was last seen), and a state Pulse
 // cannot vouch for is warning-toned, so the drawer lifts either.
-const observedStateRow = (status: string | undefined, lastSeen: string | undefined) => {
-  const state = (status || 'unknown').trim().toLowerCase();
+const observedStateRow = (resource: Resource, lastSeen: string | undefined) => {
+  const waiting = getAgentFirstReportStatusIndicator(resource);
+  if (waiting) return makeDetailRow('Observed state', waiting.label);
+  const state = (resource.status || 'unknown').trim().toLowerCase();
   const label = state.charAt(0).toUpperCase() + state.slice(1);
   const offline = state === 'offline';
   return makeDetailRow(
@@ -544,7 +547,7 @@ export const useResourceSummarySections = (
                     'Observed state',
                     getDockerContainerRunStatePresentation(props.resource),
                   )
-                : observedStateRow(props.resource.status, props.drawer.lastSeen()),
+                : observedStateRow(props.resource, props.drawer.lastSeen()),
               docker
                 ? dockerRuntimeRow(
                     'Health check',

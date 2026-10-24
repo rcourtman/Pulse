@@ -613,7 +613,16 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 	versionDrift := fleethealth.DeriveAgentVersionDrift(currentAgentVersion, expectedAgentVersion)
 	updateAvailable := versionDrift == fleethealth.AgentVersionBehind
 	agentIdentity := connectionAgentIdentityForHost(host)
-	switch fleethealth.DeriveAgentLiveness(host.LastSeen, now, host.IntervalSeconds) {
+	liveness := fleethealth.DeriveAgentLiveness(host.LastSeen, now, host.IntervalSeconds)
+	if host.Status == "pending" {
+		liveness = fleethealth.AgentLivenessPending
+		reason = "Waiting for first report after server restart"
+	} else if host.Status == "offline" && lastSeen != nil {
+		// An expired accepted-report lease is already an offline verdict. The
+		// fleet's longer fallback heartbeat cutoff cannot turn it active again.
+		liveness = fleethealth.AgentLivenessStale
+	}
+	switch liveness {
 	case fleethealth.AgentLivenessPending:
 		state = ConnectionStatePending
 	case fleethealth.AgentLivenessStale:

@@ -6,6 +6,16 @@ import {
 } from '@/utils/discoveryTarget';
 import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
+import type { StatusIndicator } from '@/utils/status';
+
+export const AGENT_WAITING_FOR_FIRST_REPORT_LABEL = 'Waiting for first report';
+
+export const getAgentFirstReportStatusIndicator = (
+  resource: Pick<Resource, 'status' | 'sourceStatus'>,
+): StatusIndicator | undefined =>
+  resource.sourceStatus?.agent?.status === 'pending' && resource.status === 'unknown'
+    ? { variant: 'info', label: AGENT_WAITING_FOR_FIRST_REPORT_LABEL }
+    : undefined;
 
 const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>(['agent', 'pbs', 'pmg']);
 const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([

@@ -35,6 +35,92 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+func TestHostAgentStartupWaitsWithinAcceptedReportLease(t *testing.T) {
+	dir := t.TempDir()
+	original := issue1654Monitor()
+	original.hostContinuityStore = config.NewHostContinuityStore(dir, nil)
+	report := issue1654Report(time.Now().UTC())
+	report.SequenceID = agentshost.FormatReportSequenceID("startup-report", 1)
+	host, err := original.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := issue1654Monitor()
+	restarted.hostContinuityStore = config.NewHostContinuityStore(dir, nil)
+	if err := restarted.hostContinuityStore.Upsert(config.HostContinuityEntry{
+		HostID: "removed-agent", Hostname: "removed-host", LastSeen: host.LastSeen,
+		IntervalSeconds: 30, RemovedAt: host.LastSeen,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	base := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	restarted.SetResourceStore(base)
+	if rejected, err := restarted.ApplyHostReport(report, nil); err != nil || rejected.Status != "pending" {
+		t.Fatalf("duplicate startup report ended the first-report wait: %+v, %v", rejected, err)
+	}
+	lease := hostAgentHealthWindow(host.IntervalSeconds)
+	for _, tc := range []struct {
+		name string
+		age  time.Duration
+		want string
+	}{
+		{"restart", time.Second, "pending"},
+		{"deadline", lease, "pending"},
+		{"no-report-before-deadline", lease + time.Nanosecond, "offline"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := host.LastSeen.Add(tc.age)
+			read := restarted.readStateWithStandaloneHostContinuityAt(base, now)
+			views := read.Hosts()
+			if len(views) != 1 {
+				t.Fatalf("saved hosts = %d, want 1", len(views))
+			}
+			status, seen := hostAgentLivenessFromReadStateView(views[0], now)
+			if status != tc.want || !seen.Equal(host.LastSeen) || views[0].AgentID() != host.ID {
+				t.Fatalf("restored status/receipt/identity = %s %s %s", status, seen, views[0].AgentID())
+			}
+			if tc.want == "pending" {
+				sighting, ok := views[0].SourceStatus(unifiedresources.SourceAgent)
+				if !ok || sighting.Status != "pending" || views[0].Status() != unifiedresources.StatusUnknown {
+					t.Fatalf("saved enrollment became a current observation: %+v", sighting)
+				}
+			}
+			if len(restarted.GetLiveHostsSnapshot()) != 0 || len(base.Hosts()) != 0 {
+				t.Fatal("read overlay mutated live state")
+			}
+			resources := read.(*unifiedresources.MonitorAdapter).GetAll()
+			if resources[0].Metrics != nil {
+				t.Fatal("saved enrollment manufactured telemetry before its first report")
+			}
+			frontend := models.ConvertResourceToFrontend(monitorResourceToConvertInput(resources[0]))
+			var delivery map[string]unifiedresources.SourceStatus
+			if err := json.Unmarshal(frontend.SourceStatus, &delivery); err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "pending" && (delivery["agent"].Status != "pending" || frontend.Status != "unknown") {
+				t.Fatalf("realtime projection lost startup delivery: %+v", delivery)
+			}
+			if frontend.CPU != nil || frontend.Memory != nil || frontend.Disk != nil || frontend.LastSeen != host.LastSeen.UnixMilli() {
+				t.Fatal("realtime projection changed the accepted receipt or supplied metrics")
+			}
+		})
+	}
+	// A real accepted report ends the wait and supplies the live observation.
+	report.Timestamp = report.Timestamp.Add(time.Second)
+	report.SequenceID = agentshost.FormatReportSequenceID("startup-report", 2)
+	if _, err := restarted.ApplyHostReport(report, nil); err != nil {
+		t.Fatal(err)
+	}
+	views := restarted.readStateWithStandaloneHostContinuity(restarted.GetUnifiedReadStateOrSnapshot()).Hosts()
+	if len(views) != 1 || views[0].Status() != unifiedresources.StatusOnline {
+		t.Fatal("first accepted report did not bring the saved agent online")
+	}
+	if sighting, ok := views[0].SourceStatus(unifiedresources.SourceAgent); !ok || sighting.Status != "online" {
+		t.Fatalf("first accepted report retained pending delivery: %+v", sighting)
+	}
+}
+
 func TestGuestPollOwnershipRuntimeDoesNotWithdrawIndependentAgentEvidence(t *testing.T) {
 	c := &guestPollOwnershipClient{cpu: .1}
 	m := guestPollOwnershipMonitor(t, c)

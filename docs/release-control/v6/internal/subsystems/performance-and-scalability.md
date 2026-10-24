@@ -15,6 +15,14 @@
 
 ## Purpose
 
+### History reads follow reporting transitions
+
+The shared drawer history query refreshes once when source reporting authority
+changes, in addition to its existing bounded polling. Ordinary snapshot object
+replacement with unchanged target, range, access and reporting state does not
+start a read. Stored series keep their shared resource/range cache; live-only
+replies cannot remain current while their canonical source is unreported.
+
 ### Workloads aggregate disk readings keep their units and presence (14 October 2026)
 
 Workload aggregate metrics are percentage points, including values from zero
@@ -3207,6 +3215,12 @@ the agent resumes, without a reload. A stale Proxmox source
 can still lose the aggregate to a live agent while its own filesystem rows
 remain; such a guest stays on the Proxmox rule. The agent's OS, addresses and
 physical disk health carry no stale cue yet.
+Realtime resource rows carry canonical source delivery status so an open
+browser observes a server restart without a REST enrichment race. An explicit
+pending agent delivery with unknown resource status withdraws that row's
+previous current metrics and agent telemetry, while retaining identity and
+the existing history target. The same full-snapshot and delta merge enforce
+this boundary; unrelated rows retain their usual incremental update path.
 Guest, node, and Docker-host drawer headers follow the same frontend-primitives dependency
 boundary for collapse: the owning table (Workloads for guests, the Proxmox
 nodes table for nodes, the Docker hosts table for Docker hosts) owns which

@@ -67,6 +67,13 @@ func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {
 func (m *Monitor) readStateWithStandaloneHostContinuity(
 	readState unifiedresources.ReadState,
 ) unifiedresources.ReadState {
+	return m.readStateWithStandaloneHostContinuityAt(readState, time.Now().UTC())
+}
+
+func (m *Monitor) readStateWithStandaloneHostContinuityAt(
+	readState unifiedresources.ReadState,
+	now time.Time,
+) unifiedresources.ReadState {
 	if m == nil || readState == nil {
 		return readState
 	}
@@ -114,7 +121,20 @@ func (m *Monitor) readStateWithStandaloneHostContinuity(
 		// it, but never present persisted telemetry as a current online sighting.
 		host := hostFromContinuityEntry(entry)
 		host.Status = "offline"
-		records = append(records, unifiedresources.HostIngestRecord(host))
+		waiting := hostAgentReportCurrent(entry.LastSeen, entry.IntervalSeconds, now)
+		if waiting {
+			host.Status = "pending"
+		}
+		record := unifiedresources.HostIngestRecord(host)
+		record.Resource.Metrics = nil
+		if waiting {
+			// The saved receipt bounds the wait, but is not a delivery in this
+			// monitor generation. Keep its timestamp without claiming freshness.
+			record.Resource.SourceStatus = map[unifiedresources.DataSource]unifiedresources.SourceStatus{
+				unifiedresources.SourceAgent: {Status: "pending", LastSeen: entry.LastSeen},
+			}
+		}
+		records = append(records, record)
 	}
 	if len(records) == 0 {
 		return readState

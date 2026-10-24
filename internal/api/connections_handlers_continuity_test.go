@@ -24,7 +24,7 @@ func TestConnectionsHandleListIncludesContinuityBackedHostAgents(t *testing.T) {
 	}
 	t.Cleanup(seedMonitor.Stop)
 
-	_, err = seedMonitor.ApplyHostReport(agentshost.Report{
+	seedHost, err := seedMonitor.ApplyHostReport(agentshost.Report{
 		Agent: agentshost.AgentInfo{
 			ID:              "agent-1",
 			Version:         "6.0.0-rc.1",
@@ -79,14 +79,14 @@ func TestConnectionsHandleListIncludesContinuityBackedHostAgents(t *testing.T) {
 	if conn.Name != "host-1.local" || conn.Address != "host-1.local" {
 		t.Fatalf("unexpected continuity-backed connection identity: name=%q address=%q", conn.Name, conn.Address)
 	}
-	if conn.State != ConnectionStateActive {
-		t.Fatalf("connection state = %q, want %q", conn.State, ConnectionStateActive)
+	if conn.State != ConnectionStatePending || conn.StateReason != "Waiting for first report after server restart" {
+		t.Fatalf("restarted connection = %q (%q), want pending first report", conn.State, conn.StateReason)
 	}
 	if conn.Source != ConnectionSourceAgent {
 		t.Fatalf("connection source = %q, want %q", conn.Source, ConnectionSourceAgent)
 	}
-	if conn.LastSeen == nil || conn.LastSeen.IsZero() {
-		t.Fatalf("expected continuity-backed connection to carry lastSeen, got %#v", conn.LastSeen)
+	if conn.LastSeen == nil || !conn.LastSeen.Equal(seedHost.LastSeen) {
+		t.Fatalf("expected continuity-backed connection to preserve lastSeen %s, got %#v", seedHost.LastSeen, conn.LastSeen)
 	}
 }
 

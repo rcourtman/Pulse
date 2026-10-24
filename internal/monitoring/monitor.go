@@ -3901,6 +3901,9 @@ func hostFromReadStateView(view *unifiedresources.HostView) models.Host {
 func hostAgentLivenessFromReadStateView(view *unifiedresources.HostView, now time.Time) (string, time.Time) {
 	status, lastSeen := string(view.Status()), view.LastSeen()
 	agentSighting, ok := view.SourceStatus(unifiedresources.SourceAgent)
+	if ok && agentSighting.Status == "pending" {
+		return "pending", agentSighting.LastSeen
+	}
 	if !ok || agentSighting.LastSeen.IsZero() {
 		return status, lastSeen
 	}
@@ -7225,6 +7228,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		PlatformType:          monitorPlatformType(&resource, resourceType),
 		SourceType:            monitorSourceType(resource.Sources),
 		Sources:               monitorSourceKeys(resource.Sources),
+		SourceStatus:          monitorRawJSON(resource.SourceStatus),
 		ParentID:              monitorStringValue(resource.ParentID),
 		ParentName:            resource.ParentName,
 		ChildCount:            resource.ChildCount,

@@ -14,6 +14,38 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
+func TestPendingHostContinuityPreservesUnknownDeliveryAcrossSerializedReads(t *testing.T) {
+	seen := time.Now().Add(-time.Minute).UTC()
+	record := HostIngestRecord(models.Host{ID: "waiting-agent", Hostname: "waiting-host", Status: "pending", LastSeen: seen})
+	record.Resource.SourceStatus = map[DataSource]SourceStatus{SourceAgent: {Status: "pending", LastSeen: seen}}
+	rr := NewRegistry(nil)
+	id := rr.ingestRecord(SourceAgent, record.SourceID, record.Resource, record.Identity, true)
+	rr.MarkStale(time.Now(), map[DataSource]time.Duration{SourceAgent: time.Second})
+	encoded, err := json.Marshal(rr.List())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resources []Resource
+	if err := json.Unmarshal(encoded, &resources); err != nil {
+		t.Fatal(err)
+	}
+	copy := NewRegistry(nil)
+	copy.IngestResourcesWithStaleThresholds(resources, map[DataSource]time.Duration{SourceAgent: time.Second})
+	got, ok := copy.Get(id)
+	if !ok || got.Status != StatusUnknown || got.SourceStatus[SourceAgent].Status != "pending" || !got.LastSeen.Equal(seen) || got.Agent.Stale {
+		t.Fatalf("waiting enrollment acquired a fresh or offline verdict: %+v", got)
+	}
+	// Normal ingest must replace the continuity marker with a real delivery.
+	rr.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{{ID: "waiting-agent", Hostname: "waiting-host", Status: "online", LastSeen: time.Now().UTC()}}})
+	got, ok = rr.Get(id)
+	if !ok || got.Status != StatusOnline || got.SourceStatus[SourceAgent].Status != "online" {
+		t.Fatalf("accepted live sighting did not replace pending continuity: %+v", got)
+	}
+	if replaced := rr.ingestRecord(SourceAgent, record.SourceID, record.Resource, record.Identity, true); replaced != "" {
+		t.Fatal("pending continuity replaced an existing live observation")
+	}
+}
+
 // The snapshot entry point shares the registry's journal ownership, without
 // mutating either the snapshot or the alert's recorded metadata.
 func TestProxmoxDiskAlertSnapshotOwnershipMatchesRegistry(t *testing.T) {

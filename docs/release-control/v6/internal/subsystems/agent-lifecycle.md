@@ -9895,7 +9895,14 @@ node that PVE polling keeps fresh. The agent connection on the Connections
 list and the update-readiness agent-continuity check therefore age a silent
 agent from its last report instead of from the PVE poll, and mark it stale at
 their own heartbeat cutoff (`fleethealth.AgentStaleThreshold`, which is
-separate from the monitoring reporting lease). Agent registration, enrolment,
+separate from the monitoring reporting lease). A saved enrollment awaiting its
+first report in the current monitor generation retains pending delivery and
+its historical receipt under the monitoring-owned lease. Connections must not
+label that enrollment active, or turn an explicitly expired lease active using
+the longer heartbeat fallback. Crossing that deadline also cannot create a
+live summary-chart sample from absent telemetry: pending and offline
+enrollments retain stored history without supplying current fallback values.
+Agent registration, enrolment,
 install, update, removal and report identity are unchanged.
 
 ### Mock-mode read views fold linked fixture agents

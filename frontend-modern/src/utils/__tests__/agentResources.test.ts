@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  getAgentFirstReportStatusIndicator,
   getActionableAgentIdFromResource,
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
@@ -31,6 +32,23 @@ const makeResource = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('agentResources', () => {
+  it('labels an unobserved startup agent without overriding a provider verdict', () => {
+    const pending = { agent: { status: 'pending', lastSeen: '2026-10-24T12:00:00Z' } };
+    expect(
+      getAgentFirstReportStatusIndicator(
+        makeResource({ status: 'unknown', sourceStatus: pending }),
+      ),
+    ).toEqual({
+      variant: 'info',
+      label: 'Waiting for first report',
+    });
+    for (const status of ['online', 'offline', 'warning'] as const) {
+      expect(
+        getAgentFirstReportStatusIndicator(makeResource({ status, sourceStatus: pending })),
+      ).toBeUndefined();
+    }
+    expect(getAgentFirstReportStatusIndicator(makeResource({ status: 'unknown' }))).toBeUndefined();
+  });
   it('resolves explicit agent ids from canonical and platform facets', () => {
     expect(
       getExplicitAgentIdFromResource(

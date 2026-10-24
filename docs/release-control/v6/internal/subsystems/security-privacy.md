@@ -18,6 +18,13 @@
 
 ## Purpose
 
+### Agent delivery is separate from authenticated transport
+
+A saved agent enrollment or an authenticated rejected report does not establish
+accepted current telemetry after a server restart. Pending delivery stays
+informational, with its historical receipt, and cannot establish a live metric
+reading or imply that credentials or command-channel policy were verified.
+
 ### Restricted outbound connections keep approved destinations pinned
 
 `pkg/securityutil/outbound_http.go` owns restricted HTTP destination validation,

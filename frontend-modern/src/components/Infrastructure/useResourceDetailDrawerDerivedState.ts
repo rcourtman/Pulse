@@ -6,6 +6,7 @@ import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAgentStatusIndicator } from '@/utils/status';
+import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
 import { mapDockerContainerStatus } from '@/features/docker/dockerPageModel';
 import {
   dedupeResourceBadges,
@@ -111,7 +112,8 @@ export const useResourceDetailDrawerDerivedState = (
   const statusIndicator = createMemo(() =>
     resource().type === 'app-container'
       ? mapDockerContainerStatus(resource())
-      : getAgentStatusIndicator({ status: resource().status }),
+      : (getAgentFirstReportStatusIndicator(resource()) ??
+        getAgentStatusIndicator({ status: resource().status })),
   );
   const healthIssue = createMemo(() => getResourceHealthIssuePresentation(resource()));
   // An open drawer keeps its rows while a resource's timestamps stay the same,

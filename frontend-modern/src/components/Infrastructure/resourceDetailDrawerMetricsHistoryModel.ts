@@ -21,6 +21,7 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
+import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -260,6 +261,7 @@ export const getResourceMetricsHistoryDeferredMetrics = (
 export const getResourceMetricsHistoryCurrentMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
+  if (getAgentFirstReportStatusIndicator(resource)) return {};
   const disk = guestDiskReading(resource);
   const diskPercent =
     resource.disk && (!disk || disk.state === 'current')

@@ -1,6 +1,7 @@
 import { createMemo } from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
+import { AGENT_WAITING_FOR_FIRST_REPORT_LABEL } from '@/utils/agentResources';
 import {
   ConnectionsAPI,
   type Connection,
@@ -342,6 +343,10 @@ const buildRow = (
   const clusterName = system?.clusterName?.trim();
   const isCluster = ownerType === 'pve' && Boolean(clusterName) && members.length > 0;
   const isStandaloneAgent = !isCluster && primaryConnection.type === 'agent';
+  const statusLabel =
+    rolledState === 'pending' && primaryConnection.type === 'agent'
+      ? AGENT_WAITING_FOR_FIRST_REPORT_LABEL
+      : presentation.label;
   const name =
     ownerType === 'pve' && clusterName
       ? clusterName
@@ -414,7 +419,7 @@ const buildRow = (
     source,
     host,
     coverageLabels,
-    statusLabel: presentation.label,
+    statusLabel,
     statusClassName: presentation.badgeClass,
     agentUpdateCount: agentUpdateCountFor(componentConnections),
     lastActivityText: rollup

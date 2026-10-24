@@ -21,6 +21,7 @@ export interface GuestDrawerHistoryQueryKey {
   resourceType: ResourceType;
   resourceId: string;
   range: HistoryTimeRange;
+  liveReadingsAvailable: boolean;
 }
 
 const EMPTY_HISTORY_RESPONSE: AllMetricsHistoryResponse = {
@@ -48,12 +49,24 @@ const normalizeHistoryResponse = (
   };
 };
 
+// A cached live reply describes the source before it stopped reporting. Keep
+// real history, but withdraw that live snapshot as soon as its authority ends.
+const filterUnavailableLiveReading = (
+  response: AllMetricsHistoryResponse,
+  available: boolean,
+): AllMetricsHistoryResponse =>
+  !available && response.source === 'live'
+    ? { ...response, metrics: {}, source: 'store' }
+    : response;
+
 // Snapshot replacement often creates a new target object with unchanged
-// coordinates. Only a real target/range/access change owns a new read.
+// coordinates. A delivery transition also owns a new read, so an open drawer
+// does not wait for its next poll after the source stops or resumes reporting.
 export const createGuestDrawerHistorySource = (
   target: Accessor<GuestDrawerHistoryTarget | null>,
   range: Accessor<HistoryTimeRange>,
   enabled: Accessor<boolean>,
+  liveReadingsAvailable: Accessor<boolean> = () => true,
 ): Accessor<GuestDrawerHistoryQueryKey | null> =>
   createMemo<GuestDrawerHistoryQueryKey | null>(
     () => {
@@ -63,6 +76,7 @@ export const createGuestDrawerHistorySource = (
         resourceType: current.resourceType,
         resourceId: current.resourceId,
         range: range(),
+        liveReadingsAvailable: liveReadingsAvailable(),
       };
     },
     null,
@@ -74,7 +88,8 @@ export const createGuestDrawerHistorySource = (
           next &&
           previous.resourceType === next.resourceType &&
           previous.resourceId === next.resourceId &&
-          previous.range === next.range,
+          previous.range === next.range &&
+          previous.liveReadingsAvailable === next.liveReadingsAvailable,
         ),
     },
   );
@@ -84,18 +99,21 @@ export const createGuestDrawerHistorySource = (
 // History view reuse the Overview's read instead of starting another.
 export const createGuestDrawerHistoryQuery = (
   source: Accessor<GuestDrawerHistoryQueryKey | null>,
-) =>
-  createNonSuspendingQuery<AllMetricsHistoryResponse, GuestDrawerHistoryQueryKey>({
+) => {
+  const query = createNonSuspendingQuery<AllMetricsHistoryResponse, GuestDrawerHistoryQueryKey>({
     source,
     fetcher: async (key, signal) =>
-      normalizeHistoryResponse(
-        await ChartsAPI.getMetricsHistory({
-          resourceType: key.resourceType,
-          resourceId: key.resourceId,
-          range: key.range,
-          maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
-          signal,
-        }),
+      filterUnavailableLiveReading(
+        normalizeHistoryResponse(
+          await ChartsAPI.getMetricsHistory({
+            resourceType: key.resourceType,
+            resourceId: key.resourceId,
+            range: key.range,
+            maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
+            signal,
+          }),
+        ),
+        key.liveReadingsAvailable,
       ),
     initialValue: EMPTY_HISTORY_RESPONSE,
     cacheKey: (key) => `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
@@ -104,3 +122,12 @@ export const createGuestDrawerHistoryQuery = (
     retainPreviousValueOnSourceChange: false,
     pollMs: GUEST_DRAWER_HISTORY_POLL_MS,
   });
+  return {
+    ...query,
+    // Matching cached history stays visible during the fresh read. A live
+    // cache entry loses authority synchronously, before that read can settle.
+    value: createMemo(() =>
+      filterUnavailableLiveReading(query.value(), source()?.liveReadingsAvailable !== false),
+    ),
+  };
+};

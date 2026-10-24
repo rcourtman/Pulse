@@ -13,6 +13,7 @@ import type {
   ConnectionFleetVersionDrift,
 } from '@/api/connections';
 import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
+import { AGENT_WAITING_FOR_FIRST_REPORT_LABEL } from '@/utils/agentResources';
 import {
   buildDockerPath,
   buildKubernetesPath,
@@ -868,7 +869,7 @@ export const agentAttachmentProblem = (agent: Connection): InfrastructureRowProb
       };
     case 'pending':
       return {
-        label: 'Agent pending first report',
+        label: AGENT_WAITING_FOR_FIRST_REPORT_LABEL,
         detail: agent.stateReason || 'The Pulse Agent has not reported yet.',
         tone: 'warning',
       };

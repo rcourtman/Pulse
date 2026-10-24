@@ -21,6 +21,31 @@ describe('useConnectionsLedger', () => {
     expect(useConnectionsLedgerSource).not.toContain('createResource');
   });
 
+  it('names the first-report wait only for pending agents', async () => {
+    const connections = [
+      { id: 'agent:waiting', type: 'agent', name: 'Waiting host', source: 'agent' },
+      { id: 'pve:waiting', type: 'pve', name: 'Waiting API', source: 'manual' },
+    ].map((value) => ({
+      ...value,
+      address: value.name,
+      state: 'pending',
+      stateReason: '',
+      enabled: true,
+      surfaces: ['host'],
+      scope: { host: true },
+      lastSeen: null,
+      lastError: null,
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    })) as Connection[];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems: [] });
+    const { result } = renderHook(() => useConnectionsLedger());
+    await waitFor(() => expect(result.rows()).toHaveLength(2));
+    expect(result.rows().find((row) => row.ownerType === 'agent')?.statusLabel).toBe(
+      'Waiting for first report',
+    );
+    expect(result.rows().find((row) => row.ownerType === 'pve')?.statusLabel).toBe('Pending');
+  });
+
   it('renders standalone agent rows with compact host identity and endpoint context', async () => {
     const connections: Connection[] = [
       {

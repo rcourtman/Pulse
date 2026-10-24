@@ -6537,9 +6537,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		_, lapsed := lapsedRows[kind+"\x00"+id]
 		return lapsed
 	}
-	// HostsSnapshot reports an agent row past its reporting lease as offline.
+	// Saved enrollment is not live telemetry while awaiting its first report,
+	// and HostsSnapshot reports an expired reporting lease as offline.
 	hostReporting := func(host *models.Host) bool {
-		return !strings.EqualFold(strings.TrimSpace(host.Status), "offline") && !rowLapsed("host", host.ID)
+		status := strings.ToLower(strings.TrimSpace(host.Status))
+		return status != "offline" && status != "pending" && !rowLapsed("host", host.ID)
 	}
 	// The poller marks a node it cannot reach, or one the cluster lists but
 	// this poll did not observe, offline or unknown and keeps earlier
