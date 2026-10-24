@@ -3832,6 +3832,12 @@ shells with a synthetic proof exit and a credential-free capturing provider,
 covering success, neutral, budget failure and a broken proof. It checks the
 read-only evidence/separate-writer admission and missing-output failure path.
 No real check is created, workflow dispatched or latency workload executed.
+The hosted envelope includes only the proof's bounded single-CPU provisioning
+agent attribution, never arbitrary background work. Both its passing and
+over-90-ms child results must reach the unchanged success/failure shell mapping;
+only genuinely competing capacity can map a budget-only result to neutral.
+The workflow-shell control preserves the actual over-budget report through
+both neutral and failure paths. This changes no release or install gate.
 
 ### Registered Windows native-exit completion proof (8 October 2026)
 

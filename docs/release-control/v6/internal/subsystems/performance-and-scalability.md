@@ -1883,6 +1883,14 @@ dashboard-specific overview, trend, or summary transport.
     its latency, with I/O wait and process I/O counters retained for diagnosis.
     Competing CPU, guest/steal or swap activity invalidates the measurement,
     and process CPU counters identify the largest observed background users.
+    On Actions, exactly one `provjobd<digits>` process bounded to one logical
+    CPU plus one percentage point of sampling skew is normal hosted overhead.
+    Keep it inside the absolute latency, while retaining its raw CPU and a
+    separate attribution. Apply the unchanged 10% limit to all remaining
+    observed/unattributed CPU; multiple/over-bound agents or missing hosted/CPU
+    context get no exception. Guest/steal and swap limits remain unconditional.
+    Real budget failures on this envelope must fail, not become neutral;
+    historical classifications are evidence, not retroactive qualification.
     Only a passing explicit 90 ms report on valid capacity establishes the local SLO.
     The manual `pulse-enterprise:.github/workflows/verify-workload-chart-latency.yml`
     reuses that same public proof on the existing disposable `pulse-ci-vm-large`

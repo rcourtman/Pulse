@@ -71,13 +71,14 @@ func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, conclusion string
+		p95              int
 		processExit      int
 		stepPass         bool
 	}{
-		{"valid", "success", 0, true},
-		{"contended", "neutral", 78, true},
-		{"budget failure", "failure", 1, false},
-		{"broken proof", "failure", 2, false},
+		{"valid hosted envelope", "success", 82, 0, true},
+		{"contended", "neutral", 107, 78, true},
+		{"hosted envelope budget failure", "failure", 107, 1, false},
+		{"broken proof", "failure", 82, 2, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			directory := t.TempDir()
@@ -96,7 +97,7 @@ func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			const report = "charts/workloads p50=40ms p95=82ms p99=86ms SLO=90ms"
+			report := "charts/workloads p50=40ms p95=" + strconv.Itoa(tc.p95) + "ms p99=112ms SLO=90ms"
 			if err := os.WriteFile(filepath.Join(samples, "candidate.log"), []byte(report+"\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
