@@ -106,11 +106,20 @@ func (m *Manager) CheckStorageWithCapacityTrend(storage models.Storage, trend Ca
 		Float64("clear", thresholds.Usage.Clear).
 		Msg("Checking storage thresholds")
 
-	// Zero usage is a clearing observation only when the byte counters also
-	// confirm an empty store. A default zero from missing capacity telemetry
-	// must not resolve an existing incident.
+	// Static and forecast decisions both need an observed capacity, not just
+	// a positive percentage left beside unavailable/contradictory byte counts.
+	// Share filesystem admission while retaining storage's stricter empty-store
+	// confirmation: a default zero must not resolve an existing incident.
+	_, observed := unifiedresources.DiskUsagePercent(models.Disk{Total: storage.Total, Used: storage.Used, Usage: storage.Usage})
 	confirmedEmpty := storage.Usage == 0 && storage.Total > 0 && storage.Used == 0 && storage.Free == storage.Total
-	if connectivityStatus != "offline" && connectivityStatus != "unavailable" && (storage.Usage > 0 || confirmedEmpty) {
+	if !liveHysteresisThreshold(thresholds.Usage) {
+		// Explicit usage-policy disablement is not telemetry recovery. Release
+		// through the disabled evaluator even when capacity is unavailable or
+		// nonfinite; connectivity and pool health keep their separate policies.
+		policyOnly := storage
+		policyOnly.Usage = 0
+		m.evaluateStorageCapacity(policyOnly, thresholds, CapacityTrendObservation{})
+	} else if connectivityStatus != "offline" && connectivityStatus != "unavailable" && observed && (storage.Usage > 0 || confirmedEmpty) {
 		m.evaluateStorageCapacity(storage, thresholds, trend)
 	} else {
 		m.interruptMetricRunIDs(storage.ID, canonicalMetricSpecID(storage.ID, "usage"), canonicalMetricStateID(storage.ID, "usage"))

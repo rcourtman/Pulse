@@ -15,6 +15,27 @@
 
 ## Purpose
 
+
+### Storage capacity warnings require observed byte counters
+
+Static usage and forecast alerts admit a finite percentage in range only with
+positive capacity and non-negative used space no greater than capacity. An
+empty-store recovery still requires zero used bytes and free bytes equal to
+total. Missing or contradictory capacity holds the existing occurrence,
+acknowledgement and trusted evidence, and interrupts pending static activation,
+forecast confirmations and explicit intent grace. A valid empty store still
+recovers; disabling usage policy releases capacity alerts even when the store
+is unavailable. Connectivity and attached ZFS health remain independently
+evaluated, and the global alerting switch remains a pause.
+
+`storage_capacity_observation_test.go` exercises CheckStorage and its trend
+entry point, static and predictive occurrence retention, false activation,
+exact-store isolation, confirmation/grace interruption, policy and independent
+connectivity controls. Its opt-in manager payloads feed the production Alerts
+API/Overview browser proof at desktop and narrow widths. No collector, guest
+operation, schema, history rewrite or notification transport changes; this is
+not installed recovery or inbox evidence.
+
 ### Unavailable Proxmox node disks are not recovered alerts
 
 The node evaluator admits the same disk observations as the canonical node

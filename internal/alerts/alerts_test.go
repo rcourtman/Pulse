@@ -5373,6 +5373,9 @@ func TestDisableAllStorageClearsExistingAlerts(t *testing.T) {
 	})
 
 	storage := models.Storage{
+		Total:  1000,
+		Used:   900,
+		Free:   100,
 		ID:     storageID,
 		Name:   "local-lvm",
 		Usage:  90.0,
@@ -18418,6 +18421,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.mu.Unlock()
 
 		storage := models.Storage{
+			Total:  1000,
+			Used:   950,
+			Free:   50,
 			ID:     "storage1",
 			Name:   "teststorage",
 			Status: "active",
@@ -18537,6 +18543,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.mu.Unlock()
 
 		storage := models.Storage{
+			Total:  1000,
+			Used:   950,
+			Free:   50,
 			ID:     "storage1",
 			Name:   "teststorage",
 			Node:   "node1",
@@ -18569,6 +18578,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.mu.Unlock()
 
 		storage := models.Storage{
+			Total:  1000,
+			Used:   950,
+			Free:   50,
 			ID:     "storage1",
 			Name:   "teststorage",
 			Status: "active",
@@ -18596,6 +18608,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.mu.Unlock()
 
 		storage := models.Storage{
+			Total:  1000,
+			Used:   950,
+			Free:   50,
 			ID:     "storage1",
 			Name:   "teststorage",
 			Status: "offline",
@@ -18623,6 +18638,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		m.mu.Unlock()
 
 		storage := models.Storage{
+			Total:  1000,
+			Used:   950,
+			Free:   50,
 			ID:     "storage1",
 			Name:   "teststorage",
 			Status: "unavailable",
@@ -21913,7 +21931,7 @@ func TestCheckStorageForecastUsesCanonicalUsageAlertIdentity(t *testing.T) {
 	m.config.StorageDefault = HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.mu.Unlock()
 
-	storage := models.Storage{ID: "forecast-proof", Name: "archive", Status: "active", Usage: 72}
+	storage := models.Storage{Total: 1000, Used: 720, Free: 280, ID: "forecast-proof", Name: "archive", Status: "active", Usage: 72}
 	trend := CapacityTrendObservation{
 		Ready: true, Reason: "increasing", ObservedAt: time.Now(), DailyChange: 5,
 		Confidence: 0.99, SampleCount: 300, BucketCount: 48, CoverageSpan: 48 * time.Hour,
@@ -22044,7 +22062,7 @@ func TestStorageNormalizedOfflineSkipsCapacityEvaluation(t *testing.T) {
 			m.config.StorageDefault = HysteresisThreshold{Trigger: 80, Clear: 70}
 			m.mu.Unlock()
 
-			s := models.Storage{ID: "storage-normalized-offline", Name: "backups", Status: status, Usage: 99}
+			s := models.Storage{Total: 1000, Used: 990, Free: 10, ID: "storage-normalized-offline", Name: "backups", Status: status, Usage: 99}
 			for range 3 {
 				m.CheckStorage(s)
 			}
