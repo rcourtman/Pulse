@@ -243,9 +243,9 @@ describe('MobileNavBar', () => {
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
     const menu = await screen.findByRole('menu', { name: 'Switch platform' });
-    expect(within(menu).getByRole('menuitem', { name: /Machines/ })).toHaveTextContent(
-      'Machines Setup',
-    );
+    const machinesItem = within(menu).getByRole('menuitem', { name: 'Machines Setup' });
+    expect(machinesItem.firstElementChild?.textContent).toBe('Machines ');
+    expect(machinesItem.lastElementChild).toHaveTextContent(/^Setup$/);
     fireEvent.click(within(nav).getByRole('button', { name: 'More navigation' }));
     const utilityMenu = await screen.findByRole('menu', {
       name: 'More navigation destinations',
