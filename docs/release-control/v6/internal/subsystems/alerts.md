@@ -15,6 +15,27 @@
 
 ## Purpose
 
+### Unavailable agent filesystems are not recovered disk alerts
+
+Host filesystem thresholds use the canonical disk-observation admission: a
+finite percentage in range, positive capacity and non-negative used space no
+larger than capacity. A listed unavailable reading or an entirely empty report
+holds the existing occurrence, acknowledgement and last trusted evidence. It
+cannot raise a new alert, resolve one, or complete activation, explicit intent
+grace or recovery timing across the gap. A measured zero remains recovery.
+
+An established linked-node summary identity keeps ownership only while its
+held disk alert remains open; interrupting a pending run returns ownership to
+the node. Current host, inherited and filesystem policy disablement, explicit
+agent removal and missing rows in a non-empty replacement inventory retain
+their ordinary cleanup semantics. No collection, guest operation, schema,
+historical metric, notification transport or provider lease changes.
+
+`host_filesystem_observation_test.go` exercises the real manager, lifecycle
+ledger, exact-host isolation, timing, policy, removal and linked-node controls.
+Its optional exported manager payloads feed the real Alerts API adapter and
+Overview surface in desktop/narrow browser proof, not a native recovery claim.
+
 ### Listed backups need an observed success date to resolve age warnings
 
 The backup-age evaluator retains an existing subject's occurrence, severity,

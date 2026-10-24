@@ -596,7 +596,14 @@ func (m *Manager) CheckHost(host models.Host) {
 			continue
 		}
 
-		evaluated := m.checkMetricWithCanonicalSpec(spec, diskName, nodeName, instanceName, "agent-disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		evaluated := false
+		if _, observed := unifiedresources.DiskUsagePercent(disk); !observed && !spec.Disabled {
+			// An unavailable listed filesystem neither recovers an incident
+			// nor completes activation/recovery timing across the gap.
+			m.interruptMetricRun(spec)
+		} else {
+			evaluated = m.checkMetricWithCanonicalSpec(spec, diskName, nodeName, instanceName, "agent-disk", disk.Usage, effectiveDiskThreshold, &metricOptions{Metadata: diskMetadata})
+		}
 		if diskResourceID == summaryDiskResourceID {
 			summaryDiskLive = liveHysteresisThreshold(effectiveDiskThreshold)
 			evaluatesSummaryDisk = evaluated
@@ -622,7 +629,22 @@ func (m *Manager) CheckHost(host models.Host) {
 		}
 	}
 
-	m.cleanupHostDiskAlerts(host, seenDisks)
+	m.reconcileHostFilesystemObservationGaps(host, seenDisks)
+	if len(host.Disks) > 0 {
+		// A non-empty replacement inventory retains its existing removal
+		// semantics. An empty report cannot establish every disk's removal.
+		m.cleanupHostDiskAlerts(host, seenDisks)
+	} else if host.LinkedNodeID != "" {
+		// Retain only the already-established summary identity, not a new
+		// reading, while its open alert still owns the linked node's disk.
+		m.mu.RLock()
+		previous := m.hostAgentNodeLinks[host.ID]
+		m.mu.RUnlock()
+		if previous.nodeID == host.LinkedNodeID {
+			summaryDiskResourceID = previous.summaryDiskResourceID
+			summaryDiskLive = previous.disk
+		}
+	}
 
 	// The linked node releases the usage metrics this agent covers and keeps
 	// the rest, so deduplication never leaves the machine unmonitored. A metric
