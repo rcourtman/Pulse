@@ -85,6 +85,23 @@ producer feeds the production Backups coverage surface in
 `scripts/check-pve-backup-reconciliation.cjs`. Retained history is not a fresh
 provider read, an available archive, guest thaw or filesystem-liveness proof.
 
+### Skipped PVE backup storage is unread, not empty
+
+A configured backup target that is not safe to query (including disabled
+storage) counts as an incomplete content scope. Pulse makes no content request,
+retains any last accepted live rows and durable recovery points without renewing
+their observation, and publishes partial or unavailable provider history with
+unknown access rather than claiming a successful empty enumeration. Independent
+readable targets still publish accepted rows. An ordinary re-enable allows the
+existing read path again; a successful empty reply can then establish removal.
+
+`TestPVEProtectionDisabledStorageIsNotAnEmptyRead` drives storage polling,
+asynchronous recovery ingest and posture reads with warm/cold inventory, one/all
+disabled targets, repeated skips, re-enable, confirmed absence and recovery.
+It verifies zero content reads to disabled targets and unchanged point evidence.
+This does not alter storage query admission, permissions, backup jobs, guest
+commands, thaw or filesystem-liveness requirements, or prove installed recovery.
+
 ### Storage investigation history shares the chart source boundary
 
 `ReadStorageMetricHistory` and `GetStorageMetricsForChart` use the same monitor

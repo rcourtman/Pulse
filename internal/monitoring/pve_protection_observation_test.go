@@ -1,15 +1,19 @@
 package monitoring
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestBuildPVEProtectionProviderObservationMapsEvidenceQuality(t *testing.T) {
@@ -206,5 +210,118 @@ func TestPersistGuestIdentitySkipsUnchangedIdentities(t *testing.T) {
 	}
 	if !firstWrite.ModTime().Equal(secondWrite.ModTime()) {
 		t.Error("unchanged identity triggered a redundant write")
+	}
+}
+
+// skippedBackupStorageClient exposes configured but disabled backup targets.
+// It records attempted content reads so retaining their history cannot be
+// achieved by bypassing the existing no-query boundary.
+type skippedBackupStorageClient struct {
+	*pveReconciliationClient
+	disabled       map[string]bool
+	contentQueries map[string]int
+}
+
+func (c *skippedBackupStorageClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
+	storages, err := c.pveReconciliationClient.GetStorage(ctx, node)
+	for i := range storages {
+		if c.disabled[node] {
+			storages[i].Enabled = 0
+		}
+	}
+	return storages, err
+}
+
+func (c *skippedBackupStorageClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
+	c.contentQueries[node]++
+	return c.pveReconciliationClient.GetStorageContent(ctx, node, storage)
+}
+
+func TestPVEProtectionDisabledStorageIsNotAnEmptyRead(t *testing.T) {
+	for _, cold := range []bool{false, true} {
+		for _, allDisabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("cold=%t/all-disabled=%t", cold, allDisabled), func(t *testing.T) {
+				f := newPVEReconciliationFixture(t)
+				f.poll(t)
+				before := f.points(t)
+				if len(before) != 2 {
+					t.Fatal("healthy control did not establish both backup observations")
+				}
+				if cold {
+					f.coldState()
+				}
+				client := &skippedBackupStorageClient{pveReconciliationClient: f.client,
+					disabled: map[string]bool{"node-a": allDisabled, "node-b": true}, contentQueries: make(map[string]int)}
+				f.client.at = f.client.at.Add(15 * time.Minute)
+				for range 2 {
+					f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+					f.wait(t)
+					points := f.points(t)
+					if len(points) != len(before) {
+						t.Errorf("skipping disabled storage deleted durable history: points=%d want=%d", len(points), len(before))
+					}
+					for id, point := range before {
+						if (allDisabled || point.SubjectResourceID == f.ids[1]) && !reflect.DeepEqual(points[id], point) {
+							t.Error("unread disabled storage lost or renewed its point-level evidence")
+						}
+					}
+					wantRaw := 2
+					if cold {
+						wantRaw = 1
+						if allDisabled {
+							wantRaw = 0
+						}
+					}
+					if got := len(f.m.state.GetSnapshot().PVEBackups.StorageBackups); got != wantRaw {
+						t.Errorf("live inventory=%d want=%d; no skipped read may delete known rows or invent cold rows", got, wantRaw)
+					}
+					history := recovery.ProtectionHistoryPartial
+					if allDisabled {
+						history = recovery.ProtectionHistoryUnavailable
+					}
+					f.assertHistory(t, history, operationaltrust.EvidencePermissionsUnknown)
+				}
+				if client.contentQueries["node-b"] != 0 || (allDisabled && client.contentQueries["node-a"] != 0) {
+					t.Fatalf("disabled storage was queried: %+v", client.contentQueries)
+				}
+				if !allDisabled {
+					if client.contentQueries["node-a"] != 2 {
+						t.Fatal("independent readable storage did not keep polling")
+					}
+					for _, point := range f.points(t) {
+						if point.SubjectResourceID == f.ids[0] && (point.CompletedAt == nil || !point.CompletedAt.Equal(f.client.at)) {
+							t.Error("independent readable storage did not publish its accepted result")
+						}
+					}
+				}
+
+				// Normal re-enable permits a real read. A successful empty reply
+				// still removes the absent backup, and a later accepted listing
+				// restores both inventory and complete provider evidence.
+				client.disabled = nil
+				f.client.emptyB = true
+				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+				f.wait(t)
+				if len(f.points(t)) != 1 || len(f.m.state.GetSnapshot().PVEBackups.StorageBackups) != 1 {
+					t.Fatal("a successful empty read after re-enable did not remove only the absent backup")
+				}
+				for _, posture := range f.postures(t) {
+					if posture.SubjectResourceID == f.ids[0] {
+						if len(posture.ProviderStates) != 1 || posture.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryComplete {
+							t.Fatal("successful readable scope did not regain complete evidence")
+						}
+					} else if posture.LastSuccessfulPointAt != nil || posture.State == recovery.ProtectionStateProtected {
+						t.Fatal("confirmed-absent backup still claimed a successful restore point")
+					}
+				}
+				f.client.emptyB = false
+				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+				f.wait(t)
+				if len(f.points(t)) != 2 || len(f.m.state.GetSnapshot().PVEBackups.StorageBackups) != 2 {
+					t.Fatal("accepted listing after re-enable did not recover both backups")
+				}
+				f.assertHistory(t, recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient)
+			})
+		}
 	}
 }
