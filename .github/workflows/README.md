@@ -324,10 +324,11 @@ Required environment secrets:
 
 Required shared secret:
 
-1. **TS_OAUTH_CLIENT_ID** and **TS_OAUTH_SECRET**
-   - Tailscale OAuth client (business tailnet `tawny-powan.ts.net`, scope Auth Keys write, tag `tag:infra`) used by the governed demo deploy/update workflows before SSH
+1. **TS_CI_DEPLOY_OAUTH_CLIENT_ID** and **TS_CI_DEPLOY_OAUTH_SECRET**
+   - Tailscale OAuth client (business tailnet `tawny-powan.ts.net`, scope Auth Keys write only, restricted to `tag:ci-deploy`) used by the governed demo deploy/update workflows before SSH
    - The action mints an ephemeral, pre-authorized, tagged node key per run, so runners join and garbage-collect themselves; unlike the retired static `TS_AUTHKEY`, the OAuth secret does not expire every 90 days
-   - Allows GitHub-hosted runners to reach private demo targets such as the stable `pulse-relay` Tailscale host
+   - The tailnet policy grants `tag:ci-deploy` TCP 22 to the stable `pulse-relay` demo host, which is all these workflows need
+   - The former `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` pair named the July 2026 `tag:infra` client, which was revoked on 30 September 2026; demo updates failed with an OAuth 401 until this move
    - May be stored as repository secrets or repeated in the selected environment if desired
 
 Required environment variables:
@@ -395,11 +396,11 @@ from `release-convergence.yml` under the global customer-promotion lease.
 
 ## Published-RC browser qualification registration
 
-`qualify-browser-update-release.yml` must **not** reuse the demo binding above.
-It uses the separate repository secrets **TS_CI_DEPLOY_OAUTH_CLIENT_ID** and
-**TS_CI_DEPLOY_OAUTH_SECRET** for a dedicated business-tailnet OAuth client with
-only **Auth Keys write**, restricted to **tag:ci-deploy**. These names must not
-alias/copy the `tag:infra` demo client or a full-access administrative client.
+`qualify-browser-update-release.yml` uses the same repository secrets
+**TS_CI_DEPLOY_OAUTH_CLIENT_ID** and **TS_CI_DEPLOY_OAUTH_SECRET** as the demo
+workflows: a dedicated business-tailnet OAuth client with only **Auth Keys
+write**, restricted to **tag:ci-deploy**. These names must never hold the
+retired `tag:infra` client or a full-access administrative client.
 The Tailnet/credential owner verifies that client scope and tag restriction when
 configuring the pair; source inspection and the node's observed tag do not prove
 OAuth scope. No secret value belongs in source, logs or receipts.
