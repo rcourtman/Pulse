@@ -2765,6 +2765,15 @@ its intentional clear semantics. `internal/api/audit_selection_validation_test.g
 pins read non-execution, selected wire results, tenant isolation and mutation
 preservation/clear/restore. Agent operations and storage internals are unchanged.
 
+Audit webhook destination updates refuse repeated top-level `urls` members,
+including JSON-escaped and case-folded aliases, before URL/DNS validation or
+mutation. One complete object within the existing body bound is required;
+trailing documents or oversized suffixes cannot apply a partial selection.
+Singleton aliases and unknown fields remain compatible. Explicit clear/restore
+and tenant-scoped access/entitlement remain unchanged. The executable controls
+in `internal/api/audit_handlers_test.go` preserve selected destinations after
+rejection; they establish neither receiver delivery nor installed recovery.
+
 ## Forbidden Paths
 
 1. Reintroducing storage or recovery product logic as ad hoc dashboard-only summaries without a canonical page-surface owner
