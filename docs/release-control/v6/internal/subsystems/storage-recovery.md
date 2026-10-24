@@ -775,6 +775,11 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+Webhook DELETE's explicit success acknowledges saved/live destination removal,
+not deletion of its retained queue configuration or failed-attempt history.
+Queue records still follow the existing cancellation/retention policy; no
+storage schema, backup, restore or data-removal acknowledgement is added.
+
 ### Operator storage vocabulary without identity changes
 
 Storage topology names preserve Proxmox plugin vocabulary, including LVM-Thin,

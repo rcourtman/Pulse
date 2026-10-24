@@ -750,7 +750,9 @@ func (h *NotificationHandlers) DeleteWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err := utils.WriteJSONResponse(w, map[string]string{"status": "success"}); err != nil {
+	// The destination editor accepts a mutation only after success is explicit.
+	// Keep status for existing clients; acknowledge only after durable/live removal.
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{"success": true, "status": "success"}); err != nil {
 		log.Error().Err(err).Str("webhookID", webhookID).Msg("Failed to write webhook deletion response")
 	}
 }

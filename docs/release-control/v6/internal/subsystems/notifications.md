@@ -17,6 +17,36 @@
 
 ## Purpose
 
+### Removing a webhook revokes its identified queued work
+
+Before queued firing or recovery delivery, a saved webhook ID must still name
+an enabled current destination. A missing ID match cancels that retained work;
+another destination at the same URL cannot authorise its old payload or
+credentials. This applies to pending work and operator-retried terminal failures,
+including after reopening the persistent queue. Policy cancellation is not a
+provider attempt, success receipt or new delivery audit. Existing failed audits
+and retained configuration/occurrence links are preserved.
+
+Only legacy queued configuration with no webhook ID may use the existing exact
+URL fallback. Editing the same enabled ID still delivers its previously admitted
+configuration snapshot; this repair does not retarget old work, cancel requests
+already in flight, or change global pause, disabled-destination, retry or retention
+policy. New alerts for a different enabled destination at that URL still deliver.
+
+`queue_destination_revocation_test.go` checks identity/URL/disabled/legacy controls
+and real generic/ntfy firing/recovery delivery across deletion, queue reopen,
+operator retry, cancellation, audit/receipt readback and new-alert delivery.
+This is synthetic source proof, not evidence of prior exposure, installed-provider
+recovery or resolution of a reported notification outage.
+
+The DELETE acknowledgement includes `success: true` only after durable and live
+removal complete, retaining the legacy `status: "success"` field. The existing
+editor requires that explicit boolean before removing the visible destination;
+a successful mutation must not be displayed as failed or encourage a blind retry.
+Persistence/live-publication failures retain their existing refusal/rollback
+behaviour. `TestNotificationHandlers/DeleteWebhook` pins both success fields;
+its failure controls still prove that a rejected save never removes live state.
+
 ### Approved addresses share a bounded connection budget
 
 Webhook and HTTP Apprise transports pass their validated numeric destinations

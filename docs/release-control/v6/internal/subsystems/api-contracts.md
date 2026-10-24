@@ -21,6 +21,18 @@
 
 ## Purpose
 
+### Webhook deletion has an explicit committed acknowledgement
+
+`DELETE /api/notifications/webhooks/{id}` returns `success: true` after saved and
+live inventories both remove that ID. The legacy `status: "success"` field remains
+for existing clients. The destination editor already requires the boolean before
+accepting deletion; the acknowledgement must not leave a successfully removed
+row shown as failed. Missing destinations, failed persistence and failed live
+publication retain their existing error and rollback paths, not a success body.
+The handler's deletion assertion pins both fields; persistence-failure controls
+continue to require no live removal. This changes no route, scope, credential,
+retention or admitted-delivery snapshot contract.
+
 ### Typed MCP fleet filters survive HTTP projection
 
 GET/DELETE capability projection preserves public string and boolean query
