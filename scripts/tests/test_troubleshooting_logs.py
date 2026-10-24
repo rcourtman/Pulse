@@ -10,13 +10,14 @@ import json
 import os
 from pathlib import Path
 import re
+import select
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
+from unittest.mock import Mock, call, patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -62,6 +63,59 @@ if os.environ.get('READER_HANG'):
     time.sleep(30)
 sys.exit(int(os.environ.get('READER_EXIT', '0')))
 '''
+
+
+def reader_state(pid: int):
+    """Read identity/state only for the PID recorded by our synthetic reader."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    except FileNotFoundError:
+        return None
+    return {"state": fields[0], "start": fields[19]}
+
+
+def observe_reader(identity):
+    """Keep the 500 ms exit bound, then separately prove owned emergency cleanup.
+
+    A pidfd exit event includes zombies and cannot refer to a recycled PID.
+    Check the recorded start time before waiting or signalling that handle.
+    """
+    report = {"pid": identity["pid"], "state": None, "survived": False,
+              "identity": "gone", "cleanup": "not-needed"}
+    try:
+        pid_fd = os.pidfd_open(identity["pid"])
+    except ProcessLookupError:
+        return report
+    try:
+        state = reader_state(identity["pid"])
+        if state is None:
+            return report
+        report["state"] = state["state"]
+        if state["start"] != identity["start"]:
+            report["identity"] = "changed"
+            return report
+        report["identity"] = "matched"
+        poller = select.poll()
+        poller.register(pid_fd, select.POLLIN)
+        if poller.poll(500):
+            return report
+        state = reader_state(identity["pid"])
+        report["state"] = state["state"] if state else None
+        # Recheck after the last observation, without extending its deadline.
+        # The old sample/sleep loop could flag an exit during its final sleep.
+        if (state is None or state["start"] != identity["start"]
+                or poller.poll(0)):
+            return report
+        report["survived"] = True
+        try:
+            signal.pidfd_send_signal(pid_fd, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        # Cleanup is not extra time to pass: a survivor still fails the test.
+        report["cleanup"] = "terminated" if poller.poll(500) else "unobserved"
+        return report
+    finally:
+        os.close(pid_fd)
 
 
 def exercise_log_recipe(reader: str, copied: str, *, stdout: str = "", stderr: str = "",
@@ -124,36 +178,78 @@ os.execv({real_rm!r}, [{real_rm!r}] + sys.argv[1:])
         result = subprocess.CompletedProcess(process.args, process.returncode, output, errors)
         result.log_cleanup = ([json.loads(line) for line in cleanup_file.read_text().splitlines()]
                               if cleanup_file.exists() else [])
-        if list(log_directory.iterdir()):
-            raise AssertionError("copied recipe left a private log file behind")
         # The reader is a child of timeout/the collection shell, not ours to
-        # waitpid. A zombie is terminated, not still collecting. Observe only
-        # the recorded fixture PID; never search for or stop a real service.
+        # waitpid. Enforce survival in the helper, not just selected callers.
+        # Do not print log contents when reporting a failed collection.
         result.reader_running = False
         if pid_file.exists():
-            identity = json.loads(pid_file.read_text())
-            try:
-                pid_fd = os.pidfd_open(identity["pid"])
-            except ProcessLookupError:
-                pid_fd = None
-            if pid_fd is not None:
-                try:
-                    for _ in range(50):
-                        try:
-                            fields = Path(f"/proc/{identity['pid']}/stat").read_text().split(")", 1)[1].split()
-                        except FileNotFoundError:
-                            break
-                        if fields[19] != identity["start"] or fields[0] == "Z":
-                            break
-                        time.sleep(0.01)
-                    else:
-                        # The pidfd cannot signal a recycled PID. Clean up
-                        # only the captured synthetic child, then fail proof.
-                        signal.pidfd_send_signal(pid_fd, signal.SIGKILL)
-                        result.reader_running = True
-                finally:
-                    os.close(pid_fd)
+            result.reader_observation = observe_reader(json.loads(pid_file.read_text()))
+            result.reader_running = result.reader_observation["survived"]
+            if result.reader_running:
+                raise AssertionError(
+                    "synthetic reader survived the copied collection shell; "
+                    f"shell_exit={result.returncode}; "
+                    f"reader={json.dumps(result.reader_observation, sort_keys=True)}"
+                )
+        if list(log_directory.iterdir()):
+            raise AssertionError("copied recipe left a private log file behind; "
+                                 f"shell_exit={result.returncode}")
         return result, json.loads(argv.read_text()) if argv.exists() else None
+
+
+class SyntheticReaderObservationTest(unittest.TestCase):
+    def test_exit_at_final_observation_is_not_reported_as_survival(self):
+        poller = Mock()
+        poller.poll.side_effect = [[], [(41, select.POLLIN)]]
+        with patch.object(os, "pidfd_open", return_value=41), \
+                patch.object(os, "close"), \
+                patch(__name__ + ".reader_state", return_value={"state": "S", "start": "7"}), \
+                patch.object(select, "poll", return_value=poller), \
+                patch.object(signal, "pidfd_send_signal") as stop:
+            report = observe_reader({"pid": 123, "start": "7"})
+        self.assertFalse(report["survived"])
+        self.assertEqual(poller.poll.call_args_list, [call(500), call(0)])
+        stop.assert_not_called()
+
+    def test_recycled_pid_is_neither_waited_on_nor_signalled(self):
+        with patch.object(os, "pidfd_open", return_value=41), \
+                patch.object(os, "close"), \
+                patch(__name__ + ".reader_state", return_value={"state": "S", "start": "8"}), \
+                patch.object(select, "poll") as poll, \
+                patch.object(signal, "pidfd_send_signal") as stop:
+            report = observe_reader({"pid": 123, "start": "7"})
+        self.assertEqual(report["identity"], "changed")
+        poll.assert_not_called()
+        stop.assert_not_called()
+
+    def test_unobserved_cleanup_is_not_reported_as_termination(self):
+        poller = Mock()
+        poller.poll.return_value = []
+        with patch.object(os, "pidfd_open", return_value=41), \
+                patch.object(os, "close"), \
+                patch(__name__ + ".reader_state", return_value={"state": "S", "start": "7"}), \
+                patch.object(select, "poll", return_value=poller), \
+                patch.object(signal, "pidfd_send_signal") as stop:
+            report = observe_reader({"pid": 123, "start": "7"})
+        self.assertTrue(report["survived"])
+        self.assertEqual(report["cleanup"], "unobserved")
+        self.assertEqual(poller.poll.call_args_list, [call(500), call(0), call(500)])
+        stop.assert_called_once_with(41, signal.SIGKILL)
+
+    def test_leaked_fixture_fails_with_shell_state_and_observed_cleanup(self):
+        # Deliberately unsafe *synthetic control*, never a published recipe.
+        # Let the shell finish while only its recorded fake reader stays alive.
+        copied = '''
+docker logs pulse </dev/null >/dev/null 2>&1 &
+for attempt in {1..100}; do
+  [ ! -s "$READER_PID" ] || exit 0
+  sleep 0.01
+done
+exit 3
+'''
+        with self.assertRaisesRegex(
+                AssertionError, r'shell_exit=0; reader=.*"cleanup": "terminated".*"state": "[RS]"'):
+            exercise_log_recipe("docker", copied, hang="ignore-term-closed-pipes")
 
 
 class TroubleshootingLogRecipesTest(unittest.TestCase):
