@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "82df77f2f5526a3b424d19926edf6f99b8faecd4",
+  "verified_at": "2026-10-24T12:36:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/components/WhatsNewContent.tsx",
+    "frontend-modern/src/components/whatsNewModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/WhatsNewCard.tsx": "5ae186944e83411f377127719b2bbc57554331fe99f53045478420a860fa809d",
+    "frontend-modern/src/components/WhatsNewContent.tsx": "f9e8d395090ba97c65bae205b4cef6142bd6cf83cd7ad7b60be13285a7483b53",
+    "frontend-modern/src/components/whatsNewModel.ts": "77d1987c91342ea0b0d5348b71f2ad4b1f8cd1aa6af26a76aecd652a4263423a"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree served by vite preview, proxied to the pulse-dev perf rig on :7699; /api/version rewritten to a published 6.6.0-rc.6 build and /api/updates/release-notes fulfilled with the published v6.6.0-rc.6 body, last-seen version 6.5.0",
+    "Post-update notice shown; dialog header reads the version with Released <date>; Known issues callout first, then Improved and every grouped section through Other improvements, then Upgrade notes; no Highlights cards and zero details elements in the dialog",
+    "Dark and light at 1440x900 and dark at 390x844; dialog scrolls internally (8662px content in a 540px viewport at desktop) with header and footer fixed"
+  ],
+  "interactions": [
+    "Signed in, reloaded with the new release, clicked See what's new, scrolled the dialog to 15%, 50% and the end at each viewport"
+  ]
+}

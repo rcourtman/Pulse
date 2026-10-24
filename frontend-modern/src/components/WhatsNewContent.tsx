@@ -30,7 +30,7 @@ const releaseText = (markdown: string): string =>
 function ReleaseText(props: { markdown: string }) {
   return (
     <div
-      class="text-sm leading-relaxed text-base-content [&_h3]:mb-2 [&_h3]:mt-5 [&_h3:first-child]:mt-0 [&_h3]:font-semibold [&_h4]:mt-3 [&_h4]:font-medium [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p+p]:mt-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_code]:font-mono [&_code]:text-xs"
+      class="text-sm leading-relaxed text-base-content [&_h3]:mb-3 [&_h3]:mt-8 [&_h3:first-child]:mt-0 [&_h3]:text-base [&_h3]:font-semibold [&_h4]:mt-3 [&_h4]:font-medium [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p+p]:mt-2 [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_code]:font-mono [&_code]:text-xs"
       // eslint-disable-next-line solid/no-innerhtml -- releaseText sanitizes release Markdown
       innerHTML={releaseText(props.markdown)}
     />
@@ -72,6 +72,8 @@ function Screenshot(props: { src: string; title: string; label: string }) {
   );
 }
 
+// A conventional changelog: warnings first, then every change group as plain
+// headed lists, with nothing hidden behind a disclosure.
 export function WhatsNewContent(props: { content: ReleaseContent }) {
   return (
     <div class="space-y-6">
@@ -84,20 +86,6 @@ export function WhatsNewContent(props: { content: ReleaseContent }) {
             <ReleaseText markdown={important()} />
           </section>
         )}
-      </Show>
-      <Show when={props.content.highlights.length > 0}>
-        <section aria-label="Release highlights">
-          <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Highlights</h3>
-          <ul class="space-y-3">
-            <For each={props.content.highlights}>
-              {(highlight) => (
-                <li class="rounded-lg border border-border bg-surface-alt p-4">
-                  <ReleaseText markdown={highlight} />
-                </li>
-              )}
-            </For>
-          </ul>
-        </section>
       </Show>
       <For each={props.content.visuals}>
         {(visual) => (
@@ -119,31 +107,18 @@ export function WhatsNewContent(props: { content: ReleaseContent }) {
           </section>
         )}
       </For>
-      <Show when={props.content.upgradeNotes}>
-        {(upgradeNotes) => (
-          <details class="group rounded-lg border border-border">
-            <summary class="cursor-pointer rounded-lg px-4 py-3 text-sm font-medium text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500">
-              Before you upgrade
-            </summary>
-            <div class="border-t border-border p-4">
-              <ReleaseText markdown={upgradeNotes()} />
-            </div>
-          </details>
-        )}
-      </Show>
       <Show when={props.content.changes}>
         {(changes) => (
-          <details
-            open={props.content.highlights.length === 0 && props.content.visuals.length === 0}
-            class="group rounded-lg border border-border"
-          >
-            <summary class="cursor-pointer rounded-lg px-4 py-3 text-sm font-medium text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-blue-500">
-              All changes
-            </summary>
-            <div class="border-t border-border p-4">
-              <ReleaseText markdown={changes()} />
-            </div>
-          </details>
+          <section aria-label="Changes">
+            <ReleaseText markdown={changes()} />
+          </section>
+        )}
+      </Show>
+      <Show when={props.content.upgradeNotes}>
+        {(upgradeNotes) => (
+          <section aria-label="Upgrade notes">
+            <ReleaseText markdown={`### Upgrade notes\n\n${upgradeNotes()}`} />
+          </section>
         )}
       </Show>
     </div>

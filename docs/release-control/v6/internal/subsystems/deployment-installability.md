@@ -2973,24 +2973,27 @@ artifact-selection behaviour.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
    reservation boundary so the release notice and the GitHub gratitude prompt
    cannot create a one-two sequence. The post-update
-   surface keeps authored Known issues and historical Breaking changes open
-   before the Highlights, with optional `See the difference` images directly
-   after the Highlights. Routine Before-you-upgrade instructions have their own
-   initially collapsed disclosure, separate from the grouped change expansion.
-   Release authors must put critical risks and required safety actions in Known
-   issues so those warnings remain visible without expanding upgrade notes.
+   dialog reads as a conventional changelog headed by the version and release
+   date: authored Known issues and historical Breaking changes first, optional
+   `See the difference` images next, then every grouped change section as
+   plain headed lists and routine Before-you-upgrade instructions last as
+   Upgrade notes, with no disclosure hiding any of them. The curated
+   Highlights summary belongs to the pre-update preview and is not repeated
+   above the changelog. Release authors must put critical risks and required
+   safety actions in Known issues so those warnings lead the dialog.
    Screenshot URLs must be exact-version public release PNG sidecars, never
    arbitrary remote images or raw PR attachment URLs. Before/now comparisons
    load through the authenticated exact-version release-asset endpoint, which
    validates body references, bounded PNG data and GitHub redirect hosts
    without loosening the application's same-origin image policy. Comparisons
    stack at narrow widths, link to full-size assets and degrade to readable
-   text if an image cannot load. Highlights-only releases remain useful, while
+   text if an image cannot load. A release without grouped change sections
+   shows its Highlights list as the changelog, while
    a first baseline, malformed or development version, missing release, or
    metadata-only release stays silent. Text is sanitized independently of
    screenshot rendering and cannot expand the chat Markdown trust boundary.
-   For both the pre-update preview and post-update overview, release rendering
-   keeps it to at most three short plain-text bullets of no more than 140
+   For the pre-update preview, release rendering keeps Highlights to at most
+   three short plain-text bullets of no more than 140
    characters each, with links, code, issue references, and nested structure
    reserved for the categorized or full release notes.
    The post-update communication boundary does not announce telemetry payload
@@ -5048,8 +5051,9 @@ build upload or public mobile-store rollout is part of this server release.
 The same release boundary provides one canonical in-app release-note
 experience. Update checks preview curated Highlights, while the authenticated
 running-version endpoint supplies the same published body to the post-update
-modal. That modal shows Highlights, optional release screenshot comparisons,
-important operator information and expandable grouped changes. Historical
+modal. That modal is a plain changelog: important operator information,
+optional release screenshot comparisons, every grouped change section and
+upgrade notes, without repeating Highlights. Historical
 Added/Improved/Fixed categories remain readable. PR visual evidence can be
 selected autonomously and copied into versioned release assets, with fresh
 captures available for missing or stale views. Source/development builds and
