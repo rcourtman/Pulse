@@ -8259,6 +8259,27 @@ smoke tests, read-only graph tests/vet and real server/agent builds at the same
 source. No install, release or native Kubernetes acceptance is implied by a
 manifest edit or acquisition receipt.
 
+### Non-storage Go dependency refresh (24 October 2026)
+
+The next managed graph advances compress to 1.20.3, Moby API/client to
+1.56.1/0.6.2, Prometheus client/common to 1.25.0/0.72.0, gopsutil to 4.26.9,
+and x/crypto, x/sync, x/sys and x/term to 0.58.0, 0.24.0, 0.49.0 and 0.47.0.
+Their seven indirect module updates are explicit in `go.mod`; dependency
+classification (direct versus indirect) and unrelated pins are preserved.
+The Go 1.26.10 toolchain, x/net 0.60.0, aligned Kubernetes 0.37.1 trio,
+SQLite 1.59.0 and libc 1.75.7 stay unchanged. This is not the storage update
+from the wider managed proposal.
+
+`go.sum` adds exact module and go.mod checksum pairs without pruning the
+previous records. The managed graph check in `scripts/tests/test-hot-dev-bg.sh`
+enforces all ten selected direct floors, their checksum pairs and the existing
+Kubernetes alignment. These checks establish graph structure, not official
+module integrity or runtime compatibility. Acceptance still needs verified
+exact-graph acquisition, read-only module resolution, the affected Docker,
+metrics wire/decompression, host-agent and authentication tests, managed-runtime
+smokes, vet and real server/agent builds. No advisory clearance, installed
+recovery or delivery is inferred from a manifest change or acquisition alone.
+
 ### Complete CI dependency-change classification (6 October 2026)
 
 Build and Test consumes the complete changed-file list before choosing the
