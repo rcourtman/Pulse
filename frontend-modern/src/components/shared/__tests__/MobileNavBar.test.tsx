@@ -228,18 +228,18 @@ describe('MobileNavBar', () => {
     ));
 
     const nav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    expect(
-      within(nav).getByRole('link', { name: 'Alerts: 2 critical, 3 warning' }),
-    ).toHaveTextContent('23');
+    const alertsLink = within(nav).getByRole('link', { name: 'Alerts 2 3' });
+    expect(alertsLink).toHaveTextContent('Alerts 2 3');
+    expect(alertsLink).toHaveAccessibleDescription('2 critical, 3 warning');
     expect(within(nav).getByRole('link', { name: 'Patrol: 2 open work items' })).toHaveTextContent(
-      'Patrol2',
+      'Patrol 2',
     );
     expect(within(nav).queryByRole('link', { name: 'Pulse Patrol Patrol' })).toBeNull();
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
     const menu = await screen.findByRole('menu', { name: 'Switch platform' });
     expect(within(menu).getByRole('menuitem', { name: /Machines/ })).toHaveTextContent(
-      'MachinesSetup',
+      'Machines Setup',
     );
     fireEvent.click(within(nav).getByRole('button', { name: 'More navigation' }));
     const utilityMenu = await screen.findByRole('menu', {

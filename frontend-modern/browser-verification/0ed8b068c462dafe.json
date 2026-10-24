@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "82df77f2f5526a3b424d19926edf6f99b8faecd4",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "6225db5808c095d7634dfb352971591e612cb9fffd79d49c8920b33209b9ca43",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "15366b75b54f703e6a0efd1b0b5e742aeb449a51a573b9d2dc550513145c8c5b",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "de0660867413400ec9c28113767cb4c0a1e86c7afd91b0906e7ee7629920f7f1"
+  },
+  "routes": [
+    "/alerts",
+    "/actions",
+    "/patrol"
+  ],
+  "states": [
+    "One warning plus two Patrol attention items and three action approvals",
+    "Mixed one critical/two warning alerts with preserved accessible severity description",
+    "Zero active alerts without a false count or severity description"
+  ],
+  "interactions": [
+    "Reproduced label-content-name-mismatch on all three counted links on assigned parent at desktop and phone using axe 4.14.0",
+    "Focus and activate Actions and Patrol with keyboard on Chromium, touch on WebKit and at 320px, verify heading/current-page state",
+    "Run all WCAG 2 A/AA, 2.1 A/AA and 2.2 AA tags in all three count states at each viewport; nine scans pass without exclusions",
+    "Check no document horizontal overflow and no page errors",
+    "Native view_image inspection of all six final captures and both parent captures; layout and readable badges retained"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "verified_at": "2026-10-24T12:16:31.649533Z",
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0"
+    }
+  ],
+  "evidence": "Web lane RECEIPTS.md, BROWSER.json, browser-expanded.raw and all eight retained PNGs. Real AppLayout, MobileNavBar, models, stores, router and CSS consume synthetic summary/approval APIs in an evidence-only shell fixture. Playwright 1.56.1 matches the integration lock; axe is 4.14.0. No native recovery, installed backend, user-issue resolution or release availability claim."
+}

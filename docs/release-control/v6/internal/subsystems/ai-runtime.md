@@ -3693,6 +3693,12 @@ verdict on its own check.
 
 ## Current State
 
+Patrol's utility-navigation attention count shares the desktop/mobile visible
+label-in-name contract: the label precedes its numeric badge in DOM text and
+in the accessible name, with a real word boundary. The attention explanation
+remains available to assistive technology; naming changes do not alter AI
+availability, permission gates, attention counts, navigation routes or actions.
+
 ### AI Discovery removed (2026-10-11)
 
 AI Discovery, the model-backed service-identification layer, is gone. The

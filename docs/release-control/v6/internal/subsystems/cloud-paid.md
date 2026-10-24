@@ -2140,6 +2140,14 @@ generated output. The canonical edit path remains the frontend source under
 must regenerate the embedded bundle plus the source-hash manifest so the live
 control-plane, embedded Go template, and local preview all run the same
 frontend revision.
+The portal's development/test graph shares the main UI's Vitest security
+floor: every installed 4.x runner/mocker family copy must be stable, at least
+4.1.12 and aligned with its runner (GHSA-qxg6-89mg-rqv8 and
+GHSA-xp26-3454-mjgp). Updating the portal manifest also requires regenerating
+the source-hash manifest, even when the unchanged production compiler emits
+byte-identical JavaScript and CSS. The maintained portal dependency test and
+Go bundle-sync check must cover both properties; a main-UI-only update or a
+passing build without committed generated identity does not cover the portal.
 That same shell framing also owns user-facing prerelease labeling for
 rc-channel builds. `frontend-modern/src/AppLayout.tsx` may still key off the
 canonical `rc` channel metadata internally, but the visible badge must frame
