@@ -4949,6 +4949,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		"validate-notes-file /dev/stdin",
 		"260 characters or fewer",
 		"Use no semicolon or em dash characters",
+		"Name the specific feature or fix and where users find it",
+		"Never a theme or benefit slogan",
 		"- **[Short outcome]** - [Where users notice it and why it matters.]",
 		"requesting one constrained revision",
 	} {
