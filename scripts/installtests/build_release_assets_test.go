@@ -2395,9 +2395,9 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	required := []string{
 		`- name: Tailscale`,
 		`uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3`,
-		`oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}`,
-		`oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}`,
-		`tags: tag:infra`,
+		`oauth-client-id: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}`,
+		`oauth-secret: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}`,
+		`tags: tag:ci-deploy`,
 		`version: '1.94.2'`,
 		`ping: ${{ secrets.DEMO_SERVER_HOST }}`,
 		`bash .github/scripts/check-demo-reachability.sh`,

@@ -8023,8 +8023,8 @@ frozen-product insertion, candidate re-cut or stable promotion is performed.
 A pinned Tailscale action registers an ephemeral project CI node using only
 `tag:ci-deploy` and the dedicated `TS_CI_DEPLOY_OAUTH_CLIENT_ID` /
 `TS_CI_DEPLOY_OAUTH_SECRET` binding. Its OAuth client has only Auth Keys write,
-restricted to that tag; it must not alias the `tag:infra` demo or full-access
-administrative identity. The credential owner verifies that configured scope;
+restricted to that tag; it must not alias the retired `tag:infra` or a
+full-access administrative identity. The credential owner verifies that configured scope;
 source and Self observations are not proof of OAuth/ACL authority. Missing
 dedicated registration configuration stops before join, with no credential,
 auth-key or caller-input fallback. `release_browser_tailnet.py` rejects anything
@@ -8037,6 +8037,16 @@ fixed prerequisite/registration steps receive the dedicated OAuth pair; acceptan
 commands receive a scrubbed environment with no provider, production or
 publishing credential. State is synthetic, disabled resources and throwaway
 admin/API authentication, with the existing telemetry opt-out.
+
+The governed demo update and recovery workflows register through the same
+`TS_CI_DEPLOY_OAUTH_CLIENT_ID` / `TS_CI_DEPLOY_OAUTH_SECRET` binding and only
+`tag:ci-deploy`. The tailnet policy grants that tag TCP 22 to the `pulse-relay`
+demo host, which is the only path those workflows use before SSH. Their former
+`TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` pair named the July 2026 `tag:infra`
+client. That client was revoked on 30 September 2026, when the private
+repositories moved to narrow clients, so every demo convergence step since then
+failed with an OAuth 401. Neither repository secret name may hold the retired
+`tag:infra` client or a full-access administrative client.
 
 The real Chromium UI signs in once, chooses Preview, checks the actual feed's
 exact RC/archive, and confirms one Install Update. The observer requires real
