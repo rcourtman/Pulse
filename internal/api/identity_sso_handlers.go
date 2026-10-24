@@ -338,14 +338,8 @@ func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, 
 }
 
 func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(req.Body, maxRequestBodySize))
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "read_error", "Failed to read request body", nil)
-		return
-	}
-
 	var provider config.SSOProvider
-	if err := json.Unmarshal(body, &provider); err != nil {
+	if err := decodeAdminJSONObject(w, req, &provider, maxRequestBodySize); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid JSON payload", nil)
 		return
 	}
@@ -478,14 +472,8 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	body, err := io.ReadAll(io.LimitReader(req.Body, maxRequestBodySize))
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "read_error", "Failed to read request body", nil)
-		return
-	}
-
 	var updated config.SSOProvider
-	if err := json.Unmarshal(body, &updated); err != nil {
+	if err := decodeAdminJSONObject(w, req, &updated, maxRequestBodySize); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid JSON payload", nil)
 		return
 	}

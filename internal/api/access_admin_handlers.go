@@ -58,15 +58,12 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Limit request body size.
-	r.Body = http.MaxBytesReader(w, r.Body, 4*1024) // 4KB max
-
 	var req struct {
 		OrgID         string `json:"org_id"`
 		Username      string `json:"username"`
 		RecoveryToken string `json:"recovery_token"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeAdminJSONObject(w, r, &req, 4*1024); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid request body", nil)
 		return
 	}

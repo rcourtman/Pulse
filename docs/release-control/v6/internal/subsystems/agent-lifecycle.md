@@ -10271,3 +10271,13 @@ The actual CLI/receipt control is
 `TestContractChartSLOProofCLIClassifiesExecution`; the separate read-only
 evidence and check-writer boundary is
 `TestChartSLOWorkflowPreservesInconclusiveAndFailure`.
+
+### Administrative JSON does not select agent operations (24 October 2026)
+
+The public SSO and RBAC administrative JSON admission rejects competing field
+values before settings, roles or one-use recovery tokens change. It exposes
+no agent enrollment, command, update or credential operation. Singleton
+requests and existing access, organization and Community SSO gates remain;
+`TestContractSSOAmbiguousSavePreservesDetail` and the SSO/RBAC JSON admission
+tests establish configuration/account preservation, not installed agent or
+guest recovery.

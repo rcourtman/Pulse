@@ -7243,3 +7243,14 @@ History latency result, intact stored data, guest liveness or installed
 recovery. `TestContractChartSLOProofCLIClassifiesExecution` preserves child
 exit, output and executable identity across those distinctions; the 90 ms
 valid-capacity requirement and independent native recovery remain unchanged.
+
+### Rejected administrative input preserves saved recovery choices (24 October 2026)
+
+Competing public SSO request fields cannot overwrite restrictions or saved
+provider credentials, and ambiguous reset-admin fields cannot consume the
+one-use token while selecting a different account. A complete unique request
+can still deliberately clear restrictions or perform its authorized scoped
+reset. `TestContractSSOAmbiguousSavePreservesDetail` and the SSO/RBAC JSON
+admission tests preserve persisted settings, exact roles and token usability.
+No database schema, stored history, backup/thaw operation or native recovery
+route changes; parser admission does not establish those operational outcomes.
