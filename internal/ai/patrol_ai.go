@@ -1865,9 +1865,14 @@ type patrolDockerHostRow struct {
 
 type patrolAppContainerRow struct {
 	id, name, status string
-	health           string
-	restartCount     int
-	cpu, memory      float64
+	// alertResourceID is the container's ID in the alert subsystem
+	// ("docker:<host>/<container ID>"), so an alert resolves to this
+	// container rather than a same-named one on another host.
+	alertResourceID string
+	health          string
+	restartCount    int
+	oomKilled       *bool
+	cpu, memory     float64
 }
 
 type patrolStoragePoolRow struct {
@@ -2189,13 +2194,15 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				continue
 			}
 			rows = append(rows, patrolAppContainerRow{
-				id:           cv.ID(),
-				name:         cv.Name(),
-				status:       strings.TrimSpace(cv.ContainerState()),
-				health:       strings.TrimSpace(cv.Health()),
-				restartCount: cv.RestartCount(),
-				cpu:          cv.CPUPercent(),
-				memory:       cv.MemoryPercent(),
+				id:              cv.ID(),
+				name:            cv.Name(),
+				status:          strings.TrimSpace(cv.ContainerState()),
+				alertResourceID: dockerAlertScopeAlias(cv.HostSourceID(), cv.ContainerID(), cv.Name()),
+				health:          strings.TrimSpace(cv.Health()),
+				restartCount:    cv.RestartCount(),
+				oomKilled:       cv.OOMKilled(),
+				cpu:             cv.CPUPercent(),
+				memory:          cv.MemoryPercent(),
 			})
 		}
 		return rows
@@ -2212,13 +2219,15 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				continue
 			}
 			rows = append(rows, patrolAppContainerRow{
-				id:           container.ID,
-				name:         container.Name,
-				status:       container.State,
-				health:       container.Health,
-				restartCount: container.RestartCount,
-				cpu:          container.CPUPercent,
-				memory:       container.MemoryPercent,
+				id:              container.ID,
+				name:            container.Name,
+				status:          container.State,
+				alertResourceID: dockerAlertScopeAlias(host.ID, container.ID, container.Name),
+				health:          container.Health,
+				restartCount:    container.RestartCount,
+				oomKilled:       container.OOMKilled,
+				cpu:             container.CPUPercent,
+				memory:          container.MemoryPercent,
 			})
 		}
 	}

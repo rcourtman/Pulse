@@ -4192,13 +4192,38 @@ and cost-gated in the keep direction. Local state never resolves an
 alert: only a parsed model RESOLVE verdict (or operator action) clears
 one. But an aged active alert whose trigger condition demonstrably
 still holds in the current runtime snapshot — a metric alert whose
-looked-up current value is still at/above its positive threshold, or
-an offline-family alert whose node/agent/VM/system-container resource
-is present and still not online (`alertStillFiringState`) — must be
-skipped without a billed model call, because a correct review could
-only answer KEEP. Every uncertain case (unknown alert type, missing
-resource, unmapped metric, non-positive threshold, resource types the
-online check does not model) still goes to the model. The remaining
+looked-up current value is still at/above its positive threshold, an
+offline-family alert whose node/agent/VM/system-container resource
+is present and still not online, or a Docker container alert whose
+container still reports what raised it (a health result other than
+healthy, starting or none while running; a runtime state the alert
+subsystem's state alert covers; exited or dead with OOM-killed set)
+(`alertStillFiringState`) — must be skipped without a billed model
+call, because a correct review could only answer KEEP and a wrong
+RESOLVE is raised again by the alert engine on the resource's next
+report, so every Patrol pass would flap the alert and its
+notifications. A restart-loop alert whose container is caught in
+Docker's restart backoff is kept the same way, on weaker evidence: the
+snapshot carries no restart window, so this shows restarting, not the
+alert subsystem's count, and that subsystem clears the alert itself
+once its window empties. A Docker container alert is
+judged against the container its `docker:<host>/<container>` resource
+ID names, never a same-named container on another host. Every
+uncertain case (unknown alert type, missing resource, unmapped metric,
+non-positive threshold, resource types the online check does not
+model, a restart loop on a running container) still goes to the
+model. The review context for a Docker container carries its health,
+restart count and OOM kill (yes, no or unknown), and the prompt makes a
+condition the shown state does not cover a KEEP: normal readings for
+other metrics are not recovery. When the context lookup has no row for
+an alert's subject but current inventory still holds it or its owner
+by durable identity (`ResolveAlertResourceReference`: a ZFS pool's
+storage, a guest's backup, a Swarm service), the context says the
+resource or its owner is present rather than not found, so a lookup
+gap is never offered to the model as removal. Owner presence does not
+prove a child (a pool device, a host's disk) survives; an alert the
+alert engine stops observing is cleared by its stale-alert sweep after
+24 hours. The remaining
 candidates are reviewed in batched `QuickAnalysis` calls of at most
 `patrolAlertReviewBatchSize` alerts with numbered per-alert verdict
 lines; verdict parsing is fail-safe (unparseable or out-of-range

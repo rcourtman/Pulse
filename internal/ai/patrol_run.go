@@ -2425,10 +2425,12 @@ func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
 //
 // Two structural cost controls run before any model call:
 //   - alerts whose trigger condition demonstrably still holds in the current
-//     snapshot (metric still at/above threshold, resource still offline) are
-//     skipped — a correct review could only answer KEEP, so the question is
-//     not worth a billed call. Resolution stays model-owned: Pulse never
-//     locally decides that an issue HAS cleared.
+//     snapshot (metric still at/above threshold, resource still offline,
+//     Docker container still unhealthy, stopped or OOM-killed) are skipped —
+//     a correct review could only answer KEEP, and a wrong RESOLVE would be
+//     raised again by the alert engine on the resource's next report. The
+//     question is not worth a billed call. Resolution stays model-owned:
+//     Pulse never locally decides that an issue HAS cleared.
 //   - the remaining candidates are reviewed in batched model calls instead
 //     of one call per alert.
 func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool, executionID string) int {
@@ -2452,6 +2454,10 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 	}
 	if aiSvc == nil || !aiSvc.IsEnabled() {
 		return 0
+	}
+	if state.alertResourceResolver == nil {
+		// Built once: each review context may consult it.
+		state.alertResourceResolver = patrolAlertReferenceResolver(state)
 	}
 
 	// Only review alerts that have been active for at least 10 minutes
@@ -2512,12 +2518,15 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 
 // alertStillFiringState reports whether the current runtime snapshot still
 // demonstrably shows the alert's trigger condition — a metric alert whose
-// current value is still at or above its threshold, or an offline alert
-// whose resource is still not online. For these alerts a correct model
-// review can only answer KEEP, so Patrol skips the billed call and keeps
-// the alert. The gate never decides that an issue HAS cleared: anything
-// uncertain (unknown alert type, missing resource, unmapped metric)
-// returns false so the model still owns the resolution decision.
+// current value is still at or above its threshold, an offline alert
+// whose resource is still not online, or a Docker container alert whose
+// container still reports the state that raised it (for a restart loop,
+// a container caught in Docker's restart backoff). For these alerts a
+// correct model review can only answer KEEP, so Patrol skips the billed
+// call and keeps the alert. The gate never decides that an issue HAS
+// cleared: anything uncertain (unknown alert type, missing resource,
+// unmapped metric) returns false so the model still owns the resolution
+// decision.
 func (p *PatrolService) alertStillFiringState(alert AlertInfo, snap patrolRuntimeState) bool {
 	switch alert.Type {
 	case "cpu", "memory", "usage", "disk":
@@ -2540,6 +2549,55 @@ func (p *PatrolService) alertStillFiringState(alert AlertInfo, snap patrolRuntim
 		default:
 			return false
 		}
+	case "docker-container-health", "docker-container-state", "docker-container-oom-kill", "docker-container-restart-loop":
+		resource := lookupPatrolAlertResourceState(alert, snap)
+		if !resource.found || resource.resourceType != "app-container" {
+			return false
+		}
+		return dockerContainerAlertStillFiring(alert.Type, resource)
+	default:
+		return false
+	}
+}
+
+// dockerContainerAlertingStates are the runtime states the alert subsystem
+// raises docker-container-state for (checkDockerContainerState).
+var dockerContainerAlertingStates = map[string]bool{
+	"created": true, "restarting": true, "removing": true, "paused": true,
+	"exited": true, "dead": true, "unknown": true,
+}
+
+// dockerContainerAlertStillFiring mirrors the alert subsystem's Docker
+// container health, state and OOM checks (internal/alerts/docker.go)
+// against the container's current report. It answers only in the keep
+// direction: a container that may have recovered returns false and goes
+// to the model.
+func dockerContainerAlertStillFiring(alertType string, container patrolAlertResourceState) bool {
+	state := strings.ToLower(strings.TrimSpace(container.status))
+	switch alertType {
+	case "docker-container-health":
+		// Health is live evidence only while the container runs; a
+		// stopped container's last health result belongs to the state
+		// alert, which the alert subsystem raises instead.
+		if state != "" && state != "running" {
+			return false
+		}
+		switch strings.ToLower(strings.TrimSpace(container.health)) {
+		case "", "none", "healthy", "starting":
+			return false
+		}
+		return true
+	case "docker-container-state":
+		return dockerContainerAlertingStates[state]
+	case "docker-container-oom-kill":
+		return (state == "exited" || state == "dead") && container.oomKilled != nil && *container.oomKilled
+	case "docker-container-restart-loop":
+		// The alert subsystem counts restarts over a window the snapshot
+		// does not carry, so this is not its check. A container caught in
+		// Docker's restart backoff is still restarting, though; keeping
+		// its alert defers to the alert subsystem, which clears it once
+		// the window empties.
+		return state == "restarting"
 	default:
 		return false
 	}
@@ -2551,6 +2609,9 @@ type patrolAlertResourceState struct {
 	platform     string
 	name         string
 	status       string
+	health       string
+	restartCount int
+	oomKilled    *bool
 	cpu          float64
 	memory       float64
 	guestMemory  *patrolGuestMemoryReading
@@ -2610,15 +2671,37 @@ func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) pa
 	return patrolAlertResourceState{}
 }
 
+// patrolAlertSubjectInInventory reports whether current inventory holds the
+// alert's subject, or the resource that owns it, by durable identity.
+func patrolAlertSubjectInInventory(alert AlertInfo, snap patrolRuntimeState) bool {
+	if strings.TrimSpace(alert.ResourceID) == "" {
+		return false
+	}
+	binding, _ := patrolAlertReferenceResolver(snap).ResolveAlertResourceReference(alert.ResourceID)
+	return binding.ResourceID != ""
+}
+
 func patrolLookupAppContainerAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
-	for _, container := range patrolAppContainerRows(snap, nil) {
-		if !patrolAlertNameMatches(alert, container.id, container.name) {
+	rows := patrolAppContainerRows(snap, nil)
+	// An alert subsystem container ID ("docker:<host>/<container>") names
+	// one container on one host, so it alone decides: a display-name match
+	// could judge the alert against a same-named container elsewhere.
+	exact := strings.HasPrefix(alert.ResourceID, "docker:")
+	for _, container := range rows {
+		if exact {
+			if container.alertResourceID != alert.ResourceID {
+				continue
+			}
+		} else if !patrolAlertNameMatches(alert, container.id, container.name) {
 			continue
 		}
 		return patrolAlertResourceState{
 			resourceType: "app-container",
 			name:         container.name,
 			status:       container.status,
+			health:       container.health,
+			restartCount: container.restartCount,
+			oomKilled:    container.oomKilled,
 			cpu:          container.cpu,
 			memory:       container.memory,
 			found:        true,
@@ -2856,7 +2939,9 @@ func (p *PatrolService) reviewAlertBatchState(ctx context.Context, batch []Alert
 
 // buildAlertReviewPromptState formats the batched alert-review prompt: one
 // numbered section per alert with its trigger details and current resource
-// state, plus strict per-line verdict output instructions.
+// state, plus strict per-line verdict output instructions. The current
+// state covers only some alert conditions, so the prompt says that a
+// condition it does not show is a KEEP, not a recovery.
 func (p *PatrolService) buildAlertReviewPromptState(batch []AlertInfo, snap patrolRuntimeState) string {
 	var sb strings.Builder
 	sb.WriteString("Review these active alerts and determine, for each, if it should be auto-resolved based on current state.\n")
@@ -2881,6 +2966,7 @@ CURRENT STATE OF THIS RESOURCE:
 	}
 	sb.WriteString(`
 For each alert, should it be RESOLVED because the underlying issue is fixed?
+Answer RESOLVE only when the current state shown for that alert directly shows its condition has cleared (for example the metric is back under its threshold, the resource is online again, or the reported health is healthy), or shows the resource no longer exists. If the current state does not cover the condition the alert is about, answer KEEP: normal readings for other metrics are not evidence that it is fixed.
 Respond with EXACTLY one line per alert, in order, and nothing else:
 ALERT <number>: RESOLVE: <brief reason>
 or
@@ -2921,6 +3007,13 @@ func patrolAlertResolveReason(raw string) string {
 func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patrolRuntimeState) string {
 	resource := lookupPatrolAlertResourceState(alert, snap)
 	if !resource.found {
+		// The lookup reads only some alert subjects. One the canonical
+		// inventory still holds, or whose owner it holds (a ZFS pool's
+		// storage, a guest's backup, a Swarm service), is not missing, and
+		// calling it missing invites the model to resolve it as removed.
+		if patrolAlertSubjectInInventory(alert, snap) {
+			return "Present in current inventory (this alert's resource or the resource that owns it); this review has no current reading of the alert's condition"
+		}
 		switch patrolAlertLookupType(alert) {
 		case "storage":
 			return "Storage not found in current state (may have been removed)"
@@ -2958,10 +3051,33 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 		return fmt.Sprintf("Container '%s': CPU %.1f%%, Memory %s, Status: %s",
 			resource.name, resource.cpu, resource.guestMemory.display(), resource.status)
 	case "app-container":
-		return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s",
-			resource.name, resource.cpu, resource.memory, resource.status)
+		return fmt.Sprintf("Docker container '%s': CPU %.1f%%, Memory %.1f%%, State: %s, Health: %s, Restart count: %d, OOM-killed: %s",
+			resource.name, resource.cpu, resource.memory, resource.status,
+			dockerContainerHealthText(resource.health), resource.restartCount, dockerContainerOOMText(resource.oomKilled))
 	default:
 		return "Resource state unknown"
+	}
+}
+
+// dockerContainerHealthText names the container's reported health check
+// result, so a health alert's review sees the reading that raised it.
+func dockerContainerHealthText(health string) string {
+	if health = strings.TrimSpace(health); health == "" {
+		return "none"
+	}
+	return health
+}
+
+// dockerContainerOOMText keeps an explicit "no" apart from an agent that
+// does not report OOM kills, which proves nothing either way.
+func dockerContainerOOMText(oomKilled *bool) string {
+	switch {
+	case oomKilled == nil:
+		return "unknown"
+	case *oomKilled:
+		return "yes"
+	default:
+		return "no"
 	}
 }
 
