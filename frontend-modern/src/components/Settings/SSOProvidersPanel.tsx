@@ -280,7 +280,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${getSSOProviderTypeLabel(form.type)} provider`}
         >
           <form class="flex max-h-[calc(100dvh-2rem-2px)] min-h-0 flex-col" onSubmit={handleSave}>
-            <div class="sticky top-0 z-10 shrink-0 border-b border-border bg-surface px-4 py-4 sm:px-6">
+            <div class="shrink-0 border-b border-border bg-surface px-4 py-4 sm:px-6">
               <h3 class="text-lg font-semibold text-base-content">
                 {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>

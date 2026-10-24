@@ -29,18 +29,25 @@ existing inline result. They do not rely on the intentionally inert background
 notification portal. Copy confirms success only after clipboard completion and
 otherwise offers manual copying. The full callback URL wraps at narrow widths.
 Save/Cancel stay reachable, and a pending save neither repeats nor dismisses.
-Retained background toasts lower below the modal backdrop while any blocking
-dialog is open, then regain their ordinary layer on close; they are not
-unmounted or made interactive through the modal. Shared modal focus trapping,
-inertness and restoration remain unchanged.
+Only success-confirmation-only toast stacks lower below the modal backdrop while
+a blocking dialog is open. Any error, warning or info toast keeps the whole stack
+at its ordinary foreground layer, including when added alongside a retained
+success: existing delete, assignment and role dialogs still depend on those
+notifications while remaining open. Toasts are not unmounted or made interactive
+through the modal. Shared modal focus trapping, inertness and restoration remain
+unchanged. The SSO header and footer are non-scrolling flex siblings of the
+scrollable fields; the header needs no sticky positioning.
 
 Allowed Groups are comma- or newline-separated exact IdP group names, preserving
 spaces through details → edit → no-op/mapping-only save for OIDC and SAML. This
 replaces the former whitespace split for that field only. Scopes, domains and
 emails keep their existing parsing; explicit empty restriction lists still clear
 them. Payload shape, secret omission and server-owned authorisation are unchanged.
-`SSOProvidersPanel.test.tsx`, `ssoProvidersModel.test.ts` and the settings
-architecture suite cover this boundary. Browser evidence uses the production
+`SSOProvidersPanel.test.tsx`, `ssoProvidersModel.test.ts`, `Toast.test.tsx`, the
+consuming `SSOProviderNotifications.test.tsx` and the settings architecture suite
+cover this boundary, including an actual refused DELETE while its confirmation
+stays open and a successful save/reopen with the previous confirmation retained.
+Browser evidence uses the production
 panel, state hook, API client, Dialog, Toast and CSS with synthetic HTTP at desktop
 and 320px widths; it is not native IdP, encrypted persistence or restart proof.
 

@@ -193,6 +193,11 @@ declare global {
 export const ToastContainer: Component = () => {
   const [toasts, setToasts] = createSignal<ToastMessage[]>([]);
 
+  // Only confirmation-only stacks may sit behind a dialog. Existing editors
+  // still rely on error, warning and info toasts while they remain open.
+  const lowerSuccessConfirmations = () =>
+    dialogStackHasBlockingDialog() && toasts().every((toast) => toast.type === 'success');
+
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
@@ -219,7 +224,7 @@ export const ToastContainer: Component = () => {
         role="region"
         aria-label="Notifications"
         class={`fixed inset-x-3 bottom-3 space-y-2 sm:left-auto sm:right-4 sm:bottom-4 sm:w-full sm:max-w-[500px] ${
-          dialogStackHasBlockingDialog() ? 'z-50' : 'z-9999'
+          lowerSuccessConfirmations() ? 'z-50' : 'z-9999'
         }`}
       >
         <For each={toasts()}>{(toast) => <Toast toast={toast} onRemove={removeToast} />}</For>
