@@ -29,6 +29,7 @@ type RuntimeCapabilitiesPayload = {
 
 /** Selector for the settings sidebar (div with aria-label, not a nav element). */
 const SETTINGS_SIDEBAR = '[aria-label="Settings navigation"]';
+const BILLING_PLAN_PATH = "/settings/pulse-intelligence/billing/plan";
 
 test.describe.serial("First-session experience", () => {
   test("wizard completes and lands on Add infrastructure source picker", async ({
@@ -176,7 +177,7 @@ test.describe.serial("First-session experience", () => {
       { path: "/settings/system-updates", readyHeading: "Updates" },
       { path: "/settings/security-overview", readyHeading: "Security Overview" },
       { path: "/settings/security-auth", readyHeading: "Authentication" },
-      { path: "/settings/system-billing", readyHeading: "Current plan" },
+      { path: BILLING_PLAN_PATH, readyHeading: "Current plan" },
     ] as const;
 
     const consoleErrors: string[] = [];
@@ -464,7 +465,7 @@ test.describe.serial("First-session experience", () => {
     );
 
     await ensureAuthenticated(page);
-    await page.goto("/settings/pulse-intelligence/billing/plan", {
+    await page.goto(BILLING_PLAN_PATH, {
       waitUntil: "domcontentloaded",
     });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
