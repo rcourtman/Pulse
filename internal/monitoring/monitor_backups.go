@@ -2606,11 +2606,12 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 		sec := sections[vmid]
 		if jobFinished {
 			if sec.status == "running" {
-				// The job ended without a per-guest verdict; treat as failed
-				// so the guest doesn't look covered by a backup that never
-				// completed.
-				sec.status = "error"
-				sec.errMsg = "backup job ended before guest backup completed"
+				// The parent ended, but the returned log may be truncated or
+				// missing a guest verdict. Neither a failed nor an OK parent
+				// establishes this guest's result. Keep explicit finish/failure
+				// lines above authoritative; do not invent either outcome here.
+				sec.status = "unknown"
+				sec.errMsg = "backup job ended without an observed guest result"
 			}
 			if sec.end.IsZero() {
 				sec.end = jobTask.EndTime

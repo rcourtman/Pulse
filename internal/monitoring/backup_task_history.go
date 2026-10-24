@@ -14,13 +14,19 @@ import (
 
 // A short HTTP response alone does not establish that a multi-guest log was
 // complete or understood. Require contiguous lines from the start, a terminal
-// marker and at least one attributed guest before qualifying the parent job.
+// marker and an explicit result for every attributed guest before qualifying
+// the parent job. An ended parent cannot fill in a missing guest verdict.
 func backupGuestLogComplete(job models.BackupTask, lines []proxmox.TaskLogLine, guests []models.BackupTask) bool {
 	if job.EndTime.IsZero() || len(lines) == 0 || len(lines) >= 20000 || len(guests) == 0 {
 		return false
 	}
 	for i, line := range lines {
 		if line.LineNumber != int64(i+1) {
+			return false
+		}
+	}
+	for _, guest := range guests {
+		if guest.Status != "OK" && guest.Status != "error" {
 			return false
 		}
 	}
