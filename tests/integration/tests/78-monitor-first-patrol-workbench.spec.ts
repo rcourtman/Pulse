@@ -749,7 +749,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("button", {
-        name: "Open High CPU pressure on pve-main",
+        name: /pve-main · High CPU pressure/,
       }),
     ).toBeVisible();
     await expect(
@@ -757,11 +757,11 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toHaveCount(0);
     await page
       .getByRole("button", {
-        name: "Open High CPU pressure on pve-main",
+        name: /pve-main · High CPU pressure/,
       })
       .click();
     const attentionDetail = page.getByRole("complementary", {
-      name: "High CPU pressure on pve-main",
+      name: "pve-main · High CPU pressure",
     });
     await expect(attentionDetail).toBeVisible();
     await expect(

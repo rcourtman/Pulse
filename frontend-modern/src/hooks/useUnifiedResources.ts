@@ -846,6 +846,7 @@ const toResource = (v2: APIResource): Resource => {
     platformId,
     platformType,
     platformScopes,
+    sources,
     sourceType: resolveSourceTypeFromSources(sources),
     parentId: v2.parentId,
     parentName: v2.parentName,

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
 import {
   createAuthenticatedStorageState,
+  apiRequest,
+  authenticateWithAPIToken,
   ensureAuthenticated,
 } from "./helpers";
 
@@ -104,6 +106,54 @@ test.describe("runtime-home onboarding contract", () => {
     await expect(
       page.getByRole("button", { name: /Generate token/i }),
     ).toHaveCount(0);
+  });
+
+  test("waits for token bootstrap before navigating to the agent install handoff", async ({ page }) => {
+    await ensureAuthenticated(page);
+    const created = await apiRequest(page, "/api/security/tokens", {
+      method: "POST",
+      data: { name: "E2E browser bootstrap regression", scopes: ["*"] },
+    });
+    expect(created.ok()).toBeTruthy();
+    const { token, record } = await created.json() as { token: string; record: { id: string } };
+    expect(token).toBeTruthy();
+    expect(record.id).toBeTruthy();
+    // This page owns only the bootstrap being tested. Replacing the setup
+    // page would also intercept its departing document's in-flight reads.
+    const bootstrapPage = await page.context().newPage();
+    let releaseBootstrap!: () => void;
+    const bootstrapHold = new Promise<void>(resolve => { releaseBootstrap = resolve; });
+    let notifyBlocked!: () => void;
+    const blocked = new Promise<void>(resolve => { notifyBlocked = resolve; });
+    const holdState = async (route: import("@playwright/test").Route) => {
+      notifyBlocked();
+      await bootstrapHold;
+      await route.continue();
+    };
+    let authentication: Promise<boolean> | undefined;
+    try {
+      await bootstrapPage.route("**/api/state/summary", holdState);
+      let completed = false;
+      authentication = authenticateWithAPIToken(bootstrapPage, token).then(result => { completed = true; return result; });
+      await Promise.race([blocked, authentication]);
+      expect(completed, "token authentication must await protected browser bootstrap").toBe(false);
+      releaseBootstrap();
+      expect(await authentication).toBe(true);
+      await bootstrapPage.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
+      await expect(bootstrapPage).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+      await expect(bootstrapPage.getByRole("dialog").getByRole("heading", {
+        name: "Add Pulse Agent", exact: true,
+      })).toBeVisible();
+    } finally {
+      releaseBootstrap();
+      await authentication?.catch(() => {});
+      await bootstrapPage.unroute("**/api/state/summary", holdState);
+      await bootstrapPage.close();
+      const revoked = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(record.id)}`, {
+        method: "DELETE",
+      });
+      expect(revoked.ok(), "the test-owned bootstrap token must be revoked").toBeTruthy();
+    }
   });
 
   test("retires legacy platform-management paths to the not-found page", async ({

@@ -2289,6 +2289,8 @@ describe('useUnifiedResources', () => {
     await result!.refetch();
     expect(result!.resources()[0].platformType).toBe('vmware-vsphere');
     expect(result!.resources()[0].sourceType).toBe('api');
+    // Owning-snapshot consumers read the canonical source list directly.
+    expect(result!.resources()[0].sources).toEqual(['vmware']);
     expect(result!.resources()[0].platformData?.sources).toEqual(['vmware']);
     expect(result!.resources()[0].vmware).toMatchObject({
       connectionId: 'vc-1',

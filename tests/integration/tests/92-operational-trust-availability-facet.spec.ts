@@ -270,10 +270,11 @@ test.describe("Operational trust availability resource facet", () => {
       hostRow.getByTitle(/TCP availability probe.*192\.0\.2\.18:8007/i).last(),
     ).toBeVisible();
 
-    await hostRow.click();
+    await hostRow.getByRole("button", { name: /^Expand details for / }).click();
 
     const drawer = dockerPage.getByTestId("docker-host-drawer");
     await expect(drawer).toBeVisible();
+    await drawer.locator('[data-testid="docker-host-technical-details"] > summary').click();
     const cards = drawer.getByTestId("availability-probe-status");
     await expect(cards).toHaveCount(2);
 
@@ -607,7 +608,7 @@ test.describe("Operational trust availability resource facet", () => {
         !requestUrl.pathname.endsWith("/summary")
       );
     });
-    await queue.getByRole("button", { name: `Open ${item.title}` }).click();
+    await queue.getByRole("button").filter({ hasText: item.title }).click();
     const detailResponse = await detailResponsePromise;
     const routedDetail = (await detailResponse.json()) as typeof detail;
 
@@ -621,6 +622,7 @@ test.describe("Operational trust availability resource facet", () => {
 
     const detailPanel = page.getByRole("complementary", { name: item.title });
     await expect(detailPanel).toBeVisible();
+    await detailPanel.getByText("Evidence and history", { exact: true }).click();
     await expect(
       detailPanel.getByText("Availability", { exact: true }),
     ).toBeVisible();

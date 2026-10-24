@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
 import platformWindowedItemsSource from '../usePlatformWindowedItems.ts?raw';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 
 describe('PlatformWindowedRows', () => {
   afterEach(cleanup);
@@ -219,6 +220,97 @@ describe('PlatformWindowedRows', () => {
       ['Zulu refreshed', 'Mike refreshed', 'Alpha refreshed'],
     );
   });
+
+  it.each([1200, 2400])(
+    'keeps an expanded %ipx drawer mounted while scrolling inside it',
+    async (drawerHeight) => {
+      let scrollTop = 0;
+      const rect = vi
+        .spyOn(Element.prototype, 'getBoundingClientRect')
+        .mockImplementation(function (this: Element) {
+          const top = this.getAttribute('data-platform-window-spacer') === 'top' ? -scrollTop : 0;
+          const height = this.hasAttribute('data-test-drawer') ? drawerHeight : 40;
+          return {
+            x: 0,
+            y: top,
+            top,
+            left: 0,
+            right: 200,
+            bottom: top + height,
+            width: 200,
+            height,
+            toJSON: () => ({}),
+          } as DOMRect;
+        });
+      const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 120 });
+      const visibility = (Element.prototype as Element & { checkVisibility?: () => boolean })
+        .checkVisibility;
+      (Element.prototype as Element & { checkVisibility?: () => boolean }).checkVisibility = () =>
+        true;
+      const [expanded, setExpanded] = createSignal(false);
+      const items = Array.from({ length: 100 }, (_, id) => ({ id }));
+      try {
+        const { container } = render(() => (
+          <table>
+            <tbody>
+              <PlatformWindowedRows items={() => items} windowSize={8} enableThreshold={8}>
+                {(item) => (
+                  <>
+                    <tr data-row={item.id}>
+                      <td>Resource {item.id}</td>
+                    </tr>
+                    <Show when={item.id === 0 && expanded()}>
+                      <InlineDetailTableRow data-test-drawer colSpan={1}>
+                        <input aria-label="Drawer draft" />
+                      </InlineDetailTableRow>
+                    </Show>
+                  </>
+                )}
+              </PlatformWindowedRows>
+            </tbody>
+          </table>
+        ));
+        setExpanded(true);
+        const draft = await screen.findByRole('textbox', { name: 'Drawer draft' });
+        await fireEvent.input(draft, { target: { value: 'keep while reading Details' } });
+        scrollTop = drawerHeight - 200;
+        await fireEvent.scroll(window);
+        expect(screen.getByRole('textbox', { name: 'Drawer draft' })).toBe(draft);
+        expect(draft).toHaveValue('keep while reading Details');
+        expect(container.querySelectorAll('[data-row]')).toHaveLength(8);
+
+        // Leaving the drawer advances the bounded window, while its measured
+        // height remains in the native scroll extent above the mounted rows.
+        scrollTop = drawerHeight + 400;
+        await fireEvent.scroll(window);
+        await waitFor(() => expect(container.querySelector('[data-row="0"]')).toBeNull());
+        const spacer = container.querySelector<HTMLElement>('[data-platform-window-spacer="top"]')!;
+        expect(parseFloat(spacer.style.height)).toBeGreaterThan(drawerHeight);
+        expect(container.querySelectorAll('[data-row]')).toHaveLength(8);
+
+        scrollTop = 0;
+        await fireEvent.scroll(window);
+        await screen.findByRole('textbox', { name: 'Drawer draft' });
+        setExpanded(false);
+        await waitFor(() =>
+          expect(screen.queryByRole('textbox', { name: 'Drawer draft' })).toBeNull(),
+        );
+        scrollTop = 400;
+        await fireEvent.scroll(window);
+        await waitFor(() => expect(parseFloat(spacer.style.height)).toBeLessThan(drawerHeight));
+        expect(parseFloat(spacer.style.height)).toBeGreaterThan(0);
+      } finally {
+        cleanup();
+        rect.mockRestore();
+        if (height) Object.defineProperty(window, 'innerHeight', height);
+        if (visibility)
+          (Element.prototype as Element & { checkVisibility?: () => boolean }).checkVisibility =
+            visibility;
+        else Reflect.deleteProperty(Element.prototype, 'checkVisibility');
+      }
+    },
+  );
 
   it('keeps estate-sized card lists within their configured mounted-item budget', () => {
     const items = () => Array.from({ length: 1_000 }, (_, index) => index);

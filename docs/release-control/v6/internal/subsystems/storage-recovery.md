@@ -1957,6 +1957,10 @@ recovery scope, or a storage/recovery-owned secret source.
    when the policy exposes them, and they must not add edition- or
    license-sniffing of their own to re-suppress or re-expose paid prompts.
 3. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
+   REST projection retains its validated source list on `resource.sources` as
+   well as platform metadata, so owning-snapshot consumers keep the same
+   provider context as websocket consumers. That provenance describes inventory;
+   it supplies no fresh storage observation, protection verdict or recovery grant.
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
    That shared hook plus the adjacent websocket/store adapter path must keep
    realtime transport merges canonical for storage/recovery consumers too:
@@ -7293,3 +7297,14 @@ reset. `TestContractSSOAmbiguousSavePreservesDetail` and the SSO/RBAC JSON
 admission tests preserve persisted settings, exact roles and token usability.
 No database schema, stored history, backup/thaw operation or native recovery
 route changes; parser admission does not establish those operational outcomes.
+
+### Browser fixture update budgets
+
+The Core E2E stack explicitly opts into a finite development update API budget
+so isolated browser sessions at one bridge IP can read the real update plan.
+`internal/api/rate_limit_config.go` keeps production at 60 update requests per
+minute and requires exact development mode plus a valid bounded override.
+`rate_limit_journey_budget_test.go` verifies exhaustion and unchanged login
+admission. This changes no storage history, backup, restore, migration or
+recovery contract. Request admission does not qualify stored-data preservation
+or a successful upgrade/recovery operation.

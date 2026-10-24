@@ -1777,6 +1777,13 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
     state, mounted-row budgets, viewport sync, and reveal timing; it must not
     fork the repeated `TableRow` / `TableCell` / surface-alt / click-containment
     shell inside workload, infrastructure, or platform table render paths.
+    Bounded platform tables use keyed measured item heights, including their
+    native inline details, when mapping scroll pixels to their mounted runway
+    and spacers. Reading a tall drawer must keep its owner mounted without
+    disabling windowing or increasing the row budget. Measurements update on
+    resize and row mutation rather than adding per-row layout reads to each
+    scroll event. The mounted `PlatformWindowedRows.test.tsx` regression covers
+    retained editing state inside a tall drawer and its offscreen scroll extent.
     Pod-mode workload filters must use the workload-owned
     `K8s cluster` / `All K8s clusters` labels for Kubernetes context selection,
     rather than a generic `Cluster` label that can be confused with Proxmox

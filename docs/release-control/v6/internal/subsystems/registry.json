@@ -1884,7 +1884,8 @@
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "tests/integration/tests/83-product-trust-accessibility.spec.ts"
             ]
           },
           {
@@ -3314,6 +3315,20 @@
             ]
           },
           {
+            "id": "endpoint-rate-budgets",
+            "label": "endpoint middleware rate budget and isolation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/rate_limit_config.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/rate_limit_config_test.go",
+              "internal/api/rate_limit_journey_budget_test.go"
+            ]
+          },
+          {
             "id": "backend-payload-contracts",
             "label": "backend API payload proof",
             "match_prefixes": [
@@ -4430,7 +4445,8 @@
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/utils/__tests__/apiClient.issue1640.test.ts",
-              "frontend-modern/src/utils/__tests__/apiClient.org.test.ts"
+              "frontend-modern/src/utils/__tests__/apiClient.org.test.ts",
+              "tests/integration/tests/83-product-trust-accessibility.spec.ts"
             ]
           },
           {
@@ -4730,8 +4746,10 @@
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
         "tests/integration/scripts/relay-mobile-token-helper.go",
+        "tests/integration/scripts/settings-scroll-audit.mjs",
         "tests/integration/tests/helpers.ts",
         "tests/integration/tests/runtime-defaults.ts",
+        "tests/integration/tests/vmware-workload-fixture.ts",
         "VERSION"
       ],
       "release_cycle_artifact_globs": [
@@ -5239,6 +5257,20 @@
             ]
           },
           {
+            "id": "browser-fixture-helpers",
+            "label": "authenticated browser fixture and onboarding handoff proof",
+            "match_prefixes": [],
+            "match_files": [
+              "tests/integration/tests/helpers.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "tests/integration/scripts/fixture-auth.test.mjs",
+              "tests/integration/tests/62-runtime-home-onboarding-contract.spec.ts"
+            ]
+          },
+          {
             "id": "dev-runtime-orchestration",
             "label": "dev runtime orchestration proof",
             "match_prefixes": [],
@@ -5264,7 +5296,6 @@
               "tests/integration/README.md",
               "tests/integration/scripts/managed-dev-runtime.mjs",
               "tests/integration/scripts/managed-local-backend.mjs",
-              "tests/integration/tests/helpers.ts",
               "tests/integration/tests/runtime-defaults.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -5351,6 +5382,34 @@
             "exact_files": [
               "scripts/installtests/native_unix_contract_runner_test.go",
               "scripts/tests/test_native_installer_contract_runner.py"
+            ]
+          },
+          {
+            "id": "browser-provider-inventory-fixture",
+            "label": "authoritative browser provider inventory fixture proof",
+            "match_prefixes": [],
+            "match_files": [
+              "tests/integration/tests/vmware-workload-fixture.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "tests/integration/tests/39-vmware-resource-detail-drawer.spec.ts",
+              "tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts"
+            ]
+          },
+          {
+            "id": "browser-settings-scroll-fixture",
+            "label": "complete native settings scroll audit proof",
+            "match_prefixes": [],
+            "match_files": [
+              "tests/integration/scripts/settings-scroll-audit.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "tests/integration/scripts/settings-scroll-audit.test.mjs",
+              "tests/integration/tests/05-settings-mobile-audit.spec.ts"
             ]
           }
         ],
@@ -5583,7 +5642,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
-              "frontend-modern/src/__tests__/AppLayout.test.tsx"
+              "frontend-modern/src/__tests__/AppLayout.test.tsx",
+              "tests/integration/tests/83-product-trust-accessibility.spec.ts"
             ]
           },
           {
@@ -6131,6 +6191,7 @@
               "frontend-modern/src/components/Workloads/__tests__/DrawerDiskListCard.readings.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/HostDrawer.filesystem-readings.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/NodeDrawerOverview.updateEvidence.test.tsx",
+              "frontend-modern/src/features/platformPage/__tests__/PlatformWindowedRows.test.tsx",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
               "frontend-modern/src/utils/__tests__/proxmoxUpdateEvidence.test.ts"
             ]

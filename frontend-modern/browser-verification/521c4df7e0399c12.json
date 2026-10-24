@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "074c3a474374b01d6a230a0ca08428de4f7cca73",
+  "verified_at": "2026-10-24T20:32:18.504070Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/index.css"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "fc905dacedc6a82ba59083ada7d0f05a9412ef2c30d75965d100adce5b3439af",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "cbdd63b9d70ccfee5483a7b2be48da624fe8b9653c83b0620655b94e35d5dcb4",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "4c4cca60550911d8ee0138742b00c88f04a9907aab33c9b91f08eaf3e59339a0",
+    "frontend-modern/src/components/shared/InlineDetailTableRow.tsx": "54eb91c75ca566ddd4f9675f77d9734adfeea543da56556cebaeb93ac6fa9616",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "33d93ce9eb37bfa6710433d6808bcfd9721a6f9cb718b90041fb37a0453e8efe",
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx": "6b3182ee0c925f9188717a01e997edb35b7146c9b0bc5e73a5a8f20dd9f71f05",
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "83ca49dbba523d74962dd4a0551ed844c8cad2cdacb2d2b2b3b5072ace235ad5",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "24a2e5520cc806fa482ad6adcc258dda93dfc099b7050d340f34d28207f1da86",
+    "frontend-modern/src/index.css": "8cd0ad3d260d7ac40fb65ac65e5bccec9d8ea9b8a464859289b3383dafe9cced"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure/agent-doctor?agents=<affected-agent>",
+    "/patrol",
+    "/docker/overview",
+    "/kubernetes/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Final staged formatting was applied before rebuilding production assets and the embedded runtime from parent 074c3a474374b01d6a230a0ca08428de4f7cca73; the formatter then reported zero pending changes across all fourteen staged frontend files. Private native mock runtime, canonical release metadata and Playwright 1.56.1. Current accessibility suite passed 15/15 across desktop Chromium, mobile Chromium and mobile WebKit; VMware read-only journeys passed four tests with two existing desktop-only exclusions, followed by a dedicated on-screen metadata capture. The manual matrix passed forty WCAG scans across desktop/tablet/phone light and desktop/phone dark, with a fresh page and asserted HTML theme in each case.",
+    "Native pixel inspection of final captures: vSphere desktop expanded VM with host grouping and on-screen vCenter/datacenter/cluster Details; update controls tablet light; installer phone dark; Agent Doctor desktop dark; Patrol desktop dark evidence and selected inbox; Docker phone light deep identity details; Kubernetes desktop dark deep identity details. Text, wrapping, focus rings, selected states, overlay placement, viewport scrolling and below-fold content remained readable and reachable.",
+    "Add controls retain their visible Add wording and platform context. Update chips retain visible update wording and affected-agent scope. Doctor notices retain contrast and command blocks expose keyboard scrolling. Semantic muted text and critical navigation badges retain contrast in both themes, including hovered Patrol rows.",
+    "Long Docker and Kubernetes inline drawers remain mounted while scrolling to and opening their Details disclosure, including phone identity/parent fields below the charts. Shared bounded row budgets and native touch scrolling remain in effect. Synthetic local proof does not establish physical device, installed agent, live provider, recovery or release qualification.",
+    "Authoritative REST-only VMware fixture retained its VM identity with the live socket mocked. Shared canonical source provenance reaches Workloads, preserving esxi-01.lab.local host grouping plus Lab vCenter, Primary DC and Production Cluster in the shared Details disclosure. Provider-local administration and recovery requests remain prohibited in the exclusion journey, including mobile touch navigation."
+  ],
+  "interactions": [
+    "Focus Add Pulse Agent hosts, activate with Enter, inspect installer, dismiss with Escape and verify focus returns. Activate affected-agent update chip; verify scoped Doctor route. Focus its command block and use ArrowRight to reveal horizontal content; return to infrastructure.",
+    "Activate a Patrol attention item with Enter, await loaded detail, verify selected desktop row, expand Evidence and history, activate Copy ID and verify actual clipboard content. Close detail or Back to list on narrow layouts and verify focus returns to the same item. Check no page-level horizontal overflow.",
+    "Open first Docker container and Kubernetes pod from the actual platform table with desktop expansion button or narrow row tap. Scroll through the drawer to Details, open it, reveal Primary ID or Parent through native actionability scrolling, verify the disclosure and owning drawer stay open, inspect final pixels and run WCAG checks.",
+    "Expand the vSphere VM and its technical Details, inspect host placement and the canonical network identity, and verify the read-only vCenter context. Exercise hidden demo billing-route fallback without commercial requests, persisted Alerts override removal across reload and in-app cleanup navigation, and Backups metadata refresh with no viewport jump."
+  ]
+}

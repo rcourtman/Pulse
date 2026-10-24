@@ -92,6 +92,10 @@ services:
       # Keep production's universal limit intact while preventing that synthetic
       # aggregation from starving later tests in this development-only stack.
       - PULSE_DEV_GENERAL_API_RATE_LIMIT=5000
+      # Each isolated browser also mounts the real update banner. Keep its
+      # shared-IP plan/check traffic bounded without exhausting the production
+      # 60-request budget during a shard's repeated document bootstraps.
+      - PULSE_DEV_UPDATE_API_RATE_LIMIT=600
       - PULSE_MULTI_TENANT_ENABLED=${PULSE_MULTI_TENANT_ENABLED:-false}
       - PULSE_ALLOW_DOCKER_UPDATES=true
       - PULSE_UPDATE_STAGE_DELAY_MS=250

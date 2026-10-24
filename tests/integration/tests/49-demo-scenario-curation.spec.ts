@@ -138,6 +138,9 @@ test.describe.serial("Demo scenario curation", () => {
     await expect(page.getByTestId("proxmox-page")).toBeVisible({
       timeout: 60_000,
     });
+    // Overview starts with a compact host preview. Inspect the full estate
+    // through its native disclosure before looking for nodes outside it.
+    await page.getByRole("button", { name: /^Show all \d+ nodes$/ }).click();
     await expectSomeRowContains(page, "West Production A");
     await expectSomeRowContains(page, "East Production A");
     await expectSomeRowContains(page, "Edge Sites A");
@@ -152,14 +155,12 @@ test.describe.serial("Demo scenario curation", () => {
     await expect(workloadSearch).toHaveValue("");
     await expectNoRowContains(page, "mock-cluster");
 
-    const guestTotals = page.getByTestId("proxmox-guest-totals");
-    await expect(guestTotals).toBeVisible({ timeout: 30_000 });
+    const guestsHeading = page.getByRole("heading", { name: /^Guests \d+$/ });
+    await expect(guestsHeading).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(async () => {
-        const text = (await guestTotals.innerText()).replace(/\s+/g, " ");
-        return Array.from(
-          text.matchAll(/(\d+) (?:running|attention|stopped)/g),
-        ).reduce((total, match) => total + Number(match[1]), 0);
+        const text = await guestsHeading.innerText();
+        return Number(text.match(/\d+/)?.[0] ?? 0);
       })
       .toBeGreaterThan(500);
 
@@ -204,8 +205,16 @@ test.describe.serial("Demo scenario curation", () => {
     await expect(page.getByTestId("storage-page")).toBeVisible({
       timeout: 60_000,
     });
-    await expectSomeRowContains(page, "shared-backup-fabric");
-    await expectSomeRowContains(page, "west-a-service-pool");
+    const storageSearch = page.getByRole("textbox", {
+      name: /Search Proxmox storage/,
+    });
+    // Storage is windowed too. Use its native search to inspect entries
+    // outside the currently mounted capacity-sorted rows.
+    for (const pool of ["shared-backup-fabric", "west-a-service-pool"]) {
+      await storageSearch.fill(pool);
+      await expectSomeRowContains(page, pool);
+    }
+    await storageSearch.fill("");
     await expectNoRowContains(page, "mock-cluster");
 
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
@@ -217,6 +226,9 @@ test.describe.serial("Demo scenario curation", () => {
       "data-proxmox-backups-windowed",
       "true",
     );
+    await expect
+      .poll(() => coverageTable.locator('[data-proxmox-backup-row="coverage"]').count())
+      .toBeGreaterThan(0);
     expect(
       await coverageTable
         .locator('[data-proxmox-backup-row="coverage"]')
@@ -228,7 +240,7 @@ test.describe.serial("Demo scenario curation", () => {
     await backupSearch.fill("checkout-web-01");
     await expectSomeRowContains(page, "checkout-web-01");
     await backupSearch.fill("");
-    await page.getByRole("button", { name: "By date", exact: true }).click();
+    await page.getByRole("link", { name: "By date", exact: true }).click();
     const recoverableTable = page.locator(
       '[data-proxmox-backups-table="recoverable"]',
     );
@@ -236,6 +248,9 @@ test.describe.serial("Demo scenario curation", () => {
       "data-proxmox-backups-windowed",
       "true",
     );
+    await expect
+      .poll(() => recoverableTable.locator('[data-proxmox-backup-row]').count())
+      .toBeGreaterThan(0);
     expect(
       await recoverableTable.locator("[data-proxmox-backup-row]").count(),
     ).toBeLessThanOrEqual(140);

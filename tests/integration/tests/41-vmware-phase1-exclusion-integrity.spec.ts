@@ -7,7 +7,6 @@ import { createAuthenticatedStorageState } from './helpers';
 import { installVmwareWorkloadResourceRoute } from './vmware-workload-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCREENSHOT_PATH = '/tmp/vmware-phase1-exclusion-integrity.png';
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -45,7 +44,7 @@ test.describe('VMware phase-1 exclusion integrity', () => {
 
   test('keeps VMware resources out of recovery and provider-local admin routes', async ({
     page,
-  }) => {
+  }, testInfo) => {
     let unexpectedVmwareApiCall: string | null = null;
     let unexpectedRecoveryApiCall: string | null = null;
 
@@ -74,16 +73,25 @@ test.describe('VMware phase-1 exclusion integrity', () => {
 
     const expandButton = page.getByRole('button', { name: 'Expand warehouse-api-01' });
     await expect(expandButton).toBeVisible({ timeout: 30_000 });
-    await expandButton.click();
+    if (testInfo.project.name.startsWith('mobile-')) {
+      // Compact rows expose a full name-cell touch target; their disclosure
+      // button is screen-reader-only until focused from the keyboard.
+      await page.locator('tr').filter({ has: expandButton }).locator('td').first().tap();
+    } else {
+      await expandButton.click();
+    }
 
     const drawer = page.getByRole('region', { name: 'warehouse-api-01' });
     await expect(drawer).toBeVisible();
 
-    // The action surface points at agent onboarding instead of offering
-    // native lifecycle controls for an API-backed VM.
-    await expect(
-      drawer.getByRole('link', { name: 'Add agent for AI actions' }),
-    ).toBeVisible();
+    // Coverage is evidence in Details; API-backed guests do not expose
+    // the retired action-oriented onboarding link or native lifecycle controls.
+    const details = drawer.getByTestId('guest-technical-details');
+    await details.locator('summary').click();
+    await expect(details).toHaveAttribute('open', '');
+    await expect(details.getByText('Pulse coverage', { exact: true })).toBeVisible();
+    await expect(details.getByText('Agent recommended', { exact: true })).toBeVisible();
+    await expect(drawer.getByRole('link', { name: 'Add agent for AI actions' })).toHaveCount(0);
 
     await expect(page.getByRole('link', { name: /Open related recovery/i })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Open in Recovery/i })).toHaveCount(0);
@@ -94,6 +102,6 @@ test.describe('VMware phase-1 exclusion integrity', () => {
     expect(unexpectedVmwareApiCall).toBeNull();
     expect(unexpectedRecoveryApiCall).toBeNull();
 
-    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath('vmware-exclusion-integrity.png'), fullPage: true });
   });
 });

@@ -332,9 +332,9 @@ base.describe('Demo mode commercial boundary', () => {
     await page.goto('/settings/system/billing/usage?details=counting-rules', {
       waitUntil: 'domcontentloaded',
     });
-    // The demo shell now redirects hidden billing routes to the settings
-    // infrastructure root (the /install sub-route was retired).
-    await page.waitForURL('**/settings/infrastructure', { timeout: 15_000 });
+    // This read-only session has no infrastructure-management capability.
+    // Hidden billing routes resolve to the reachable user preferences panel.
+    await page.waitForURL('**/settings/system-general', { timeout: 15_000 });
 
     await expect
       .poll(() => runtimeCapabilitiesRequests, {
@@ -347,7 +347,7 @@ base.describe('Demo mode commercial boundary', () => {
     await expect(
       page.getByText('Demo instance with mock data (read-only)', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'General', exact: true })).toBeVisible();
     const settingsNavigation = await getVisibleSettingsNavigation(
       page,
       testInfo.project.name,

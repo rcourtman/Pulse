@@ -1714,6 +1714,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "tests/integration/tests/83-product-trust-accessibility.spec.ts",
                     ],
                 }
             ],
@@ -1831,6 +1832,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        "tests/integration/tests/83-product-trust-accessibility.spec.ts",
                     ],
                 }
             ],
@@ -2042,6 +2044,18 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_endpoint_budget_change_requires_its_middleware_controls(self):
+        required = infer_impacted_subsystems(["internal/api/rate_limit_config.go"])
+        self.assertEqual(set(required), {"api-contracts"})
+        requirement = required["api-contracts"]["verification_requirements"][0]
+        self.assertEqual(requirement["id"], "endpoint-rate-budgets")
+        self.assertEqual(requirement["test_prefixes"], [])
+        self.assertFalse(requirement["allow_same_subsystem_tests"])
+        self.assertEqual(requirement["exact_files"], [
+            "internal/api/rate_limit_config_test.go",
+            "internal/api/rate_limit_journey_budget_test.go",
+        ])
 
     def test_session_store_change_uses_session_migration_proof_policy(self):
         required = infer_impacted_subsystems(["internal/api/session_store.go"])

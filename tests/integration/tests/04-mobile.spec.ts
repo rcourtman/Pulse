@@ -3,6 +3,7 @@ import {
   ensureAuthenticated,
   setMockMode,
   waitForDefaultMockRuntimeReady,
+  waitForAuthenticatedAppShell,
 } from "./helpers";
 
 const getViewportWidth = async (
@@ -85,12 +86,12 @@ const gotoMobileRoute = async (
 // an ellipsis. The drawer is where a truncated table cell sends the reader
 // for the full value, so neither is allowed there.
 const findCutDrawerValues = (section: Element): string[] => {
-  // Below lg the inline drawer's content shell clips anything past it.
-  let shell: HTMLElement | null = section.parentElement;
-  while (shell && window.getComputedStyle(shell).overflowX !== "clip") {
-    shell = shell.parentElement;
-  }
-  if (!shell) return ["no clipping drawer content shell"];
+  // Find the canonical owner independently of computed overflow keywords.
+  // Cross-axis overflow normalization can report hidden/auto instead of clip.
+  // The checks below still measure every clipping ancestor and ellipsis.
+  const shell = section.closest("tr[data-inline-detail-row]")
+    ?.querySelector<HTMLElement>(":scope > td > div");
+  if (!shell) return ["no inline drawer content shell"];
 
   const offenders: string[] = [];
   const walker = document.createTreeWalker(
@@ -237,7 +238,9 @@ test.describe("Mobile viewport flows", () => {
   test("Platform filter bar does not overflow horizontally", async ({
     page,
   }) => {
-    await page.goto("/docker/overview");
+    await page.goto("/docker/overview", { waitUntil: "domcontentloaded" });
+    await waitForAuthenticatedAppShell(page);
+    await expect(page).toHaveURL(/\/docker\/overview$/);
 
     await expect(page.getByPlaceholder("Search containers")).toBeVisible();
 
@@ -300,8 +303,8 @@ test.describe("Mobile viewport flows", () => {
 
     const table = page.locator("table.workload-table--mobile");
     await expect(table).toBeVisible({ timeout: 30_000 });
-    await expect(table).toHaveClass(/min-w-\[0px\]/);
-    await expect(table.locator("xpath=..")).toHaveClass(/overflow-x-auto/);
+    await expect(table).toHaveCSS("min-width", "0px");
+    await expect(table.locator("xpath=..")).toHaveCSS("overflow-x", "auto");
   });
 
   test("utility destinations stay pinned in the fixed rail", async ({
@@ -524,7 +527,9 @@ test.describe("Mobile viewport flows", () => {
           "resource-identity-section",
           "resource-docker-container-section",
         ],
-        identityLabel: "Aliases",
+        // The native ID is a primary identity row. It is deliberately not
+        // repeated in Aliases after identity deduplication.
+        identityLabel: "Primary ID",
       },
       {
         route: "/kubernetes",

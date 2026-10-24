@@ -25,6 +25,10 @@ suite checks the full accessible name, including changes to relative time,
 and existing review/detail/focus behaviour. No provider, action execution,
 authorisation or attention-state semantics change.
 
+Mobile return controls retain `Back to list` in their contextual names. The
+expanded resource-copy control retains its visible `Copy ID` name, including
+after copying; the fuller explanation remains its tooltip.
+
 ### One-page Patrol setup on the Patrol page
 
 When Patrol is blocked because no provider is connected, Pulse Intelligence

@@ -28,6 +28,8 @@ export interface PlatformWindowedItemsOptions<Item> {
   estimatedItemHeight?: number;
   enableThreshold?: number;
   windowSize?: number;
+  /** Native table items may include a variable-height inline detail row. */
+  measureTableRows?: boolean;
 }
 
 /**
@@ -52,6 +54,30 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     windowSize: resolvedWindowSize,
     enableThreshold: options.enableThreshold ?? resolvedWindowSize,
   });
+  // Measurements belong to keyed items, so sorting and leaving the mounted
+  // runway preserve their scroll extent. Offscreen items retain their last
+  // measured size until they are mounted and measured again.
+  const [measuredHeights, setMeasuredHeights] = createSignal<ReadonlyMap<Item, number>>(new Map());
+  const measuredLayout = createMemo(() => {
+    if (!options.measureTableRows) return undefined;
+    const heights = measuredHeights();
+    const estimate = estimatedItemHeight();
+    const offsets = [0];
+    for (const item of options.items()) {
+      offsets.push(offsets[offsets.length - 1]! + (heights.get(item) ?? estimate));
+    }
+    const indexAt = (offset: number) => {
+      let low = 0;
+      let high = Math.max(0, offsets.length - 2);
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (offsets[middle]! <= offset) low = middle;
+        else high = middle - 1;
+      }
+      return low;
+    };
+    return { offsets, indexAt };
+  });
 
   const visibleItems = createMemo<readonly Item[]>(() => {
     const items = options.items();
@@ -59,20 +85,55 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
     return items.slice(windowing.startIndex(), windowing.endIndex());
   });
   const topSpacerHeight = createMemo(() =>
-    windowing.isWindowed() ? windowing.startIndex() * estimatedItemHeight() : 0,
+    windowing.isWindowed()
+      ? (measuredLayout()?.offsets[windowing.startIndex()] ??
+        windowing.startIndex() * estimatedItemHeight())
+      : 0,
   );
   const bottomSpacerHeight = createMemo(() =>
     windowing.isWindowed()
-      ? Math.max(0, options.items().length - windowing.endIndex()) * estimatedItemHeight()
+      ? measuredLayout()
+        ? measuredLayout()!.offsets[options.items().length]! -
+          measuredLayout()!.offsets[windowing.endIndex()]!
+        : Math.max(0, options.items().length - windowing.endIndex()) * estimatedItemHeight()
       : 0,
   );
+
+  const measureTableRows = () => {
+    if (!options.measureTableRows) return;
+    const anchor = anchorRef();
+    if (!anchor || isWindowedSurfaceHidden(anchor)) return;
+    const items = visibleItems();
+    const measurements = new Map<Item, number>();
+    let index = -1;
+    let sibling = anchor.nextElementSibling;
+    while (sibling && !sibling.hasAttribute('data-platform-window-spacer')) {
+      const height = sibling.getBoundingClientRect().height;
+      if (!sibling.hasAttribute('data-inline-detail-row')) index += 1;
+      const item = items[index];
+      if (item !== undefined && height > 0) {
+        measurements.set(item, (measurements.get(item) ?? 0) + height);
+      }
+      sibling = sibling.nextElementSibling;
+    }
+    const previous = measuredHeights();
+    const activeItems = new Set(options.items());
+    const next = new Map([...previous].filter(([item]) => activeItems.has(item)));
+    for (const [item, height] of measurements) next.set(item, height);
+    if (
+      next.size !== previous.size ||
+      [...next].some(([item, height]) => previous.get(item) !== height)
+    ) {
+      setMeasuredHeights(next);
+    }
+  };
 
   const syncWindowToViewport = (projectedScrollDelta = 0, measureItems = false) => {
     if (typeof window === 'undefined' || !windowing.isWindowed()) return;
     const anchor = anchorRef();
     if (!anchor || isWindowedSurfaceHidden(anchor)) return;
 
-    if (measureItems) {
+    if (measureItems && !options.measureTableRows) {
       let measuredHeight = 0;
       let sibling = anchor.nextElementSibling;
       for (let sampled = 0; sampled < MEASUREMENT_SAMPLE_SIZE && sibling; sampled += 1) {
@@ -85,20 +146,28 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
 
     const segmentRect = anchor.getBoundingClientRect();
     const scrollContainer = findWindowedPageScrollContainer(anchor);
+    const updateWindow = (scrollTop: number, viewportHeight: number) => {
+      const layout = measuredLayout();
+      if (!layout) {
+        windowing.onScroll(scrollTop, viewportHeight, estimatedItemHeight());
+        return;
+      }
+      // Map native pixels into the controller's logical row coordinates. A
+      // viewport within a tall detail still belongs to its owning item.
+      const first = layout.indexAt(scrollTop);
+      const last = layout.indexAt(scrollTop + viewportHeight);
+      const estimate = estimatedItemHeight();
+      windowing.onScroll(first * estimate, (last - first + 1) * estimate, estimate);
+    };
     if (scrollContainer) {
       const containerRect = scrollContainer.getBoundingClientRect();
-      windowing.onScroll(
+      updateWindow(
         Math.max(0, containerRect.top - segmentRect.top + projectedScrollDelta),
         scrollContainer.clientHeight || window.innerHeight,
-        estimatedItemHeight(),
       );
       return;
     }
-    windowing.onScroll(
-      Math.max(0, -segmentRect.top + projectedScrollDelta),
-      window.innerHeight,
-      estimatedItemHeight(),
-    );
+    updateWindow(Math.max(0, -segmentRect.top + projectedScrollDelta), window.innerHeight);
   };
 
   createEffect(() => {
@@ -117,7 +186,24 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
       if (wheelEvent.deltaY === 0) return;
       syncWindowToViewport(wheelDeltaInPixels(wheelEvent, viewportHeight()));
     };
-    const handleResize = () => syncWindowToViewport(0, true);
+    const handleResize = () => {
+      measureTableRows();
+      syncWindowToViewport(0, true);
+    };
+
+    // Native disclosure, history and live-content height changes are measured
+    // outside the scroll/wheel hot path. Observe the owning tbody so newly
+    // mounted detail rows participate without consumer-specific callbacks.
+    let resizeObserver: ResizeObserver | undefined;
+    let mutationObserver: MutationObserver | undefined;
+    if (options.measureTableRows && anchor.parentElement) {
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(handleResize);
+        resizeObserver.observe(anchor.parentElement);
+      }
+      mutationObserver = new MutationObserver(handleResize);
+      mutationObserver.observe(anchor.parentElement, { childList: true });
+    }
 
     // The initial measurement reads windowing signals the pass itself moves.
     // Keep those reads outside this setup effect's dependency graph so runway
@@ -131,6 +217,10 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
         onResize: handleResize,
       }),
     );
+    onCleanup(() => {
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+    });
   });
 
   return {
