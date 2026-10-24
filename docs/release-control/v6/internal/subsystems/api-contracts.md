@@ -12644,3 +12644,21 @@ classification. `TestContractChartSLOProofCLIClassifiesExecution` drives the
 real CLI and disposable child processes through all ten outcomes, verifies
 unaltered logs/result/digest/strict arguments and excludes the synthetic token
 from the child environment. Its capacity rows are synthetic, not latency proof.
+
+### Unambiguous public administrative writes (24 October 2026)
+
+Public SSO provider create/update and RBAC reset-admin require one complete,
+bounded JSON object. Competing members for a decoded request field, including
+escaped and case-folded aliases and repeated nested OIDC/SAML objects, return
+`400 invalid_json` before persistence, provider initialization, role changes or
+recovery-token consumption. Group-role map keys remain case-sensitive data;
+exact or escaped duplicates cannot choose a later role. Well-formed unknown
+fields and singleton aliases remain compatible. Deliberate empty restrictions,
+blank-secret preservation, Community SSO and existing tenant/access/licence
+checks are unchanged. SSO consumes the full 1 MiB bound; reset-admin retains
+its 4 KiB bound, including trailing whitespace. No route or response field is
+added. `TestContractSSOAmbiguousSavePreservesDetail` binds the error and retained
+detail response; `sso_json_admission_test.go`, `rbac_json_admission_test.go` and
+`admin_json_test.go` cover persisted preservation, explicit clears, aliases,
+limits and one-use recovery. These are public source controls, not an observed
+exploit, private runtime acceptance or installed sign-in recovery.

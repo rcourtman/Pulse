@@ -8750,3 +8750,74 @@ func TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure(t *testing.T) {
 		"test_caller_has_no_blanket_nas_or_legacy_tree_deletion",
 	}, 2*time.Minute)
 }
+
+// Unraid's rc.local executes its fromdos copy /var/tmp/go (go.safemode in safe
+// mode), so the kernel names a live go shell after the script, not bash. On a
+// host installed before the detached go entry, that shell is still blocked on
+// the foreground wrapper line. Stopping the watchdog would release it to run
+// the rest of go from memory, so it must read as an unknown boot owner.
+func TestInstallSHNASRemovalTreatsLiveUnraidGoShellAsUnknownOwner(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix NAS process observation needs bash")
+	}
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "plugins", "pulse-agent")
+	rows := []struct {
+		process, unraid, qnap string
+	}{
+		{"100 1 bash /bin/bash " + filepath.Join(stateDir, "start-pulse-agent.sh"), "watchdog", "watchdog"},
+		{"105 1 go /bin/bash /var/tmp/go", "unknown", "other"},
+		{"106 1 go.safemode /bin/bash /var/tmp/go.safemode", "unknown", "other"},
+		{"107 1 bash /bin/bash /boot/config/go", "unknown", "other"},
+		{"108 1 bash bash /var/tmp/go", "unknown", "other"},
+		// A Go toolchain shares the name but runs no boot script, and the
+		// script path must be a whole argument, not the start of another.
+		{"109 1 go /usr/local/go/bin/go build ./...", "other", "other"},
+		{"110 1 bash /bin/bash /var/tmp/gopher.sh", "other", "other"},
+		{"111 1 bash /bin/bash /boot/config/go~", "other", "other"},
+	}
+	var listing strings.Builder
+	for _, row := range rows {
+		listing.WriteString(row.process + "\n")
+	}
+	listingPath := filepath.Join(dir, "ps-listing")
+	if err := os.WriteFile(listingPath, []byte(listing.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tools := filepath.Join(dir, "tools")
+	if err := os.MkdirAll(tools, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tools, "ps"), []byte("#!/bin/sh\nexec cat \"$PS_LISTING\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := "set -euo pipefail\n" +
+		"timeout() { shift 3; \"$@\"; }\n" +
+		extractInstallShellFunction(t, "read_nas_agent_removal_processes") + "\n" +
+		"read_nas_agent_removal_processes \"$1\"\n"
+	for _, platform := range []string{"Unraid", "QNAP"} {
+		t.Run(platform, func(t *testing.T) {
+			cmd := exec.Command("bash", "-c", script, "bash", platform)
+			cmd.Env = append(os.Environ(),
+				"PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"PS_LISTING="+listingPath,
+				"STATE_DIR="+stateDir,
+				"INSTALL_DIR="+filepath.Join(dir, "bin"),
+				"BINARY_NAME=pulse-agent")
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("process observation failed: %v\n%s", err, output)
+			}
+			for _, row := range rows {
+				fields := strings.Fields(row.process)
+				want := row.unraid
+				if platform == "QNAP" {
+					want = row.qnap
+				}
+				if line := fields[0] + " " + fields[1] + " " + want + "\n"; !strings.Contains(string(output), line) {
+					t.Errorf("%q: want role %s, got inventory:\n%s", row.process, want, output)
+				}
+			}
+		})
+	}
+}
