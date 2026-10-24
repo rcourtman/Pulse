@@ -732,7 +732,6 @@ function AttentionList(props: {
                           : 'hover:bg-surface-hover'
                       }`}
                       aria-pressed={props.selectedItemId === item.id}
-                      aria-label={`Open ${displayTitle()}`}
                       onClick={() => props.onSelect(item.id)}
                     >
                       <div class="flex min-w-0 items-start gap-3">

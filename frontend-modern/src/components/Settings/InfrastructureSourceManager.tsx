@@ -940,7 +940,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         type="button"
                                         onClick={() => handleGroupAddSource(group)}
                                         class={`${addSectionButtonClass} whitespace-nowrap`}
-                                        aria-label={group.actionLabel}
+                                        aria-label={`Add ${group.label}`}
                                         title={group.actionLabel}
                                       >
                                         <Plus class="h-3.5 w-3.5" />
@@ -1080,7 +1080,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     ),
                                                   )
                                                 }
-                                                aria-label={`Open Agent Doctor for ${row.name}`}
+                                                aria-label={`${row.agentUpdateCount === 1 ? 'Agent update' : `${row.agentUpdateCount} updates`}: open Agent Doctor for ${row.name}`}
                                               >
                                                 {row.agentUpdateCount === 1
                                                   ? 'Agent update'
@@ -1468,7 +1468,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               type="button"
                               onClick={() => handleGroupAddSource(group)}
                               class={`${addSectionButtonClass} whitespace-nowrap`}
-                              aria-label={group.actionLabel}
+                              aria-label={`Add ${group.label}`}
                               title={group.actionLabel}
                             >
                               <Plus class="h-3.5 w-3.5" />
@@ -1697,7 +1697,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 agentConnectionIDsForInfrastructureRow(row, true),
                                               )
                                             }
-                                            aria-label={`Open Agent Doctor for ${row.name}`}
+                                            aria-label={`${row.agentUpdateCount === 1 ? 'Agent update' : `${row.agentUpdateCount} agent updates`}: open Agent Doctor for ${row.name}`}
                                           >
                                             {row.agentUpdateCount === 1
                                               ? 'Agent update'

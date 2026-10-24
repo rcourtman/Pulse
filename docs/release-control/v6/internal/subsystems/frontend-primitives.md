@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Visible action text remains in accessible names (24 October 2026)
+
+Infrastructure section shortcuts include their visible Add action and group
+identity in the accessible name. Update chips include the visible singular or
+counted update label, the affected system and Agent Doctor destination, at both
+responsive layouts. Read-only inventories expose no add/update action. Patrol
+attention rows derive their name from their visible severity, title, summary,
+decision/resource context and observation time rather than a title-only override.
+Native buttons, pressed state, focus and touch selection remain unchanged.
+Registered InfrastructureSourceManager and PatrolAttentionWorkbench tests cover
+scoped actions, counts, read-only rendering and time-varying accessible content;
+the consuming WCAG scan and its rules remain enforced.
+
 ### Agent first-report status
 
 Machines, resource detail drawers and agent connection rows use the shared
