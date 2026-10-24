@@ -10242,3 +10242,15 @@ The `internal/api` change of 2026-10-23 that serializes the projection of a
 Patrol investigation's action and finalizes Patrol runs that ran past their
 limit enrols, commands, updates or removes no agent and touches no agent
 identity or credential.
+
+### Hosted chart evidence cannot qualify an agent lifecycle
+
+The optional hosted workload-chart capacity proof reports an executed but
+contended measurement as inconclusive, never as a healthy reading or a passed
+90 ms budget. This CI-only classification does not satisfy agent installation,
+restart, confinement, credential persistence or signed recovery acceptance.
+Skips, missing reports and non-budget child failures still fail the proof.
+The actual CLI/receipt control is
+`TestContractChartSLOProofCLIClassifiesExecution`; the separate read-only
+evidence and check-writer boundary is
+`TestChartSLOWorkflowPreservesInconclusiveAndFailure`.
