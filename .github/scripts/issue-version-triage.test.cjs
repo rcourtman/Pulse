@@ -281,6 +281,87 @@ test("syncLabels adds newly declared topics but respects a completed disposition
   }
 });
 
+for (const [name, before, after] of [
+  ["appended", "Add a storage filter.", "Add a storage filter.\nAlso retain failed notification attempts."],
+  ["replaced", "Add a storage filter.", "Retain failed notification attempts."],
+  ["revised", "Retain one failed attempt.", "Retain every failed attempt."],
+]) {
+  test(`syncLabels requeues ${name} secondary topics after an earlier disposition`, async () => {
+    const body = value => `### Additional actionable topics\n${value}\n### Pulse version\n6.5.0\n`;
+    const { github, calls } = createGithub();
+    await syncLabels({
+      github,
+      context: createContext({ action: "edited", previousBody: body(before), issue: {
+        number: 1796, title: "Monitoring workflow", body: body(after),
+        labels: [{ name: "enhancement" }, { name: "operator-reviewed" }],
+      } }),
+      core: createCore(),
+    });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+    assert.equal(calls.getLatestRelease.length, 0);
+  });
+}
+
+for (const [name, before, after] of [
+  ["an unrelated field", "### Summary\nOld wording\n### Additional actionable topics\nAdd a storage filter.\n",
+    "### Summary\nNew wording\n### Additional actionable topics\nAdd a storage filter.\n"],
+  ["whitespace only", "### Additional actionable topics\nRetain every failed attempt.\n",
+    "### Additional actionable topics\n\nRetain every\nfailed attempt.  \n"],
+  ["hidden comments only", "### Additional actionable topics\nRetain every failed attempt. <!-- old note -->\n",
+    "### Additional actionable topics\nRetain every failed attempt. <!-- new note -->\n"],
+  ["removing the topics", "### Additional actionable topics\nAdd a storage filter.\n",
+    "### Additional actionable topics\nNone.\n"],
+]) {
+  test(`syncLabels does not requeue dispositioned topics for ${name}`, async () => {
+    const { github, calls } = createGithub();
+    await syncLabels({
+      github,
+      context: createContext({ action: "edited", previousBody: before, issue: {
+        number: 1796, title: "Monitoring workflow", body: after,
+        labels: [{ name: "enhancement" }, { name: "operator-reviewed" }],
+      } }),
+      core: createCore(),
+    });
+    assert.equal(calls.addLabels.length, 0);
+    assert.equal(calls.removeLabel.length, 0);
+    assert.equal(calls.createComment.length, 0);
+  });
+}
+
+test("triage guidance preserves revised-topic review", () => {
+  const guide = fs.readFileSync(path.resolve(__dirname, "../../docs/ISSUE_TRIAGE.md"), "utf8");
+  assert.match(guide.replace(/\s+/g, " "), /adding or revising actionable content/);
+  assert.match(guide, /after an earlier topic was dispositioned/);
+});
+
+test("a revised topic cannot override a newer Community disposition", async () => {
+  const previousBody = "### Additional actionable topics\nRetain one failed attempt.\n";
+  const issue = {
+    number: 1796, title: "Monitoring workflow", state: "open",
+    body: "### Additional actionable topics\nRetain every failed attempt.\n",
+    updated_at: "2026-10-08T10:00:00Z", labels: [{ name: "enhancement" }],
+  };
+  for (const stage of ["before initial read", "during label preparation"]) {
+    const { github, calls } = createGithub({ currentIssue: { ...issue } });
+    if (stage === "before initial read") {
+      github.currentIssue.updated_at = "2026-10-08T11:00:00Z";
+    } else {
+      const getLabel = github.rest.issues.getLabel;
+      github.rest.issues.getLabel = async payload => {
+        github.currentIssue = { ...issue, updated_at: "2026-10-08T11:00:00Z" };
+        return getLabel(payload);
+      };
+    }
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", previousBody, issue }) });
+    assert.equal(calls.addLabels.length, 0, stage);
+    assert.equal(calls.removeLabel.length, 0, stage);
+    assert.equal(calls.createComment.length, 0, stage);
+  }
+});
+
 test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
   const { classifyAdditionalActionableTopics } = triage.internals;
 
