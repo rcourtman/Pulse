@@ -114,7 +114,11 @@ class AuditWebhookDocsTest(unittest.TestCase):
         handler = (ROOT / "internal/api/activity_audit_handlers.go").read_text().split(
             "func (h *AuditHandlers) HandleUpdateWebhooks", 1)[1].split(
                 "// validateWebhookURL", 1)[0]
-        self.assertIn('URLs []string `json:"urls"`', handler)
+        # Admission now lives in the duplicate-preserving decoder, not an
+        # inline struct. Bind the documented complete replacement to that path.
+        self.assertIn("urls, err := decodeAuditWebhookSelection(r.Body)", handler)
+        self.assertLess(handler.index("decodeAuditWebhookSelection(r.Body)"),
+                        handler.index("validateWebhookURL(rawURL)"))
         self.assertIn("getLoggerForOrg(orgID)", handler)
         self.assertIn("logger.UpdateWebhookURLs(validatedURLs)", handler)
 
