@@ -1143,3 +1143,210 @@ func TestOrchestratorRunResultSkipsANewerRun(t *testing.T) {
 	}
 	assertOrchestratorRunState(t, findings, "retried", "chat-retried-b", aicontracts.InvestigationStatusFailed, aicontracts.OutcomeTimedOut, 2)
 }
+
+// actionRecordingStore records an investigation's action on its own, as the
+// enterprise store does, and counts how often a whole session is replaced.
+type actionRecordingStore struct {
+	*testInvestigationStore
+	replaced int
+}
+
+func (s *actionRecordingStore) Update(session *aicontracts.InvestigationSession) bool {
+	s.replaced++
+	return s.testInvestigationStore.Update(session)
+}
+
+func (s *actionRecordingStore) SetAction(id string, action *aicontracts.ActionReference) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.sessions[id]
+	if !ok {
+		return false
+	}
+	session.Action = aicontracts.CloneActionReference(action)
+	return true
+}
+
+// patrolProjectionFixture is a running Patrol investigation, the action audit
+// store its plans live in, and the handler that projects them onto it.
+type patrolProjectionFixture struct {
+	handler       *AISettingsHandler
+	audits        *unifiedresources.MemoryStore
+	sessions      *actionRecordingStore
+	investigation *aicontracts.InvestigationSession
+}
+
+func newPatrolProjectionFixture(t *testing.T) patrolProjectionFixture {
+	t.Helper()
+	svc := ai.NewService(nil, nil)
+	svc.SetStateProvider(&MockStateProvider{})
+	svc.GetPatrolService().GetFindings().Add(&ai.Finding{ID: "finding-1", ResourceID: "vm:42", Title: "Unhealthy service",
+		Severity: ai.FindingSeverityWarning, InvestigationSessionID: "session-1",
+		InvestigationStatus: string(aicontracts.InvestigationStatusRunning)})
+	sessions := &actionRecordingStore{testInvestigationStore: newTestInvestigationStore()}
+	investigation := sessions.Create("finding-1", "session-1")
+	audits := unifiedresources.NewMemoryStore()
+	handler := &AISettingsHandler{defaultAIService: svc,
+		investigationStores:   map[string]aicontracts.InvestigationStore{"default": sessions},
+		resourceStoreProvider: func(string) (unifiedresources.ResourceStore, error) { return audits, nil },
+	}
+	return patrolProjectionFixture{handler: handler, audits: audits, sessions: sessions, investigation: investigation}
+}
+
+func (f patrolProjectionFixture) recordPlan(t *testing.T, audit unifiedresources.ActionAuditRecord) unifiedresources.ActionAuditRecord {
+	t.Helper()
+	if err := f.audits.RecordActionAudit(audit); err != nil {
+		t.Fatalf("RecordActionAudit(%s): %v", audit.ID, err)
+	}
+	recorded, found, err := f.audits.GetActionAudit(audit.ID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit(%s): found=%v err=%v", audit.ID, found, err)
+	}
+	return recorded
+}
+
+// A projection records the action and the outcome on their own when the store
+// can, so it never replaces the session and cannot undo progress the
+// orchestrator saved after the projection read it.
+func TestPatrolActionProjectionRecordsOnlyTheActionAndOutcome(t *testing.T) {
+	f := newPatrolProjectionFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	plan := f.recordPlan(t, patrolPlanAudit("act-1", f.investigation.ID, now, now.Add(time.Hour)))
+
+	f.handler.ReconcilePatrolActionTransition("default", plan)
+
+	got := f.sessions.Get(f.investigation.ID)
+	if got.Action == nil || got.Action.ActionID != "act-1" || got.Outcome != aicontracts.OutcomeFixQueued {
+		t.Fatalf("session = %+v, want the planned action and its queued fix", got)
+	}
+	if f.sessions.replaced != 0 {
+		t.Fatalf("the projection replaced the whole session %d times", f.sessions.replaced)
+	}
+}
+
+// A projection waits for any other projection of the same investigation, so one
+// that read an older state of the action cannot land after one that read a
+// newer state. Other investigations do not wait for it.
+func TestPatrolActionProjectionWaitsForTheInvestigationsLock(t *testing.T) {
+	f := newPatrolProjectionFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	plan := f.recordPlan(t, patrolPlanAudit("act-1", f.investigation.ID, now, now.Add(time.Hour)))
+
+	release := lockPatrolInvestigation("default", f.investigation.ID)
+	done := make(chan struct{})
+	go func() {
+		f.handler.ReconcilePatrolActionTransition("default", plan)
+		close(done)
+	}()
+	select {
+	case <-done:
+		release()
+		t.Fatal("a projection ran while another held the investigation's lock")
+	case <-time.After(100 * time.Millisecond):
+	}
+	lockPatrolInvestigation("default", "another-investigation")()
+	release()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the projection did not run once the lock was free")
+	}
+	if got := f.sessions.Get(f.investigation.ID); got.Action == nil || got.Action.ActionID != "act-1" {
+		t.Fatalf("session = %+v, want the action projected once the lock was free", got)
+	}
+}
+
+// Hydration returns the action and outcome the investigation's store holds after
+// the repair, not a projection of the caller's copy. After a refresh replaced
+// the plan, a copy taken before the refresh must not bring back the replaced
+// plan, here expired.
+func TestPatrolActionHydrationUsesTheInvestigationsCurrentAction(t *testing.T) {
+	f := newPatrolProjectionFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	f.recordPlan(t, patrolPlanAudit("act-1", f.investigation.ID, now.Add(-10*time.Minute), now.Add(-5*time.Minute)))
+	replacement := patrolPlanAudit("act-2", f.investigation.ID, now.Add(-time.Minute), now.Add(time.Hour))
+	replacement.Request.RequestID = "refresh:act-1"
+	replacement.Plan.RequestID = "refresh:act-1"
+	f.recordPlan(t, replacement)
+	if expired, err := f.audits.ExpireActionAudits(now, 10); err != nil || len(expired) != 1 || expired[0].ID != "act-1" {
+		t.Fatalf("expired = %+v err=%v, want the replaced plan", expired, err)
+	}
+	f.sessions.SetAction(f.investigation.ID, &aicontracts.ActionReference{ActionID: "act-2", State: string(unifiedresources.ActionStatePending)})
+	f.sessions.SetOutcome(f.investigation.ID, aicontracts.OutcomeFixQueued)
+	stale := *f.sessions.Get(f.investigation.ID)
+	stale.Action = &aicontracts.ActionReference{ActionID: "act-1", State: string(unifiedresources.ActionStatePending)}
+
+	got := f.handler.hydratePatrolInvestigationAction("default", &stale)
+
+	if got.Action == nil || got.Action.ActionID != "act-2" || got.Outcome != aicontracts.OutcomeFixQueued {
+		t.Fatalf("hydrated = action %+v outcome %q, want the replacement still queued", got.Action, got.Outcome)
+	}
+}
+
+// A run's close finalizes, under the investigation's lock, the session the
+// orchestrator closed: a copy the stuck-run sweep marked failed gives way to the
+// run's own close once that has landed.
+func TestPatrolRunCloseFinalizesTheClosedSessionUnderTheLock(t *testing.T) {
+	f := newPatrolProjectionFixture(t)
+	f.sessions.Complete(f.investigation.ID, aicontracts.OutcomeResolved, "The service recovered on its own.", nil)
+	abandoned := *f.sessions.Get(f.investigation.ID)
+	abandoned.Status = aicontracts.InvestigationStatusFailed
+	abandoned.Error = "Patrol stopped waiting for this investigation after it ran past its time limit."
+
+	var finalized *aicontracts.InvestigationSession
+	f.handler.closePatrolInvestigationRun("default", &abandoned, func(closed *aicontracts.InvestigationSession) {
+		finalized = closed
+		acquired := make(chan struct{})
+		go func() {
+			lockPatrolInvestigation("default", f.investigation.ID)()
+			close(acquired)
+		}()
+		select {
+		case <-acquired:
+			t.Error("a projection of the investigation ran while the run was being finalized")
+		case <-time.After(50 * time.Millisecond):
+		}
+	})
+
+	if finalized == nil || finalized.Status != aicontracts.InvestigationStatusCompleted || finalized.Outcome != aicontracts.OutcomeResolved || finalized.Error != "" {
+		t.Fatalf("finalized %+v, want the run's own completed close", finalized)
+	}
+}
+
+// A run the orchestrator still shows as running, which the stuck-run sweep gave
+// up on, is finalized as the sweep marked it.
+func TestPatrolRunCloseFinalizesAnAbandonedRunAsGivenUp(t *testing.T) {
+	f := newPatrolProjectionFixture(t)
+	f.sessions.UpdateStatus(f.investigation.ID, aicontracts.InvestigationStatusRunning)
+	abandoned := *f.sessions.Get(f.investigation.ID)
+	abandoned.Status = aicontracts.InvestigationStatusFailed
+	abandoned.Error = "Patrol stopped waiting for this investigation after it ran past its time limit."
+
+	var finalized *aicontracts.InvestigationSession
+	f.handler.closePatrolInvestigationRun("default", &abandoned, func(closed *aicontracts.InvestigationSession) {
+		finalized = closed
+	})
+
+	if finalized == nil || finalized.Status != aicontracts.InvestigationStatusFailed || finalized.Error != abandoned.Error {
+		t.Fatalf("finalized %+v, want the run as the sweep gave it up", finalized)
+	}
+}
+
+// The investigation keeps the action's canonical result and verification, as
+// the broker reports them, and the model's causal attribution, which the
+// action audit does not hold.
+func TestPatrolActionProjectionKeepsTheFullActionReference(t *testing.T) {
+	f := newPatrolProjectionFixture(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	plan := f.recordPlan(t, patrolPlanAudit("act-1", f.investigation.ID, now, now.Add(time.Hour)))
+	f.sessions.SetAction(f.investigation.ID, &aicontracts.ActionReference{ActionID: "act-1", State: string(unifiedresources.ActionStatePending), CausalResourceID: "storage:nfs-1"})
+
+	f.handler.ReconcilePatrolActionTransition("default", plan)
+
+	got := f.sessions.Get(f.investigation.ID).Action
+	want := dispositionFromRecord(plan)
+	if got == nil || got.CausalResourceID != "storage:nfs-1" || len(got.ActionResultV2) == 0 ||
+		string(got.ActionResultV2) != string(want.ActionResultV2) || got.VerificationStatus != want.VerificationStatus {
+		t.Fatalf("action = %+v, want the broker's result and verification with the causal attribution kept", got)
+	}
+}

@@ -137,3 +137,11 @@ type InvestigationStore interface {
 	Cleanup(maxAge time.Duration) int
 	EnforceSizeLimit(maxSessions int) int
 }
+
+// InvestigationActionStore is implemented by investigation stores that record
+// an investigation's action without replacing the rest of the session. Pulse
+// uses it, when the store offers it, to record the action lifecycle's
+// transitions without undoing progress the orchestrator saved meanwhile.
+type InvestigationActionStore interface {
+	SetAction(id string, action *ActionReference) bool
+}

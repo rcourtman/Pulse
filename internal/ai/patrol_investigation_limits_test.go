@@ -144,7 +144,7 @@ func TestRecoverStuckInvestigationsKeepsAnActionOutcome(t *testing.T) {
 	now := time.Now()
 	closedAWhileAgo := now.Add(-investigationRunGrace - time.Minute)
 	findings := NewFindingsStore()
-	for _, id := range []string{"queued", "queued-interrupted"} {
+	for _, id := range []string{"queued", "queued-interrupted", "queued-closed"} {
 		f := runningInvestigationFinding(id, "chat-"+id, nil)
 		// The action lifecycle recorded the queued fix while the run was
 		// still running, and a restart came before the run finished.
@@ -154,12 +154,20 @@ func TestRecoverStuckInvestigationsKeepsAnActionOutcome(t *testing.T) {
 	orchestrator := &sessionReportingOrchestrator{sessions: map[string]*InvestigationSession{
 		"queued":             {ID: "inv-queued", FindingID: "queued", SessionID: "chat-queued", Status: aicontracts.InvestigationStatusFailed, Outcome: aicontracts.OutcomeFixQueued, StartedAt: now.Add(-time.Hour), CompletedAt: &closedAWhileAgo},
 		"queued-interrupted": {ID: "inv-queued-interrupted", FindingID: "queued-interrupted", SessionID: "chat-queued-interrupted", Status: aicontracts.InvestigationStatusFailed, Outcome: aicontracts.OutcomeInterrupted, StartedAt: now.Add(-time.Hour), CompletedAt: &closedAWhileAgo},
+		// This run closed itself, but its update never reached the finding.
+		"queued-closed": {ID: "inv-queued-closed", FindingID: "queued-closed", SessionID: "chat-queued-closed", Status: aicontracts.InvestigationStatusCompleted, Outcome: aicontracts.OutcomeFixQueued, StartedAt: now.Add(-time.Hour), CompletedAt: &closedAWhileAgo},
 	}}
 	patrol := &PatrolService{findings: findings, investigationOrchestrator: orchestrator}
 	patrol.recoverStuckInvestigations()
 
-	for _, id := range []string{"queued", "queued-interrupted"} {
-		assertInvestigationState(t, findings, id, InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	// Each run keeps the status it closed with: a run cut short after it
+	// planned the fix failed, as it reads when such a run closes itself.
+	for id, status := range map[string]InvestigationStatus{
+		"queued":             InvestigationStatusFailed,
+		"queued-interrupted": InvestigationStatusFailed,
+		"queued-closed":      InvestigationStatusCompleted,
+	} {
+		assertInvestigationState(t, findings, id, status, InvestigationOutcomeFixQueued)
 		if findings.Get(id).ShouldInvestigate("approval") {
 			t.Fatalf("%s: a queued fix must keep blocking another investigation", id)
 		}

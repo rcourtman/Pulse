@@ -2672,11 +2672,12 @@ func TestCompleteInvestigationClosesARunFromAnEarlierOccurrenceAsTheSweepWould(t
 	}
 	assertInvestigationState(t, findings, "settled", InvestigationStatusFailed, InvestigationOutcomeInterrupted)
 	// The close keeps an outcome the action lifecycle recorded, as the sweep
-	// does, so the queued fix still blocks another investigation.
+	// does, so the queued fix still blocks another investigation, and the run
+	// still reads as failed.
 	if complete("queued", beforeRegression) {
 		t.Fatal("a run from before the regression recorded its result")
 	}
-	assertInvestigationState(t, findings, "queued", InvestigationStatusCompleted, InvestigationOutcomeFixQueued)
+	assertInvestigationState(t, findings, "queued", InvestigationStatusFailed, InvestigationOutcomeFixQueued)
 	if findings.Get("queued").ShouldInvestigate("approval") {
 		t.Fatal("a queued fix must keep blocking another investigation")
 	}
