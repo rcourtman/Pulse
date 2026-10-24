@@ -17,6 +17,23 @@
 
 ## Purpose
 
+### Ended backup jobs do not supply missing guest verdicts
+
+For multi-guest vzdump jobs, only an explicit guest finish or failure line
+establishes that guest's result. If the parent has ended but its returned log
+has no guest verdict, the synthetic task is `unknown`, not failed, successful
+or still running. Parent failure/OK status and terminal log markers cannot
+substitute for a guest result. Explicit results for other guests remain intact.
+The job's attribution stays incomplete and retryable until every observed guest
+has an explicit result and the existing contiguous, bounded terminal-log checks
+pass. An ordinary later complete read repairs the result under the same task
+identity; only then may a finished log be cached as final.
+
+`TestVzdumpGuestResult*` covers ended/running jobs, truncated/gapped/capped logs,
+explicit mixed results, retries and cache finalisation through the real poller,
+state JSON and recovery mapper. These are offline log fixtures, not native backup
+execution, archive availability, guest thaw or filesystem-liveness proof.
+
 ### Native TrueNAS SCALE CPU uses the reported aggregate
 
 `reporting.realtime` may place its aggregate at `fields.cpu.cpu.usage`,

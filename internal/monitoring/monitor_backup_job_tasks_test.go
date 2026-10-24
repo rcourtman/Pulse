@@ -113,7 +113,7 @@ func TestParseVzdumpJobLogRunningJob(t *testing.T) {
 	}
 }
 
-func TestParseVzdumpJobLogJobDiedMidGuest(t *testing.T) {
+func TestParseVzdumpJobLogEndedWithoutGuestVerdict(t *testing.T) {
 	start := time.Date(2026, 7, 25, 2, 0, 0, 0, time.UTC)
 	jobTask := models.BackupTask{
 		ID:        "pve-cluster-" + testJobUPID,
@@ -132,8 +132,8 @@ func TestParseVzdumpJobLogJobDiedMidGuest(t *testing.T) {
 	if len(tasks) != 1 {
 		t.Fatalf("expected 1 synthetic guest task, got %d", len(tasks))
 	}
-	if tasks[0].Status != "error" || tasks[0].Error == "" {
-		t.Errorf("guest in dead job = %+v, want status error with message", tasks[0])
+	if tasks[0].Status != "unknown" || tasks[0].Error != "backup job ended without an observed guest result" {
+		t.Errorf("guest without a verdict = %+v, want unknown with an evidence explanation", tasks[0])
 	}
 	if !tasks[0].EndTime.Equal(jobTask.EndTime) {
 		t.Errorf("guest end = %v, want parent end time", tasks[0].EndTime)
