@@ -28,7 +28,8 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesUpgradePrompts: () => false,
 }));
 
-const writeCalls = () => apiFetchJSON.mock.calls.filter(([, options]) => options?.method === 'POST');
+const writeCalls = () =>
+  apiFetchJSON.mock.calls.filter(([, options]) => options?.method === 'POST');
 const openPanel = async (canManage = true) => {
   render(() => <AuditWebhookPanel canManage={canManage} />);
   await screen.findByText(existingUrl);
@@ -48,7 +49,9 @@ describe('audit webhook entry recovery', () => {
     apiFetchJSON.mockRejectedValueOnce(new Error('save refused')).mockResolvedValueOnce({});
     fireEvent.input(input, { target: { value: `  ${addedUrl}  ` } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() => expect(showWarning).toHaveBeenCalledWith('Failed to save webhook configuration'));
+    await waitFor(() =>
+      expect(showWarning).toHaveBeenCalledWith('Failed to save webhook configuration'),
+    );
     expect(input).toHaveValue(`  ${addedUrl}  `);
     expect(screen.getByText(existingUrl)).toBeInTheDocument();
     expect(screen.queryByText(addedUrl)).not.toBeInTheDocument();
@@ -67,10 +70,16 @@ describe('audit webhook entry recovery', () => {
   it('keeps a newer draft and rejects concurrent Enter/removal writes during a pending save', async () => {
     const input = await openPanel();
     let finishSave!: (value: object) => void;
-    apiFetchJSON.mockReturnValueOnce(new Promise((resolve) => { finishSave = resolve; }));
+    apiFetchJSON.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSave = resolve;
+      }),
+    );
     fireEvent.input(input, { target: { value: addedUrl } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Add Endpoint' })).toBeDisabled(),
+    );
     expect(screen.getByRole('button', { name: 'Remove webhook endpoint' })).toBeDisabled();
     fireEvent.input(input, { target: { value: 'https://next.example.test/events' } });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -99,17 +108,23 @@ describe('audit webhook entry recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Remove webhook' }));
     await waitFor(() => expect(screen.queryByText(existingUrl)).not.toBeInTheDocument());
     expect(input).toHaveValue(addedUrl);
-    expect(writeCalls().map(([, options]) => JSON.parse(options.body))).toEqual([{ urls: [] }, { urls: [] }]);
+    expect(writeCalls().map(([, options]) => JSON.parse(options.body))).toEqual([
+      { urls: [] },
+      { urls: [] },
+    ]);
   });
 
-  it.each(['not a URL', existingUrl])('does not write an invalid or duplicate entry: %s', async (draft) => {
-    const input = await openPanel();
-    fireEvent.input(input, { target: { value: draft } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(showWarning).toHaveBeenCalledOnce();
-    expect(writeCalls()).toHaveLength(0);
-    expect(input).toHaveValue(draft);
-  });
+  it.each(['not a URL', existingUrl])(
+    'does not write an invalid or duplicate entry: %s',
+    async (draft) => {
+      const input = await openPanel();
+      fireEvent.input(input, { target: { value: draft } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(showWarning).toHaveBeenCalledOnce();
+      expect(writeCalls()).toHaveLength(0);
+      expect(input).toHaveValue(draft);
+    },
+  );
 
   it('does not allow a read-only account to write through Enter or removal', async () => {
     const input = await openPanel(false);
