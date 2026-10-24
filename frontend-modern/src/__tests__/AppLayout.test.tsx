@@ -285,6 +285,9 @@ describe('AppLayout navigation icons', () => {
     expect(desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(
       ' ',
     );
+    expect(
+      desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextElementSibling,
+    ).toHaveTextContent(/^2$/);
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -296,6 +299,7 @@ describe('AppLayout navigation icons', () => {
     // The visible label precedes the icon/badge wrapper in DOM order.
     expect(mobilePatrolTab.firstElementChild).toHaveClass('order-2');
     expect(mobilePatrolTab.firstElementChild?.textContent).toBe('Patrol ');
+    expect(mobilePatrolTab.querySelector('.absolute')).toHaveTextContent(/^2$/);
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -329,12 +333,19 @@ describe('AppLayout navigation icons', () => {
     expect(actionsTab).toHaveAttribute('href', '/actions');
     expect(actionsTab).toHaveAttribute('aria-current', 'page');
     expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(' ');
+    expect(actionsTab.querySelector('[class~="xs:inline"]')?.textContent).toBe('Actions');
+    expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextElementSibling).toHaveTextContent(
+      /^3$/,
+    );
     expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    expect(
-      within(mobileNav).getByRole('link', { name: 'Actions: 3 actions await approval' }),
-    ).toHaveAttribute('aria-current', 'page');
+    const mobileActionsTab = within(mobileNav).getByRole('link', {
+      name: 'Actions: 3 actions await approval',
+    });
+    expect(mobileActionsTab).toHaveAttribute('aria-current', 'page');
+    expect(mobileActionsTab.firstElementChild?.textContent).toBe('Actions ');
+    expect(mobileActionsTab.querySelector('.absolute')).toHaveTextContent(/^3$/);
     expect(document.title).toContain('Actions');
   });
 

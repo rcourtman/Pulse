@@ -795,7 +795,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
     expect(appLayoutSource).toContain("} from '@/components/shared/mobileNavBarModel';");
     expect(appLayoutSource).not.toContain('function getDesktopUtilityTabAriaLabel');
-    expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
+    expect(appLayoutSource).not.toContain('return `${count} ${tab.label}`;');
     expect(appLayoutSource).toContain('const primaryTabsSource = createMemo<PrimaryTab[]>(() =>');
     expect(appLayoutSource).toContain("id: 'proxmox',");
     expect(appLayoutSource).toContain("icon: getPlatformIcon('proxmox'),");

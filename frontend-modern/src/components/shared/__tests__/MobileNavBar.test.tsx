@@ -233,11 +233,12 @@ describe('MobileNavBar', () => {
     // a visible label. Test label order/boundaries and badge contents directly.
     expect(alertsLink.firstElementChild).toHaveClass('order-2');
     expect(alertsLink.firstElementChild?.textContent).toBe('Alerts ');
-    expect(alertsLink.querySelector('.absolute')).toHaveTextContent('2 3');
+    expect(alertsLink.querySelector('.absolute')).toHaveTextContent(/^2 3$/);
     expect(alertsLink).toHaveAccessibleDescription('2 critical, 3 warning');
-    expect(within(nav).getByRole('link', { name: 'Patrol: 2 open work items' })).toHaveTextContent(
-      'Patrol 2',
-    );
+    const patrolLink = within(nav).getByRole('link', { name: 'Patrol: 2 open work items' });
+    expect(patrolLink.firstElementChild).toHaveClass('order-2');
+    expect(patrolLink.firstElementChild?.textContent).toBe('Patrol ');
+    expect(patrolLink.querySelector('.absolute')).toHaveTextContent(/^2$/);
     expect(within(nav).queryByRole('link', { name: 'Pulse Patrol Patrol' })).toBeNull();
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
