@@ -9,6 +9,7 @@ import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { unifiedPlatformOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { getTemperatureSymbol } from '@/utils/temperature';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PlatformWindowedRows,
@@ -236,7 +237,7 @@ export const TrueNASSystemsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="platform-table-mobile-w-20 md:w-[10%]"
+                  class="platform-table-mobile-w-15 md:w-[10%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
                 </PlatformSortableTableHead>
@@ -252,9 +253,9 @@ export const TrueNASSystemsTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="temp"
-                  class="platform-table-mobile-w-15 md:w-[6%]"
+                  class="platform-table-mobile-w-20 md:w-[6%]"
                 >
-                  <PlatformResponsiveTableLabel compact="°C" full="Temp" />
+                  <PlatformResponsiveTableLabel compact={getTemperatureSymbol()} full="Temp" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="text"

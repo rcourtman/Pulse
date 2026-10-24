@@ -46,6 +46,7 @@ import {
   type SearchTermSplit,
 } from '@/utils/searchQuery';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatTemperature } from '@/utils/temperature';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
 import {
@@ -1027,7 +1028,8 @@ export const formatPlatformTablePercentValue = (
   return `${clamped.toFixed(1)}%`;
 };
 
-const formatOneDecimalCelsius = (value: number): string => `${value.toFixed(1)}°C`;
+const formatOneDecimalTemperature = (value: number): string =>
+  formatTemperature(value, { decimals: 1 });
 
 export function PlatformTablePercentValue(props: {
   value: number | null | undefined;
@@ -1066,7 +1068,7 @@ export function PlatformTableTemperatureValue(props: {
     <PlatformTableNumberValue
       value={finitePositiveValue()}
       emptyText={props.emptyText}
-      format={formatOneDecimalCelsius}
+      format={formatOneDecimalTemperature}
     />
   );
 }
