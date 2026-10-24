@@ -8783,7 +8783,8 @@ func TestHostDiskUsageRecordingSkipsAbsenceAndPreservesZero(t *testing.T) {
 	if points := monitor.metricsHistory.GetGuestMetrics("agent:"+host.ID, "disk", time.Hour); len(points) != 0 {
 		t.Fatalf("absent inventory recorded disk zero: %+v", points)
 	}
-	recordedAt := time.Now().Add(-2 * time.Minute)
+	// The persistent store contract records whole-second observations.
+	recordedAt := time.Now().Add(-2 * time.Minute).Truncate(time.Second)
 	monitor.metricsHistory.AddGuestMetric("agent:"+host.ID, "disk", 43, recordedAt)
 	store.Write("agent", host.ID, "disk", 43, recordedAt)
 	report.Disks = []agentshost.Disk{{Device: "/dev/sda", Mountpoint: "/", Type: "ext4", TotalBytes: 100, FreeBytes: 100, Usage: 0}}
