@@ -9,6 +9,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
+import { formatUpdateReleaseDate } from '@/utils/updatesPresentation';
 import {
   extractWhatsNew,
   isReleaseVersion,
@@ -48,6 +49,7 @@ export function WhatsNewCard() {
   const [noticeVisible, setNoticeVisible] = createSignal(false);
   const [dialogVisible, setDialogVisible] = createSignal(false);
   const [version, setVersion] = createSignal('');
+  const [releaseDate, setReleaseDate] = createSignal<string | undefined>();
   const [content, setContent] = createSignal<ReleaseContent | null>(null);
   let checked = false;
 
@@ -66,6 +68,7 @@ export function WhatsNewCard() {
       }
       setContent(releaseContent);
       setVersion(currentVersion);
+      setReleaseDate(formatUpdateReleaseDate(notes.releaseDate));
       // The compact notice is the only automatic release UI. Record the
       // version immediately so reloads cannot turn it into a recurring prompt.
       markVersionSeen(currentVersion);
@@ -182,7 +185,9 @@ export function WhatsNewCard() {
                     >
                       What's new in Pulse v{version()}
                     </h2>
-                    <p class="text-xs text-muted">What changed and why it matters</p>
+                    <Show when={releaseDate()}>
+                      {(date) => <p class="text-xs text-muted">Released {date()}</p>}
+                    </Show>
                   </div>
                 </div>
                 <ActionIconButton
