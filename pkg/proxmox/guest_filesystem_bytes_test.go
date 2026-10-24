@@ -113,7 +113,7 @@ func TestVMFilesystemBytesWireAdmissionKeepsValidPeersAndObjectPrecision(t *test
 				backupAgentPayload(w, r)
 			}))
 			defer server.Close()
-			c := backupTestClient(t, server.URL)
+			c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 			readings, err := c.GetVMFSInfo(context.Background(), "node", 105)
 			if tc.wantError {
 				if err == nil {

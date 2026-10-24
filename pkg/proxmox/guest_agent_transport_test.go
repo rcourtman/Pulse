@@ -46,7 +46,7 @@ func TestGuestAgentWireDoesNotReplayLostReply(t *testing.T) {
 					http.NotFound(w, r)
 				}))
 				defer server.Close()
-				client := backupTestClient(t, server.URL)
+				client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), client, 105); GuestAgentDeferredReason(err) != "agent-timeout" {
 					t.Errorf("lost command reply was not deferred: %v", err)
 				}
@@ -87,7 +87,7 @@ func TestGuestAgentWireDoesNotFollowRedirect(t *testing.T) {
 					http.Redirect(w, r, destination.URL+r.URL.Path, status)
 				}))
 				defer server.Close()
-				client := backupTestClient(t, server.URL)
+				client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), client, 105); GuestAgentDeferredReason(err) != "agent-redirect" {
 					t.Errorf("redirect response was not deferred: %v", err)
 				}
@@ -126,7 +126,7 @@ func TestGuestAgentTransportLeavesOrdinaryRecoveryIntact(t *testing.T) {
 		fmt.Fprint(w, `{"data":[]}`)
 	}))
 	defer server.Close()
-	client := backupTestClient(t, server.URL)
+	client := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	// Warm the ordinary transport. Its idempotent resource reads still recover
 	// a lost reply on that reused connection; only QGA commands are single-use.
 	for i := 0; i < 2; i++ {

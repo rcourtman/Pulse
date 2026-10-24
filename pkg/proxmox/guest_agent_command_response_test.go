@@ -229,7 +229,7 @@ func TestGuestAgentCommandReplyPreservesCompatibleEmptyAndPartialData(t *testing
 					backupAgentPayload(w, r)
 				}))
 				defer server.Close()
-				c := commandReplyTestClient(t, server.URL)
+				c := commandReplyTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 				if err := read(context.Background(), c, 105); GuestAgentDeferredReason(err) != "" {
 					t.Fatalf("compatible reply paused %s: %v", reader, err)
 				}

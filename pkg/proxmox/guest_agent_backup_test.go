@@ -98,7 +98,7 @@ func TestGuestAgentBackupLockBlocksEveryReadAndResumes(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	for name, read := range backupAgentReads() {
 		t.Run(name, func(t *testing.T) {
 			if err := read(context.Background(), c, 105); err == nil {
@@ -135,7 +135,7 @@ func TestGuestAgentUnknownLockStateFailsClosed(t *testing.T) {
 				backupAgentPayload(w, r)
 			}))
 			defer server.Close()
-			_, err := backupTestClient(t, server.URL).GetVMFSInfo(context.Background(), "node", 105)
+			_, err := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL)).GetVMFSInfo(context.Background(), "node", 105)
 			if err == nil || calls.Load() != 0 {
 				t.Fatalf("unverified lock state queried agent: err=%v calls=%d", err, calls.Load())
 			}
@@ -165,7 +165,7 @@ func TestGuestAgentConcurrentDiagnosticsDoNotOverlap(t *testing.T) {
 	}))
 	defer server.Close()
 	// Separate Client instances model a diagnostic alongside ordinary polling.
-	c1, c2 := backupTestClient(t, server.URL), backupTestClient(t, server.URL)
+	c1, c2 := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL)), backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() { defer wg.Done(); _, _ = c1.GetVMFSInfo(context.Background(), "node", 105) }()
@@ -204,7 +204,7 @@ func TestGuestAgentTimeoutDefersOtherCommands(t *testing.T) {
 		backupAgentPayload(w, r)
 	}))
 	defer server.Close()
-	c := backupTestClient(t, server.URL)
+	c := backupTestClient(t, guestAgentFixtureEndpoint(t, server.URL))
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 	defer cancel()
 	if _, err := c.GetVMFSInfo(ctx, "node", 105); err == nil {

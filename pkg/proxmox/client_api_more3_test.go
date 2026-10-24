@@ -9,6 +9,7 @@ import (
 )
 
 func TestClientVMFSInfoParsing(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -62,6 +63,7 @@ func TestClientVMFSInfoParsing(t *testing.T) {
 }
 
 func TestClientVMFSInfoParsingCentOSXFSResult(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -98,6 +100,7 @@ func TestClientVMFSInfoParsingCentOSXFSResult(t *testing.T) {
 }
 
 func TestClientVMFSInfoParsingPrivilegedCapacityFallback(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -142,6 +145,7 @@ func TestClientVMFSInfoParsingPrivilegedCapacityFallback(t *testing.T) {
 }
 
 func TestClientVMFSInfoParsingWindowsVolumeGUIDMountpointFallback(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -185,6 +189,7 @@ func TestClientVMFSInfoParsingWindowsVolumeGUIDMountpointFallback(t *testing.T) 
 }
 
 func TestClientVMFSInfoParsingIssue1319WindowsVolumePayload(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -226,6 +231,7 @@ func TestClientVMFSInfoParsingIssue1319WindowsVolumePayload(t *testing.T) {
 }
 
 func TestClientVMFSInfoSkipsMalformedEntries(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -273,6 +279,7 @@ func TestClientVMFSInfoSkipsMalformedEntries(t *testing.T) {
 }
 
 func TestClientVMFSInfoObjectResult(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
@@ -299,6 +306,7 @@ func TestClientVMFSInfoObjectResult(t *testing.T) {
 }
 
 func TestClientVMFSInfoObjectFilesystemResult(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {

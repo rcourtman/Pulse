@@ -33,6 +33,7 @@ func TestClusterClient_GetNodePendingUpdates_NoHealthyNodes(t *testing.T) {
 }
 
 func TestClusterClient_GetVMAgentVersion_QemuGA(t *testing.T) {
+	isolateGuestAgentCapacity(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Guest reads require fresh operation-lock evidence, independently of their payload fixture.
 		if strings.HasSuffix(r.URL.Path, "/config") {
