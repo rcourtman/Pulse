@@ -148,7 +148,8 @@ export interface BackupActivityTooltipRow {
   muted: boolean;
 }
 
-export type BackupActivityNoun = 'archive' | 'artifact' | 'backup' | 'task' | 'snapshot';
+export type BackupActivityNoun =
+  'archive' | 'artifact' | 'backup' | 'task' | 'snapshot' | 'restore point';
 
 function formatActivityValue(value: number, mode: BackupActivityMetricMode): string {
   if (mode === 'volume') return formatBytes(Math.max(0, value));

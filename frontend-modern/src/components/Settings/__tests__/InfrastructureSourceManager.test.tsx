@@ -220,13 +220,71 @@ describe('InfrastructureSourceManager setup summary', () => {
       'min-h-11',
       'lg:min-h-9',
     );
-    expect(screen.getByRole('button', { name: /^Install Pulse Agent$/i })).toHaveClass(
+    expect(screen.getByRole('button', { name: /^Add Pulse Agent hosts$/i })).toHaveClass(
       'min-h-11',
       'lg:min-h-0',
     );
     expect(infrastructureSourceManagerSource).toContain(
       'class="min-h-11 min-w-18 shrink-0 lg:min-h-0"',
     );
+  });
+
+  it.each([1440, 390])('keeps visible Add and update labels in scoped names at %ipx', (width) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    const onAddSource = vi.fn();
+    const onOpenAgentDoctor = vi.fn();
+    const outdated = connectionFixture({ id: 'agent:outdated', agentUpdateAvailable: true });
+    const second = connectionFixture({ id: 'agent:second', agentUpdateAvailable: true });
+    const current = connectionFixture({ id: 'agent:current', agentUpdateAvailable: false });
+    const rows = [
+      row({
+        id: 'fleet',
+        name: 'Fleet alpha',
+        agentUpdateCount: 2,
+        connection: outdated,
+        attachedConnections: [second, current],
+      }),
+    ];
+    const view = render(() => (
+      <InfrastructureSourceManager
+        rows={() => rows}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSource={onAddSource}
+        onOpenAgentDoctor={onOpenAgentDoctor}
+      />
+    ));
+    const add = screen.getByRole('button', { name: 'Add Pulse Agent hosts' });
+    expect(add).toHaveTextContent('Add');
+    expect(add).toHaveAttribute('title', 'Install Pulse Agent');
+    fireEvent.click(add);
+    expect(onAddSource).toHaveBeenCalledExactlyOnceWith('agent');
+    const label = width < 1024 ? '2 agent updates' : '2 updates';
+    const update = screen.getByRole('button', {
+      name: `${label}: open Agent Doctor for Fleet alpha`,
+    });
+    expect(update).toHaveTextContent(label);
+    fireEvent.click(update);
+    expect(onOpenAgentDoctor).toHaveBeenCalledExactlyOnceWith(['agent:outdated', 'agent:second']);
+    view.unmount();
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => rows}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly
+        onAddSource={onAddSource}
+        onOpenAgentDoctor={onOpenAgentDoctor}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'Add Pulse Agent hosts' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /open Agent Doctor for Fleet alpha/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 
   it('keeps manual discovery observable while a scan is running', () => {
@@ -437,7 +495,9 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Agent Doctor for behind-host' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Agent update: open Agent Doctor for behind-host' }),
+    );
     expect(onOpenAgentDoctor).toHaveBeenCalledWith(['agent:behind-host']);
   });
 
@@ -478,7 +538,7 @@ describe('InfrastructureSourceManager setup summary', () => {
     ));
 
     expect(
-      screen.getByRole('button', { name: 'Open Agent Doctor for outdated-host' }),
+      screen.getByRole('button', { name: 'Agent update: open Agent Doctor for outdated-host' }),
     ).toHaveTextContent('Agent update');
     expect(screen.queryByText('Version behind')).toBeNull();
     expect(screen.queryByText(/needs? attention/i)).toBeNull();

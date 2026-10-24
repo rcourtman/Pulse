@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Attention selection retains visible evidence in its name (24 October 2026)
+
+Attention list buttons use their visible contents as the accessible name instead
+of replacing severity, summary, decision state and Last seen evidence with an
+Open-title label. Resource-leading titles, flapping/handled badges, pressed state
+and native keyboard/touch selection are preserved. The registered workbench
+suite checks the full accessible name, including changes to relative time,
+and existing review/detail/focus behaviour. No provider, action execution,
+authorisation or attention-state semantics change.
+
 ### One-page Patrol setup on the Patrol page
 
 When Patrol is blocked because no provider is connected, Pulse Intelligence
