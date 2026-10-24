@@ -228,7 +228,7 @@ func TestHostFilesystemGapKeepsNodeOwnershipOnlyForHeldAlert(t *testing.T) {
 	for _, gap := range []string{"empty", "unknown-zero"} {
 		for _, firing := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/firing=%v", gap, firing), func(t *testing.T) {
-				m, _ := hostFilesystemManager(t, !firing)
+				m, elapsed := hostFilesystemManager(t, !firing)
 				host := hostFilesystemSample("host-1", 85)
 				host.LinkedNodeID = "node-1"
 				if firing {
@@ -242,7 +242,10 @@ func TestHostFilesystemGapKeepsNodeOwnershipOnlyForHeldAlert(t *testing.T) {
 				if owner.disk != firing {
 					t.Fatalf("gap disk ownership=%v, want %v", owner.disk, firing)
 				}
-				m.CheckNode(models.Node{ID: "node-1", Name: "storage-host", Status: "online", Disk: models.Disk{Total: 1000, Used: 950, Usage: 95}})
+				node := models.Node{ID: "node-1", Name: "storage-host", Status: "online", Disk: models.Disk{Total: 1000, Used: 950, Usage: 95}}
+				m.CheckNode(node)
+				elapsed.Store(int64(time.Minute))
+				m.CheckNode(node)
 				if len(m.GetActiveAlerts()) != 1 {
 					t.Fatal("node handover left duplicate alerts or no alert")
 				}
@@ -280,5 +283,46 @@ func TestHostFilesystemBrowserProducer(t *testing.T) {
 	}
 	if os.Getenv("PULSE_HOST_FILESYSTEM_FRAMES") == "1" {
 		fmt.Printf("HOST_FILESYSTEM_FRAMES=%s\n", hostFilesystemJSON(t, frames))
+	}
+}
+
+func TestHostFilesystemUnobservedNeverFires(t *testing.T) {
+	for _, gap := range []string{"empty", "unknown-zero", "unknown-positive", "negative-capacity", "negative-used", "over-capacity", "negative", "over-100", "NaN", "+Inf"} {
+		t.Run(gap, func(t *testing.T) {
+			m, elapsed := hostFilesystemManager(t, false)
+			host := hostFilesystemGap(hostFilesystemSample("host-1", 95), gap)
+			m.CheckHost(host)
+			elapsed.Store(int64(time.Hour))
+			m.CheckHost(host)
+			if len(m.GetActiveAlerts()) != 0 || len(queryAlertEvents(t, m, eventlog.Filter{})) != 0 {
+				t.Fatal("an unavailable filesystem invented an alert or transition")
+			}
+		})
+	}
+}
+
+func TestHostFilesystemReplacementRetiresPendingRun(t *testing.T) {
+	m, elapsed := hostFilesystemManager(t, true)
+	host := hostFilesystemSample("host-1", 85)
+	id := hostFilesystemID(host)
+	m.CheckHost(host)
+	if _, exists := continuityIncident(m, id, "disk"); !exists {
+		t.Fatal("control must start a pending run")
+	}
+	replacement := hostFilesystemSample(host.ID, 0)
+	replacement.Disks[0].Mountpoint = "/other"
+	elapsed.Store(int64(2 * time.Minute))
+	m.CheckHost(replacement)
+	if _, exists := continuityIncident(m, id, "disk"); exists {
+		t.Fatal("removed filesystem retained timed evidence")
+	}
+	m.CheckHost(host)
+	if len(m.GetActiveAlerts()) != 0 {
+		t.Fatal("reappearing filesystem fired using retired evidence")
+	}
+	elapsed.Store(int64(3 * time.Minute))
+	m.CheckHost(host)
+	if len(m.GetActiveAlerts()) != 1 {
+		t.Fatal("fresh full run did not fire")
 	}
 }
