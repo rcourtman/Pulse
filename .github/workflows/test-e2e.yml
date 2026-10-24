@@ -437,10 +437,11 @@ jobs:
         working-directory: tests/integration
         run: node scripts/report-stable-e2e-failures.mjs test-results/junit.xml
 
-      # Preserve the completed stable failure before observational work can
-      # reach the job deadline. Probation must not take its receipts with it.
+      # Preserve failed attempts, including a passing first retry, before
+      # probation can reach the job deadline. Retry traces and failure images
+      # are diagnostic bytes even when the suite's final outcome is success.
       - name: Upload Playwright report
-        if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
+        if: ${{ !cancelled() && (steps.stable.outcome == 'failure' || hashFiles('tests/integration/test-results/**/trace.zip', 'tests/integration/test-results/**/test-failed-*.png') != '') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-shard-${{ matrix.shard }}
@@ -450,7 +451,7 @@ jobs:
       # The HTML report already contains screenshots, videos and traces.
       # Keep only the separate machine-readable result here.
       - name: Upload JUnit results
-        if: ${{ !cancelled() && steps.stable.outcome == 'failure' }}
+        if: ${{ !cancelled() && (steps.stable.outcome == 'success' || steps.stable.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-results-shard-${{ matrix.shard }}
@@ -516,7 +517,7 @@ jobs:
       # continue-on-error keeps the job green on a probation failure, so
       # failure() never fires for these; key off the step outcome instead.
       - name: Upload probation Playwright report
-        if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
+        if: ${{ !cancelled() && (steps.probation.outcome == 'failure' || hashFiles('tests/integration/test-results-probation/**/trace.zip', 'tests/integration/test-results-probation/**/test-failed-*.png') != '') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-probation-shard-${{ matrix.shard }}
@@ -524,7 +525,7 @@ jobs:
           retention-days: 3
 
       - name: Upload probation JUnit results
-        if: ${{ !cancelled() && steps.probation.outcome == 'failure' }}
+        if: ${{ !cancelled() && (steps.probation.outcome == 'success' || steps.probation.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: junit-results-probation-shard-${{ matrix.shard }}

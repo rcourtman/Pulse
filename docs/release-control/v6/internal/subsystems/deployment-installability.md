@@ -3027,10 +3027,22 @@ artifact-selection behaviour.
    That regression creates and revokes its own token through the admitted
    session and shared browser-token helper. It must work with cookie-only and
    primary-token fixtures without replacing their remembered credential.
+   Protected full-page navigations also await that mounted-shell boundary
+   before judging a consuming panel. A loading root is not a ready workspace.
+   The delayed-token browser regression owns a fresh page and holds only that
+   page's bootstrap reads, so reads from a departing document cannot release
+   or stall its control. Responsive threshold edits leave the whole desktop
+   row or use the card's Save control before asserting a staged change.
    The Core E2E Docker stack explicitly sets bounded development-only general
    and update request budgets for isolated browser contexts sharing one bridge
    IP. Production limits and authentication limits remain enforced. The API
    contracts subsystem owns validation and exhaustion semantics.
+   Core E2E retains a tier's HTML diagnostic report when it fails or produces
+   a first-retry trace/failure screenshot, including a retry that passes. Small
+   JUnit results are retained for every completed tier. Stable receipts are
+   uploaded before probation starts, and both tiers keep the existing three-day
+   retention. Artifact presence controls retention, not release readiness or
+   probation promotion.
    Settings browser audits scroll the actual application content owner to its
    observed bottom. Traversal must scale with the populated estate rather than
    stop after a fixed number of wheel steps. The browser geometry regression

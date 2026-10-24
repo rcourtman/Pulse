@@ -8,6 +8,7 @@ import {
   primaryNavigationLink,
   trackBrowserRequests,
   waitForPulseReady,
+  waitForAuthenticatedAppShell,
 } from "./helpers";
 
 /**
@@ -330,6 +331,7 @@ test.describe.serial("First-session experience", () => {
 
         if (!hasFeature) {
           await page.goto(route, { waitUntil: "domcontentloaded" });
+          await waitForAuthenticatedAppShell(page);
           await page.waitForURL(expectedURL, { timeout: 10_000 });
           await expect(page.locator("#root")).toBeVisible();
 
@@ -352,6 +354,7 @@ test.describe.serial("First-session experience", () => {
           ).toBe(false);
         } else {
           await page.goto(route, { waitUntil: "domcontentloaded" });
+          await waitForAuthenticatedAppShell(page);
           await page.waitForURL(expectedURL, { timeout: 10_000 });
           await expect(page.locator("#root")).toBeVisible();
 

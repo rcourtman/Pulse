@@ -143,15 +143,24 @@ test.describe.serial('Core E2E flows', () => {
     const cpuInput = editorContainer.locator('input[type="number"]').first();
     await expect(cpuInput).toBeVisible();
     await cpuInput.fill(String(overrideValue));
-    await cpuInput.blur();
+    await expect(cpuInput).toHaveValue(String(overrideValue));
+    const unsaved = page.getByText('You have unsaved changes');
+    // Tabbing to a sibling control keeps the draft inside the editor.
+    await cpuInput.press('Tab');
+    expect(await editorContainer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await expect(unsaved).toHaveCount(0);
+    // Desktop commits when focus leaves the whole row. Cards retain the
+    // draft until Save. Move focus outside the editor, including its slider,
+    // and wait for the active layout's actual commit boundary.
+    await page.getByPlaceholder('Search resources...').focus();
     const commitMobileEdit = page.getByRole('button', {
       name: `Save threshold edits for ${resourceName}`,
     });
+    await expect(unsaved.or(commitMobileEdit).first()).toBeVisible();
     if (await commitMobileEdit.isVisible().catch(() => false)) {
       await commitMobileEdit.click();
     }
 
-    const unsaved = page.getByText('You have unsaved changes');
     await expect(unsaved).toBeVisible();
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();

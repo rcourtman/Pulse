@@ -119,8 +119,13 @@ func (m *Manager) CheckNode(node models.Node) {
 			}
 			if owners.disk.disk {
 				released = append(released, "disk")
-			} else {
-				input.Disk = &UnifiedResourceMetric{Percent: node.Disk.Usage}
+			} else if percent, observed := unifiedresources.DiskUsagePercent(node.Disk); observed {
+				input.Disk = &UnifiedResourceMetric{Percent: percent}
+			} else if !liveHysteresisThreshold(thresholds.Disk) {
+				// Explicit policy still releases the alert, even without a
+				// reading. Otherwise leave it unknown: missing capacity or
+				// contradictory used space is not measured zero/recovery.
+				input.Disk = &UnifiedResourceMetric{}
 			}
 			m.releaseNodeMetricAlerts(node, owners, released...)
 			m.evaluateUnifiedMetrics(input, thresholds, nil, "temperature") // checkNodeTemperature owns its observation gaps.

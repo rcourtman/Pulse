@@ -118,41 +118,37 @@ test.describe("runtime-home onboarding contract", () => {
     const { token, record } = await created.json() as { token: string; record: { id: string } };
     expect(token).toBeTruthy();
     expect(record.id).toBeTruthy();
-    let tokenNavigationStarted = false;
-    const onNavigation = () => {
-      if (new URL(page.url()).searchParams.has("token")) tokenNavigationStarted = true;
-    };
+    // This page owns only the bootstrap being tested. Replacing the setup
+    // page would also intercept its departing document's in-flight reads.
+    const bootstrapPage = await page.context().newPage();
     let releaseBootstrap!: () => void;
     const bootstrapHold = new Promise<void>(resolve => { releaseBootstrap = resolve; });
     let notifyBlocked!: () => void;
     const blocked = new Promise<void>(resolve => { notifyBlocked = resolve; });
     const holdState = async (route: import("@playwright/test").Route) => {
-      if (tokenNavigationStarted) {
-        notifyBlocked();
-        await bootstrapHold;
-      }
+      notifyBlocked();
+      await bootstrapHold;
       await route.continue();
     };
     let authentication: Promise<boolean> | undefined;
     try {
-      page.on("framenavigated", onNavigation);
-      await page.route("**/api/state/summary", holdState);
+      await bootstrapPage.route("**/api/state/summary", holdState);
       let completed = false;
-      authentication = authenticateWithAPIToken(page, token).then(result => { completed = true; return result; });
+      authentication = authenticateWithAPIToken(bootstrapPage, token).then(result => { completed = true; return result; });
       await Promise.race([blocked, authentication]);
       expect(completed, "token authentication must await protected browser bootstrap").toBe(false);
       releaseBootstrap();
       expect(await authentication).toBe(true);
-      await page.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
-      await expect(page).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
-      await expect(page.getByRole("dialog").getByRole("heading", {
+      await bootstrapPage.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
+      await expect(bootstrapPage).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+      await expect(bootstrapPage.getByRole("dialog").getByRole("heading", {
         name: "Add Pulse Agent", exact: true,
       })).toBeVisible();
     } finally {
       releaseBootstrap();
       await authentication?.catch(() => {});
-      await page.unroute("**/api/state/summary", holdState);
-      page.off("framenavigated", onNavigation);
+      await bootstrapPage.unroute("**/api/state/summary", holdState);
+      await bootstrapPage.close();
       const revoked = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(record.id)}`, {
         method: "DELETE",
       });

@@ -3,6 +3,7 @@ import {
   ensureAuthenticated,
   setMockMode,
   waitForDefaultMockRuntimeReady,
+  waitForAuthenticatedAppShell,
 } from "./helpers";
 
 const getViewportWidth = async (
@@ -237,7 +238,9 @@ test.describe("Mobile viewport flows", () => {
   test("Platform filter bar does not overflow horizontally", async ({
     page,
   }) => {
-    await page.goto("/docker/overview");
+    await page.goto("/docker/overview", { waitUntil: "domcontentloaded" });
+    await waitForAuthenticatedAppShell(page);
+    await expect(page).toHaveURL(/\/docker\/overview$/);
 
     await expect(page.getByPlaceholder("Search containers")).toBeVisible();
 

@@ -15870,6 +15870,8 @@ func TestCheckNode(t *testing.T) {
 			Instance: "pve1",
 			Status:   "online",
 			Disk: models.Disk{
+				Total: 100,
+				Used:  95,
 				Usage: 95.0, // Above trigger
 			},
 		}

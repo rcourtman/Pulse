@@ -289,7 +289,29 @@ class E2EImageWorkflowTest(unittest.TestCase):
             self.assertLess(stable, start)
             self.assertLess(start, probation)
             end = consumer.index("\n      - name:", start)
-            self.assertIn("!cancelled() && steps.stable.outcome == 'failure'", consumer[start:end])
+            receipt_block = consumer[start:end]
+            self.assertIn("!cancelled()", receipt_block)
+            self.assertIn("steps.stable.outcome == 'failure'", receipt_block)
+            if receipt == "Upload Playwright report":
+                self.assertIn("hashFiles(", receipt_block)
+                self.assertIn("tests/integration/test-results/**/trace.zip", receipt_block)
+                self.assertIn("tests/integration/test-results/**/test-failed-*.png", receipt_block)
+            else:
+                self.assertIn("steps.stable.outcome == 'success'", receipt_block)
+
+        for receipt in ("Upload probation Playwright report", "Upload probation JUnit results"):
+            start = consumer.index(f"- name: {receipt}\n")
+            self.assertLess(probation, start)
+            end = consumer.find("\n      - name:", start)
+            receipt_block = consumer[start:end if end >= 0 else None]
+            self.assertIn("!cancelled()", receipt_block)
+            self.assertIn("steps.probation.outcome == 'failure'", receipt_block)
+            if receipt == "Upload probation Playwright report":
+                self.assertIn("hashFiles(", receipt_block)
+                self.assertIn("tests/integration/test-results-probation/**/trace.zip", receipt_block)
+                self.assertIn("tests/integration/test-results-probation/**/test-failed-*.png", receipt_block)
+            else:
+                self.assertIn("steps.probation.outcome == 'success'", receipt_block)
 
     def test_fixture_admission_cannot_skip_source_images_or_lose_completed_receipts(self):
         self.assert_fixture_admission(WORKFLOW.read_text())
@@ -301,7 +323,11 @@ class E2EImageWorkflowTest(unittest.TestCase):
              "run: npx playwright test --config=fixture-readiness.config.ts || true"),
             ("        id: fixture\n", "        id: fixture\n        continue-on-error: true\n"),
             ('PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"', 'PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "false"'),
-            ("!cancelled() && steps.stable.outcome == 'failure'", "failure()"),
+            ("!cancelled() && (steps.stable.outcome == 'failure'", "failure() && (steps.stable.outcome == 'failure'"),
+            ("test-results/**/trace.zip", "other-results/**/trace.zip"),
+            ("test-results-probation/**/trace.zip", "other-results-probation/**/trace.zip"),
+            ("steps.stable.outcome == 'success'", "steps.stable.outcome == 'skipped'"),
+            ("steps.probation.outcome == 'success'", "steps.probation.outcome == 'skipped'"),
         ):
             with self.subTest(mutation=new):
                 with self.assertRaises(AssertionError):

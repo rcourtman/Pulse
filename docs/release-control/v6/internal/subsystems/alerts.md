@@ -15,6 +15,24 @@
 
 ## Purpose
 
+### Unavailable Proxmox node disks are not recovered alerts
+
+The node evaluator admits the same disk observations as the canonical node
+metric: positive capacity, finite percentage in range, and non-negative used
+space within capacity. Missing or contradictory readings hold an open disk
+occurrence with its acknowledgement and trusted evidence, and interrupt pending
+activation and explicit intent grace. An observed zero still recovers normally.
+Explicit disabled/off policy and an actually covering linked agent still release
+the node alert; a missing reading does not claim another owner. Independent CPU,
+memory and temperature evaluation and the existing offline policy are unchanged.
+
+`node_disk_observation_test.go` exercises CheckNode, lifecycle events, measured
+zero, both grace paths, exact-node isolation, explicit policy and real linked-agent
+handover. Its optional manager frames feed the production Alerts API adapter and
+Overview at desktop/narrow viewports. This aligns observation admission only: no
+collector, guest operation, schema, historical rewrite or notification transport
+changes, and no installed recovery or inbox claim.
+
 ### Unavailable agent filesystems are not recovered disk alerts
 
 Host filesystem thresholds use the canonical disk-observation admission: a

@@ -163,7 +163,7 @@ export async function waitForAppShell(page: Page, timeoutMs = 20_000) {
   );
 }
 
-async function waitForAuthenticatedAppShell(page: Page, timeoutMs = 20_000) {
+export async function waitForAuthenticatedAppShell(page: Page, timeoutMs = 20_000) {
   // A protected URL and a nonempty root also describe pending bootstrap and
   // Login after a rejected summary request. The app-scroll-shell mounts only
   // after loading, needsAuth and enhanced-store admission have completed.
