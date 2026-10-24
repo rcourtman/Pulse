@@ -82,7 +82,17 @@ with independent absence observations. Editor sessions, backup wrappers and
 co-installed names are not targets. Relative/foreign same-name processes or
 unattributable QNAP deferred autorun or live Unraid go shells refuse instead
 of signalling another boot owner. A live go shell may already hold later boot
-commands in memory; editing its file cannot establish quiescence. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
+commands in memory; editing its file cannot establish quiescence. Unraid's
+`rc.local` executes the `fromdos` copy `/var/tmp/go` (`/var/tmp/go.safemode`
+in safe mode), so for a go file with a `#!` line the kernel names that shell
+`go` or `go.safemode`, not `bash`. A process with either name, or a shell,
+that has `/boot/config/go`, `/var/tmp/go` or their `.safemode` forms as a
+whole argument is that owner. A `go` process naming none of them, such as a
+Go toolchain, is not. A go file without a `#!` line runs in a forked copy of
+`rc.local` and is not recognised. Hosts installed before the detached go
+entry keep such a shell blocked on the old foreground wrapper line.
+`TestInstallSHNASRemovalTreatsLiveUnraidGoShellAsUnknownOwner` pins those
+roles on Unraid and QNAP. Failed/diagnostic/duplicate/empty reads and ignored/refused signals
 retain identity, credentials, trust and recoverable files. QNAP mount and
 unmount each have checked bounded results, including cleanup after partial mount.
 
