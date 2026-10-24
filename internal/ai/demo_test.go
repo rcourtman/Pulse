@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestIsDemoMode(t *testing.T) {
@@ -138,6 +140,140 @@ func keysOfDemoFindings(m map[string]*Finding) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// Demo findings name the unified resource, as real Patrol findings do. The
+// Inbox names an alert's subject by the unified resource its reference
+// resolves to, resource drawers ask for a resource's findings by that ID, and
+// the alert-mirror reconcile folds a finding under its alert through it. A
+// demo finding stamped with the snapshot's source ID joined none of them.
+func TestPatrolService_RunDemoPatrolCycle_NamesUnifiedResources(t *testing.T) {
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+	mockruntime.SetEnabled(true)
+
+	now := time.Now()
+	snapshot := demoTestSnapshot(now)
+	// Mock-shaped Docker IDs: a host alert reference ("docker:<host ID>")
+	// cannot carry a slash, and mock container IDs are short.
+	snapshot.DockerHosts[0].ID = "edge-01-mock"
+	snapshot.DockerHosts[1].ID = "core-01-mock"
+	snapshot.DockerHosts[1].Containers[0].ID = "core-01-5666a65b2b52"
+	// The busiest guest is an LXC container.
+	snapshot.Containers = []models.Container{
+		{ID: "pve1-ct-102", VMID: 102, Name: "dns-01", Node: "pve1", Status: "running", Type: "lxc",
+			Memory: models.Memory{Total: 2 << 30, Used: 1946 << 20, Usage: 95.0}},
+	}
+	offlineAlert := models.Alert{ID: "docker:edge-01-mock-connectivity", Type: "docker-host-offline",
+		ResourceID: alerts.DockerHostResourceID("edge-01-mock"), StartTime: now.Add(-time.Hour)}
+	usageAlert := models.Alert{ID: "pve1-local-zfs-usage", Type: "usage", ResourceID: "pve1-local-zfs",
+		StartTime: now.Add(-time.Hour)}
+	snapshot.ActiveAlerts = []models.Alert{offlineAlert, usageAlert}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	service := NewPatrolService(nil, demoSnapshotProvider{snapshot: snapshot})
+	service.SetReadState(registry)
+	service.runDemoPatrolCycle(TriggerReasonStartup)
+
+	containerResourceID := ""
+	for _, resource := range registry.List() {
+		if resource.Type == unifiedresources.ResourceTypeAppContainer && resource.Name == "uptime-kuma" {
+			containerResourceID = resource.ID
+		}
+	}
+	if containerResourceID == "" {
+		t.Fatal("expected the registry to hold the uptime-kuma app container")
+	}
+
+	cases := []struct {
+		findingID    string
+		resourceID   string
+		resourceType string
+	}{
+		// An alert on each resource carries these references.
+		{"demo-docker-host-offline-edge-01", AttentionSubjectResourceID(registry, offlineAlert.ResourceID), "docker-host"},
+		{"demo-storage-capacity-pve1-local-zfs", AttentionSubjectResourceID(registry, usageAlert.ResourceID), "storage"},
+		{"demo-pbs-degraded-dr-vault", AttentionSubjectResourceID(registry, "pbs/dr-vault"), "pbs"},
+		{"demo-guest-memory-pve1-ct-102", AttentionSubjectResourceID(registry, "pve1-ct-102"), "system-container"},
+		// A short container ID binds no alert reference, so name the resource directly.
+		{"demo-docker-container-core-01-uptime-kuma", containerResourceID, "app-container"},
+	}
+	for _, tc := range cases {
+		finding := service.findings.Get(tc.findingID)
+		if finding == nil {
+			t.Fatalf("expected finding %s", tc.findingID)
+		}
+		if _, ok := registry.Get(tc.resourceID); !ok {
+			t.Fatalf("%s: expected %q to be a unified resource", tc.findingID, tc.resourceID)
+		}
+		if finding.ResourceID != tc.resourceID {
+			t.Fatalf("%s: resource ID = %q, want unified %q", tc.findingID, finding.ResourceID, tc.resourceID)
+		}
+		if finding.ResourceType != tc.resourceType {
+			t.Fatalf("%s: resource type = %q, want %q", tc.findingID, finding.ResourceType, tc.resourceType)
+		}
+		onResource := service.GetFindingsForResource(tc.resourceID)
+		if len(onResource) != 1 || onResource[0].ID != tc.findingID {
+			t.Fatalf("%s: findings for resource %q = %v", tc.findingID, tc.resourceID, onResource)
+		}
+	}
+
+	// Both findings restate an active alert, so they fold under it.
+	for findingID, alertID := range map[string]string{
+		"demo-docker-host-offline-edge-01":     offlineAlert.ID,
+		"demo-storage-capacity-pve1-local-zfs": usageAlert.ID,
+	} {
+		if got := service.findings.Get(findingID).MirrorsAlertID; got != alertID {
+			t.Fatalf("%s: mirrors alert %q, want %q", findingID, got, alertID)
+		}
+	}
+
+	// Without a read state the views are derived from the same snapshot.
+	for _, derived := range synthesizeDemoPatrolFindings(newPatrolRuntimeState(snapshot), now) {
+		if want := service.findings.Get(derived.ID); want == nil || derived.ResourceID != want.ResourceID {
+			t.Fatalf("%s: derived resource ID %q differs from the read state's", derived.ID, derived.ResourceID)
+		}
+	}
+
+	// A registry that has not ingested the snapshot yet must not leave the
+	// first cycle's findings on source IDs: the store keeps a finding's
+	// resource for as long as the process runs.
+	early := NewPatrolService(nil, demoSnapshotProvider{snapshot: snapshot})
+	early.SetReadState(unifiedresources.NewRegistry(nil))
+	early.runDemoPatrolCycle(TriggerReasonStartup)
+	for _, tc := range cases {
+		finding := early.findings.Get(tc.findingID)
+		if finding == nil {
+			t.Fatalf("expected finding %s before the registry ingests", tc.findingID)
+		}
+		if finding.ResourceID != tc.resourceID {
+			t.Fatalf("%s: resource ID before the registry ingests = %q, want %q", tc.findingID, finding.ResourceID, tc.resourceID)
+		}
+	}
+
+	// Once the registry holds resources it is the only authority. A record it
+	// lacks or refuses (an operator link can fold a Docker host into a guest)
+	// keeps its source ID instead of an ID from a registry without those links.
+	partial := snapshot
+	partial.DockerHosts = nil
+	partialRegistry := unifiedresources.NewRegistry(nil)
+	partialRegistry.IngestSnapshot(partial)
+	lagging := NewPatrolService(nil, demoSnapshotProvider{snapshot: snapshot})
+	lagging.SetReadState(partialRegistry)
+	lagging.runDemoPatrolCycle(TriggerReasonStartup)
+	for findingID, want := range map[string]string{
+		"demo-docker-host-offline-edge-01":     "edge-01-mock",
+		"demo-storage-capacity-pve1-local-zfs": AttentionSubjectResourceID(registry, usageAlert.ResourceID),
+	} {
+		finding := lagging.findings.Get(findingID)
+		if finding == nil {
+			t.Fatalf("expected finding %s with a registry lacking Docker hosts", findingID)
+		}
+		if finding.ResourceID != want {
+			t.Fatalf("%s: resource ID with a registry lacking Docker hosts = %q, want %q", findingID, finding.ResourceID, want)
+		}
+	}
 }
 
 func TestPatrolService_RunDemoPatrolCycle_ResolvesStaleDemoFindings(t *testing.T) {

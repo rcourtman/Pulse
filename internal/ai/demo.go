@@ -5,8 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -326,15 +328,76 @@ func (p *PatrolService) backfillDemoRunHistory(template PatrolRunRecord, now tim
 	return true
 }
 
+// demoResourceResolver names the snapshot records the demo synthesizer reads
+// by the unified resources real Patrol findings name. The Inbox, resource
+// drawers, the resource-scoped findings list and the alert-mirror reconcile
+// all join a finding to its resource by that ID, so a demo finding stamped
+// with a snapshot source ID joined none of them.
+type demoResourceResolver struct {
+	readState unifiedresources.ReadState
+	subjects  unifiedresources.AlertResourceReferenceResolver
+}
+
+// newDemoResourceResolver resolves against Patrol's read state. Without one,
+// or while it holds none of the record kinds the synthesizer reads (a demo
+// cycle can start before the registry's first ingest), it derives one from
+// the snapshot, as the real producers do: the findings store keeps a
+// finding's resource for the life of the process, so a first cycle must not
+// settle for source IDs. The derived IDs match what the registry assigns on
+// ingest unless a saved operator link folds the record into another
+// resource; such a finding keeps the derived ID until restart. Once the
+// registry holds such records it is the only authority, so a record it lacks
+// or refuses (an operator link can fold a Docker host into a guest) never
+// takes an ID from a registry without the operator's links.
+func newDemoResourceResolver(snap patrolRuntimeState) *demoResourceResolver {
+	if snap.readState == nil || demoReadStateLacksRecords(snap.readState) {
+		snap = snap.withDerivedProviders()
+	}
+	return &demoResourceResolver{readState: snap.readState, subjects: patrolAlertReferenceResolver(snap)}
+}
+
+func demoReadStateLacksRecords(rs unifiedresources.ReadState) bool {
+	return len(rs.VMs()) == 0 && len(rs.Containers()) == 0 && len(rs.StoragePools()) == 0 &&
+		len(rs.DockerHosts()) == 0 && len(rs.DockerContainers()) == 0 &&
+		len(rs.PBSInstances()) == 0 && len(rs.PMGInstances()) == 0
+}
+
+// unifiedID resolves the reference an alert on the record carries the way
+// the Inbox resolves an alert's subject (AttentionSubjectResourceID), so a
+// demo finding names the resource an Inbox item about the same record names.
+// A reference that binds nothing, or binds another type of resource, keeps
+// the record's source ID.
+func (r *demoResourceResolver) unifiedID(reference, sourceID string, resourceType unifiedresources.ResourceType) string {
+	binding, _ := r.subjects.ResolveAlertResourceReference(reference)
+	if binding.ResourceID == "" || binding.Component || unifiedresources.CanonicalResourceType(binding.ResourceType) != resourceType {
+		return sourceID
+	}
+	return binding.ResourceID
+}
+
+// containerID resolves an app container through the container views, by
+// host and container ID: a Docker container alert reference binds only a
+// complete container ID, and mock containers carry short ones.
+func (r *demoResourceResolver) containerID(hostID, containerID string) string {
+	host, container := strings.TrimSpace(hostID), strings.TrimSpace(containerID)
+	for _, view := range r.readState.DockerContainers() {
+		if view != nil && view.HostSourceID() == host && view.ContainerID() == container {
+			return view.ID()
+		}
+	}
+	return containerID
+}
+
 // synthesizeDemoPatrolFindings derives demo findings from the live mock
-// state. Every finding references a resource that exists in the demo dataset
-// and quotes its actual observed values, so the patrol surface stays
-// consistent with what the rest of the demo UI shows. The demo scenario data
-// pins a set of deliberate anomalies (an offline Docker edge host, a degraded
-// PBS instance, unhealthy containers), which gives the surface a stable core
-// of findings across cycles.
+// state. Every finding names a resource that exists in the demo dataset by
+// its unified resource ID and quotes its actual observed values, so the
+// patrol surface stays consistent with what the rest of the demo UI shows.
+// The demo scenario data pins a set of deliberate anomalies (an offline
+// Docker edge host, a degraded PBS instance, unhealthy containers), which
+// gives the surface a stable core of findings across cycles.
 func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Finding {
 	var findings []*Finding
+	resources := newDemoResourceResolver(snap)
 
 	// Offline Docker host: the demo scenario keeps one edge host offline.
 	for _, host := range snap.DockerHosts {
@@ -347,7 +410,7 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 			Key:          fmt.Sprintf("docker:%s:offline", host.Hostname),
 			Severity:     FindingSeverityCritical,
 			Category:     FindingCategoryReliability,
-			ResourceID:   host.ID,
+			ResourceID:   resources.unifiedID(alerts.DockerHostResourceID(host.ID), host.ID, unifiedresources.ResourceTypeAgent),
 			ResourceName: name,
 			ResourceType: "docker-host",
 			Node:         host.Hostname,
@@ -394,7 +457,7 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 			Key:          fmt.Sprintf("storage:%s:capacity", topStorage.Name),
 			Severity:     severity,
 			Category:     FindingCategoryCapacity,
-			ResourceID:   topStorage.ID,
+			ResourceID:   resources.unifiedID(topStorage.ID, topStorage.ID, unifiedresources.ResourceTypeStorage),
 			ResourceName: topStorage.Name,
 			ResourceType: "storage",
 			Node:         topStorage.Node,
@@ -423,7 +486,7 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 			Key:          fmt.Sprintf("pbs:%s:connection", pbs.Name),
 			Severity:     FindingSeverityWarning,
 			Category:     FindingCategoryBackup,
-			ResourceID:   pbs.ID,
+			ResourceID:   resources.unifiedID(pbs.ID, pbs.ID, unifiedresources.ResourceTypePBS),
 			ResourceName: pbs.Name,
 			ResourceType: "pbs",
 			Node:         pbs.Name,
@@ -471,7 +534,7 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 				Key:          fmt.Sprintf("docker:%s/%s:health", host.Hostname, c.Name),
 				Severity:     FindingSeverityWarning,
 				Category:     FindingCategoryReliability,
-				ResourceID:   c.ID,
+				ResourceID:   resources.containerID(host.ID, c.ID),
 				ResourceName: c.Name,
 				ResourceType: "app-container",
 				Node:         host.Hostname,
@@ -505,7 +568,7 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 			Key:          fmt.Sprintf("pmg:%s:connection", pmg.Name),
 			Severity:     FindingSeverityWarning,
 			Category:     FindingCategoryReliability,
-			ResourceID:   pmg.ID,
+			ResourceID:   resources.unifiedID(pmg.ID, pmg.ID, unifiedresources.ResourceTypePMG),
 			ResourceName: pmg.Name,
 			ResourceType: "pmg",
 			Node:         pmg.Name,
@@ -525,26 +588,27 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 
 	// Highest-memory running guest, only when genuinely high.
 	type guestRef struct {
-		id, name, node, kind string
-		usage                float64
-		used, total          int64
+		id, name, node, label string
+		resourceType          unifiedresources.ResourceType
+		usage                 float64
+		used, total           int64
 	}
 	var topGuest *guestRef
-	consider := func(id, name, node, kind string, status string, mem models.Memory) {
+	consider := func(id, name, node, label string, resourceType unifiedresources.ResourceType, status string, mem models.Memory) {
 		if !strings.EqualFold(strings.TrimSpace(status), "running") || mem.Total <= 0 {
 			return
 		}
 		if topGuest == nil || mem.Usage > topGuest.usage {
-			topGuest = &guestRef{id: id, name: name, node: node, kind: kind, usage: mem.Usage, used: mem.Used, total: mem.Total}
+			topGuest = &guestRef{id: id, name: name, node: node, label: label, resourceType: resourceType, usage: mem.Usage, used: mem.Used, total: mem.Total}
 		}
 	}
 	for i := range snap.VMs {
 		vm := &snap.VMs[i]
-		consider(vm.ID, vm.Name, vm.Node, "VM", vm.Status, vm.Memory)
+		consider(vm.ID, vm.Name, vm.Node, "VM", unifiedresources.ResourceTypeVM, vm.Status, vm.Memory)
 	}
 	for i := range snap.Containers {
 		ct := &snap.Containers[i]
-		consider(ct.ID, ct.Name, ct.Node, "Container", ct.Status, ct.Memory)
+		consider(ct.ID, ct.Name, ct.Node, "Container", unifiedresources.ResourceTypeSystemContainer, ct.Status, ct.Memory)
 	}
 	if topGuest != nil && topGuest.usage >= 85 {
 		findings = append(findings, &Finding{
@@ -552,14 +616,14 @@ func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Fin
 			Key:          fmt.Sprintf("guest:%s:memory", topGuest.id),
 			Severity:     FindingSeverityWarning,
 			Category:     FindingCategoryPerformance,
-			ResourceID:   topGuest.id,
+			ResourceID:   resources.unifiedID(topGuest.id, topGuest.id, topGuest.resourceType),
 			ResourceName: topGuest.name,
-			ResourceType: strings.ToLower(topGuest.kind),
+			ResourceType: string(topGuest.resourceType),
 			Node:         topGuest.node,
-			Title:        fmt.Sprintf("%s %q memory usage at %.0f%%", topGuest.kind, topGuest.name, topGuest.usage),
+			Title:        fmt.Sprintf("%s %q memory usage at %.0f%%", topGuest.label, topGuest.name, topGuest.usage),
 			Description: fmt.Sprintf(
 				"%s %s on %s is using %s of its %s allocation. Sustained usage at this level risks swapping and degraded performance under load.",
-				topGuest.kind, topGuest.name, topGuest.node, formatDemoBytes(topGuest.used), formatDemoBytes(topGuest.total)),
+				topGuest.label, topGuest.name, topGuest.node, formatDemoBytes(topGuest.used), formatDemoBytes(topGuest.total)),
 			Recommendation: "Increase the memory allocation if the host has capacity, or check the workload for a leak " +
 				"and review application cache settings to reduce steady-state usage.",
 			Evidence:   fmt.Sprintf("memory=%.1f%% used=%s total=%s", topGuest.usage, formatDemoBytes(topGuest.used), formatDemoBytes(topGuest.total)),
