@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "72c5579c55d143ec86b3b29a755ac2bbe95cf679",
+  "verified_at": "2026-10-24T00:27:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "82182ae2cf2d0971d91b08232d502c5b019f1aff0691ea9820b6a6fec8ce67f8",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "fa55f749d77cdc472e5235e8aedb0a320d31b03de8643c2c3358861a631d9f6d"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Actual production ProxmoxBackupsTable, real PVE/PBS/posture HTTP adapters, recovery model, Coverage table and CSS; read-only synthetic HTTP, not a native provider or full application stack. All 294 compiled production modules and artifacts are hash-bound.",
+    "Observed and recovered: both accepted backups retain their dates, Verified evidence, Protected posture and complete/sufficient provider quality.",
+    "Unreadable namespace history: the readable root remains visible; missing child backup age is Unknown and the expansion qualifies that history is not confirmed complete, rather than asserting no restore points.",
+    "Denied/partial history: existing Needs attention and backup-exists explanation remain, with qualified missing evidence, Unknown age and no hidden raw artifact.",
+    "Accepted complete/sufficient empty scope: None and source-scoped no-points copy, not a fabricated protected backup.",
+    "Raw PBS HTTP503 and posture HTTP503: Unknown and qualified missing evidence despite empty raw arrays or retained complete quality. The synthetic private error body is not rendered. Expected network console errors are recorded, with no unexpected page/console errors.",
+    "Known successful point outside the raw list: preserved server-owned Protected posture but Unknown raw-list age and explicit current-list qualification, not None or invented archive.",
+    "All 16 state/viewport captures were opened with the native view_image tool; the 320px copy wraps, age stays readable and no horizontal document overflow appears."
+  ],
+  "interactions": [
+    "Keyboard focus, Enter expansion/collapse/reopen through native workload row buttons at both widths.",
+    "All three consuming production API hooks read the synthetic HTTP envelopes. No external request or mutation.",
+    "Isolated Retry PBS inventory replaces Unknown/incomplete with accepted-empty None at both widths without a component remount.",
+    "Inspected all sixteen actual screenshots with native view_image; browser contexts and local server closed."
+  ]
+}

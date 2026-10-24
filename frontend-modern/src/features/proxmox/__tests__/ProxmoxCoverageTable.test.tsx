@@ -259,7 +259,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     ));
 
     const notice = screen.getByRole('status');
-    expect(notice).toHaveTextContent('No restore points found for this workload.');
+    expect(notice).toHaveTextContent(
+      'No restore points reported for this workload in the readable history.',
+    );
     expect(notice.className).toContain('border-amber-300');
     // No registry match, so nothing to link to.
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
@@ -389,5 +391,107 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(span?.parentElement?.children).toHaveLength(1);
     expect(span?.getAttribute('class')).toBe('block truncate');
     expect(span?.closest('table')).toHaveClass('table-fixed');
+  });
+});
+
+describe('Coverage absence requires readable, complete history', () => {
+  const unknownTitle =
+    'No completed backup is visible in the current list. Missing entries do not mean no backups exist. Expand this row to inspect the evidence.';
+  const completePosture = row.protectionPosture!;
+  const provider = completePosture.providerStates[0];
+  const mount = (subject: WorkloadCoverageRow, historyReadIncomplete = false) =>
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[subject]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        historyReadIncomplete={historyReadIncomplete}
+        layoutWidth={() => 320}
+      />
+    ));
+
+  it.each([
+    ['partial history', { ...provider, historyCompleteness: 'partial' as const }],
+    ['unavailable history', { ...provider, historyCompleteness: 'unavailable' as const }],
+    ['unknown history', { ...provider, historyCompleteness: 'unknown' as const }],
+    ['partial access', { ...provider, permissions: 'partial' as const }],
+    ['denied access', { ...provider, permissions: 'denied' as const }],
+    ['unknown access', { ...provider, permissions: 'unknown' as const }],
+  ])('does not turn %s into confirmed absence', (_label, incompleteProvider) => {
+    mount({
+      ...row,
+      posture: 'attention',
+      protectionPosture: { ...completePosture, providerStates: [incompleteProvider] },
+    });
+
+    expect(screen.getByTitle(unknownTitle)).toHaveTextContent(/^Unknown$/);
+    expect(screen.getByLabelText(`Unknown age. ${unknownTitle}`)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.',
+    );
+    expect(document.body.textContent).not.toContain('No restore points found');
+    expect(document.body.textContent).not.toContain('No restore points reported');
+    // This copy qualifies the list; it does not synthesise a hidden archive.
+    expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['missing posture', undefined],
+    ['no provider evidence', { ...completePosture, providerStates: [] }],
+    ['unknown scope', { ...completePosture, coverage: 'unknown' as const }],
+    ['partial scope', { ...completePosture, coverage: 'partial' as const }],
+    [
+      'one readable source beside an unreadable source',
+      {
+        ...completePosture,
+        providerStates: [provider, { ...provider, historyCompleteness: 'unavailable' as const }],
+      },
+    ],
+  ])('keeps %s unknown even when raw requests fulfilled', (_label, protectionPosture) => {
+    mount({ ...row, protectionPosture });
+    expect(screen.getByTitle(unknownTitle)).toHaveTextContent(/^Unknown$/);
+    expect(screen.getByRole('status')).toHaveTextContent('not confirmed complete');
+  });
+
+  it('qualifies pending/failed reads even beside retained complete provider quality', () => {
+    mount(row, true);
+    expect(screen.getByTitle(unknownTitle)).toHaveTextContent(/^Unknown$/);
+    expect(screen.getByRole('status')).toHaveTextContent('not confirmed complete');
+  });
+
+  it('keeps a known backup outside the raw list unknown, not None', () => {
+    mount({
+      ...row,
+      protectionPosture: {
+        ...completePosture,
+        lastSuccessfulPointAt: '2026-10-23T00:00:00Z',
+      },
+    });
+    expect(screen.getByTitle(unknownTitle)).toHaveTextContent(/^Unknown$/);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'No restore points are visible in the current list. Missing entries do not mean no backups exist.',
+    );
+    expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
+  });
+
+  it('preserves accepted-empty history as a scoped empty observation', () => {
+    mount({
+      ...row,
+      posture: 'unprotected',
+      protectionPosture: { ...completePosture, state: 'unprotected', coverage: 'none' },
+    });
+    expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(/^None$/);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'No restore points reported for this workload in the readable history.',
+    );
+    expect(screen.queryByTitle(unknownTitle)).not.toBeInTheDocument();
   });
 });
