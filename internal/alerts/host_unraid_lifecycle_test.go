@@ -1619,7 +1619,9 @@ func TestHostSMARTRiskFilesystemAndHostLifecycleStayIndependent(t *testing.T) {
 				fsID, _ := hostDiskResourceID(f.host, f.host.Disks[0])
 				id := canonicalMetricStateID(fsID, "disk")
 				testRequireActiveAlert(t, f.m, id)
-				f.host.Disks = nil
+				// A non-empty replacement establishes filesystem removal;
+				// an empty report alone is now an observation gap.
+				f.host.Disks = []models.Disk{{Mountpoint: "/other", Total: 1000}}
 				f.host.Sensors.SMART = nil
 				f.m.CheckHost(f.host)
 				if testHasActiveAlert(t, f.m, id) {
@@ -1690,7 +1692,9 @@ func TestHostSMARTRiskFilesystemIdentityCannotSubstituteInventory(t *testing.T) 
 			usageID := canonicalMetricStateID(diskResourceID, "disk")
 			testRequireActiveAlert(t, f.m, usageID)
 			if direction == "SMART-only" {
-				f.host.Disks = nil
+				// A non-empty replacement establishes filesystem removal;
+				// an empty report alone is now an observation gap.
+				f.host.Disks = []models.Disk{{Mountpoint: "/other", Total: 1000}}
 				f.m.CheckHost(f.host)
 				if testHasActiveAlert(t, f.m, usageID) {
 					t.Fatal("SMART identity held missing filesystem usage")

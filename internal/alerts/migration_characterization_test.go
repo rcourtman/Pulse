@@ -994,10 +994,10 @@ func TestAlertCharacterizationHeldMetricAlertRefreshesItsClassification(t *testi
 			name:    "agent filesystem",
 			alertID: canonicalMetricStateID("agent:held-host/disk:srv", "disk"),
 			fire: func(m *Manager) {
-				m.CheckHost(models.Host{ID: "held-host", Hostname: "held", Disks: []models.Disk{{Mountpoint: "/srv", Device: "/dev/sdc1", Usage: 92}}})
+				m.CheckHost(models.Host{ID: "held-host", Hostname: "held", Disks: []models.Disk{{Mountpoint: "/srv", Device: "/dev/sdc1", Total: 1000, Used: 920, Usage: 92}}})
 			},
 			hold: func(m *Manager) {
-				m.CheckHost(models.Host{ID: "held-host", Hostname: "held", Disks: []models.Disk{{Mountpoint: "/srv", Device: "/dev/sdc1", Usage: 75}}})
+				m.CheckHost(models.Host{ID: "held-host", Hostname: "held", Disks: []models.Disk{{Mountpoint: "/srv", Device: "/dev/sdc1", Total: 1000, Used: 750, Usage: 75}}})
 			},
 			stale:            staleAlert{resourceType: "agent"},
 			wantResourceType: "agent-disk",
