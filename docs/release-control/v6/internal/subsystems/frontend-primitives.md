@@ -36,6 +36,18 @@ starts a fresh read without waiting for the poll, while retaining actual stored
 series and rejecting a late live reply from the previous reporting state.
 Pending API polls retain their own wording.
 
+### Backups distinguishes completed points from inventory entries (24 October 2026)
+
+The existing health strip names completed restore points and separately counts
+running and failed entries. The existing per-day chart measures only completed
+restore points in both count and volume modes, while the dated table and its
+filters keep incomplete entries available for inspection. Table and day-group
+counters name entries so they cannot imply completion. The incomplete-only
+chart state says that no completed dated points are visible, not that no
+backup activity occurred. The consuming Backups tests cover summary, chart,
+volume, date selection and route views together; existing table interaction
+primitives, access boundaries and routes are unchanged.
+
 ### Backup posture failure and retry stay source-local (24 October 2026)
 
 The Backups posture notice offers a keyboard-operable retry with the existing

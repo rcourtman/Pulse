@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "be587352819b1a65bf73ab71361ced5a4c4d3ff1",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "d164eebb0187567016e0df3d407c4b05071b7a3f532f4368c73532c589441a00",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "df2a05565d4e96b297edb5a20b9d8b846cfea5a2363457e903fcf99b5a16e629",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "9ec6e341187f3e86f52254d4e7b202bd3c5571e1cd341cb4f474ecbfe5e91a35",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "6918881f993caef9ef604291f92a7b822ef4dc1df8c7cadfcf8802f87c1739a2"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Mixed inventory: 3 completed restore points, 2 running and 1 failed; all 6 entries remain available.",
+    "Incomplete-only inventory: 0 completed points, separate running/failed counts, no PBS completed coverage or completed chart activity.",
+    "Completed-only count and volume charts, including a guest-local snapshot distinct from PBS and PVE backups.",
+    "Expanded failed artifact keeps its failed state and full details on desktop and phone."
+  ],
+  "interactions": [
+    "Keyboard Count/Volume/day selection and date clearing retain incomplete inventory entries.",
+    "Keyboard desktop disclosure and whole-row phone tap open failed evidence; the phone disclosure button remains keyboard-only by existing shared-table design.",
+    "Keyboard/touch Coverage navigation preserves completed summary and active-page semantics.",
+    "Actual production stores, router, model, tables, chart and CSS consume safe synthetic HTTP/WS responses; no app source substitution or external mutations."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-24T18:16:26.812Z",
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "evidence": "Lane RECEIPTS.md, BROWSER.json and PIXEL-REVIEW.json retain complete initial failures, targeted corrections, production-asset/source bindings and fourteen natively inspected captures. The initial pre-hydration Overview is not cleared as installed startup health; no native backup, restore, thaw or release acceptance is claimed."
+}

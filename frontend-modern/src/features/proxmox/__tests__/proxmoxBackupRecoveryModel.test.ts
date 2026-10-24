@@ -598,3 +598,104 @@ describe('backup-date-evidence model', () => {
     expect(getRecoveryAgeBand(nowMs - 30 * 86400000 - 1, nowMs)).toBe('stale');
   });
 });
+
+describe('completed restore-point totals', () => {
+  const nowMs = Date.parse('2026-05-26T08:00:00Z');
+  const build = (
+    pbsBackups: PBSBackup[],
+    archives: StorageBackup[] = [],
+    snapshots: GuestSnapshot[] = [],
+  ) =>
+    buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups,
+      archives,
+      snapshots,
+      tasks: [],
+      nowMs,
+    });
+
+  it('keeps incomplete PBS and PVE entries visible without inflating completed counts or bytes', () => {
+    const model = build(
+      [
+        pbsBackup({ id: 'complete', size: 100 }),
+        pbsBackup({ id: 'running', size: 10_000, inProgress: true }),
+        pbsBackup({
+          id: 'failed',
+          size: 20_000,
+          inProgress: true,
+          writeActivityObserved: true,
+          writeActive: false,
+        }),
+      ],
+      [
+        archive({ id: 'complete-file', size: 200 }),
+        archive({ id: 'writing-file', size: 40_000, inProgress: true }),
+      ],
+      [snapshot({ sizeBytes: 300 })],
+    );
+    expect(model.recoverableArtifacts).toHaveLength(6);
+    expect(model.coverageRows[0].artifacts).toHaveLength(6);
+    expect(model.coverageSummary).toMatchObject({
+      recoverableArtifacts: 3,
+      runningArtifacts: 2,
+      failedArtifacts: 1,
+      totalBytes: 600,
+      withPBS: 1,
+    });
+    expect(model.coverageRows[0].latestBackup?.nativeId).toBe('complete');
+  });
+
+  it.each([false, true])(
+    'does not count an incomplete-only PBS target when write activity is %s',
+    (writeActive) => {
+      const model = build([
+        pbsBackup({
+          inProgress: true,
+          writeActivityObserved: true,
+          writeActive,
+          protected: true,
+          verified: true,
+        }),
+      ]);
+      expect(model.coverageSummary).toMatchObject({
+        recoverableArtifacts: 0,
+        withPBS: 0,
+        totalBytes: 0,
+        runningArtifacts: writeActive ? 1 : 0,
+        failedArtifacts: writeActive ? 0 : 1,
+      });
+      expect(model.recoverableArtifacts).toHaveLength(1);
+      expect(model.recoverableArtifacts[0].verified).toBeUndefined();
+      expect(model.coverageRows[0].latestBackup).toBeUndefined();
+    },
+  );
+
+  it('keeps unknown chronology and missing verification separate from completion', () => {
+    const model = build([pbsBackup({ backupTime: 'not-a-date', verified: false, size: 123 })]);
+    expect(model.coverageSummary).toMatchObject({
+      recoverableArtifacts: 1,
+      totalBytes: 123,
+      withPBS: 1,
+    });
+    expect(model.coverageRows[0].latestBackup).toBeUndefined();
+    expect(model.coverageRows[0].ageUnknown?.backup).toBe(true);
+    expect(model.recoverableArtifacts[0].verified).toBe(false);
+  });
+
+  it('moves the same observed entry into completed totals only when its producer reports completion', () => {
+    const pending = build([pbsBackup({ inProgress: true, size: 100 })]);
+    const complete = build([pbsBackup({ inProgress: false, size: 200 })]);
+    expect(pending.coverageSummary).toMatchObject({
+      recoverableArtifacts: 0,
+      runningArtifacts: 1,
+      totalBytes: 0,
+    });
+    expect(complete.coverageSummary).toMatchObject({
+      recoverableArtifacts: 1,
+      runningArtifacts: 0,
+      totalBytes: 200,
+    });
+    expect(complete.recoverableArtifacts[0].id).toBe(pending.recoverableArtifacts[0].id);
+  });
+});
