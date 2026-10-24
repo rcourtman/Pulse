@@ -2750,7 +2750,17 @@ prepared SQL is cached. Layout participates in the bounded SQL-template key;
 results and tier presence remain uncached. Raw multi-resource reads bind one
 bounded request table and return statement-local resource numbers across the
 SQLite row boundary. Resolve each number against that statement's normalized
-resource list; never persist or expose it as resource identity. Tier discovery,
+resource list; never persist or expose it as resource identity. With multiple
+requested metrics, return one series number instead of repeatedly decoding the
+metric name too. Resolve both dimensions against the current bound resource
+and metric lists, including on a SQL-template cache hit or a new chunk. Metric
+names remain bound data in the projection, not interpolated SQL. Full and
+value-only raw projections share this shape; unfiltered, single-resource and
+ordered display-bucket reads keep their existing row dimensions.
+`TestRetainedRawFleetSeriesNumbersBindCurrentMetrics` checks both layouts and
+projections, parameter-like identities, reordered metric bindings and exact
+observation ownership; the resource-number regression covers filtered chunk
+boundaries and mixed-tier chronology. Tier discovery,
 coverage probes and value ranges retain the same scoped snapshot and index
 bounds. These detached raw series explicitly restore stable timestamp order in
 Go before Docker observation projection, without a fleet-wide SQLite sort or
