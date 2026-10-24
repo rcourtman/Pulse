@@ -126,7 +126,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                     </div>
                     <button
                       onClick={() => setUrlToRemove(url)}
-                      disabled={!canManage()}
+                      disabled={!canManage() || saving()}
                       class="p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors"
                       title="Remove webhook endpoint"
                     >
@@ -145,12 +145,13 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
               </Show>
             </div>
           </Show>
-          <div class="flex gap-3 pt-4 border-t border-border">
+          <div class="flex flex-col gap-3 pt-4 border-t border-border sm:flex-row">
             <input
               ref={newUrlInputRef}
               type="text"
+              aria-label="Audit webhook URL"
               placeholder="https://your-api.com/webhook"
-              class={`${formControl} flex-1`}
+              class={`${formControl} w-full min-w-0 flex-1`}
               value={newUrl()}
               onInput={(e) => setNewUrl(e.currentTarget.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
@@ -159,7 +160,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             <button
               onClick={handleAddWebhook}
               disabled={!canManage() || saving() || !newUrl().trim()}
-              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-2 transition-colors"
+              class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md flex items-center justify-center gap-2 transition-colors sm:shrink-0"
             >
               <Plus size={18} />
               Add Endpoint
