@@ -111,12 +111,25 @@ class AuditWebhookDocsTest(unittest.TestCase):
         for boundary in ("ensureAdminSession", "featureAuditLoggingValue", "ScopeSettingsRead",
                          "ScopeSettingsWrite", "auth.ResourceAuditLogs"):
             self.assertIn(boundary, route)
-        handler = (ROOT / "internal/api/activity_audit_handlers.go").read_text().split(
-            "func (h *AuditHandlers) HandleUpdateWebhooks", 1)[1].split(
-                "// validateWebhookURL", 1)[0]
-        self.assertIn('URLs []string `json:"urls"`', handler)
-        self.assertIn("getLoggerForOrg(orgID)", handler)
-        self.assertIn("logger.UpdateWebhookURLs(validatedURLs)", handler)
+        source = (ROOT / "internal/api/activity_audit_handlers.go").read_text()
+        handler = source.split("func (h *AuditHandlers) HandleUpdateWebhooks", 1)[1].split(
+            "\n}\n", 1)[0]
+        # The bounded decoder now owns the wire shape; requiring an inline
+        # struct would reject the repair that prevents last-member-wins clears.
+        selection = source.split("func decodeAuditWebhookSelection(", 1)[1].split(
+            "\n}\n", 1)[0]
+        self.assertIn("var urls []string", selection)
+        self.assertIn("decoder.Decode(&urls)", selection)
+        self.assertIn("if urls == nil", selection)
+        for boundary in ("http.MaxBytesReader(w, r.Body, 64*1024)",
+                         "urls, err := decodeAuditWebhookSelection(r.Body)",
+                         "for _, rawURL := range urls", "validateWebhookURL(rawURL)",
+                         "getLoggerForOrg(orgID)", "logger.UpdateWebhookURLs(validatedURLs)"):
+            self.assertIn(boundary, handler)
+        self.assertLess(handler.index("decodeAuditWebhookSelection(r.Body)"),
+                        handler.index("validateWebhookURL(rawURL)"))
+        self.assertLess(handler.index("validateWebhookURL(rawURL)"),
+                        handler.index("logger.UpdateWebhookURLs(validatedURLs)"))
 
     def test_audit_endpoint_restrictions_are_not_an_alert_setting(self):
         for phrase in ("using HTTPS with valid certificate trust", "placeholder",
