@@ -99,7 +99,10 @@ type auditQueryValidationError struct {
 }
 
 func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *auditQueryValidationError) {
-	query := r.URL.Query()
+	query, validationErr := auditEventQueryFromRequest(r)
+	if validationErr != nil {
+		return audit.QueryFilter{}, validationErr
+	}
 	filter := audit.QueryFilter{
 		EventType: query.Get("event"),
 		User:      query.Get("user"),
@@ -134,6 +137,27 @@ func auditEventListFilterFromRequest(r *http.Request) (audit.QueryFilter, *audit
 	}
 
 	return filter, nil
+}
+
+// URL.Query silently discards damaged pairs. An audit selection must be parsed
+// completely, and singleton selectors must not depend on which value came first.
+func auditEventQueryFromRequest(r *http.Request) (url.Values, *auditQueryValidationError) {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return nil, &auditQueryValidationError{
+			code:    "invalid_query",
+			message: "Invalid audit query encoding",
+		}
+	}
+	for _, key := range []string{"event", "user", "startTime", "endTime", "success", "limit", "offset", "format", "verify"} {
+		if len(query[key]) > 1 {
+			return nil, &auditQueryValidationError{
+				code:    "ambiguous_query",
+				message: fmt.Sprintf("Audit query parameter %s must be supplied at most once", key),
+			}
+		}
+	}
+	return query, nil
 }
 
 // A supplied malformed or empty bound must not become an unfiltered read.
@@ -283,9 +307,13 @@ func (h *AuditHandlers) HandleUpdateWebhooks(w http.ResponseWriter, r *http.Requ
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}
+	if req.URLs == nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "An explicit urls array is required; use [] to remove all audit webhooks", nil)
+		return
+	}
 
 	// Validate all webhook URLs
-	var validatedURLs []string
+	validatedURLs := make([]string, 0, len(req.URLs))
 	for _, rawURL := range req.URLs {
 		if err := validateWebhookURL(rawURL); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_url", fmt.Sprintf("Invalid webhook URL: %s", err.Error()), map[string]string{"url": rawURL})
@@ -443,7 +471,11 @@ func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	query := r.URL.Query()
+	query, validationErr := auditEventQueryFromRequest(r)
+	if validationErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message, nil)
+		return
+	}
 
 	// Parse format
 	format := audit.ExportFormatJSON
@@ -509,7 +541,11 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	query := r.URL.Query()
+	query, validationErr := auditEventQueryFromRequest(r)
+	if validationErr != nil {
+		writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message, nil)
+		return
+	}
 
 	// Parse filter
 	filter := audit.QueryFilter{

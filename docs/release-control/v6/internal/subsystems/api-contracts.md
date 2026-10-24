@@ -4082,6 +4082,26 @@ exporter are pinned by `internal/api/audit_filter_validation_test.go` with
 fake persistent loggers, including query non-execution and tenant isolation;
 `internal/api/audit_handlers_test.go` pins valid export/summary filter payloads.
 
+List/export/summary parse the entire raw query with `url.ParseQuery`; damaged
+encoding (including an invalid unknown pair) returns `400 invalid_query`, never
+a partial selection. The named singleton parameters `event`, `user`,
+`startTime`, `endTime`, `success`, `limit`, `offset`, `format` and `verify` may
+appear at most once, including under encoded keys; repeated values return
+`400 ambiguous_query`, even when identical. Valid encoded values, unknown
+well-formed parameters and existing per-endpoint filter semantics remain.
+Rejections occur before Query/Count/signature checks or export attachment
+headers. `internal/api/audit_selection_validation_test.go` exercises the actual
+handlers/exporter, scoped wire results and tenant isolation without a database.
+
+POST/PUT `/api/admin/webhooks/audit` require an explicit `urls` array.
+`null`, `{}` and `{"urls":null}` return `400 invalid_request` without updating
+existing destinations. `{"urls":[]}` is intentional removal of every endpoint;
+non-empty selections still undergo all existing URL/SSRF validation before one
+update. Body bounds, organisation/access/entitlement gates and best-effort
+forwarding remain unchanged; these controls establish no receiver delivery.
+The same test file pins both methods, unchanged state after refusal, deliberate
+clear/restore, invalid-URL atomicity and tenant-scoped mutation.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test
