@@ -29,16 +29,18 @@ describe('backup health help', () => {
     }
   });
 
-  it('routes both existing help entry points to the authoritative PBS check', () => {
+  it('routes every named health-help entry to the authoritative PBS check', () => {
     for (const slug of ['RECOVERY', 'TROUBLESHOOTING']) {
-      // Other advice can share this destination; identify the named entry
-      // rather than whichever link happens to occur first in the guide.
+      // Guides can repeat the entry and other advice can share its destination.
+      // Check every named entry without assuming document order or uniqueness.
       const links = Array.from(render(read(`docs/${slug}.md`), slug).querySelectorAll('a')).filter(
         (link) => link.textContent === 'backup health checks',
       );
-      expect(links).toHaveLength(1);
-      expect(links[0].getAttribute('href')).toBe(`/docs/PBS#${fragment}`);
-      expect(links[0].hasAttribute('data-doc-link')).toBe(true);
+      expect(links.length).toBeGreaterThan(0);
+      for (const link of links) {
+        expect(link.getAttribute('href')).toBe(`/docs/PBS#${fragment}`);
+        expect(link.hasAttribute('data-doc-link')).toBe(true);
+      }
     }
   });
 });
