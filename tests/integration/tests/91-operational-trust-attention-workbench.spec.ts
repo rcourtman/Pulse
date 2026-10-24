@@ -367,7 +367,10 @@ async function mockAttention(
   await page.route("**/api/resources**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname !== "/api/resources") {
-      await route.continue();
+      // Resource detail reads belong to this isolated fixture too. Continue
+      // skips the earlier API fallback and leaks the synthetic token to the
+      // real backend, whose correct 401 response then sends the UI to login.
+      await route.fallback();
       return;
     }
     await route.fulfill({
