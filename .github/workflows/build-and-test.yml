@@ -811,9 +811,9 @@ jobs:
       # This additional evidence job keeps the ordinary hosted envelope and
       # required source/release gates intact. A fresh VM must first demonstrate
       # idle capacity; the candidate then enforces the existing local 90 ms SLO.
-      # Competing capacity during the measurement (on hosted runners, the
-      # runner's own provjobd daemon in every observed run) voids the latency
-      # verdict: the proof exits 78 and the verdict check is neutral, not red.
+      # Bounded single-CPU hosted provisioning overhead stays in the measured
+      # 90 ms outcome. Other competing CPU, guest/steal or swap activity voids
+      # the verdict: exit 78 is neutral, never a passed budget.
       - name: Verify chart latency on observed idle capacity
         id: proof
         run: |

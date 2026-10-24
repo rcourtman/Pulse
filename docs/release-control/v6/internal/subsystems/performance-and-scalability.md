@@ -1883,6 +1883,14 @@ dashboard-specific overview, trend, or summary transport.
     its latency, with I/O wait and process I/O counters retained for diagnosis.
     Competing CPU, guest/steal or swap activity invalidates the measurement,
     and process CPU counters identify the largest observed background users.
+    On Actions, exactly one `provjobd<digits>` process bounded to one logical
+    CPU plus one percentage point of sampling skew is normal hosted overhead.
+    Keep it inside the absolute latency, while retaining its raw CPU and a
+    separate attribution. Apply the unchanged 10% limit to all remaining
+    observed/unattributed CPU; multiple/over-bound agents or missing hosted/CPU
+    context get no exception. Guest/steal and swap limits remain unconditional.
+    Real budget failures on this envelope must fail, not become neutral;
+    historical classifications are evidence, not retroactive qualification.
     Only a passing explicit 90 ms report on valid capacity establishes the local SLO.
     The manual `pulse-enterprise:.github/workflows/verify-workload-chart-latency.yml`
     reuses that same public proof on the existing disposable `pulse-ci-vm-large`
@@ -2750,7 +2758,17 @@ prepared SQL is cached. Layout participates in the bounded SQL-template key;
 results and tier presence remain uncached. Raw multi-resource reads bind one
 bounded request table and return statement-local resource numbers across the
 SQLite row boundary. Resolve each number against that statement's normalized
-resource list; never persist or expose it as resource identity. Tier discovery,
+resource list; never persist or expose it as resource identity. With multiple
+requested metrics, return one series number instead of repeatedly decoding the
+metric name too. Resolve both dimensions against the current bound resource
+and metric lists, including on a SQL-template cache hit or a new chunk. Metric
+names remain bound data in the projection, not interpolated SQL. Full and
+value-only raw projections share this shape; unfiltered, single-resource and
+ordered display-bucket reads keep their existing row dimensions.
+`TestRetainedRawFleetSeriesNumbersBindCurrentMetrics` checks both layouts and
+projections, parameter-like identities, reordered metric bindings and exact
+observation ownership; the resource-number regression covers filtered chunk
+boundaries and mixed-tier chronology. Tier discovery,
 coverage probes and value ranges retain the same scoped snapshot and index
 bounds. These detached raw series explicitly restore stable timestamp order in
 Go before Docker observation projection, without a fleet-wide SQLite sort or

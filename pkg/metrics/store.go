@@ -1718,15 +1718,25 @@ func retainedQueryUsesResourceOrdinals(resources int, stepSecs int64, groupSerie
 func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
 	params := retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
 	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), stepSecs, groupSeries)
+	seriesOrdinals := resourceOrdinals && len(metricTypes) > 1
 	identityColumns := ""
 	if len(resourceIDs) != 1 {
-		if resourceOrdinals {
+		if seriesOrdinals {
+			// A filtered fleet already binds every metric name. Return one
+			// statement-local series number instead of decoding its resource
+			// number and the same metric string for every observation.
+			metricCases := make([]string, len(metricTypes))
+			for i := range metricTypes {
+				metricCases[i] = fmt.Sprintf("WHEN :p%d THEN %d", 2+len(resourceIDs)+i, i)
+			}
+			identityColumns = fmt.Sprintf("(r.resource_number * %d + CASE m.metric_type %s END) AS series_number, ", len(metricTypes), strings.Join(metricCases, " "))
+		} else if resourceOrdinals {
 			identityColumns += "r.resource_number, "
 		} else {
 			identityColumns += "resource_id, "
 		}
 	}
-	if len(metricTypes) != 1 {
+	if len(metricTypes) != 1 && !seriesOrdinals {
 		identityColumns += "metric_type, "
 	}
 	// Reuse SQLite's named bindings across every branch and overlap probe.
@@ -1955,6 +1965,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	}
 	sqlQuery, params := s.retainedQuerySQLForIndex(index, resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly)
 	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), queryStep, streamBuckets)
+	seriesOrdinals := resourceOrdinals && len(metricTypes) > 1
 
 	queryRows := func() (*sql.Rows, error) { return tx.Query(sqlQuery, params...) }
 	if tx == nil {
@@ -2048,7 +2059,7 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	}
 	if len(metricTypes) == 1 {
 		metricType = metricTypes[0]
-	} else {
+	} else if !seriesOrdinals {
 		destinations = append(destinations, &metricType)
 	}
 	destinations = append(destinations, &ts, &p.Value)
@@ -2061,10 +2072,18 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 			continue
 		}
 		if resourceOrdinals {
-			if resourceNumber < 0 || resourceNumber >= len(resourceIDs) {
-				return nil, fmt.Errorf("invalid retained resource number %d for %d resources", resourceNumber, len(resourceIDs))
+			resourceIndex := resourceNumber
+			if seriesOrdinals {
+				if resourceNumber < 0 || resourceNumber >= len(resourceIDs)*len(metricTypes) {
+					return nil, fmt.Errorf("invalid retained series number %d", resourceNumber)
+				}
+				resourceIndex /= len(metricTypes)
+				metricType = metricTypes[resourceNumber%len(metricTypes)]
 			}
-			resourceID = resourceIDs[resourceNumber]
+			if resourceIndex < 0 || resourceIndex >= len(resourceIDs) {
+				return nil, fmt.Errorf("invalid retained resource number %d for %d resources", resourceIndex, len(resourceIDs))
+			}
+			resourceID = resourceIDs[resourceIndex]
 		}
 		if !projection.valuesOnly {
 			p.Min, p.Max = p.Value, p.Value

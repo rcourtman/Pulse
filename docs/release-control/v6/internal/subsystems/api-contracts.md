@@ -12641,9 +12641,17 @@ report, wrong budget, cleanup failure or other child failure remains an error.
 A valid-capacity budget failure still fails. No API payload, route, History
 sample, incident state or operational-recovery result is changed by this CI
 classification. `TestContractChartSLOProofCLIClassifiesExecution` drives the
-real CLI and disposable child processes through all ten outcomes, verifies
+real CLI and disposable child processes through idle, hosted-agent and contended outcomes, verifies
 unaltered logs/result/digest/strict arguments and excludes the synthetic token
 from the child environment. Its capacity rows are synthetic, not latency proof.
+On actual Actions execution, one exactly named `provjobd<digits>` process may
+account for at most one logical CPU plus one percentage point of sampling skew.
+Only that bounded contribution is separated from competing CPU; all other
+observed and unattributed CPU retains the 10% limit. Multiple or over-bound
+agents, non-Actions execution, guest/steal and swap get no exception. Receipts
+retain raw CPU rows plus runner-agent/competing attribution and CPU count.
+The hosted overhead remains in the absolute latency: under-budget passes and
+over-budget failures both receive real verdicts, without normalization.
 
 ### Unambiguous public administrative writes (24 October 2026)
 
