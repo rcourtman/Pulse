@@ -103,6 +103,33 @@ Unraid/QNAP/Linux/PowerShell, TLS/identity/repetition/cleanup and containing
 publication remain separate obligations; this source proof does not resolve
 #1099 or claim installed restoration.
 
+### Unraid boot entry starts its watchdog detached
+
+Unraid's `rc.local` runs `/boot/config/go` to completion, and the generated
+`start-pulse-agent.sh` wrapper is an endless watchdog loop. The installer's
+`go` entry (`render_unraid_go_launch`) therefore backgrounds the wrapper with
+its output redirected. A foreground launch never returns, so every line kept
+after the Pulse entry, such as swap or a hosts entry the agent needs, never
+runs and the host reports as down after a reboot. Installation replaces only
+the `# Pulse Agent` marker and command lines that name a `start-pulse-agent.sh`
+wrapper or this runtime binary outside a comment, which covers earlier
+foreground, hand-edited and old-location entries; a comment is set aside only
+when it is certain to be one. A launch reached only indirectly, such as a
+relative path after `cd`, is not detected. Other lines that mention
+pulse-agent, comments and co-installed agents stay. Line endings become LF, as
+Unraid's `fromdos` makes them before running `go`, and a replacement that would
+leave `go` unparseable is refused with a warning instead. Removal admits the
+detached entry and the earlier foreground form for the selected wrapper.
+
+`TestInstallSHUnraidGoEntryDoesNotBlockLaterBootLines` executes the generated
+`go` with its output on a pipe and requires it to return, release the pipe, run
+the next line and start the wrapper; a planted foreground entry must hang the
+same harness. `TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches` pins the
+replacement, the syntax refusal and the removal filter's admission of the
+written entry, and the NAS teardown controls render their Unraid entry through
+the same emitter. These are private bash fixtures, not native Unraid boot
+acceptance.
+
 ### TrueNAS SCALE removal retires every owned middleware boot task before recovery erasure
 
 The [agent lifecycle removal contract](agent-lifecycle.md#truenas-scale-removal-retires-every-owned-middleware-boot-task-before-recovery-erasure)

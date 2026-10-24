@@ -2858,107 +2858,268 @@ func TestInstallSHUsesCanonicalSysVEnablementHelper(t *testing.T) {
 	}
 }
 
-// TestUnraidGoScriptCleanup verifies the sed commands that remove pulse entries
-// from /boot/config/go without disturbing other entries.
-func TestUnraidGoScriptCleanup(t *testing.T) {
+func runUnraidGoWriter(functions, goScript, wrapper, runtimeBinary string) ([]byte, error) {
+	script := "AGENT_NAME=pulse-agent\n" + functions + "\nwrite_unraid_go_entry \"$1\" \"$2\" \"$3\"\n"
+	return exec.Command("bash", "-c", script, "bash", goScript, wrapper, runtimeBinary).CombinedOutput()
+}
+
+func unraidGoEntryShellFunctions(t *testing.T) string {
+	t.Helper()
+	return extractInstallShellFunction(t, "render_unraid_go_launch") + "\n" +
+		extractInstallShellFunction(t, "write_unraid_go_entry") + "\n"
+}
+
+// TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches runs the installer's
+// /boot/config/go writer. go is the user's boot script: only the installer's
+// marker and command lines that reference a Pulse wrapper or the runtime
+// binary are replaced. The earlier cleanup, sed '/pulse-agent/d', also deleted
+// any user line that merely mentioned pulse-agent. Removal must admit the
+// written entry, and a removal that would leave go unparseable is refused.
+func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unraid boot-file fixture needs bash")
+	}
+	dir := t.TempDir()
+	stateDir := filepath.Join(dir, "plugins", "pulse-agent")
+	installDir := filepath.Join(dir, "bin")
+	wrapper := filepath.Join(stateDir, "start-pulse-agent.sh")
+	runtimeBinary := filepath.Join(installDir, "pulse-agent")
+	entry := "# Pulse Agent\nbash " + wrapper + " >> /var/log/pulse-agent.log 2>&1 &\n"
+	userTop := "#!/bin/bash\n/boot/config/pulse/telegraf/start_telegraf.sh\nmkdir -p /var/log/pulse-agent\n"
+	userRest := "# pulse-agent reaches its server through this hosts entry\n" +
+		"echo '192.0.2.10 delly' >> /etc/hosts\n" +
+		"bash /boot/config/plugins/pulse-agent-prod/start-pulse-agent-prod.sh &\n" +
+		runtimeBinary + "-prod --url https://prod.example.invalid &\n" +
+		"swapon /mnt/cache/swapfile # pulse-agent needs swap\n"
+	user := userTop + userRest
+	manualIf := "#!/bin/bash\nif [ -x " + runtimeBinary + " ]; then\n  echo manual agent\nfi\n"
+
 	cases := []struct {
-		name   string
-		before string
-		after  string
+		name    string
+		before  string // empty: go does not exist yet
+		after   string
+		refused bool
+		// Removal refuses any command line naming the wrapper, even in a
+		// trailing comment; that conservatism is removal's, not the writer's.
+		skipRemoval bool
 	}{
 		{
-			name: "pulse entry with trailing blank line",
-			before: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-
-# Other stuff
-echo hello
-`,
-			// The comment and command lines are removed; the trailing blank line remains.
-			// This is harmless in /boot/config/go.
-			after: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-
-# Other stuff
-echo hello
-`,
+			name:  "missing go is created",
+			after: "#!/bin/bash\n" + entry,
 		},
 		{
-			name: "pulse entry without trailing blank line",
-			before: `#!/bin/bash
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-# Other stuff
-echo hello
-`,
-			after: `#!/bin/bash
-# Other stuff
-echo hello
-`,
+			name:   "user script without an entry",
+			before: user,
+			after:  user + entry,
 		},
 		{
-			name: "no pulse entries - unchanged",
-			before: `#!/bin/bash
-echo hello
-echo world
-`,
-			after: `#!/bin/bash
-echo hello
-echo world
-`,
+			// Exactly what earlier installers appended; its blank lines stay.
+			name:   "foreground entry from earlier installers",
+			before: userTop + "\n# Pulse Agent\nbash " + wrapper + "\n\n" + userRest,
+			after:  userTop + "\n\n" + userRest + entry,
 		},
 		{
-			name: "telegraf line containing pulse is kept",
-			before: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-# Pulse Agent
-bash /boot/config/plugins/pulse-agent/start-pulse-agent.sh
-
-echo done
-`,
-			// The telegraf line is NOT removed (no "pulse-agent" in it).
-			// Comment and command lines are deleted individually.
-			after: `#!/bin/bash
-/boot/config/pulse/telegraf/start_telegraf.sh
-
-echo done
-`,
+			// Unraid runs go through fromdos, so CRLF lines become LF.
+			name: "hand-edited, old-location and direct runtime launches",
+			before: strings.ReplaceAll(userTop, "\n", "\r\n") +
+				"# Pulse Agent\r\n" +
+				"setsid bash " + wrapper + " >/dev/null 2>&1 < /dev/null &\r\n" +
+				"bash " + wrapper + ">/dev/null\n" +
+				"echo \"starting #1\"; bash " + wrapper + "\n" +
+				"echo starting\\ #1; bash " + wrapper + "\n" +
+				"echo $'starting \\' #1'; bash " + wrapper + "\n" +
+				"echo ${v:- #1}; bash " + wrapper + "\n" +
+				"cd " + stateDir + "; w=start-pulse-agent.sh; bash \"$w\"\n" +
+				"bash " + wrapper + "${x:+}\n" +
+				"bash /mnt/user/appdata/old/start-pulse-agent.sh\n" +
+				runtimeBinary + " --url https://pulse.example.invalid &\n" +
+				userRest,
+			after: user + entry,
+		},
+		{
+			name:        "command whose comment names the wrapper",
+			before:      "#!/bin/bash\nswapon /mnt/cache/swapfile # start-pulse-agent.sh needs this\n",
+			after:       "#!/bin/bash\nswapon /mnt/cache/swapfile # start-pulse-agent.sh needs this\n" + entry,
+			skipRemoval: true,
+		},
+		{
+			name:    "removal that would break go's syntax",
+			before:  manualIf,
+			after:   manualIf,
+			refused: true,
+		},
+		{
+			// Judged as fromdos leaves it, not by the raw CRLF bytes.
+			name:    "removal that would break CRLF go's syntax",
+			before:  strings.ReplaceAll(manualIf, "\n", "\r\n"),
+			after:   strings.ReplaceAll(manualIf, "\n", "\r\n"),
+			refused: true,
 		},
 	}
 
-	for _, tc := range cases {
+	functions := unraidGoEntryShellFunctions(t)
+	removal := extractInstallShellFunction(t, "portable_path_uid") + "\n" +
+		extractInstallShellFunction(t, "nas_agent_removal_file_safe") + "\n" +
+		extractInstallShellFunction(t, "filter_nas_agent_boot_file") + "\n" +
+		extractInstallShellFunction(t, "render_unraid_go_launch") + "\n"
+	for i, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			goScript := filepath.Join(dir, "go")
-			if err := os.WriteFile(goScript, []byte(tc.before), 0755); err != nil {
-				t.Fatal(err)
+			goScript := filepath.Join(dir, fmt.Sprintf("go-%d", i))
+			if tc.before != "" {
+				if err := os.WriteFile(goScript, []byte(tc.before), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for run := 1; run <= 2; run++ {
+				out, err := runUnraidGoWriter(functions, goScript, wrapper, runtimeBinary)
+				if tc.refused != (err != nil) {
+					t.Fatalf("write_unraid_go_entry run %d: err=%v, want refused=%v\n%s", run, err, tc.refused, out)
+				}
+				got, err := os.ReadFile(goScript)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != tc.after {
+					t.Fatalf("go after install %d:\n--- got ---\n%s\n--- want ---\n%s", run, got, tc.after)
+				}
+			}
+			if tc.refused || tc.skipRemoval {
+				return
 			}
 
-			// Run the exact same sed commands from install.sh (line-by-line, not range-based)
-			script := `
-				GO_SCRIPT="` + goScript + `"
-				# Remove unified agent entries
-				sed -i '' '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/^# Pulse Agent$/d' "$GO_SCRIPT" 2>/dev/null || true
-				sed -i '' '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || sed -i '/pulse-agent/d' "$GO_SCRIPT" 2>/dev/null || true
-				`
-			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			script := "AGENT_NAME=pulse-agent BINARY_NAME=pulse-agent STATE_DIR=\"$1\" INSTALL_DIR=\"$2\"\n" + removal +
+				"\nfilter_nas_agent_boot_file Unraid \"$3\" status && filter_nas_agent_boot_file Unraid \"$3\" filter\n"
+			out, err := exec.Command("bash", "-c", script, "bash", stateDir, installDir, goScript).CombinedOutput()
 			if err != nil {
-				t.Fatalf("bash: %v\n%s", err, out)
+				t.Fatalf("removal filter refused the installed entry: %v\n%s", err, out)
 			}
-
-			got, err := os.ReadFile(goScript)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if string(got) != tc.after {
-				t.Errorf("go script mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, tc.after)
+			if want := "present\n" + strings.TrimSuffix(tc.after, entry); string(out) != want {
+				t.Fatalf("removal filter:\n--- got ---\n%s\n--- want ---\n%s", out, want)
 			}
 		})
+	}
+}
+
+// TestInstallSHUnraidGoEntryDoesNotBlockLaterBootLines guards a real incident.
+// The go entry ran the watchdog wrapper in the foreground, and the wrapper
+// never returns, so after a reboot every line below it in go (swap, a hosts
+// entry the agent needed) was skipped and the host showed as down for two days.
+// Execute the go file the installer writes, with output on a pipe as a boot
+// logger would read it: it must return, release the pipe, run the next line
+// and start the wrapper. The planted foreground entry must hang the harness.
+func TestInstallSHUnraidGoEntryDoesNotBlockLaterBootLines(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unraid boot-file fixture needs bash")
+	}
+	dir := t.TempDir()
+	logDir := filepath.Join(dir, "log")
+	if err := os.Mkdir(logDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	wrapper := filepath.Join(dir, "start-pulse-agent.sh")
+	pidFile := filepath.Join(dir, "wrapper.pid")
+	// Like the generated watchdog loop, this wrapper does not return. The PID
+	// is renamed into place so a reader never sees a partial write.
+	stub := "#!/bin/bash\necho $$ > '" + pidFile + ".tmp' && mv '" + pidFile + ".tmp' '" + pidFile + "'\nexec sleep 120\n"
+	if err := os.WriteFile(wrapper, []byte(stub), 0755); err != nil {
+		t.Fatal(err)
+	}
+	waitForWrapper := func(limit time.Duration) (int, bool) {
+		deadline := time.Now().Add(limit)
+		for {
+			if data, err := os.ReadFile(pidFile); err == nil {
+				if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+					return pid, true
+				}
+			}
+			if time.Now().After(deadline) {
+				return 0, false
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	stopWrapper := func() {
+		if pid, ok := waitForWrapper(5 * time.Second); ok {
+			if process, err := os.FindProcess(pid); err == nil {
+				_ = process.Kill()
+			}
+		}
+		_ = os.Remove(pidFile)
+	}
+	t.Cleanup(stopWrapper)
+
+	runGo := func(goScript string, limit time.Duration) bool {
+		cmd := exec.Command("bash", goScript)
+		var out strings.Builder
+		cmd.Stdout = &out
+		cmd.Stderr = &out
+		// Bound the output drain once bash exits, even if a child kept the pipe.
+		cmd.WaitDelay = 5 * time.Second
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+		select {
+		case err := <-done:
+			if errors.Is(err, exec.ErrWaitDelay) {
+				t.Fatalf("go returned but its entry kept the boot output pipe open\n%s", out.String())
+			}
+			if err != nil {
+				t.Fatalf("go exited with %v\n%s", err, out.String())
+			}
+			return true
+		case <-time.After(limit):
+			_ = cmd.Process.Kill()
+			stopWrapper()
+			<-done
+			return false
+		}
+	}
+
+	after := filepath.Join(dir, "after-pulse-entry")
+	userAfter := "touch '" + after + "'\n"
+
+	planted := filepath.Join(dir, "go-foreground")
+	if err := os.WriteFile(planted, []byte("#!/bin/bash\n# Pulse Agent\nbash "+wrapper+"\n"+userAfter), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if runGo(planted, 2*time.Second) {
+		t.Fatal("planted foreground entry returned; the harness cannot detect a blocking go entry")
+	}
+	if _, err := os.Stat(after); err == nil {
+		t.Fatal("planted foreground entry ran the line after it")
+	}
+
+	// The entry logs under /var/log, which the test cannot write.
+	functions := strings.ReplaceAll(unraidGoEntryShellFunctions(t), "/var/log/", logDir+"/")
+	goScript := filepath.Join(dir, "go")
+	if err := os.WriteFile(goScript, []byte("#!/bin/bash\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runUnraidGoWriter(functions, goScript, wrapper, filepath.Join(dir, "pulse-agent")); err != nil {
+		t.Fatalf("write_unraid_go_entry: %v\n%s", err, out)
+	}
+	f, err := os.OpenFile(goScript, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(userAfter); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if !runGo(goScript, 20*time.Second) {
+		contents, _ := os.ReadFile(goScript)
+		t.Fatalf("go did not return: the Pulse entry blocks every later boot line\n%s", contents)
+	}
+	if _, err := os.Stat(after); err != nil {
+		t.Fatalf("the line after the Pulse entry did not run: %v", err)
+	}
+	if _, ok := waitForWrapper(10 * time.Second); !ok {
+		t.Fatal("the detached go entry did not start the wrapper")
 	}
 }
 

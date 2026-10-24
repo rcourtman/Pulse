@@ -26,6 +26,7 @@ FUNCTIONS = (
     "read_nas_agent_removal_processes", "nas_agent_processes_absent", "quiesce_nas_agent_for_removal",
     "confirm_nas_agent_removal_quiescent", "teardown_nas_agent_boot_owner",
     "remove_qnap_autorun_block", "render_qnap_autorun_block", "append_qnap_autorun_block",
+    "render_unraid_go_launch", "write_unraid_go_entry",
 )
 
 
@@ -224,23 +225,24 @@ class AgentNASTeardown(unittest.TestCase):
             bootfile = root / "flash/autorun.sh" if platform == "QNAP" else root / "go"
             unrelated = "#!/bin/sh\necho before\nbash /other/start-pulse-agent-prod.sh\necho pulse-agent-prod\n/boot/config/pulse/telegraf/start_telegraf.sh\n"
             bootfile.write_text(unrelated)
-            producer = definitions(self.source, ("portable_sed_in_place", "remove_qnap_autorun_block", "render_qnap_autorun_block", "append_qnap_autorun_block"))
+            producer = definitions(self.source, ("portable_sed_in_place", "remove_qnap_autorun_block", "render_qnap_autorun_block", "append_qnap_autorun_block", "render_unraid_go_launch", "write_unraid_go_entry"))
+            # Consume the real production boot emitters, not a second literal.
             if platform == "QNAP":
-                # Consume the real production bootstrap emitter, not a second literal.
                 command = "AGENT_NAME=pulse-agent\nSTATE_DIR=" + shlex.quote(str(root / "state")) + "\n" + producer + "\nappend_qnap_autorun_block " + shlex.quote(str(bootfile)) + " " + shlex.quote(str(target)) + " " + shlex.quote(str(root / "state"))
-                subprocess.run(["bash", "-c", command], check=True, capture_output=True, text=True)
             else:
-                bootfile.write_text(unrelated + "# Pulse Agent\nbash " + str(target) + "\n")
+                command = "AGENT_NAME=pulse-agent\n" + producer + "\nwrite_unraid_go_entry " + shlex.quote(str(bootfile)) + " " + shlex.quote(str(target)) + " " + shlex.quote(str(root / "bin/pulse-agent"))
+            subprocess.run(["bash", "-c", command], check=True, capture_output=True, text=True)
             bootfile.write_text(bootfile.read_text() + "echo after\n")
             if boot == "duplicate":
                 if platform == "QNAP":
                     block = bootfile.read_text().split("# Pulse Agent bootstrap begin", 1)[1].split("# Pulse Agent bootstrap end", 1)[0]
                     bootfile.write_text(bootfile.read_text() + "# Pulse Agent bootstrap begin" + block + "# Pulse Agent bootstrap end\n")
+                # Earlier installers' foreground entry still retires with the current one.
                 else: bootfile.write_text(bootfile.read_text() + "# Pulse Agent\nbash " + str(target) + "\n")
             elif boot == "foreign": bootfile.write_text(bootfile.read_text().replace(str(target), "/other/start-pulse-agent.sh"))
             elif boot == "indirect": bootfile.write_text(bootfile.read_text() + "bash -c 'bash " + str(target) + "'\n")
             elif boot == "unterminated": bootfile.write_text(bootfile.read_text().replace("# Pulse Agent bootstrap end", "# unknown") if platform == "QNAP" else bootfile.read_text() + "# Pulse Agent\n")
-            elif boot == "changed-block": bootfile.write_text(bootfile.read_text().replace("_pulse_wait_max=1800", "_pulse_wait_max=999") if platform == "QNAP" else bootfile.read_text().replace("bash " + str(target), "bash " + str(target) + " --unknown"))
+            elif boot == "changed-block": bootfile.write_text(bootfile.read_text().replace("_pulse_wait_max=1800", "_pulse_wait_max=999") if platform == "QNAP" else bootfile.read_text().replace(str(target) + " >>", str(target) + " --unknown >>"))
             elif boot == "no-newline": bootfile.write_text(bootfile.read_text().rstrip("\n"))
             elif boot == "binary": bootfile.write_bytes(bootfile.read_bytes() + b'\0\n')
             elif boot == "oversized": bootfile.write_text(bootfile.read_text() + "#" * 1048577 + "\n")
@@ -624,7 +626,11 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                     render_file.write_text(setup + emitter + '\nappend_qnap_autorun_block ' + shlex.quote(str(bootfile)) + ' "$WRAPPER_SCRIPT" "$STATE_DIR"\n')
                     rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
                     self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
-                else: bootfile.write_text('#!/bin/bash\n# Pulse Agent\nbash ' + str(watchdog) + '\n')
+                else:
+                    emitter = definitions(self.source, ('render_unraid_go_launch', 'write_unraid_go_entry'))
+                    render_file.write_text(setup + emitter + '\nwrite_unraid_go_entry ' + shlex.quote(str(bootfile)) + ' "$WRAPPER_SCRIPT" "$RUNTIME_BINARY"\n')
+                    rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
+                    self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
                 functions = definitions(self.source)
                 functions = functions.replace('/boot/config/go', str(bootfile))
                 functions = functions.replace('[[ -d /boot/config && ! -L /boot/config ]]', '[[ -d ' + str(root) + ' && ! -L ' + str(root) + ' ]]')
