@@ -277,11 +277,18 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			if !strings.Contains(storage.Content, "backup") {
 				continue
 			}
+			storagesWithBackup++
 			if !storageContentQueryable(storage) {
+				// Configured but unreadable is not an empty content listing.
+				// Preserve the no-query boundary (notably disabled storage)
+				// without letting this skipped scope delete known history or
+				// qualify the provider-wide observation as complete.
+				contentFailures++
+				if _, ok := storageSuccess[storage.Storage]; !ok {
+					storagePreserveNeeded[storage.Storage] = struct{}{}
+				}
 				continue
 			}
-
-			storagesWithBackup++
 
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
