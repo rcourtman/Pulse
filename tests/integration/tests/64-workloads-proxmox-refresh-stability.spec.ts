@@ -484,7 +484,8 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
       const url = new URL(response.url());
       return (
         url.pathname === "/api/resources" &&
-        url.searchParams.get("type") === "pbs" &&
+        // Backups composes provider inventory with its reporting agents.
+        (url.searchParams.get("type") ?? "").split(",").sort().join(",") === "agent,pbs" &&
         url.searchParams.get("source") === "pbs"
       );
     });

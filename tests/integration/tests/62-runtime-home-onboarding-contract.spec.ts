@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
 import {
   createAuthenticatedStorageState,
+  E2E_CREDENTIALS,
   ensureAuthenticated,
 } from "./helpers";
 
@@ -104,6 +105,47 @@ test.describe("runtime-home onboarding contract", () => {
     await expect(
       page.getByRole("button", { name: /Generate token/i }),
     ).toHaveCount(0);
+  });
+
+  test("waits for token bootstrap before navigating to the agent install handoff", async ({ page }) => {
+    await ensureAuthenticated(page);
+    expect(E2E_CREDENTIALS.primaryApiToken, "the runtime fixture must retain its primary token").toBeTruthy();
+    let tokenNavigationStarted = false;
+    const onNavigation = () => {
+      if (new URL(page.url()).searchParams.has("token")) tokenNavigationStarted = true;
+    };
+    page.on("framenavigated", onNavigation);
+    let releaseBootstrap!: () => void;
+    const bootstrapHold = new Promise<void>(resolve => { releaseBootstrap = resolve; });
+    let notifyBlocked!: () => void;
+    const blocked = new Promise<void>(resolve => { notifyBlocked = resolve; });
+    const holdState = async (route: import("@playwright/test").Route) => {
+      if (tokenNavigationStarted) {
+        notifyBlocked();
+        await bootstrapHold;
+      }
+      await route.continue();
+    };
+    await page.route("**/api/state/summary", holdState);
+    let authentication: Promise<void> | undefined;
+    try {
+      let completed = false;
+      authentication = ensureAuthenticated(page).then(() => { completed = true; });
+      await Promise.race([blocked, authentication]);
+      expect(completed, "token authentication must await protected browser bootstrap").toBe(false);
+      releaseBootstrap();
+      await authentication;
+      await page.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
+      await expect(page).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+      await expect(page.getByRole("dialog").getByRole("heading", {
+        name: "Add Pulse Agent", exact: true,
+      })).toBeVisible();
+    } finally {
+      releaseBootstrap();
+      await authentication?.catch(() => {});
+      await page.unroute("**/api/state/summary", holdState);
+      page.off("framenavigated", onNavigation);
+    }
   });
 
   test("retires legacy platform-management paths to the not-found page", async ({

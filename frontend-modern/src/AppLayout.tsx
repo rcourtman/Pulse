@@ -879,7 +879,7 @@ export function AppLayout(props: AppLayoutProps) {
                             return (
                               <span class="inline-flex items-center gap-1">
                                 {tab.breakdown && tab.breakdown.critical > 0 && (
-                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
+                                  <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 rounded-full">
                                     {tab.breakdown.critical}{' '}
                                   </span>
                                 )}

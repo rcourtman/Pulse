@@ -15,6 +15,19 @@
 
 ## Purpose
 
+Infrastructure Add shortcuts and update chips follow the frontend primitives
+visible-label naming contract. Their names preserve `Add` or the displayed
+update wording and append source or host context, while keeping the existing
+installer destination and affected-agent scope. An Agent Doctor destination
+does not replace the update chip's visible action in its accessible name.
+Agent Doctor keeps evidence at its notice tone's full text contrast. Its
+scrollable repair, inspection, removal and credential commands are native
+keyboard focus targets with visible focus, so long commands remain readable
+without a pointer; copy actions and execution authority are unchanged.
+The command-access description in the installer must remain readable against
+its consent panel in both themes through the shared semantic text tokens. The
+operator needs that explanation before choosing host command authority.
+
 ### Command access is a named token-step choice, not a legacy option (21 October 2026)
 
 The installer's command-access checkbox reads **Allow Pulse to run commands on

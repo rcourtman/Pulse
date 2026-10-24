@@ -23,6 +23,15 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### REST snapshots retain canonical source provenance
+
+`useUnifiedResources` preserves the validated source list on the canonical
+resource as well as its platform metadata. Owning-snapshot consumers such as
+Workloads derive their provider context from `resource.sources`; a REST refresh
+must not erase vCenter placement, host grouping or source-specific behavior
+that the websocket projection supplies. The REST mapping regression and the
+authoritative VMware drawer browser fixture cover that consuming boundary.
+
 ### Drawer history follows current source authority
 
 Resource drawers withdraw current chart fallbacks and cached live-only replies

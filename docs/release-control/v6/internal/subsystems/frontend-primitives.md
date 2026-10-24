@@ -165,7 +165,23 @@ native QGA/backup or update-permission recovery.
 shared history query and Docs with synthetic observations at desktop/phone
 widths, including keyboard/touch guidance and same-node updates.
 
-### Navigation labels retain their visible badge text (24 October 2026)
+### Control names retain their visible wording
+
+Action names include their visible text in source order. Context may extend a
+short label, but must not replace it with a different action name. Infrastructure
+group shortcuts retain `Add` before their source label; update chips retain
+their visible count and update wording before the host context. Patrol attention
+rows use their native button contents so severity, title, summary and observation
+age remain part of the name as the displayed record changes.
+Scrollable command displays are native keyboard focus targets with visible
+focus. A sibling Copy button does not make the command's own scroll area
+keyboard reachable.
+Semantic muted text must meet normal-text contrast on the surface and hover
+backgrounds where controls and disclosures use it in either theme. Dark muted
+text uses slate-300 so slate-700 hover/consent panels remain readable; individual
+callers must not compensate for an inaccessible shared token. The authenticated
+browser accessibility proof covers both themes and an explicitly hovered
+Patrol row as well as expanded installer and Agent Doctor states.
 
 Desktop and mobile utility links include their visible label and badge numbers
 contiguously, in source order, in the accessible name (WCAG 2.5.3). Mobile
@@ -1316,6 +1332,14 @@ the mounted window advances far faster than the real scroll position and drops a
 group's rows mid-scroll. The controller samples several leading siblings and
 keeps the tallest, so uniform tables still measure their real row height while
 mixed group/content lists keep a content-scale estimate.
+Native table rows additionally measure each mounted item's summary and any
+`InlineDetailTableRow` marked `data-inline-detail-row` as one logical item.
+Keyed measurements own prefix offsets, native spacer extent and pixel-to-item
+lookup, so scrolling within a tall drawer cannot advance past and unmount its
+owner. Offscreen items retain their last measured size until remeasured.
+Resize and direct-child mutation observers update those measurements outside
+the scroll/wheel path. The mounted-item budget and native touch path remain
+unchanged. List surfaces retain representative height estimation.
 
 Shared workload, node, Docker-host, and resource-drawer history presentation
 must scope retained observations to the exact resource type, resource ID and

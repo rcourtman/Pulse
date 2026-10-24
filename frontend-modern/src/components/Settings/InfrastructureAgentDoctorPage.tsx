@@ -709,7 +709,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 >
                                   <p class="font-medium">{reason.message}</p>
                                   <Show when={reason.evidence?.length}>
-                                    <p class="mt-1 text-xs opacity-80 wrap-anywhere">
+                                    <p class="mt-1 text-xs wrap-anywhere">
                                       {(reason.evidence ?? []).join(' · ')}
                                     </p>
                                   </Show>
@@ -742,7 +742,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                       title="Copy host-local agent repair command"
                                       label={`Copy ${target.needsCredentialRepair ? 'authentication repair' : 'update'} command for ${target.displayName}`}
                                     />
-                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                    <pre
+                                      tabIndex={0}
+                                      class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    >
                                       <code>{command()}</code>
                                     </pre>
                                     <Show
@@ -825,7 +828,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                             title="Copy host-local agent uninstall command"
                                             label={`Copy ${entry.label} uninstall command for ${target.displayName}`}
                                           />
-                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                          <pre
+                                            tabIndex={0}
+                                            class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                          >
                                             <code>
                                               {operations.getPlatformUninstallCommand(
                                                 entry.platform,
@@ -877,7 +883,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                       }
                                       label="Copy safe-profile inspection command"
                                     />
-                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                    <pre
+                                      tabIndex={0}
+                                      class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    >
                                       <code>
                                         {buildSafeCollectorInspectCommand({
                                           pulseUrl: operations.selectedAgentUrl(),
@@ -905,7 +914,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                       }
                                       label="Copy safe-profile apply command"
                                     />
-                                    <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                    <pre
+                                      tabIndex={0}
+                                      class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                    >
                                       <code>
                                         {buildSafeCollectorApplyCommand({
                                           pulseUrl: operations.selectedAgentUrl(),
@@ -975,7 +987,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                             onClick={() => void copyCommand(tokenFileCommand())}
                                             label="Copy private token-file command"
                                           />
-                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                          <pre
+                                            tabIndex={0}
+                                            class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                          >
                                             <code>{tokenFileCommand()}</code>
                                           </pre>
                                         </div>
@@ -990,7 +1005,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                             title="Copy one-time action-runner credential"
                                             label={`Copy action-runner credential for ${target.displayName}`}
                                           />
-                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                          <pre
+                                            tabIndex={0}
+                                            class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                          >
                                             <code>{reveal().token}</code>
                                           </pre>
                                         </div>
@@ -1004,7 +1022,10 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                             onClick={() => void copyCommand(installCommand())}
                                             label="Copy action-runner installer command"
                                           />
-                                          <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
+                                          <pre
+                                            tabIndex={0}
+                                            class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                          >
                                             <code>{installCommand()}</code>
                                           </pre>
                                         </div>

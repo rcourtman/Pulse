@@ -2830,7 +2830,10 @@ thought-signature, and provider-result normalization as Assistant and MCP —
     destination in `AppLayout`'s tab lists shares the nav identity-stability
     contract owned by `frontend-primitives` (`stableNavTabs.ts`): a websocket
     state frame with structurally unchanged tab content must not recreate the
-    Patrol button DOM or its attention-count badge element. Patrol and the peer
+    Patrol button DOM or its attention-count badge element. Utility chrome
+    shares the app-shell light/dark accessibility proof, including
+    readable small count badges, without changing their attention or capability
+    sources. Patrol and the peer
     utility destinations commit navigation without awaiting best-effort module
     warming, so lazy-route work cannot make the shared shell drop or defer a
     tap.

@@ -137,7 +137,7 @@ export function InlineDetailTableRow(props: InlineDetailTableRowProps) {
   );
 
   return (
-    <TableRow ref={detailRow} class={local.class} {...rest}>
+    <TableRow ref={detailRow} class={local.class} {...rest} data-inline-detail-row>
       <TableCell
         id={local.cellId}
         colspan={effectiveColspan()}

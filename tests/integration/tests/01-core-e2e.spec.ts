@@ -196,7 +196,7 @@ test.describe.serial('Core E2E flows', () => {
 
     await page.reload();
     if (!/\/alerts\/thresholds/.test(page.url())) {
-      await page.goto('/alerts/overview');
+      await page.goto('/alerts/overview', { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
       const toggle = page.getByRole('checkbox', {
         name: 'Send notifications',
@@ -228,7 +228,8 @@ test.describe.serial('Core E2E flows', () => {
 
     // Restore prior activation state to keep the test safe against real instances.
     if (!alertsInitiallyEnabled) {
-      await page.goto('/alerts/overview');
+      await page.getByRole('button', { name: 'Overview', exact: true }).click();
+      await expect(page).toHaveURL(/\/alerts\/overview/);
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
       const alertsToggleRestore = page.getByRole('checkbox', {
         name: 'Send notifications',

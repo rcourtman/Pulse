@@ -1943,6 +1943,10 @@ recovery scope, or a storage/recovery-owned secret source.
    when the policy exposes them, and they must not add edition- or
    license-sniffing of their own to re-suppress or re-expose paid prompts.
 3. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
+   REST projection retains its validated source list on `resource.sources` as
+   well as platform metadata, so owning-snapshot consumers keep the same
+   provider context as websocket consumers. That provenance describes inventory;
+   it supplies no fresh storage observation, protection verdict or recovery grant.
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
    That shared hook plus the adjacent websocket/store adapter path must keep
    realtime transport merges canonical for storage/recovery consumers too:

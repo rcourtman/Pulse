@@ -230,7 +230,7 @@ test('API admission cannot hide browser rejection at the unchanged protected URL
   const f = fixture(t, { browserRejectSession: true });
   f.save([cookie('pulse_session', 'saved-live')]);
   const page = f.createPage();
-  await assert.rejects(() => f.ensureAuthenticated(page), /Shared cookie session was rejected by browser bootstrap/);
+  await assert.rejects(() => f.ensureAuthenticated(page), /Session was rejected by browser bootstrap/);
   assert.equal(page.url(), 'http://127.0.0.1:7655/infrastructure');
   assert.deepEqual(page.navigations, ['/infrastructure']);
   assert.deepEqual(f.bootstrapChecks, ['login']);
@@ -292,6 +292,75 @@ test('primary-token fixtures keep their token auth and import no ambient cookie 
   assert.equal(f.counts().loginCalls, 0);
   assert.equal(f.counts().probeCalls, 0);
   assert.equal((await page.context().cookies()).length, 0);
+});
+
+function primaryBootstrapFixture({ rejected = false } = {}) {
+  let currentURL = 'about:blank';
+  let releaseBootstrap;
+  const bootstrap = new Promise(resolve => { releaseBootstrap = resolve; });
+  let notifyWaitStarted;
+  const waitStarted = new Promise(resolve => { notifyWaitStarted = resolve; });
+  let ready = false;
+  const page = {
+    goto: async target => { currentURL = new URL(target, 'http://127.0.0.1:7655').href; },
+    url: () => currentURL,
+    waitForURL: async () => { currentURL = 'http://127.0.0.1:7655/infrastructure'; },
+    locator: () => ({ waitFor: () => new Promise(() => {}) }),
+    waitForFunction: async predicate => {
+      const evaluate = () => runInNewContext(`(${predicate.toString()})()`, {
+        document: { querySelector: selector => {
+          if (!ready) return null;
+          const present = selector === '.app-scroll-shell' ? !rejected : rejected;
+          return present ? { getClientRects: () => [1] } : null;
+        } },
+        getComputedStyle: () => ({ visibility: 'visible' }),
+      });
+      assert.equal(evaluate(), false, 'protected bootstrap is still loading');
+      notifyWaitStarted();
+      await bootstrap;
+      return { jsonValue: async () => evaluate(), dispose: async () => {} };
+    },
+  };
+  const authenticate = runInNewContext(stripTypeScriptTypes([
+    source.match(/const AUTHENTICATED_URL =[\s\S]*?;\n/)[0],
+    fragment('async function waitForAuthenticatedAppShell(', 'export async function waitForPulseReady('),
+    fragment('async function authenticateWithPrimaryAPIToken(', 'export async function ensureAuthenticated('),
+    'authenticateWithPrimaryAPIToken;',
+  ].join('\n')), {
+    URL, encodeURIComponent,
+    primaryAPITokenCandidates: () => [{ token: 'fixture-token' }],
+    apiRequest: async () => response(200),
+    rememberPrimaryAPIToken: () => {},
+    waitForAppShell: async () => {},
+  });
+  return {
+    page, authenticate, waitStarted,
+    completeBootstrap: () => {
+      ready = true;
+      currentURL = 'http://127.0.0.1:7655/proxmox/overview';
+      releaseBootstrap();
+    },
+  };
+}
+
+test('an admitted token and workspace URL cannot race a subsequent onboarding navigation', async () => {
+  const f = primaryBootstrapFixture();
+  let completed = false;
+  const authentication = f.authenticate(f.page).then(value => { completed = true; return value; });
+  await Promise.race([f.waitStarted, authentication]);
+  assert.equal(completed, false, 'token auth must wait for the mounted authenticated shell');
+  f.completeBootstrap();
+  assert.equal(await authentication, true);
+  await f.page.goto('/settings/infrastructure?add=agent');
+  assert.equal(f.page.url(), 'http://127.0.0.1:7655/settings/infrastructure?add=agent');
+});
+
+test('a valid token probe cannot hide a rejected browser bootstrap', async () => {
+  const f = primaryBootstrapFixture({ rejected: true });
+  const authentication = f.authenticate(f.page);
+  await Promise.race([f.waitStarted, authentication]);
+  f.completeBootstrap();
+  await assert.rejects(authentication, /Session was rejected by browser bootstrap/);
 });
 
 test('explicit session fixtures still get independent password sessions', async t => {

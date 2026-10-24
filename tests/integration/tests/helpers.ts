@@ -182,7 +182,7 @@ async function waitForAuthenticatedAppShell(page: Page, timeoutMs = 20_000) {
   );
   try {
     if (await outcome.jsonValue() !== "authenticated") {
-      throw new Error("Shared cookie session was rejected by browser bootstrap");
+      throw new Error("Session was rejected by browser bootstrap");
     }
   } finally {
     await outcome.dispose();
@@ -1097,6 +1097,10 @@ async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
     ]);
 
     if (state === "authenticated") {
+      // The workspace URL can appear before protected bootstrap has mounted
+      // the application. Its pending default-workspace redirect must finish
+      // before the caller navigates to a specific onboarding route.
+      await waitForAuthenticatedAppShell(page);
       return true;
     }
 

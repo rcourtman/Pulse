@@ -3014,6 +3014,14 @@ artifact-selection behaviour.
    deterministic token authentication after setup, and may use the server setup
    API as a fallback only when the UI wizard fails to complete cleanly under the
    managed hot-dev runtime.
+   A successful token probe and a protected workspace URL do not establish
+   completed browser bootstrap. Token and cookie reuse must wait for the mounted
+   authenticated app shell before returning control to a journey, so a pending
+   workspace redirect cannot overwrite its next deep link. Browser rejection
+   remains an authentication failure rather than a reason to accept the URL or
+   retry login. `tests/integration/scripts/fixture-auth.test.mjs` exercises the
+   actual token helper with delayed and rejected bootstrap; the runtime-home
+   onboarding browser contract also holds a real protected-state request.
    The built `index.html` must not modulepreload lazy route chunks: the SRI
    plugin runs with `preloadDynamicChunks: false` so cold start fetches only the
    entry and its static vendor imports (route-level code splitting stays
@@ -6487,6 +6495,13 @@ truth inside Playwright helpers. `tests/integration/tests/helpers.ts` may
 offer request trackers for browser-shell contract proofs, but those helpers
 must observe page-originated traffic only and must not blur browser runtime
 requests together with `page.request` or other direct API helper calls.
+Provider inventory fixtures must own every inventory input consumed by their
+journey. `tests/integration/tests/vmware-workload-fixture.ts` serves its canonical
+REST snapshot with a mocked empty socket so a live frame cannot replace its VM
+identity during drawer inspection. Its resource-detail and exclusion-integrity
+browser proofs exercise read-only context and retain provider-admin prohibitions.
+This synthetic fixture does not establish live vCenter or websocket acceptance.
+
 The shared authenticated browser fixture must not report the default mock
 runtime ready from inventory alone while historical chart initialization is
 still running. When Core E2E requests the default mock-readiness gate, the

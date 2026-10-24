@@ -54,6 +54,9 @@ const VMWARE_WORKLOAD_RESOURCE = {
 } as const;
 
 export async function installVmwareWorkloadResourceRoute(page: Page): Promise<void> {
+  // This REST snapshot owns the test inventory. Do not let a live backend
+  // frame replace its VM identity while a drawer is under inspection.
+  await page.routeWebSocket('**/ws*', () => {});
   await page.route('**/api/resources?*', async (route) => {
     const url = new URL(route.request().url());
     const resourceTypes = (url.searchParams.get('type') ?? '').split(',');

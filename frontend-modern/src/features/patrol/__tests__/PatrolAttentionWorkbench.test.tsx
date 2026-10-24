@@ -304,7 +304,10 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getDetail.mockResolvedValue(detail(active));
     try {
       renderWorkbench();
-      const row = await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' });
+      const row = await screen.findByRole('button', { name: /Database VM · Disk pressure/ });
+      expect(row).toHaveAccessibleName(
+        /Critical.*Database VM · Disk pressure.*The database disk is nearly full\..*Last seen 1m ago/,
+      );
       expect(row).toHaveTextContent('Last seen 1m ago');
       fireEvent.click(row);
       const detailRegion = await screen.findByRole('complementary', {
@@ -316,6 +319,7 @@ describe('PatrolAttentionWorkbench', () => {
       const held = vi.spyOn(patrolAttentionStore, 'load').mockResolvedValue(undefined);
       vi.advanceTimersByTime(60_000);
       expect(row).toHaveTextContent('Last seen 2m ago');
+      expect(row).toHaveAccessibleName(/Last seen 2m ago/);
       expect(detailRegion).toHaveTextContent('Last seen 2m ago');
       expect(detailRegion).toHaveTextContent(/first 11m ago.*latest 3m ago/);
       expect(apiMocks.getList).toHaveBeenCalledOnce();
@@ -374,9 +378,7 @@ describe('PatrolAttentionWorkbench', () => {
       await screen.findByRole('heading', { name: '1 decision needs you' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Start review' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Open Database VM · Disk pressure' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Database VM · Disk pressure/ })).toBeInTheDocument();
     expect(screen.queryByText("Today's Patrol briefing")).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Decision inbox' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Review this decision' })).not.toBeInTheDocument();
@@ -451,7 +453,9 @@ describe('PatrolAttentionWorkbench', () => {
         /1 other current issue is continuing without a decision under Safe auto-fix/i,
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Open Database VM/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Database VM · Disk pressure/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps a long decision queue compact until the operator asks for all of it', async () => {
@@ -464,10 +468,10 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     const showAll = await screen.findByRole('button', { name: 'Show all 7 decisions' });
-    expect(screen.getAllByRole('button', { name: /Open Decision/ })).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: /Decision/ })).toHaveLength(5);
 
     fireEvent.click(showAll);
-    expect(screen.getAllByRole('button', { name: /Open Decision/ })).toHaveLength(7);
+    expect(screen.getAllByRole('button', { name: /Decision/ })).toHaveLength(7);
     expect(screen.getByRole('button', { name: 'Show fewer decisions' })).toBeInTheDocument();
   });
 
@@ -526,7 +530,7 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     const openButton = await screen.findByRole('button', {
-      name: 'Open Database VM · Disk pressure',
+      name: /Database VM · Disk pressure/,
     });
     fireEvent.click(openButton);
 
@@ -535,9 +539,7 @@ describe('PatrolAttentionWorkbench', () => {
     });
     expect(within(detailRegion).getByText('Writes may fail.')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Evidence and history')).toBeInTheDocument();
-    expect(
-      within(detailRegion).getByRole('button', { name: 'Copy resource identifier' }),
-    ).toBeInTheDocument();
+    expect(within(detailRegion).getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
     expect(within(detailRegion).queryByText('pve:vm:101')).not.toBeInTheDocument();
     expect(
       within(detailRegion).getByText(/latest backup has not been verified/i),
@@ -545,7 +547,7 @@ describe('PatrolAttentionWorkbench', () => {
     expect(within(detailRegion).getByText('Proxmox VE')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Observing to Open')).toBeInTheDocument();
     expect(
-      within(detailRegion).getByRole('button', { name: 'Back to attention list' }),
+      within(detailRegion).getByRole('button', { name: 'Back to list of Patrol attention' }),
     ).toHaveTextContent('Back to list');
     expect(
       within(detailRegion).getByRole('button', { name: 'Close attention detail' }),
@@ -586,7 +588,7 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getDetail.mockResolvedValue(detail(active));
     renderWorkbench();
 
-    fireEvent.click(await screen.findByRole('button', { name: /^Open .*Database VM/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Disk pressure on Database VM/ }));
     const link = await screen.findByRole('link', { name: 'Open resource' });
     await waitFor(() => expect(link).toHaveAttribute('href', '/vmware/overview'));
     expect(getResource).toHaveBeenCalledWith('agent-b602', expect.anything());
@@ -609,9 +611,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     try {
       renderWorkbench();
-      fireEvent.click(
-        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
-      );
+      fireEvent.click(await screen.findByRole('button', { name: /Database VM · Disk pressure/ }));
       const detailRegion = await screen.findByRole('complementary', {
         name: 'Database VM · Disk pressure',
       });
@@ -654,9 +654,7 @@ describe('PatrolAttentionWorkbench', () => {
     try {
       renderWorkbench();
       fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
-      fireEvent.click(
-        await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
-      );
+      fireEvent.click(await screen.findByRole('button', { name: /Database VM · Disk pressure/ }));
       const detailRegion = await screen.findByRole('complementary', {
         name: 'Database VM · Disk pressure',
       });
@@ -707,14 +705,12 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getDetail.mockResolvedValue(detail(active));
     renderWorkbench();
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: /Database VM · Disk pressure/ }));
     const detailRegion = await screen.findByRole('complementary', {
       name: 'Database VM · Disk pressure',
     });
     const header = within(detailRegion)
-      .getByRole('button', { name: 'Back to attention list' })
+      .getByRole('button', { name: 'Back to list of Patrol attention' })
       .closest('div.sticky');
     expect(header).toHaveClass('top-0', 'bg-surface/95');
 
@@ -755,7 +751,7 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getDetail.mockResolvedValue(detail(unknownTrust));
     renderWorkbench();
 
-    const row = await screen.findByRole('button', { name: 'Open Database VM · Disk pressure' });
+    const row = await screen.findByRole('button', { name: /Database VM · Disk pressure/ });
     expect(within(row).queryByText(/Evidence/)).not.toBeInTheDocument();
     expect(within(row).queryByText(/timing/i)).not.toBeInTheDocument();
     expect(within(row).queryByText('Unknown / Complete')).not.toBeInTheDocument();
@@ -791,7 +787,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
 
@@ -858,7 +854,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     expect(await screen.findByText('Decision 1 of 2')).toBeInTheDocument();
@@ -898,7 +894,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Return to decision inbox' }));
@@ -935,7 +931,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Suppress temporarily' }));
@@ -1023,7 +1019,7 @@ describe('PatrolAttentionWorkbench', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Suppress temporarily' }));
@@ -1100,7 +1096,7 @@ describe('PatrolAttentionWorkbench', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     const returnToAttention = await screen.findByRole('button', {
@@ -1151,7 +1147,7 @@ describe('PatrolAttentionWorkbench', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Reviewed and suppressed (1)' }));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'End suppression' }));
@@ -1180,7 +1176,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
 
@@ -1243,7 +1239,7 @@ describe('PatrolAttentionWorkbench', () => {
     ));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
     const decisions = within(await screen.findByRole('list', { name: 'Lasting decisions' }));
@@ -1301,7 +1297,7 @@ describe('PatrolAttentionWorkbench', () => {
     ));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
 
@@ -1331,7 +1327,7 @@ describe('PatrolAttentionWorkbench', () => {
     ));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
 
@@ -1378,7 +1374,7 @@ describe('PatrolAttentionWorkbench', () => {
     ));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
 
@@ -1422,7 +1418,7 @@ describe('PatrolAttentionWorkbench', () => {
     ));
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open Database VM · Disk pressure',
+        name: /Database VM · Disk pressure/,
       }),
     );
 
@@ -1482,7 +1478,7 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     const row = await screen.findByRole('button', {
-      name: 'Open shlink-web-clientX · Docker container state',
+      name: /shlink-web-clientX · Docker container state/,
     });
     expect(within(row).getByText('Flapping · 11 changes in 24h')).toBeInTheDocument();
     fireEvent.click(row);
@@ -1586,7 +1582,7 @@ describe('PatrolAttentionWorkbench', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: 'Open API container is unhealthy',
+        name: /API container is unhealthy/,
       }),
     );
     const trigger = await screen.findByRole('button', { name: 'Review and approve' });

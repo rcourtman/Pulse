@@ -300,8 +300,8 @@ test.describe("Mobile viewport flows", () => {
 
     const table = page.locator("table.workload-table--mobile");
     await expect(table).toBeVisible({ timeout: 30_000 });
-    await expect(table).toHaveClass(/min-w-\[0px\]/);
-    await expect(table.locator("xpath=..")).toHaveClass(/overflow-x-auto/);
+    await expect(table).toHaveCSS("min-width", "0px");
+    await expect(table.locator("xpath=..")).toHaveCSS("overflow-x", "auto");
   });
 
   test("utility destinations stay pinned in the fixed rail", async ({
@@ -524,7 +524,9 @@ test.describe("Mobile viewport flows", () => {
           "resource-identity-section",
           "resource-docker-container-section",
         ],
-        identityLabel: "Aliases",
+        // The native ID is a primary identity row. It is deliberately not
+        // repeated in Aliases after identity deduplication.
+        identityLabel: "Primary ID",
       },
       {
         route: "/kubernetes",

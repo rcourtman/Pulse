@@ -15,6 +15,16 @@
 
 ## Purpose
 
+Attention-row buttons derive their accessible names from their visible content,
+following the frontend primitives control-name contract. Severity, title,
+summary and relative observation age remain available to assistive technology
+in display order. A title-only override must not hide the other visible label
+text; selection, keyboard review and detail focus restoration keep their existing
+owners.
+Mobile return controls retain `Back to list` in their contextual names. The
+expanded resource-copy control retains its visible `Copy ID` name, including
+after copying; the fuller explanation remains its tooltip.
+
 ### One-page Patrol setup on the Patrol page
 
 When Patrol is blocked because no provider is connected, Pulse Intelligence

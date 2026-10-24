@@ -129,6 +129,7 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
   );
   const windowing = usePlatformWindowedItems({
     items: renderItems,
+    measureTableRows: true,
     estimatedItemHeight: props.estimatedRowHeight,
     enableThreshold: props.enableThreshold,
     windowSize: props.windowSize,

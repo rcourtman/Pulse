@@ -3334,6 +3334,9 @@ a new API state machine, queue contract, or verification-accounting field.
    attention projection by severity, then actionable review posture, then
    observation recency, but it must preserve every API-owned lifecycle,
    evidence, protection, action, and verification fact in selected detail.
+   Attention-row control names expose the displayed record in source order,
+   through the Patrol and frontend primitives visible-label contract; rendering
+   must not replace those facts with a title-only accessible name.
    The first-party `Inbox`, `Protection`, and `Activity` modes are a mutually
    exclusive presentation boundary, not API query modes: Inbox consumes the
    canonical attention projection, Protection consumes retained objectives,
