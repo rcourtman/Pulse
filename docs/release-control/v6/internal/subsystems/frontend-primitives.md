@@ -2447,6 +2447,12 @@ For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy
 rather than another card, strip, or proof counter above the findings list.
+A findings list scoped to one resource keeps that description, the work-group
+chips and the filter counts on that resource: the description names it and
+counts its open findings, each count reads only its findings, the approval
+banner shows only their approvals, and the estate-wide check-health and
+coverage-stale chips stay in the unscoped queue, so nothing above the rows
+counts another resource's work.
 Watch-only forward-path guidance follows the same rule: the finding-row
 `Switch to Ask first` nudge and the Actions inbox Watch-only calm-state copy
 live in their governed presentation helpers

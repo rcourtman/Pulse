@@ -36,7 +36,7 @@ describe('ApprovalBanner', () => {
   const renderBanner = () =>
     render(() => (
       <Router>
-        <Route path="/" component={ApprovalBanner} />
+        <Route path="/" component={() => <ApprovalBanner />} />
       </Router>
     ));
 
@@ -104,6 +104,57 @@ describe('ApprovalBanner', () => {
       'href',
       '/actions',
     );
+  });
+
+  it("shows only the approvals for a scoped resource's findings", () => {
+    state.pendingApprovals = [
+      approvalRequest({
+        id: 'approval-elsewhere',
+        targetId: 'finding-elsewhere',
+        context: 'Restart elsewhere',
+      }),
+      approvalRequest({
+        id: 'approval-here',
+        targetId: 'finding-here',
+        context: 'Restart here',
+        expiresAt: '2026-03-01T00:04:00Z',
+        plan: { actionId: 'action-here' },
+      }),
+    ] as ApprovalRequest[];
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => <ApprovalBanner targetIds={new Set(['finding-here'])} />}
+        />
+      </Router>
+    ));
+
+    // The resource's own approval keeps its countdown and exact action.
+    expect(screen.getByText('Action awaiting approval')).toBeInTheDocument();
+    expect(screen.getByText('Restart here')).toBeInTheDocument();
+    expect(screen.getByText('expires 4m 0s')).toBeInTheDocument();
+    expect(screen.queryByText(/actions awaiting your approval/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
+      'href',
+      '/actions?action=action-here',
+    );
+  });
+
+  it('stays hidden when no approval waits on the scoped findings', () => {
+    state.pendingApprovals = [approvalRequest()];
+
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => <ApprovalBanner targetIds={new Set(['finding-other'])} />}
+        />
+      </Router>
+    ));
+
+    expect(screen.queryByRole('link', { name: 'Review in Actions' })).not.toBeInTheDocument();
   });
 
   it('renders a deterministic countdown label for a valid single approval expiry', () => {

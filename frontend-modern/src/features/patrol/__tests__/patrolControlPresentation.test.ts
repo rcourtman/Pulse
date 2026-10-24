@@ -347,6 +347,84 @@ describe('patrolControlPresentation', () => {
     ]);
   });
 
+  it('names the scoped resource instead of counting affected resources', () => {
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'monitor',
+        findingCount: 2,
+        affectedResourceCount: 1,
+        resourceName: 'afs-web',
+        workTypeComposition: {
+          total: 2,
+          approval: 0,
+          failed: 0,
+          inProgress: 0,
+          recurring: 2,
+          newIssues: 0,
+        },
+      }),
+    ).toBe(
+      'Patrol found 2 issues on afs-web — 2 recurring. Open a row to review evidence and record the outcome.',
+    );
+    // A blank name keeps the count; a scope with no open findings keeps the
+    // empty queue copy.
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'monitor',
+        findingCount: 2,
+        affectedResourceCount: 1,
+        resourceName: ' ',
+      }),
+    ).toBe(
+      'Patrol found 2 issues on 1 affected resource. Open a row to review evidence and record the outcome.',
+    );
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'monitor',
+        findingCount: 0,
+        affectedResourceCount: 0,
+        resourceName: 'afs-web',
+      }),
+    ).toBe('Current Patrol issues appear here.');
+  });
+
+  it('leaves Patrol check health out of a resource-scoped queue', () => {
+    const input: Parameters<typeof getPatrolWorkspaceWorkGroups>[0] = {
+      latestRun: {
+        error_count: 1,
+        resources_checked: 4,
+        status: 'error',
+      },
+      nowMs: Date.parse('2026-06-30T15:00:00Z'),
+      patrolStatus: {
+        error_count: 1,
+        next_patrol_at: '2026-06-30T14:05:00Z',
+        running: false,
+      },
+      pendingApprovalCount: 1,
+      workTypeComposition: {
+        total: 3,
+        approval: 1,
+        failed: 1,
+        inProgress: 0,
+        recurring: 1,
+        newIssues: 0,
+      },
+    };
+
+    expect(
+      getPatrolWorkspaceWorkGroups({ ...input, resourceScoped: true }).map((group) => group.id),
+    ).toEqual(['approvals', 'failed-actions', 'recurring']);
+    // The same evidence without a resource scope still reports the check.
+    expect(getPatrolWorkspaceWorkGroups(input).map((group) => group.id)).toEqual([
+      'approvals',
+      'failed-actions',
+      'failed-check',
+      'recurring',
+      'stale-protection',
+    ]);
+  });
+
   it('treats old Patrol evidence as stale relative to the configured interval', () => {
     const nowMs = Date.parse('2026-06-30T15:00:00Z');
 

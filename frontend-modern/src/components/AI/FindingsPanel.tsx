@@ -263,6 +263,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       ? aiIntelligenceStore.patrolFindingsWithPendingApprovals
       : aiIntelligenceStore.findingsWithPendingApprovals,
   );
+  // A resource scope narrows the rows to one resource, so the filter counts
+  // read only its findings: a chip never counts rows it cannot show.
+  const isInResourceScope = (finding: UnifiedFinding) =>
+    !props.resourceId || finding.resourceId === props.resourceId;
 
   // Load findings on mount
   createEffect(() => {
@@ -305,6 +309,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       const nowMs = now();
       return sourceFindings()
         .filter((f) => {
+          if (!isInResourceScope(f)) return false;
           if (f.dismissedReason !== 'will_fix_later' || !f.remindAt) return false;
           const due = Date.parse(f.remindAt);
           return Number.isFinite(due) && due <= nowMs;
@@ -426,21 +431,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const useRunSnapshotScopedControls = createMemo(() => props.runSnapshot !== undefined);
   const scopedNeedsAttentionCount = createMemo(() => {
     const attentionIds = new Set(sourceFindingsNeedingAttention().map((f) => f.id));
-    return runSnapshotScopedPatrolFindings().filter((finding) => attentionIds.has(finding.id))
-      .length;
+    return runSnapshotScopedPatrolFindings().filter(
+      (finding) => isInResourceScope(finding) && attentionIds.has(finding.id),
+    ).length;
   });
   const scopedPendingApprovalCount = createMemo(() => {
     const approvalIds = new Set(sourceFindingsWithPendingApprovals().map((finding) => finding.id));
-    return runSnapshotScopedPatrolFindings().filter((finding) => approvalIds.has(finding.id))
-      .length;
+    return runSnapshotScopedPatrolFindings().filter(
+      (finding) => isInResourceScope(finding) && approvalIds.has(finding.id),
+    ).length;
   });
   const filterCounts = createMemo(() => ({
     needsAttentionCount: useRunSnapshotScopedControls()
       ? scopedNeedsAttentionCount()
-      : sourceFindingsNeedingAttention().length,
+      : sourceFindingsNeedingAttention().filter(isInResourceScope).length,
     pendingApprovalCount: useRunSnapshotScopedControls()
       ? scopedPendingApprovalCount()
-      : sourceFindingsWithPendingApprovals().length,
+      : sourceFindingsWithPendingApprovals().filter(isInResourceScope).length,
   }));
   // Drives the Overdue commitments chip below.
   const overdueCount = createMemo(() => overdueFindingIds().length);

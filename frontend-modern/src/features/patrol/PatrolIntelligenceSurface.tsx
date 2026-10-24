@@ -289,6 +289,7 @@ export function PatrolIntelligenceSurface() {
               <PatrolIntelligenceWorkspace
                 state={state}
                 findingResourceId={findingResourceScope()?.id}
+                findingResourceName={findingResourceScope()?.name}
               />
             </div>
           </details>

@@ -4827,6 +4827,11 @@ inventory does not bind keeps that reference as its subject. Before
 24 October 2026 the item carried the reference, which no finding matched. The
 field's name, type and presence are unchanged for the relay mobile surface.
 Proof: `TestAttentionHandlersNameTheInventorySubjectOfEachAlert`.
+The Patrol page's resource scope is presentation over those same payloads:
+when it narrows the findings list to that ID, the `Open work` summary, work
+groups and filter counts above the list count the findings whose `resource_id`
+matches and the pending approvals that target them. It adds no request,
+parameter or count field (24 October 2026).
 The Patrol workbench may project the summary counts into its fixed lifecycle
 filter labels at either desktop or narrow widths, but changing presentation
 does not create a parallel count or filter vocabulary: every selection still
