@@ -587,14 +587,14 @@ func TestHostAgentRemovalLifecycleKeepsOfflineRowRemovableAfterRestart(t *testin
 	}
 
 	// Reconstruct the monitor without another agent report. The durable row
-	// must remain visible as offline so its removal action stays reachable.
+	// must remain visible while awaiting a report so removal stays reachable.
 	restarted := newHostRemovalLifecycleMonitor(t, dataPath)
 	hosts := restarted.HostsSnapshot()
 	if len(hosts) != 1 || hosts[0].ID != host.ID {
 		t.Fatalf("restart host inventory = %+v, want continuity row %q", hosts, host.ID)
 	}
-	if hosts[0].Status != "offline" {
-		t.Fatalf("restart continuity status = %q, want offline", hosts[0].Status)
+	if hosts[0].Status != "pending" {
+		t.Fatalf("restart continuity status = %q, want pending", hosts[0].Status)
 	}
 
 	for i := 0; i < 3; i++ {

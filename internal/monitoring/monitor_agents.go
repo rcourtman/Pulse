@@ -1812,8 +1812,11 @@ func (m *Monitor) applyRejectedHostReportLiveness(
 		if host.LastSeen.IsZero() ||
 			receivedAt.Sub(host.LastSeen) > hostAgentHealthWindow(host.IntervalSeconds) {
 			host.Status = "offline"
+		} else {
+			host.Status = "pending"
 		}
-		m.state.UpsertHost(host)
+		// A rejected report does not hydrate live telemetry after a restart.
+		// Leave the saved enrollment in its bounded first-report projection.
 	}
 
 	// An authenticated arrival proves the transport is reachable, but a report

@@ -63,7 +63,10 @@ import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
-import { getActionableAgentIdFromResource } from '@/utils/agentResources';
+import {
+  getActionableAgentIdFromResource,
+  getAgentFirstReportStatusIndicator,
+} from '@/utils/agentResources';
 import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
 import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -1579,7 +1582,9 @@ export const AgentsMachinesTable: Component<{
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
                     const indicator = () => getStandaloneResourceStatusIndicator(machine, now());
-                    const canRenderMetrics = () => indicator().variant !== 'danger';
+                    const awaitingReport = () => getAgentFirstReportStatusIndicator(machine);
+                    const canRenderMetrics = () =>
+                      !awaitingReport() && indicator().variant !== 'danger';
                     const telemetryFallback = () =>
                       canRenderMetrics()
                         ? outdatedAgentTelemetryFallbackFor(machine, props.targetAgentVersion)
@@ -1721,12 +1726,21 @@ export const AgentsMachinesTable: Component<{
                                 title={indicator().label}
                                 ariaLabel={indicator().label}
                               />
-                              <ResourceNameWithWebInterfaceLink
-                                name={name()}
-                                url={savedWebInterfaceUrl()}
-                                class="min-w-0"
-                                nameClass="truncate font-semibold text-base-content"
-                              />
+                              <div class="min-w-0">
+                                <ResourceNameWithWebInterfaceLink
+                                  name={name()}
+                                  url={savedWebInterfaceUrl()}
+                                  class="min-w-0"
+                                  nameClass="truncate font-semibold text-base-content"
+                                />
+                                <Show when={awaitingReport()}>
+                                  {(waiting) => (
+                                    <span class="block whitespace-normal text-[10px] leading-snug text-muted">
+                                      {waiting().label}
+                                    </span>
+                                  )}
+                                </Show>
+                              </div>
                             </div>
                           </TableCell>
                           <Show when={columnVisibility.isColumnVisible('system')}>

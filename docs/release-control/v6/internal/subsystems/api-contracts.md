@@ -51,6 +51,14 @@ HTTP transport, production fleet handler and text/structured output over safe
 resource/finding fixtures. It covers true/false/omission, composed filters and
 an empty intersection; this is not released-binary or customer-estate proof.
 
+### Unreported agent delivery supplies no live chart fallback
+
+A saved enrollment awaiting its first accepted report, including after its
+reporting lease expires, remains queryable by its existing metrics target.
+History and summary chart routes retain stored series
+but cannot synthesize a now-stamped live sample from that enrollment's absent
+metrics. An accepted report restores normal live fallback behaviour.
+
 ### Proxmox setup guide names the command-access option by its shared label (21 October 2026)
 
 The Proxmox node setup guide's Docker-in-LXC note now points to the Pulse
@@ -8056,6 +8064,11 @@ API-backed lifecycle state. The retired
 `InfrastructureOperationsController.tsx` shell and
 `useInfrastructureReportingState.tsx` reporting path must not be reintroduced
 as parallel transport owners.
+The `/api/connections` agent projection preserves monitoring's pending
+first-report state across a restart without renewing the saved last-seen
+timestamp. An explicitly offline agent cannot become active through the
+longer fleet heartbeat fallback. API provider errors and pending provider
+polls retain their own connection states.
 That same `/api/connections` projection also owns collection-method truth for
 the infrastructure ledger: `useConnectionsLedger.ts` must derive one canonical
 subtitle (`via platform API`, `via Pulse Agent`, or `via platform API and

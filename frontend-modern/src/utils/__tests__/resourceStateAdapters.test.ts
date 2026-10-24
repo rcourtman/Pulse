@@ -12,6 +12,53 @@ import {
 } from '../resourceStateAdapters';
 import type { Resource } from '@/types/resource';
 
+it('withdraws a previous browser observation when realtime reports startup pending delivery', () => {
+  const existing: Resource = {
+    id: 'waiting-agent',
+    type: 'agent',
+    name: 'Host',
+    displayName: 'Host',
+    platformId: 'agent',
+    platformType: 'agent',
+    sourceType: 'agent',
+    status: 'online',
+    lastSeen: 1000,
+    sources: ['agent'],
+    cpu: { current: 12 },
+    memory: { current: 25 },
+    uptime: 60,
+    agent: { agentId: 'waiting-agent', cpuCount: 4 } as Resource['agent'],
+  };
+  const incoming: Resource = {
+    id: existing.id,
+    type: 'agent',
+    name: 'Host',
+    displayName: 'Host',
+    platformId: 'agent',
+    platformType: 'agent',
+    sourceType: 'agent',
+    status: 'unknown',
+    lastSeen: 1000,
+    sources: ['agent'],
+    sourceStatus: { agent: { status: 'pending' } },
+    agent: { agentId: 'waiting-agent' } as Resource['agent'],
+  };
+  for (const result of [
+    mergeCanonicalResourceSnapshot([incoming], [existing]),
+    mergeCanonicalResourceDeltaSnapshot([incoming], [existing], new Set([incoming.id])),
+  ]) {
+    expect(result[0]).toMatchObject({
+      status: 'unknown',
+      lastSeen: 1000,
+      sourceStatus: incoming.sourceStatus,
+    });
+    expect(result[0]?.cpu).toBeUndefined();
+    expect(result[0]?.memory).toBeUndefined();
+    expect(result[0]?.uptime).toBeUndefined();
+    expect(result[0]?.agent?.cpuCount).toBeUndefined();
+  }
+});
+
 const createNodeResource = (platformData: Record<string, unknown>): Resource =>
   ({
     id: 'node-1',

@@ -16,8 +16,8 @@ import (
 // one identity, so the resources API stores operator state written through the
 // agent's references on the VM and Patrol reads it there, on the same store.
 // Neither the monitor's read state nor the registry the resources API seeds
-// from it merges the saved agent into the VM: the agent keeps its own offline
-// row and the VM keeps what vSphere reports.
+// from it merges the saved agent into the VM: the recent agent keeps its own
+// pending row without current metrics and the VM keeps what vSphere reports.
 func TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest(t *testing.T) {
 	now := time.Now().UTC()
 	monitorCfg := &config.Config{DataPath: t.TempDir()}
@@ -85,8 +85,8 @@ func TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest(t *testing.T
 	for _, resource := range listing {
 		readStateRows[resource.ID] = resource
 	}
-	if agent, ok := readStateRows[agentID]; !ok || agent.Status != unifiedresources.StatusOffline {
-		t.Fatalf("read state agent row = %+v (listed=%v), want the saved agent's own offline row", agent, ok)
+	if agent, ok := readStateRows[agentID]; !ok || agent.Status != unifiedresources.StatusUnknown || agent.SourceStatus[unifiedresources.SourceAgent].Status != "pending" || agent.Metrics != nil {
+		t.Fatalf("read state agent row = %+v (listed=%v), want the saved agent's own pending row without current metrics", agent, ok)
 	}
 	if guest, ok := readStateRows[vmID]; !ok || guest.Agent != nil {
 		t.Fatalf("read state guest = %+v (listed=%v), want vSphere's VM without the saved agent", guest, ok)
@@ -97,8 +97,8 @@ func TestResourcesAPIAndPatrolAgreeOnContinuityAgentLinkedIntoGuest(t *testing.T
 		t.Fatalf("resources API registry: %v", err)
 	}
 	agent, listed := registry.Get(agentID)
-	if !listed || agent.Status != unifiedresources.StatusOffline {
-		t.Fatalf("resources API agent row = %+v (listed=%v), want the saved agent's own offline row", agent, listed)
+	if !listed || agent.Status != unifiedresources.StatusUnknown || agent.SourceStatus[unifiedresources.SourceAgent].Status != "pending" || agent.Metrics != nil {
+		t.Fatalf("resources API agent row = %+v (listed=%v), want the saved agent's own pending row without current metrics", agent, listed)
 	}
 	if guest, ok := registry.Get(vmID); !ok || guest.Agent != nil || guest.Status != unifiedresources.StatusOnline {
 		t.Fatalf("resources API guest = %+v (listed=%v), want vSphere's online VM without the saved agent", guest, ok)

@@ -79,6 +79,62 @@ function deferred<T>() {
 }
 
 describe('GuestDrawerHistory refresh recovery', () => {
+  it('withdraws a cached live reply before refreshing when reporting stops, then resumes on a new report', async () => {
+    const pending = deferred<AllMetricsHistoryResponse>();
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValueOnce({ ...response(42), source: 'live' })
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce({ ...response(77), source: 'live' });
+    const [reporting, setReporting] = createSignal(true);
+    const { container } = render(() => (
+      <GuestDrawerHistory
+        target={target}
+        range="24h"
+        liveReadingsAvailable={reporting()}
+        currentMetrics={{ cpu: 99 }}
+      />
+    ));
+    await waitFor(() => expect(container).toHaveTextContent('Current'));
+    setReporting(false);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(container).not.toHaveTextContent('Current');
+    expect(container.querySelector('[data-history-current]')).toBeNull();
+    expect(paths(container)).toHaveLength(0);
+    // An API response from a different delivery generation cannot restore a
+    // current reading while the canonical source is still unreported.
+    pending.resolve({ ...response(66), source: 'live' });
+    await pending.promise;
+    await Promise.resolve();
+    expect(container).not.toHaveTextContent('Current');
+    expect(paths(container)).toHaveLength(0);
+    setReporting(true);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(container).toHaveTextContent('77.0%'));
+    expect(container).toHaveTextContent('Current');
+  });
+
+  it('retains real stored observations while a reporting transition refreshes history', async () => {
+    const pending = deferred<AllMetricsHistoryResponse>();
+    const fetch = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValueOnce(response(37))
+      .mockReturnValueOnce(pending.promise);
+    const [reporting, setReporting] = createSignal(true);
+    const { container } = render(() => (
+      <GuestDrawerHistory target={target} range="24h" liveReadingsAvailable={reporting()} />
+    ));
+    await waitFor(() => expect(paths(container)).toHaveLength(1));
+    setReporting(false);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(paths(container)).toHaveLength(1);
+    expect(container).toHaveTextContent('Latest stored');
+    expect(container).toHaveTextContent('37.0%');
+    pending.resolve(response(38));
+    await waitFor(() => expect(container).toHaveTextContent('38.0%'));
+    expect(container).not.toHaveTextContent('Current');
+  });
+
   it('offers one scoped retry after initial failure without claiming collection or exposing errors', async () => {
     const pending = deferred<AllMetricsHistoryResponse>();
     const fetch = vi

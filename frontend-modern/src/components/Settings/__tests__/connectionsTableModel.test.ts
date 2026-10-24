@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Connection, ConnectionAgentIdentity } from '@/api/connections';
 import {
+  agentAttachmentProblem,
   connectionAgentIdentitySummary,
   fleetGovernanceSignalsForConnection,
   primaryRowProblem,
@@ -26,6 +27,16 @@ const connectionFixture = (overrides: Partial<Connection> = {}): Connection => (
 });
 
 describe('visibleFleetGovernanceSignals', () => {
+  it('names a pending attached agent without calling it an outage', () => {
+    expect(agentAttachmentProblem(connectionFixture({ state: 'pending' }))).toMatchObject({
+      label: 'Waiting for first report',
+      tone: 'warning',
+    });
+    expect(agentAttachmentProblem(connectionFixture({ state: 'unreachable' }))).toMatchObject({
+      label: 'Agent unreachable',
+      tone: 'critical',
+    });
+  });
   it('surfaces the failed module and its operator-facing reason', () => {
     const signals = fleetGovernanceSignalsForConnection(
       connectionFixture({

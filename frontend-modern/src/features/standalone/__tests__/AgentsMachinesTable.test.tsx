@@ -162,6 +162,32 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
+  it('shows the first-report wait beside the name and hides cached metric bars until reporting', () => {
+    const [machine, setMachine] = createStore(
+      resource({
+        id: 'waiting',
+        name: 'Waiting host',
+        status: 'unknown',
+        lastSeen: Date.now(),
+        sourceStatus: { agent: { status: 'pending' } },
+        cpu: { current: 12 },
+      }),
+    );
+    render(() => (
+      <AgentsMachinesTable
+        resources={[machine]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+    expect(screen.getByText('Waiting for first report')).toBeVisible();
+    expect(screen.queryByTestId('agent-machine-cpu-bar')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Offline, 0' })).toBeInTheDocument();
+    setMachine({ status: 'online', sourceStatus: { agent: { status: 'online' } } });
+    expect(screen.queryByText('Waiting for first report')).not.toBeInTheDocument();
+    expect(screen.getByTestId('agent-machine-cpu-bar')).toHaveAttribute('data-usage', '12');
+  });
   it('keeps health counts and selected rows truthful for retained, arriving and withdrawn reports', () => {
     const start = Date.parse('2026-10-11T17:00:00Z');
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });

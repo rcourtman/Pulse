@@ -180,6 +180,8 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{
 		hosts: []models.Host{
+			{ID: "startup", Hostname: "waiting", Status: "pending", LastSeen: now.Add(-10 * time.Second), IntervalSeconds: 30},
+			{ID: "expired-startup", Hostname: "missed-report", Status: "offline", LastSeen: now.Add(-4 * time.Minute), IntervalSeconds: 30},
 			{ID: "fresh", Hostname: "h1", LastSeen: now.Add(-10 * time.Second), IntervalSeconds: 30},
 			{ID: "stale", Hostname: "h2", LastSeen: now.Add(-5*time.Minute - time.Second), IntervalSeconds: 30},
 			{ID: "never", Hostname: "h3"},
@@ -199,6 +201,13 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 	}
 	if byID["agent:never"].State != ConnectionStatePending {
 		t.Fatalf("never-reported agent: got %q, want pending", byID["agent:never"].State)
+	}
+	startup := byID["agent:startup"]
+	if startup.State != ConnectionStatePending || startup.StateReason != "Waiting for first report after server restart" || startup.LastSeen == nil || !startup.LastSeen.Equal(now.Add(-10*time.Second)) {
+		t.Fatalf("saved startup agent reported live: %+v", startup)
+	}
+	if byID["agent:expired-startup"].State != ConnectionStateStale {
+		t.Fatal("expired startup lease became active without a report")
 	}
 	for _, c := range got {
 		if c.Capabilities.SupportsPause || c.Capabilities.SupportsScope {

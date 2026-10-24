@@ -1998,7 +1998,7 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 		previousStatus := resource.Status
 		staleFound := false
 		for source, status := range resource.SourceStatus {
-			if status.LastSeen.IsZero() {
+			if status.LastSeen.IsZero() || status.Status == "pending" {
 				continue
 			}
 			if now.Sub(status.LastSeen) > sourceStaleThreshold(source, status, thresholds) {
@@ -3102,7 +3102,11 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	}
 	resource.Sources = []DataSource{source}
 	sighting := resource.SourceStatus[source]
-	sighting.Status = sourceSightingStatus(resource.LastSeen)
+	// Only continuity can describe an enrolled agent awaiting a report in the
+	// current monitor generation. Its old receipt is a deadline, not a sighting.
+	if !(onlyMissing && source == SourceAgent && sighting.Status == "pending") {
+		sighting.Status = sourceSightingStatus(resource.LastSeen)
+	}
 	sighting.LastSeen = resource.LastSeen
 	sighting.reported = resource.Status
 	resource.SourceStatus = map[DataSource]SourceStatus{source: sighting}

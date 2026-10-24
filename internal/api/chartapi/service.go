@@ -362,7 +362,7 @@ func (r *Service) HandleCharts(w http.ResponseWriter, req *http.Request) {
 		if batchMetrics, ok := agentBatchMetrics[request.SQLResourceID]; ok {
 			oldestTimestamp = fillChartSeriesFromBatch(agentData[hID], batchMetrics, oldestTimestamp)
 		}
-		if len(agentData[hID]["cpu"]) == 0 {
+		if len(agentData[hID]["cpu"]) == 0 && hostAgentCanSupplyLiveChartFallback(h) {
 			agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
 			agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
 			agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
@@ -477,6 +477,14 @@ func parseWorkloadMaxPoints(raw string) int {
 }
 
 func ParseWorkloadMaxPoints(raw string) int { return parseWorkloadMaxPoints(raw) }
+
+func hostAgentCanSupplyLiveChartFallback(host *unifiedresources.HostView) bool {
+	if host.Status() == unifiedresources.StatusOffline {
+		return false
+	}
+	status, ok := host.SourceStatus(unifiedresources.SourceAgent)
+	return !ok || status.Status != "pending"
+}
 
 func hostAgentChartRequest(host *unifiedresources.HostView) (string, monitoring.GuestChartRequest, bool) {
 	if host == nil {
@@ -1976,6 +1984,9 @@ func (r *Service) HandleInfrastructureCharts(w http.ResponseWriter, req *http.Re
 		}
 		for _, metricType := range requestedMetricNames {
 			if len(agentData[hID][metricType]) > 0 {
+				continue
+			}
+			if !hostAgentCanSupplyLiveChartFallback(h) {
 				continue
 			}
 			var value float64

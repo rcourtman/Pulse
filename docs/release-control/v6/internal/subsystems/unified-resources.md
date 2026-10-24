@@ -23,6 +23,15 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Drawer history follows current source authority
+
+Resource drawers withdraw current chart fallbacks and cached live-only replies
+when a standalone agent is offline or awaiting its first accepted report.
+The delivery transition refreshes the shared history query; actual stored
+observations retain their original timestamps and remain readable while that
+read settles. The browser does not infer a new lease or reporting verdict, and
+guest power state does not override the provider's metric admission rules.
+
 ### Websocket-first routes always obtain their REST snapshot (21 October 2026)
 
 Action readiness, scoped facets and other REST-only enrichment arrive only
@@ -676,8 +685,8 @@ fleet CPU attribution.
 
 ### Host continuity overlays reuse one build per registry generation
 
-`ReadStateWithHostContinuity` overlays standalone agents that are offline
-across a restart onto the live read state by building a registry clone. The
+`ReadStateWithHostContinuity` overlays standalone agents awaiting a report or
+offline across a restart onto the live read state by building a registry clone. The
 monitor requests that overlay on every canonical read-state lookup, which
 alert evaluation makes once per resource per poll, so a single offline agent
 made every poll rebuild the registry once per resource for up to 72 hours. The
@@ -911,6 +920,14 @@ and linked Proxmox state. Even a future-dated saved enrollment cannot overwrite
 live truth. Skipped records cannot attach superseded IDs or migrate operator
 state. Distinct machines sharing a hostname remain distinct, and absent hosts
 retain their historical identity without manufacturing a live sighting.
+During the monitoring-owned reporting lease, an absent saved agent has unknown
+resource status and pending agent delivery. Registry ingestion, stale marking,
+cloning and serialized read-state seeding preserve that pending delivery rather
+than treating its historical timestamp as a current sighting. Continuity carries
+no metrics. Its lease and transition to offline are owned by monitoring.
+Realtime rows carry source delivery alongside resource status. A pending
+enrollment explicitly withdraws an earlier browser observation rather than
+retaining cached metrics or an older agent facet as current evidence.
 `TestHostContinuityCannotOverwriteCurrentResource`,
 `TestHostContinuityRetainsDistinctMachinesWithSameHostname`, and the monitoring
 `TestHostContinuityPreservesLiveAgentAfterReenrollment` pin this boundary (#1913).

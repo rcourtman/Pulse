@@ -59,6 +59,8 @@ export interface GuestDrawerHistoryAlert {
 
 interface GuestDrawerHistoryProps {
   currentMetrics?: Record<string, number | null | undefined>;
+  /** False when the owning resource no longer supplies current readings. */
+  liveReadingsAvailable?: boolean;
   deferredMetrics?: Record<string, GuestDrawerHistoryDeferredMetric | undefined>;
   groups?: GuestDrawerHistoryGroupConfig[];
   range: HistoryTimeRange;
@@ -858,6 +860,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     () => props.target,
     () => props.range,
     () => !locked() && props.enabled !== false,
+    () => props.liveReadingsAvailable !== false,
   );
   const historyQuery = createGuestDrawerHistoryQuery(historySource);
   // A successful retry removes the focused Retry button with the error. Keep
@@ -1012,7 +1015,9 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                     group={group}
                     loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
                     metrics={metrics()}
-                    currentMetrics={props.currentMetrics}
+                    currentMetrics={
+                      props.liveReadingsAvailable !== false ? props.currentMetrics : undefined
+                    }
                     deferredMetrics={props.deferredMetrics}
                     range={props.range}
                     source={historyQuery.value().source}
