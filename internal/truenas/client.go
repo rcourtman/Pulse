@@ -3272,6 +3272,12 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 			cpuPercent, hasCPU = readFloatValueAny(usage, "percent", "value", "usage")
 		}
 	}
+	if !hasCPU {
+		// SCALE reporting.realtime groups its aggregate alongside cpu0, cpu1,
+		// etc. Read that aggregate directly; cores and temperature are not
+		// substitutes for a missing usage sample. Explicit idle zero is valid.
+		cpuPercent, hasCPU = readFloatValueAny(readMapAny(cpu, "cpu"), "usage")
+	}
 	telemetry.CPUPercent = cpuPercent
 	telemetry.Telemetry.CPU = hasCPU
 
