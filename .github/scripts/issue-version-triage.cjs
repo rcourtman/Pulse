@@ -107,13 +107,17 @@ function extractSectionValue(body, heading, followingHeadings = []) {
   return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
-function classifyAdditionalActionableTopics(body) {
-  const value = extractSectionValue(body, "Additional actionable topics", [
+function additionalActionableTopicsValue(body) {
+  return extractSectionValue(body, "Additional actionable topics", [
     "Pulse version",
     "Additional context",
     "Logs, screenshots, or diagnostics",
     "Confirmations",
   ]);
+}
+
+function classifyAdditionalActionableTopics(body) {
+  const value = additionalActionableTopicsValue(body);
   if (value === null) return null;
 
   const normalized = value
@@ -388,17 +392,19 @@ async function syncLabels({ github, context, core }) {
     isBugLike,
   } = buildTriageState(issue, core, null);
 
-  // A form declaration creates a review task only when it is new. A later
+  // A new or revised form declaration creates a review task. A later
   // empty field cannot prove that comment topics were dispositioned, and an
   // unrelated or superseded event must not restore a label Community cleared.
   const previousBody = context.payload.changes?.body?.from;
+  const topicText = (body) => (additionalActionableTopicsValue(body) || "")
+    .replace(/\s+/g, " ").trim();
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
     issue.updated_at === eventIssue.updated_at;
   const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
-      classifyAdditionalActionableTopics(previousBody) !== true)
+      topicText(previousBody) !== topicText(issue.body))
   );
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");

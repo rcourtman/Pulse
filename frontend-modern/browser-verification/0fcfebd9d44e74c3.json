@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "871d94f53d48af1f98ac5a1412b35f1410a373d0",
+  "verified_at": "2026-10-24T00:59:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/ISSUE_TRIAGE.md": "8eea911fbfc8a758ee3374327e47b483cf2a42404d750caf093a4d68bb7cac07"
+  },
+  "routes": [
+    "/docs/ISSUE_TRIAGE"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Source and served triage guidance describe additions and revisions after an earlier topic disposition, while whitespace and hidden-comment-only edits do not reopen review.",
+    "Actual production Docs.tsx, docMarkdown.ts, PageHeader and production CSS consume the planned final static Markdown. A synthetic router/static preview has no backend, external service or credentials.",
+    "Playwright 1.56.1; Chromium 141.0.7390.37 at 1440\u00d71000 and WebKit 26.0 at 320\u00d7900. No page/console error or horizontal overflow; browser contexts and server close.",
+    "Both retained screenshots were opened with the native image tool. Changed text and focused documentation link are readable at both widths. No stopped Docs Back/reload or original SSO/native recovery is exercised."
+  ],
+  "interactions": [
+    "Loaded the existing document route once in each synthetic browser context; no history Back or reload.",
+    "Used Tab to focus the actual All documentation link and checked visible keyboard focus without following it."
+  ]
+}

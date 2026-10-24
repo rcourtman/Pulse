@@ -7,8 +7,10 @@ documentation gaps, or operator workflows described in the same report.
 ## Intake contract
 
 Issue forms ask for one primary outcome and provide an **Additional actionable
-topics** field. Declaring a topic when opening an issue or newly adding one to
-this field applies the `needs-decomposition` label automatically. This is a
+topics** field. Declaring a topic when opening an issue, or adding or revising
+actionable content in this field, applies the `needs-decomposition` label
+automatically, including after an earlier topic was dispositioned. Whitespace
+or hidden-comment changes alone do not reopen that review. This is a
 queue-integrity signal, not a statement that every topic will be built.
 The synchronizer never removes this label, nor restores it after a maintainer
 has cleared it when an unrelated edit or reopen occurs. A later `None` in the
