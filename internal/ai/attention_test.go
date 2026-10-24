@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestProjectAttentionItemsUsesCanonicalLifecycleAndStableOrdering(t *testing.T) {
@@ -26,7 +29,7 @@ func TestProjectAttentionItemsUsesCanonicalLifecycleAndStableOrdering(t *testing
 		),
 	}
 
-	projected := ProjectAttentionItems(active, nil, postures, now)
+	projected := ProjectAttentionItems(active, nil, postures, nil, now)
 	if projected.Summary.ActiveCount != 3 {
 		t.Fatalf("ActiveCount = %d, want 3", projected.Summary.ActiveCount)
 	}
@@ -75,7 +78,7 @@ func TestProjectAttentionItemsDeduplicatesHistoryAndActiveByOperationalRecord(t 
 		now,
 	)
 
-	projected := ProjectAttentionItems([]alerts.Alert{active}, []alerts.Alert{historical}, nil, now)
+	projected := ProjectAttentionItems([]alerts.Alert{active}, []alerts.Alert{historical}, nil, nil, now)
 	if len(projected.Details) != 1 {
 		t.Fatalf("details = %d, want one canonical item", len(projected.Details))
 	}
@@ -106,6 +109,7 @@ func TestProjectAttentionItemsDoesNotReviveNonTerminalHistorySnapshots(t *testin
 	projected := ProjectAttentionItems(
 		nil,
 		[]alerts.Alert{orphanedOpen, resolved},
+		nil,
 		nil,
 		now,
 	)
@@ -139,7 +143,7 @@ func TestProjectAttentionItemsRepresentsUncertainEvidenceHonestly(t *testing.T) 
 	)
 	unknown.Evidence = nil
 
-	projected := ProjectAttentionItems([]alerts.Alert{stale, unknown}, nil, nil, now)
+	projected := ProjectAttentionItems([]alerts.Alert{stale, unknown}, nil, nil, nil, now)
 	if projected.Summary.UncertainCount != 2 || projected.Summary.ActiveCount != 2 {
 		t.Fatalf("summary = %+v, want two uncertain active items", projected.Summary)
 	}
@@ -203,7 +207,7 @@ func TestAttentionFiltersAndPaginationCoverLifecycleStates(t *testing.T) {
 		active = append(active, alert)
 	}
 
-	projected := ProjectAttentionItems(active, history, nil, now)
+	projected := ProjectAttentionItems(active, history, nil, nil, now)
 	checks := map[AttentionFilter]int{
 		AttentionFilterActive:       3,
 		AttentionFilterOpen:         1,
@@ -233,7 +237,7 @@ func TestAttentionFiltersAndPaginationCoverLifecycleStates(t *testing.T) {
 
 func TestProjectAttentionItemsProducesCurrentCalmEvaluation(t *testing.T) {
 	now := time.Date(2026, 7, 19, 5, 0, 0, 0, time.UTC)
-	projected := ProjectAttentionItems(nil, nil, nil, now)
+	projected := ProjectAttentionItems(nil, nil, nil, nil, now)
 	if !projected.Summary.Calm || projected.Summary.ActiveCount != 0 {
 		t.Fatalf("summary = %+v, want current calm evaluation", projected.Summary)
 	}
@@ -344,7 +348,7 @@ func TestProjectAttentionItemsLeadsHeldMetricAlertsWithTheLiveReading(t *testing
 			alert.Value = 80
 			alert.Metadata = tt.metadata
 			alert.MetricStatus = tt.status
-			projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, now)
+			projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, nil, now)
 			if len(projected.Details) != 1 {
 				t.Fatalf("details = %d, want 1", len(projected.Details))
 			}
@@ -605,7 +609,7 @@ func TestProjectAttentionItemsCollapsesOpenResolvedChurnIntoFlapping(t *testing.
 		},
 	)
 
-	projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, now)
+	projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, nil, now)
 	if len(projected.Details) != 1 {
 		t.Fatalf("details = %d, want 1", len(projected.Details))
 	}
@@ -640,8 +644,104 @@ func TestProjectAttentionItemsLeavesSingleRecurrenceUnlabelled(t *testing.T) {
 		},
 	)
 
-	projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, now)
+	projected := ProjectAttentionItems([]alerts.Alert{alert}, nil, nil, nil, now)
 	if projected.Details[0].Item.Flapping != nil {
 		t.Fatalf("one recurrence was labelled flapping: %+v", projected.Details[0].Item.Flapping)
 	}
+}
+
+// An alert lifecycle record names its subject by the alert producer's own
+// reference. The item names the unified resource that reference binds in
+// current inventory, the ID Patrol findings and protection postures carry,
+// for every producer shape; the record keeps the alert's reference.
+func TestProjectAttentionItemsNamesTheUnifiedSubjectOfEveryAlertKind(t *testing.T) {
+	now := time.Date(2026, 10, 24, 8, 0, 0, 0, time.UTC)
+	containerID := strings.Repeat("ab12", 16)
+	snapshot := models.StateSnapshot{
+		Nodes:      []models.Node{{ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: now}},
+		VMs:        []models.VM{{ID: "pve1:node1:100", VMID: 100, Name: "web-vm", Node: "node1", Instance: "pve1", Status: "running", Type: "qemu", LastSeen: now}},
+		Containers: []models.Container{{ID: "pve1:node1:101", VMID: 101, Name: "dns-ct", Node: "node1", Instance: "pve1", Status: "running", Type: "lxc", LastSeen: now}},
+		Storage:    []models.Storage{{ID: "pve1-node1-local", Name: "local", Node: "node1", Instance: "pve1", Type: "dir", Status: "available", Enabled: true, Active: true}},
+		Hosts:      []models.Host{{ID: "host-src-1", Hostname: "backup-box", MachineID: "machine-1", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "dock-agent-1", AgentID: "dock-agent-1", Hostname: "docker-box", Status: "online", LastSeen: now,
+			Containers: []models.DockerContainer{{ID: containerID, Name: "web", State: "running", Health: "unhealthy"}}}},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	resourceIDByName := map[string]string{}
+	for _, resource := range registry.List() {
+		resourceIDByName[resource.Name] = resource.ID
+	}
+	cases := []struct {
+		reference string
+		resource  string
+	}{
+		{"pve1-node1", "node1"},
+		{"pve1:node1:100", "web-vm"},
+		{"pve1:node1:101", "dns-ct"},
+		{"pve1-node1-local", "local"},
+		{"pve1-node1-local/zfs-pool:tank", "local"},
+		{"agent:host-src-1", "backup-box"},
+		{"agent:host-src-1/disk:docker-data", "backup-box"},
+		{alerts.DockerHostResourceID("dock-agent-1"), "docker-box"},
+		{alerts.DockerContainerResourceID("dock-agent-1", containerID, "web"), "web"},
+	}
+	active := make([]alerts.Alert, 0, len(cases)+2)
+	want := make(map[string]string, len(cases)+2)
+	for i, tc := range cases {
+		resourceID := resourceIDByName[tc.resource]
+		if resourceID == "" || resourceID == tc.reference {
+			t.Fatalf("fixture resource %q missing or named like its alert reference: %q", tc.resource, resourceID)
+		}
+		id := fmt.Sprintf("record-%d", i)
+		active = append(active, attentionSubjectTestAlert(id, tc.reference, now))
+		want[id] = resourceID
+	}
+	// A reference inventory does not bind keeps its own name, as does an alert
+	// already raised on the unified resource.
+	active = append(active,
+		attentionSubjectTestAlert("record-removed", "agent:removed-host/disk:data", now),
+		attentionSubjectTestAlert("record-unified", resourceIDByName["web-vm"], now),
+	)
+	want["record-removed"] = "agent:removed-host/disk:data"
+	want["record-unified"] = resourceIDByName["web-vm"]
+	postures := map[string]recoverymodel.ProtectionPosture{
+		resourceIDByName["web-vm"]: attentionTestPosture(resourceIDByName["web-vm"], recoverymodel.ProtectionStateProtected, now),
+	}
+
+	projected := ProjectAttentionItems(active, nil, postures, registry, now)
+	if len(projected.Details) != len(want) {
+		t.Fatalf("details = %d, want %d", len(projected.Details), len(want))
+	}
+	references := map[string]string{"record-removed": "agent:removed-host/disk:data", "record-unified": resourceIDByName["web-vm"]}
+	for i, tc := range cases {
+		references[fmt.Sprintf("record-%d", i)] = tc.reference
+	}
+	for _, detail := range projected.Details {
+		id := detail.Item.ID
+		if got := detail.Item.SubjectResourceID; got != want[id] {
+			t.Errorf("%s (%s): subject = %q, want %q", id, references[id], got, want[id])
+		}
+		if got := detail.OperationalRecord.SubjectResourceID; got != references[id] {
+			t.Errorf("%s: record subject = %q, want the alert's reference %q", id, got, references[id])
+		}
+		if got := detail.Item.ProtectionPosture != nil; got != (want[id] == resourceIDByName["web-vm"]) {
+			t.Errorf("%s: posture attached = %v", id, got)
+		}
+	}
+
+	// Without inventory every item keeps its record's reference.
+	for _, detail := range ProjectAttentionItems(active, nil, postures, nil, now).Details {
+		if detail.Item.SubjectResourceID != references[detail.Item.ID] {
+			t.Errorf("%s: subject = %q without inventory, want %q", detail.Item.ID, detail.Item.SubjectResourceID, references[detail.Item.ID])
+		}
+	}
+}
+
+func attentionSubjectTestAlert(id, reference string, now time.Time) alerts.Alert {
+	alert := attentionTestAlert(id, operationaltrust.OperationalOpen, operationaltrust.SeverityWarning, now.Add(-time.Hour), now)
+	alert.ResourceID = reference
+	alert.OperationalRecord.SubjectResourceID = reference
+	alert.Evidence[0].Subject.ResourceID = reference
+	return alert
 }

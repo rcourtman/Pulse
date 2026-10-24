@@ -8199,6 +8199,13 @@ deliver a command itself or add an agent wire shape. Actual dispatch retains
 the canonical action executor, exact agent/resource binding, command-enabled
 token policy, durable attempt/receipt, timeout, and restart-reconciliation
 boundaries.
+The attention read handler binds each alert's subject reference to the org's
+current unified inventory (`ResolveAlertResourceReference`), so an agent's
+disk, RAID and sensor alerts name the agent's machine and a Docker container
+alert names the collected container; the restart plan therefore targets the
+unified container ID the executor resolves. This reads the existing registry
+only: it registers no agent, accepts no report, and changes no command,
+credential or token path.
 
 ### Operational Trust lifecycle mutation boundary
 

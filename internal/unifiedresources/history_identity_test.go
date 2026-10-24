@@ -893,6 +893,102 @@ func TestAlertResourceReferenceRequiresCurrentDurableOwner(t *testing.T) {
 	}
 }
 
+// A Docker container alert ("docker:<host ID>/<container ID>") binds the
+// container collected under that host and complete ID, from a snapshot or from
+// unified rows, so Patrol and the inbox name the container Patrol findings
+// carry. Shortened IDs, names, another host and a removed container bind
+// nothing.
+func TestAlertResourceReferenceBindsCollectedDockerContainer(t *testing.T) {
+	container := strings.Repeat("ab12", 16)
+	now := time.Now()
+	snapshot := models.StateSnapshot{DockerHosts: []models.DockerHost{
+		{ID: "dh-7f3a", Hostname: "tower", Status: "online", LastSeen: now, Containers: []models.DockerContainer{
+			{ID: container, Name: "web", State: "running"},
+			{ID: container[:12], Name: "short", State: "running"},
+			{Name: "nameless", State: "running"},
+		}},
+		{ID: "dh-91c0", Hostname: "rack", Status: "online", LastSeen: now},
+	}}
+	collected := NewRegistry(nil)
+	collected.IngestSnapshot(snapshot)
+	containerID := collected.sourceResourceID(SourceDocker, "dh-7f3a/container/"+container)
+	require.NotEmpty(t, containerID)
+	rehydrated := NewRegistry(nil)
+	rehydrated.IngestResources(collected.List())
+	for name, registry := range map[string]*ResourceRegistry{"snapshot": collected, "unified rows": rehydrated} {
+		binding, claimed := registry.ResolveAlertResourceReference("docker:dh-7f3a/" + container)
+		require.True(t, claimed, name)
+		require.Equal(t, containerID, binding.ResourceID, name)
+		require.Equal(t, ResourceTypeAppContainer, binding.ResourceType, name)
+		sourceKeys := make([]string, 0, len(binding.SourceTargets))
+		for _, target := range binding.SourceTargets {
+			sourceKeys = append(sourceKeys, string(target.Source)+"="+target.SourceID)
+		}
+		require.Contains(t, sourceKeys, "docker=dh-7f3a/container/"+container, name)
+		for _, ref := range []string{
+			"docker:dh-7f3a/" + container[:12], // shortened ID
+			"docker:dh-7f3a/web",               // container name
+			"docker:dh-7f3a/name:nameless",     // container without an ID
+			"docker:dh-91c0/" + container,      // another host
+			"docker:tower/" + container,        // hostname
+		} {
+			binding, claimed := registry.ResolveAlertResourceReference(ref)
+			require.Empty(t, binding.ResourceID, "%s: %s", name, ref)
+			require.False(t, claimed, "%s: %s", name, ref)
+		}
+	}
+	snapshot.DockerHosts[0].Containers = nil
+	removed := NewRegistry(nil)
+	removed.IngestSnapshot(snapshot)
+	binding, claimed := removed.ResolveAlertResourceReference("docker:dh-7f3a/" + container)
+	require.Empty(t, binding.ResourceID)
+	require.False(t, claimed)
+}
+
+// A filesystem, sensor or ZFS pool alert resolves to the owner it shares with
+// its sibling components, so the binding says so; a reference to the resource
+// itself does not. Resolution reads source targets from the view cache, which
+// the first lookup builds, instead of scanning every mapping per reference.
+func TestAlertResourceReferenceMarksComponentOwners(t *testing.T) {
+	now := time.Now()
+	container := strings.Repeat("cd34", 16)
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Nodes:   []models.Node{{ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online", LastSeen: now}},
+		VMs:     []models.VM{{ID: "pve1:node1:100", VMID: 100, Name: "web-vm", Node: "node1", Instance: "pve1", Status: "running", Type: "qemu", LastSeen: now}},
+		Storage: []models.Storage{{ID: "pve1-node1-local", Name: "local", Node: "node1", Instance: "pve1", Type: "zfspool", Status: "available", Enabled: true, Active: true}},
+		Hosts:   []models.Host{{ID: "host-src-1", Hostname: "backup-box", MachineID: "machine-1", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "dh-7f3a", Hostname: "tower", Status: "online", LastSeen: now,
+			Containers: []models.DockerContainer{{ID: container, Name: "web", State: "running"}}}},
+	})
+	registry.mu.RLock()
+	require.True(t, registry.viewsDirty, "fixture must start without built views")
+	registry.mu.RUnlock()
+	for ref, component := range map[string]bool{
+		"pve1-node1":                                false,
+		"pve1:node1:100":                            false,
+		"pve1-node1-local":                          false,
+		"pve1-node1-local/zfs-pool:tank":            true,
+		"pve1-node1-local/zfs-pool:tank/device:sda": true,
+		"agent:host-src-1":                          false,
+		"agent:host-src-1/disk:data":                true,
+		"agent:host-src-1/disk_temp:sda":            true,
+		"agent:host-src-1/raid:md0":                 true,
+		"agent:host-src-1/custom:fan":               true,
+		"docker:dh-7f3a":                            false,
+		"docker:dh-7f3a/" + container:               false,
+	} {
+		binding, claimed := registry.ResolveAlertResourceReference(ref)
+		require.True(t, claimed, ref)
+		require.NotEmpty(t, binding.ResourceID, ref)
+		require.Equal(t, component, binding.Component, ref)
+	}
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	require.False(t, registry.viewsDirty)
+	require.NotNil(t, registry.cachedSourceTargets)
+}
+
 func TestHistoryIdentityLinkedAgentDiskUsesCanonicalOwner(t *testing.T) {
 	store := NewMemoryStore()
 	snapshot := models.StateSnapshot{

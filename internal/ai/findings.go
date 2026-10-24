@@ -263,10 +263,11 @@ type Finding struct {
 	// this finding restates (for example a Proxmox guest stopped finding
 	// beside a powered-off alert). Stamped by Patrol after every run and
 	// cleared when the alert resolves; the attention surface folds such
-	// findings under the alert instead of listing them twice.
+	// findings under the alert instead of listing them twice. The ID is the
+	// alert's attention item (operational record) ID, which is what clients
+	// join on: several alerts can share a resource and kind.
 	MirrorsAlertID string `json:"mirrors_alert_id,omitempty"`
-	// MirrorsAlertType is the alert type of MirrorsAlertID, so a client
-	// holding the alert projection can join on resource plus kind.
+	// MirrorsAlertType is the alert type of MirrorsAlertID.
 	MirrorsAlertType string `json:"mirrors_alert_type,omitempty"`
 }
 

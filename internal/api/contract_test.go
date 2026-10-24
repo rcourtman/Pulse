@@ -55,6 +55,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -857,6 +858,86 @@ func TestContract_PatrolAttentionRoutesAcceptMobileRelayCapability(t *testing.T)
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code == http.StatusForbidden || rec.Code == http.StatusUnauthorized {
 		t.Fatalf("mobile relay token rejected on attention list with %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// The inbox names each alert's subject by the unified resource Pulse inventory
+// resolves the alert's own reference to, the ID Patrol findings carry, so the
+// "Browse Patrol findings for this resource" scope matches them. The record
+// keeps the alert's reference.
+func TestContract_PatrolAttentionSubjectIsTheInventoryResource(t *testing.T) {
+	now := time.Now().UTC()
+	containerID := strings.Repeat("ab12", 16)
+	inventory := unifiedresources.NewRegistry(nil)
+	inventory.IngestSnapshot(models.StateSnapshot{
+		VMs:   []models.VM{{ID: "pve1:node1:100", VMID: 100, Name: "web-vm", Node: "node1", Instance: "pve1", Status: "running", Type: "qemu", LastSeen: now}},
+		Hosts: []models.Host{{ID: "host-src-1", Hostname: "backup-box", MachineID: "machine-1", Status: "online", LastSeen: now}},
+		DockerHosts: []models.DockerHost{{ID: "dock-agent-1", Hostname: "docker-box", Status: "online", LastSeen: now,
+			Containers: []models.DockerContainer{{ID: containerID, Name: "web", State: "running", Health: "unhealthy"}}}},
+	})
+	resourceIDByName := map[string]string{}
+	for _, resource := range inventory.List() {
+		resourceIDByName[resource.Name] = resource.ID
+	}
+	resources := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	resources.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: inventory.List(),
+	})
+	references := map[string]string{
+		"guest-cpu":       "pve1:node1:100",
+		"host-disk":       "agent:host-src-1/disk:docker-data",
+		"web-health":      alerts.DockerContainerResourceID("dock-agent-1", containerID, "web"),
+		"removed-machine": "agent:removed-host",
+	}
+	want := map[string]string{
+		"guest-cpu":       resourceIDByName["web-vm"],
+		"host-disk":       resourceIDByName["backup-box"],
+		"web-health":      resourceIDByName["web"],
+		"removed-machine": "agent:removed-host",
+	}
+	active := make([]alerts.Alert, 0, len(references))
+	for id, reference := range references {
+		alert := attentionHandlerAlert(id, operationaltrust.OperationalOpen, now)
+		alert.ResourceID = reference
+		alert.OperationalRecord.SubjectResourceID = reference
+		alert.Evidence[0].Subject.ResourceID = reference
+		active = append(active, alert)
+	}
+	handler := &AttentionHandlers{
+		readAlerts: func(context.Context) ([]alerts.Alert, []alerts.Alert, error) {
+			return active, nil, nil
+		},
+	}
+	handler.SetActionDependencies(resources, testActionAuthority())
+
+	response := httptest.NewRecorder()
+	handler.HandleAttention(response, httptest.NewRequest(http.MethodGet, "/api/ai/patrol/attention?limit=10", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	var payload attentionListResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Data) != len(want) {
+		t.Fatalf("data = %+v, want %d items", payload.Data, len(want))
+	}
+	for _, item := range payload.Data {
+		if want[item.ID] == "" || item.SubjectResourceID != want[item.ID] {
+			t.Errorf("%s: subject = %q, want %q", item.ID, item.SubjectResourceID, want[item.ID])
+		}
+	}
+
+	response = httptest.NewRecorder()
+	handler.HandleAttention(response, httptest.NewRequest(http.MethodGet, "/api/ai/patrol/attention/web-health", nil))
+	var detail ai.AttentionItemDetail
+	if err := json.Unmarshal(response.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode detail: %v (status %d)", err, response.Code)
+	}
+	if detail.Item.SubjectResourceID != want["web-health"] ||
+		detail.OperationalRecord.SubjectResourceID != references["web-health"] {
+		t.Fatalf("detail subject = %q record subject = %q", detail.Item.SubjectResourceID, detail.OperationalRecord.SubjectResourceID)
 	}
 }
 

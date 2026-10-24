@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "31b3d3f2ea3744acb76e4e8f74968c0c828afa18",
+  "verified_at": "2026-10-24T08:37:23Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "43e9ab24dbd398710dfdde315e8bcd212532eab9a4a1ecfa88862d540a6107bd",
+    "frontend-modern/src/features/patrol/patrolHomePresentation.ts": "b25847ef54b0742e672cb4d2b12868b4ab21e2869b2f7a5d88cb523d887eef69"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private Pulse Pro stack rebuilt from these exact bytes (embedded bundle; sha256 of both changed files matched this receipt) on pulse-dev, dev Pro licence, real Pulse agent reporting a private rootless Docker engine, busybox container afs-web made unhealthy by killing its httpd, so a real docker-container-health alert is open; Patrol model pointed at a local stub that answers only the tool-call self-test",
+    "inbox item for the alert: subjectResourceId app-container-deef7b15adf61e36 (unified container) while operationalRecord.subjectResourceId keeps docker:afs-check-agent/ab9a99e3dc4c... (the alert's reference); Open resource links /docker/overview?q=afs-web and Adjust alert thresholds /alerts/thresholds/docker?q=afs-web",
+    "unlinked state (two Patrol findings on the unified container, neither stamped yet): Lasting decisions read 'Patrol also raised 2 findings for this resource and keeps them separate from this alert, so decide on them from the findings' with Adjust alert thresholds and Browse Patrol findings for this resource; no lasting-decision list. An earlier build of the same flow with one unlinked finding read 'Patrol also raised Web server in container afs-web stopped answering for this resource and keeps it separate from this alert'",
+    "Activity after Browse: 'Showing Patrol findings for afs-web' with both afs-web (app-container) rows and their Finding options (on main this scope was empty, 'No current issues are listed')",
+    "linked state after one manual Patrol pass (analysis failed at the stub, end-of-cycle reconcile ran): mirrors_alert_id on 'Container afs-web is unhealthy' equals the item's operational record ID, the other finding stays unstamped, and the detail shows 'Patrol also raised Container afs-web is unhealthy for this resource. Decide once here' with the four lasting decisions and no Browse button; unscoped Activity folds it under '1 finding mirrors an active alert'",
+    "1440 light, 1024 dark and 390 phone (mobile emulation) in headless Chromium on pulse-dev; zero console or page errors at every width; the earlier build was also checked in the in-app browser through a tunnel (DOM reads, pane hidden)"
+  ],
+  "interactions": [
+    "opened the afs-web Docker container health item from the Patrol inbox list at each width",
+    "read the Lasting decisions section text and buttons, screenshotted it and the detail at each width, before and after the Patrol pass",
+    "clicked Browse Patrol findings for this resource: the view switched to Activity with Finding options and history open and scoped to afs-web; read and screenshotted the scoped list at each width",
+    "ran one Patrol pass through the API and reopened the item: the linked-finding branch replaced the alert-only guidance",
+    "opened Activity > Finding options and history unscoped and read the mirrored-findings fold",
+    "component tests with negative controls cover the branches (no findings: browse hidden; one and two unlinked findings: named, browse opens the item's resource; a finding stamped for a sibling alert on the same host is not offered under this alert)"
+  ]
+}

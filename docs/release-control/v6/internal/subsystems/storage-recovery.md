@@ -3176,6 +3176,12 @@ as a bounded subject-ID batch. Recovery remains the sole owner of protected,
 attention, unprotected, and unknown derivation and its provider evidence.
 Attention projection may order and display that posture but cannot recompute it
 or call the store once per item.
+The batch is keyed by each item's subject: the unified resource ID the alert's
+own reference resolves to in current inventory, which is the ID recovery
+records postures under. Before 24 October 2026 the batch asked for the alerts'
+raw references (`pve1:node1:100`, `docker:<host>/<container>`), so a guest's
+posture never attached to its alert. Only the requested IDs changed; no
+recovery read, write or derivation path did.
 
 If posture lookup fails, lifecycle work remains visible with partial coverage.
 If no subject-linked posture exists, the UI says protection is unknown rather

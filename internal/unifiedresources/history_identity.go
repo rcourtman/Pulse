@@ -12,10 +12,15 @@ import (
 
 // AlertResourceReference binds a collected alert subject to current canonical
 // inventory. Source targets are durable identities, never display names.
+// Component reports that the reference names a part of ResourceID that is not
+// a resource of its own (an agent's filesystem, disk temperature, RAID device
+// or custom sensor, or a storage's ZFS pool or pool device): ResourceID is its
+// owner, which several such alerts share.
 type AlertResourceReference struct {
 	ResourceID    string
 	ResourceType  ResourceType
 	SourceTargets []SourceTarget
+	Component     bool
 }
 
 type AlertResourceReferenceResolver interface {
@@ -46,27 +51,34 @@ func (rr *ResourceRegistry) AlertResourceReferences() map[string]AlertResourceRe
 // correlation. It never consults retained history bindings or matches names.
 // claimed is true for an inventory conflict as well as a successful binding;
 // conflicts have an empty ResourceID and must not fall back to another source.
+// Source targets come from the view cache, built once per registry generation:
+// a per-reference scan of every source mapping made a batch of references
+// cost alerts × inventory.
 func (rr *ResourceRegistry) ResolveAlertResourceReference(ref string) (AlertResourceReference, bool) {
 	if rr == nil {
 		return AlertResourceReference{}, false
 	}
-	rr.mu.RLock()
-	defer rr.mu.RUnlock()
-	id, claimed := rr.resolveHistoryReferenceLocked(ref)
-	if id == "" {
-		return AlertResourceReference{}, claimed
+	type resolution struct {
+		binding AlertResourceReference
+		claimed bool
 	}
-	resource := rr.resources[id]
-	if resource == nil {
-		return AlertResourceReference{}, true
-	}
-	var targets []SourceTarget
-	if !rr.viewsDirty && rr.cachedSourceTargets != nil {
-		targets = append([]SourceTarget(nil), rr.cachedSourceTargets[id]...)
-	} else {
-		targets = rr.collectSourceTargetsLocked(id, resource.Type)
-	}
-	return AlertResourceReference{ResourceID: id, ResourceType: resource.Type, SourceTargets: targets}, true
+	result := withViewCache(rr, func() resolution {
+		id, claimed, component := rr.resolveAlertReferenceLocked(ref)
+		if id == "" {
+			return resolution{claimed: claimed}
+		}
+		resource := rr.resources[id]
+		if resource == nil {
+			return resolution{claimed: true}
+		}
+		return resolution{binding: AlertResourceReference{
+			ResourceID:    id,
+			ResourceType:  resource.Type,
+			SourceTargets: append([]SourceTarget(nil), rr.cachedSourceTargets[id]...),
+			Component:     component,
+		}, claimed: true}
+	})
+	return result.binding, result.claimed
 }
 
 func (a *UnifiedAIAdapter) ResolveAlertResourceReference(ref string) (AlertResourceReference, bool) {
@@ -145,12 +157,22 @@ func dockerHostHistoryReference(ref string) (hostID, serviceID string, ok bool) 
 	return hostID, serviceID, true
 }
 
-// dockerHistoryOwnerLocked resolves a Docker host or Swarm service alert
-// reference through the registry's own Docker source identities. The host ID
-// is the Docker host's source ID. A service reference names the service with
-// that exact ID in the host's Swarm cluster, which every manager of the
-// cluster reports under its own host ID.
+// dockerHistoryOwnerLocked resolves a Docker host, Swarm service or container
+// alert reference through the registry's own Docker source identities. The
+// host ID is the Docker host's source ID. A service reference names the service
+// with that exact ID in the host's Swarm cluster, which every manager of the
+// cluster reports under its own host ID. A container reference binds only with
+// a complete container ID, to the container collected under that host and ID:
+// the same source key RecordChange joins its history to.
 func (rr *ResourceRegistry) dockerHistoryOwnerLocked(ref string) string {
+	if sourceID, _, ok := legacyDockerHistoryIdentity(ref); ok {
+		containerResourceID := rr.bySource[SourceDocker][sourceID]
+		container := rr.resources[containerResourceID]
+		if container == nil || CanonicalResourceType(container.Type) != ResourceTypeAppContainer {
+			return ""
+		}
+		return containerResourceID
+	}
 	hostID, serviceID, ok := dockerHostHistoryReference(ref)
 	if !ok {
 		return ""
@@ -223,7 +245,8 @@ func historySubResourceOwner(ref string) (ownerRef string, ownerType ResourceTyp
 // history it joins. Only durable identities qualify: the canonical ID, a
 // retired era, a source ID (Proxmox node, guest and storage IDs), a
 // node-scoped Proxmox guest reference, an agent alert reference
-// ("agent:<host ID>"), a Docker host or Swarm service ID, or the owner of a
+// ("agent:<host ID>"), a Docker host, Swarm service or complete container ID,
+// or the owner of a
 // sub-resource reference (historySubResourceOwner). Names and hostnames never
 // bind history, so a resource named like a system reference cannot capture
 // its events. claimed reports that inventory answers to the reference,
@@ -239,17 +262,26 @@ func (rr *ResourceRegistry) resolveHistoryReference(ref string) (resourceID stri
 }
 
 func (rr *ResourceRegistry) resolveHistoryReferenceLocked(ref string) (resourceID string, claimed bool) {
+	resourceID, claimed, _ = rr.resolveAlertReferenceLocked(ref)
+	return resourceID, claimed
+}
+
+// resolveAlertReferenceLocked is resolveHistoryReferenceLocked that also
+// reports whether the reference names a component of the resource it resolves
+// to (AlertResourceReference.Component). An agent's Unraid array reference
+// ("agent:<host ID>/storage:<array>") names the array's storage itself.
+func (rr *ResourceRegistry) resolveAlertReferenceLocked(ref string) (resourceID string, claimed, component bool) {
 	ref = CanonicalResourceID(ref)
 	if ref == "" {
-		return "", false
+		return "", false, false
 	}
 	if isDockerHistoryReference(ref) {
 		resourceID = rr.dockerHistoryOwnerLocked(ref)
-		return resourceID, resourceID != ""
+		return resourceID, resourceID != "", false
 	}
 	if isProxmoxPhysicalDiskAlertReference(ref) {
 		// A device path is not durable identity (proxmoxDiskAlertOwner).
-		return "", false
+		return "", false, false
 	}
 	matches := rr.durableHistoryMatchesLocked(ref)
 	if ownerRef, ownerType, ok := historySubResourceOwner(ref); ok && len(matches) == 0 {
@@ -263,18 +295,19 @@ func (rr *ResourceRegistry) resolveHistoryReferenceLocked(ref string) (resourceI
 			// when its canonical resource is a VM, container or node.
 			typeMatches := CanonicalResourceType(owner.Type) == ownerType || (ownerType == ResourceTypeAgent && owner.Agent != nil)
 			if len(owners) != 1 || !typeMatches {
-				return "", true
+				return "", true, false
 			}
 			matches[id] = struct{}{}
 		}
+		component = !(strings.HasPrefix(ref, "agent:") && ownerType == ResourceTypeStorage)
 	}
 	if len(matches) != 1 {
-		return "", len(matches) > 1
+		return "", len(matches) > 1, false
 	}
 	for id := range matches {
 		resourceID = id
 	}
-	return resourceID, true
+	return resourceID, true, component
 }
 
 // durableHistoryMatchesLocked lists the resources that answer to a reference

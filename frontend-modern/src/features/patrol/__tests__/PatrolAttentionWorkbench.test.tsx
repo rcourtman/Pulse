@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AttentionItem,
@@ -172,7 +173,7 @@ const mirroredFinding = (overrides: Partial<UnifiedFinding> = {}): UnifiedFindin
   description: 'The root volume has been filling for a week.',
   detectedAt: '2026-07-19T07:00:00Z',
   status: 'active',
-  mirrorsAlertId: 'alert-record-1',
+  mirrorsAlertId: 'record-1',
   mirrorsAlertType: 'disk',
   ...overrides,
 });
@@ -1344,10 +1345,108 @@ describe('PatrolAttentionWorkbench', () => {
       'href',
       '/alerts/thresholds/proxmox?q=Database+VM',
     );
+    // With no open finding on the resource the scoped list would be empty.
+    expect(
+      screen.queryByRole('button', { name: 'Browse Patrol findings for this resource' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers lasting decisions only for the finding that restates this alert, not a sibling alert on the same resource', async () => {
+    // Two filesystem alerts on one host share the host's resource ID and kind.
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench
+              findings={() => [
+                mirroredFinding({
+                  id: 'finding-other-disk',
+                  title: 'Disk /backup on Database VM is 92% full',
+                  mirrorsAlertId: 'record-2',
+                }),
+              ]}
+            />
+          )}
+        />
+      </Router>
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+
+    expect(await screen.findByText(/keeps it separate from this alert/i)).toHaveTextContent(
+      'Patrol also raised Disk /backup on Database VM is 92% full for this resource',
+    );
+    expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
+  });
+
+  it('names Patrol findings on the same resource that do not restate the alert and opens them', async () => {
+    const active = item();
+    apiMocks.getList.mockResolvedValue(
+      listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+    );
+    apiMocks.getDetail.mockResolvedValue(detail(active));
+    const onOpenFindings = vi.fn();
+    const [findings, setFindings] = createSignal<UnifiedFinding[]>([
+      mirroredFinding({
+        id: 'finding-restarts',
+        category: 'reliability',
+        title: 'Database VM restarted three times today',
+        mirrorsAlertId: undefined,
+        mirrorsAlertType: undefined,
+      }),
+      mirroredFinding({ id: 'finding-resolved', status: 'resolved', mirrorsAlertId: undefined }),
+      mirroredFinding({
+        id: 'finding-elsewhere',
+        resourceId: 'pve:vm:102',
+        mirrorsAlertId: undefined,
+      }),
+    ]);
+    render(() => (
+      <Router>
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench findings={findings} onOpenFindings={onOpenFindings} />
+          )}
+        />
+      </Router>
+    ));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Database VM · Disk pressure',
+      }),
+    );
+
+    expect(await screen.findByText(/keeps it separate from this alert/i)).toHaveTextContent(
+      'Patrol also raised Database VM restarted three times today for this resource',
+    );
+    expect(screen.queryByText(/has not raised a finding/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Lasting decisions' })).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('button', { name: 'Browse Patrol findings for this resource' }),
     );
     expect(onOpenFindings).toHaveBeenCalledWith(active);
+
+    setFindings((current) => [
+      ...current,
+      mirroredFinding({
+        id: 'finding-io',
+        title: 'Database VM disk latency is high',
+        mirrorsAlertId: undefined,
+      }),
+    ]);
+    expect(await screen.findByText(/keeps them separate from this alert/i)).toHaveTextContent(
+      'Patrol also raised 2 findings for this resource',
+    );
   });
 
   it('collapses a flapping item into one label and a summarised timeline', async () => {

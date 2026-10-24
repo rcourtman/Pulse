@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
+	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -234,22 +235,38 @@ func (h *AttentionHandlers) project(
 	if err != nil {
 		return ai.AttentionProjection{}, err
 	}
+	subjects := h.attentionSubjects(ctx)
 	postures := map[string]recoverymodel.ProtectionPosture{}
 	postureComplete := true
 	if includeProtectionPosture {
-		resourceIDs := attentionResourceIDs(active, history)
+		resourceIDs := attentionResourceIDs(active, history, subjects)
 		postures, postureComplete = h.loadProtectionPostures(
 			ctx,
 			GetOrgID(ctx),
 			resourceIDs,
 		)
 	}
-	projection := ai.ProjectAttentionItems(active, history, postures, time.Now().UTC())
+	projection := ai.ProjectAttentionItems(active, history, postures, subjects, time.Now().UTC())
 	if !postureComplete {
 		projection.Summary.CoverageState = "partial"
 	}
 	ai.GetPatrolMetrics().ObserveAttentionProjection(projection, projection.Summary.EvaluatedAt)
 	return projection, nil
+}
+
+// attentionSubjects binds alert subject references to the org's current
+// unified inventory, so items name the resources Patrol findings, postures and
+// actions carry. Without inventory, items keep the alerts' own references.
+func (h *AttentionHandlers) attentionSubjects(ctx context.Context) unified.AlertResourceReferenceResolver {
+	if h == nil || h.resources == nil {
+		return nil
+	}
+	registry, err := h.resources.buildRegistry(GetOrgID(ctx))
+	if err != nil || registry == nil {
+		log.Debug().Err(err).Msg("Patrol attention subject inventory is unavailable")
+		return nil
+	}
+	return registry
 }
 
 func (h *AttentionHandlers) loadProtectionPostures(
@@ -361,7 +378,10 @@ func parsePositiveAttentionInt(
 	return value, true
 }
 
-func attentionResourceIDs(active, history []alerts.Alert) []string {
+func attentionResourceIDs(
+	active, history []alerts.Alert,
+	subjects unified.AlertResourceReferenceResolver,
+) []string {
 	unique := make(map[string]struct{}, len(active)+len(history))
 	add := func(values []alerts.Alert, history bool) {
 		for _, alert := range values {
@@ -371,7 +391,7 @@ func attentionResourceIDs(active, history []alerts.Alert) []string {
 			if history && alert.OperationalRecord.State != operationaltrust.OperationalResolved {
 				continue
 			}
-			if resourceID := strings.TrimSpace(alert.OperationalRecord.SubjectResourceID); resourceID != "" {
+			if resourceID := ai.AttentionSubjectResourceID(subjects, alert.OperationalRecord.SubjectResourceID); resourceID != "" {
 				unique[resourceID] = struct{}{}
 			}
 		}

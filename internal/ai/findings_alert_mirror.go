@@ -17,10 +17,17 @@ import (
 )
 
 // alertMirrorCandidate is the minimal alert shape the matcher needs.
+// ResourceID is the alert's own reference ("docker:<host>/<container>", a
+// Proxmox source ID); CanonicalResourceID is the unified resource it resolves
+// to in current inventory. It stays empty when inventory does not bind the
+// reference or binds only an owner the alert shares with sibling components
+// (a host's filesystems or sensors, a storage's ZFS pool), so a finding about
+// one filesystem never folds under another's alert.
 type alertMirrorCandidate struct {
-	ID         string
-	ResourceID string
-	Type       string
+	ID                  string
+	ResourceID          string
+	CanonicalResourceID string
+	Type                string
 }
 
 // Condition classes shared by alerts and findings. An empty class never
@@ -129,7 +136,8 @@ func findingConditionClass(f *Finding) string {
 
 // findingMirrorsAlert reports whether f restates alert: an explicit
 // AlertIdentifier link, or the same canonical resource with the same
-// condition class.
+// condition class. A finding names the unified resource, or rarely the alert's
+// own reference, so either identity of the alert's subject matches.
 func findingMirrorsAlert(f *Finding, alert alertMirrorCandidate) bool {
 	if f == nil {
 		return false
@@ -139,8 +147,9 @@ func findingMirrorsAlert(f *Finding, alert alertMirrorCandidate) bool {
 		return true
 	}
 	findingResource := unified.CanonicalResourceID(f.ResourceID)
-	alertResource := unified.CanonicalResourceID(alert.ResourceID)
-	if findingResource == "" || alertResource == "" || findingResource != alertResource {
+	if findingResource == "" ||
+		(findingResource != unified.CanonicalResourceID(alert.ResourceID) &&
+			findingResource != unified.CanonicalResourceID(alert.CanonicalResourceID)) {
 		return false
 	}
 	class := findingConditionClass(f)
@@ -177,19 +186,26 @@ func matchFindingsToAlerts(findings []*Finding, alerts []alertMirrorCandidate) m
 // reconcileAlertMirrors re-stamps every unresolved finding against the
 // current unscoped active-alert set. It runs at the end of every patrol
 // cycle so a finding that mirrors an alert is folded while the alert is
-// active and released once the alert resolves.
+// active and released once the alert resolves. Each alert's reference is
+// resolved to the unified resource it names, which Patrol findings carry.
 func (p *PatrolService) reconcileAlertMirrors() int {
 	if p == nil || p.findings == nil || p.stateProvider == nil {
 		return 0
 	}
-	snapshot := p.stateProvider.ReadSnapshot()
-	candidates := make([]alertMirrorCandidate, 0, len(snapshot.ActiveAlerts))
-	for _, alert := range snapshot.ActiveAlerts {
-		candidates = append(candidates, alertMirrorCandidate{
-			ID:         alert.ID,
-			ResourceID: alert.ResourceID,
-			Type:       alert.Type,
-		})
+	state := p.currentPatrolRuntimeState()
+	var subjects unified.AlertResourceReferenceResolver
+	if len(state.ActiveAlerts) > 0 {
+		subjects = patrolAlertReferenceResolver(state)
+	}
+	candidates := make([]alertMirrorCandidate, 0, len(state.ActiveAlerts))
+	for _, alert := range state.ActiveAlerts {
+		candidate := alertMirrorCandidate{ID: alert.ID, ResourceID: alert.ResourceID, Type: alert.Type}
+		if subjects != nil {
+			if binding, _ := subjects.ResolveAlertResourceReference(alert.ResourceID); !binding.Component {
+				candidate.CanonicalResourceID = binding.ResourceID
+			}
+		}
+		candidates = append(candidates, candidate)
 	}
 	findings := p.findings.GetAll(nil)
 	return p.findings.StampAlertMirrors(matchFindingsToAlerts(findings, candidates))

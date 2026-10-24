@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -165,5 +166,35 @@ func TestPatrolDiskAlertRejectsUntrustedSubjects(t *testing.T) {
 				t.Fatalf("unsafe scope accepted: %+v, context=%+v", resolution, resolved.AlertContext)
 			}
 		})
+	}
+}
+
+// A Docker container alert ("docker:<host ID>/<container ID>") binds the
+// collected container, so an alert-triggered run over the unified inventory
+// keeps the triggering alert and its trusted context in scope instead of
+// investigating the container without the alert that raised it.
+func TestPatrolDockerContainerAlertScopeKeepsTheTriggeringAlert(t *testing.T) {
+	containerID := strings.Repeat("ab12", 16)
+	alert := models.Alert{ID: "docker-container-health-web", Type: "docker-container-health", Level: "critical",
+		ResourceID: alerts.DockerContainerResourceID("dock-agent-1", containerID, "web"), ResourceName: "web",
+		Message: "Docker container 'web' health is unhealthy"}
+	snapshot := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{{ID: "dock-agent-1", Hostname: "docker-box", Status: "online", LastSeen: time.Now(),
+			Containers: []models.DockerContainer{{ID: containerID, Name: "web", State: "running", Health: "unhealthy"}}}},
+		ActiveAlerts: []models.Alert{alert},
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	state := newPatrolRuntimeStateWithProviders(snapshot, registry, unifiedresources.NewUnifiedAIAdapter(registry))
+
+	resolved, resolution := resolvePatrolScopeState(state, AlertTriggeredPatrolScope(alert.ID, alert.ResourceID, "app-container", alert.Type))
+	if len(resolution.UnmatchedResourceIDs)+len(resolution.AmbiguousResourceIDs) != 0 || len(resolution.EffectiveResourceIDs) == 0 {
+		t.Fatalf("container alert scope did not resolve: %+v", resolution)
+	}
+	if resolved.AlertContext == nil || resolved.AlertContext.ResourceID != alert.ResourceID || resolved.AlertContext.Message != alert.Message {
+		t.Fatalf("lost the triggering alert's context: %+v", resolved.AlertContext)
+	}
+	if filtered := filterPatrolStateByScopeState(state, resolved); len(filtered.ActiveAlerts) != 1 || filtered.ActiveAlerts[0].ID != alert.ID {
+		t.Fatalf("scoped state dropped the triggering alert: %+v", filtered.ActiveAlerts)
 	}
 }

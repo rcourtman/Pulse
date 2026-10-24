@@ -3610,6 +3610,28 @@ alert keeps `Message`, which tracks the breach, and a stale or missing status
 falls back to it. The Patrol inbox, the investigation handoff and API clients
 read that summary, so none of them re-derives the phase.
 
+An item names its subject by the unified resource its record's subject
+reference resolves to in current inventory (`AttentionSubjectResourceID`,
+through the org registry's `ResolveAlertResourceReference`): Proxmox guest,
+node and storage source IDs, `agent:<host ID>` references with their disk,
+RAID and sensor children, ZFS pool children, and Docker host, Swarm service and
+container references all become the unified resource ID that Patrol findings,
+protection postures and resource actions carry. `operationalRecord` keeps the
+alert's own reference, and a reference inventory does not bind (a removed
+resource, or the moments after a restart before the agent reports) stays the
+item's subject too. Before 24 October 2026 the projection passed the reference
+through, so "Browse Patrol findings for this resource" scoped the findings list
+to an ID no finding carries, postures keyed by unified ID never attached, and
+the Docker restart offer's `registry.Get` never found a real container. The
+offer still binds its evidence to the record: `ProjectAttentionAction` compares
+each evidence subject with the record's subject reference and the candidate
+resource with the item's unified subject. Proof:
+`TestProjectAttentionItemsNamesTheUnifiedSubjectOfEveryAlertKind` and
+`TestProjectAttentionActionRequiresFreshConfirmedCanonicalEvidence` in
+`internal/ai`, `TestAttentionHandlersNameTheInventorySubjectOfEachAlert` and
+`TestAttentionActionPlanBindsCanonicalRecordEvidenceAndReplaysIdempotently`
+(now with a real container reference and unified container) in `internal/api`.
+
 ### Patrol model-readiness evidence
 
 Keep the Patrol model-readiness advisor provider-neutral and evidence-based.
@@ -5189,6 +5211,12 @@ to scope by, so only the unified read state can scope its alerts. Proof:
 `internal/ai/patrol_run_test.go` and
 `TestDockerServiceAlertScopeAliasesDeriveIDFromName` in
 `internal/ai/patrol_state_scope_alias_test.go`.
+Since 24 October 2026 the alert reference resolver also binds a container
+reference with a complete ID (see unified-resources), so an alert-triggered
+scope over the unified read state keeps the triggering container alert and its
+`AlertContext`; before, the scoped state dropped the alert that raised the run
+(`TestPatrolDockerContainerAlertScopeKeepsTheTriggeringAlert` in
+`internal/ai/patrol_alert_scope_test.go`).
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved
@@ -7068,7 +7096,20 @@ demo patrol cycle against the unscoped active-alert snapshot and stamps
 `FindingsStore.StampAlertMirrors`, clearing the stamp once the alert resolves.
 The stamp is a derived read-model annotation: it is not persisted and is not a
 reason to drop the finding. Surfaces demote stamped findings under the alert
-instead of listing the same problem twice.
+instead of listing the same problem twice. Alerts name resources by their
+producer's reference while findings carry the unified resource ID, so the
+reconcile resolves each alert's reference through Patrol's alert reference
+resolver and the matcher accepts either identity
+(`alertMirrorCandidate.CanonicalResourceID`). Before 24 October 2026 it
+compared the raw strings, so no Proxmox, agent or Docker alert folded a
+finding on its unified resource. A component alert (a filesystem, disk
+temperature, RAID device or sensor, or a ZFS pool or device) resolves only to
+the owner its siblings share (`AlertResourceReference.Component`), so it
+contributes no canonical ID and folds only a finding linked to it explicitly:
+a capacity finding about `/backup` must not hide under the `/data` alert
+(`TestReconcileAlertMirrorsMatchesFindingsOnTheUnifiedResource`). Clients join
+a stamped finding to its alert by `mirrors_alert_id`, which is the attention
+item's operational record ID.
 
 Flapping is owned by the existing storm throttler rather than a parallel
 mechanism. `FindingsStore.recordTransitionLifecycleLocked` routes every
