@@ -143,12 +143,12 @@ jobs:
               url="$(awk -F '\t' '{print $3}' <<<"${run_state}")"
               echo "${label}: status=${status} conclusion=${conclusion:-pending} ${url}"
               if [[ "${status}" == "completed" ]]; then
-                if [[ "${conclusion}" == "success" ]]; then
-                  echo "[OK] ${label} completed successfully: ${url}"
-                  return 0
-                fi
-                echo "::error::${label} failed with conclusion=${conclusion}: ${url}"
-                return 1
+                # The caller judges the conclusion: a refused attempt it
+                # re-dispatches must leave no failure annotation, because
+                # reconciliation reads exactly one private run URL from them.
+                completed_conclusion="${conclusion}"
+                completed_url="${url}"
+                return 0
               fi
               sleep 5
             done
@@ -157,39 +157,82 @@ jobs:
             return 1
           }
 
+          # pulse-pro gives a run credentials only while that run is still its
+          # current main (scripts/check_workflow_source.py). A pulse-pro merge
+          # landing during the run's queue and validation window therefore
+          # refuses the promotion before anything is mutated; on 24 October
+          # 2026 that left v6.6.0-rc.6 off the RC broker until the hourly
+          # reconcile re-ran convergence. Only that refusal is re-dispatched.
+          source_check_refused_only() {
+            local run_id="$1"
+            local run_head current_head refused
+            run_head="$(gh api "repos/rcourtman/pulse-pro/actions/runs/${run_id}" --jq '.head_sha')"
+            current_head="$(gh api repos/rcourtman/pulse-pro/git/ref/heads/main --jq '.object.sha')"
+            if [[ ! "${run_head}" =~ ^[0-9a-f]{40}$ ]] || \
+               [[ ! "${current_head}" =~ ^[0-9a-f]{40}$ ]] || \
+               [[ "${run_head}" == "${current_head}" ]]; then
+              return 1
+            fi
+            refused="$(
+              gh run view "${run_id}" \
+                --repo rcourtman/pulse-pro \
+                --json jobs \
+                --jq '[.jobs[] | select(.conclusion == "failure") | [.steps[] | select(.conclusion == "failure") | .name] | unique] | length > 0 and all(. == ["Require current exact main source before credentials"])'
+            )"
+            [[ "${refused}" == "true" ]]
+          }
+
           allow_ga_publish=false
           if [[ "${IS_PRERELEASE}" != "true" ]]; then
             allow_ga_publish=true
           fi
-          echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX}."
-          promote_dispatch="$(
-            jq -n \
-              --arg version "${VERSION}" \
-              --arg r2_prefix "${R2_PREFIX}" \
-              --arg allow_ga_prefix "${allow_ga_publish}" \
-              --arg pulse_lease_sha "${PULSE_LEASE_SHA}" \
-              --arg pulse_convergence_run_id "${PULSE_CONVERGENCE_RUN_ID}" \
-              --arg pulse_owner_asset_name "${PULSE_OWNER_ASSET_NAME}" \
-              --arg pulse_owner_asset_sha256 "${PULSE_OWNER_ASSET_SHA256}" \
-              '{
-                ref: "main",
-                return_run_details: true,
-                inputs: {
-                  version: $version,
-                  r2_prefix: $r2_prefix,
-                  allow_ga_prefix: $allow_ga_prefix,
-                  pulse_lease_sha: $pulse_lease_sha,
-                  pulse_convergence_run_id: $pulse_convergence_run_id,
-                  pulse_owner_asset_name: $pulse_owner_asset_name,
-                  pulse_owner_asset_sha256: $pulse_owner_asset_sha256
-                }
-              }' | \
-              gh api \
-                --method POST \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2026-03-10" \
-                repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches \
-                --input -
-          )"
-          promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"
-          wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion" 3600
+          max_promotion_attempts=5
+          promotion_deadline=$((SECONDS + 3600))
+          for attempt in $(seq 1 "${max_promotion_attempts}"); do
+            echo "Dispatching live paid-runtime promotion for ${TAG} with R2 prefix ${R2_PREFIX} (attempt ${attempt}/${max_promotion_attempts})."
+            promote_dispatch="$(
+              jq -n \
+                --arg version "${VERSION}" \
+                --arg r2_prefix "${R2_PREFIX}" \
+                --arg allow_ga_prefix "${allow_ga_publish}" \
+                --arg pulse_lease_sha "${PULSE_LEASE_SHA}" \
+                --arg pulse_convergence_run_id "${PULSE_CONVERGENCE_RUN_ID}" \
+                --arg pulse_owner_asset_name "${PULSE_OWNER_ASSET_NAME}" \
+                --arg pulse_owner_asset_sha256 "${PULSE_OWNER_ASSET_SHA256}" \
+                '{
+                  ref: "main",
+                  return_run_details: true,
+                  inputs: {
+                    version: $version,
+                    r2_prefix: $r2_prefix,
+                    allow_ga_prefix: $allow_ga_prefix,
+                    pulse_lease_sha: $pulse_lease_sha,
+                    pulse_convergence_run_id: $pulse_convergence_run_id,
+                    pulse_owner_asset_name: $pulse_owner_asset_name,
+                    pulse_owner_asset_sha256: $pulse_owner_asset_sha256
+                  }
+                }' | \
+                gh api \
+                  --method POST \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2026-03-10" \
+                  repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches \
+                  --input -
+            )"
+            promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"
+            completed_conclusion=""
+            completed_url=""
+            wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion" "$((promotion_deadline - SECONDS))"
+            if [[ "${completed_conclusion}" == "success" ]]; then
+              echo "[OK] private Pro live promotion completed successfully: ${completed_url}"
+              exit 0
+            fi
+            if [[ "${completed_conclusion}" == "failure" ]] && \
+               (( attempt < max_promotion_attempts )) && \
+               source_check_refused_only "${promote_run_id}"; then
+              echo "private Pro live promotion run ${promote_run_id} was refused only because pulse-pro main moved after dispatch; re-dispatching on the current main."
+              continue
+            fi
+            echo "::error::private Pro live promotion failed with conclusion=${completed_conclusion}: ${completed_url}"
+            exit 1
+          done

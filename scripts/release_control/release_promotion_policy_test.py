@@ -1395,6 +1395,124 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertNotIn("gh run list", job)
                 self.assertNotIn("started_at", job)
 
+    def test_private_pro_promotion_redispatches_only_a_moved_main_source_refusal(self) -> None:
+        """Run the real dispatch loop against doubles: only a pre-credential refusal caused by a
+        pulse-pro main that moved after dispatch is re-dispatched, and only the terminal failure
+        leaves the single private-run annotation that reconciliation reads."""
+        workflow = yaml.safe_load(read(".github/workflows/promote-private-pro-runtime.yml"))
+        step = workflow["jobs"]["promote"]["steps"][0]["run"]
+        script = step[step.index("wait_for_workflow() {"):]
+        source_step = "Require current exact main source before credentials"
+        fake_gh = r'''#!/usr/bin/env python3
+import json, os, subprocess, sys
+fix = os.environ["FIX"]
+args = sys.argv[1:]
+expression = args[args.index("--jq") + 1] if "--jq" in args else None
+with open(os.path.join(fix, "state.json")) as handle:
+    state = json.load(handle)
+
+def emit(value):
+    text = json.dumps(value)
+    if expression is not None:
+        text = subprocess.run(["jq", "-r", expression], input=text, text=True,
+                              capture_output=True, check=True).stdout
+    sys.stdout.write(text if text.endswith("\n") else text + "\n")
+
+def attempt(run_id):
+    return state["attempts"][min(int(run_id) - 100, len(state["attempts"]) - 1)]
+
+if args[0] == "api" and "--method" in args:
+    sys.stdin.read()
+    run_id = 100 + len(state["dispatched"])
+    state["dispatched"].append(run_id)
+    with open(os.path.join(fix, "state.json"), "w") as handle:
+        json.dump(state, handle)
+    emit({"workflow_run_id": run_id})
+elif args[0] == "api" and args[1].endswith("/git/ref/heads/main"):
+    emit({"object": {"sha": state["main"]}})
+elif args[0] == "api" and "/actions/runs/" in args[1]:
+    emit({"head_sha": attempt(args[1].rsplit("/", 1)[1])["head"]})
+elif args[:2] == ["run", "view"] and "jobs" in args:
+    run = attempt(args[2])
+    jobs = [{"name": "credential_containment", "conclusion": "success",
+             "steps": [{"name": "Checkout pulse-pro", "conclusion": "success"}]}]
+    if run["failed_step"]:
+        jobs.append({"name": "promote", "conclusion": "failure", "steps": [
+            {"name": "Checkout pulse-pro", "conclusion": "success"},
+            {"name": run["failed_step"], "conclusion": "failure"}]})
+    emit({"jobs": jobs})
+elif args[:2] == ["run", "view"]:
+    emit({"status": "completed", "conclusion": attempt(args[2])["conclusion"],
+          "url": f"https://github.com/rcourtman/pulse-pro/actions/runs/{args[2]}"})
+else:
+    sys.exit(f"unexpected gh call: {args}")
+'''
+        old_main, new_main = "a" * 40, "b" * 40
+
+        def run(main: str, attempts: list[dict]) -> tuple[subprocess.CompletedProcess, list[int]]:
+            with tempfile.TemporaryDirectory() as directory:
+                fix = Path(directory)
+                (fix / "bin").mkdir()
+                for name, body in (("gh", fake_gh), ("sleep", "#!/bin/bash\n")):
+                    (fix / "bin" / name).write_text(body)
+                    (fix / "bin" / name).chmod(0o755)
+                (fix / "state.json").write_text(
+                    json.dumps({"main": main, "attempts": attempts, "dispatched": []})
+                )
+                env = {**os.environ, "FIX": str(fix), "TAG": "v6.6.0-rc.6", "VERSION": "6.6.0-rc.6",
+                       "IS_PRERELEASE": "true", "R2_PREFIX": "prefix", "PULSE_LEASE_SHA": "c" * 40,
+                       "PULSE_CONVERGENCE_RUN_ID": "7", "PULSE_OWNER_ASSET_NAME": "owner.json",
+                       "PULSE_OWNER_ASSET_SHA256": "d" * 64,
+                       "PATH": f"{fix / 'bin'}{os.pathsep}{os.environ['PATH']}"}
+                result = subprocess.run(
+                    ["bash", "--noprofile", "--norc", "-eu", "-o", "pipefail", "-c", script],
+                    cwd=REPO_ROOT, env=env, text=True, capture_output=True, timeout=60,
+                )
+                dispatched = json.loads((fix / "state.json").read_text())["dispatched"]
+                return result, dispatched
+
+        refused = {"conclusion": "failure", "head": old_main, "failed_step": source_step}
+        promoted = {"conclusion": "success", "head": new_main, "failed_step": ""}
+
+        # A refusal because main moved after dispatch is re-dispatched and leaves no annotation.
+        result, dispatched = run(new_main, [refused, promoted])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(dispatched, [100, 101])
+        self.assertNotIn("::error::", result.stdout)
+        self.assertIn("re-dispatching on the current main", result.stdout)
+
+        # The same refusal while main is unchanged is a source-read fault, not a race: terminal.
+        result, dispatched = run(old_main, [refused])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100])
+
+        # A failure past the source check may have used credentials: never re-dispatched.
+        mutated = {"conclusion": "failure", "head": old_main,
+                   "failed_step": "Download signed packet and promote live broker"}
+        result, dispatched = run(new_main, [mutated])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100])
+        self.assertEqual(
+            re.findall(r"::error::.*", result.stdout),
+            ["::error::private Pro live promotion failed with conclusion=failure: "
+             "https://github.com/rcourtman/pulse-pro/actions/runs/100"],
+        )
+
+        # A cancelled run is not a refusal either.
+        result, dispatched = run(new_main, [{**refused, "conclusion": "cancelled"}])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100])
+
+        # Retries are bounded, and only the last attempt's URL is annotated.
+        result, dispatched = run(new_main, [refused])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(dispatched, [100, 101, 102, 103, 104])
+        self.assertEqual(
+            re.findall(r"https://github\.com/rcourtman/pulse-pro/actions/runs/\d+",
+                       "\n".join(re.findall(r"::error::.*", result.stdout))),
+            ["https://github.com/rcourtman/pulse-pro/actions/runs/104"],
+        )
+
     def test_release_promotion_policy_requires_live_rc_and_v5_policy(self) -> None:
         content = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         self.assertIn("`beta.N` is the normal user-testing stage", content)
