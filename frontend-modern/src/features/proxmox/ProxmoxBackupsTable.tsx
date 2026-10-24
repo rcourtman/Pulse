@@ -43,6 +43,7 @@ import {
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
+  isCompletedRecoveryArtifact,
   selectWorkloadRecoveryArtifacts,
   recoverableArtifactMatchesSearch,
   type RecoverableArtifact,
@@ -502,11 +503,13 @@ export const ProxmoxBackupsTable: Component<{
       recoveryModel().recoverableArtifacts,
       (artifact) => artifact.createdMs,
       (artifact) =>
-        artifact.sourceKind === 'pbs'
-          ? 'pbs'
-          : artifact.sourceKind === 'archive'
-            ? 'archive'
-            : 'snapshot',
+        !isCompletedRecoveryArtifact(artifact)
+          ? null
+          : artifact.sourceKind === 'pbs'
+            ? 'pbs'
+            : artifact.sourceKind === 'archive'
+              ? 'archive'
+              : 'snapshot',
       {
         now: new Date(nowMs()),
         getValue:
@@ -753,8 +756,17 @@ export const ProxmoxBackupsTable: Component<{
               tail={
                 <span>
                   {liveTotalCount()} targets ·{' '}
-                  {recoveryModel().coverageSummary.recoverableArtifacts} restore points
+                  {recoveryModel().coverageSummary.recoverableArtifacts} completed restore{' '}
+                  {recoveryModel().coverageSummary.recoverableArtifacts === 1 ? 'point' : 'points'}
                   {inventoryIncomplete() ? ' read' : ''}
+                  <Show when={recoveryModel().coverageSummary.runningArtifacts > 0}>
+                    {' · '}
+                    {recoveryModel().coverageSummary.runningArtifacts} running
+                  </Show>
+                  <Show when={recoveryModel().coverageSummary.failedArtifacts > 0}>
+                    {' · '}
+                    {recoveryModel().coverageSummary.failedArtifacts} failed
+                  </Show>
                   <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                     {' · '}
                     {recoveryModel().coverageSummary.withPBS} with{' '}
@@ -830,7 +842,10 @@ export const ProxmoxBackupsTable: Component<{
                 when={hasRecoverableActivityInRange()}
                 fallback={
                   <div class="flex flex-col gap-2 rounded-md border border-border-subtle px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
-                    <span>No dated backup activity in the selected {chartRange()}-day window.</span>
+                    <span>
+                      No completed restore points with known dates in the selected {chartRange()}
+                      -day window.
+                    </span>
                     <div class="flex items-center gap-2">
                       <button
                         type="button"
@@ -854,10 +869,10 @@ export const ProxmoxBackupsTable: Component<{
                 <BackupActivityChart
                   title={
                     recoverableMetricMode() === 'volume'
-                      ? 'Backup volume per day'
-                      : 'Backups per day'
+                      ? 'Completed restore volume per day'
+                      : 'Completed restore points per day'
                   }
-                  noun="backup"
+                  noun="restore point"
                   segmentKinds={RECOVERABLE_SEGMENT_KINDS}
                   range={chartRange}
                   onRangeChange={setChartRange}
@@ -906,8 +921,8 @@ export const ProxmoxBackupsTable: Component<{
                   rowNoun={
                     view() === 'date'
                       ? inventoryIncomplete()
-                        ? 'backups read'
-                        : 'backups'
+                        ? 'backup entries read'
+                        : 'backup entries'
                       : 'targets'
                   }
                 />

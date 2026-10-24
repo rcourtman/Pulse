@@ -438,7 +438,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getByText('main / minipc')).toBeInTheDocument();
     expect(
       screen.getByRole('cell', {
-        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 backups`,
+        name: `${getRecoveryFullDateLabel('2026-05-25')} 3 entries`,
       }),
     ).toBeInTheDocument();
     const tables = screen.getAllByRole('table');
@@ -994,7 +994,7 @@ describe('independent Proxmox backup inventory reads', () => {
     mountBackupReadState();
     await screen.findByText(/PVE backup inventory is loading/);
     await waitFor(() => expect(recoverableRows()).toHaveLength(1));
-    expect(screen.getByText(/1 restore points read/)).toBeInTheDocument();
+    expect(screen.getByText(/1 completed restore point read/)).toBeInTheDocument();
     pending.resolve(jsonResponse(readPvePayload));
     await waitFor(() => expect(recoverableRows()).toHaveLength(2));
     expect(screen.queryByText(/inventory is loading/)).not.toBeInTheDocument();
@@ -1303,7 +1303,7 @@ describe('backup-date-evidence connected inventory', () => {
     );
     expect(warning).toHaveAttribute('role', 'status');
     expect(warning).toHaveTextContent('excluded from the activity chart and day filters');
-    expect(screen.getByText(/No dated backup activity/)).toBeInTheDocument();
+    expect(screen.getByText(/No completed restore points with known dates/)).toBeInTheDocument();
     const future = [...document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')].find(
       (row) => row.textContent?.includes('PBS'),
     )! as HTMLElement;
@@ -1607,5 +1607,93 @@ describe('Coverage withdraws failed protection assessments', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('completed restore-point summary and activity', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const mountInventory = (incompleteOnly = false) => {
+    vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
+    const completedPBS = identityPBS({ id: 'complete', size: 2048 });
+    const runningPBS = identityPBS({ id: 'running', inProgress: true, size: 1024 * 1024 });
+    const failedPBS = identityPBS({
+      id: 'failed',
+      inProgress: true,
+      writeActivityObserved: true,
+      writeActive: false,
+      size: 2 * 1024 * 1024,
+    });
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data: url.endsWith('/pbs')
+            ? { backups: [...(incompleteOnly ? [] : [completedPBS]), runningPBS, failedPBS] }
+            : {
+                storageBackups: incompleteOnly ? [] : [identityArchive({ size: 1024 })],
+                guestSnapshots: incompleteOnly ? [] : [identitySnapshot()],
+                backupTasks: [],
+              },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    return renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
+      />
+    ));
+  };
+
+  it('counts completed points and volume separately while retaining running and failed rows for inspection', async () => {
+    const { container } = mountInventory();
+    await screen.findByText(/3 completed restore points · 1 running · 1 failed/);
+    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
+    expect(
+      screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 5 entries` }),
+    ).toBeInTheDocument();
+    const day = screen.getByRole('button', { name: /: 3 restore points$/ });
+    expect(day).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /: 5 restore points$/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Completed restore points per day')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    expect(screen.getByText('Completed restore volume per day')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /: 3.00 KB$/ })).toBeInTheDocument();
+    expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
+  });
+
+  it('does not draw completed activity or claim PBS restore coverage for an incomplete-only inventory', async () => {
+    const { container } = mountInventory(true);
+    const summary = await screen.findByText(/0 completed restore points · 1 running · 1 failed/);
+    expect(summary).not.toHaveTextContent('with PBS snapshots');
+    expect(screen.getByText(/No completed restore points with known dates/)).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Activity metric' })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
+    expect(
+      screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 2 entries` }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('link', { name: 'Coverage', exact: true }));
+    expect(screen.queryByText(/completed restore points with known dates/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/0 completed restore points · 1 running · 1 failed/),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps incomplete entries available under a completed day filter and when it is cleared', async () => {
+    const { container } = mountInventory();
+    await screen.findByText(/3 completed restore points/);
+    await fireEvent.click(screen.getByRole('button', { name: /: 3 restore points$/ }));
+    await waitFor(() => expect(window.location.search).toContain('day=2026-10-04'));
+    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }));
+    await waitFor(() => expect(window.location.search).not.toContain('day='));
+    expect(screen.getByRole('button', { name: /: 3 restore points$/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
   });
 });

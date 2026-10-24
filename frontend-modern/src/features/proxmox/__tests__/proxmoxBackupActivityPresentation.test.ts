@@ -425,6 +425,8 @@ describe('proxmoxBackupActivityPresentation', () => {
       [0, 'backup', '0 backups'],
       [1, 'backup', '1 backup'],
       [2, 'backup', '2 backups'],
+      [1, 'restore point', '1 restore point'],
+      [3, 'restore point', '3 restore points'],
       [1, 'snapshot', '1 snapshot'],
       [5, 'task', '5 tasks'],
       [2, 'archive', '2 archives'],
