@@ -206,7 +206,7 @@ func TestHandleCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing
 		Hostname: "live-store-host-1",
 		CPUUsage: 11.0,
 		Memory:   models.Memory{Usage: 22.0},
-		Disks:    []models.Disk{{Usage: 33.0}},
+		Disks:    []models.Disk{{Total: 100, Used: 33, Usage: 33.0}},
 		Status:   "online",
 	}}
 	syncTestResourceStore(t, monitor, state)
@@ -310,7 +310,7 @@ func TestHandleInfrastructureCharts_Lightweight(t *testing.T) {
 		Hostname: "host-one",
 		CPUUsage: 11.0,
 		Memory:   models.Memory{Usage: 22.0},
-		Disks:    []models.Disk{{Usage: 33.0}},
+		Disks:    []models.Disk{{Total: 100, Used: 33, Usage: 33.0}},
 		Status:   "online",
 	}}
 	syncTestResourceStore(t, monitor, state)
@@ -393,7 +393,7 @@ func TestHandleInfrastructureCharts_MetricFilter(t *testing.T) {
 		Hostname: "host-one",
 		CPUUsage: 11.0,
 		Memory:   models.Memory{Usage: 22.0},
-		Disks:    []models.Disk{{Usage: 33.0}},
+		Disks:    []models.Disk{{Total: 100, Used: 33, Usage: 33.0}},
 		Status:   "online",
 	}}
 	syncTestResourceStore(t, monitor, state)
@@ -448,7 +448,7 @@ func TestHandleInfrastructureCharts_UsesCanonicalMockUnifiedReadStateForVMwareHo
 		Hostname: "live-store-host-1",
 		CPUUsage: 11.0,
 		Memory:   models.Memory{Usage: 22.0},
-		Disks:    []models.Disk{{Usage: 33.0}},
+		Disks:    []models.Disk{{Total: 100, Used: 33, Usage: 33.0}},
 		Status:   "online",
 	}}
 	syncTestResourceStore(t, monitor, state)

@@ -112,12 +112,9 @@ func buildHostMetricPayload(
 		percent := percentFromReportedPercent(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source, Observation: memory.Observation}
 	}
-	if len(disks) > 0 {
+	if percent, ok := HostDiskUsagePercent(disks); ok {
 		disk := disks[0]
-		if hasObservedDiskUsage(disk) {
-			percent := percentFromReportedPercent(disk.Usage)
-			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
-		}
+		metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
 	setNetworkAndDiskIOMetricsHost(metrics, netInRate, netOutRate, diskReadRate, diskWriteRate, source)
 	return metrics

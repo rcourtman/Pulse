@@ -27873,3 +27873,90 @@ func TestContract_ChartIndexFallbackPreservesObservations(t *testing.T) {
 		}
 	}
 }
+
+func TestHostDiskUsageHistoryAndSummaryRespectPresence(t *testing.T) {
+	setMockModeForTest(t, false)
+	for _, tc := range []struct {
+		name    string
+		disks   []models.Disk
+		present bool
+		value   float64
+	}{
+		{name: "absent"},
+		{name: "empty", disks: []models.Disk{}},
+		{name: "capacity unavailable", disks: []models.Disk{{Usage: 0}}},
+		{name: "unavailable", disks: []models.Disk{{Total: 100, Usage: -1}}},
+		{name: "measured zero", disks: []models.Disk{{Total: 100, Free: 100, Usage: 0}}, present: true},
+		{name: "small percent", disks: []models.Disk{{Total: 1000, Used: 2, Usage: 0.2}}, present: true, value: 0.2},
+		{name: "measured usage", disks: []models.Disk{{Total: 100, Used: 61, Usage: 61}}, present: true, value: 61},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, stored := range []bool{false, true} {
+				for _, status := range []string{"online", "offline"} {
+					t.Run(status+map[bool]string{false: "/cold", true: "/recorded"}[stored], func(t *testing.T) {
+						monitor, state, history := newTestMonitor(t)
+						state.Hosts = []models.Host{{ID: "fixture-host", Hostname: "Disk presence host", Status: status, LastSeen: time.Now(), CPUUsage: 12, Memory: models.Memory{Total: 8192, Used: 2048, Usage: 25}, Disks: tc.disks}}
+						syncTestResourceStore(t, monitor, state)
+						recordedAt := time.Now().Add(-2 * time.Minute)
+						if stored {
+							history.AddGuestMetric("agent:fixture-host", "disk", 43, recordedAt)
+						}
+						router := &Router{monitor: monitor}
+						for _, path := range []string{"/api/metrics-store/history?resourceType=agent&resourceId=fixture-host&range=1h", "/api/metrics-store/history?resourceType=agent&resourceId=fixture-host&metric=disk&range=1h", "/api/charts?range=1h", "/api/charts/infrastructure?range=1h", "/api/charts/infrastructure?range=1h&metrics=disk"} {
+							rec := httptest.NewRecorder()
+							req := httptest.NewRequest(http.MethodGet, path, nil)
+							switch {
+							case strings.HasPrefix(path, "/api/metrics-store/history"):
+								router.handleMetricsHistory(rec, req)
+							case strings.HasPrefix(path, "/api/charts/infrastructure"):
+								router.handleInfrastructureCharts(rec, req)
+							default:
+								router.handleCharts(rec, req)
+							}
+							want := stored || (status == "online" && tc.present)
+							var payload struct {
+								Points    []chartapi.MetricPoint                       `json:"points"`
+								Metrics   map[string][]chartapi.MetricPoint            `json:"metrics"`
+								AgentData map[string]map[string][]chartapi.MetricPoint `json:"agentData"`
+							}
+							// A wholly unmeasured history target keeps its existing no-source error;
+							// a missing metric must never turn into a successful zero sample.
+							if rec.Code == http.StatusServiceUnavailable && !want && strings.HasPrefix(path, "/api/metrics-store/history") {
+								continue
+							}
+							if rec.Code != http.StatusOK {
+								t.Fatalf("%s status %d: %s", path, rec.Code, rec.Body.String())
+							}
+							if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+								t.Fatal(err)
+							}
+							points := payload.Points
+							if !strings.Contains(path, "metric=disk") {
+								if payload.AgentData != nil {
+									points = payload.AgentData["fixture-host"]["disk"]
+								} else {
+									points = payload.Metrics["disk"]
+								}
+							}
+							if (len(points) > 0) != want {
+								t.Fatalf("%s disk presence=%v want=%v; %s", path, len(points) > 0, want, rec.Body.String())
+							}
+							if want {
+								value := tc.value
+								if stored {
+									value = 43
+								}
+								if len(points) != 1 || points[0].Value != value {
+									t.Fatalf("%s lost real reading: %+v want %v", path, points, value)
+								}
+								if stored && points[0].Timestamp != recordedAt.UnixMilli() {
+									t.Fatalf("%s replaced original recorded timestamp: %+v", path, points)
+								}
+							}
+						}
+					})
+				}
+			}
+		})
+	}
+}
