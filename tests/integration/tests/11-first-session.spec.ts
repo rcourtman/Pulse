@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   ensureAuthenticated,
+  ensureSessionAuthenticated,
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
@@ -161,7 +162,10 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    // Settings bootstrap includes session-preferred organisation reads. Use
+    // the actual browser session, not the token-only helper's intentional
+    // unauthenticated probe followed by a token retry.
+    await ensureSessionAuthenticated(page);
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(750);
 
@@ -190,6 +194,11 @@ test.describe.serial("First-session experience", () => {
 
     try {
       for (const route of keyRoutes) {
+        // Retire the previous document before measuring this route. A
+        // departing infrastructure row may still start its anomaly read;
+        // that is not a Settings bootstrap request. Do not exempt anomalies
+        // from the assertion or miss this document's early requests.
+        await page.goto("about:blank");
         consoleErrors.length = 0;
         aiRequests.clear();
 
@@ -211,7 +220,14 @@ test.describe.serial("First-session experience", () => {
           `Route ${route} did not render any panel content`,
         ).toBeVisible({ timeout: 10_000 });
 
-        await page.waitForTimeout(500);
+        // The outer page heading is present even while General remains on
+        // "Loading configuration...". Require the consuming panel, not just
+        // the Settings shell, before judging requests and console output.
+        await expect(
+          page.locator("[data-settings-content] [data-settings-panel]").first(),
+          `Route ${route} did not finish loading a settings panel`,
+        ).toBeVisible({ timeout: 10_000 });
+        await expect(page.getByText("Loading configuration...", { exact: true })).toHaveCount(0);
 
         const unexpectedAIRequests = aiRequests
           .urls()

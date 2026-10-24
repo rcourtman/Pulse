@@ -249,6 +249,31 @@ test.describe("Settings mobile optimization audit", () => {
           }
 
           await expect(page.locator("[data-settings-content]")).toBeVisible();
+          if (route === "/settings/security-audit") {
+            const panel = page.locator("[data-settings-panel]").filter({
+              has: page.getByRole("heading", { name: "Audit Log", exact: true }),
+            });
+            await expect(panel).toBeVisible();
+            // Root scrollWidth misses content clipped by overflow-hidden.
+            // Check the actual title and every toolbar control before scroll.
+            const clippedOrOverlapping = await panel.evaluate((element) => {
+              const header = element.firstElementChild!;
+              const bounds = header.getBoundingClientRect();
+              const title = header.querySelector("h2")!;
+              const titleBounds = title.getBoundingClientRect();
+              return [title, ...header.querySelectorAll("button")].flatMap((item) => {
+                const rect = item.getBoundingClientRect();
+                const clipped = rect.width < 1 || rect.left < bounds.left - 1 ||
+                  rect.right > bounds.right + 1 || rect.top < bounds.top - 1 ||
+                  rect.bottom > bounds.bottom + 1;
+                const overlapsTitle = item !== title && rect.left < titleBounds.right &&
+                  rect.right > titleBounds.left && rect.top < titleBounds.bottom &&
+                  rect.bottom > titleBounds.top;
+                return clipped || overlapsTitle ? [item.textContent?.trim()] : [];
+              });
+            });
+            expect(clippedOrOverlapping, `Audit header at ${viewport.width}px`).toEqual([]);
+          }
           await scrollSettingsToBottom(page);
           const position = await settingsScrollPosition(page);
           const atBottom = position.scrollTop >= position.maxScrollTop - 3;
