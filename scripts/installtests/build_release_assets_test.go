@@ -4681,7 +4681,8 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 		`repos/rcourtman/pulse-pro/actions/workflows/promote-paid-runtime-release.yml/dispatches`,
 		`promote_run_id="$(jq -r '.workflow_run_id // empty' <<<"${promote_dispatch}")"`,
 		`wait_for_workflow rcourtman/pulse-pro "${promote_run_id}" "private Pro live promotion"`,
-		`echo "::error::${label} failed with conclusion=${conclusion}: ${url}"`,
+		`source_check_refused_only "${promote_run_id}"`,
+		`echo "::error::private Pro live promotion failed with conclusion=${completed_conclusion}: ${completed_url}"`,
 	} {
 		if !strings.Contains(promotionJob, needle) {
 			t.Fatalf("promote_private_pro_runtime missing required contract: %s", needle)
