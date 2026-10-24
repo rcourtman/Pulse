@@ -7836,6 +7836,25 @@ binary/version/configuration/identity, no installer/manager mutation, exact
 requests, and removal of all temporary files. These controls do not establish
 published-installer or installed-host recovery.
 
+### Go dependency proposal isolation
+
+Dependabot's minor/patch version proposals keep the `modernc.org/*` storage
+driver/runtime family together in `go-storage-runtime` and exclude that family
+from `go-minor-patch`. An unrelated exporter or transport patch can therefore
+be reviewed without repeatedly importing a storage update that needs separate
+qualification. The storage group preserves the driver's matching runtime and
+transitive update scope rather than splitting its modules into competing PRs.
+This is review isolation, not a version pin, ignored dependency or acceptance
+of any storage update. Major updates stay individual; `go-security` still
+covers every module, with no new ignore entries or advisory suppression.
+
+`scripts/tests/test_dependabot_config.py`, run by `scripts/tests/run.sh`, checks
+the disjoint groups against the SQLite/libc and Prometheus combination seen in
+PR #3178, the remaining modernc runtime family and other Go patches. It also
+checks unchanged security coverage and individual major updates. This static
+configuration proof does not establish that GitHub has regenerated an existing
+proposal or that any dependency graph has passed runtime qualification.
+
 ### Governed dependency floors for the go-minor-patch group
 
 The managed `go-minor-patch` group advances three direct modules together with
