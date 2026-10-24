@@ -2762,8 +2762,17 @@ resource list; never persist or expose it as resource identity. With multiple
 requested metrics, return one series number instead of repeatedly decoding the
 metric name too. Resolve both dimensions against the current bound resource
 and metric lists, including on a SQL-template cache hit or a new chunk. Metric
-names remain bound data in the projection, not interpolated SQL. Full and
-value-only raw projections share this shape; unfiltered, single-resource and
+names remain bound data in the projection, not interpolated SQL. Accumulate
+filtered raw observations directly by series number, resolving names once per
+nonempty series after the read instead of flushing interleaved nested maps for
+every point. Empty resources and metrics stay absent. At most 4,096 slice
+headers are reserved per chunk; wider sparse filters retain the map assembler.
+Both paths return detached observations and restore stable timestamp order
+before Docker projection, with no new sampling or source-selection policy.
+`TestRetainedNumberedAssemblyMatchesSingleResourceReads` compares compact,
+reordered and wide-sparse fleets with single-resource reads on both layouts,
+including interleaved series, overlap exclusion, zero and nullable extrema.
+Full and value-only raw projections share this shape; unfiltered, single-resource and
 ordered display-bucket reads keep their existing row dimensions.
 `TestRetainedRawFleetSeriesNumbersBindCurrentMetrics` checks both layouts and
 projections, parameter-like identities, reordered metric bindings and exact

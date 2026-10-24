@@ -736,3 +736,102 @@ func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
 		}
 	}
 }
+
+// Direct ordinal accumulation must be indistinguishable from the existing
+// single-resource assembler, including interleaved rows and empty series. Wide
+// sparse filters exercise the bounded fallback without losing statement scope.
+func TestRetainedNumberedAssemblyMatchesSingleResourceReads(t *testing.T) {
+	for _, clustered := range []bool{false, true} {
+		t.Run(fmt.Sprintf("clustered=%t", clustered), func(t *testing.T) {
+			db := newPlanTestDB(t)
+			if clustered {
+				if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID; CREATE INDEX idx_metrics_tier_time ON metrics(tier,timestamp)`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store := &Store{db: pdb.Wrap(db, "numbered-series-assembly")}
+			store.clusteredMetrics.Store(clustered)
+			base := time.Unix(1_800_003_600, 0)
+			end := base.Add(6 * time.Hour)
+			ids := []string{"b':p2", "a:p4", "missing"}
+			names := []string{"memory", "cpu", "netin", "absent"}
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			insert, err := tx.Prepare(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value,min_value,max_value) VALUES ('node',?,?,?,?,?,?,?)`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, id := range ids[:2] {
+				for j, name := range names[:3] {
+					// Minute-tier rows come first; the raw first/tail points must
+					// still be restored to chronological order, never averaged.
+					for p := 0; p < 300; p++ {
+						value := float64(i*1000 + j*300 + p)
+						if _, err := insert.Exec(id, name, "minute", base.Unix()+int64(p*60+60), value, value-7, value+9); err != nil {
+							t.Fatal(err)
+						}
+					}
+					for _, p := range []struct{ offset, value int64 }{{1, 12}, {65, 99999}, {18061, 0}} {
+						if _, err := insert.Exec(id, name, "raw", base.Unix()+p.offset, p.value, nil, nil); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+			insert.Close()
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			for _, shape := range []string{"compact", "rebound", "wide-sparse"} {
+				t.Run(shape, func(t *testing.T) {
+					requested := append([]string(nil), ids...)
+					filters := append([]string(nil), names...)
+					if shape == "rebound" {
+						requested[0], requested[1] = requested[1], requested[0]
+						filters[0], filters[2] = filters[2], filters[0]
+					}
+					if shape == "wide-sparse" {
+						for len(requested) < queryAllBatchChunkSize {
+							requested = append(requested, fmt.Sprintf("missing-%d", len(requested)))
+						}
+						for len(filters) <= maxRetainedNumberedSeries/queryAllBatchChunkSize {
+							filters = append(filters, fmt.Sprintf("absent-%d", len(filters)))
+						}
+					}
+					full, err := store.QueryMetricTypesBatch("node", requested, filters, base, end, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(full) != 2 {
+						t.Fatalf("empty resource materialised: %d resources", len(full))
+					}
+					for _, id := range ids[:2] {
+						single, err := store.QueryMetricTypesBatch("node", []string{id}, filters, base, end, 0)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if !reflect.DeepEqual(full[id], single[id]) {
+							t.Fatalf("fleet differs from single-resource read for %s", id)
+						}
+						for _, points := range full[id] {
+							if len(points) != 302 || points[0].Value != 12 || points[len(points)-1].Value != 0 || points[len(points)-1].Min != 0 || points[1].Min != points[1].Value-7 {
+								t.Fatalf("chronology/zero/extrema/overlap changed: %d points", len(points))
+							}
+						}
+					}
+					values, err := store.QueryMetricValuesBatch("node", requested, filters, base, end, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, full, values)
+					full[ids[0]][names[0]][0].Value = -999
+					if values[ids[0]][names[0]][0].Value != 12 {
+						t.Fatal("reader outputs alias each other")
+					}
+				})
+			}
+		})
+	}
+}
