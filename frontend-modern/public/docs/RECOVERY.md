@@ -45,6 +45,41 @@ the same columns or filters, and a missing reading is not proof that no backup
 exists. [Check missing evidence](#missing-or-inconsistent-evidence) before
 changing the provider or Pulse's stored data.
 
+## Why Proxmox backup counts differ
+
+In **Proxmox → Backups → By date**, the inventory and completed-point totals
+answer different questions:
+
+- **Backup entries** includes running and failed entries, kept for inspection.
+  The **completed restore points** total in **Backup health** excludes both,
+  even when an incomplete entry has a size or a verification flag. The total
+  covers the loaded inventory, not just the rows matching your list filters.
+- **Completed restore points per day** also requires a known, non-future date
+  within the selected chart range. An undated completed point can count in
+  Backup health but not in a daily column. A blank chart is not proof that
+  no backups exist; check any inventory loading or access warning first.
+- **Completed restore volume per day** adds only positive reported sizes for
+  those dated completed points. A point with no reported size can count as a
+  point without contributing volume. These are recorded artifact sizes, not
+  PBS datastore usage or deduplicated physical space.
+- Guest **snapshots** can contribute to completed-point and chart totals.
+  They are not independent backups and do not fill Coverage's **Latest backup**.
+  If a completed backup's date is unavailable or in the future, the latest
+  backup age stays unknown rather than choosing an older dated backup.
+
+Selecting a chart day filters the list; it does not make every listed entry
+complete. Use **Clear date filter** and clear restrictive search or list filters
+to inspect undated and incomplete entries. This changes only the display, not
+collection, permissions or retention. Older versions may use different labels.
+
+**Completed is not Verified, a tested restore or guest thaw.** Compare the same
+provider, guest, location and time using existing records, not just a count.
+Do not run a new backup, verification or restore, delete entries, or clear
+History to make totals agree. For contradictory PBS verification or protection,
+use the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected).
+An unresponsive guest or uncertain freeze/thaw needs the
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety), not a chart check.
+
 ## What the evidence means
 
 Keep these observations separate:
