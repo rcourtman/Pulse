@@ -407,6 +407,29 @@ func TestHandleUpdateWebhooks(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateWebhooksRejectsNonArrayAndOversizedSelections(t *testing.T) {
+	for _, body := range []string{
+		`{"urls":"https://8.8.8.8/audit"}`,
+		`{"urls":false}`,
+		`{"urls":[{}]}`,
+		strings.Repeat(" ", 64*1024) + `{"urls":[]}`,
+	} {
+		logger := newAuditSelectionLogger()
+		logger.urls = []string{"https://8.8.8.8/audit"}
+		setAuditLogger(t, logger)
+		rec := httptest.NewRecorder()
+		NewAuditHandlers().HandleUpdateWebhooks(rec, httptest.NewRequest(http.MethodPut,
+			"/api/admin/webhooks/audit", strings.NewReader(body)))
+		var payload APIError
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != http.StatusBadRequest || payload.Code != "invalid_request" || logger.updates != 0 || len(logger.urls) != 1 {
+			t.Fatalf("invalid selection changed destination: status/code/updates = %d/%q/%d", rec.Code, payload.Code, logger.updates)
+		}
+	}
+}
+
 func TestHandleExportAuditEvents_NotPersistent(t *testing.T) {
 	setAuditLogger(t, audit.NewConsoleLogger())
 	handler := NewAuditHandlers()

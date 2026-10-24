@@ -4011,6 +4011,14 @@ existing export/summary non-pagination semantics. This changes only audit
 request validation, not agent identity, enrolment, collection or recovery.
 Fake-logger handler controls live in `internal/api/audit_filter_validation_test.go`.
 
+The canonical audit read handlers also refuse damaged raw query encoding and
+repeated named singleton selectors before any event read, rather than silently
+losing a filter or taking its first value. Absent webhook URL selections are
+not deliberate removal: POST/PUT require an explicit array, with `[]` retaining
+its intentional clear semantics. `internal/api/audit_selection_validation_test.go`
+pins read non-execution, selected wire results, tenant isolation and mutation
+preservation/clear/restore. Agent operations and storage internals are unchanged.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
