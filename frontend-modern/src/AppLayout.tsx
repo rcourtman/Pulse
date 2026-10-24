@@ -13,6 +13,10 @@ import {
   type MobileNavBarUtilityTab as UtilityTab,
 } from '@/components/shared/MobileNavBar';
 import {
+  getMobileNavTabAriaDescription,
+  getMobileNavTabAriaLabel,
+} from '@/components/shared/mobileNavBarModel';
+import {
   createStableTabList,
   primaryNavTabEquals,
   utilityNavTabEquals,
@@ -130,17 +134,6 @@ export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean 
   return scopes.includes('*') || scopes.includes(SETTINGS_READ_SCOPE);
 }
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
-
-function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
-  const count = tab.count ?? 0;
-  if (count > 0) {
-    if (tab.id === 'alerts') {
-      return `${count} ${tab.label}`;
-    }
-    return `${tab.label}: ${tab.countLabel ?? `${count} items`}`;
-  }
-  return tab.label;
-}
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
@@ -864,7 +857,8 @@ export function AppLayout(props: AppLayoutProps) {
                     <A
                       href={tab.route}
                       class={className()}
-                      aria-label={getDesktopUtilityTabAriaLabel(tab)}
+                      aria-label={getMobileNavTabAriaLabel(tab)}
+                      aria-description={getMobileNavTabAriaDescription(tab)}
                       aria-current={isActive() ? 'page' : undefined}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onFocus={() => warmNavigationTarget(tab.route)}
@@ -875,7 +869,7 @@ export function AppLayout(props: AppLayoutProps) {
                       </span>
                       <span class="flex items-center gap-1">
                         <span class="hidden xs:inline">{tab.label}</span>
-                        <span class="xs:hidden">{tab.label.charAt(0)}</span>
+                        <span class="xs:hidden">{tab.label.charAt(0)}</span>{' '}
                         {(() => {
                           const total = tab.count ?? 0;
                           if (total <= 0) {
@@ -886,7 +880,7 @@ export function AppLayout(props: AppLayoutProps) {
                               <span class="inline-flex items-center gap-1">
                                 {tab.breakdown && tab.breakdown.critical > 0 && (
                                   <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-600 dark:bg-red-500 rounded-full">
-                                    {tab.breakdown.critical}
+                                    {tab.breakdown.critical}{' '}
                                   </span>
                                 )}
                                 {tab.breakdown && tab.breakdown.warning > 0 && (

@@ -5,6 +5,7 @@ import {
   getMobileNavAlertBadgeCounts,
   getMobileNavDestinationHref,
   getMobileNavTabAriaLabel,
+  getMobileNavTabAriaDescription,
   getMobileNavTabButtonClass,
 } from '@/components/shared/mobileNavBarModel';
 import type {
@@ -121,6 +122,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         countLabel: '12 pending',
       });
       expect(getMobileNavTabAriaLabel(tab)).toBe('Patrol: 12 pending');
+      expect(getMobileNavTabAriaDescription(tab)).toBeUndefined();
     });
 
     it('synthesizes "N items" when countLabel is absent (countLabel ?? right arm)', () => {
@@ -133,7 +135,7 @@ describe('mobileNavBarModel.branchcov2', () => {
       expect(getMobileNavTabAriaLabel(tab)).toBe('Patrol: 12 items');
     });
 
-    it('returns the bare label for an alerts tab whose breakdown is all zeros (parts.length === 0 arm)', () => {
+    it('returns the bare label without a description when both severity counts are zero', () => {
       const tab = makeUtilityTab({
         id: 'alerts',
         label: 'Alerts',
@@ -141,6 +143,7 @@ describe('mobileNavBarModel.branchcov2', () => {
         breakdown: { critical: 0, warning: 0 },
       });
       expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts');
+      expect(getMobileNavTabAriaDescription(tab)).toBeUndefined();
     });
 
     it('lists only critical when warning is 0 (warning push guard false)', () => {
@@ -150,7 +153,8 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 4,
         breakdown: { critical: 3, warning: 0 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts: 3 critical');
+      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts 3');
+      expect(getMobileNavTabAriaDescription(tab)).toBe('3 critical');
     });
 
     it('lists only warning when critical is 0 (critical push guard false)', () => {
@@ -160,17 +164,19 @@ describe('mobileNavBarModel.branchcov2', () => {
         count: 4,
         breakdown: { critical: 0, warning: 2 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts: 2 warning');
+      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts 2');
+      expect(getMobileNavTabAriaDescription(tab)).toBe('2 warning');
     });
 
-    it('joins both severities with a comma when both are > 0', () => {
+    it('keeps mixed visible numbers contiguous and describes both severities', () => {
       const tab = makeUtilityTab({
         id: 'alerts',
         label: 'Alerts',
         count: 10,
         breakdown: { critical: 3, warning: 7 },
       });
-      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts: 3 critical, 7 warning');
+      expect(getMobileNavTabAriaLabel(tab)).toBe('Alerts 3 7');
+      expect(getMobileNavTabAriaDescription(tab)).toBe('3 critical, 7 warning');
     });
   });
 

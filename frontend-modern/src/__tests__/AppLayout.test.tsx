@@ -197,7 +197,9 @@ describe('AppLayout navigation icons', () => {
       name: 'Patrol',
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
-    expect(within(systemGroup as HTMLElement).getByRole('link', { name: '1 Alerts' })).toBeTruthy();
+    expect(
+      within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts 1' }),
+    ).toHaveAccessibleDescription('1 warning');
     expect(
       within(systemGroup as HTMLElement).queryByRole('link', {
         name: 'Pulse Patrol Patrol',
@@ -278,6 +280,14 @@ describe('AppLayout navigation icons', () => {
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
+    // jsdom includes the hidden compact label and SVG title in textContent.
+    // Assert the actual word boundary before the badge instead.
+    expect(desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(
+      ' ',
+    );
+    expect(
+      desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextElementSibling,
+    ).toHaveTextContent(/^2$/);
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -286,6 +296,10 @@ describe('AppLayout navigation icons', () => {
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');
+    // The visible label precedes the icon/badge wrapper in DOM order.
+    expect(mobilePatrolTab.firstElementChild).toHaveClass('order-2');
+    expect(mobilePatrolTab.firstElementChild?.textContent).toBe('Patrol ');
+    expect(mobilePatrolTab.querySelector('.absolute')).toHaveTextContent(/^2$/);
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -318,12 +332,20 @@ describe('AppLayout navigation icons', () => {
     expect(actionsTab.className).toContain('text-blue-600');
     expect(actionsTab).toHaveAttribute('href', '/actions');
     expect(actionsTab).toHaveAttribute('aria-current', 'page');
+    expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(' ');
+    expect(actionsTab.querySelector('[class~="xs:inline"]')?.textContent).toBe('Actions');
+    expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextElementSibling).toHaveTextContent(
+      /^3$/,
+    );
     expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    expect(
-      within(mobileNav).getByRole('link', { name: 'Actions: 3 actions await approval' }),
-    ).toHaveAttribute('aria-current', 'page');
+    const mobileActionsTab = within(mobileNav).getByRole('link', {
+      name: 'Actions: 3 actions await approval',
+    });
+    expect(mobileActionsTab).toHaveAttribute('aria-current', 'page');
+    expect(mobileActionsTab.firstElementChild?.textContent).toBe('Actions ');
+    expect(mobileActionsTab.querySelector('.absolute')).toHaveTextContent(/^3$/);
     expect(document.title).toContain('Actions');
   });
 
