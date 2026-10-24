@@ -1184,6 +1184,9 @@ describe('settings architecture guardrails', () => {
   it('separates SSO mapping entries without splitting spaces inside IdP group names', () => {
     expect(ssoProvidersModelSource).toContain('input.split(/[,\\r\\n]+/)');
     expect(ssoProvidersModelSource).not.toContain('splitList(input).forEach');
+    expect(ssoProvidersModelSource).toContain('allowedGroups: splitGroupList(form.allowedGroups)');
+    expect(ssoProvidersModelSource).toContain('scopes: splitList(form.oidcScopes)');
+    expect(ssoProvidersPanelSource).toContain('Comma- or newline-separated.');
     expect(ssoProvidersPanelSource).toContain('Group names may contain spaces.');
   });
 

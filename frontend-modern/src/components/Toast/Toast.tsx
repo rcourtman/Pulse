@@ -6,6 +6,7 @@ import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import InfoIcon from 'lucide-solid/icons/info';
 import XIcon from 'lucide-solid/icons/x';
 import { ActionIconButton } from '@/components/shared/Button';
+import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { POLLING_INTERVALS } from '@/constants';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 
@@ -217,7 +218,9 @@ export const ToastContainer: Component = () => {
       <div
         role="region"
         aria-label="Notifications"
-        class="fixed inset-x-3 bottom-3 z-9999 space-y-2 sm:left-auto sm:right-4 sm:bottom-4 sm:w-full sm:max-w-[500px]"
+        class={`fixed inset-x-3 bottom-3 space-y-2 sm:left-auto sm:right-4 sm:bottom-4 sm:w-full sm:max-w-[500px] ${
+          dialogStackHasBlockingDialog() ? 'z-50' : 'z-9999'
+        }`}
       >
         <For each={toasts()}>{(toast) => <Toast toast={toast} onRemove={removeToast} />}</For>
       </div>

@@ -83,6 +83,10 @@ export function getSSOCopySuccessMessage(label: string): string {
   return `${label} has been copied to the clipboard.`;
 }
 
+export function getSSOCopyErrorMessage(label: string): string {
+  return `Unable to copy ${label.toLowerCase()}. Select and copy the URL manually.`;
+}
+
 export function getSSOConnectionTestSuccessMessage(): string {
   return 'Connection test completed successfully.';
 }

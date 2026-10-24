@@ -42,6 +42,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     providers,
     loading,
     saving,
+    editorFeedback,
     showModal,
     setShowModal,
     editingProvider,
@@ -272,18 +273,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       <Show when={showModal()}>
         <Dialog
           isOpen={true}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            if (!saving()) setShowModal(false);
+          }}
           panelClass="max-w-2xl"
           ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${getSSOProviderTypeLabel(form.type)} provider`}
         >
-          <div class="w-full max-h-[90vh] overflow-y-auto">
-            <div class="sticky top-0 bg-surface px-6 py-4 border-b border-border z-10">
+          <form class="flex max-h-[calc(100dvh-2rem-2px)] min-h-0 flex-col" onSubmit={handleSave}>
+            <div class="sticky top-0 z-10 shrink-0 border-b border-border bg-surface px-4 py-4 sm:px-6">
               <h3 class="text-lg font-semibold text-base-content">
                 {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>
             </div>
 
-            <form class="p-6 space-y-4" onSubmit={handleSave}>
+            <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
               {/* Common fields */}
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class={formField}>
@@ -342,10 +345,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
                           label="Copy callback / redirect URL"
                           variant="accent"
-                          size="chip"
-                          class="max-w-full text-xs"
+                          size="sm"
+                          class="min-w-0 max-w-full justify-between gap-2 py-2 text-left text-xs [&>svg]:shrink-0"
                         >
-                          <span class="min-w-0 truncate">{editingProvider()?.oidcCallbackUrl}</span>
+                          <span class="min-w-0 [overflow-wrap:anywhere]">
+                            {editingProvider()?.oidcCallbackUrl}
+                          </span>
                         </CopyValueButton>
                       </div>
                     </Show>
@@ -609,7 +614,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
               {/* Test result display */}
               <Show when={testResult()}>
-                <div class={testResultPresentation()!.panelClass}>
+                <div
+                  class={testResultPresentation()!.panelClass}
+                  role={testResult()?.success ? 'status' : 'alert'}
+                >
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
                       <CheckCircle class={testResultPresentation()!.iconClass} />
@@ -712,7 +720,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   type="button"
                   variant="ghost"
                   size="xs"
-                  class="font-semibold hover:underline"
+                  class="h-auto max-w-full whitespace-normal text-left font-semibold hover:underline"
                   onClick={() => setAdvancedOpen(!advancedOpen())}
                 >
                   {advancedOpen() ? 'Hide' : 'Show'} access restrictions & role mapping
@@ -748,7 +756,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Comma-separated. Empty allows all."
+                        help="Comma- or newline-separated. Group names may contain spaces. Empty allows all."
                       />
                       <FormTextarea
                         label="Allowed Domains"
@@ -780,9 +788,26 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </div>
                 </Show>
               </div>
+            </div>
 
-              {/* Actions */}
-              <div class="flex justify-end gap-3 pt-4 border-t border-border">
+            {/* Keep feedback and recovery actions inside the active modal, clear of toasts. */}
+            <div class="relative z-10 shrink-0 space-y-3 border-t border-border bg-surface p-4 sm:px-6">
+              <Show when={editorFeedback()} keyed>
+                {(feedback) => (
+                  <p
+                    role={feedback.tone === 'error' ? 'alert' : 'status'}
+                    tabindex="0"
+                    class={`max-h-28 overflow-y-auto text-sm [overflow-wrap:anywhere] ${
+                      feedback.tone === 'error'
+                        ? 'text-red-700 dark:text-red-300'
+                        : 'text-base-content'
+                    }`}
+                  >
+                    {feedback.message}
+                  </p>
+                )}
+              </Show>
+              <div class="grid grid-cols-1 gap-2 sm:flex sm:justify-end sm:gap-3">
                 <Button
                   type="button"
                   onClick={() => setShowModal(false)}
@@ -802,8 +827,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   {saving() ? 'Saving...' : editingProvider() ? 'Save Changes' : 'Create Provider'}
                 </Button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </Dialog>
       </Show>
 

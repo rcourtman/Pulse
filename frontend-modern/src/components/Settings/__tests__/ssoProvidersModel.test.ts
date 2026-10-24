@@ -6,6 +6,50 @@ import {
 } from '../ssoProvidersModel';
 
 describe('ssoProvidersModel', () => {
+  it.each(['oidc', 'saml'] as const)(
+    'preserves exact %s group restrictions on no-op and mapping-only saves',
+    (type) => {
+      const form = mapProviderDetailsToForm({
+        id: 'corp',
+        name: 'Corporate SSO',
+        enabled: true,
+        type,
+        allowedGroups: ['Server Access', 'Read Only'],
+        allowedDomains: ['example.com', 'corp.example.com'],
+        allowedEmails: ['admin@example.com'],
+        groupRoleMappings: { 'Server Access': 'admin' },
+        oidc: { scopes: ['openid', 'profile', 'email', 'groups'] },
+      });
+      for (const draft of [form, { ...form, groupRoleMappings: 'Server Access=viewer' }]) {
+        const payload = buildProviderPayload(draft);
+        expect(payload.allowedGroups).toEqual(['Server Access', 'Read Only']);
+        expect(payload.allowedDomains).toEqual(['example.com', 'corp.example.com']);
+        expect(payload.allowedEmails).toEqual(['admin@example.com']);
+      }
+      expect(
+        buildProviderPayload({ ...form, allowedGroups: ' Server Access,\n Read Only\r\n ' })
+          .allowedGroups,
+      ).toEqual(['Server Access', 'Read Only']);
+      expect(buildProviderPayload({ ...form, allowedGroups: '   ' }).allowedGroups).toEqual([]);
+      // Scope/domain/email conveniences remain whitespace-separated, not group-name parsing.
+      const oidc = buildProviderPayload({
+        ...form,
+        type: 'oidc',
+        oidcScopes: 'openid profile email groups',
+        allowedDomains: 'example.com corp.example.com',
+        allowedEmails: 'admin@example.com ops@example.com',
+      });
+      expect((oidc.oidc as Record<string, unknown>).scopes).toEqual([
+        'openid',
+        'profile',
+        'email',
+        'groups',
+      ]);
+      expect(oidc.allowedDomains).toEqual(['example.com', 'corp.example.com']);
+      expect(oidc.allowedEmails).toEqual(['admin@example.com', 'ops@example.com']);
+    },
+  );
+
   it('serializes OIDC group claim settings for restrictions and role mappings', () => {
     const form = {
       ...createEmptyProviderForm(),
@@ -47,7 +91,7 @@ describe('ssoProvidersModel', () => {
     const payload = buildProviderPayload({
       ...form,
       groupRoleMappings: ' Server Access = admin,\n Everyone = viewer ',
-      allowedGroups: 'admins operators',
+      allowedGroups: 'admins, operators',
     });
     expect(payload.groupRoleMappings).toEqual({ 'Server Access': 'admin', Everyone: 'viewer' });
     expect(payload.allowedGroups).toEqual(['admins', 'operators']);

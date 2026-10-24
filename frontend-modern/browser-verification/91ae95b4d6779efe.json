@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "a079862edc1284b90a89ebae1a0fb6086e0e1df2",
+  "verified_at": "2026-10-24T01:35:17.926Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+    "frontend-modern/src/components/Toast/Toast.tsx",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "2eb2ecc8c72fb7462bcd4eab6213e4af730d2c29febdfa839855f8a0f2c79c8f",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "3c995445a21034ed7ca3242bccc5ef14662cf0d6aeddc71f8555218aea6ac23e",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "465e68954b4aa66b3461d480b409c47592864ebc7412b41fc40453e45f6415ba",
+    "frontend-modern/src/components/Toast/Toast.tsx": "c1c564f3f6af3acebf8671d723f23a8b1242dbf7e056af2dff70faaa366a7954",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "cf5d992ef94776f00e31722155388ab622d6d0401273e24d4b195981ecb7face"
+  },
+  "routes": [
+    "/settings/security/sso (production panel with synthetic HTTP, not full application)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Production SSO panel, state hook, API client, Dialog, Toast and CSS with synthetic safe HTTP and controlled clipboard success/refusal. Baseline is the exact supplied parent. No native IdP, encrypted persistence or restart acceptance.",
+    "Refused write remains inside the active editor, preserving draft, omitted client secret and exact spaced group restrictions. An explicit keyboard correction saves and reopens with the same restrictions and corrected role.",
+    "Header/callback layout, clipboard refusal/manual fallback, connection-test failure and SAML metadata-preview failure are inspected at desktop and narrow widths. Feedback and footer are readable. Some WebKit capture frames retain top-heading clipping observations in the lane dossier, not a claim of perfect general layout.",
+    "Retained success notification lowers below blocking dialogs; correction/reopen does not cover the footer. Shared modal isolation is unchanged.",
+    "All fourteen retained captures, including two exact-parent controls, were opened with the native image viewer."
+  ],
+  "interactions": [
+    "Real HTTP-adapter GET/detail/PUT/test/preview flows and callback-copy control; exact payload, scopes, groups/domains, secret omission and explicit correction/reopen checks.",
+    "One pending save does not repeat or dismiss on Escape; read-only controls, focus trapping, Escape close and focus return remain.",
+    "Playwright 1.56.1, Chromium desktop and WebKit 320px; no page errors or external requests. Only deliberately refused HTTP400 and their existing error logs in the final run. Browser contexts and server closed."
+  ]
+}
