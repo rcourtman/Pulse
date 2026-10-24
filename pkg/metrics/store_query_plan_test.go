@@ -666,6 +666,73 @@ func TestRetainedResourceNumbersPreserveScopeAndOrderedSeries(t *testing.T) {
 				}
 			}
 			check(append(append([]string{}, ids...), "missing", ids[0]), nil, 0)
+			check(append(append([]string{}, ids...), "missing", ids[0]), []string{"memory", "cpu", "absent"}, 0)
 		})
+	}
+}
+
+// Filtered raw fleets bind both dimensions already. The row boundary should
+// transport one series ordinal, while a cache hit with reordered metric names
+// must still resolve against this statement's current bindings.
+func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
+	for _, clustered := range []bool{false, true} {
+		for _, valuesOnly := range []bool{false, true} {
+			t.Run(fmt.Sprintf("clustered=%t/values=%t", clustered, valuesOnly), func(t *testing.T) {
+				db := newPlanTestDB(t)
+				if clustered {
+					if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID; CREATE INDEX idx_metrics_tier_time ON metrics(tier,timestamp)`); err != nil {
+						t.Fatal(err)
+					}
+				}
+				store := &Store{db: pdb.Wrap(db, "series-number-binding")}
+				store.clusteredMetrics.Store(clustered)
+				base := time.Unix(1_800_003_600, 0)
+				ids := []string{"b':p2", "a:p4"}
+				names := []string{"memory", "cpu", ":p4"}
+				for i, id := range ids {
+					for j, metric := range names {
+						if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node',?,?,'minute',?,?)`, id, metric, base.Unix(), float64(i*100+j)); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				for _, filters := range [][]string{names, {":p4", "memory", "cpu"}, {"cpu", "memory", ":p4"}} {
+					query, args := store.retainedQuerySQL("node", ids, filters, base.Add(-3*time.Hour), base.Add(time.Minute), 0, []Tier{TierMinute}, false, valuesOnly)
+					rows, err := db.Query(query, args...)
+					if err != nil {
+						t.Fatal(err)
+					}
+					columns, err := rows.Columns()
+					if err != nil {
+						t.Fatal(err)
+					}
+					rows.Close()
+					want := []string{"series_number", "timestamp", "value"}
+					if !valuesOnly {
+						want = append(want, "min_value", "max_value")
+					}
+					if !reflect.DeepEqual(columns, want) {
+						t.Fatalf("repeated series identity still crosses row boundary: got %v, want %v", columns, want)
+					}
+					full, err := store.QueryMetricTypesBatch("node", ids, filters, base.Add(-3*time.Hour), base.Add(time.Minute), 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					values, err := store.QueryMetricValuesBatch("node", ids, filters, base.Add(-3*time.Hour), base.Add(time.Minute), 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, full, values)
+					for i, id := range ids {
+						for j, name := range names {
+							points := full[id][name]
+							if len(points) != 1 || points[0].Value != float64(i*100+j) || !points[0].Timestamp.Equal(base) {
+								t.Fatalf("wrong current series for %q/%q: %+v", id, name, points)
+							}
+						}
+					}
+				}
+			})
+		}
 	}
 }
