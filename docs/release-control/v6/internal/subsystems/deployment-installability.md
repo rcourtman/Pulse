@@ -3374,6 +3374,16 @@ artifact-selection behaviour.
    A rebuilt packet from identical inputs is waste and lineage churn; a
    non-empty prefix that fails packet validation must fail the private build
    instead of being overwritten.
+   The caller itself re-dispatches only one failure: a refusal by the mutator's
+   current-main source check. That check runs before credentials, so nothing
+   was mutated. Every failed job must have failed only that step, and
+   `pulse-pro` main must have moved off the refused run's head. The caller then
+   dispatches again on the new main, up to five attempts within one hour. Any
+   other failed step, an unchanged head or a cancelled run stays terminal.
+   Only the terminal failure is annotated, so reconciliation still reads
+   exactly one private run URL. On 12, 17 and 24 October 2026, unrelated
+   `pulse-pro` merges during the run's queue and validation window caused five
+   such refusals, and each one failed convergence.
    A successfully uploaded `release-activation.json` asset is the irreversible
    release commit, not the earlier `draft=false` PATCH by itself. Before that
    marker, `activate_release` must verify the draft identity and every required
