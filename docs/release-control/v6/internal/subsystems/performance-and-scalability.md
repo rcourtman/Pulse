@@ -2755,7 +2755,16 @@ value points afterward. Full and value projections share scope normalization,
 filters, tier reconciliation, time ordering, display buckets and Docker
 observation provenance; their distinct SQL column shapes must have distinct
 keys within the existing bounded query cache. Neither mode caches results or
-tier presence. Full readers continue to preserve extrema. Legacy databases keep
+tier presence. Full readers continue to preserve extrema. At the application row-decoding
+boundary, native int64 ordinals/timestamps and float64 values are assigned
+without reflective per-observation numeric conversion. Atypical numeric text,
+blobs and integer-valued observations retain database/sql's ordinary conversion;
+NULL, malformed and overflowing values must still fail rather than manufacture
+zeroes. This changes neither SQL nor driver behaviour. The compatibility control
+`TestRetainedNumericScansMatchDatabaseSQL` compares both decoders bit-for-bit,
+including signed zero, large integers and conversion failures; the native scan
+allocation control and existing full/value, tier, scope and detached-read tests
+remain required. Legacy databases keep
 their existing unique index authoritative while deferred startup maintenance
 copies the eight observation columns into the clustered table. `BEGIN IMMEDIATE`
 serializes writers and independent Store migrations before inspection. Copy,
