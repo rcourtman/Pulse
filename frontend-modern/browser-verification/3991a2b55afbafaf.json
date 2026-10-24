@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "bc5491b6d1aca329fe90cd9a052166e458466235",
+  "verified_at": "2026-10-24T16:50:17.767Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "b0a534bfee85c53d53f98e8b931df10c750a6f4a47675cbbbfa3b9caf231ae3b",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "ec01abc4691f74ac7815774b1f16ab29cab922f27a6feb93429575f124bfc5ad",
+    "frontend-modern/src/components/Workloads/guestDrawerHistoryQuery.ts": "193797355b0ae95a4d6acf31822bb671a14fb96d933cc0a7625c360182120712"
+  },
+  "routes": [
+    "/standalone",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Recent persisted enrollments show Waiting for first report with no current metrics. Already overdue agents remain offline and removed enrollments remain absent.",
+    "Expanded desktop and phone drawers show an informational waiting notice, absent current readings and no invented history observations.",
+    "Settings infrastructure shows both waiting labels in the actual phone viewport after scrolling, with the overdue agent still stale.",
+    "An accepted report ends the wait and supplies real CPU 12 percent and memory 25 percent readings.",
+    "The browser and expanded drawer remain open through an actual server restart. Waiting returns without a Current history label, while real prior observations remain labelled Latest stored.",
+    "The saved enrollment receiving no report becomes offline at its original lease deadline. Summary endpoints still contain no invented current samples."
+  ],
+  "interactions": [
+    "Focus a machine row and open details with Enter, dismiss with Escape, reopen and collapse through its header control.",
+    "Inspect full desktop and phone drawer pixels, responsive row wrapping and tablet width. Scroll the mobile Settings ledger to both waiting labels.",
+    "Submit a real synthetic agent report through the private backend, then stop and restart that server without closing the browser or drawer.",
+    "Reload after the original reporting deadline, inspect desktop and phone expiry states, and query actual resource, connection and summary payloads.",
+    "Run the final browser matrix against a freshly rebuilt backend embedding the final frontend assets, with matching source hashes. Stop owned browser and server processes afterwards."
+  ]
+}
