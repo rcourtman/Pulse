@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "52457777c432420ae348822c13ddba3b0244096a",
+  "verified_at": "2026-10-24T10:10:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AI/FindingsPanel.tsx",
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AI/FindingsPanel.tsx": "82205372c7f7e3c42949566043d424233f668a4e176dabb9a2c2cb7b3cfaef36",
+    "frontend-modern/src/components/patrol/ApprovalBanner.tsx": "deace86580cb3b820d08a7ac321e28e6deacf71dfa093137aa69c853ad2591ea",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "6a4f573342c7379fe63620f830f0f0df4029336dcd72b089510cec373c3e29f7",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "e1cad1da45244adf4e41277cccbf670c2651481b10633ab382700cabd6d293a8",
+    "frontend-modern/src/features/patrol/patrolControlPresentation.ts": "6c88f32efbc5222220886b27ebd0da1a59c7d399567d7a8a5d4444c59c0427a8"
+  },
+  "routes": [
+    "/patrol",
+    "/patrol/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "private mock-mode Pulse stack: backend cross-built from origin/main (OSS cmd/pulse) with this commit's frontend served by Vite from the landing clone (sha256 of the five changed runtime files matched this receipt); plaintext ai_findings.json seed: two recurring findings on postgres-replica-01 (unified vm-2e08698ae7c9c5b5, whose powered-off alert is an Inbox item), a cannot_fix finding on west-a-iso-library, a Pulse Patrol runtime finding, plus mock mode's demo findings: 10 open findings on 9 resources",
+    "Inbox detail for postgres-replica-01 Powered off: 'Patrol also raised 2 findings for this resource' with Browse Patrol findings for this resource",
+    "scoped Activity after Browse (fixed): 'Showing Patrol findings for postgres-replica-01', Open work 'Patrol found 2 issues on postgres-replica-01 — 2 recurring', one work group '2 recurring issues', chips Active/All/Resolved, two rows, at 1440 and 390; both rows and their Finding options visible on the phone landing screen",
+    "same scope on origin/main's frontend (HMR swap of the four files, same stack): 'Patrol found 10 issues on 9 affected resources — 1 failed fix, 3 recurring', work groups '1 failed action' and '3 recurring issues', and a 'Needs Attention (1)' chip whose finding is on another resource, above the same two rows; at 390 the second row was pushed below the first screen",
+    "scoped All filter: summary unchanged (open work) and the same two rows",
+    "unscoped after Show all finding options: 'Patrol found 10 issues on 9 affected resources — 1 failed fix, 3 recurring', '1 failed action', '3 recurring issues', 'Needs Attention (1)', unchanged from main (12 on 10 by the final pass, as mock mode's demo cycle added findings; the scope still read 2 on postgres-replica-01)",
+    "approvals pass: the headless run answered GET /api/ai/approvals with two pending investigation_fix approvals (one on postgres-replica-01's WAL finding, expiring in 9 minutes; one on west-a-iso-library), because pending Patrol approvals need the Pro orchestrator. Scoped (fixed): banner 'Action awaiting approval · medium risk · expires 8m 58s · Grow the WAL volume on postgres-replica-01 by 20 GiB', work groups '1 approval waiting' and '2 recurring issues', chips Active/All/Resolved/Approvals (1), two rows. Unscoped: '2 actions awaiting your approval', 'Approvals (2)'. Same scope on main: '2 actions awaiting your approval', 'Patrol found 12 issues on 10 affected resources — 1 failed fix, 6 recurring', '2 approvals waiting', '1 failed action', '6 recurring issues', Needs Attention (1), Approvals (2) above the two rows",
+    "390 px: the single-approval banner's context line overflowed the banner (clipped at the screen edge); after adding min-w-0 to its flex items it ends in an ellipsis inside the banner",
+    "headless Chromium on pulse-dev through a reverse tunnel (the in-app pane was hidden; its DOM reads at 1440 matched); dark theme; zero page errors at either width; final pass on these exact bytes (the five changed runtime files)"
+  ],
+  "interactions": [
+    "opened the postgres-replica-01 Powered off item from the Patrol Inbox at each width",
+    "clicked Browse Patrol findings for this resource; the view switched to Activity with Finding options and history open and scoped; read the scope line, Open work line, work groups, filter chips and rows, and screenshotted the landing screen and the whole panel",
+    "opened the first row's review and its Finding options inside the scope",
+    "switched the scoped filter to All and re-read the summary and rows",
+    "clicked Show all finding options, returned to Active and re-read the unscoped summary, groups, chips and rows",
+    "repeated the whole pass with origin/main's copies of the five runtime files served by the same Vite, with and without injected approvals, then restored this change",
+    "component tests: PatrolIntelligenceWorkspace.resourceScope.test.tsx (real workspace, FindingsPanel and ApprovalBanner, including a findings refresh and the end of the scope), the FindingsPanel resource scope cases, the ApprovalBanner targetIds cases and the two patrolControlPresentation cases fail on origin/main and pass here; unscoped controls pass on both"
+  ]
+}

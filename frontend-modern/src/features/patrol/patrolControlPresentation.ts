@@ -182,6 +182,9 @@ interface PatrolControlCopyInput {
 interface PatrolQueueCountInput {
   affectedResourceCount?: number;
   findingCount?: number;
+  // Set when the queue lists one resource's findings: the summary names it
+  // instead of counting affected resources.
+  resourceName?: string;
   workTypeComposition?: PatrolWorkTypeComposition;
 }
 
@@ -210,6 +213,9 @@ interface PatrolWorkspaceWorkGroupsInput {
         Partial<Pick<PatrolStatus, 'interval_ms' | 'last_patrol_at'>>)
     | null;
   pendingApprovalCount?: number;
+  // One resource's findings. The latest check's health and coverage describe
+  // every resource, so their groups stay in the unscoped queue.
+  resourceScoped?: boolean;
   workTypeComposition?: PatrolWorkTypeComposition;
 }
 
@@ -407,14 +413,13 @@ export function getPatrolQueueWorkspaceDescription(
 ): string {
   const findingCount = normalizeCount(input.findingCount);
   const affectedResourceCount = normalizeCount(input.affectedResourceCount);
-  if (findingCount > 0 && affectedResourceCount > 0) {
+  const resourceName = normalizeText(input.resourceName);
+  if (findingCount > 0 && (resourceName || affectedResourceCount > 0)) {
     const compositionClause = input.workTypeComposition
       ? getPatrolWorkTypeCompositionClause(input.workTypeComposition)
       : '';
-    return `Patrol found ${getPatrolFindingIssueCountLabel(findingCount)} on ${formatCount(
-      affectedResourceCount,
-      'affected resource',
-    )}${compositionClause}. ${getPatrolQueueActionDetail(input)}`;
+    const subject = resourceName || formatCount(affectedResourceCount, 'affected resource');
+    return `Patrol found ${getPatrolFindingIssueCountLabel(findingCount)} on ${subject}${compositionClause}. ${getPatrolQueueActionDetail(input)}`;
   }
 
   if (input.autonomyLocked) {
@@ -464,7 +469,7 @@ export function getPatrolWorkspaceWorkGroups(
     });
   }
 
-  if (latestRunFailed || statusErrorCount > 0) {
+  if (!input.resourceScoped && (latestRunFailed || statusErrorCount > 0)) {
     const checkedResources = normalizeCount(latestRun?.resources_checked);
     groups.push({
       id: 'failed-check',
@@ -487,6 +492,7 @@ export function getPatrolWorkspaceWorkGroups(
   }
 
   if (
+    !input.resourceScoped &&
     isPatrolCoverageStale({
       latestRun,
       nowMs: input.nowMs,

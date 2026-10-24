@@ -44,8 +44,15 @@ vi.mock('../PatrolAttentionWorkbench', () => ({
 }));
 
 vi.mock('../PatrolIntelligenceWorkspace', () => ({
-  PatrolIntelligenceWorkspace: (props: { findingResourceId?: string }) => (
-    <div data-testid="patrol-workspace" data-resource-id={props.findingResourceId ?? ''} />
+  PatrolIntelligenceWorkspace: (props: {
+    findingResourceId?: string;
+    findingResourceName?: string;
+  }) => (
+    <div
+      data-testid="patrol-workspace"
+      data-resource-id={props.findingResourceId ?? ''}
+      data-resource-name={props.findingResourceName ?? ''}
+    />
   ),
 }));
 
@@ -119,10 +126,15 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     expect(window.location.pathname).toBe('/patrol/activity');
     expect(screen.getByText(/Showing Patrol findings for Database VM/i)).toBeInTheDocument();
     expect(screen.getByTestId('patrol-workspace')).toHaveAttribute('data-resource-id', 'vm-101');
+    expect(screen.getByTestId('patrol-workspace')).toHaveAttribute(
+      'data-resource-name',
+      'Database VM',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Show all finding options' }));
 
     expect(screen.getByTestId('patrol-workspace')).toHaveAttribute('data-resource-id', '');
+    expect(screen.getByTestId('patrol-workspace')).toHaveAttribute('data-resource-name', '');
     expect(screen.queryByText(/Showing Patrol findings for Database VM/i)).not.toBeInTheDocument();
   });
 

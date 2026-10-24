@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FindingsPanel } from '../FindingsPanel';
 import { RELATIVE_TIME_TICK_MS } from '@/utils/relativeTimeClock';
@@ -80,6 +80,8 @@ const mockState = vi.hoisted(() => {
       targetId: string;
       expiresAt?: string;
     }>,
+    attentionFindingIds: [] as string[],
+    approvalFindingIds: [] as string[],
     getResource,
     loadFindings,
     loadPatrolFindings,
@@ -141,13 +143,17 @@ vi.mock('@/stores/aiIntelligence', () => ({
       return [];
     },
     get patrolFindingsNeedingAttention() {
-      return [];
+      return mockState.patrolFindings.filter((finding) =>
+        mockState.attentionFindingIds.includes(finding.id as string),
+      );
     },
     get findingsWithPendingApprovals() {
       return [];
     },
     get patrolFindingsWithPendingApprovals() {
-      return [];
+      return mockState.patrolFindings.filter((finding) =>
+        mockState.approvalFindingIds.includes(finding.id as string),
+      );
     },
     get needsAttentionCount() {
       return 0;
@@ -923,5 +929,88 @@ describe('FindingsPanel future times', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('FindingsPanel resource scope', () => {
+  const finding = (
+    id: string,
+    title: string,
+    resource: { resourceId: string; resourceName: string },
+    extra: Record<string, unknown> = {},
+  ) => ({ ...mockState.initialPatrolFindings[0], id, title, ...resource, ...extra });
+  const web = { resourceId: 'docker:host-1/web', resourceName: 'afs-web' };
+  const db = { resourceId: 'vm-db', resourceName: 'db-01' };
+  const overdue = {
+    status: 'dismissed',
+    dismissedReason: 'will_fix_later',
+    remindAt: '2026-01-01T00:00:00Z',
+  };
+  const reviewButtons = () =>
+    screen
+      .getAllByRole('button', { name: /^Review issue for / })
+      .map((button) => button.getAttribute('aria-label') ?? button.textContent);
+
+  beforeEach(() => {
+    mockState.patrolFindingsLoading = false;
+    mockState.patrolFindingsError = null;
+    mockState.patrolPendingApprovals = [];
+    mockState.patrolFindings = [
+      finding('web-disk', 'Web disk is filling', web),
+      finding('web-restart', 'Web container keeps restarting', web),
+      finding('web-later', 'Web certificate renewal slipping', web, overdue),
+      finding('db-backup', 'Database backup is stale', db),
+      finding('db-later', 'Database patching slipping', db, overdue),
+    ];
+    mockState.attentionFindingIds = ['web-disk', 'web-restart', 'db-backup'];
+    mockState.approvalFindingIds = ['web-restart', 'db-backup'];
+  });
+
+  afterEach(() => {
+    mockState.attentionFindingIds = [];
+    mockState.approvalFindingIds = [];
+  });
+
+  it("counts only the scoped resource's findings in the filter chips", () => {
+    render(() => (
+      <FindingsPanel
+        findingsSource="patrol"
+        resourceId="docker:host-1/web"
+        filterOverride="active"
+      />
+    ));
+
+    expect(reviewButtons()).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /^Needs Attention \(2\)$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Overdue commitments \(1\)$/ })).toBeInTheDocument();
+
+    // Each chip opens exactly the rows it counted.
+    fireEvent.click(screen.getByRole('button', { name: /^Approvals \(1\)$/ }));
+    expect(reviewButtons()).toEqual(['Review issue for Web container keeps restarting']);
+    fireEvent.click(screen.getByRole('button', { name: /^Overdue commitments \(1\)$/ }));
+    expect(reviewButtons()).toEqual(['Review issue for Web certificate renewal slipping']);
+  });
+
+  it('counts every finding when the panel is not scoped to a resource', () => {
+    render(() => <FindingsPanel findingsSource="patrol" filterOverride="active" />);
+
+    expect(screen.getByRole('button', { name: /^Needs Attention \(3\)$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Approvals \(2\)$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Overdue commitments \(2\)$/ })).toBeInTheDocument();
+  });
+
+  it('keeps the filter bar for a scoped resource with no findings', () => {
+    render(() => (
+      <FindingsPanel findingsSource="patrol" resourceId="vm-quiet" filterOverride="active" />
+    ));
+
+    expect(screen.queryAllByRole('button', { name: /^Review issue for / })).toHaveLength(0);
+    // Resolved and All stay reachable; no chip counts another resource's work.
+    for (const name of [/^Active$/, /^All$/, /^Resolved$/]) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('button', { name: /^Needs Attention/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Approvals/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Overdue commitments/ })).not.toBeInTheDocument();
   });
 });

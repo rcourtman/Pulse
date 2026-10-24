@@ -2628,6 +2628,21 @@ subject is the unified resource ID findings carry (see ai-runtime, 24 October
 2026); before, a Docker container alert's raw `docker:<host>/<container>`
 reference scoped the list to nothing and the detail denied a finding Patrol
 had raised on that container.
+The scope carries the resource's name with its ID, and nothing above the
+scoped list counts another resource's work: the `Open work` description names
+the resource and counts its open findings (`Patrol found 2 issues on <name>`,
+the rows the Active filter shows), the work groups count its approvals, failed
+actions and recurring issues, and the findings filter's Needs Attention,
+Approvals and Overdue chips each count that resource's findings in their own
+subset. The approval banner shows only the approvals for the resource's
+findings, so one about to expire keeps its countdown in the scope. The latest
+check's health and coverage-stale groups describe every resource, so they stay
+in the unscoped queue, and the page header keeps the last check. Before
+24 October 2026 the scoped list sat under the whole queue's summary and
+groups, so two rows read as `3 issues on 2 affected resources`. Proof:
+`PatrolIntelligenceWorkspace.resourceScope.test.tsx`, the
+`FindingsPanel resource scope` cases in `FindingsPanel.links.test.tsx`,
+`ApprovalBanner.test.tsx` and `patrolControlPresentation.test.ts`.
 The temporary controls state in one visible line that acknowledgement and
 suppression are short-term; the former `More ways to manage this issue`
 disclosure is gone.

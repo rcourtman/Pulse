@@ -7,6 +7,8 @@
  * - Hidden when no pending approvals
  * - Single approval: deep-links to the exact governed action when available
  * - Multiple approvals: links to the open Actions inbox
+ * - Given targetIds (a findings list scoped to one resource), only the
+ *   approvals for those findings
  */
 
 import { Component, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
@@ -23,10 +25,14 @@ import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 
 const APPROVAL_BANNER_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
-export const ApprovalBanner: Component = () => {
+export const ApprovalBanner: Component<{ targetIds?: ReadonlySet<string> }> = (props) => {
   const [tick, setTick] = createSignal(Date.now());
 
-  const pending = createMemo(() => aiIntelligenceStore.patrolPendingApprovals);
+  const pending = createMemo(() => {
+    const approvals = aiIntelligenceStore.patrolPendingApprovals;
+    const targetIds = props.targetIds;
+    return targetIds ? approvals.filter((approval) => targetIds.has(approval.targetId)) : approvals;
+  });
 
   // Only tick when there are pending approvals to avoid unnecessary work
   createEffect(() => {
@@ -53,11 +59,11 @@ export const ApprovalBanner: Component = () => {
     <Show when={pending().length > 0}>
       <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-3">
         <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div class="flex items-center gap-3">
+          <div class="flex min-w-0 items-center gap-3">
             <div class="shrink-0 p-1.5 border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/25 rounded-md">
               <ShieldAlertIcon class="w-4 h-4 text-amber-500 dark:text-amber-400" />
             </div>
-            <div>
+            <div class="min-w-0">
               <Show when={pending().length === 1 && firstApproval()}>
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-sm font-medium text-amber-900 dark:text-amber-100">

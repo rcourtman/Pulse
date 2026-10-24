@@ -5,6 +5,7 @@ import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { ApprovalBanner, RunHistoryPanel } from '@/components/patrol';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import {
   getFindingTitlePresentation,
   buildPatrolFindingDisplayGroups,
@@ -61,23 +62,48 @@ const PatrolSetupPanel = lazy(() => import('./PatrolSetupPanel'));
 export function PatrolIntelligenceWorkspace(props: {
   state: PatrolIntelligenceState;
   findingResourceId?: string;
+  findingResourceName?: string;
 }) {
   const state = props.state;
   // The selected run stays as picked when run history is re-read, so its start
   // age reads the shared clock instead of freezing at selection.
   const now = useRelativeTimeNow();
-  const queueDisplayGroups = createMemo(() =>
-    buildPatrolFindingDisplayGroups(state.findingsTabBadgeFindings()),
-  );
-  const queueIssueCount = createMemo(
-    () => state.findingsTabBadgeCount() ?? state.findingsTabBadgeFindings().length,
+  // An Inbox item's "Browse Patrol findings for this resource" narrows the
+  // findings list to that resource, so the summary and work groups above it
+  // count the same findings.
+  const queueFindings = createMemo(() => {
+    const findings = state.findingsTabBadgeFindings();
+    const resourceId = props.findingResourceId;
+    return resourceId ? findings.filter((finding) => finding.resourceId === resourceId) : findings;
+  });
+  const queueDisplayGroups = createMemo(() => buildPatrolFindingDisplayGroups(queueFindings()));
+  const queueIssueCount = createMemo(() =>
+    props.findingResourceId
+      ? queueFindings().length
+      : (state.findingsTabBadgeCount() ?? queueFindings().length),
   );
   const queueAffectedResourceCount = createMemo(() =>
     queueDisplayGroups().reduce((count, group) => count + group.affectedResourceCount, 0),
   );
-  const workTypeComposition = createMemo(() =>
-    getPatrolWorkTypeComposition(state.findingsTabBadgeFindings()),
-  );
+  const workTypeComposition = createMemo(() => getPatrolWorkTypeComposition(queueFindings()));
+  // The scoped resource's findings: its work group and the approval banner
+  // count and show only the approvals waiting on them.
+  const scopedFindingIds = createMemo(() => {
+    const resourceId = props.findingResourceId;
+    if (!resourceId) return undefined;
+    return new Set(
+      aiIntelligenceStore.patrolFindings
+        .filter((finding) => finding.resourceId === resourceId)
+        .map((finding) => finding.id),
+    );
+  });
+  const queuePendingApprovalCount = createMemo(() => {
+    const findingIds = scopedFindingIds();
+    if (!findingIds) return state.patrolPendingApprovalCount();
+    return aiIntelligenceStore.patrolPendingApprovals.filter((approval) =>
+      findingIds.has(approval.targetId),
+    ).length;
+  });
   const isHistoryOpen = () => state.activeTab() === 'history';
   // Once the operator starts the setup panel it stays until they finish:
   // polling flips the readiness cause mid-setup (no provider, then model
@@ -132,6 +158,7 @@ export function PatrolIntelligenceWorkspace(props: {
               autonomyLocked: state.autoFixLocked(),
               affectedResourceCount: queueAffectedResourceCount(),
               findingCount: queueIssueCount(),
+              resourceName: props.findingResourceId ? props.findingResourceName : undefined,
               workTypeComposition: workTypeComposition(),
             });
   const openHistory = () => {
@@ -161,7 +188,8 @@ export function PatrolIntelligenceWorkspace(props: {
     getPatrolWorkspaceWorkGroups({
       latestRun: latestCompletedRun(),
       patrolStatus: state.patrolStatus(),
-      pendingApprovalCount: state.patrolPendingApprovalCount(),
+      pendingApprovalCount: queuePendingApprovalCount(),
+      resourceScoped: Boolean(props.findingResourceId),
       workTypeComposition: workTypeComposition(),
     }),
   );
@@ -178,7 +206,7 @@ export function PatrolIntelligenceWorkspace(props: {
 
   return (
     <>
-      <ApprovalBanner />
+      <ApprovalBanner targetIds={scopedFindingIds()} />
 
       <div class="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div class="min-w-0">
