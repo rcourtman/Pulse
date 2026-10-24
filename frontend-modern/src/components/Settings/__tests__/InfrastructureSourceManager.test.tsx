@@ -1,4 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import {
@@ -14,6 +22,9 @@ import {
   type InfrastructureSystemRow,
 } from '../connectionsTableModel';
 import type { Connection } from '@/api/connections';
+import { ConnectionsAPI } from '@/api/connections';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import { useConnectionsLedger } from '../useConnectionsLedger';
 
 const clusterDeployApi = vi.hoisted(() => ({
   getCandidates: vi.fn(),
@@ -112,7 +123,37 @@ const member = (
 describe('InfrastructureSourceManager setup summary', () => {
   afterEach(() => {
     cleanup();
+    resetCreateNonSuspendingQueryCacheForTest();
+    vi.restoreAllMocks();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+  });
+
+  it('renders the canonical first-report label through the real connection ledger', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({
+      connections: [connectionFixture({ state: 'pending', name: 'Waiting host' })],
+      systems: [],
+    });
+    const ledger = renderHook(() => useConnectionsLedger());
+    await waitFor(() => expect(ledger.result.rows()).toHaveLength(1));
+    const onOpenConnection = vi.fn();
+    render(() => (
+      <InfrastructureSourceManager
+        rows={ledger.result.rows}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSource={vi.fn()}
+        onAddInfrastructure={vi.fn()}
+        onOpenConnection={onOpenConnection}
+        onOpenAgentDoctor={vi.fn()}
+      />
+    ));
+    expect(screen.getByText('Waiting for first report')).toBeInTheDocument();
+    expect(screen.queryByText('Unreachable')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
+    expect(onOpenConnection).toHaveBeenCalled();
   });
 
   it('renders manual discovery as a visible operator action', () => {

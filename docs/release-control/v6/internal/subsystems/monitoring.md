@@ -2680,6 +2680,17 @@ the live last-known host snapshot. After a server restart, durable continuity
 must still expire persisted operation alerts on the same accepted-telemetry
 lease; missing telemetry then remains visible through the separate confirmed
 connectivity lifecycle.
+After a restart, a saved agent enrollment without a report in this monitor
+generation waits only while its last accepted report remains inside that same
+lease. The read projection publishes pending agent delivery and unknown
+resource status, preserving identity and the historical receipt with no
+metrics. An accepted report replaces that projection. Lease expiry publishes
+offline even if no report arrives. Already-expired or removed enrollments do
+not receive a new grace period, and provider failures remain authoritative.
+Rejected duplicate or buffered reports cannot hydrate a live host or finish
+the wait. They preserve transport liveness and the accepted-report watermark.
+Realtime resource conversion carries the same source delivery map and original
+receipt as the canonical API, including pending delivery and absent metrics.
 PBS backup snapshot refresh is a bounded monitoring hot path: group-level
 snapshot fetches must run through the fixed worker pool in
 `internal/monitoring/monitor_backups.go`, reuse cached snapshots on per-group
@@ -4855,7 +4866,10 @@ path through `evaluateHostAgents` and the registry-backed store refresh.
 
 The metrics-history API's live fallback relies on the same projection: it
 treats a host row reading `offline` as past its lease, and an agent linked to
-a Proxmox node then answers from the node row. For node rows it takes a
+a Proxmox node then answers from the node row. A pending startup enrollment
+also supplies no live fallback. History and summary charts keep any actual
+stored observations without synthesizing zero-valued current samples.
+For node rows it takes a
 projected `offline` or `unknown` as the lapse and otherwise reads the
 registry's sightings (`NodeView.SourceStatus`), because a projected `warning`
 is ambiguous: the stale pass shows an unreachable node that way, and so does a

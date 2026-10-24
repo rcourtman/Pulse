@@ -21,6 +21,13 @@
 
 ## Purpose
 
+### Agent startup is not storage evidence
+
+An agent's pending first report after a server restart is a monitoring-owned
+delivery state. Its retained enrollment and historical receipt carry no fresh
+storage metrics, healthy storage verdict or recovery evidence. Storage and
+recovery consumers continue to require their own source observations.
+
 ### Failed posture refreshes withdraw retained assessments (24 October 2026)
 
 Protection posture remains visible while a refresh is pending, but a settled

@@ -402,6 +402,17 @@ describe('getResourceMetricsHistoryTarget branch coverage', () => {
 });
 
 describe('getResourceMetricsHistoryCurrentMetrics branch coverage', () => {
+  it('does not supply a current fallback while a saved agent awaits its first report', () => {
+    const waiting = baseResource({
+      status: 'unknown',
+      sourceStatus: { agent: { status: 'pending' } },
+      cpu: { current: 12 },
+      memory: { current: 25 },
+      disk: { current: 30 },
+    });
+    expect(getResourceMetricsHistoryCurrentMetrics(waiting)).toEqual({});
+    expect(getResourceMetricsHistoryTarget(waiting)).not.toBeNull();
+  });
   it('returns every metric as a finite number when the resource is fully populated', () => {
     // All finiteMetric calls take the "finite number -> return value" arm;
     // memory/disk ternaries take the TRUE arm and getMemoryPercent/getDiskPercent

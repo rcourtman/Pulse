@@ -21,6 +21,13 @@
 
 ## Purpose
 
+### Pending agent delivery supplies no live chart fallback
+
+A saved enrollment awaiting its first accepted report remains queryable by its
+existing metrics target. History and summary chart routes retain stored series
+but cannot synthesize a now-stamped live sample from that enrollment's absent
+metrics. An accepted report restores normal live fallback behaviour.
+
 ### Typed MCP fleet filters survive HTTP projection
 
 GET/DELETE capability projection preserves public string and boolean query
@@ -8025,6 +8032,11 @@ API-backed lifecycle state. The retired
 `InfrastructureOperationsController.tsx` shell and
 `useInfrastructureReportingState.tsx` reporting path must not be reintroduced
 as parallel transport owners.
+The `/api/connections` agent projection preserves monitoring's pending
+first-report state across a restart without renewing the saved last-seen
+timestamp. An explicitly offline agent cannot become active through the
+longer fleet heartbeat fallback. API provider errors and pending provider
+polls retain their own connection states.
 That same `/api/connections` projection also owns collection-method truth for
 the infrastructure ledger: `useConnectionsLedger.ts` must derive one canonical
 subtitle (`via platform API`, `via Pulse Agent`, or `via platform API and

@@ -13939,6 +13939,11 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 	setUnexportedField(t, monitor, "state", state)
 	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
 	setUnexportedField(t, monitor, "metricsStore", store)
+	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := continuity.Upsert(config.HostContinuityEntry{HostID: "agent-waiting", Hostname: "waiting", LastSeen: now.Add(-time.Second), IntervalSeconds: 30}); err != nil {
+		t.Fatal(err)
+	}
+	setUnexportedField(t, monitor, "hostContinuityStore", continuity)
 	router := &Router{monitor: monitor}
 
 	// Preserve the source's own verdict through the stale pass (#2634): a
@@ -13976,6 +13981,8 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ resourceType, resourceID, metric string }{
+		{"agent", "agent-waiting", "cpu"},
+		{"agent", "agent-waiting", "temperature"},
 		{"agent", "agent-silent", "cpu"},
 		{"agent", "agent-silent", "temperature"},
 		{"node", "pve-unreachable", "memory"},
@@ -14031,6 +14038,11 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		if resp.Source != "live" || len(resp.Points) != 1 || math.Abs(resp.Points[0].Value-tc.want) > 0.001 {
 			t.Fatalf("%s %s: current %s not served as a live point: source=%q points=%+v", tc.resourceType, tc.resourceID, tc.metric, resp.Source, resp.Points)
 		}
+	}
+	// A saved enrollment may still have real history from its previous run.
+	monitor.GetMetricsHistory().AddGuestMetric("agent:agent-waiting", "cpu", 37, now.Add(-time.Minute))
+	if resp, _ := history("resourceType=agent&resourceId=agent-waiting&metric=cpu"); resp.Source == "live" || len(resp.Points) != 1 || resp.Points[0].Value != 37 {
+		t.Fatalf("pending enrollment lost stored history or relabelled it as live: %+v", resp)
 	}
 }
 

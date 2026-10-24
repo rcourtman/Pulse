@@ -1154,6 +1154,7 @@ type ResourceConvertInput struct {
 	PlatformType          string
 	SourceType            string
 	Sources               []string
+	SourceStatus          json.RawMessage
 	ParentID              string
 	ParentName            string
 	ChildCount            int
@@ -1241,6 +1242,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		PlatformType:          input.PlatformType,
 		SourceType:            input.SourceType,
 		Sources:               append([]string(nil), input.Sources...),
+		SourceStatus:          input.SourceStatus,
 		ParentID:              input.ParentID,
 		ParentName:            input.ParentName,
 		ChildCount:            input.ChildCount,

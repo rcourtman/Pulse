@@ -27,6 +27,7 @@ import { $RAW } from 'solid-js/store';
 import type { Resource } from '@/types/resource';
 import {
   getExplicitAgentIdFromResource,
+  getAgentFirstReportStatusIndicator,
   getExplicitResourceClusterName,
   hasDockerFacetEvidence,
 } from '@/utils/agentResources';
@@ -161,8 +162,8 @@ const mergeAgentFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T | 
   return next;
 };
 
-// Source status is per-source evidence the realtime payload never carries, so
-// it survives merges as REST enrichment. Entries of sources the merged row no
+// Thin producers can omit source status, so it survives as REST enrichment.
+// Entries of sources the merged row no
 // longer lists are stale: they would keep a split-off provider claiming the row.
 const pruneSourceStatus = (
   value: unknown,
@@ -940,6 +941,19 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
     merged.sourceStatus = status as Resource['sourceStatus'];
   } else if (merged.sourceStatus !== undefined) {
     delete merged.sourceStatus;
+  }
+  if (getAgentFirstReportStatusIndicator(incoming)) {
+    // A new monitor generation has no accepted telemetry for this enrollment.
+    // Its explicit delivery state withdraws the previous browser observation.
+    merged.cpu = undefined;
+    merged.memory = undefined;
+    merged.disk = undefined;
+    merged.network = undefined;
+    merged.diskIO = undefined;
+    merged.temperature = undefined;
+    merged.uptime = undefined;
+    merged.agent = incoming.agent;
+    merged.platformData = incoming.platformData;
   }
   return merged;
 };

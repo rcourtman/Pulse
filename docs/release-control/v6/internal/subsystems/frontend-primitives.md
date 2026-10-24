@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Agent first-report status
+
+Machines, resource detail drawers and agent connection rows use the shared
+"Waiting for first report" label for monitoring's bounded pending startup
+state. Machines treats that informational state as unknown rather than an outage.
+The collapsed machine row shows the wording beside its name and suppresses
+cached metric bars until accepted telemetry arrives. Consumers must not infer
+the wait from a browser timer or hide a provider failure behind it. The expanded
+drawer presents the wait as information and does not synthesize a current
+chart reading from absent or cached metrics. Stored history remains available.
+Pending API polls retain their own wording.
+
 ### Backup posture failure and retry stay source-local (24 October 2026)
 
 The Backups posture notice offers a keyboard-operable retry with the existing

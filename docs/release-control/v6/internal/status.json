@@ -4785,6 +4785,29 @@
             "run",
             "type-check"
           ]
+        },
+        {
+          "id": "ra42-startup-agent-history",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "./internal/api/chartapi",
+            "-run",
+            "TestContract_MetricsHistoryLivePointOnlyWhileSourceReports|TestChartsDoNotSynthesizeCurrentMetricsForPendingEnrollment",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra42-startup-agent-report",
+          "run": [
+            "go",
+            "test",
+            "./internal/monitoring",
+            "-run",
+            "TestHostAgentStartupWaitsWithinAcceptedReportLease",
+            "-count=1"
+          ]
         }
       ],
       "evidence": [
@@ -4802,6 +4825,24 @@
         {
           "repo": "pulse",
           "path": "internal/alerts/operational_state_writers_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/chartapi/service_handlers_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/monitor_host_agents_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },

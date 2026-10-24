@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "base_sha": "0a98f0a8debb2c96870d5ef0133d3b31491e830b",
+  "verified_at": "2026-10-24T15:41:10.218Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts",
+    "frontend-modern/src/utils/agentResources.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "406ff7d3ec98ea605ccc1accc2cfe8e26c594cad8557c75b9383f2bac6f48038",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "05197e1b31e6f25812fe2c652d0676ebbc3b607c4dc67df11bd2303967793c1d",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "9c800cdffe393b3c7671f05940c6f2b682e67dff9b0922f2a098ef726e4f6aba",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "f636b3c362e516f6d9078aa1c4dc431db500fec333a2645f9d04c6502b140498",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "c62059c55e1f4ff5ab397a2306ac2ec72ae1f0a84c9cc65a084f49cfef3f2ef3",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "30c286d18cf51dff8984ce49ce6c76d5db1ecdcee642c80dd2e3ac38055d2728",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "0c11c74b2e92f84af5c83a5064d04e3ee13843a43273bcef0038c8070648fcbe",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "f7de0eadcd75e9b6e575a6fb53a5430985578fbdca504757d7a2457d1ab8a9da",
+    "frontend-modern/src/utils/agentResources.ts": "c3c6a003da42e0075cad3b9a5530cc64bf718529c9ea648e5777b8779933b5c6",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "a13924bf6410c4f3439ce59e68b582c45b88553f455fc143d4bd35f73ac7624a"
+  },
+  "routes": [
+    "/standalone",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Recent saved agents show Waiting for first report with unknown status and no current metric bars.",
+    "An overdue saved agent remains offline. An unreported enrollment becomes offline at its original lease deadline.",
+    "Removed saved enrollments remain absent after startup and restart.",
+    "Expanded pending drawer shows an informational wait and empty history without fabricated zero-valued current readings.",
+    "An accepted report ends the wait and shows live CPU and memory readings.",
+    "An open browser and inline drawer survive an actual server restart, withdraw current readings, and retain labelled stored history.",
+    "Settings agent rows show the first-report label on desktop and narrow layouts."
+  ],
+  "interactions": [
+    "Focus the machine expansion button, open and close with Enter, press Escape, and collapse through the drawer header.",
+    "Open the machine drawer by selecting its name on desktop and narrow viewports; inspect wrapping, chart placement and dismissal.",
+    "Navigate between /standalone and /settings/infrastructure and scroll the narrow Settings page to inspect the last pending row in the viewport.",
+    "Send an authenticated synthetic agent report and observe the transition to healthy telemetry.",
+    "Keep the page and drawer open during a private server restart and inspect the restored pending state and stored history.",
+    "Wait through the original reporting deadline, reload, and verify the overdue and removed enrollment states."
+  ]
+}

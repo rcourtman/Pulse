@@ -13,6 +13,8 @@ import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertsForUnifiedResource, getOwnAlertsForUnifiedResource } from '@/utils/alerts';
 import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
+import { InlineNotice } from '@/components/shared/InlineNotice';
+import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
 import {
   getAlertStatedRowLabels,
   getDrawerChartAlerts,
@@ -404,6 +406,13 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
   return (
     <div class="space-y-3">
+      <Show when={getAgentFirstReportStatusIndicator(resource())}>
+        {(waiting) => (
+          <InlineNotice tone="info" role="status">
+            {waiting().label}
+          </InlineNotice>
+        )}
+      </Show>
       <DrawerAttentionSection items={attentionItems()} />
       <Show when={attentionItems().length === 0}>
         <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />

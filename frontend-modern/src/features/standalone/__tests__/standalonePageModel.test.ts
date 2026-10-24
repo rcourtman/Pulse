@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import {
   buildStandalonePageModel,
   buildStandalonePostureSummary,
+  getStandaloneResourceStatusIndicator,
   sortStandaloneResourcesByAttention,
 } from '../standalonePageModel';
 
@@ -21,6 +22,28 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('standalonePageModel', () => {
+  it('keeps startup waiting out of the outage and attention counts, then follows recovery or expiry', () => {
+    const saved = resource({ status: 'unknown', sourceStatus: { agent: { status: 'pending' } } });
+    expect(getStandaloneResourceStatusIndicator(saved)).toEqual({
+      variant: 'info',
+      label: 'Waiting for first report',
+    });
+    expect(buildStandalonePostureSummary([saved])).toMatchObject({
+      total: 1,
+      unknown: 1,
+      critical: 0,
+      attention: 0,
+    });
+    const now = Date.now();
+    const online = resource({
+      status: 'online',
+      lastSeen: now,
+      sourceStatus: { agent: { status: 'online' } },
+    });
+    expect(getStandaloneResourceStatusIndicator(online, now).label).toBe('Online');
+    const expired = resource({ status: 'offline', sourceStatus: { agent: { status: 'stale' } } });
+    expect(getStandaloneResourceStatusIndicator(expired).variant).toBe('danger');
+  });
   it('classifies each resource once per attention sort and reclassifies on the next call', () => {
     const now = 1_700_000_030_000;
     let firstStatus: Resource['status'] = 'online';

@@ -3,6 +3,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
 import {
+  agentAttachmentProblem,
   infrastructureRowMonitoringPath,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
@@ -328,6 +329,42 @@ describe('InfrastructureWorkspace', () => {
 
   const renderWorkspace = (propOverrides: Record<string, unknown> = {}) =>
     render(() => (<InfrastructureWorkspace {...{ ...baseProps(), ...propOverrides }} />) as any);
+
+  it('keeps a working provider active while its attached agent awaits a first report', async () => {
+    const provider = connectionFixture();
+    const agent = connectionFixture({ id: 'agent:waiting', type: 'agent', state: 'pending' });
+    connectionState.rows = [
+      {
+        id: provider.id,
+        ownerType: provider.type,
+        name: provider.name,
+        subtitle: 'via platform API and Pulse Agent',
+        source: 'both',
+        host: provider.address,
+        coverageLabels: ['VMs'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        ...emptyFleetRow,
+        problem: agentAttachmentProblem(agent),
+        enabled: true,
+        canEdit: true,
+        canPause: false,
+        canRemove: true,
+        isAgent: false,
+        isCluster: false,
+        attachedConnections: [agent],
+        members: [],
+        connection: provider,
+      },
+    ];
+    renderWorkspace();
+    await waitFor(() => expect(screen.getByText('Waiting for first report')).toBeInTheDocument());
+    expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Unreachable')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Manage$/i })).toBeInTheDocument();
+  });
 
   it('renders the source manager landing without empty platform sections', async () => {
     renderWorkspace();
