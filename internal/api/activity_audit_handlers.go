@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -300,21 +301,15 @@ func (h *AuditHandlers) HandleUpdateWebhooks(w http.ResponseWriter, r *http.Requ
 	// Limit request body size to prevent memory exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
 
-	var req struct {
-		URLs []string `json:"urls"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
-		return
-	}
-	if req.URLs == nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "An explicit urls array is required; use [] to remove all audit webhooks", nil)
+	urls, err := decodeAuditWebhookSelection(r.Body)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", err.Error(), nil)
 		return
 	}
 
 	// Validate all webhook URLs
-	validatedURLs := make([]string, 0, len(req.URLs))
-	for _, rawURL := range req.URLs {
+	validatedURLs := make([]string, 0, len(urls))
+	for _, rawURL := range urls {
 		if err := validateWebhookURL(rawURL); err != nil {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_url", fmt.Sprintf("Invalid webhook URL: %s", err.Error()), map[string]string{"url": rawURL})
 			return
@@ -330,6 +325,55 @@ func (h *AuditHandlers) HandleUpdateWebhooks(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Decode one complete selection before validating URLs or updating destinations.
+// Struct/map decoding would discard repeated members. Match the struct decoder's
+// case-insensitive keys, including JSON escapes, but never choose a last value.
+func decodeAuditWebhookSelection(body io.Reader) ([]string, error) {
+	invalidBody := fmt.Errorf("Invalid request body")
+	decoder := json.NewDecoder(body)
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return nil, invalidBody
+	}
+
+	var urls []string
+	seenURLs := false
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return nil, invalidBody
+		}
+		if name, ok := key.(string); ok && strings.EqualFold(name, "urls") {
+			if seenURLs {
+				return nil, fmt.Errorf("Only one urls array may be supplied")
+			}
+			seenURLs = true
+			if err := decoder.Decode(&urls); err != nil {
+				return nil, invalidBody
+			}
+		} else {
+			// Retain forward-compatible unknown fields without letting a nested
+			// urls member masquerade as a top-level destination selection.
+			var ignored json.RawMessage
+			if err := decoder.Decode(&ignored); err != nil {
+				return nil, invalidBody
+			}
+		}
+	}
+	if closing, err := decoder.Token(); err != nil || closing != json.Delim('}') {
+		return nil, invalidBody
+	}
+	// Do not accept another document, trailing junk, or an oversized suffix.
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return nil, invalidBody
+	}
+	if urls == nil {
+		return nil, fmt.Errorf("An explicit urls array is required; use [] to remove all audit webhooks")
+	}
+	return urls, nil
 }
 
 // validateWebhookURL validates a webhook URL for security.

@@ -4102,6 +4102,19 @@ forwarding remain unchanged; these controls establish no receiver delivery.
 The same test file pins both methods, unchanged state after refusal, deliberate
 clear/restore, invalid-URL atomicity and tenant-scoped mutation.
 
+Audit webhook updates also reject competing top-level `urls` members with
+`400 invalid_request`, before DNS/URL validation or any logger update. JSON
+escapes and the existing case-insensitive key matching (including Unicode
+case folds) identify the same selection: identical duplicates are ambiguous
+too. A singleton alias, well-formed unknown fields and nested metadata remain
+compatible. The bounded body must contain one complete JSON object, followed
+only by whitespace; a second document, junk or an oversized suffix cannot
+silently apply its first selection. Explicit `[]` clear/restore, atomic URL/SSRF
+validation, tenant selection, access/entitlement and best-effort delivery are
+unchanged. `internal/api/audit_handlers_test.go` pins both methods, duplicate
+aliases, preserved destinations, singleton compatibility and complete-body
+bounds. This proves configuration preservation, not external receiver delivery.
+
 ## Forbidden Paths
 
 1. Handler-local payload shape drift without a contract test

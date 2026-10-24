@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -426,6 +427,102 @@ func TestHandleUpdateWebhooksRejectsNonArrayAndOversizedSelections(t *testing.T)
 		}
 		if rec.Code != http.StatusBadRequest || payload.Code != "invalid_request" || logger.updates != 0 || len(logger.urls) != 1 {
 			t.Fatalf("invalid selection changed destination: status/code/updates = %d/%q/%d", rec.Code, payload.Code, logger.updates)
+		}
+	}
+}
+
+func TestHandleUpdateWebhooksRejectsCompetingSelections(t *testing.T) {
+	previousResolve := resolveWebhookIPs
+	resolveWebhookIPs = func(context.Context, string) ([]net.IPAddr, error) {
+		t.Error("competing selections must be rejected before DNS validation")
+		return []net.IPAddr{{IP: net.ParseIP("8.8.8.8")}}, nil
+	}
+	t.Cleanup(func() { resolveWebhookIPs = previousResolve })
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		for name, body := range map[string]string{
+			"clear_overrides_selection": `{"urls":["https://receiver.example/new"],"urls":[]}`,
+			"selection_overrides_clear": `{"urls":[],"urls":["https://receiver.example/new"]}`,
+			"identical":                 `{"urls":[],"urls":[]}`,
+			"escaped":                   `{"urls":["https://receiver.example/new"],"\u0075rls":[]}`,
+			"upper_case":                `{"urls":["https://receiver.example/new"],"URLS":[]}`,
+			"mixed_case":                `{"uRlS":["https://receiver.example/new"],"urls":[]}`,
+			"unicode_fold":              `{"urls":["https://receiver.example/new"],"url\u017f":[]}`,
+			"null_before_clear":         `{"urls":null,"urls":[]}`,
+		} {
+			t.Run(method+"/"+name, func(t *testing.T) {
+				logger := newAuditSelectionLogger()
+				before := []string{"https://8.8.8.8/original", "https://1.1.1.1/second"}
+				logger.urls = append([]string{}, before...)
+				setAuditLogger(t, logger)
+				rec := httptest.NewRecorder()
+				NewAuditHandlers().HandleUpdateWebhooks(rec, httptest.NewRequest(method,
+					"/api/admin/webhooks/audit", strings.NewReader(body)))
+				var payload APIError
+				if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+					t.Fatal(err)
+				}
+				if rec.Code != http.StatusBadRequest || payload.Code != "invalid_request" || payload.ErrorMessage != "Only one urls array may be supplied" {
+					t.Errorf("status/body = %d/%s, want a clear competing-selection error", rec.Code, rec.Body.String())
+				}
+				if logger.updates != 0 || !reflect.DeepEqual(logger.urls, before) {
+					t.Errorf("competing fields changed receivers: updates=%d urls=%v", logger.updates, logger.urls)
+				}
+			})
+		}
+	}
+}
+
+func TestHandleUpdateWebhooksAcceptsSingleSelectionAliases(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		for _, key := range []string{"urls", "URLS", "uRlS", `\u0075rls`, `url\u017f`} {
+			t.Run(method+"/"+key, func(t *testing.T) {
+				logger := newAuditSelectionLogger()
+				logger.urls = []string{"https://8.8.8.8/original"}
+				setAuditLogger(t, logger)
+				// Unknown (even repeated) fields remain compatible. Nested urls
+				// are metadata, not competing top-level selections.
+				body := `{"future":{"urls":["ignored"]},"future":true,"` + key + `":["https://8.8.8.8/restored"]} ` + "\n\t"
+				rec := httptest.NewRecorder()
+				NewAuditHandlers().HandleUpdateWebhooks(rec, httptest.NewRequest(method,
+					"/api/admin/webhooks/audit", strings.NewReader(body)))
+				if rec.Code != http.StatusNoContent || logger.updates != 1 || !reflect.DeepEqual(logger.urls, []string{"https://8.8.8.8/restored"}) {
+					t.Fatalf("status/updates/urls = %d/%d/%v: %s", rec.Code, logger.updates, logger.urls, rec.Body.String())
+				}
+			})
+		}
+	}
+}
+
+func TestHandleUpdateWebhooksRequiresCompleteBoundedObject(t *testing.T) {
+	for _, method := range []string{http.MethodPost, http.MethodPut} {
+		for name, body := range map[string]string{
+			"second_object":     `{"urls":[]} {"urls":["https://8.8.8.8/unselected"]}`,
+			"trailing_null":     `{"urls":[]} null`,
+			"trailing_junk":     `{"urls":[]} broken`,
+			"missing_close":     `{"urls":[]`,
+			"trailing_comma":    `{"urls":[],}`,
+			"non_object":        `[{"urls":[]}]`,
+			"nested_only":       `{"future":{"urls":[]}}`,
+			"oversized_field":   `{"urls":[],"future":"` + strings.Repeat("x", 64*1024) + `"}`,
+			"oversized_suffix":  `{"urls":[]}` + strings.Repeat(" ", 64*1024),
+			"malformed_unknown": `{"urls":[],"future":invalid}`,
+		} {
+			t.Run(method+"/"+name, func(t *testing.T) {
+				logger := newAuditSelectionLogger()
+				before := []string{"https://8.8.8.8/original"}
+				logger.urls = append([]string{}, before...)
+				setAuditLogger(t, logger)
+				rec := httptest.NewRecorder()
+				NewAuditHandlers().HandleUpdateWebhooks(rec, httptest.NewRequest(method,
+					"/api/admin/webhooks/audit", strings.NewReader(body)))
+				var payload APIError
+				if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+					t.Fatal(err)
+				}
+				if rec.Code != http.StatusBadRequest || payload.Code != "invalid_request" || logger.updates != 0 || !reflect.DeepEqual(logger.urls, before) {
+					t.Fatalf("invalid body changed receivers: status/code/updates/urls = %d/%q/%d/%v", rec.Code, payload.Code, logger.updates, logger.urls)
+				}
+			})
 		}
 	}
 }
