@@ -204,6 +204,26 @@ function normalizeLegacyVersionValue(value) {
     ? normalizeVersion(visible) : null;
 }
 
+function extractTitlePulseVersion(title) {
+  const text = String(title || "").trim();
+  // A starting version in an upgrade title is not a running declaration.
+  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(text)) return null;
+
+  const version = String.raw`v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b`;
+  // A title can also name the agent, OS or monitored platform. Prefer a
+  // server-qualified value, rather than taking its first arbitrary number.
+  const declared = text.match(new RegExp(
+    String.raw`\bpulse(?:[ \t]+pro)?[ \t]+(?:version[ \t]*[:=]?[ \t]*)?(${version})`, "i"
+  )) || text.match(new RegExp(String.raw`\bpulse(?:-pro)?:(${version})`, "i"));
+  if (declared) return normalizeVersion(declared[1]);
+
+  // Retain legacy version-first titles and the neutral "Bug on v..." form.
+  // Do not search through another product's name to reach its version.
+  const neutral = text.replace(/^\[(?:bug|v6 pre-release)\][ \t]*:?[ \t]*/i, "");
+  const leading = neutral.match(new RegExp(String.raw`^(?:bug[ \t]+on[ \t]+)?(${version})`, "i"));
+  return leading ? normalizeVersion(leading[1]) : null;
+}
+
 function extractPulseVersion(title, body) {
   if (body) {
     const lines = declarationLines(body);
@@ -241,10 +261,7 @@ function extractPulseVersion(title, body) {
     }
   }
 
-  // A starting version named in an upgrade title is not a running-version
-  // declaration. Copied examples may leave no usable body field at all.
-  if (/\b(?:upgrad(?:e|ed|ing)|migrat(?:e|ed|ing))\b[^\n]*\bfrom\b/i.test(String(title || ""))) return null;
-  return normalizeVersion(title);
+  return extractTitlePulseVersion(title);
 }
 
 function classifyV6FeedbackType(body) {

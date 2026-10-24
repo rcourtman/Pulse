@@ -2057,3 +2057,59 @@ test("the label consumer accepts a linked version without fetching links or cont
     assert.equal(calls.getIssue.length, 2);
   }
 });
+
+
+test("title fallback cannot borrow a platform or agent release as the Pulse server version", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const title of [
+    "[Bug]: vSphere 8.0.3 enrichment fails",
+    "[Bug]: TrueNAS SCALE 25.10.3 reconnects",
+    "[Bug]: Debian 13.0.0 install failure",
+    "[Bug]: pulse-agent 6.5.0 loses disk data",
+    "[v6 pre-release]: Pulse agent v6.6.0-rc.6 loses disk data",
+    "Pulse unknown; agent 6.5.0 remains connected",
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy report without a declared server version."), null, title);
+  }
+});
+
+test("title fallback retains explicit Pulse and neutral version-leading declarations", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const [title, expected] of [
+    ["[Bug]: Pulse 6.5.0 loses readings", "6.5.0"],
+    ["vSphere 8.0.3 enrichment fails in Pulse v6.5.0", "6.5.0"],
+    ["[Bug]: TrueNAS 25.10.3 in Pulse Pro version: V6.6.0-rc.6", "6.6.0-rc.6"],
+    ["[Bug]: rcourtman/pulse:6.5.0 loses readings", "6.5.0"],
+    ["[Bug]: license.pulserelay.pro/pulse-pro:6.6.0-rc.6 loses readings", "6.6.0-rc.6"],
+    ["v6.4.3-rc.1 (LXC): Pulse degrades", "6.4.3-rc.1"],
+    ["[Bug]: v6.6.0-rc.6 loses readings", "6.6.0-rc.6"],
+    ["Bug on v6.5.0", "6.5.0"],
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy report."), expected, title);
+    assert.equal(extractPulseVersion(title, "### Pulse version\nunknown"), null, title);
+    assert.equal(extractPulseVersion(title, "### Pulse version\n6.4.5"), "6.4.5", title);
+  }
+  assert.equal(extractPulseVersion("Upgrade from Pulse 6.4.5 to Pulse 6.5.0", "Legacy report."), null);
+});
+
+test("title-version label consumer corrects only its own metadata without contact or release inference", async () => {
+  for (const [title, body, version] of [
+    ["[Bug]: vSphere 8.0.3 enrichment fails", "Legacy report.", null],
+    ["vSphere 8.0.3 enrichment fails in Pulse 6.5.0", "Legacy report.", "6.5.0"],
+    ["[Bug]: TrueNAS SCALE 25.10.3 reconnects", "### Pulse version\n6.5.0", "6.5.0"],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2925, title, body,
+      labels: ["bug", "affects-8.0.3", "needs-human", "release-blocker", "needs-decomposition",
+        "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    const expectedLabel = version ? `affects-${version}` : "needs-version-info";
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [[expectedLabel]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-8.0.3"]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), [expectedLabel]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
