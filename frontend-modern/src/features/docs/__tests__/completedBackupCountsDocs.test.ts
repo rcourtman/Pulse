@@ -18,7 +18,11 @@ const section = () => {
   const heading = article.querySelector('#why-proxmox-backup-counts-differ');
   expect(heading?.textContent).toBe('Why Proxmox backup counts differ');
   const result = document.createElement('section');
-  for (let next = heading!.nextElementSibling; next && next.tagName !== 'H2'; next = next.nextElementSibling) {
+  for (
+    let next = heading!.nextElementSibling;
+    next && next.tagName !== 'H2';
+    next = next.nextElementSibling
+  ) {
     result.appendChild(next.cloneNode(true));
   }
   return result;
@@ -49,10 +53,14 @@ describe('completed backup count guidance', () => {
       expect(tableSource).toContain(label);
     }
     expect(tableSource).toContain('aria-label="Clear date filter"');
-    expect(copy).toContain('covers the loaded inventory, not just the rows matching your list filters');
+    expect(copy).toContain(
+      'covers the loaded inventory, not just the rows matching your list filters',
+    );
     expect(copy).toContain('Selecting a chart day filters the list');
     expect(copy).toContain('Clear date filter');
-    expect(copy).toContain('This changes only the display, not collection, permissions or retention');
+    expect(copy).toContain(
+      'This changes only the display, not collection, permissions or retention',
+    );
     expect(copy).toContain('Older versions may use different labels');
   });
 
@@ -69,7 +77,9 @@ describe('completed backup count guidance', () => {
     expect(completed.map((entry) => entry.id)).toEqual(['completed', 'undated', 'snapshot']);
     const classify = (entry: RecoverableArtifact) =>
       isCompletedRecoveryArtifact(entry) ? entry.sourceKind : null;
-    const dated = buildBackupActivityTimeline(7, entries, (entry) => entry.createdMs, classify, { now });
+    const dated = buildBackupActivityTimeline(7, entries, (entry) => entry.createdMs, classify, {
+      now,
+    });
     const volume = buildBackupActivityTimeline(7, entries, (entry) => entry.createdMs, classify, {
       now,
       getValue: (entry) => entry.size ?? 0,
@@ -77,8 +87,12 @@ describe('completed backup count guidance', () => {
     expect(dated.points.reduce((sum, day) => sum + day.total, 0)).toBe(2);
     expect(volume.points.reduce((sum, day) => sum + day.total, 0)).toBe(100);
     const copy = text();
-    expect(copy).toContain('excludes both, even when an incomplete entry has a size or a verification flag');
-    expect(copy).toContain('An undated completed point can count in Backup health but not in a daily column');
+    expect(copy).toContain(
+      'excludes both, even when an incomplete entry has a size or a verification flag',
+    );
+    expect(copy).toContain(
+      'An undated completed point can count in Backup health but not in a daily column',
+    );
     expect(copy).toContain('no reported size can count as a point without contributing volume');
     expect(copy).toContain('not PBS datastore usage or deduplicated physical space');
   });
@@ -105,7 +119,9 @@ describe('completed backup count guidance', () => {
     expect(copy).toContain('A blank chart is not proof that no backups exist');
     expect(copy).toContain('check any inventory loading or access warning first');
     expect(copy).toContain('Completed is not Verified, a tested restore or guest thaw');
-    expect(copy).toContain('Do not run a new backup, verification or restore, delete entries, or clear History');
+    expect(copy).toContain(
+      'Do not run a new backup, verification or restore, delete entries, or clear History',
+    );
     expect(section().querySelector('pre')).toBeNull();
     for (const [name, anchor] of [
       ['PBS', 'backups-are-visible-but-coverage-says-unprotected'],
