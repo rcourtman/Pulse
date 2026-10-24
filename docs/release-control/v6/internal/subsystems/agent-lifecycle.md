@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### Accepted host reports preserve disk-reading presence
+
+An accepted host report is not evidence of a disk measurement. Disk history
+recording and live fallback share canonical first-filesystem admission:
+unavailable/absent readings stay absent while measured zero remains available.
+Enrollment, receipt freshness, removal, correlation and stored observations keep
+their existing semantics. The host disk recording and API presence regressions
+cover this distinction; they do not establish installed guest recovery.
+
+
 ### Command access is a named token-step choice, not a legacy option (21 October 2026)
 
 The installer's command-access checkbox reads **Allow Pulse to run commands on

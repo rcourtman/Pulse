@@ -8753,3 +8753,75 @@ func TestMonitorDiscoveryEventsStayWithOwningOrganization(t *testing.T) {
 		}
 	}
 }
+
+func TestHostDiskUsageRecordingSkipsAbsenceAndPreservesZero(t *testing.T) {
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := false
+	t.Cleanup(func() {
+		if !closed {
+			store.Close()
+		}
+	})
+	monitor := issue1654Monitor()
+	monitor.metricsHistory = NewMetricsHistory(20, time.Hour)
+	monitor.metricsStore = store
+	// Close drains ordinary queued writes before the final read; no polling for
+	// a favourable absence result and no changes to the store or its driver.
+	report := issue1654Report(time.Now().UTC())
+	report.Disks = nil
+	report.Metrics = agentshost.Metrics{CPUUsagePercent: 12, Memory: agentshost.MemoryMetric{TotalBytes: 8192, UsedBytes: 2048, Usage: 25}}
+	report.SequenceID = agentshost.FormatReportSequenceID("disk-presence", 1)
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if points := monitor.metricsHistory.GetGuestMetrics("agent:"+host.ID, "disk", time.Hour); len(points) != 0 {
+		t.Fatalf("absent inventory recorded disk zero: %+v", points)
+	}
+	recordedAt := time.Now().Add(-2 * time.Minute)
+	monitor.metricsHistory.AddGuestMetric("agent:"+host.ID, "disk", 43, recordedAt)
+	store.Write("agent", host.ID, "disk", 43, recordedAt)
+	report.Disks = []agentshost.Disk{{Device: "/dev/sda", Mountpoint: "/", Type: "ext4", TotalBytes: 100, FreeBytes: 100, Usage: 0}}
+	report.SequenceID = agentshost.FormatReportSequenceID("disk-presence", 2)
+	report.Timestamp = time.Now().UTC()
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatal(err)
+	}
+	report.Disks = nil
+	report.SequenceID = agentshost.FormatReportSequenceID("disk-presence", 3)
+	report.Timestamp = time.Now().UTC()
+	if _, err := monitor.ApplyHostReport(report, nil); err != nil {
+		t.Fatal(err)
+	}
+	points := monitor.metricsHistory.GetGuestMetrics("agent:"+host.ID, "disk", time.Hour)
+	if len(points) != 2 || points[0].Value != 43 || points[1].Value != 0 || !points[0].Timestamp.Equal(recordedAt) {
+		t.Fatalf("absence changed recorded/real-zero observations: %+v", points)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	closed = true
+	reopened, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	saved, err := reopened.Query("agent", host.ID, "disk", recordedAt.Add(-time.Minute), time.Now().Add(time.Minute), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 2 || saved[0].Value != 43 || saved[1].Value != 0 {
+		t.Fatalf("persisted disk series invented or lost a sample: %+v", saved)
+	}
+	if saved[0].Timestamp.UnixMilli() != recordedAt.UnixMilli() {
+		t.Fatalf("persisted observation time changed: %+v", saved[0])
+	}
+	if got := monitor.HostsSnapshot(); len(got) != 1 || len(got[0].Disks) != 0 || got[0].Memory.Total != 8192 {
+		t.Fatalf("accepted no-disk report was not retained: %+v", got)
+	}
+}

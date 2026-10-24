@@ -3837,10 +3837,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Record host-agent metrics for sparkline charts.
 	hostMetricKey := fmt.Sprintf("agent:%s", host.ID)
 
-	var hostDiskPercent float64
-	if len(host.Disks) > 0 {
-		hostDiskPercent = host.Disks[0].Usage
-	}
+	hostDiskPercent, hasHostDiskUsage := unifiedresources.HostDiskUsagePercent(host.Disks)
 	hostTemperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors)
 	hostGPUUtilization, hostGPUMemory, hostGPUTemperature := hostGPUMetrics(host.Sensors)
 
@@ -3850,7 +3847,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			if host.Memory.HasKnownUsage() {
 				m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
 			}
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+			if hasHostDiskUsage {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+			}
 			if hostTemperature != nil {
 				m.metricsHistory.AddGuestMetric(hostMetricKey, "temperature", *hostTemperature, now)
 			}
@@ -3885,7 +3884,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			if host.Memory.HasKnownUsage() {
 				m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
 			}
-			m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
+			if hasHostDiskUsage {
+				m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
+			}
 			if hostTemperature != nil {
 				m.metricsStore.Write("agent", host.ID, "temperature", *hostTemperature, now)
 			}

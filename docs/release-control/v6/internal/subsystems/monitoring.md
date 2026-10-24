@@ -17,6 +17,17 @@
 
 ## Purpose
 
+### Missing host-agent disk readings are not recorded as idle
+
+`ApplyHostReport` applies the canonical first-filesystem disk admission before
+writing host disk usage to recent memory or the persistent metrics store.
+Absent/unavailable inventory emits no disk sample; an observed zero still emits
+zero. Other accepted host fields and existing observations are not withdrawn,
+rewritten or deleted. No guest operation or collection/retry policy changes.
+`TestHostDiskUsageRecordingSkipsAbsenceAndPreservesZero` covers accepted absent,
+zero and absent-again reports, retained history and ordinary store reopen.
+
+
 ### Ended backup jobs do not supply missing guest verdicts
 
 For multi-guest vzdump jobs, only an explicit guest finish or failure line

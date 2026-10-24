@@ -6713,11 +6713,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if host != nil {
 				points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: host.CPUUsage}
 				points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: host.Memory.Usage}
-				diskPercent := float64(0)
-				if len(host.Disks) > 0 {
-					diskPercent = host.Disks[0].Usage
+				if diskPercent, ok := unifiedresources.HostDiskUsagePercent(host.Disks); ok {
+					points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
 				}
-				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: diskPercent}
 				if temperature := models.HostSensorPrimaryCPUTemperatureCelsius(host.Sensors); temperature != nil {
 					points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 				}

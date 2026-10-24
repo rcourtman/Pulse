@@ -362,10 +362,18 @@ func (r *Service) HandleCharts(w http.ResponseWriter, req *http.Request) {
 		if batchMetrics, ok := agentBatchMetrics[request.SQLResourceID]; ok {
 			oldestTimestamp = fillChartSeriesFromBatch(agentData[hID], batchMetrics, oldestTimestamp)
 		}
-		if len(agentData[hID]["cpu"]) == 0 && hostAgentCanSupplyLiveChartFallback(h) {
-			agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
-			agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
-			agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
+		if hostAgentCanSupplyLiveChartFallback(h) {
+			if len(agentData[hID]["cpu"]) == 0 {
+				agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
+			}
+			if len(agentData[hID]["memory"]) == 0 {
+				agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
+			}
+			if len(agentData[hID]["disk"]) == 0 {
+				if value, ok := h.DiskUsagePercent(); ok {
+					agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: value}}
+				}
+			}
 		}
 	}
 
@@ -1997,7 +2005,7 @@ func (r *Service) HandleInfrastructureCharts(w http.ResponseWriter, req *http.Re
 			case "memory":
 				value = h.MemoryPercent()
 			case "disk":
-				value = h.DiskPercent()
+				value, hasFallbackValue = h.DiskUsagePercent()
 			default:
 				hasFallbackValue = false
 			}
