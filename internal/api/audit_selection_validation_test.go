@@ -253,8 +253,9 @@ func TestAuditSelectionTenantIsolation(t *testing.T) {
 		req = httptest.NewRequest(http.MethodPut, "/api/admin/webhooks/audit", strings.NewReader(`{"urls":null}`))
 		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, org))
 		rec = httptest.NewRecorder()
+		ownUpdates, otherUpdates := factory[org].updates, factory[other].updates
 		NewAuditHandlers().HandleUpdateWebhooks(rec, req)
-		if rec.Code != 400 || factory[org].updates != 0 || factory[other].updates != 0 {
+		if rec.Code != 400 || factory[org].updates != ownUpdates || factory[other].updates != otherUpdates {
 			t.Fatal("absent selection mutated tenant receivers")
 		}
 		req = httptest.NewRequest(http.MethodPut, "/api/admin/webhooks/audit", strings.NewReader(`{"urls":[]}`))
