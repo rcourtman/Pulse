@@ -171,6 +171,11 @@ func metricBoundsForRole(resourceClass, metric, role string) (float64, float64) 
 		case metricRoleWeb, metricRoleIngress:
 			max *= 0.92
 		}
+		// Persona multipliers must not turn a physical memory percentage
+		// into more used bytes than capacity. Leave 1% for the fixture's
+		// reclaimable cache/free split, in both live and historical samples.
+		// Bound the shared range rather than only clamping one consumer.
+		max = math.Min(max, 99)
 	case "disk", "usage":
 		switch role {
 		case metricRoleBackup, metricRoleStorage:

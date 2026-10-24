@@ -8186,3 +8186,20 @@ multi-connection dispatch and canonical resource projection for consuming
 browser proof. No poll interval, API limit, TLS setting, provider permissions
 or timeout threshold is waived. These synthetic controls are not vCenter 8.0.3
 or installed recovery, and do not attribute #2070's HTTP 500 to refresh duration.
+
+### Mock memory personas preserve physical capacity (24 October 2026)
+
+Role-shaped mock memory ranges must stay below 100%: database/cache persona
+multipliers previously raised an agent's 96% upper bound to 103.68%, so a
+valid sample could generate used bytes above total and negative cache/free
+pages. The shared memory range now has a 99% ceiling, leaving headroom for the
+fixture's reclaimable split. Global and graph-bound point/series samplers use
+the same range; initial host generation and subsequent ticks retain
+`used + cache + free == total`, non-negative bytes and positive reclaimable
+cache. Ordinary ranges below the ceiling and multi-core Docker CPU semantics
+are unchanged. This shapes synthetic readings only, not live measurements.
+
+`internal/mock/metric_memory_test.go` registers exhaustive class/persona bounds,
+a fixed seven-day point/series equivalence and byte-accounting regression, and
+host generation/tick checks across cache/database/backup/general role changes.
+The existing `TestBuildFixtureStateIncludesHostAgents` assertion stays intact.
