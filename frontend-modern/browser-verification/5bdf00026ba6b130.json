@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "518fda75b3581951868935e861c5c90c1b5c16cb",
+  "verified_at": "2026-10-24T02:25:40.484534Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Toast/Toast.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "6fa2023f853a5a6080158459e0fb30593aa3a3853c3be43dfe35986b49ef946e",
+    "frontend-modern/src/components/Toast/Toast.tsx": "7c6236ffa6215a6bb4d52dc7932e24d3dee19fb361a02103b118597e6a3d84f1"
+  },
+  "routes": [
+    "/settings/security/sso (production panel consumed in a safe synthetic HTTP fixture at /candidate/)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Production SSO panel/state/API/Dialog/Toast/CSS; baseline is the retained candidate composed with current main. No native IdP, encryption, restart or installed recovery proof.",
+    "Actual modal-only DELETE refusal remains visible in the foreground while Delete provider stays open, even alongside the retained successful-save notification. Error, warning and info stacks keep their original foreground behaviour; only success-only stacks lower.",
+    "Successful mapping save and immediate reopen preserve the exact Server Access group, scopes, domain and omitted secret; the retained success does not obscure editor actions. Existing modal inertness stays intact.",
+    "Non-scrolling flex header is visible in initial, connection-failure, metadata-failure and scrolled-reopen narrow pixels. Earlier archived missing-title pixels were inspected; the current baseline also paints its heading, so no universal WebKit cause or fix is inferred.",
+    "All twelve retained captures were opened with the native image viewer, including modal-only failure controls and desktop/320px candidate states."
+  ],
+  "interactions": [
+    "Real production HTTP adapter GET/detail/PUT/DELETE/test/metadata-preview producers, with fixed synthetic responses; no automatic DELETE retry and no inline delete error substituted for the existing toast.",
+    "Keyboard save and consuming reopen, exact access restrictions and visible unobscured recovery controls. Removing the non-success feedback restores normal background isolation after close.",
+    "Playwright 1.56.1; desktop Chromium and narrow WebKit. Fourteen cases pass. No page errors or external requests; only deliberate HTTP400/409 and their existing error logs. Contexts, browsers and preview server closed."
+  ]
+}

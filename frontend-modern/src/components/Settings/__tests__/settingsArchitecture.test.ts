@@ -1161,6 +1161,17 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersPanelSource).not.toContain('Add SAML (Pro)');
   });
 
+  it('keeps the SSO editor header outside its independently scrolling fields', () => {
+    const editor = ssoProvidersPanelSource.slice(
+      ssoProvidersPanelSource.indexOf('{/* Add/Edit Modal */}'),
+      ssoProvidersPanelSource.indexOf('{/* Delete confirmation modal */}'),
+    );
+    expect(editor).toContain('min-h-0 flex-col');
+    expect(editor).toContain('shrink-0 border-b border-border bg-surface');
+    expect(editor).toContain('min-h-0 flex-1 space-y-4 overflow-y-auto');
+    expect(editor).not.toContain('sticky');
+  });
+
   it('keeps SAML SSO available without a self-hosted Pro upsell boundary', () => {
     expect(ssoProvidersPanelSource).toContain('@/components/shared/Button');
     expect(ssoProvidersPanelSource).toContain('ActionIconButton');
@@ -1184,6 +1195,9 @@ describe('settings architecture guardrails', () => {
   it('separates SSO mapping entries without splitting spaces inside IdP group names', () => {
     expect(ssoProvidersModelSource).toContain('input.split(/[,\\r\\n]+/)');
     expect(ssoProvidersModelSource).not.toContain('splitList(input).forEach');
+    expect(ssoProvidersModelSource).toContain('allowedGroups: splitGroupList(form.allowedGroups)');
+    expect(ssoProvidersModelSource).toContain('scopes: splitList(form.oidcScopes)');
+    expect(ssoProvidersPanelSource).toContain('Comma- or newline-separated.');
     expect(ssoProvidersPanelSource).toContain('Group names may contain spaces.');
   });
 

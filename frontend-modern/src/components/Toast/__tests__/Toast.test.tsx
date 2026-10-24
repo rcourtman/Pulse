@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { batch } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
+import { Dialog } from '@/components/shared/Dialog';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Toast, ToastContainer } from '@/components/Toast/Toast';
 import toastSource from '@/components/Toast/Toast.tsx?raw';
@@ -36,6 +37,65 @@ describe('Toast', () => {
     expect(action).toHaveFocus();
     expect(screen.queryByRole(role === 'alert' ? 'status' : 'alert')).not.toBeInTheDocument();
   });
+
+  it('keeps a retained success below blocking dialogs, restoring it after close', () => {
+    const [open, setOpen] = createSignal(false);
+    render(() => (
+      <>
+        <ToastContainer />
+        <Dialog isOpen={open()} onClose={() => setOpen(false)} ariaLabel="Editor">
+          <button onClick={() => setOpen(false)}>Close editor</button>
+        </Dialog>
+      </>
+    ));
+    window.showToast('success', 'Previous operation completed');
+    const notifications = screen.getByRole('region', { name: 'Notifications' });
+    expect(notifications).toHaveClass('z-9999');
+    setOpen(true);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(notifications).toHaveClass('z-50');
+    expect(notifications).not.toHaveClass('z-9999');
+    expect(notifications.closest('[inert]')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Close editor' }));
+    expect(notifications).toHaveClass('z-9999');
+    expect(notifications.closest('[inert]')).toBeNull();
+    expect(screen.getByText('Previous operation completed')).toBeInTheDocument();
+  });
+
+  it.each(['error', 'warning', 'info'] as const)(
+    'keeps %s feedback above an open dialog even beside a retained success',
+    (type) => {
+      const [open, setOpen] = createSignal(false);
+      render(() => (
+        <>
+          <ToastContainer />
+          <Dialog isOpen={open()} onClose={() => setOpen(false)} ariaLabel="Editor">
+            <button onClick={() => window.showToast(type, 'Operation needs attention')}>
+              Try operation
+            </button>
+            <button onClick={() => setOpen(false)}>Close editor</button>
+          </Dialog>
+        </>
+      ));
+      window.showToast('success', 'Previous operation completed');
+      const notifications = screen.getByRole('region', { name: 'Notifications' });
+      setOpen(true);
+      expect(notifications).toHaveClass('z-50');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try operation' }));
+
+      expect(notifications).toHaveClass('z-9999');
+      expect(notifications).not.toHaveClass('z-50');
+      expect(screen.getByText('Operation needs attention')).toBeInTheDocument();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      // Layering must not weaken the existing modal background isolation.
+      expect(notifications.closest('[inert]')).not.toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Close editor' }));
+      expect(notifications.closest('[inert]')).toBeNull();
+      expect(notifications).toHaveClass('z-9999');
+      expect(screen.getByText('Previous operation completed')).toBeInTheDocument();
+    },
+  );
 
   it('keeps all toasts created within a batch', () => {
     render(() => <ToastContainer />);
