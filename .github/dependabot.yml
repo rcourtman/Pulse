@@ -56,6 +56,19 @@ updates:
         applies-to: "version-updates"
         patterns:
           - "*"
+        exclude-patterns:
+          - "modernc.org/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Review the storage driver and its matching runtime together, without
+      # rebundling them with unrelated patches when one needs separate proof.
+      # This changes proposal scope, not eligibility: majors stay individual
+      # and the security-update group below continues to cover every module.
+      go-storage-runtime:
+        applies-to: "version-updates"
+        patterns:
+          - "modernc.org/*"
         update-types:
           - "minor"
           - "patch"

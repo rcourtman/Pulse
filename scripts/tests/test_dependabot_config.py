@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Guard the low-noise dependency update policy and its covered manifests."""
 
+from fnmatch import fnmatchcase
 import json
 from pathlib import Path
 import unittest
@@ -96,18 +97,73 @@ class DependabotConfigTest(unittest.TestCase):
             ("npm", "npm-minor-patch", "npm-security"),
         ):
             groups = self.updates[ecosystem]["groups"]
+            version_policy = {
+                "applies-to": "version-updates",
+                "patterns": ["*"],
+                "update-types": ["minor", "patch"],
+            }
+            if ecosystem == "gomod":
+                version_policy["exclude-patterns"] = ["modernc.org/*"]
             self.assertEqual(
                 groups[version_group],
-                {
-                    "applies-to": "version-updates",
-                    "patterns": ["*"],
-                    "update-types": ["minor", "patch"],
-                },
+                version_policy,
             )
             self.assertEqual(
                 groups[security_group],
                 {"applies-to": "security-updates", "patterns": ["*"]},
             )
+
+    def test_go_storage_updates_stay_together_without_blocking_other_patches(self) -> None:
+        gomod = self.updates["gomod"]
+        groups = gomod["groups"]
+        self.assertEqual(
+            groups["go-storage-runtime"],
+            {
+                "applies-to": "version-updates",
+                "patterns": ["modernc.org/*"],
+                "update-types": ["minor", "patch"],
+            },
+        )
+        # Separating review scope must not suppress updates or advisories.
+        self.assertEqual(gomod.get("ignore", []), [])
+        self.assertEqual(set(groups), {"go-minor-patch", "go-storage-runtime", "go-security"})
+
+        def matching_groups(dependency: str, update_type: str, applies_to: str) -> set[str]:
+            return {
+                name
+                for name, group in groups.items()
+                if group["applies-to"] == applies_to
+                and update_type in group.get("update-types", ["major", "minor", "patch"])
+                and any(fnmatchcase(dependency, pattern) for pattern in group["patterns"])
+                and not any(
+                    fnmatchcase(dependency, pattern)
+                    for pattern in group.get("exclude-patterns", [])
+                )
+            }
+
+        # PR 3178 rebundled the deferred SQLite/libc pair with a new Prometheus
+        # patch immediately after the non-storage refresh landed. Keep the
+        # driver's transitives in its own reviewable proposal, in either order.
+        for dependency in (
+            "modernc.org/sqlite",
+            "modernc.org/libc",
+            "modernc.org/memory",
+            "modernc.org/mathutil",
+            "github.com/prometheus/common",
+            "github.com/klauspost/compress",
+            "golang.org/x/net",
+        ):
+            expected = (
+                "go-storage-runtime" if dependency.startswith("modernc.org/") else "go-minor-patch"
+            )
+            for update_type in ("minor", "patch"):
+                with self.subTest(dependency=dependency, update_type=update_type):
+                    self.assertEqual(
+                        matching_groups(dependency, update_type, "version-updates"),
+                        {expected},
+                    )
+            self.assertEqual(matching_groups(dependency, "major", "version-updates"), set())
+            self.assertEqual(matching_groups(dependency, "patch", "security-updates"), {"go-security"})
 
     def test_docker_updates_preserve_governed_tags(self) -> None:
         docker = self.updates["docker"]
