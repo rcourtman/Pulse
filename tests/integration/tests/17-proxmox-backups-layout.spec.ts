@@ -89,13 +89,17 @@ test.describe("Proxmox backups layout guards", () => {
       .getByRole("button", { name: /: [1-9]\d* restore points?$/ })
       .last();
     await activeDay.click();
-    await expect(activeDay).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("button", { name: /: [1-9]\d* restore points?, selected$/ }),
+    ).toHaveAttribute("aria-pressed", "true");
     await expect(page).toHaveURL(/\/proxmox\/backups/);
     await expect(
       page.getByText(/^\d+ of \d+ backup entries$/).first(),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Clear date filter", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Clear date filter", exact: true })
+      .click();
     await expect(totalCopy).toHaveText(unfilteredCount);
   });
 
