@@ -165,12 +165,12 @@ function normalizeLegacyVersionValue(value) {
   const visible = text.trim().replace(/^[`*_]+/, "");
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the
-  // server archive names; companion binaries and signatures cannot establish
-  // the attempted server executable's version.
+  // Community and Pro server archive names; companion binaries and signatures
+  // cannot establish the attempted server executable's version.
   const filename = visible.match(/^pulse-[^\s`*_]+/i)?.[0];
   if (filename && /\.(?:tar\.gz|tgz|zip|exe|sha256|sig|sshsig)(?:\.|$)/i.test(filename)) {
     const archive = filename.match(
-      /^pulse-v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(?:tar\.gz|tgz)$/i
+      /^pulse-(?:pro-)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(?:tar\.gz|tgz)$/i
     );
     return archive ? normalizeVersion(archive[1].replace(
       /-linux-(?:386|amd64|arm64|armv6|armv7)$/i, ""
@@ -178,7 +178,7 @@ function normalizeLegacyVersionValue(value) {
   }
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse:|pulse[-_])/i.test(visible)
+  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:|pulse[-_])/i.test(visible)
     ? normalizeVersion(visible) : null;
 }
 

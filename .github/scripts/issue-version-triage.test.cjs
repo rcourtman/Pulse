@@ -1821,6 +1821,60 @@ test("non-server artifacts cannot supply an attempted server version", () => {
   }
 });
 
+test("Pro server artifacts retain their declared version without borrowing agent evidence", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const version of ["6.5.0", "6.6.0-beta.3", "6.6.0-rc.6"]) {
+    for (const artifact of [
+      `pulse-pro-v${version}-linux-amd64.tar.gz`,
+      `pulse-pro-v${version}-linux-arm64.tar.gz`,
+      `license.pulserelay.pro/pulse-pro:${version}`,
+    ]) {
+      for (const value of [artifact, `**\`${artifact}\`**`, `[${artifact}](https://example.invalid/6.4.5)`]) {
+        for (const field of ["### Pulse version\n", "Pulse version: ", "- **Pulse version**: "]) {
+          for (const newline of ["\n", "\r\n"]) {
+            const body = `${field}${value}\n\n### Agent version\n6.4.5`.replaceAll("\n", newline);
+            assert.equal(extractPulseVersion("Upgrade from v6.4.5", body), version, body);
+          }
+        }
+      }
+    }
+  }
+  for (const value of [
+    "pulse-pro-agent-v6.6.0-rc.6-linux-amd64.tar.gz",
+    "pulse-pro-v6.6.0-rc.6-linux-amd64.tar.gz.sshsig",
+    "pulse-pro-v6.6.0-rc.6-linux-amd64.tar.gz.sha256",
+    "pulse-pro-v6.6.0-rc.6-linux-amd64.tar.gz.sig",
+    "unknown; downloaded pulse-pro-v6.6.0-rc.6-linux-amd64.tar.gz",
+    "[unknown](https://example.invalid/pulse-pro-v6.6.0-rc.6-linux-amd64.tar.gz)",
+  ]) {
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5",
+      `### Pulse version\n${value}\n### Agent version\n6.4.5`), null, value);
+  }
+});
+
+for (const value of [
+  "pulse-pro-v6.6.0-rc.6-linux-amd64.tar.gz",
+  "pulse-pro-v6.6.0-rc.6-linux-arm64.tar.gz",
+  "license.pulserelay.pro/pulse-pro:6.6.0-rc.6",
+]) {
+  test(`Pro server intake updates only silent version metadata: ${value}`, async () => {
+    const { github, calls } = createGithub();
+    const issue = { number: 2923, title: "Failed install", labels: [
+      "bug", "affects-6.4.5", "needs-version-info", "needs-human", "release-blocker",
+      "needs-decomposition", "needs-retest-on-latest",
+    ].map(name => ({ name })),
+    body: `### Pulse version\n${value}\n### Agent version\n6.4.5` };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0-rc.6"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["affects-6.6.0-rc.6"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  });
+}
+
 test("archive recognition neither borrows a later filename nor shortens bare prereleases", () => {
   const { extractPulseVersion } = triage.internals;
   assert.equal(extractPulseVersion("Upgrade from v6.4.5",
