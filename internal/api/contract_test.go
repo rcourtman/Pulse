@@ -27731,3 +27731,34 @@ func TestContract_PortablePrivateBootstrapPayloads(t *testing.T) {
 		}
 	}
 }
+
+// An ambiguous administrative save must not become a successful empty access
+// selection in the detail API consumed by Settings.
+func TestContractSSOAmbiguousSavePreservesDetail(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	seedRestrictedSSOProvider(t, router)
+	get := func() *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		router.handleGetSSOProvider(rec, httptest.NewRequest(http.MethodGet, "/api/security/sso/providers/guarded", nil), "guarded")
+		return rec
+	}
+	before := get()
+	if before.Code != http.StatusOK {
+		t.Fatalf("detail status = %d", before.Code)
+	}
+	rejected := serveSSOAdmission(router, "update", `{"name":"Corporate SSO","type":"oidc","oidc":{"clientId":"pulse"},"allowedGroups":["ops"],"ALLOWEDGROUPS":[]}`)
+	if rejected.Code != http.StatusBadRequest || !strings.Contains(rejected.Body.String(), `"invalid_json"`) {
+		t.Fatalf("ambiguous save status = %d, want invalid_json", rejected.Code)
+	}
+	after := get()
+	if after.Code != http.StatusOK || before.Body.String() != after.Body.String() {
+		t.Fatal("rejected save changed the detail response")
+	}
+	var detail SSOProviderResponse
+	if err := json.Unmarshal(after.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(detail.AllowedGroups, []string{"ops"}) || detail.OIDC == nil || !detail.OIDC.ClientSecretSet || strings.Contains(after.Body.String(), "fixture-secret") {
+		t.Fatal("detail lost its access selection or exposed the saved secret")
+	}
+}
