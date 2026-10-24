@@ -472,3 +472,78 @@ func TestBuildClusterEndpointsRetainsDuplicatePinConflicts(t *testing.T) {
 		}
 	}
 }
+
+// A member that joined after the others had their certificates pinned is
+// dialed by its bare node name under strict TLS. Its web interface link must
+// use the address Proxmox reports for it, not leave the frontend to guess one
+// from interfaces every member shares.
+func TestResolveNodeConnectionInfoUnpinnedStrictMemberLinksToClusterIP(t *testing.T) {
+	instance := &config.PVEInstance{
+		Name:        "nexus",
+		Host:        "https://192.168.13.5:8006",
+		Fingerprint: "AA:BB",
+		VerifySSL:   true,
+		IsCluster:   true,
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{NodeName: "aurora", Host: "https://aurora:8006", IP: "192.168.13.5", Fingerprint: "AA:BB"},
+			{NodeName: "venus", Host: "https://venus:8006", IP: "192.168.13.8"},
+		},
+	}
+
+	host, guestURL := resolveNodeConnectionInfo(instance, config.DiscoveryConfig{}, "venus")
+	if host != "https://venus:8006" {
+		t.Fatalf("connection host = %q, want the hostname strict TLS validates", host)
+	}
+	if guestURL != "https://192.168.13.8:8006" {
+		t.Fatalf("guest URL = %q, want the Proxmox-reported member address", guestURL)
+	}
+
+	host, guestURL = resolveNodeConnectionInfo(instance, config.DiscoveryConfig{}, "aurora")
+	if host != "https://192.168.13.5:8006" || guestURL != "" {
+		t.Fatalf("pinned member = (%q, %q), want its IP dial URL and no derived link", host, guestURL)
+	}
+}
+
+func TestResolveNodeConnectionInfoKeepsOperatorLinks(t *testing.T) {
+	instance := &config.PVEInstance{
+		Name:      "nexus",
+		Host:      "https://192.168.13.5:8006",
+		VerifySSL: true,
+		IsCluster: true,
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{NodeName: "venus", Host: "https://venus:8006", IP: "192.168.13.8", GuestURL: "https://venus.example.test"},
+		},
+	}
+	if _, guestURL := resolveNodeConnectionInfo(instance, config.DiscoveryConfig{}, "venus"); guestURL != "https://venus.example.test" {
+		t.Fatalf("member link override = %q", guestURL)
+	}
+
+	instance.ClusterEndpoints[0].GuestURL = ""
+	instance.GuestURL = "https://cluster.example.test"
+	if _, guestURL := resolveNodeConnectionInfo(instance, config.DiscoveryConfig{}, "venus"); guestURL != "https://cluster.example.test" {
+		t.Fatalf("connection link override = %q", guestURL)
+	}
+}
+
+func TestClusterMemberBrowserURL(t *testing.T) {
+	cases := []struct {
+		name     string
+		endpoint config.ClusterEndpoint
+		host     string
+		want     string
+	}{
+		{"bare name uses reported IP", config.ClusterEndpoint{IP: "192.168.13.8"}, "https://venus:8006", "https://192.168.13.8:8006"},
+		{"custom port kept", config.ClusterEndpoint{IP: "10.0.0.2"}, "https://venus:9443", "https://10.0.0.2:9443"},
+		{"IPv6 bracketed", config.ClusterEndpoint{IP: "fd00::8"}, "https://venus:8006", "https://[fd00::8]:8006"},
+		{"FQDN left to the browser", config.ClusterEndpoint{IP: "192.168.13.8"}, "https://venus.lab.test:8006", ""},
+		{"IP dial needs nothing", config.ClusterEndpoint{IP: "192.168.13.8"}, "https://192.168.13.8:8006", ""},
+		{"no reported address", config.ClusterEndpoint{}, "https://venus:8006", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := clusterMemberBrowserURL(tc.endpoint, tc.host); got != tc.want {
+				t.Fatalf("clusterMemberBrowserURL = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
