@@ -626,6 +626,25 @@ when the row is clicked: no document listener, timer, signal, metric derivation
 or History work is added per row. `GuestRow.test.tsx` covers the drag, the
 in-place click and chevron activation over a selection.
 
+### Chart caps select before wire conversion (24 October 2026)
+
+The existing time-nearest chart cap selects indices in the original series
+before allocating wire-format points. Its equal-time targets, latest-time tie
+break, first/last observations and degenerate-span index fallback are unchanged.
+No average, synthetic timestamp or new sampling policy is introduced; zero and
+selected extrema retain their exact values. Oldest-data metadata still examines
+every eligible source observation, including one omitted from display. Empty
+series remain empty and each converted response owns its point slices. The
+retained reader, LTTB stage, source/alias choice, scopes and cache budgets stay
+unchanged.
+
+`TestChartPointSelectionMatchesOriginalCap` compares the frozen former algorithm
+with both wire and source-point paths over mixed cadence, millisecond ties,
+negative epochs, unsorted/degenerate spans and caps from unlimited to one point.
+`TestContract_ChartIndexFallbackPreservesObservations` checks the exported fallback
+with equal-time, fractional, negative and explicit-zero observations. Source
+parity and consuming browser evidence remain separate acceptance obligations.
+
 ## Canonical Files
 
 - `frontend-modern/src/utils/workloadDiskUsage.ts` — aggregate disk numeric/current-reading admission.

@@ -27781,3 +27781,29 @@ func TestContractSSOAmbiguousSavePreservesDetail(t *testing.T) {
 		t.Fatal("detail lost its access selection or exposed the saved secret")
 	}
 }
+
+// The cap's degenerate-time fallback selects actual observations. Equal
+// timestamps cannot authorise averaging values or replacing explicit zero.
+func TestContract_ChartIndexFallbackPreservesObservations(t *testing.T) {
+	points := []chartapi.MetricPoint{
+		{Timestamp: 1800000000123, Value: 0.125},
+		{Timestamp: 1800000000123, Value: 91.75},
+		{Timestamp: 1800000000123, Value: -7.5},
+		{Timestamp: 1800000000123, Value: 63.875},
+		{Timestamp: 1800000000123, Value: 0},
+	}
+	for _, tc := range []struct {
+		cap     int
+		indices []int
+	}{{0, []int{0, 1, 2, 3, 4}}, {1, []int{4}}, {3, []int{0, 2, 4}}, {4, []int{0, 1, 3, 4}}} {
+		got := chartapi.CapMetricPointSeriesByIndex(points, tc.cap)
+		if len(got) != len(tc.indices) {
+			t.Fatalf("cap %d: %d observations, want %d", tc.cap, len(got), len(tc.indices))
+		}
+		for i, index := range tc.indices {
+			if got[i] != points[index] {
+				t.Fatalf("cap %d index %d: observation changed: %+v", tc.cap, index, got[i])
+			}
+		}
+	}
+}

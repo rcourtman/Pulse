@@ -2,6 +2,10 @@ package chartapi
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
+	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -649,5 +653,177 @@ func TestEmptyDockerData(t *testing.T) {
 		}
 	} else {
 		t.Errorf("dockerData should be an empty object, not missing")
+	}
+}
+
+// A frozen copy of the former wire-point cap is the oracle: source-point
+// selection must preserve its exact timestamps/values, not just a point count.
+func referenceChartCapByIndex(points []MetricPoint, maxPoints int) []MetricPoint {
+	if len(points) <= maxPoints || maxPoints <= 0 {
+		return points
+	}
+	if maxPoints == 1 {
+		return []MetricPoint{points[len(points)-1]}
+	}
+
+	result := make([]MetricPoint, 0, maxPoints)
+	step := float64(len(points)-1) / float64(maxPoints-1)
+	prevIndex := -1
+
+	for i := 0; i < maxPoints; i++ {
+		index := int(float64(i)*step + 0.5)
+		if index <= prevIndex {
+			index = prevIndex + 1
+		}
+		if index >= len(points) {
+			index = len(points) - 1
+		}
+		result = append(result, points[index])
+		prevIndex = index
+	}
+
+	if result[len(result)-1].Timestamp != points[len(points)-1].Timestamp {
+		result[len(result)-1] = points[len(points)-1]
+	}
+	return result
+}
+
+func referenceChartCap(points []MetricPoint, maxPoints int) []MetricPoint {
+	if len(points) <= maxPoints || maxPoints <= 0 {
+		return points
+	}
+	if maxPoints == 1 {
+		return []MetricPoint{points[len(points)-1]}
+	}
+
+	startTimestamp := points[0].Timestamp
+	endTimestamp := points[len(points)-1].Timestamp
+	if endTimestamp <= startTimestamp {
+		return referenceChartCapByIndex(points, maxPoints)
+	}
+
+	bucketSpan := float64(endTimestamp-startTimestamp) / float64(maxPoints-1)
+	if bucketSpan < 1 {
+		return referenceChartCapByIndex(points, maxPoints)
+	}
+
+	type timeBucketRepresentative struct {
+		point    MetricPoint
+		distance float64
+		ok       bool
+	}
+
+	buckets := make([]timeBucketRepresentative, maxPoints)
+	for _, point := range points {
+		index := int(math.Round(float64(point.Timestamp-startTimestamp) / bucketSpan))
+		if index < 0 {
+			index = 0
+		}
+		if index >= maxPoints {
+			index = maxPoints - 1
+		}
+
+		targetTimestamp := float64(startTimestamp) + bucketSpan*float64(index)
+		distance := math.Abs(float64(point.Timestamp) - targetTimestamp)
+		current := buckets[index]
+		if !current.ok ||
+			distance < current.distance ||
+			(distance == current.distance && point.Timestamp > current.point.Timestamp) {
+			buckets[index] = timeBucketRepresentative{
+				point:    point,
+				distance: distance,
+				ok:       true,
+			}
+		}
+	}
+
+	result := make([]MetricPoint, 0, maxPoints)
+	result = append(result, points[0])
+	lastAddedTimestamp := points[0].Timestamp
+	for index := 1; index < maxPoints-1; index++ {
+		bucket := buckets[index]
+		if !bucket.ok {
+			continue
+		}
+		if bucket.point.Timestamp <= lastAddedTimestamp {
+			continue
+		}
+		result = append(result, bucket.point)
+		lastAddedTimestamp = bucket.point.Timestamp
+	}
+
+	lastPoint := points[len(points)-1]
+	if lastPoint.Timestamp <= lastAddedTimestamp {
+		result[len(result)-1] = lastPoint
+		return result
+	}
+
+	result = append(result, lastPoint)
+	return result
+}
+
+func TestChartPointSelectionMatchesOriginalCap(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewSource(20261024))
+	for scenario := 0; scenario < 160; scenario++ {
+		n := []int{0, 1, 2, 3, 17, 121, 240, 500, 777}[scenario%9]
+		points := make([]MetricPoint, n)
+		stamp := int64(1_800_000_000_123)
+		if scenario%11 == 0 {
+			stamp = -100000
+		}
+		for i := range points {
+			step := int64(rng.Intn(4000))
+			if i > n/2 {
+				step %= 5 // dense recent tail, duplicate/millisecond timestamps
+			}
+			stamp += step
+			points[i] = MetricPoint{Timestamp: stamp, Value: float64(rng.Intn(201)-100) / 7}
+		}
+		if n > 2 {
+			points[n-1].Value = 0
+			switch scenario % 5 {
+			case 0:
+				for i := range points {
+					points[i].Timestamp = stamp // no positive span: index fallback
+				}
+			case 1:
+				points[0], points[n-1] = points[n-1], points[0]
+			case 2:
+				points[n/2].Timestamp = points[0].Timestamp - 7 // unselected minimum
+			}
+		}
+		for _, cap := range []int{-1, 0, 1, 2, 3, 30, 36, 120, 500} {
+			t.Run(fmt.Sprintf("%d/cap=%d", scenario, cap), func(t *testing.T) {
+				want := referenceChartCap(points, cap)
+				if got := capMetricPointSeries(points, cap); !reflect.DeepEqual(got, want) {
+					t.Fatal("time cap changed its selected observations")
+				}
+				if got, want := capMetricPointSeriesByIndex(points, cap), referenceChartCapByIndex(points, cap); !reflect.DeepEqual(got, want) {
+					t.Fatal("index fallback changed its selected observations")
+				}
+				source := make([]monitoring.MetricPoint, n)
+				wantOldest := int64(math.MaxInt64)
+				for i, point := range points {
+					source[i] = monitoring.MetricPoint{Timestamp: time.UnixMilli(point.Timestamp), Value: point.Value}
+					if point.Timestamp < wantOldest {
+						wantOldest = point.Timestamp
+					}
+				}
+				oldest := int64(math.MaxInt64)
+				got := convertMetricsForChart(map[string][]monitoring.MetricPoint{
+					"cpu": source, "not-a-sparkline": {{Timestamp: time.UnixMilli(math.MinInt64), Value: -999}},
+				}, &oldest, cap)
+				if len(got) != 1 || !reflect.DeepEqual(got["cpu"], want) || oldest != wantOldest {
+					t.Fatalf("source conversion/cap/oldest changed: oldest %d, want %d", oldest, wantOldest)
+				}
+				if len(got["cpu"]) > 0 {
+					got["cpu"][0].Value = 9999
+					if source[0].Value != points[0].Value {
+						t.Fatal("wire output aliases retained source")
+					}
+				}
+			})
+		}
 	}
 }
