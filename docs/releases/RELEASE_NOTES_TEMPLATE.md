@@ -5,8 +5,13 @@ what feels better or works now, not how it was implemented.
 
 ## Highlights
 
-- One to three short plain-text outcomes. Keep each under 140 characters with
-  no Markdown, links or issue references so the in-app highlights stay readable.
+- One to three of the release's biggest changes. Name the specific feature or
+  fix and where users find it, for example "Resource Overview shows alerts,
+  recent trends and longer history together", never a theme or benefit slogan
+  such as "See problems and trends together" or "Spend less time on setup".
+  Keep each under 140 characters with no Markdown, links or issue references.
+  The update banner shows these before users install, so each must make sense
+  on its own.
 
 ## Proxmox, PBS and backups
 
@@ -46,9 +51,10 @@ receives both. The models decide what to inspect, what matters, and how to tell
 the release story. The harness owns the release boundary, public format, safety
 constraints, and optional per-pass traces.
 
-The post-update modal keeps Known issues visible, followed by Highlights and
-optional screenshots directly underneath. Routine upgrade notes and grouped
-changes have separate disclosures. Keep the highlights useful without images.
+The post-update dialog is a plain changelog: Known issues first, optional
+screenshots, every change group, then Before you upgrade as Upgrade notes, with
+nothing collapsed. Highlights appear only in the update banner before users
+install, and the dialog shows them only when a release has no change groups.
 The visual investigation also reads the Visual evidence sections and images
 from merged PRs in this release range. It may reuse a public GitHub image
 attachment or immutable committed screenshot when inspected, safe and still
@@ -64,8 +70,8 @@ be described twice as both an improvement and a fix.
 ## Known issues
 
 Describe remaining user symptoms and an actionable workaround or next step.
-Put critical risks and required safety actions here so they remain visible in
-the post-update modal, including risks that apply before an upgrade.
+Put critical risks and required safety actions here so they lead the
+post-update changelog, including risks that apply before an upgrade.
 Omit this section when there are none. Do not substitute internal verification
 status for information users can act on.
 
@@ -74,8 +80,8 @@ status for information users can act on.
 Include only compatibility, migration, signing, companion-app, known-risk, or
 required operator information. Omit this section when users do not need to do
 or understand anything before upgrading.
-This section is collapsed in the post-update modal. Put critical warnings in
-Known issues rather than relying on an operator expanding these instructions.
+This section appears last in the post-update changelog as Upgrade notes. Put
+critical warnings in Known issues so they lead instead.
 
 The release pipeline appends the `Install` and `Roll back` sections from
 governed version metadata. Do not add release qualification, validation,

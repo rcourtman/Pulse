@@ -2995,7 +2995,11 @@ artifact-selection behaviour.
    For the pre-update preview, release rendering keeps Highlights to at most
    three short plain-text bullets of no more than 140
    characters each, with links, code, issue references, and nested structure
-   reserved for the categorized or full release notes.
+   reserved for the categorized or full release notes. Each Highlights bullet
+   names a specific change and where users find it, never a theme or benefit
+   slogan, because the preview is all a user reads before installing.
+   `scripts/generate-release-notes.sh` and
+   `docs/releases/RELEASE_NOTES_TEMPLATE.md` carry that authoring rule.
    The post-update communication boundary does not announce telemetry payload
    changes. Those are disclosed in the dated `Payload changes` section of
    `docs/PRIVACY.md` and in the release notes of the first release that carries
