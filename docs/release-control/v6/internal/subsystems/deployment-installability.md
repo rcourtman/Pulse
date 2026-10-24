@@ -8299,6 +8299,26 @@ metrics wire/decompression, host-agent and authentication tests, managed-runtime
 smokes, vet and real server/agent builds. No advisory clearance, installed
 recovery or delivery is inferred from a manifest change or acquisition alone.
 
+### Separated metrics and HTTP patch graph (24 October 2026)
+
+The separated non-storage proposal advances `github.com/prometheus/common` to
+0.72.1 and `golang.org/x/net` to 0.61.0. Existing direct/indirect classifications,
+the compiler, all other explicit pins and the complete modernc runtime stay
+unchanged; this does not admit the deferred SQLite/libc update. `go.sum` retains
+previous records and adds the six exact module/go.mod records from the managed
+proposal, including x/tools 0.51.0 selected by the new graph. Those proposed
+checksums still require official exact-graph verification.
+
+`scripts/tests/test-hot-dev-bg.sh` now enforces both reviewed floors and their
+checksum pairs, whether a required module is direct or indirect. Structure alone
+is not compatibility: acceptance requires completed exact-graph acquisition, a
+fresh matching worker, read-only graph resolution, module verification, the
+existing actual metrics-wire/decompression and HTTP/IDNA compatibility tests,
+affected authentication/agent tests, managed-runtime smokes, vet and real
+server/agent builds. No rendered field or frontend state is intentionally
+changed. Acquisition or a passing source check is not installed recovery,
+release acceptance, or permission to resume the excluded crash investigation.
+
 ### Complete CI dependency-change classification (6 October 2026)
 
 Build and Test consumes the complete changed-file list before choosing the
