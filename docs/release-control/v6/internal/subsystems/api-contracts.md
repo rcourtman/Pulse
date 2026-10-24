@@ -12578,3 +12578,17 @@ investigation's action reference now includes `action_result_v2` and
 carries, and keeps `causal_resource_id` for the same action, so investigation
 payloads may carry these optional fields where they were empty before. No route
 changes. Proof: `internal/api/ai_handlers_investigation_additional_test.go`.
+
+### Workload-chart proof distinguishes an invalid measurement from recovery
+
+`internal/api/testdata/chart_latency_proof.py` keeps the strict 90 ms budget,
+exact one-test execution, executable digest and child result in its receipt.
+Only a single complete PASS or budget-only FAIL with competing capacity can
+exit 78 and describe the timing as inconclusive. A skipped/missing/duplicate
+report, wrong budget, cleanup failure or other child failure remains an error.
+A valid-capacity budget failure still fails. No API payload, route, History
+sample, incident state or operational-recovery result is changed by this CI
+classification. `TestContractChartSLOProofCLIClassifiesExecution` drives the
+real CLI and disposable child processes through all ten outcomes, verifies
+unaltered logs/result/digest/strict arguments and excludes the synthetic token
+from the child environment. Its capacity rows are synthetic, not latency proof.
