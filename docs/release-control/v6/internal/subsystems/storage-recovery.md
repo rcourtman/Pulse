@@ -7249,3 +7249,8 @@ History latency result, intact stored data, guest liveness or installed
 recovery. `TestContractChartSLOProofCLIClassifiesExecution` preserves child
 exit, output and executable identity across those distinctions; the 90 ms
 valid-capacity requirement and independent native recovery remain unchanged.
+One bounded hosted provisioning agent is part of the absolute measured envelope,
+not a blanket contention exemption: other/unattributed CPU, guest/steal and swap
+remain invalidating. Raw CPU and agent attribution are both retained. This
+permits a real failure as well as a pass at 90 ms; it clears no earlier adverse
+timing, storage failure or excluded investigation and changes no store code.

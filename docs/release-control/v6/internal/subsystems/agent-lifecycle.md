@@ -10278,3 +10278,8 @@ The actual CLI/receipt control is
 `TestContractChartSLOProofCLIClassifiesExecution`; the separate read-only
 evidence and check-writer boundary is
 `TestChartSLOWorkflowPreservesInconclusiveAndFailure`.
+Bounded hosted provisioning-agent CPU is now attributed separately, retaining
+raw observations and enforcing the same 90 ms budget with that overhead present.
+An over-budget run in this normal hosted envelope fails rather than disappearing
+into neutral. Other/unattributed CPU and guest/steal/swap still invalidate the
+timing. Neither verdict supplies any of the independent lifecycle proofs above.
