@@ -780,9 +780,10 @@ floors = {
     "github.com/moby/moby/api": (1, 56, 1),
     "github.com/moby/moby/client": (0, 6, 2),
     "github.com/prometheus/client_golang": (1, 25, 0),
-    "github.com/prometheus/common": (0, 72, 0),
+    "github.com/prometheus/common": (0, 72, 1),
     "github.com/shirou/gopsutil/v4": (4, 26, 9),
     "golang.org/x/crypto": (0, 58, 0),
+    "golang.org/x/net": (0, 61, 0),
     "golang.org/x/sync": (0, 24, 0),
     "golang.org/x/sys": (0, 49, 0),
     "golang.org/x/term": (0, 47, 0),
@@ -792,8 +793,8 @@ floors = {
 }
 kubernetes = set()
 for name, floor in floors.items():
-    matches = re.findall(r"(?m)^\s*" + re.escape(name) + r" (v\d+\.\d+\.\d+)\s*$", mod)
-    assert len(matches) == 1, f"missing/ambiguous stable direct module: {name}"
+    matches = re.findall(r"(?m)^\s*" + re.escape(name) + r" (v\d+\.\d+\.\d+)(?: // indirect)?\s*$", mod)
+    assert len(matches) == 1, f"missing/ambiguous stable module: {name}"
     version = matches[0]
     assert tuple(map(int, version[1:].split("."))) >= floor, f"module below reviewed patch floor: {name}"
     for suffix in ("", "/go.mod"):
