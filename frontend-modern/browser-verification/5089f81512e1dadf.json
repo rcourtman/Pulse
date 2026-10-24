@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9182e7b206f889d29688f41ee2c4a484b21d348f",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "63344ef1136ea314f80c846f5855a2fa5401d527c137f1d0a7c8ac21528a1802",
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "3a99f8501848ba7ecf076708f77b8b42e557d556e7eb7dd232cbfd2851a4e8eb"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Accepted protected posture with provider evidence and an independent PVE restore point",
+    "Settled HTTP503 posture poll: Unknown rows and counts, no retained policy/explanation/provider claims, restore point still visible",
+    "Pending posture-only retry: disabled button and Unknown retained",
+    "Successful retry: current attention assessment, explanation and policy restored"
+  ],
+  "interactions": [
+    "Expand actual Coverage details by mouse at1440px and row tap at320px",
+    "Advance the browser clock through the existing30second posture poll and return synthetic HTTP503",
+    "Focus retry and press Enter; hold response to inspect disabled pending state, then release a new assessment",
+    "Check that PVE/PBS inventory requests remain one each, posture requests are three, no horizontal overflow or page errors"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-24T04:27:45Z",
+  "browsers": [
+    "Chromium via Playwright1.56.1",
+    "WebKit via Playwright1.56.1"
+  ],
+  "evidence": "Lane RECEIPTS.md links raw browser results, scripts and nine natively inspected captures. Full production app with synthetic local read-only HTTP fixtures; not native sign-in, guest recovery or original hosted-run replay."
+}

@@ -83,11 +83,16 @@ export function useProtectionPostures(resourceIDs: Accessor<readonly string[] | 
     pollMs: REFRESH_MS,
   });
 
-  const postures = createMemo<ProtectionPosture[]>(() => state.value().data ?? []);
+  // A retained assessment is useful while a refresh is pending, not after
+  // that read fails. Withdraw the entire joined result (including its policy)
+  // so rows, health counts and explanations cannot still claim protection
+  // beside the unavailable notice. A successful full retry restores it.
+  const acceptedResponse = createMemo(() => (state.error() ? EMPTY_RESPONSE : state.value()));
+  const postures = createMemo<ProtectionPosture[]>(() => acceptedResponse().data ?? []);
   const postureByResourceID = createMemo<ReadonlyMap<string, ProtectionPosture>>(
     () => new Map(postures().map((posture) => [posture.subjectResourceId, posture] as const)),
   );
-  const policy = createMemo(() => state.value().policy ?? EMPTY_POLICY);
+  const policy = createMemo(() => acceptedResponse().policy ?? EMPTY_POLICY);
 
   return {
     response: {

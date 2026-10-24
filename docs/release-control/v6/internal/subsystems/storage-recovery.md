@@ -21,6 +21,19 @@
 
 ## Purpose
 
+### Failed posture refreshes withdraw retained assessments (24 October 2026)
+
+Protection posture remains visible while a refresh is pending, but a settled
+failure in any bounded batch withdraws all retained assessments and their
+policy from the active Coverage projection. Rows and health counts become
+Unknown; old protection explanations and provider-quality claims disappear.
+Independently readable backup artifacts remain available. A source-local,
+disabled-while-pending retry refreshes posture only, and restores assessments
+only after the complete joined read succeeds. Failed cached results cannot
+resurrect assessments on remount. The hook and consuming Backups table tests
+cover these transitions without changing server policy, access scope, backup
+execution or native guest recovery.
+
 ### Patrol timer checkpoints preserve run and recovery history
 
 The existing Patrol history envelope retains the next scheduled deadline and
