@@ -31,11 +31,14 @@ describe('backup health help', () => {
 
   it('routes both existing help entry points to the authoritative PBS check', () => {
     for (const slug of ['RECOVERY', 'TROUBLESHOOTING']) {
-      const link = render(read(`docs/${slug}.md`), slug).querySelector(
-        `a[href="/docs/PBS#${fragment}"]`,
+      // Other advice can share this destination; identify the named entry
+      // rather than whichever link happens to occur first in the guide.
+      const links = Array.from(render(read(`docs/${slug}.md`), slug).querySelectorAll('a')).filter(
+        (link) => link.textContent === 'backup health checks',
       );
-      expect(link?.textContent).toBe('backup health checks');
-      expect(link?.hasAttribute('data-doc-link')).toBe(true);
+      expect(links).toHaveLength(1);
+      expect(links[0].getAttribute('href')).toBe(`/docs/PBS#${fragment}`);
+      expect(links[0].hasAttribute('data-doc-link')).toBe(true);
     }
   });
 });
