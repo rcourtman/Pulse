@@ -173,6 +173,16 @@ export function getMobileNavTabAriaLabel(tab: MobileNavBarUtilityTab): string {
     }
     return tab.label;
   }
+  // Keep the visible label and badge numbers contiguous in the accessible
+  // name, in the same order. Severity belongs in the description: inserting
+  // "critical" between two visible numbers breaks label-in-name for speech
+  // input (WCAG 2.5.3).
+  return [tab.label, badges.critical || null, badges.warning || null].filter(Boolean).join(' ');
+}
+
+export function getMobileNavTabAriaDescription(tab: MobileNavBarUtilityTab): string | undefined {
+  const badges = getMobileNavAlertBadgeCounts(tab);
+  if (!badges) return undefined;
   const parts: string[] = [];
   if (badges.critical > 0) {
     parts.push(`${badges.critical} critical`);
@@ -180,8 +190,7 @@ export function getMobileNavTabAriaLabel(tab: MobileNavBarUtilityTab): string {
   if (badges.warning > 0) {
     parts.push(`${badges.warning} warning`);
   }
-  if (parts.length === 0) return tab.label;
-  return `${tab.label}: ${parts.join(', ')}`;
+  return parts.length > 0 ? parts.join(', ') : undefined;
 }
 
 export function getMobileNavTabButtonClass(options: {

@@ -100,29 +100,42 @@ proof.snapshot = lambda: {}
 proof.process_counters = lambda: {}
 proof.ticks = lambda pid: 0
 proof.process_io = lambda pid: {}
+proof.os.cpu_count = lambda: 4
+os.environ['GITHUB_ACTIONS'] = 'true'
 os.environ['GITHUB_TOKEN'] = 'synthetic-must-not-reach-child'
 report = '    slo_bench_test.go:637: charts/workloads p50=75ms p95=107ms p99=112ms SLO=90ms\n'
 violation = '    slo_bench_test.go:637: SLO VIOLATION: p95=107ms exceeds target 90ms\n'
 passed = report.replace('p95=107ms p99=112ms', 'p95=82ms p99=86ms') + '--- PASS: TestSLO_WorkloadCharts (0.03s)\nPASS\n'
 failed = report + violation + '--- FAIL: TestSLO_WorkloadCharts (0.03s)\nFAIL\n'
 cases = [
-    ('idle-pass', False, passed, 0, 0),
-    ('idle-budget-failure', False, failed, 1, 1),
-    ('contended-pass', True, passed, 0, 78),
-    ('contended-budget-failure', True, failed, 1, 78),
-    ('contended-cleanup-error', True, failed.replace(violation, violation +
+    ('idle-pass', 'idle', passed, 0, 0),
+    ('idle-budget-failure', 'idle', failed, 1, 1),
+    ('runner-agent-pass', 'agent', passed, 0, 0),
+    ('runner-agent-budget-failure', 'agent', failed, 1, 1),
+    ('runner-agent-with-other-cpu', 'mixed', passed, 0, 78),
+    ('runner-agent-with-steal', 'steal', passed, 0, 78),
+    ('contended-pass', 'other', passed, 0, 78),
+    ('contended-budget-failure', 'other', failed, 1, 78),
+    ('contended-cleanup-error', 'other', failed.replace(violation, violation +
         '    testing.go:1369: TempDir RemoveAll cleanup: directory not empty\n'), 1, 1),
-    ('contended-skip', True, report + '--- SKIP: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
-    ('contended-process-error', True, failed, 2, 1),
-    ('contended-no-report', True, '--- PASS: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
-    ('contended-wrong-budget', True, passed.replace('90ms', '550ms'), 0, 1),
-    ('contended-duplicate', True, passed + passed, 0, 1),
+    ('contended-skip', 'other', report + '--- SKIP: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
+    ('contended-process-error', 'other', failed, 2, 1),
+    ('contended-no-report', 'other', '--- PASS: TestSLO_WorkloadCharts (0.03s)\n', 0, 1),
+    ('contended-wrong-budget', 'other', passed.replace('90ms', '550ms'), 0, 1),
+    ('contended-duplicate', 'other', passed + passed, 0, 1),
 ]
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
-    for name, contended, text, child_exit, expected in cases:
+    for name, capacity, text, child_exit, expected in cases:
+        contended = capacity in ('other', 'mixed', 'steal')
+        agent = dict(pid=1, name='provjobd1892260', cpu_pct=25)
+        other = dict(pid=2, name='node', cpu_pct=11)
+        processes = {'idle': [], 'agent': [agent], 'other': [other],
+                     'mixed': [agent, other], 'steal': [agent]}[capacity]
+        proof.background_processes = lambda *args: processes
         proof.interval = lambda before, after: dict(total_ticks=100,
-            busy_pct=25 if contended else 0, guest_pct=0, steal_pct=0, swap_pages=0)
+            busy_pct=sum(row['cpu_pct'] for row in processes), guest_pct=0,
+            steal_pct=1 if capacity == 'steal' else 0, swap_pages=0)
         binary = root / (name + '.sh')
         binary.write_text('#!/bin/sh\n'
             'test -z "${GITHUB_TOKEN:-}" || exit 7\n'
@@ -145,9 +158,15 @@ with tempfile.TemporaryDirectory() as directory:
         assert receipt['returncode'] == child_exit, name
         assert receipt['binary_sha256'] == hashlib.sha256(binary.read_bytes()).hexdigest(), name
         assert receipt['environment']['PULSE_STRICT_LOCAL_API_SLOS'] == 'true', name
+        assert receipt['capacity_context'] == dict(hosted=True, cpu_count=4), name
         assert 'GITHUB_TOKEN' not in receipt['environment'], name
         assert (output / 'candidate.log').read_text() == text, name
         assert bool(receipt['capacity_errors']) == contended, name
+        rows = [json.loads(line) for line in (output / 'candidate.cpu.jsonl').read_text().splitlines()]
+        assert rows and all('runner_agent_cpu_pct' in row and 'competing_busy_pct' in row for row in rows), name
+        if capacity == 'agent':
+            assert all(row['background_busy_pct'] == 25 and row['runner_agent_cpu_pct'] == 25
+                       and row['competing_busy_pct'] == 0 for row in rows), name
         assert receipt['command'][1:] == ['-test.run=^TestSLO_WorkloadCharts$', '-test.v',
             '-test.count=1', '-test.cpu=2', '-test.timeout=5m'], name
         assert summary.exists() == (expected == 78), name
@@ -27826,5 +27845,31 @@ func TestContractSSOAmbiguousSavePreservesDetail(t *testing.T) {
 	}
 	if !slices.Equal(detail.AllowedGroups, []string{"ops"}) || detail.OIDC == nil || !detail.OIDC.ClientSecretSet || strings.Contains(after.Body.String(), "fixture-secret") {
 		t.Fatal("detail lost its access selection or exposed the saved secret")
+	}
+}
+
+// The cap's degenerate-time fallback selects actual observations. Equal
+// timestamps cannot authorise averaging values or replacing explicit zero.
+func TestContract_ChartIndexFallbackPreservesObservations(t *testing.T) {
+	points := []chartapi.MetricPoint{
+		{Timestamp: 1800000000123, Value: 0.125},
+		{Timestamp: 1800000000123, Value: 91.75},
+		{Timestamp: 1800000000123, Value: -7.5},
+		{Timestamp: 1800000000123, Value: 63.875},
+		{Timestamp: 1800000000123, Value: 0},
+	}
+	for _, tc := range []struct {
+		cap     int
+		indices []int
+	}{{0, []int{0, 1, 2, 3, 4}}, {1, []int{4}}, {3, []int{0, 2, 4}}, {4, []int{0, 1, 3, 4}}} {
+		got := chartapi.CapMetricPointSeriesByIndex(points, tc.cap)
+		if len(got) != len(tc.indices) {
+			t.Fatalf("cap %d: %d observations, want %d", tc.cap, len(got), len(tc.indices))
+		}
+		for i, index := range tc.indices {
+			if got[i] != points[index] {
+				t.Fatalf("cap %d index %d: observation changed: %+v", tc.cap, index, got[i])
+			}
+		}
 	}
 }

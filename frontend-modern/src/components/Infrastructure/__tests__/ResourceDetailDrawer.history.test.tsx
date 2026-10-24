@@ -7,7 +7,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { createSignal, Suspense } from 'solid-js';
-import { ChartsAPI } from '@/api/charts';
+import { ChartsAPI, type AllMetricsHistoryResponse } from '@/api/charts';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
@@ -162,6 +162,57 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
 });
 
 describe('ResourceDetailDrawer change history section', () => {
+  it('withdraws an open drawer live history reply on restart while preserving real stored history', async () => {
+    resetCreateNonSuspendingQueryCacheForTest();
+    const source = baseResource({
+      id: 'restart-history',
+      metricsTarget: { resourceType: 'agent', resourceId: 'restart-history' },
+      sourceStatus: { agent: { status: 'online' } },
+      cpu: { current: 12 },
+    });
+    const live: AllMetricsHistoryResponse = {
+      resourceType: 'agent',
+      resourceId: 'restart-history',
+      range: '24h',
+      start: 1_700_000_000_000,
+      end: 1_700_000_060_000,
+      source: 'live',
+      metrics: { cpu: [{ timestamp: 1_700_000_060_000, value: 12, min: 12, max: 12 }] },
+    };
+    let resolveHistory!: (value: AllMetricsHistoryResponse) => void;
+    const nextHistory = new Promise<AllMetricsHistoryResponse>((resolve) => {
+      resolveHistory = resolve;
+    });
+    const read = vi
+      .spyOn(ChartsAPI, 'getMetricsHistory')
+      .mockResolvedValueOnce(live)
+      .mockReturnValueOnce(nextHistory);
+    const [resource, setResource] = createSignal(source);
+    const view = render(() => <ResourceDetailDrawer resource={resource()} />);
+    try {
+      const history = view.container.querySelector('[data-testid="resource-metrics-history"]')!;
+      await waitFor(() => expect(history).toHaveTextContent('Current'));
+      setResource({
+        ...source,
+        status: 'unknown',
+        sourceStatus: { agent: { status: 'pending' } },
+        cpu: undefined,
+      });
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+      expect(screen.getAllByText('Waiting for first report').length).toBeGreaterThan(0);
+      expect(history).not.toHaveTextContent('Current');
+      expect(history.querySelector('[data-history-current]')).toBeNull();
+      resolveHistory({ ...live, source: 'store' });
+      await waitFor(() => expect(history).toHaveTextContent('Latest stored'));
+      expect(history).toHaveTextContent('12.0%');
+      expect(history).not.toHaveTextContent('Current');
+    } finally {
+      view.unmount();
+      read.mockRestore();
+      resetCreateNonSuspendingQueryCacheForTest();
+    }
+  });
+
   it('keeps retained guest memory and paused filesystems out of current chart fallbacks', async () => {
     resetCreateNonSuspendingQueryCacheForTest();
     const source = baseResource({

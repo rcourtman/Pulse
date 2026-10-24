@@ -23,6 +23,15 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Drawer history follows current source authority
+
+Resource drawers withdraw current chart fallbacks and cached live-only replies
+when a standalone agent is offline or awaiting its first accepted report.
+The delivery transition refreshes the shared history query; actual stored
+observations retain their original timestamps and remain readable while that
+read settles. The browser does not infer a new lease or reporting verdict, and
+guest power state does not override the provider's metric admission rules.
+
 ### Websocket-first routes always obtain their REST snapshot (21 October 2026)
 
 Action readiness, scoped facets and other REST-only enrichment arrive only

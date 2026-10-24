@@ -71,13 +71,14 @@ func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, conclusion string
+		p95              int
 		processExit      int
 		stepPass         bool
 	}{
-		{"valid", "success", 0, true},
-		{"contended", "neutral", 78, true},
-		{"budget failure", "failure", 1, false},
-		{"broken proof", "failure", 2, false},
+		{"valid hosted envelope", "success", 82, 0, true},
+		{"contended", "neutral", 107, 78, true},
+		{"hosted envelope budget failure", "failure", 107, 1, false},
+		{"broken proof", "failure", 82, 2, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			directory := t.TempDir()
@@ -96,7 +97,7 @@ func TestChartSLOWorkflowPreservesInconclusiveAndFailure(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			const report = "charts/workloads p50=40ms p95=82ms p99=86ms SLO=90ms"
+			report := "charts/workloads p50=40ms p95=" + strconv.Itoa(tc.p95) + "ms p99=112ms SLO=90ms"
 			if err := os.WriteFile(filepath.Join(samples, "candidate.log"), []byte(report+"\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -2395,9 +2396,9 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	required := []string{
 		`- name: Tailscale`,
 		`uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3`,
-		`oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}`,
-		`oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}`,
-		`tags: tag:infra`,
+		`oauth-client-id: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}`,
+		`oauth-secret: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}`,
+		`tags: tag:ci-deploy`,
 		`version: '1.94.2'`,
 		`ping: ${{ secrets.DEMO_SERVER_HOST }}`,
 		`bash .github/scripts/check-demo-reachability.sh`,
@@ -2734,6 +2735,10 @@ func TestDemoPublicBrowserSmokeWaitsForVisibleLoginUI(t *testing.T) {
 		`getByLabel('Password').waitFor({ state: 'visible', timeout: 120000 })`,
 		`getByRole('button', { name: 'Sign in to Pulse' }).waitFor({ state: 'visible', timeout: 120000 })`,
 		`getByRole('status', { name: 'Backend and live data stream are connected.' })`,
+		`const DEMO_AUTO_LOGIN_KEY = 'pulse-demo-auto-login';`,
+		`await openDemo(browser, { suppressAutoLogin: false })`,
+		`await waitForConnectedWorkspace(visitor, visitorStartedAt, 'auto-signed-in visitor')`,
+		`await openDemo(browser, { suppressAutoLogin: true })`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -4948,6 +4953,8 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		"validate-notes-file /dev/stdin",
 		"260 characters or fewer",
 		"Use no semicolon or em dash characters",
+		"Name the specific feature or fix and where users find it",
+		"Never a theme or benefit slogan",
 		"- **[Short outcome]** - [Where users notice it and why it matters.]",
 		"requesting one constrained revision",
 	} {

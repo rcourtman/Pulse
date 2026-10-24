@@ -82,6 +82,72 @@ class ChartLatencyProofTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertTrue(proof.competing_capacity(dict(row, **{field: value})))
 
+    def test_bounded_hosted_agent_is_attributed_without_changing_raw_evidence(self):
+        row = dict(background_busy_pct=26.799007444168744, guest_pct=0, steal_pct=0,
+                   swap_pages=0, background_processes=[
+                       dict(pid=2106, name='provjobd1892260', cpu_pct=25.31017369727047),
+                       dict(pid=45, name='kworker/u16:1-flush-8:0', cpu_pct=1.2406947890818858),
+                       dict(pid=3197, name='python3', cpu_pct=0.49627791563275436)])
+        original = repr(row)
+        capacity = proof.background_capacity(row, hosted=True, cpu_count=4)
+        self.assertEqual(capacity['runner_agent_cpu_pct'], row['background_processes'][0]['cpu_pct'])
+        self.assertAlmostEqual(capacity['competing_busy_pct'], 1.7369727047146402)
+        self.assertFalse(proof.competing_capacity(dict(row, **capacity)))
+        self.assertEqual(repr(row), original)
+
+    def test_agent_exception_requires_hosted_context_exact_name_and_one_cpu_bound(self):
+        for hosted, cpus, name, cpu in [
+                (False, 4, 'provjobd1892260', 25),
+                (True, None, 'provjobd1892260', 25),
+                (True, 0, 'provjobd1892260', 25),
+                (True, 8, 'provjobd1892260', 25),
+                (True, 4, 'provjobd1892260', 26.01),
+                (True, 4, 'provjobd', 25),
+                (True, 4, 'provjobd1892260-extra', 25),
+                (True, 4, 'provjobd-1', 25),
+                (True, 4, 'Runner.Worker', 25),
+                (True, 4, 'node', 25)]:
+            with self.subTest(hosted=hosted, cpus=cpus, name=name, cpu=cpu):
+                row = dict(background_busy_pct=cpu, background_processes=[
+                    dict(pid=1, name=name, cpu_pct=cpu)])
+                capacity = proof.background_capacity(row, hosted=hosted, cpu_count=cpus)
+                self.assertEqual(capacity['runner_agent_cpu_pct'], 0)
+                self.assertEqual(capacity['competing_busy_pct'], cpu)
+
+    def test_other_unattributed_or_multiple_agent_cpu_stays_competing(self):
+        agent = dict(pid=1, name='provjobd1892260', cpu_pct=25)
+        other = dict(pid=2, name='node', cpu_pct=11)
+        for background, processes in [
+                (36, [agent, other]), (5, [agent, other]), (36, [agent]),
+                (25, []), (25, [agent, dict(pid=2, name='provjobd2772537', cpu_pct=0.25)])]:
+            with self.subTest(background=background, processes=processes):
+                row = dict(background_busy_pct=background, guest_pct=0, steal_pct=0,
+                           swap_pages=0, background_processes=processes)
+                capacity = proof.background_capacity(row, hosted=True, cpu_count=4)
+                self.assertTrue(proof.competing_capacity(dict(row, **capacity)))
+
+    def test_runner_agent_cannot_clear_guest_steal_or_swap(self):
+        row = dict(background_busy_pct=25, guest_pct=0, steal_pct=0, swap_pages=0,
+                   background_processes=[dict(pid=1, name='provjobd1892260', cpu_pct=25)])
+        row.update(proof.background_capacity(row, hosted=True, cpu_count=4))
+        self.assertFalse(proof.competing_capacity(row))
+        for field, value in [('guest_pct', 2.01), ('steal_pct', 0.11), ('swap_pages', 1)]:
+            with self.subTest(field=field):
+                self.assertTrue(proof.competing_capacity(dict(row, **{field: value})))
+
+    def test_inconclusive_summary_separates_agent_from_actual_contention(self):
+        row = dict(background_busy_pct=36, background_processes=[
+            dict(pid=1, name='provjobd1892260', cpu_pct=25),
+            dict(pid=2, name='node', cpu_pct=11)])
+        row.update(proof.background_capacity(row, hosted=True, cpu_count=4))
+        with tempfile.TemporaryDirectory() as directory:
+            summary = Path(directory) / 'summary.md'
+            proof.report_inconclusive('charts/workloads p50=1ms p95=2ms p99=3ms SLO=90ms',
+                                      [row], summary)
+            text = summary.read_text()
+        self.assertIn('peak 11.0% competing CPU; processes: node', text)
+        self.assertNotIn('provjobd', text)
+
     def test_process_receipt_excludes_measurement_and_handles_new_or_reused_pids(self):
         before = {10: dict(name='test', ticks=20, start='1'),
                   20: dict(name='other', ticks=30, start='2'),

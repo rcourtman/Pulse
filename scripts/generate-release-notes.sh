@@ -191,8 +191,13 @@ then
 
 ## Highlights
 
-- [One to three plain-text outcomes, each 140 characters or fewer. No markup,
-  links or issue references in this short list.]
+- [One to three of the release's biggest changes, each 140 characters or
+  fewer. Name the specific feature or fix and where users find it, for
+  example: Resource Overview shows alerts, recent trends and longer history
+  together. Never a theme or benefit slogan such as See problems and trends
+  together or Spend less time on setup. These preview the update before it is
+  installed, so each must make sense on its own. No markup, links or issue
+  references in this short list.]
 
 ## Proxmox, PBS and backups
 
@@ -209,14 +214,14 @@ Each full bullet must be 260 characters or fewer. No semicolons or em dashes.]
 
 [Only unresolved user symptoms with an actionable workaround or next step.
 Include critical risks and required safety actions here, even when they apply
-before upgrading. This section stays visible in the post-update modal.
+before upgrading. This section leads the post-update changelog.
 Omit this section when there are none.]
 
 ## Before you upgrade
 
 [Only compatibility, signing, companion-app or required operator information.
-Routine upgrade instructions are collapsed in the post-update modal. Put
-critical warnings in Known issues. Omit this section when there is none.
+It appears last in the post-update changelog as Upgrade notes. Put critical
+warnings in Known issues. Omit this section when there is none.
 No internal verification status.]
 EOF
 fi

@@ -429,6 +429,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               onRangeChange={drawer.setMetricsHistoryRange}
               enabled={drawer.activeTab() === 'overview'}
               currentMetrics={drawer.metricsHistoryCurrentMetrics()}
+              liveReadingsAvailable={
+                !(resource().type === 'agent' && resource().status === 'offline') &&
+                !getAgentFirstReportStatusIndicator(resource())
+              }
               deferredMetrics={drawer.metricsHistoryDeferredMetrics()}
               groups={drawer.metricsHistoryGroups()}
               alerts={chartAlerts()}

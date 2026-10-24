@@ -269,7 +269,7 @@ describe('post-update release content', () => {
       'Not part of the visual.',
     ].join('\n');
 
-  it('consumes current grouped release notes and a short Highlights list', () => {
+  it('reads current grouped release notes without repeating the Highlights summary', () => {
     const content = extractWhatsNew(
       [
         '## Highlights',
@@ -286,7 +286,7 @@ describe('post-update release content', () => {
       ].join('\n'),
       '6.6.0',
     );
-    expect(content?.highlights).toEqual(['Spot backup gaps.', 'Keep important alerts visible.']);
+    expect(content?.changes).not.toContain('Spot backup gaps.');
     expect(content?.changes).toContain('Proxmox, PBS and backups');
     expect(content?.changes).toContain('Acknowledgements persist');
     expect(content?.changes).not.toContain('Internal evidence');
@@ -294,7 +294,7 @@ describe('post-update release content', () => {
     expect(content?.important).toBeNull();
   });
 
-  it('separates authored warnings from collapsible upgrade instructions', () => {
+  it('separates authored warnings from routine upgrade instructions', () => {
     const content = extractWhatsNew(
       [
         '## Known issues',
@@ -340,7 +340,10 @@ describe('post-update release content', () => {
         '6.6.0',
       )[0],
     ).toMatchObject({ after: `${base}release-note-new-now.png`, before: undefined });
-    expect(extractWhatsNew('## Highlights\n- Faster updates.', '6.6.0')?.visuals).toEqual([]);
+    expect(extractWhatsNew('## Highlights\n- Faster updates.', '6.6.0')).toMatchObject({
+      changes: '- Faster updates.',
+      visuals: [],
+    });
     expect(extractWhatsNew('## Installation\nInstall Pulse.', '6.6.0')).toBeNull();
   });
 

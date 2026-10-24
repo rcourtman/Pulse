@@ -666,6 +666,172 @@ func TestRetainedResourceNumbersPreserveScopeAndOrderedSeries(t *testing.T) {
 				}
 			}
 			check(append(append([]string{}, ids...), "missing", ids[0]), nil, 0)
+			check(append(append([]string{}, ids...), "missing", ids[0]), []string{"memory", "cpu", "absent"}, 0)
+		})
+	}
+}
+
+// Filtered raw fleets bind both dimensions already. The row boundary should
+// transport one series ordinal, while a cache hit with reordered metric names
+// must still resolve against this statement's current bindings.
+func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
+	for _, clustered := range []bool{false, true} {
+		for _, valuesOnly := range []bool{false, true} {
+			t.Run(fmt.Sprintf("clustered=%t/values=%t", clustered, valuesOnly), func(t *testing.T) {
+				db := newPlanTestDB(t)
+				if clustered {
+					if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID; CREATE INDEX idx_metrics_tier_time ON metrics(tier,timestamp)`); err != nil {
+						t.Fatal(err)
+					}
+				}
+				store := &Store{db: pdb.Wrap(db, "series-number-binding")}
+				store.clusteredMetrics.Store(clustered)
+				base := time.Unix(1_800_003_600, 0)
+				ids := []string{"b':p2", "a:p4"}
+				names := []string{"memory", "cpu", ":p4"}
+				for i, id := range ids {
+					for j, metric := range names {
+						if _, err := db.Exec(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node',?,?,'minute',?,?)`, id, metric, base.Unix(), float64(i*100+j)); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				for _, filters := range [][]string{names, {":p4", "memory", "cpu"}, {"cpu", "memory", ":p4"}} {
+					query, args := store.retainedQuerySQL("node", ids, filters, base.Add(-3*time.Hour), base.Add(time.Minute), 0, []Tier{TierMinute}, false, valuesOnly)
+					rows, err := db.Query(query, args...)
+					if err != nil {
+						t.Fatal(err)
+					}
+					columns, err := rows.Columns()
+					if err != nil {
+						t.Fatal(err)
+					}
+					rows.Close()
+					want := []string{"series_number", "timestamp", "value"}
+					if !valuesOnly {
+						want = append(want, "min_value", "max_value")
+					}
+					if !reflect.DeepEqual(columns, want) {
+						t.Fatalf("repeated series identity still crosses row boundary: got %v, want %v", columns, want)
+					}
+					full, err := store.QueryMetricTypesBatch("node", ids, filters, base.Add(-3*time.Hour), base.Add(time.Minute), 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					values, err := store.QueryMetricValuesBatch("node", ids, filters, base.Add(-3*time.Hour), base.Add(time.Minute), 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, full, values)
+					for i, id := range ids {
+						for j, name := range names {
+							points := full[id][name]
+							if len(points) != 1 || points[0].Value != float64(i*100+j) || !points[0].Timestamp.Equal(base) {
+								t.Fatalf("wrong current series for %q/%q: %+v", id, name, points)
+							}
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+// Direct ordinal accumulation must be indistinguishable from the existing
+// single-resource assembler, including interleaved rows and empty series. Wide
+// sparse filters exercise the bounded fallback without losing statement scope.
+func TestRetainedNumberedAssemblyMatchesSingleResourceReads(t *testing.T) {
+	for _, clustered := range []bool{false, true} {
+		t.Run(fmt.Sprintf("clustered=%t", clustered), func(t *testing.T) {
+			db := newPlanTestDB(t)
+			if clustered {
+				if _, err := db.Exec(`DROP TABLE metrics; CREATE TABLE metrics (` + metricsTableColumns + `) WITHOUT ROWID; CREATE INDEX idx_metrics_tier_time ON metrics(tier,timestamp)`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store := &Store{db: pdb.Wrap(db, "numbered-series-assembly")}
+			store.clusteredMetrics.Store(clustered)
+			base := time.Unix(1_800_003_600, 0)
+			end := base.Add(6 * time.Hour)
+			ids := []string{"b':p2", "a:p4", "missing"}
+			names := []string{"memory", "cpu", "netin", "absent"}
+			tx, err := db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			insert, err := tx.Prepare(`INSERT INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value,min_value,max_value) VALUES ('node',?,?,?,?,?,?,?)`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, id := range ids[:2] {
+				for j, name := range names[:3] {
+					// Minute-tier rows come first; the raw first/tail points must
+					// still be restored to chronological order, never averaged.
+					for p := 0; p < 300; p++ {
+						value := float64(i*1000 + j*300 + p)
+						if _, err := insert.Exec(id, name, "minute", base.Unix()+int64(p*60+60), value, value-7, value+9); err != nil {
+							t.Fatal(err)
+						}
+					}
+					for _, p := range []struct{ offset, value int64 }{{1, 12}, {65, 99999}, {18061, 0}} {
+						if _, err := insert.Exec(id, name, "raw", base.Unix()+p.offset, p.value, nil, nil); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+			insert.Close()
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
+			for _, shape := range []string{"compact", "rebound", "wide-sparse"} {
+				t.Run(shape, func(t *testing.T) {
+					requested := append([]string(nil), ids...)
+					filters := append([]string(nil), names...)
+					if shape == "rebound" {
+						requested[0], requested[1] = requested[1], requested[0]
+						filters[0], filters[2] = filters[2], filters[0]
+					}
+					if shape == "wide-sparse" {
+						for len(requested) < queryAllBatchChunkSize {
+							requested = append(requested, fmt.Sprintf("missing-%d", len(requested)))
+						}
+						for len(filters) <= maxRetainedNumberedSeries/queryAllBatchChunkSize {
+							filters = append(filters, fmt.Sprintf("absent-%d", len(filters)))
+						}
+					}
+					full, err := store.QueryMetricTypesBatch("node", requested, filters, base, end, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(full) != 2 {
+						t.Fatalf("empty resource materialised: %d resources", len(full))
+					}
+					for _, id := range ids[:2] {
+						single, err := store.QueryMetricTypesBatch("node", []string{id}, filters, base, end, 0)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if !reflect.DeepEqual(full[id], single[id]) {
+							t.Fatalf("fleet differs from single-resource read for %s", id)
+						}
+						for _, points := range full[id] {
+							if len(points) != 302 || points[0].Value != 12 || points[len(points)-1].Value != 0 || points[len(points)-1].Min != 0 || points[1].Min != points[1].Value-7 {
+								t.Fatalf("chronology/zero/extrema/overlap changed: %d points", len(points))
+							}
+						}
+					}
+					values, err := store.QueryMetricValuesBatch("node", requested, filters, base, end, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					assertMetricValueProjection(t, full, values)
+					full[ids[0]][names[0]][0].Value = -999
+					if values[ids[0]][names[0]][0].Value != 12 {
+						t.Fatal("reader outputs alias each other")
+					}
+				})
+			}
 		})
 	}
 }

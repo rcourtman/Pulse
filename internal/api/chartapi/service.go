@@ -631,28 +631,10 @@ func capMetricPointSeriesByIndex(points []MetricPoint, maxPoints int) []MetricPo
 	if len(points) <= maxPoints || maxPoints <= 0 {
 		return points
 	}
-	if maxPoints == 1 {
-		return []MetricPoint{points[len(points)-1]}
-	}
-
-	result := make([]MetricPoint, 0, maxPoints)
-	step := float64(len(points)-1) / float64(maxPoints-1)
-	prevIndex := -1
-
-	for i := 0; i < maxPoints; i++ {
-		index := int(float64(i)*step + 0.5)
-		if index <= prevIndex {
-			index = prevIndex + 1
-		}
-		if index >= len(points) {
-			index = len(points) - 1
-		}
-		result = append(result, points[index])
-		prevIndex = index
-	}
-
-	if result[len(result)-1].Timestamp != points[len(points)-1].Timestamp {
-		result[len(result)-1] = points[len(points)-1]
+	indices := chartPointIndicesByIndex(len(points), maxPoints)
+	result := make([]MetricPoint, len(indices))
+	for i, index := range indices {
+		result[i] = points[index]
 	}
 	return result
 }
@@ -668,6 +650,89 @@ const (
 
 const InfrastructureSummaryMaxSeriesPoints = infrastructureSummaryMaxSeriesPoints
 
+func chartPointIndicesByIndex(count, maxPoints int) []int {
+	if maxPoints == 1 {
+		return []int{count - 1}
+	}
+	indices := make([]int, 0, maxPoints)
+	step := float64(count-1) / float64(maxPoints-1)
+	prevIndex := -1
+	for i := 0; i < maxPoints; i++ {
+		index := int(float64(i)*step + 0.5)
+		if index <= prevIndex {
+			index = prevIndex + 1
+		}
+		if index >= count {
+			index = count - 1
+		}
+		indices = append(indices, index)
+		prevIndex = index
+	}
+	return indices
+}
+
+// chartPointIndices selects original observations, not averages or synthetic
+// timestamps. Call only when count > maxPoints > 0. Keeping indices lets the
+// retained reader apply the same cap before allocating wire-format points.
+func chartPointIndices(count, maxPoints int, timestampAt func(int) int64) []int {
+	if maxPoints == 1 {
+		return []int{count - 1}
+	}
+	startTimestamp, endTimestamp := timestampAt(0), timestampAt(count-1)
+	if endTimestamp <= startTimestamp {
+		return chartPointIndicesByIndex(count, maxPoints)
+	}
+	bucketSpan := float64(endTimestamp-startTimestamp) / float64(maxPoints-1)
+	if bucketSpan < 1 {
+		return chartPointIndicesByIndex(count, maxPoints)
+	}
+
+	type representative struct {
+		indexPlusOne int // zero means no observation in this time bucket
+		distance     float64
+	}
+	buckets := make([]representative, maxPoints)
+	for pointIndex := 0; pointIndex < count; pointIndex++ {
+		timestamp := timestampAt(pointIndex)
+		index := int(math.Round(float64(timestamp-startTimestamp) / bucketSpan))
+		if index < 0 {
+			index = 0
+		}
+		if index >= maxPoints {
+			index = maxPoints - 1
+		}
+		targetTimestamp := float64(startTimestamp) + bucketSpan*float64(index)
+		distance := math.Abs(float64(timestamp) - targetTimestamp)
+		current := buckets[index]
+		if current.indexPlusOne == 0 || distance < current.distance ||
+			(distance == current.distance && timestamp > timestampAt(current.indexPlusOne-1)) {
+			buckets[index] = representative{indexPlusOne: pointIndex + 1, distance: distance}
+		}
+	}
+
+	result := make([]int, 0, maxPoints)
+	result = append(result, 0)
+	lastAddedTimestamp := startTimestamp
+	for index := 1; index < maxPoints-1; index++ {
+		bucket := buckets[index]
+		if bucket.indexPlusOne == 0 {
+			continue
+		}
+		pointIndex := bucket.indexPlusOne - 1
+		timestamp := timestampAt(pointIndex)
+		if timestamp <= lastAddedTimestamp {
+			continue
+		}
+		result = append(result, pointIndex)
+		lastAddedTimestamp = timestamp
+	}
+	if endTimestamp <= lastAddedTimestamp {
+		result[len(result)-1] = count - 1
+		return result
+	}
+	return append(result, count-1)
+}
+
 // capMetricPointSeries keeps mixed-cadence series visually proportional across
 // the selected time window. Index-based capping over-selects recent dense
 // samples, which bunches the right edge on long ranges.
@@ -675,73 +740,11 @@ func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
 	if len(points) <= maxPoints || maxPoints <= 0 {
 		return points
 	}
-	if maxPoints == 1 {
-		return []MetricPoint{points[len(points)-1]}
+	indices := chartPointIndices(len(points), maxPoints, func(i int) int64 { return points[i].Timestamp })
+	result := make([]MetricPoint, len(indices))
+	for i, index := range indices {
+		result[i] = points[index]
 	}
-
-	startTimestamp := points[0].Timestamp
-	endTimestamp := points[len(points)-1].Timestamp
-	if endTimestamp <= startTimestamp {
-		return capMetricPointSeriesByIndex(points, maxPoints)
-	}
-
-	bucketSpan := float64(endTimestamp-startTimestamp) / float64(maxPoints-1)
-	if bucketSpan < 1 {
-		return capMetricPointSeriesByIndex(points, maxPoints)
-	}
-
-	type timeBucketRepresentative struct {
-		point    MetricPoint
-		distance float64
-		ok       bool
-	}
-
-	buckets := make([]timeBucketRepresentative, maxPoints)
-	for _, point := range points {
-		index := int(math.Round(float64(point.Timestamp-startTimestamp) / bucketSpan))
-		if index < 0 {
-			index = 0
-		}
-		if index >= maxPoints {
-			index = maxPoints - 1
-		}
-
-		targetTimestamp := float64(startTimestamp) + bucketSpan*float64(index)
-		distance := math.Abs(float64(point.Timestamp) - targetTimestamp)
-		current := buckets[index]
-		if !current.ok ||
-			distance < current.distance ||
-			(distance == current.distance && point.Timestamp > current.point.Timestamp) {
-			buckets[index] = timeBucketRepresentative{
-				point:    point,
-				distance: distance,
-				ok:       true,
-			}
-		}
-	}
-
-	result := make([]MetricPoint, 0, maxPoints)
-	result = append(result, points[0])
-	lastAddedTimestamp := points[0].Timestamp
-	for index := 1; index < maxPoints-1; index++ {
-		bucket := buckets[index]
-		if !bucket.ok {
-			continue
-		}
-		if bucket.point.Timestamp <= lastAddedTimestamp {
-			continue
-		}
-		result = append(result, bucket.point)
-		lastAddedTimestamp = bucket.point.Timestamp
-	}
-
-	lastPoint := points[len(points)-1]
-	if lastPoint.Timestamp <= lastAddedTimestamp {
-		result[len(result)-1] = lastPoint
-		return result
-	}
-
-	result = append(result, lastPoint)
 	return result
 }
 
@@ -1111,18 +1114,34 @@ func convertMetricsForChart(
 		if !sparklineMetrics[metricType] {
 			continue
 		}
-		points := make([]MetricPoint, len(metricPoints))
-		for i, point := range metricPoints {
-			ts := point.Timestamp.UnixMilli()
-			if ts < *oldestTimestamp {
+		if len(metricPoints) <= maxPoints || maxPoints <= 0 {
+			points := make([]MetricPoint, len(metricPoints))
+			for i, point := range metricPoints {
+				ts := point.Timestamp.UnixMilli()
+				if ts < *oldestTimestamp {
+					*oldestTimestamp = ts
+				}
+				points[i] = MetricPoint{Timestamp: ts, Value: point.Value}
+			}
+			converted[metricType] = points
+			continue
+		}
+		// Oldest-data metadata describes the source observations, not just
+		// those selected for display (also for degenerate/unsorted inputs).
+		for _, point := range metricPoints {
+			if ts := point.Timestamp.UnixMilli(); ts < *oldestTimestamp {
 				*oldestTimestamp = ts
 			}
-			points[i] = MetricPoint{
-				Timestamp: ts,
-				Value:     point.Value,
-			}
 		}
-		converted[metricType] = capMetricPointSeries(points, maxPoints)
+		indices := chartPointIndices(len(metricPoints), maxPoints, func(i int) int64 {
+			return metricPoints[i].Timestamp.UnixMilli()
+		})
+		points := make([]MetricPoint, len(indices))
+		for i, index := range indices {
+			point := metricPoints[index]
+			points[i] = MetricPoint{Timestamp: point.Timestamp.UnixMilli(), Value: point.Value}
+		}
+		converted[metricType] = points
 	}
 	return converted
 }

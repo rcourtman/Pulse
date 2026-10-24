@@ -7,6 +7,7 @@ import {
   getMobileNavDestinationKey,
   getMobileNavDestinationHref,
   getMobileNavTabAriaLabel,
+  getMobileNavTabAriaDescription,
   getMobileNavTabButtonClass,
   isMobileNavDestinationActive,
   mobileNavDestinationHasBadge,
@@ -42,7 +43,10 @@ function MobileNavDestinationContent(props: {
 
   return (
     <>
-      <span class="relative flex shrink-0 items-center justify-center">
+      {/* Label first in source order, icon first visually. Badge numbers must
+          follow the label in both the text alternative and the DOM text. */}
+      <span class="order-2 min-w-0 truncate">{tab().label} </span>
+      <span class="relative order-1 flex shrink-0 items-center justify-center">
         <span aria-hidden="true" class="inline-flex items-center justify-center">
           <Icon class={props.iconClass} />
         </span>
@@ -51,12 +55,12 @@ function MobileNavDestinationContent(props: {
             <span aria-hidden="true" class="absolute -right-2 -top-1 flex items-center gap-1">
               <Show when={badges().critical > 0}>
                 <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-                  {badges().critical}
+                  {badges().critical}{' '}
                 </span>
               </Show>
               <Show when={badges().warning > 0}>
                 <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-800">
-                  {badges().warning}
+                  {badges().warning}{' '}
                 </span>
               </Show>
             </span>
@@ -73,22 +77,21 @@ function MobileNavDestinationContent(props: {
           )}
         </Show>
       </span>
-      <span class="min-w-0 truncate">{tab().label}</span>
       <Show when={props.destination.kind === 'primary' && !props.destination.tab.enabled}>
-        <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
+        <span class="order-3 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
           Setup
         </span>
       </Show>
       <Show when={props.destination.kind === 'primary' && props.destination.tab.badge}>
-        <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
+        <span class="order-3 rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
           {props.destination.kind === 'primary' ? props.destination.tab.badge : null}
         </span>
       </Show>
       <Show when={utilityTab()?.badge === 'update'}>
-        <span aria-hidden="true" class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+        <span aria-hidden="true" class="order-3 h-1.5 w-1.5 rounded-full bg-red-500"></span>
       </Show>
       <Show when={utilityTab()?.badge === 'pro'}>
-        <span class="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
+        <span class="order-3 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700 dark:bg-blue-900/25 dark:text-blue-300">
           Pro
         </span>
       </Show>
@@ -185,6 +188,11 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 aria-label={
                   destination.kind === 'utility'
                     ? getMobileNavTabAriaLabel(destination.tab)
+                    : undefined
+                }
+                aria-description={
+                  destination.kind === 'utility'
+                    ? getMobileNavTabAriaDescription(destination.tab)
                     : undefined
                 }
                 onClick={(event) => handleDestinationLinkClick(event, destination)}
@@ -316,6 +324,11 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 aria-label={
                   destination.kind === 'utility'
                     ? getMobileNavTabAriaLabel(destination.tab)
+                    : undefined
+                }
+                aria-description={
+                  destination.kind === 'utility'
+                    ? getMobileNavTabAriaDescription(destination.tab)
                     : undefined
                 }
                 onClick={(event) => handleDestinationLinkClick(event, destination)}

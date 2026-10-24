@@ -784,6 +784,11 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+Webhook DELETE's explicit success acknowledges saved/live destination removal,
+not deletion of its retained queue configuration or failed-attempt history.
+Queue records still follow the existing cancellation/retention policy; no
+storage schema, backup, restore or data-removal acknowledgement is added.
+
 ### Operator storage vocabulary without identity changes
 
 Storage topology names preserve Proxmox plugin vocabulary, including LVM-Thin,
@@ -7258,6 +7263,11 @@ History latency result, intact stored data, guest liveness or installed
 recovery. `TestContractChartSLOProofCLIClassifiesExecution` preserves child
 exit, output and executable identity across those distinctions; the 90 ms
 valid-capacity requirement and independent native recovery remain unchanged.
+One bounded hosted provisioning agent is part of the absolute measured envelope,
+not a blanket contention exemption: other/unattributed CPU, guest/steal and swap
+remain invalidating. Raw CPU and agent attribution are both retained. This
+permits a real failure as well as a pass at 90 ms; it clears no earlier adverse
+timing, storage failure or excluded investigation and changes no store code.
 
 ### Rejected administrative input preserves saved recovery choices (24 October 2026)
 

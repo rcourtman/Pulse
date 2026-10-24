@@ -2149,6 +2149,14 @@ preview label with a second top-of-shell release-candidate warning banner or
 release-feedback CTA in `frontend-modern/src/AppLayout.tsx`; prerelease cloud
 posture stays a subtle shell label, not a public-RC callout inside the paid
 runtime chrome.
+The same authenticated shell keeps counted utility navigation consistent for
+speech input and screen readers: desktop and mobile accessible names include
+the visible label followed by its badge numbers, with explicit word boundaries.
+Mixed Alert severity remains in the accessible description; Patrol attention
+and Actions approval explanations remain available. This shared-shell repair
+does not change counts, routes, permissions, paid gates or portal frontend
+inputs. AppLayout, MobileNavBar and model tests plus the consuming WCAG browser
+scans verify those semantics across zero, single and mixed alert counts.
 The self-hosted trial-start frontend runtime is retired for v6 GA. Commercial
 relay, onboarding, setup, Pro settings, and shared paywall surfaces may still
 offer explicit plan, activation, recovery, support, or hosted handoff paths, but

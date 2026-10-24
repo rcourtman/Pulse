@@ -4335,10 +4335,16 @@ func (n *NotificationManager) isQueuedWebhookStillEnabled(queuedWebhook WebhookC
 		return false
 	}
 
-	for _, current := range currentWebhooks {
-		if queuedWebhook.ID != "" && current.ID == queuedWebhook.ID {
-			return current.Enabled
+	if queuedWebhook.ID != "" {
+		for _, current := range currentWebhooks {
+			if current.ID == queuedWebhook.ID {
+				return current.Enabled
+			}
 		}
+		// A removed destination cannot borrow another destination's permission
+		// just because it shares the URL. Retained work carries the old payload
+		// and credentials; only legacy work without an ID may fall back to URL.
+		return false
 	}
 
 	if queuedWebhook.URL == "" {

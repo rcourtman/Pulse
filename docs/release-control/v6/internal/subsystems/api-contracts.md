@@ -21,13 +21,17 @@
 
 ## Purpose
 
-### Unreported agent delivery supplies no live chart fallback
+### Webhook deletion has an explicit committed acknowledgement
 
-A saved enrollment awaiting its first accepted report, including after its
-reporting lease expires, remains queryable by its existing metrics target.
-History and summary chart routes retain stored series
-but cannot synthesize a now-stamped live sample from that enrollment's absent
-metrics. An accepted report restores normal live fallback behaviour.
+`DELETE /api/notifications/webhooks/{id}` returns `success: true` after saved and
+live inventories both remove that ID. The legacy `status: "success"` field remains
+for existing clients. The destination editor already requires the boolean before
+accepting deletion; the acknowledgement must not leave a successfully removed
+row shown as failed. Missing destinations, failed persistence and failed live
+publication retain their existing error and rollback paths, not a success body.
+The handler's deletion assertion pins both fields; persistence-failure controls
+continue to require no live removal. This changes no route, scope, credential,
+retention or admitted-delivery snapshot contract.
 
 ### Typed MCP fleet filters survive HTTP projection
 
@@ -46,6 +50,14 @@ shielding; the HTTP request test pins encoding and token preservation.
 HTTP transport, production fleet handler and text/structured output over safe
 resource/finding fixtures. It covers true/false/omission, composed filters and
 an empty intersection; this is not released-binary or customer-estate proof.
+
+### Unreported agent delivery supplies no live chart fallback
+
+A saved enrollment awaiting its first accepted report, including after its
+reporting lease expires, remains queryable by its existing metrics target.
+History and summary chart routes retain stored series
+but cannot synthesize a now-stamped live sample from that enrollment's absent
+metrics. An accepted report restores normal live fallback behaviour.
 
 ### Proxmox setup guide names the command-access option by its shared label (21 October 2026)
 
@@ -825,6 +837,25 @@ identity and keeping installation credentials out. The shared command proof
 executes a terminal-free Unix recorder and inspects explicit Windows parameter
 binding. Browser evidence is UI-only; server/native deregistration and Windows
 failure retention require their own owner result, not source acceptance.
+
+### Chart caps select before wire conversion (24 October 2026)
+
+The existing time-nearest chart cap selects indices in the original series
+before allocating wire-format points. Its equal-time targets, latest-time tie
+break, first/last observations and degenerate-span index fallback are unchanged.
+No average, synthetic timestamp or new sampling policy is introduced; zero and
+selected extrema retain their exact values. Oldest-data metadata still examines
+every eligible source observation, including one omitted from display. Empty
+series remain empty and each converted response owns its point slices. The
+retained reader, LTTB stage, source/alias choice, scopes and cache budgets stay
+unchanged.
+
+`TestChartPointSelectionMatchesOriginalCap` compares the frozen former algorithm
+with both wire and source-point paths over mixed cadence, millisecond ties,
+negative epochs, unsorted/degenerate spans and caps from unlimited to one point.
+`TestContract_ChartIndexFallbackPreservesObservations` checks the exported fallback
+with equal-time, fractional, negative and explicit-zero observations. Source
+parity and consuming browser evidence remain separate acceptance obligations.
 
 ## Canonical Files
 
@@ -12654,9 +12685,17 @@ report, wrong budget, cleanup failure or other child failure remains an error.
 A valid-capacity budget failure still fails. No API payload, route, History
 sample, incident state or operational-recovery result is changed by this CI
 classification. `TestContractChartSLOProofCLIClassifiesExecution` drives the
-real CLI and disposable child processes through all ten outcomes, verifies
+real CLI and disposable child processes through idle, hosted-agent and contended outcomes, verifies
 unaltered logs/result/digest/strict arguments and excludes the synthetic token
 from the child environment. Its capacity rows are synthetic, not latency proof.
+On actual Actions execution, one exactly named `provjobd<digits>` process may
+account for at most one logical CPU plus one percentage point of sampling skew.
+Only that bounded contribution is separated from competing CPU; all other
+observed and unattributed CPU retains the 10% limit. Multiple or over-bound
+agents, non-Actions execution, guest/steal and swap get no exception. Receipts
+retain raw CPU rows plus runner-agent/competing attribution and CPU count.
+The hosted overhead remains in the absolute latency: under-budget passes and
+over-budget failures both receive real verdicts, without normalization.
 
 ### Unambiguous public administrative writes (24 October 2026)
 

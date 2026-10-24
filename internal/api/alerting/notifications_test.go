@@ -718,6 +718,13 @@ func TestNotificationHandlers(t *testing.T) {
 		h.DeleteWebhook(w, req)
 
 		assert.Equal(t, 200, w.Code)
+		var result struct {
+			Success bool   `json:"success"`
+			Status  string `json:"status"`
+		}
+		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+		assert.True(t, result.Success, "the destination editor must be able to accept the persisted deletion")
+		assert.Equal(t, "success", result.Status, "retain the legacy acknowledgement")
 	})
 
 	t.Run("GetWebhookTemplates", func(t *testing.T) {

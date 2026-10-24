@@ -113,11 +113,36 @@ def process_io(pid):
         return None
 
 
+def background_capacity(row, *, hosted=False, cpu_count=None):
+    # The two retained hosted samples (40077319330 and 40075384922) have
+    # opposite 90 ms outcomes, but the same single-CPU provjobd activity.
+    # Treat that bounded runner overhead as part of the hosted envelope, not
+    # a reason to discard either outcome. Never subtract it from the latency.
+    processes = row.get('background_processes', [])
+    agents = [process for process in processes
+              if re.fullmatch(r'provjobd[0-9]+', process['name'])]
+    agent = None
+    if hosted and cpu_count and cpu_count > 0 and len(agents) == 1:
+        # /proc/stat and per-process counters are sampled separately. Allow
+        # one percentage point of accounting skew above one logical CPU;
+        # multiple agents or activity beyond that bound get no exemption.
+        if 0 <= agents[0]['cpu_pct'] <= 100 / cpu_count + 1:
+            agent = agents[0]
+    agent_cpu = agent['cpu_pct'] if agent else 0
+    # Keep unaccounted CPU (including exited processes and the top-five tail)
+    # and every other observed process. Attribution must not hide contention
+    # when the independent aggregate/process counters disagree.
+    competing = max(0, row['background_busy_pct'] - agent_cpu,
+                    sum(process['cpu_pct'] for process in processes if process is not agent))
+    return dict(runner_agent_cpu_pct=agent_cpu,
+                runner_agent_pid=agent['pid'] if agent else None, competing_busy_pct=competing)
+
+
 def competing_capacity(row):
     # The measured SQLite process performs I/O. Keep I/O wait in the raw
     # receipt and latency, rather than mistaking its own reads for contention.
     # Admission still requires quiet I/O before the process starts.
-    return (row['background_busy_pct'] > 10 or row['guest_pct'] > 2
+    return (row.get('competing_busy_pct', row['background_busy_pct']) > 10 or row['guest_pct'] > 2
             or row['steal_pct'] > 0.1 or row['swap_pages'] != 0)
 
 
@@ -160,12 +185,14 @@ def validate_contended_output(text, returncode):
 
 def report_inconclusive(report, capacity_errors, summary_path):
     names = sorted({row['name'] for error in capacity_errors
-                    for row in error['background_processes'] if row['cpu_pct'] > 2})
-    peak = max(error['background_busy_pct'] for error in capacity_errors)
+                    for row in error['background_processes']
+                    if row['cpu_pct'] > 2 and row['pid'] != error.get('runner_agent_pid')})
+    peak = max(error.get('competing_busy_pct', error['background_busy_pct'])
+               for error in capacity_errors)
     lines = ['Workload chart 90ms SLO: inconclusive',
              f'{report} (not a verdict)',
              f'{len(capacity_errors)} measurement intervals had competing capacity '
-             f'(peak {peak:.1f}% background CPU; processes: {", ".join(names) or "none named"}).',
+             f'(peak {peak:.1f}% competing CPU; processes: {", ".join(names) or "none named"}).',
              'The hosted runner was not idle, so this result neither passes nor fails the budget.']
     print('\n'.join(lines), flush=True)
     if summary_path:
@@ -181,6 +208,7 @@ def measure(binary, prefix):
         'PATH', 'HOME', 'TMPDIR', 'TZ', 'GOMAXPROCS', 'CI',
         'GITHUB_ACTIONS', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT') if key in os.environ}
     env['PULSE_STRICT_LOCAL_API_SLOS'] = 'true'
+    capacity_context = dict(hosted=env.get('GITHUB_ACTIONS') == 'true', cpu_count=os.cpu_count())
     command = [str(binary), '-test.run=^TestSLO_WorkloadCharts$', '-test.v',
                '-test.count=1', '-test.cpu=2', '-test.timeout=5m']
     capacity_errors = []
@@ -201,6 +229,7 @@ def measure(binary, prefix):
             if own_before is not None and own_after is not None and row['total_ticks'] > 0:
                 row['measurement_cpu_pct'] = 100 * (own_after - own_before) / row['total_ticks']
                 row['background_busy_pct'] = max(0, row['busy_pct'] - row['measurement_cpu_pct'])
+                row.update(background_capacity(row, **capacity_context))
                 if competing_capacity(row):
                     capacity_errors.append(row)
             receipt.write(json.dumps(row) + '\n')
@@ -217,6 +246,7 @@ def measure(binary, prefix):
             before = after
     verdict = 'inconclusive' if capacity_errors else 'valid'
     result = dict(command=command, binary_sha256=identity, environment=env,
+                  capacity_context=capacity_context,
                   pid=process.pid, returncode=returncode, verdict=verdict,
                   capacity_errors=capacity_errors)
     prefix.with_suffix('.result.json').write_text(json.dumps(result, indent=2) + '\n')

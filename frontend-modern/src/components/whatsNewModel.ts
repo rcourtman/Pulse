@@ -1,5 +1,5 @@
 // Model logic for the release preview and post-update changelog.
-import { marked, type Tokens } from 'marked';
+import { marked } from 'marked';
 import { normalizeReleaseVersion } from './updateVersion';
 
 type Heading = {
@@ -90,7 +90,6 @@ export type ReleaseVisual = {
 };
 
 export type WhatsNewContent = {
-  highlights: string[];
   changes: string | null;
   important: string | null;
   upgradeNotes: string | null;
@@ -142,15 +141,12 @@ export const extractReleaseVisuals = (markdown: string, version: string): Releas
   });
 };
 
-/** Read the same authored release body used by GitHub and the update preview. */
+/**
+ * Read the same authored release body used by GitHub and the update preview.
+ * The post-update dialog is a changelog: the curated Highlights summary only
+ * stands in for the change groups when a release has none.
+ */
 export const extractWhatsNew = (markdown: string, version: string): WhatsNewContent | null => {
-  const summary = extractHighlights(markdown);
-  const summaryTokens = summary ? marked.lexer(summary) : [];
-  const highlights = summaryTokens
-    .flatMap((token) =>
-      token.type === 'list' ? token.items.map((item: Tokens.ListItem) => item.text) : [],
-    )
-    .slice(0, 3);
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const headings = headingsIn(lines);
   const sectionMarkdown = (titles: ReadonlySet<string>, includeTitles = true) =>
@@ -161,21 +157,21 @@ export const extractWhatsNew = (markdown: string, version: string): WhatsNewCont
         return body ? [includeTitles ? `### ${heading.title}\n\n${body}` : body] : [];
       })
       .join('\n\n') || null;
-  // Authored warning sections stay open. Routine upgrade instructions have
-  // their own disclosure, without inferring severity from individual words.
+  // Authored warning sections lead the changelog, without inferring severity
+  // from individual words.
   const important = sectionMarkdown(new Set(['known issues', 'breaking changes']));
   const upgradeNotes = sectionMarkdown(new Set(['before you upgrade', 'upgrade notes']), false);
-  const changes = extractChangelog(markdown);
+  const changes = extractChangelog(markdown) ?? extractHighlights(markdown);
   const visuals = extractReleaseVisuals(markdown, version);
-  return highlights.length || changes || important || upgradeNotes || visuals.length
-    ? { highlights, changes, important, upgradeNotes, visuals }
+  return changes || important || upgradeNotes || visuals.length
+    ? { changes, important, upgradeNotes, visuals }
     : null;
 };
 
 /**
  * Build the post-update changelog from the user-facing change categories in a
- * published release body. Highlights, warnings, upgrade notes and visuals
- * render separately, while this is its expandable detailed changelog.
+ * published release body. Warnings, upgrade notes and visuals render
+ * separately around it.
  */
 export const extractChangelog = (markdown: string): string | null => {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');

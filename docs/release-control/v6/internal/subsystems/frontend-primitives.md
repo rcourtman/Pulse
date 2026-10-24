@@ -30,6 +30,10 @@ cached metric bars until accepted telemetry arrives. Consumers must not infer
 the wait from a browser timer or hide a provider failure behind it. The expanded
 drawer presents the wait as information and does not synthesize a current
 chart reading from absent or cached metrics. Stored history remains available.
+The shared history query immediately withdraws cached live replies and current
+fallbacks when the owning source loses reporting authority. That transition
+starts a fresh read without waiting for the poll, while retaining actual stored
+series and rejecting a late live reply from the previous reporting state.
 Pending API polls retain their own wording.
 
 ### Backup posture failure and retry stay source-local (24 October 2026)
@@ -160,6 +164,21 @@ native QGA/backup or update-permission recovery.
 `browser-tests/drawer-composition.cjs` consumes the actual adapter, drawers,
 shared history query and Docs with synthetic observations at desktop/phone
 widths, including keyboard/touch guidance and same-node updates.
+
+### Navigation labels retain their visible badge text (24 October 2026)
+
+Desktop and mobile utility links include their visible label and badge numbers
+contiguously, in source order, in the accessible name (WCAG 2.5.3). Mobile
+icons may appear above/beside their labels through CSS, but their numeric
+badges follow the label in the DOM with explicit word boundaries. Mixed Alert
+badge numbers remain in the name; the accessible description retains their
+critical/warning meanings without interrupting that visible text sequence.
+Patrol attention and Actions approval explanations stay in their names. Counts,
+routes, permissions, current-page state and stable link identity do not change.
+The maintained AppLayout/MobileNavBar/model tests and the integration WCAG
+scans cover these semantics, including zero, single and mixed severity counts.
+The integration graph keeps Playwright 1.56.1 while upgrading axe to 4.14.0;
+no WCAG tags, assertions, budgets or disclosure checks are removed.
 
 ### History honours explicit selected-source staleness (13 October 2026)
 

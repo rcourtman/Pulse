@@ -2973,26 +2973,33 @@ artifact-selection behaviour.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
    reservation boundary so the release notice and the GitHub gratitude prompt
    cannot create a one-two sequence. The post-update
-   surface keeps authored Known issues and historical Breaking changes open
-   before the Highlights, with optional `See the difference` images directly
-   after the Highlights. Routine Before-you-upgrade instructions have their own
-   initially collapsed disclosure, separate from the grouped change expansion.
-   Release authors must put critical risks and required safety actions in Known
-   issues so those warnings remain visible without expanding upgrade notes.
+   dialog reads as a conventional changelog headed by the version and release
+   date: authored Known issues and historical Breaking changes first, optional
+   `See the difference` images next, then every grouped change section as
+   plain headed lists and routine Before-you-upgrade instructions last as
+   Upgrade notes, with no disclosure hiding any of them. The curated
+   Highlights summary belongs to the pre-update preview and is not repeated
+   above the changelog. Release authors must put critical risks and required
+   safety actions in Known issues so those warnings lead the dialog.
    Screenshot URLs must be exact-version public release PNG sidecars, never
    arbitrary remote images or raw PR attachment URLs. Before/now comparisons
    load through the authenticated exact-version release-asset endpoint, which
    validates body references, bounded PNG data and GitHub redirect hosts
    without loosening the application's same-origin image policy. Comparisons
    stack at narrow widths, link to full-size assets and degrade to readable
-   text if an image cannot load. Highlights-only releases remain useful, while
+   text if an image cannot load. A release without grouped change sections
+   shows its Highlights list as the changelog, while
    a first baseline, malformed or development version, missing release, or
    metadata-only release stays silent. Text is sanitized independently of
    screenshot rendering and cannot expand the chat Markdown trust boundary.
-   For both the pre-update preview and post-update overview, release rendering
-   keeps it to at most three short plain-text bullets of no more than 140
+   For the pre-update preview, release rendering keeps Highlights to at most
+   three short plain-text bullets of no more than 140
    characters each, with links, code, issue references, and nested structure
-   reserved for the categorized or full release notes.
+   reserved for the categorized or full release notes. Each Highlights bullet
+   names a specific change and where users find it, never a theme or benefit
+   slogan, because the preview is all a user reads before installing.
+   `scripts/generate-release-notes.sh` and
+   `docs/releases/RELEASE_NOTES_TEMPLATE.md` carry that authoring rule.
    The post-update communication boundary does not announce telemetry payload
    changes. Those are disclosed in the dated `Payload changes` section of
    `docs/PRIVACY.md` and in the release notes of the first release that carries
@@ -3832,6 +3839,12 @@ shells with a synthetic proof exit and a credential-free capturing provider,
 covering success, neutral, budget failure and a broken proof. It checks the
 read-only evidence/separate-writer admission and missing-output failure path.
 No real check is created, workflow dispatched or latency workload executed.
+The hosted envelope includes only the proof's bounded single-CPU provisioning
+agent attribution, never arbitrary background work. Both its passing and
+over-90-ms child results must reach the unchanged success/failure shell mapping;
+only genuinely competing capacity can map a budget-only result to neutral.
+The workflow-shell control preserves the actual over-budget report through
+both neutral and failure paths. This changes no release or install gate.
 
 ### Registered Windows native-exit completion proof (8 October 2026)
 
@@ -5048,8 +5061,9 @@ build upload or public mobile-store rollout is part of this server release.
 The same release boundary provides one canonical in-app release-note
 experience. Update checks preview curated Highlights, while the authenticated
 running-version endpoint supplies the same published body to the post-update
-modal. That modal shows Highlights, optional release screenshot comparisons,
-important operator information and expandable grouped changes. Historical
+modal. That modal is a plain changelog: important operator information,
+optional release screenshot comparisons, every grouped change section and
+upgrade notes, without repeating Highlights. Historical
 Added/Improved/Fixed categories remain readable. PR visual evidence can be
 selected autonomously and copied into versioned release assets, with fresh
 captures available for missing or stale views. Source/development builds and
@@ -5672,6 +5686,14 @@ demo login reaches the connected workspace instead of failing open on API-only
 reachability or remaining on the authenticated loading shell. The proof must
 use visible UI state rather than Playwright `networkidle`, because the public
 demo can keep background activity alive after the page is already usable.
+Since v6.5.0 demo mode signs a fresh visitor in with the published demo
+credentials, so the login form never stays on screen for a first visit. The
+smoke therefore proves that a fresh visitor reaches the connected workspace
+when the server reports demo mode, then sets the frontend's tab-scoped
+`pulse-demo-auto-login` marker in a separate context to keep proving the login
+form and a manual demo sign-in. The policy test pins that marker to
+`frontend-modern/src/utils/localStorage.ts`, so a rename fails source checks
+instead of the live demo step.
 That same demo-update verification boundary also owns the canonical v6 mock
 runtime state contract. `.github/workflows/update-demo-server.yml` must verify
 mock-mode readiness through the unified `/api/state` `resources[]` collection,
@@ -8023,8 +8045,8 @@ frozen-product insertion, candidate re-cut or stable promotion is performed.
 A pinned Tailscale action registers an ephemeral project CI node using only
 `tag:ci-deploy` and the dedicated `TS_CI_DEPLOY_OAUTH_CLIENT_ID` /
 `TS_CI_DEPLOY_OAUTH_SECRET` binding. Its OAuth client has only Auth Keys write,
-restricted to that tag; it must not alias the `tag:infra` demo or full-access
-administrative identity. The credential owner verifies that configured scope;
+restricted to that tag; it must not alias the retired `tag:infra` or a
+full-access administrative identity. The credential owner verifies that configured scope;
 source and Self observations are not proof of OAuth/ACL authority. Missing
 dedicated registration configuration stops before join, with no credential,
 auth-key or caller-input fallback. `release_browser_tailnet.py` rejects anything
@@ -8037,6 +8059,16 @@ fixed prerequisite/registration steps receive the dedicated OAuth pair; acceptan
 commands receive a scrubbed environment with no provider, production or
 publishing credential. State is synthetic, disabled resources and throwaway
 admin/API authentication, with the existing telemetry opt-out.
+
+The governed demo update and recovery workflows register through the same
+`TS_CI_DEPLOY_OAUTH_CLIENT_ID` / `TS_CI_DEPLOY_OAUTH_SECRET` binding and only
+`tag:ci-deploy`. The tailnet policy grants that tag TCP 22 to the `pulse-relay`
+demo host, which is the only path those workflows use before SSH. Their former
+`TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` pair named the July 2026 `tag:infra`
+client. That client was revoked on 30 September 2026, when the private
+repositories moved to narrow clients, so every demo convergence step since then
+failed with an OAuth 401. Neither repository secret name may hold the retired
+`tag:infra` client or a full-access administrative client.
 
 The real Chromium UI signs in once, chooses Preview, checks the actual feed's
 exact RC/archive, and confirms one Install Update. The observer requires real

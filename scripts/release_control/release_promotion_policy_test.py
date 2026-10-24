@@ -3190,8 +3190,8 @@ else:
         self.assertIn("verify_only: true", dry_run_workflow)
         self.assertIn("Verify Current Stable Demo Path (No Mutation)", dry_run_workflow)
         self.assertIn("tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3", demo)
-        self.assertIn("oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}", demo)
-        self.assertIn("oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}", demo)
+        self.assertIn("oauth-client-id: ${{ secrets.TS_CI_DEPLOY_OAUTH_CLIENT_ID }}", demo)
+        self.assertIn("oauth-secret: ${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}", demo)
         self.assertIn("ping: ${{ secrets.DEMO_SERVER_HOST }}", demo)
         # The static 90-day TS_AUTHKEY was retired for the OAuth client
         # (0a9a29d63); the runner mints an ephemeral tagged node key per run.
@@ -3367,6 +3367,13 @@ else:
         self.assertNotIn("getByText('Connected', { exact: true })", demo_smoke)
         self.assertIn("Public demo remained on the authenticated loading shell", demo_smoke)
         self.assertNotIn("waitUntil: 'networkidle'", demo_smoke)
+        # v6.5.0 demo mode signs a fresh visitor in, so the smoke proves that
+        # arrival and suppresses it for the tab that proves the login form.
+        self.assertIn("const DEMO_AUTO_LOGIN_KEY = 'pulse-demo-auto-login';", demo_smoke)
+        self.assertIn("await waitForConnectedWorkspace(visitor, visitorStartedAt, 'auto-signed-in visitor')", demo_smoke)
+        self.assertIn("await openDemo(browser, { suppressAutoLogin: true })", demo_smoke)
+        login = read("frontend-modern/src/utils/localStorage.ts")
+        self.assertIn("DEMO_AUTO_LOGIN: 'pulse-demo-auto-login'", login)
 
     def test_stable_demo_recovery_is_fixed_current_bits_only(self) -> None:
         workflow = read(".github/workflows/recover-demo-server.yml")
