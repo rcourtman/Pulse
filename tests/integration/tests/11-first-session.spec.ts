@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import {
   ensureAuthenticated,
+  ensureSessionAuthenticated,
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
@@ -28,6 +29,7 @@ type RuntimeCapabilitiesPayload = {
 
 /** Selector for the settings sidebar (div with aria-label, not a nav element). */
 const SETTINGS_SIDEBAR = '[aria-label="Settings navigation"]';
+const BILLING_PLAN_PATH = "/settings/pulse-intelligence/billing/plan";
 
 test.describe.serial("First-session experience", () => {
   test("wizard completes and lands on Add infrastructure source picker", async ({
@@ -161,18 +163,21 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureAuthenticated(page);
+    // Settings bootstrap includes session-preferred organisation reads. Use
+    // the actual browser session, not the token-only helper's intentional
+    // unauthenticated probe followed by a token retry.
+    await ensureSessionAuthenticated(page);
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(750);
 
     // Visit a selection of key settings routes and verify the page renders
     // without console errors or blank screens.
     const keyRoutes = [
-      "/settings/system-general",
-      "/settings/system-updates",
-      "/settings/security-overview",
-      "/settings/security-auth",
-      "/settings/system-pro",
+      { path: "/settings/system-general", readyHeading: "Appearance" },
+      { path: "/settings/system-updates", readyHeading: "Updates" },
+      { path: "/settings/security-overview", readyHeading: "Security Overview" },
+      { path: "/settings/security-auth", readyHeading: "Authentication" },
+      { path: BILLING_PLAN_PATH, readyHeading: "Current plan" },
     ] as const;
 
     const consoleErrors: string[] = [];
@@ -189,7 +194,12 @@ test.describe.serial("First-session experience", () => {
     });
 
     try {
-      for (const route of keyRoutes) {
+      for (const { path: route, readyHeading } of keyRoutes) {
+        // Retire the previous document before measuring this route. A
+        // departing infrastructure row may still start its anomaly read;
+        // that is not a Settings bootstrap request. Do not exempt anomalies
+        // from the assertion or miss this document's early requests.
+        await page.goto("about:blank");
         consoleErrors.length = 0;
         aiRequests.clear();
 
@@ -198,20 +208,19 @@ test.describe.serial("First-session experience", () => {
         await page.waitForURL(/\/settings/, { timeout: 10_000 });
         await expect(page.locator("#root")).toBeVisible();
 
-        // Wait for the panel content to render. Scope to the settings content
-        // area (everything after the sidebar) to avoid matching sidebar labels.
-        // Fall back to a page-wide heading if the content area locator doesn't
-        // match — some layouts render headings differently.
-        const panelHeading = page
-          .locator('h1, h2, h3, [role="heading"]')
-          .filter({ hasNotText: "Settings" })
-          .first();
+        // The outer page heading is present even while General remains on
+        // "Loading configuration...". Require the consuming panel, not just
+        // the Settings shell, before judging requests and console output.
         await expect(
-          panelHeading,
-          `Route ${route} did not render any panel content`,
+          page.locator("[data-settings-content]").getByRole("heading", {
+            name: readyHeading,
+            exact: true,
+          }),
+          `Route ${route} did not finish loading a settings panel`,
         ).toBeVisible({ timeout: 10_000 });
-
-        await page.waitForTimeout(500);
+        await expect(
+          page.getByText("Loading configuration...", { exact: true }),
+        ).toHaveCount(0);
 
         const unexpectedAIRequests = aiRequests
           .urls()
@@ -456,7 +465,7 @@ test.describe.serial("First-session experience", () => {
     );
 
     await ensureAuthenticated(page);
-    await page.goto("/settings/pulse-intelligence/billing/plan", {
+    await page.goto(BILLING_PLAN_PATH, {
       waitUntil: "domcontentloaded",
     });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });

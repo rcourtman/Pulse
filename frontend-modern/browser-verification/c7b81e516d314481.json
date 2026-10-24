@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "49efecdeb15a21f58c060c8174c073704b617f4a",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx": "fd8f9633014c84ee989d3cdde4819dc99ec24ba4cf15bd48bd77d46240c8b363",
+    "frontend-modern/src/components/Settings/useAuditWebhookPanelState.ts": "44f4bfcebba352c82f21c1f7fe52595be8fa9cdfee93da993b96994d16b87ff1"
+  },
+  "routes": [
+    "/settings/security-webhooks"
+  ],
+  "states": [
+    "An authenticated synthetic audit receiver remains configured after an HTTP400 refused add; the submitted URL and existing warning remain available",
+    "A held retry disables competing add/removal writes while allowing a new draft; the successful reply does not erase that newer draft",
+    "A subsequent successful add clears its submitted draft and retains all three endpoints",
+    "Canceling explicit removal sends no write; refused removal preserves its endpoint; successful confirmation removes only the selected endpoint and restores field focus"
+  ],
+  "interactions": [
+    "Keyboard Enter and focused Add Endpoint at desktop; touch Add Endpoint and removal cancellation at320px",
+    "Type a new URL while a save is pending and press Enter; no competing write occurs",
+    "Inspect the actual production hook, panel, API client, capability store, router, Dialog, Toast and CSS; ten current captures opened with native view_image",
+    "Compare the existing compiled parent at both widths: refused entries vanish and the320px field is107.98px, versus270px after repair"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-24T06:59:32Z",
+  "browsers": [
+    {
+      "engine": "Chromium",
+      "version": "141.0.7390.37",
+      "width": 1365
+    },
+    {
+      "engine": "WebKit",
+      "version": "26.0",
+      "width": 320
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, WEBHOOK-BINDING.json, PIXEL-REVIEW.json and resumed browser/capture archives. Exact production source 49efecdeb15a21f58c060c8174c073704b617f4a, source proof source-l9t1jtk4, artifact 68856e64a1ee95a0c1aec561673bf831024c62073cfe924556478a7c64cda808; Playwright 1.56.1. Safe cookie-backed synthetic HTTP only; no private backend, customer sign-in, external delivery, deployment or release acceptance. Initial toast frames include entry animation; subsequent pending/refused-removal frames show settled warnings. Rapid repeated saves retain their ordinary notification stack."
+}

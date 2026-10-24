@@ -36,8 +36,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
       {...rest}
     >
       <div class="border-b border-border bg-surface-alt px-2.5 py-2 sm:px-6 sm:py-4">
-        <div class="flex items-start gap-2 sm:items-center sm:gap-3">
-          <div class="flex min-w-0 flex-1 flex-col gap-0.5 sm:gap-1">
+        <div class="flex flex-wrap items-start gap-2 sm:items-center sm:gap-3">
+          <div class="flex min-w-0 flex-1 basis-40 flex-col gap-0.5 sm:gap-1">
             <h2
               id={local.titleId}
               class="text-[11px] font-semibold uppercase tracking-wide text-base-content dark:text-slate-100 sm:text-base sm:normal-case sm:tracking-tight"
@@ -51,7 +51,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             </Show>
           </div>
           <Show when={local.action}>
-            <div class="w-auto shrink-0">{local.action}</div>
+            <div class="w-auto min-w-0 max-w-full shrink-0">{local.action}</div>
           </Show>
         </div>
       </div>

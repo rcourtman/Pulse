@@ -53,17 +53,20 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
       });
       setWebhookUrls(urls);
       showSuccess(getAuditWebhookSaveSuccessMessage());
+      return true;
     } catch (error) {
       logger.error('[AuditWebhookPanel] Failed to save audit webhooks', error);
       showWarning(getAuditWebhookSaveErrorMessage());
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const handleAddWebhook = async () => {
-    if (!canManage()) return;
-    const url = newUrl().trim();
+    if (!canManage() || saving()) return;
+    const draft = newUrl();
+    const url = draft.trim();
     if (!url) return;
 
     try {
@@ -78,12 +81,14 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
       return;
     }
 
-    await saveWebhooks([...webhookUrls(), url]);
-    setNewUrl('');
+    const saved = await saveWebhooks([...webhookUrls(), url]);
+    // Leave failed entries available for correction/retry, and do not erase
+    // a different draft typed while the submitted entry was saving.
+    if (saved && newUrl() === draft) setNewUrl('');
   };
 
   const handleRemoveWebhook = async (url: string) => {
-    if (!canManage()) return;
+    if (!canManage() || saving()) return;
     await saveWebhooks(webhookUrls().filter((existingUrl) => existingUrl !== url));
   };
 

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "567fcb960794d6acb0fd634fc01c4fa07f645e8c",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/SettingsPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/SettingsPanel.tsx": "b08f844f7e3af953960e7c040e1f9516e7df0279ce34db6a4f1b48015ea10d48"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "states": [
+    "Two signed audit events with all toolbar actions and a readable non-overlapping title",
+    "Active signature verification with an enabled Cancel control",
+    "Cancellation after the active verification settles, with one unchecked event and enabled Resume",
+    "Resumed verification complete with disabled Resume and two verified events"
+  ],
+  "interactions": [
+    "Focus Refresh and activate with Enter",
+    "Activate Verify All, Cancel and Resume with keyboard at desktop/intermediate widths and touch at320px",
+    "Check title and all four action bounds before, during and after verification; the assigned-parent SettingsPanel blob in the retained Core consumer fails the same containment check",
+    "Inspect actual production frontend captures with native view_image at all three widths"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    },
+    {
+      "width": 768,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-24T06:10:26Z",
+  "browsers": [
+    {
+      "width": 1365,
+      "version": "141.0.7390.37",
+      "engine": "Chromium"
+    },
+    {
+      "width": 320,
+      "version": "26.0",
+      "engine": "WebKit"
+    },
+    {
+      "width": 768,
+      "version": "141.0.7390.37",
+      "engine": "Chromium"
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, PIXEL-REVIEW.json and CAPTURES.tar.xz retain the raw results, native pixel observations and captures. Full production frontend from source-o8f7e19d at bb903ef7d679803e5d90c64af3303bc5863f1d86, matching this final frontend content; local synthetic APIs only. No native SSO, guest or installed recovery claim."
+}
