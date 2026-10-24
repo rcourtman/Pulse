@@ -626,6 +626,25 @@ when the row is clicked: no document listener, timer, signal, metric derivation
 or History work is added per row. `GuestRow.test.tsx` covers the drag, the
 in-place click and chevron activation over a selection.
 
+### Chart caps select before wire conversion (24 October 2026)
+
+The existing time-nearest chart cap selects indices in the original series
+before allocating wire-format points. Its equal-time targets, latest-time tie
+break, first/last observations and degenerate-span index fallback are unchanged.
+No average, synthetic timestamp or new sampling policy is introduced; zero and
+selected extrema retain their exact values. Oldest-data metadata still examines
+every eligible source observation, including one omitted from display. Empty
+series remain empty and each converted response owns its point slices. The
+retained reader, LTTB stage, source/alias choice, scopes and cache budgets stay
+unchanged.
+
+`TestChartPointSelectionMatchesOriginalCap` compares the frozen former algorithm
+with both wire and source-point paths over mixed cadence, millisecond ties,
+negative epochs, unsorted/degenerate spans and caps from unlimited to one point.
+`TestContract_ChartIndexFallbackPreservesObservations` checks the exported fallback
+with equal-time, fractional, negative and explicit-zero observations. Source
+parity and consuming browser evidence remain separate acceptance obligations.
+
 ## Canonical Files
 
 - `frontend-modern/src/utils/workloadDiskUsage.ts` — aggregate disk numeric/current-reading admission.
@@ -2762,8 +2781,17 @@ resource list; never persist or expose it as resource identity. With multiple
 requested metrics, return one series number instead of repeatedly decoding the
 metric name too. Resolve both dimensions against the current bound resource
 and metric lists, including on a SQL-template cache hit or a new chunk. Metric
-names remain bound data in the projection, not interpolated SQL. Full and
-value-only raw projections share this shape; unfiltered, single-resource and
+names remain bound data in the projection, not interpolated SQL. Accumulate
+filtered raw observations directly by series number, resolving names once per
+nonempty series after the read instead of flushing interleaved nested maps for
+every point. Empty resources and metrics stay absent. At most 4,096 slice
+headers are reserved per chunk; wider sparse filters retain the map assembler.
+Both paths return detached observations and restore stable timestamp order
+before Docker projection, with no new sampling or source-selection policy.
+`TestRetainedNumberedAssemblyMatchesSingleResourceReads` compares compact,
+reordered and wide-sparse fleets with single-resource reads on both layouts,
+including interleaved series, overlap exclusion, zero and nullable extrema.
+Full and value-only raw projections share this shape; unfiltered, single-resource and
 ordered display-bucket reads keep their existing row dimensions.
 `TestRetainedRawFleetSeriesNumbersBindCurrentMetrics` checks both layouts and
 projections, parameter-like identities, reordered metric bindings and exact

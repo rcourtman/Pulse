@@ -1482,6 +1482,10 @@ func (s *Store) QueryAll(resourceType, resourceID string, start, end time.Time, 
 // queries fast.
 const queryAllBatchChunkSize = 500
 
+// Bound the empty slice headers for direct ordinal assembly. Unusually wide,
+// sparse metric filters keep the existing map assembler instead.
+const maxRetainedNumberedSeries = 4096
+
 // QueryAllBatch retrieves all metric types for multiple resources of the same
 // type in a single query. Returns map[resourceID]map[metricType][]MetricPoint.
 // This avoids N+1 query patterns when loading charts for many resources.
@@ -2000,6 +2004,14 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 
 	result := make(map[string]map[string][]T, len(resourceIDs))
 	seriesCapacity := estimateQueryAllBatchSeriesCapacity(start, end, stepSecs)
+	// Filtered raw fleets already return a statement-local series number.
+	// Accumulate by that number directly: time-major rows interleave metrics,
+	// so resolving strings and flushing nested maps on every row defeats the
+	// compact transport. Bind names once per nonempty series after the read.
+	var numberedSeries [][]T
+	if seriesOrdinals && len(resourceIDs)*len(metricTypes) <= maxRetainedNumberedSeries {
+		numberedSeries = make([][]T, len(resourceIDs)*len(metricTypes))
+	}
 
 	// Consecutive points in one series append directly to its slice. Flush on
 	// a series change so interleaved metrics can resume their existing slices
@@ -2077,13 +2089,15 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 				if resourceNumber < 0 || resourceNumber >= len(resourceIDs)*len(metricTypes) {
 					return nil, fmt.Errorf("invalid retained series number %d", resourceNumber)
 				}
-				resourceIndex /= len(metricTypes)
-				metricType = metricTypes[resourceNumber%len(metricTypes)]
-			}
-			if resourceIndex < 0 || resourceIndex >= len(resourceIDs) {
+				if numberedSeries == nil {
+					resourceID = resourceIDs[resourceNumber/len(metricTypes)]
+					metricType = metricTypes[resourceNumber%len(metricTypes)]
+				}
+			} else if resourceIndex < 0 || resourceIndex >= len(resourceIDs) {
 				return nil, fmt.Errorf("invalid retained resource number %d for %d resources", resourceIndex, len(resourceIDs))
+			} else {
+				resourceID = resourceIDs[resourceIndex]
 			}
-			resourceID = resourceIDs[resourceIndex]
 		}
 		if !projection.valuesOnly {
 			p.Min, p.Max = p.Value, p.Value
@@ -2096,7 +2110,11 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		}
 		if !streamBuckets {
 			p.Timestamp = time.Unix(ts, 0)
-			appendPoint(resourceID, metricType, p)
+			if numberedSeries != nil {
+				numberedSeries[resourceNumber] = append(numberedSeries[resourceNumber], projection.point(p))
+			} else {
+				appendPoint(resourceID, metricType, p)
+			}
 			continue
 		}
 		start := (ts / stepSecs) * stepSecs
@@ -2120,6 +2138,18 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 
 	flushBucket()
 	flushSeries()
+	for number, points := range numberedSeries {
+		if len(points) == 0 {
+			continue
+		}
+		id := resourceIDs[number/len(metricTypes)]
+		metrics := result[id]
+		if metrics == nil {
+			metrics = make(map[string][]T, len(metricTypes))
+			result[id] = metrics
+		}
+		metrics[metricTypes[number%len(metricTypes)]] = points
+	}
 	if resourceOrdinals {
 		for _, metrics := range result {
 			for _, points := range metrics {
