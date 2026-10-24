@@ -536,6 +536,21 @@ func (m *Manager) CheckHost(host models.Host) {
 	summaryDiskResourceID := ""
 	if summary, ok := models.SummaryDisk(host.Disks); ok {
 		summaryDiskResourceID, _ = hostDiskResourceID(host, summary)
+	} else if host.LinkedNodeID != "" {
+		// SummaryDisk needs capacity. A still-listed filesystem whose
+		// capacity disappeared retains its established identity, not a
+		// usable reading, so its held alert still prevents a node duplicate.
+		m.mu.RLock()
+		previous := m.hostAgentNodeLinks[host.ID]
+		m.mu.RUnlock()
+		if previous.nodeID == host.LinkedNodeID {
+			for _, disk := range host.Disks {
+				if id, _ := hostDiskResourceID(host, disk); id == previous.summaryDiskResourceID {
+					summaryDiskResourceID = id
+					break
+				}
+			}
+		}
 	}
 	evaluatesSummaryDisk := false
 	summaryDiskLive := false

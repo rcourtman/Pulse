@@ -21,8 +21,9 @@ Host filesystem thresholds use the canonical disk-observation admission: a
 finite percentage in range, positive capacity and non-negative used space no
 larger than capacity. A listed unavailable reading or an entirely empty report
 holds the existing occurrence, acknowledgement and last trusted evidence. It
-cannot raise a new alert, resolve one, or complete activation, explicit intent
-grace or recovery timing across the gap. A measured zero remains recovery.
+cannot raise a new alert, resolve one, or complete activation or explicit intent
+grace across the gap. A measured zero retains ordinary immediate disk recovery;
+no recovery delay is introduced.
 
 An established linked-node summary identity keeps ownership only while its
 held disk alert remains open; interrupting a pending run returns ownership to

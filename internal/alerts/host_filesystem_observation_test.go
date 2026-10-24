@@ -111,71 +111,47 @@ func TestHostFilesystemUnknownPreservesOccurrence(t *testing.T) {
 
 func TestHostFilesystemGapRestartsTiming(t *testing.T) {
 	for _, grace := range []bool{false, true} {
-		for _, recovery := range []bool{false, true} {
-			for _, gap := range []string{"empty", "unknown-zero", "unknown-positive", "negative-used", "over-capacity"} {
-				t.Run(fmt.Sprintf("intent=%v/recovery=%v/%s", grace, recovery, gap), func(t *testing.T) {
-					m, elapsed := hostFilesystemManager(t, grace)
-					m.mu.Lock()
-					m.config.MetricTimeThresholds = map[string]map[string]int{"all": {"disk": 60}}
-					m.mu.Unlock()
-					host := hostFilesystemSample("host-1", 85)
-					id := hostFilesystemID(host)
-					if recovery {
-						host.Disks[0].Used, host.Disks[0].Usage = 950, 95
-						m.CheckHost(host)
-						elapsed.Store(int64(time.Minute))
-						m.CheckHost(host)
-						if len(m.GetActiveAlerts()) != 1 {
-							t.Fatal("critical control must fire")
-						}
-						host.Disks[0].Used, host.Disks[0].Usage = 100, 10
-						elapsed.Store(int64(70 * time.Second))
-					}
-					m.CheckHost(host)
-					incident, exists := continuityIncident(m, id, "disk")
-					if !exists || (!recovery && incident.State != reducer.StatePending) || (recovery && incident.RecoverySince.IsZero()) {
-						t.Fatal("control must start the real timed run")
-					}
-					// A similarly prefixed host must not be interrupted with this host.
-					other := hostFilesystemSample("host-10", 85)
-					m.CheckHost(other)
-					elapsed.Store(int64(3 * time.Minute))
-					m.CheckHost(hostFilesystemGap(host, gap))
-					incident, exists = continuityIncident(m, id, "disk")
-					if (!recovery && exists) || (recovery && (!exists || !incident.RecoverySince.IsZero())) {
-						t.Fatal("observation gap retained timed evidence")
-					}
-					if _, exists := continuityIncident(m, hostFilesystemID(other), "disk"); !exists {
-						t.Fatal("gap crossed the exact host boundary")
-					}
-					m.CheckHost(host)
-					want := 0
-					if recovery {
-						want = 1
-					}
-					if len(m.GetActiveAlerts()) != want {
-						t.Fatal("first fresh sample completed the pre-gap run")
-					}
-					elapsed.Store(int64(3*time.Minute + 59*time.Second))
-					m.CheckHost(host)
-					if len(m.GetActiveAlerts()) != want {
-						t.Fatal("fresh run completed early")
-					}
-					elapsed.Store(int64(4 * time.Minute))
-					m.CheckHost(host)
-					if recovery {
-						want = 0
-					} else {
-						want = 1
-					}
-					if len(m.GetActiveAlerts()) != want {
-						t.Fatal("full continuous fresh run did not complete")
-					}
-					if m.ShadowDivergences() != 0 {
-						t.Fatal("interruption diverged from the shadow reducer")
-					}
-				})
-			}
+		for _, gap := range []string{"empty", "unknown-zero", "unknown-positive", "negative-used", "over-capacity"} {
+			t.Run(fmt.Sprintf("intent=%v/%s", grace, gap), func(t *testing.T) {
+				m, elapsed := hostFilesystemManager(t, grace)
+				m.mu.Lock()
+				m.config.MetricTimeThresholds = map[string]map[string]int{"all": {"disk": 60}}
+				m.mu.Unlock()
+				host := hostFilesystemSample("host-1", 85)
+				id := hostFilesystemID(host)
+				m.CheckHost(host)
+				incident, exists := continuityIncident(m, id, "disk")
+				if !exists || incident.State != reducer.StatePending {
+					t.Fatal("control must start the real timed activation run")
+				}
+				other := hostFilesystemSample("host-10", 85)
+				m.CheckHost(other)
+				elapsed.Store(int64(2 * time.Minute))
+				m.CheckHost(hostFilesystemGap(host, gap))
+				if _, exists := continuityIncident(m, id, "disk"); exists {
+					t.Fatal("observation gap retained timed evidence")
+				}
+				if _, exists := continuityIncident(m, hostFilesystemID(other), "disk"); !exists {
+					t.Fatal("gap crossed the exact host boundary")
+				}
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("first fresh sample completed the pre-gap run")
+				}
+				elapsed.Store(int64(2*time.Minute + 59*time.Second))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 0 {
+					t.Fatal("fresh run completed early")
+				}
+				elapsed.Store(int64(3 * time.Minute))
+				m.CheckHost(host)
+				if len(m.GetActiveAlerts()) != 1 {
+					t.Fatal("full continuous fresh run did not complete")
+				}
+				if m.ShadowDivergences() != 0 {
+					t.Fatal("interruption diverged from the shadow reducer")
+				}
+			})
 		}
 	}
 }
