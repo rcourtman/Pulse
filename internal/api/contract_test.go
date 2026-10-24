@@ -13940,8 +13940,13 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
 	setUnexportedField(t, monitor, "metricsStore", store)
 	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
-	if err := continuity.Upsert(config.HostContinuityEntry{HostID: "agent-waiting", Hostname: "waiting", LastSeen: now.Add(-time.Second), IntervalSeconds: 30}); err != nil {
-		t.Fatal(err)
+	for _, entry := range []config.HostContinuityEntry{
+		{HostID: "agent-waiting", Hostname: "waiting", LastSeen: now.Add(-time.Second), IntervalSeconds: 30},
+		{HostID: "agent-expired-waiting", Hostname: "expired-waiting", LastSeen: now.Add(-4 * time.Minute), IntervalSeconds: 30},
+	} {
+		if err := continuity.Upsert(entry); err != nil {
+			t.Fatal(err)
+		}
 	}
 	setUnexportedField(t, monitor, "hostContinuityStore", continuity)
 	router := &Router{monitor: monitor}
@@ -13983,6 +13988,8 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 	for _, tc := range []struct{ resourceType, resourceID, metric string }{
 		{"agent", "agent-waiting", "cpu"},
 		{"agent", "agent-waiting", "temperature"},
+		{"agent", "agent-expired-waiting", "cpu"},
+		{"agent", "agent-expired-waiting", "temperature"},
 		{"agent", "agent-silent", "cpu"},
 		{"agent", "agent-silent", "temperature"},
 		{"node", "pve-unreachable", "memory"},
@@ -14039,11 +14046,58 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 			t.Fatalf("%s %s: current %s not served as a live point: source=%q points=%+v", tc.resourceType, tc.resourceID, tc.metric, resp.Source, resp.Points)
 		}
 	}
+	// Summary endpoints share the same reading contract on both sides of the
+	// original lease. An expired saved enrollment has no new zero reading.
+	assertSavedSummary := func(stored bool) {
+		t.Helper()
+		for _, path := range []string{"/api/charts?range=5m", "/api/charts/infrastructure?range=5m"} {
+			// Each request gets a fresh service so the summary cache cannot hide
+			// newly added history in the second assertion.
+			chartsRouter := &Router{monitor: monitor}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if strings.HasPrefix(path, "/api/charts/infrastructure") {
+				chartsRouter.handleInfrastructureCharts(rec, req)
+			} else {
+				chartsRouter.handleCharts(rec, req)
+			}
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s: status = %d, body=%s", path, rec.Code, rec.Body.String())
+			}
+			var response struct {
+				AgentData map[string]chartapi.VMChartData `json:"agentData"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatalf("%s: decode: %v", path, err)
+			}
+			for _, id := range []string{"agent-waiting", "agent-expired-waiting"} {
+				series, ok := response.AgentData[id]
+				if !ok {
+					t.Fatalf("%s lost saved enrollment %s", path, id)
+				}
+				if stored && id == "agent-waiting" {
+					if len(series["cpu"]) != 1 || series["cpu"][0].Value != 37 {
+						t.Fatalf("%s %s: stored history changed: %+v", path, id, series)
+					}
+				}
+				for metric, points := range series {
+					if stored && id == "agent-waiting" && metric == "cpu" {
+						continue
+					}
+					if len(points) != 0 {
+						t.Fatalf("%s %s: saved enrollment served invented %s readings: %+v", path, id, metric, points)
+					}
+				}
+			}
+		}
+	}
+	assertSavedSummary(false)
 	// A saved enrollment may still have real history from its previous run.
 	monitor.GetMetricsHistory().AddGuestMetric("agent:agent-waiting", "cpu", 37, now.Add(-time.Minute))
 	if resp, _ := history("resourceType=agent&resourceId=agent-waiting&metric=cpu"); resp.Source == "live" || len(resp.Points) != 1 || resp.Points[0].Value != 37 {
 		t.Fatalf("pending enrollment lost stored history or relabelled it as live: %+v", resp)
 	}
+	assertSavedSummary(true)
 }
 
 // A row lapses only when it records a reading source and every one it records

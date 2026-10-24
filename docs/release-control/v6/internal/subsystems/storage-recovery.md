@@ -25,7 +25,9 @@
 
 An agent's pending first report after a server restart is a monitoring-owned
 delivery state. Its retained enrollment and historical receipt carry no fresh
-storage metrics, healthy storage verdict or recovery evidence. Storage and
+storage metrics, healthy storage verdict or recovery evidence. Expiry of that
+reporting lease likewise supplies no new zero-valued chart observation or
+recovery proof. Storage and
 recovery consumers continue to require their own source observations.
 
 ### Failed posture refreshes withdraw retained assessments (24 October 2026)

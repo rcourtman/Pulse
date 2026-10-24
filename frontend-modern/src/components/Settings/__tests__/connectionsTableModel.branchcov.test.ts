@@ -174,7 +174,7 @@ describe('agentAttachmentProblem', () => {
       'critical',
     ],
     ['unauthorized', 'Agent unauthorized', 'The Pulse Agent token is being rejected.', 'critical'],
-    ['pending', 'Agent pending first report', 'The Pulse Agent has not reported yet.', 'warning'],
+    ['pending', 'Waiting for first report', 'The Pulse Agent has not reported yet.', 'warning'],
   ] as const satisfies ReadonlyArray<[ConnectionState, string, string, 'critical' | 'warning']>)(
     'uses the fallback detail for state %s when stateReason is empty',
     (state, label, detail, tone) => {
@@ -190,7 +190,7 @@ describe('agentAttachmentProblem', () => {
   it.each([
     ['unreachable', 'Agent unreachable'],
     ['unauthorized', 'Agent unauthorized'],
-    ['pending', 'Agent pending first report'],
+    ['pending', 'Waiting for first report'],
   ] as const satisfies ReadonlyArray<[ConnectionState, string]>)(
     'uses the explicit stateReason for state %s when one is provided',
     (state, label) => {

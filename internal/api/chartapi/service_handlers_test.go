@@ -239,47 +239,51 @@ func TestHandleCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing
 }
 
 func TestChartsDoNotSynthesizeCurrentMetricsForPendingEnrollment(t *testing.T) {
-	monitor, state, history := newTestMonitor(t)
-	syncTestResourceStore(t, monitor, state)
-	continuity := config.NewHostContinuityStore(t.TempDir(), nil)
-	if err := continuity.Upsert(config.HostContinuityEntry{HostID: "waiting-agent", Hostname: "waiting", LastSeen: time.Now().Add(-time.Second), IntervalSeconds: 30}); err != nil {
-		t.Fatal(err)
-	}
-	setUnexportedField(t, monitor, "hostContinuityStore", continuity)
-	for _, stored := range []bool{false, true} {
-		if stored {
-			history.AddGuestMetric("agent:waiting-agent", "cpu", 37, time.Now().Add(-time.Minute))
-		}
-		for _, path := range []string{"/api/charts?range=5m", "/api/charts/infrastructure?range=5m"} {
-			service := NewService(fixedMonitorResolver{monitor: monitor})
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodGet, path, nil)
-			if strings.HasPrefix(path, "/api/charts/infrastructure") {
-				service.HandleInfrastructureCharts(rec, req)
-			} else {
-				service.HandleCharts(rec, req)
-			}
-			var response struct {
-				AgentData map[string]VMChartData `json:"agentData"`
-			}
-			if rec.Code != http.StatusOK {
-				t.Fatalf("%s: status %d: %s", path, rec.Code, rec.Body.String())
-			}
-			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+	for _, age := range []time.Duration{time.Second, 4 * time.Minute} {
+		t.Run(age.String(), func(t *testing.T) {
+			monitor, state, history := newTestMonitor(t)
+			syncTestResourceStore(t, monitor, state)
+			continuity := config.NewHostContinuityStore(t.TempDir(), nil)
+			if err := continuity.Upsert(config.HostContinuityEntry{HostID: "waiting-agent", Hostname: "waiting", LastSeen: time.Now().Add(-age), IntervalSeconds: 30}); err != nil {
 				t.Fatal(err)
 			}
-			series := response.AgentData["waiting-agent"]
-			if _, ok := response.AgentData["waiting-agent"]; !ok {
-				t.Fatalf("%s lost the pending enrollment", path)
-			}
-			if stored {
-				if len(series["cpu"]) != 1 || series["cpu"][0].Value != 37 {
-					t.Fatalf("%s lost stored history: %+v", path, series)
+			setUnexportedField(t, monitor, "hostContinuityStore", continuity)
+			for _, stored := range []bool{false, true} {
+				if stored {
+					history.AddGuestMetric("agent:waiting-agent", "cpu", 37, time.Now().Add(-4*time.Minute))
 				}
-			} else if len(series) != 0 {
-				t.Fatalf("%s invented current readings: %+v", path, series)
+				for _, path := range []string{"/api/charts?range=5m", "/api/charts/infrastructure?range=5m"} {
+					service := NewService(fixedMonitorResolver{monitor: monitor})
+					rec := httptest.NewRecorder()
+					req := httptest.NewRequest(http.MethodGet, path, nil)
+					if strings.HasPrefix(path, "/api/charts/infrastructure") {
+						service.HandleInfrastructureCharts(rec, req)
+					} else {
+						service.HandleCharts(rec, req)
+					}
+					var response struct {
+						AgentData map[string]VMChartData `json:"agentData"`
+					}
+					if rec.Code != http.StatusOK {
+						t.Fatalf("%s: status %d: %s", path, rec.Code, rec.Body.String())
+					}
+					if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+						t.Fatal(err)
+					}
+					series := response.AgentData["waiting-agent"]
+					if _, ok := response.AgentData["waiting-agent"]; !ok {
+						t.Fatalf("%s lost the pending enrollment", path)
+					}
+					if stored {
+						if len(series["cpu"]) != 1 || series["cpu"][0].Value != 37 {
+							t.Fatalf("%s lost stored history: %+v", path, series)
+						}
+					} else if len(series) != 0 {
+						t.Fatalf("%s invented current readings: %+v", path, series)
+					}
+				}
 			}
-		}
+		})
 	}
 }
 
