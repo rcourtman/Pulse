@@ -223,6 +223,28 @@ select the canonical owner without interpreting alert strings independently.
 `alert_scope_test.go` verifies the registry and both read adapters, rejected
 references and absent current owners. Scoped Patrol tests cover linked owners
 and conflicting unqualified source IDs.
+A Docker container alert (`docker:<host ID>/<container ID>`, built by
+`alerts.DockerContainerResourceID`) binds the container collected under exactly
+that host and complete 64-character ID, through the registry's own Docker
+source key (`<host ID>/container/<container ID>`), the key `RecordChange`
+already joins that alert's history to. A shortened ID, a container reported
+without an ID (`docker:<host ID>/name:<name>`), a hostname or another host
+binds nothing. Before 24 October 2026 only Docker host and Swarm service
+references resolved here, so the Patrol inbox named container alerts by the
+raw reference and never matched the unified container Patrol findings carry.
+History recording is unchanged: `RecordChange` resolves complete container IDs
+before this resolver and the journal backfill skips container references.
+Proof: `TestAlertResourceReferenceBindsCollectedDockerContainer` in
+`history_identity_test.go`, from a snapshot and from unified rows.
+A binding reached through a component's owner (an agent's filesystem, disk
+temperature, RAID device or custom sensor; a storage's ZFS pool or device)
+carries `Component`: its owner is shared by sibling components, so consumers
+that match one alert to one finding must not treat the owner as the alert's
+subject. The Unraid array reference names the array's storage itself and is
+not a component. Source targets come from the registry's view cache, which the
+first resolution of a generation builds, instead of a scan of every source
+mapping per reference, so resolving a page of alerts stays linear
+(`TestAlertResourceReferenceMarksComponentOwners`).
 
 ### Resource CPU temperature uses the one primary rule
 

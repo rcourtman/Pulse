@@ -2598,9 +2598,11 @@ Two users in a row (discussions #1623 and #1699) could not find the durable
 Patrol outcomes because they sat two levels below the Needs attention detail.
 The selected detail in `PatrolAttentionWorkbench.tsx` now owns a `Lasting
 decisions` section beside the alert lifecycle controls. When a Patrol finding
-mirrors the selected alert (same resource, backend-stamped `mirrorsAlertType`
-equal to the item kind, joined by `getLinkedPatrolFindings` in
-`patrolHomePresentation.ts` over the surface-supplied `findings` accessor),
+mirrors the selected alert (backend-stamped `mirrorsAlertId` equal to the
+item's operational record ID, joined by `getLinkedPatrolFindings` in
+`patrolHomePresentation.ts` over the surface-supplied `findings` accessor;
+before 24 October 2026 the join was resource plus kind, which cannot tell
+apart two filesystem alerts on one host),
 the section lists Remember as expected, Dismiss: Not an issue, Dismiss: Later,
 and Create rule, each with one line stating what it does and how long it lasts
 (`PATROL_LASTING_DECISIONS`). Choosing one opens an inline confirmation with an
@@ -2615,6 +2617,17 @@ active-only default set and the detail would otherwise claim Patrol has
 nothing to remember. An alert with no mirrored finding says
 plainly that Patrol has nothing to remember and points at alert thresholds,
 because the only durable control for a bare alert is the alert configuration.
+When Patrol has open findings on the same resource that do not restate the
+alert (`getPatrolFindingsOnSubject`: active findings on the item's subject,
+the list "Browse Patrol findings for this resource" opens), the guidance names
+the finding (or the count) and says Patrol keeps it separate from the alert,
+so the decision is made on the finding; it no longer claims Patrol has raised
+nothing. The browse button appears only when that list is non-empty, so it
+never opens an empty scope. The join works because the attention item's
+subject is the unified resource ID findings carry (see ai-runtime, 24 October
+2026); before, a Docker container alert's raw `docker:<host>/<container>`
+reference scoped the list to nothing and the detail denied a finding Patrol
+had raised on that container.
 The temporary controls state in one visible line that acknowledgement and
 suppression are short-term; the former `More ways to manage this issue`
 disclosure is gone.
@@ -2636,7 +2649,8 @@ intermediate and narrow linked journey is exercised by
 `scripts/check-patrol-assistant-journey.mjs`.
 `PatrolAttentionWorkbench.test.tsx` pins the four decisions and their copy, the
 rule reason requirement, the remembered-decision path, the alert-only
-guidance, and the flapping collapse.
+guidance with and without unlinked findings on the resource, and the flapping
+collapse.
 
 ### Open resource goes to the page that shows the resource
 

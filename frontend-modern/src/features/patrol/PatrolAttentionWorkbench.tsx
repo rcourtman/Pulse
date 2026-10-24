@@ -73,6 +73,7 @@ import {
   getAttentionFlappingPresentation,
   getAttentionHandoverClose,
   getLinkedPatrolFindings,
+  getPatrolFindingsOnSubject,
   getPatrolRememberedDecisionPresentation,
   partitionPatrolAttention,
   PATROL_AUTONOMY_EXPERIENCE,
@@ -902,6 +903,12 @@ function AttentionDetail(props: {
     if (!current || !findings) return [];
     return getLinkedPatrolFindings(current.item, findings);
   });
+  const subjectFindings = createMemo(() => {
+    const current = detail();
+    const findings = props.findings?.();
+    if (!current || !findings) return [];
+    return getPatrolFindingsOnSubject(current.item, findings);
+  });
   const orderedEvidence = createMemo(() =>
     [...(detail()?.evidence ?? [])].sort(
       (left, right) => new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime(),
@@ -1177,6 +1184,7 @@ function AttentionDetail(props: {
             <AttentionLastingDecisions
               item={loaded().item}
               linkedFindings={linkedFindings()}
+              subjectFindings={subjectFindings()}
               onOpenFindings={props.onOpenFindings}
               thresholdsHref={thresholdsHref()}
             />
@@ -1532,6 +1540,7 @@ function AttentionTimelineList(props: { timeline: AttentionItemDetail['timeline'
 function AttentionLastingDecisions(props: {
   item: AttentionItem;
   linkedFindings: UnifiedFinding[];
+  subjectFindings: UnifiedFinding[];
   onOpenFindings?: (item: AttentionItem) => void;
   thresholdsHref: string;
 }) {
@@ -1631,6 +1640,7 @@ function AttentionLastingDecisions(props: {
               fallback={
                 <AttentionAlertOnlyGuidance
                   item={props.item}
+                  subjectFindings={props.subjectFindings}
                   onOpenFindings={props.onOpenFindings}
                   thresholdsHref={props.thresholdsHref}
                 />
@@ -1759,18 +1769,49 @@ function AttentionLastingDecisions(props: {
   );
 }
 
+// Findings on the same resource that do not restate this alert keep their own
+// lasting decisions, so the guidance names them and opens them instead of
+// saying Patrol has raised nothing.
 function AttentionAlertOnlyGuidance(props: {
   item: AttentionItem;
+  subjectFindings: UnifiedFinding[];
   onOpenFindings?: (item: AttentionItem) => void;
   thresholdsHref: string;
 }) {
   return (
     <div>
-      <p class="text-xs leading-5 text-muted">
-        This is an alert and Patrol has not raised a finding about it, so there is nothing for
-        Patrol to remember here. To change it for good, adjust when this alert fires or turn it off
-        for {props.item.subjectResourceName} under alert thresholds.
-      </p>
+      <Show
+        when={props.subjectFindings.length > 0}
+        fallback={
+          <p class="text-xs leading-5 text-muted">
+            This is an alert and Patrol has not raised a finding about it, so there is nothing for
+            Patrol to remember here. To change it for good, adjust when this alert fires or turn it
+            off for {props.item.subjectResourceName} under alert thresholds.
+          </p>
+        }
+      >
+        <p class="text-xs leading-5 text-muted">
+          <Show
+            when={props.subjectFindings.length === 1}
+            fallback={
+              <>
+                Patrol also raised{' '}
+                <span class="font-medium text-base-content">
+                  {props.subjectFindings.length} findings
+                </span>{' '}
+                for this resource and keeps them separate from this alert, so decide on them from
+                the findings.
+              </>
+            }
+          >
+            Patrol also raised{' '}
+            <span class="font-medium text-base-content">{props.subjectFindings[0]?.title}</span> for
+            this resource and keeps it separate from this alert, so decide on it from the finding.
+          </Show>{' '}
+          To change this alert for good, adjust when it fires or turn it off for{' '}
+          {props.item.subjectResourceName} under alert thresholds.
+        </p>
+      </Show>
       <div class="mt-2 flex flex-wrap gap-2">
         <ButtonLink
           href={props.thresholdsHref}
@@ -1780,7 +1821,7 @@ function AttentionAlertOnlyGuidance(props: {
         >
           Adjust alert thresholds
         </ButtonLink>
-        <Show when={props.onOpenFindings}>
+        <Show when={props.onOpenFindings && props.subjectFindings.length > 0}>
           <Button
             variant="ghost"
             size="sm"

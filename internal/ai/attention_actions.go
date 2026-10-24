@@ -82,8 +82,10 @@ func ProjectAttentionAction(
 		if evidence.Permissions != operationaltrust.EvidencePermissionsSufficient {
 			return AttentionActionOffer{}, AttentionActionEvidencePermissionLimited
 		}
+		// Evidence names the record's own subject reference; the item's
+		// subject is the unified resource that reference resolves to.
 		if unified.CanonicalResourceID(evidence.Subject.ResourceID) !=
-			unified.CanonicalResourceID(item.SubjectResourceID) {
+			unified.CanonicalResourceID(detail.OperationalRecord.SubjectResourceID) {
 			return AttentionActionOffer{}, AttentionActionEvidenceSubjectMismatch
 		}
 		if evidence.Correlation != nil && evidence.Correlation.CandidateCount != 1 {

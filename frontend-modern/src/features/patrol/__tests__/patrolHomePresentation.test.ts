@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { PatrolObjective } from '@/api/patrol';
 import type { AttentionItem, AttentionItemDetail } from '@/api/patrolAttention';
+import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import {
   getAttentionHandoverClose,
+  getLinkedPatrolFindings,
   getPatrolAttentionDecisionReason,
+  getPatrolFindingsOnSubject,
   getPatrolObjectiveProtectionSummary,
   partitionPatrolAttention,
 } from '../patrolHomePresentation';
@@ -203,5 +206,83 @@ describe('getAttentionHandoverClose', () => {
         timeline: [handover, reopened],
       }),
     ).toBeNull();
+  });
+});
+
+describe('getPatrolFindingsOnSubject', () => {
+  const finding = (overrides: Partial<UnifiedFinding> = {}): UnifiedFinding => ({
+    id: 'finding-1',
+    source: 'ai-patrol',
+    resourceId: 'app-container-a1bf6ef7c728a8db',
+    resourceName: 'pulse-live-web',
+    resourceType: 'app-container',
+    category: 'reliability',
+    severity: 'warning',
+    title: 'Web server in container pulse-live-web stopped answering',
+    description: 'The health check has been refused for 40 minutes.',
+    detectedAt: '2026-10-24T07:00:00Z',
+    status: 'active',
+    ...overrides,
+  });
+
+  it('lists the open findings on the unified resource the alert item names', () => {
+    // The backend resolves the alert's own reference ("docker:<host>/<container>")
+    // to the unified container the findings carry.
+    const item = attentionItem({ subjectResourceId: 'app-container-a1bf6ef7c728a8db' });
+    const onSubject = finding();
+    const mirroring = finding({
+      id: 'finding-2',
+      mirrorsAlertId: 'record-1',
+      mirrorsAlertType: 'availability',
+    });
+    const findings = [
+      onSubject,
+      mirroring,
+      finding({ id: 'resolved', status: 'resolved' }),
+      finding({ id: 'dismissed', status: 'dismissed', dismissedReason: 'not_an_issue' }),
+      finding({ id: 'elsewhere', resourceId: 'app-container-0594de6a76cb71fe' }),
+    ];
+
+    expect(getPatrolFindingsOnSubject(item, findings).map(({ id }) => id)).toEqual([
+      'finding-1',
+      'finding-2',
+    ]);
+    expect(getLinkedPatrolFindings(item, findings).map(({ id }) => id)).toEqual(['finding-2']);
+    expect(getPatrolFindingsOnSubject(attentionItem({ subjectResourceId: ' ' }), findings)).toEqual(
+      [],
+    );
+  });
+
+  it('links a finding only to the alert it restates when alerts share a resource and kind', () => {
+    // Two filesystem alerts on one host name the same unified host and kind.
+    const data = attentionItem({
+      id: 'record-data',
+      operationalRecordId: 'record-data',
+      subjectResourceId: 'agent-6e63a900bdf8d8b7',
+      kind: 'disk',
+    });
+    const backup = attentionItem({
+      id: 'record-backup',
+      operationalRecordId: 'record-backup',
+      subjectResourceId: 'agent-6e63a900bdf8d8b7',
+      kind: 'disk',
+    });
+    const backupFull = finding({
+      id: 'backup-full',
+      resourceId: 'agent-6e63a900bdf8d8b7',
+      category: 'capacity',
+      title: 'Disk /backup is 92% full',
+      mirrorsAlertId: 'record-backup',
+      mirrorsAlertType: 'disk',
+    });
+
+    expect(getLinkedPatrolFindings(backup, [backupFull]).map(({ id }) => id)).toEqual([
+      'backup-full',
+    ]);
+    expect(getLinkedPatrolFindings(data, [backupFull])).toEqual([]);
+    // The other filesystem's finding is still an open finding on the host.
+    expect(getPatrolFindingsOnSubject(data, [backupFull]).map(({ id }) => id)).toEqual([
+      'backup-full',
+    ]);
   });
 });

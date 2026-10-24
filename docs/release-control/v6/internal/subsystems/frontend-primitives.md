@@ -4462,7 +4462,10 @@ triggers are shared `Button` primitives in a labelled list, the inline
 confirmation note or rule reason is a `FormTextarea`, and the alert-only
 guidance link is a `ButtonLink`. `PatrolIntelligenceSurface.tsx` passes the
 Patrol findings accessor into the workbench; the workbench does not fetch or
-poll findings itself.
+poll findings itself. The alert-only guidance names Patrol's open findings on
+the same resource from that accessor, and its `Browse Patrol findings for this
+resource` trigger stays a shared `Button`, rendered only when that list is
+non-empty.
 `Open resource` in the attention detail is a `ButtonLink` whose destination
 comes from `buildResourcePagePath`; the workbench hides it when no platform
 page can show the subject instead of linking to a page that cannot.

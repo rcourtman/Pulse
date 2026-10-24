@@ -4803,6 +4803,17 @@ canonically confirmed postcondition before applying the requested maximum of
 presentation fields. A client must not scan a generic resolved-attention or
 settled-action page and filter it after pagination, because unrelated history
 can otherwise hide genuine verified work.
+An item's `subjectResourceId` is the unified resource ID the alert's subject
+reference resolves to in the org's current inventory, the same ID
+`GET /api/ai/patrol/findings` carries as `resource_id` and that protection
+postures and resource actions use, so clients scope findings and open
+resources with it directly. The detail's `operationalRecord.subjectResourceId`
+keeps the alert's own reference (`docker:<host ID>/<container ID>`, a Proxmox
+source ID, `agent:<host ID>/disk:<label>`), and an item whose reference
+inventory does not bind keeps that reference as its subject. Before
+24 October 2026 the item carried the reference, which no finding matched. The
+field's name, type and presence are unchanged for the relay mobile surface.
+Proof: `TestAttentionHandlersNameTheInventorySubjectOfEachAlert`.
 The Patrol workbench may project the summary counts into its fixed lifecycle
 filter labels at either desktop or narrow widths, but changing presentation
 does not create a parallel count or filter vocabulary: every selection still
@@ -5155,7 +5166,10 @@ itself is unchanged. `GET /api/ai/patrol/findings` findings may carry
 `flapping` (`transition_count`, `window_hours`, `first_transition_at`,
 `last_transition_at`) under the same rule, plus `mirrors_alert_id` and
 `mirrors_alert_type` naming the active alert the finding restates (same
-canonical resource, same condition class). All four fields are omitted when
+canonical resource, same condition class). `mirrors_alert_id` equals that
+alert's attention item `id` (its operational record ID), and clients join on
+it, never on resource plus kind, which several alerts on one host can share.
+All four fields are omitted when
 not applicable and are derived read-model annotations, not lifecycle state;
 clients must not treat their absence as evidence of stability.
 `frontend-modern/src/api/patrolAttention.ts` (`AttentionFlapping`) and

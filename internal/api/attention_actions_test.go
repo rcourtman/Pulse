@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,13 +42,17 @@ func (*attentionActionTestExecutor) CheckActionAvailable(
 func TestAttentionActionPlanBindsCanonicalRecordEvidenceAndReplaysIdempotently(t *testing.T) {
 	now := time.Now().UTC()
 	alert := attentionHandlerAlert("docker-health-record", operationaltrust.OperationalOpen, now)
-	resourceID := "docker:host-1/container-1"
+	// The alert names the container by its own reference; Pulse inventory
+	// names it by the unified ID the action must target.
+	containerID := strings.Repeat("c1", 32)
+	reference := alerts.DockerContainerResourceID("host-1", containerID, "api")
+	resourceID := "app-container-5f0c2d7a91b3e4f6"
 	alert.Type = ai.AttentionDockerHealthKind
-	alert.ResourceID = resourceID
+	alert.ResourceID = reference
 	alert.ResourceName = "API container"
 	alert.Metadata = map[string]interface{}{"resourceType": string(unified.ResourceTypeAppContainer)}
-	alert.OperationalRecord.SubjectResourceID = resourceID
-	alert.Evidence[0].Subject.ResourceID = resourceID
+	alert.OperationalRecord.SubjectResourceID = reference
+	alert.Evidence[0].Subject.ResourceID = reference
 
 	resources := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	resources.SetStateProvider(resourceUnifiedSeedProvider{
@@ -59,6 +64,8 @@ func TestAttentionActionPlanBindsCanonicalRecordEvidenceAndReplaysIdempotently(t
 			Status:    unified.StatusWarning,
 			LastSeen:  now,
 			UpdatedAt: now,
+			Sources:   []unified.DataSource{unified.SourceDocker},
+			Docker:    &unified.DockerData{HostSourceID: "host-1", ContainerID: containerID},
 			Capabilities: []unified.ResourceCapability{{
 				Name:                 ai.AttentionDockerRestartCapability,
 				Type:                 unified.CapabilityTypeCommon,
@@ -109,8 +116,13 @@ func TestAttentionActionPlanBindsCanonicalRecordEvidenceAndReplaysIdempotently(t
 	if err := json.Unmarshal(detailResponse.Body.Bytes(), &detail); err != nil {
 		t.Fatalf("decode detail: %v", err)
 	}
+	if detail.Item.SubjectResourceID != resourceID || detail.OperationalRecord.SubjectResourceID != reference {
+		t.Fatalf("subject = %q record subject = %q, want %q and %q",
+			detail.Item.SubjectResourceID, detail.OperationalRecord.SubjectResourceID, resourceID, reference)
+	}
 	if len(detail.Item.AvailableActions) != 1 ||
 		detail.Item.AvailableActions[0].Capability != ai.AttentionDockerRestartCapability ||
+		detail.Item.AvailableActions[0].TargetResourceID != resourceID ||
 		detail.Item.AvailableActions[0].ActionID != "" {
 		t.Fatalf("initial offers = %+v", detail.Item.AvailableActions)
 	}
@@ -160,6 +172,7 @@ func TestAttentionActionPlanBindsCanonicalRecordEvidenceAndReplaysIdempotently(t
 		t.Fatalf("origin audit found=%t err=%v", found, err)
 	}
 	if audit.ID != first.ActionID ||
+		audit.Request.ResourceID != resourceID ||
 		audit.Origin == nil ||
 		audit.Origin.OperationalRecordID != "docker-health-record" ||
 		len(audit.Origin.EvidenceIDs) != 1 ||

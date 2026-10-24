@@ -231,23 +231,37 @@ const normalizeResourceKey = (value: string | undefined): string =>
   (value ?? '').trim().toLowerCase();
 
 /**
- * Patrol findings that restate this attention item's alert: same resource and
- * the backend-stamped mirror type equals the alert kind. Resolved findings are
- * history and are not linked.
+ * Patrol findings that restate this attention item's alert: the backend stamps
+ * the alert's ID, which is the item's operational record ID, on each one.
+ * Several alerts can share one resource and kind (a host's filesystems), so the
+ * resource is not enough to tell them apart. Resolved findings are history and
+ * are not linked.
  */
 export function getLinkedPatrolFindings(
   item: AttentionItem,
   findings: readonly UnifiedFinding[],
 ): UnifiedFinding[] {
+  const alertId = item.operationalRecordId.trim();
+  if (!alertId) return [];
+  return findings.filter(
+    (finding) => finding.status !== 'resolved' && finding.mirrorsAlertId?.trim() === alertId,
+  );
+}
+
+/**
+ * Open Patrol findings on this attention item's subject: the list "Browse
+ * Patrol findings for this resource" opens. The item names the unified
+ * resource its alert resolves to, the ID Patrol findings carry.
+ */
+export function getPatrolFindingsOnSubject(
+  item: AttentionItem,
+  findings: readonly UnifiedFinding[],
+): UnifiedFinding[] {
   const resource = normalizeResourceKey(item.subjectResourceId);
-  const kind = normalizeResourceKey(item.kind);
-  if (!resource || !kind) return [];
+  if (!resource) return [];
   return findings.filter(
     (finding) =>
-      finding.status !== 'resolved' &&
-      Boolean(finding.mirrorsAlertId) &&
-      normalizeResourceKey(finding.resourceId) === resource &&
-      normalizeResourceKey(finding.mirrorsAlertType) === kind,
+      finding.status === 'active' && normalizeResourceKey(finding.resourceId) === resource,
   );
 }
 

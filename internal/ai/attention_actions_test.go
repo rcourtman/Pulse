@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -69,6 +70,20 @@ func TestProjectAttentionActionRequiresFreshConfirmedCanonicalEvidence(t *testin
 				}
 			},
 			want: AttentionActionEvidenceSubjectMismatch,
+		},
+		{
+			name: "evidence about another container",
+			mutate: func(detail *AttentionItemDetail, _ *AttentionActionCandidate) {
+				detail.Evidence[0].Subject.ResourceID = "docker:host-1/" + strings.Repeat("d2", 32)
+			},
+			want: AttentionActionEvidenceSubjectMismatch,
+		},
+		{
+			name: "resource is another container",
+			mutate: func(_ *AttentionItemDetail, candidate *AttentionActionCandidate) {
+				candidate.Resource.ID = "app-container-0000000000000000"
+			},
+			want: AttentionActionResourceUnavailable,
 		},
 		{
 			name: "capability missing",
@@ -189,9 +204,12 @@ func TestAttentionActionVerificationStatePreservesExecutionAndPostconditionTruth
 	}
 }
 
+// The alert lifecycle record and its evidence name the container by the alert's
+// own reference; the item names the unified container it resolves to.
 func attentionDockerHealthDetail(now time.Time) AttentionItemDetail {
-	resourceID := "docker:host-1/container-1"
-	evidence := attentionTestEvidence(resourceID, now)
+	reference := "docker:host-1/" + strings.Repeat("c1", 32)
+	resourceID := "app-container-5f0c2d7a91b3e4f6"
+	evidence := attentionTestEvidence(reference, now)
 	return AttentionItemDetail{
 		Item: AttentionItem{
 			ID:                  "operational-docker-health",
@@ -204,7 +222,7 @@ func attentionDockerHealthDetail(now time.Time) AttentionItemDetail {
 		},
 		OperationalRecord: operationaltrust.OperationalRecord{
 			ID:                "operational-docker-health",
-			SubjectResourceID: resourceID,
+			SubjectResourceID: reference,
 		},
 		Evidence: []operationaltrust.EvidenceEnvelope{evidence},
 	}

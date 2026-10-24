@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	recoverymodel "github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 const (
@@ -140,11 +141,17 @@ type AttentionProjection struct {
 
 // ProjectAttentionItems is the single Patrol read-model projection over the
 // canonical alert lifecycle. It does not inspect loose alert metadata to
-// invent work and it never creates a second writable lifecycle.
+// invent work and it never creates a second writable lifecycle. An item's
+// subject is the unified resource its record's subject reference resolves to
+// in current inventory (AttentionSubjectResourceID), the identity Patrol
+// findings, protection postures and resource actions carry; the operational
+// record keeps the alert's own reference. A nil subjects resolver keeps every
+// record's reference.
 func ProjectAttentionItems(
 	active []alerts.Alert,
 	history []alerts.Alert,
 	postures map[string]recoverymodel.ProtectionPosture,
+	subjects unifiedresources.AlertResourceReferenceResolver,
 	now time.Time,
 ) AttentionProjection {
 	if now.IsZero() {
@@ -162,7 +169,7 @@ func ProjectAttentionItems(
 
 	details := make([]AttentionItemDetail, 0, len(records))
 	for _, alert := range records {
-		detail, ok := projectAttentionAlert(alert, postures, now)
+		detail, ok := projectAttentionAlert(alert, postures, subjects, now)
 		if !ok {
 			continue
 		}
@@ -208,9 +215,28 @@ func attentionAlertNewer(candidate, existing alerts.Alert) bool {
 	return candidate.OperationalRecord.LastObservedAt.After(existing.OperationalRecord.LastObservedAt)
 }
 
+// AttentionSubjectResourceID names the unified resource an alert lifecycle
+// record's subject reference ("docker:<host>/<container>", a Proxmox source
+// ID, "agent:<host>/disk:<label>") resolves to in current inventory, or the
+// reference itself when inventory does not bind it.
+func AttentionSubjectResourceID(
+	subjects unifiedresources.AlertResourceReferenceResolver,
+	reference string,
+) string {
+	reference = strings.TrimSpace(reference)
+	if subjects == nil || reference == "" {
+		return reference
+	}
+	if binding, _ := subjects.ResolveAlertResourceReference(reference); binding.ResourceID != "" {
+		return binding.ResourceID
+	}
+	return reference
+}
+
 func projectAttentionAlert(
 	alert alerts.Alert,
 	postures map[string]recoverymodel.ProtectionPosture,
+	subjects unifiedresources.AlertResourceReferenceResolver,
 	now time.Time,
 ) (AttentionItemDetail, bool) {
 	if alert.OperationalRecord == nil {
@@ -233,8 +259,9 @@ func projectAttentionAlert(
 		related = append(related, AttentionResource{ResourceID: resourceID})
 	}
 
+	subjectResourceID := AttentionSubjectResourceID(subjects, record.SubjectResourceID)
 	var posture *recoverymodel.ProtectionPosture
-	if candidate, found := postures[record.SubjectResourceID]; found {
+	if candidate, found := postures[subjectResourceID]; found {
 		value := candidate.Clone()
 		posture = &value
 	}
@@ -242,7 +269,7 @@ func projectAttentionAlert(
 	item := AttentionItem{
 		ID:                   record.ID,
 		OperationalRecordID:  record.ID,
-		SubjectResourceID:    record.SubjectResourceID,
+		SubjectResourceID:    subjectResourceID,
 		SubjectResourceName:  resourceName,
 		SubjectResourceType:  attentionResourceType(alert),
 		Kind:                 strings.TrimSpace(alert.Type),
