@@ -65,20 +65,46 @@ const COVERAGE_NO_BACKUP_TITLE = 'No PBS snapshot or PVE backup file';
 // Matches the posture engine's own wording for a snapshot-only subject.
 const COVERAGE_SNAPSHOT_ONLY_TITLE =
   'No PBS snapshot or PVE backup file. A snapshot is not a separate backup, so it does not count.';
+const COVERAGE_HISTORY_UNKNOWN_TITLE =
+  'No completed backup is visible in the current list. Missing entries do not mean no backups exist. Expand this row to inspect the evidence.';
 
-function CoverageAgeFallback(props: { unknown?: boolean; emptyTitle: string; compact?: boolean }) {
+// A fulfilled raw-inventory request is not proof that every provider scope was
+// readable. Keep absence scoped to the server's history/access evidence, not
+// the posture colour (an independently readable backup can still be Protected).
+const hasCompleteCoverageHistory = (row: WorkloadCoverageRow): boolean => {
+  const posture = row.protectionPosture;
+  const providers = posture?.providerStates ?? [];
+  return (
+    (posture?.coverage === 'complete' || posture?.coverage === 'none') &&
+    providers.length > 0 &&
+    providers.every(
+      (provider) =>
+        provider.historyCompleteness === 'complete' && provider.permissions === 'sufficient',
+    )
+  );
+};
+
+function CoverageAgeFallback(props: {
+  unknown?: boolean;
+  historyUnknown?: boolean;
+  emptyTitle: string;
+  compact?: boolean;
+}) {
+  const unknown = () => props.unknown || props.historyUnknown;
   const title = () =>
     props.unknown
       ? 'One or more completed restore-point dates are unavailable or in the future. The latest point is unknown. Expand this row to inspect the evidence.'
-      : props.emptyTitle;
+      : props.historyUnknown
+        ? COVERAGE_HISTORY_UNKNOWN_TITLE
+        : props.emptyTitle;
   return (
     <span
-      class={props.unknown ? 'font-semibold text-amber-600 dark:text-amber-300' : 'text-muted'}
-      classList={{ 'text-[10px]': props.unknown && props.compact }}
+      class={unknown() ? 'font-semibold text-amber-600 dark:text-amber-300' : 'text-muted'}
+      classList={{ 'text-[10px]': unknown() && props.compact }}
       title={title()}
-      aria-label={props.unknown ? `Unknown age. ${title()}` : undefined}
+      aria-label={unknown() ? `Unknown age. ${title()}` : undefined}
     >
-      {props.unknown ? 'Unknown' : COVERAGE_EMPTY_LABEL}
+      {unknown() ? 'Unknown' : COVERAGE_EMPTY_LABEL}
     </span>
   );
 }
@@ -220,6 +246,8 @@ export function ProxmoxCoverageTable(props: {
   // The task column auto-hides when no workload has task history. Per-source
   // ages (PBS snapshot, PVE file, guest snapshot) live in the row expansion.
   showTaskColumn: boolean;
+  /** Inventory or posture read is pending/failed; retained quality cannot confirm absence. */
+  historyReadIncomplete?: boolean;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
   const observedWidth = useObservedElementWidth();
@@ -359,6 +387,8 @@ export function ProxmoxCoverageTable(props: {
                 {(row) => {
                   const isExpanded = () => props.expandedKey === row.key;
                   const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
+                  const historyComplete = () =>
+                    !props.historyReadIncomplete && hasCompleteCoverageHistory(row);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
                     <>
@@ -448,6 +478,10 @@ export function ProxmoxCoverageTable(props: {
                             fallback={
                               <CoverageAgeFallback
                                 unknown={row.ageUnknown?.backup}
+                                historyUnknown={
+                                  !historyComplete() ||
+                                  Boolean(row.protectionPosture?.lastSuccessfulPointAt)
+                                }
                                 compact={layoutMode() === 'compact'}
                                 emptyTitle={
                                   row.snapshotCount > 0
@@ -554,7 +588,11 @@ export function ProxmoxCoverageTable(props: {
                                   role="status"
                                   class="text-xs"
                                 >
-                                  No restore points found for this workload.
+                                  {!historyComplete()
+                                    ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
+                                    : row.protectionPosture?.lastSuccessfulPointAt
+                                      ? 'No restore points are visible in the current list. Missing entries do not mean no backups exist.'
+                                      : 'No restore points reported for this workload in the readable history.'}
                                 </InlineNotice>
                               }
                             >

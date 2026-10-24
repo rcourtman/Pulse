@@ -1408,3 +1408,140 @@ describe('backup-identity: connected Coverage and By date', () => {
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 });
+
+describe('Coverage qualifies missing restore evidence through the consuming API hooks', () => {
+  const posture = {
+    subjectResourceId: workloadResource.id,
+    state: 'unprotected',
+    freshness: 'unknown',
+    verification: 'unknown',
+    coverage: 'none',
+    providerStates: [
+      {
+        provider: 'proxmox-pbs',
+        source: 'pbs-backup-enumeration',
+        scope: 'pbs-main',
+        jobState: 'success',
+        historyCompleteness: 'complete',
+        permissions: 'sufficient',
+        evidenceIds: [],
+      },
+    ],
+    repositoryResourceIds: [],
+    evidenceIds: [],
+    explanation: 'Pulse sees the full history and no backup in it can count.',
+    evaluatedAt: '2026-10-23T12:00:00Z',
+  };
+  const mount = () => {
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+    return renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+  };
+  const rowElement = () =>
+    document.querySelector('[data-proxmox-backup-row="coverage"]') as HTMLElement;
+  const open = async () => {
+    await waitFor(() => expect(rowElement()).not.toBeNull());
+    fireEvent.click(within(rowElement()).getByRole('button', { name: /expand details/i }));
+    return screen.findByTestId('proxmox-coverage-detail');
+  };
+
+  beforeEach(() => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: {} });
+  });
+
+  it.each(['partial', 'unavailable'])(
+    'does not mistake HTTP200 inventories beside %s provider history for absence',
+    async (historyCompleteness) => {
+      apiFetchJSONMock.mockResolvedValue({
+        data: [
+          {
+            ...posture,
+            state: 'unknown',
+            coverage: 'unknown',
+            providerStates: [{ ...posture.providerStates[0], historyCompleteness }],
+          },
+        ],
+        policy: {},
+      });
+      mount();
+      const detail = await open();
+      await waitFor(() => expect(detail).toHaveTextContent('not confirmed complete'));
+      expect(rowElement()).not.toHaveTextContent('None');
+      expect(detail).not.toHaveTextContent('No restore points reported');
+      expect(detail).not.toHaveTextContent('Restore evidence');
+    },
+  );
+
+  it('qualifies a failed raw source, then accepts an isolated successful empty retry', async () => {
+    let failed = true;
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith('/pbs') && failed
+          ? new Response('', { status: 503 })
+          : jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS),
+      ),
+    );
+    mount();
+    const retry = await screen.findByRole('button', { name: 'Retry PBS inventory' });
+    const detail = await open();
+    await waitFor(() => expect(detail).toHaveTextContent('not confirmed complete'));
+    expect(rowElement()).not.toHaveTextContent('None');
+    failed = false;
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(detail).toHaveTextContent(
+        'No restore points reported for this workload in the readable history.',
+      ),
+    );
+    expect(within(rowElement()).getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(
+      'None',
+    );
+    expect(sourceCalls('pve')).toHaveLength(1);
+    expect(sourceCalls('pbs')).toHaveLength(2);
+  });
+
+  it('keeps a failed posture read unknown even when both raw inventories are accepted empty', async () => {
+    apiFetchJSONMock.mockRejectedValue(new Error('synthetic posture read failed'));
+    mount();
+    const detail = await open();
+    await screen.findByText(/Protection posture is unavailable/);
+    expect(detail).toHaveTextContent('not confirmed complete');
+    expect(rowElement()).not.toHaveTextContent('None');
+  });
+
+  it('keeps an independently visible backup and its date beside partial provider history', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : pbsPayload)),
+    );
+    apiFetchJSONMock.mockResolvedValue({
+      data: [
+        {
+          ...posture,
+          state: 'attention',
+          coverage: 'partial',
+          lastSuccessfulPointAt: pbsPayload.data.backups[0].backupTime,
+          providerStates: [
+            {
+              ...posture.providerStates[0],
+              historyCompleteness: 'partial',
+              permissions: 'partial',
+            },
+          ],
+        },
+      ],
+      policy: {},
+    });
+    mount();
+    const detail = await open();
+    await waitFor(() => expect(detail).toHaveTextContent('Restore evidence'));
+    expect(rowElement()).not.toHaveTextContent('None');
+    expect(within(rowElement()).queryByLabelText(/Unknown age/)).not.toBeInTheDocument();
+    expect(detail).toHaveTextContent('History Partial');
+    expect(detail).toHaveTextContent('Access Partial');
+    expect(detail).not.toHaveTextContent('No restore points');
+  });
+});

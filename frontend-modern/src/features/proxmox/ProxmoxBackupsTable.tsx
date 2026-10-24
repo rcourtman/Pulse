@@ -934,6 +934,11 @@ export const ProxmoxBackupsTable: Component<{
                 expandedKey={expandedCoverageKey()}
                 onToggleExpand={toggleCoverageExpansion}
                 showTaskColumn={coverageHasTask()}
+                historyReadIncomplete={
+                  inventoryIncomplete() ||
+                  !protectionPostures.resolvedOnce() ||
+                  Boolean(protectionPostures.response.error)
+                }
               />
 
               <Show when={orphanedTotalCount() > 0}>
@@ -970,6 +975,11 @@ export const ProxmoxBackupsTable: Component<{
                         expandedKey={expandedCoverageKey()}
                         onToggleExpand={toggleCoverageExpansion}
                         showTaskColumn={coverageHasTask()}
+                        historyReadIncomplete={
+                          inventoryIncomplete() ||
+                          !protectionPostures.resolvedOnce() ||
+                          Boolean(protectionPostures.response.error)
+                        }
                       />
                     </div>
                   </Show>
