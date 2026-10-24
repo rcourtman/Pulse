@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { SSOProvidersPanel } from '../SSOProvidersPanel';
 
 const fetchMock = vi.fn();
@@ -156,6 +156,7 @@ describe('SSOProvidersPanel OIDC group role mappings', () => {
   it('preserves a multi-word group from provider details through the edit form and PUT', async () => {
     setupFetch([corpProvider], {
       ...corpProviderDetails,
+      allowedGroups: ['Server Access'],
       groupRoleMappings: { 'Server Access': 'admin' },
     });
     render(() => <SSOProvidersPanel />);
@@ -183,6 +184,7 @@ describe('SSOProvidersPanel OIDC group role mappings', () => {
       expect(saveCall).toBeTruthy();
       const body = JSON.parse((saveCall![1] as RequestInit).body as string);
       expect(body.groupRoleMappings).toEqual({ 'Server Access': 'admin', Everyone: 'viewer' });
+      expect(body.allowedGroups).toEqual(['Server Access']);
       expect(body.oidc.scopes).toEqual(['openid', 'profile', 'email', 'groups']);
     });
   });
@@ -263,5 +265,166 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
         'The Callback / Redirect URL is generated when the provider is saved. Save this provider, then copy it from the provider card.',
       ),
     ).toBeTruthy();
+  });
+});
+
+describe('SSOProvidersPanel modal feedback and recovery', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    document.cookie = 'pulse_csrf=test-csrf-token';
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const editProvider = async () => {
+    render(() => <SSOProvidersPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider' }));
+    return within(await screen.findByRole('dialog', { name: 'Edit OIDC provider' }));
+  };
+
+  it('keeps a refused save and the unchanged draft inside the active dialog until an explicit correction', async () => {
+    setupFetch([corpProvider]);
+    const read = fetchMock.getMockImplementation()!;
+    let refuse = true;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) => {
+      if (options?.method === 'PUT') {
+        return Promise.resolve(
+          refuse ? new Response('Invalid role mapping', { status: 400 }) : jsonResponse({}),
+        );
+      }
+      return read(url, options);
+    });
+    const dialog = await editProvider();
+    const name = dialog.getByLabelText('Provider Name') as HTMLInputElement;
+    const secret = dialog.getByLabelText('Client Secret') as HTMLInputElement;
+    fireEvent.input(name, { target: { value: 'Edited provider' } });
+    const save = dialog.getByRole('button', { name: 'Save Changes' });
+    fireEvent.submit(save.closest('form')!);
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Invalid role mapping');
+    expect(name.value).toBe('Edited provider');
+    expect(secret.value).toBe('');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
+    expect(notificationSuccessMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(1);
+
+    refuse = false;
+    fireEvent.input(name, { target: { value: 'Corrected provider' } });
+    fireEvent.submit(save.closest('form')!);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const writes = fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT');
+    expect(writes).toHaveLength(2);
+    const payload = JSON.parse(writes[1][1].body);
+    expect(payload.name).toBe('Corrected provider');
+    expect(payload.oidc.clientSecret).toBeUndefined();
+    expect(payload.allowedGroups).toEqual(['admins']);
+    expect(payload.groupRoleMappings).toEqual({ admins: 'admin' });
+    expect(notificationSuccessMock).toHaveBeenCalledOnce();
+  });
+
+  it('ignores repeated submit and keeps the modal open while a save is pending', async () => {
+    setupFetch([corpProvider]);
+    const read = fetchMock.getMockImplementation()!;
+    let finish!: (response: Response) => void;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      options?.method === 'PUT'
+        ? new Promise<Response>((resolve) => {
+            finish = resolve;
+          })
+        : read(url, options),
+    );
+    const dialog = await editProvider();
+    const form = dialog.getByRole('button', { name: 'Save Changes' }).closest('form')!;
+    fireEvent.submit(form);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(
+        1,
+      ),
+    );
+    fireEvent.submit(form);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(1);
+    expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    finish(jsonResponse({}));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('clears failed-save feedback when a different editor session opens', async () => {
+    setupFetch([corpProvider]);
+    const read = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      options?.method === 'PUT'
+        ? Promise.resolve(new Response('Refused', { status: 400 }))
+        : read(url, options),
+    );
+    const dialog = await editProvider();
+    fireEvent.submit(dialog.getByRole('button', { name: 'Save Changes' }).closest('form')!);
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Refused');
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add OIDC' }));
+    expect(within(screen.getByRole('dialog')).queryByRole('alert')).toBeNull();
+  });
+
+  it.each([false, true])(
+    'reports clipboard completion inside the modal, rejected=%s',
+    async (rejected) => {
+      const callback = 'https://pulse.example.com/api/oidc/corp-oidc/callback';
+      setupFetch([{ ...corpProvider, oidcCallbackUrl: callback }]);
+      const writeText = vi
+        .fn()
+        .mockImplementation(() =>
+          rejected ? Promise.reject(new Error('Denied')) : Promise.resolve(),
+        );
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const dialog = await editProvider();
+      fireEvent.click(dialog.getByRole('button', { name: 'Copy callback / redirect URL' }));
+      expect(await dialog.findByRole(rejected ? 'alert' : 'status')).toHaveTextContent(
+        rejected ? 'Unable to copy callback url' : 'Callback URL has been copied',
+      );
+      expect(writeText).toHaveBeenCalledWith(callback);
+      expect(notificationErrorMock).not.toHaveBeenCalled();
+      expect(notificationSuccessMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps SAML preview failures inside the modal without an inert toast', async () => {
+    setupFetch([]);
+    const read = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/metadata/preview')
+        ? Promise.resolve(new Response('Metadata unavailable', { status: 502 }))
+        : read(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add SAML' }));
+    const dialog = within(screen.getByRole('dialog'));
+    fireEvent.input(dialog.getByLabelText('IdP Metadata URL'), {
+      target: { value: 'https://idp.example.com/metadata' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Preview' }));
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Metadata unavailable');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('announces connection-test failure in the existing result without a background toast', async () => {
+    setupFetch([corpProvider]);
+    const read = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test')
+        ? Promise.resolve(jsonResponse({ success: false, message: 'Synthetic IdP unavailable' }))
+        : read(url, options),
+    );
+    const dialog = await editProvider();
+    fireEvent.click(dialog.getByRole('button', { name: 'Test' }));
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Synthetic IdP unavailable');
+    expect(notificationErrorMock).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit provider' }));
+    expect((await screen.findByRole('dialog')).querySelector('[role="alert"]')).toBeNull();
   });
 });

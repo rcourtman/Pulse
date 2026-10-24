@@ -4,9 +4,8 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
   getSSOCopySuccessMessage,
+  getSSOCopyErrorMessage,
   getSSOConnectionTestErrorMessage,
-  getSSOConnectionTestFailureMessage,
-  getSSOConnectionTestSuccessMessage,
   getSSOMetadataFetchErrorMessage,
   getSSOMetadataUrlRequiredMessage,
   getSSOProviderDeleteErrorMessage,
@@ -44,6 +43,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [providers, setProviders] = createSignal<SSOProvider[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
+  const [editorFeedback, setEditorFeedback] = createSignal<{
+    tone: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [showModal, setShowModal] = createSignal(false);
   const [editingProvider, setEditingProvider] = createSignal<SSOProvider | null>(null);
   const [form, setForm] = createStore<ProviderForm>(createEmptyProviderForm());
@@ -90,6 +93,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     if (!canManage()) {
       return;
     }
+    setEditorFeedback(null);
+    setTestResult(null);
     setEditingProvider(null);
     setForm(createEmptyProviderForm());
     setForm('type', type);
@@ -101,6 +106,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     if (!canManage()) {
       return;
     }
+    setEditorFeedback(null);
+    setTestResult(null);
     setEditingProvider(provider);
     try {
       const { apiFetch } = await import('@/utils/apiClient');
@@ -119,9 +126,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
-    if (!canManage()) {
+    if (!canManage() || saving()) {
       return;
     }
+    setEditorFeedback(null);
     setSaving(true);
 
     try {
@@ -149,7 +157,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       props.onConfigUpdated?.();
     } catch (error) {
       logger.error('[SSOProvidersPanel] Failed to save provider:', error);
-      notificationStore.error(getSSOProviderSaveErrorMessage(error));
+      setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage(error) });
     } finally {
       setSaving(false);
     }
@@ -221,9 +229,23 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    void navigator.clipboard.writeText(text);
-    notificationStore.success(getSSOCopySuccessMessage(label));
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      const message = getSSOCopySuccessMessage(label);
+      if (showModal()) {
+        setEditorFeedback({ tone: 'success', message });
+      } else {
+        notificationStore.success(message);
+      }
+    } catch {
+      const message = getSSOCopyErrorMessage(label);
+      if (showModal()) {
+        setEditorFeedback({ tone: 'error', message });
+      } else {
+        notificationStore.error(message);
+      }
+    }
   };
 
   const testResultPresentation = createMemo(() =>
@@ -231,6 +253,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   );
 
   const testConnection = async () => {
+    setEditorFeedback(null);
     setTesting(true);
     setTestResult(null);
 
@@ -245,11 +268,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       const result = (await response.json()) as SSOProviderTestResult;
       setTestResult(result);
 
-      if (result.success) {
-        notificationStore.success(getSSOConnectionTestSuccessMessage());
-      } else {
-        notificationStore.error(getSSOConnectionTestFailureMessage(result.message));
-      }
+      // The result belongs to the active dialog, not its inert background toast.
     } catch (error) {
       logger.error('[SSOProvidersPanel] Test connection error:', error);
       setTestResult({
@@ -257,7 +276,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         message: getSSOConnectionTestErrorMessage(),
         error: String(error),
       });
-      notificationStore.error(getSSOConnectionTestErrorMessage());
     } finally {
       setTesting(false);
     }
@@ -266,8 +284,9 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const canTest = () => canTestProviderForm(form);
 
   const fetchMetadataPreview = async () => {
+    setEditorFeedback(null);
     if (!form.samlIdpMetadataUrl.trim()) {
-      notificationStore.error(getSSOMetadataUrlRequiredMessage());
+      setEditorFeedback({ tone: 'error', message: getSSOMetadataUrlRequiredMessage() });
       return;
     }
 
@@ -291,7 +310,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       setShowMetadataPreview(true);
     } catch (error) {
       logger.error('[SSOProvidersPanel] Metadata preview error:', error);
-      notificationStore.error(getSSOMetadataFetchErrorMessage(error));
+      setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage(error) });
     } finally {
       setLoadingPreview(false);
     }
@@ -301,6 +320,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     providers,
     loading,
     saving,
+    editorFeedback,
     showModal,
     setShowModal,
     editingProvider,

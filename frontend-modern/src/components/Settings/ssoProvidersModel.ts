@@ -166,6 +166,13 @@ export const splitList = (input: string) =>
     .map((value) => value.trim())
     .filter(Boolean);
 
+// Group restrictions use exact IdP names, just like role-mapping keys.
+const splitGroupList = (input: string) =>
+  input
+    .split(/[,\r\n]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
 export const mappingsToString = (mappings?: Record<string, string>) =>
   mappings
     ? Object.entries(mappings)
@@ -175,7 +182,7 @@ export const mappingsToString = (mappings?: Record<string, string>) =>
 
 export const stringToMappings = (input: string) => {
   const result: Record<string, string> = {};
-  // A group name can contain spaces. Unlike scopes and allowed lists, mappings
+  // A group name can contain spaces. Like allowed groups, mappings
   // are separated only by commas or newlines, as shown by mappingsToString.
   input.split(/[,\r\n]+/).forEach((pair) => {
     const [key, value] = pair.split('=').map((segment) => segment.trim());
@@ -224,7 +231,7 @@ export const buildProviderPayload = (form: ProviderForm): Record<string, unknown
     enabled: form.enabled,
     displayName: form.displayName.trim() || undefined,
     priority: form.priority,
-    allowedGroups: splitList(form.allowedGroups),
+    allowedGroups: splitGroupList(form.allowedGroups),
     allowedDomains: splitList(form.allowedDomains),
     allowedEmails: splitList(form.allowedEmails),
     groupRoleMappings: stringToMappings(form.groupRoleMappings),

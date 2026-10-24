@@ -3180,7 +3180,12 @@ describe('frontend resource type boundaries', () => {
     expect(ssoProvidersStateSource).toContain('getSSOProviderDetailsLoadErrorMessage');
     expect(ssoProvidersStateSource).toContain('getSSOProviderSaveSuccessMessage');
     expect(ssoProvidersStateSource).toContain('getSSOProviderDeleteSuccessMessage');
-    expect(ssoProvidersStateSource).toContain('getSSOConnectionTestSuccessMessage');
+    // Test results belong to the active editor, not its inert toast portal.
+    expect(ssoProvidersStateSource).toContain('setTestResult(result)');
+    expect(ssoProvidersStateSource).toContain('getSSOProviderSaveErrorMessage(error)');
+    expect(ssoProvidersStateSource).not.toContain(
+      'notificationStore.success(getSSOConnectionTestSuccessMessage()',
+    );
     expect(ssoProvidersModelSource).toContain('export const createEmptyProviderForm =');
     expect(ssoProvidersModelSource).toContain('export const mapProviderDetailsToForm =');
     expect(ssoProvidersModelSource).toContain('export const buildProviderPayload =');

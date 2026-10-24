@@ -20,6 +20,30 @@
 
 ## Purpose
 
+### SSO editor feedback and exact group names (24 October 2026)
+
+The provider editor scrolls its fields independently of its header and recovery
+footer. Save refusals, metadata-preview errors and clipboard outcomes stay in
+that active dialog, with live alert/status semantics; connection tests use the
+existing inline result. They do not rely on the intentionally inert background
+notification portal. Copy confirms success only after clipboard completion and
+otherwise offers manual copying. The full callback URL wraps at narrow widths.
+Save/Cancel stay reachable, and a pending save neither repeats nor dismisses.
+Retained background toasts lower below the modal backdrop while any blocking
+dialog is open, then regain their ordinary layer on close; they are not
+unmounted or made interactive through the modal. Shared modal focus trapping,
+inertness and restoration remain unchanged.
+
+Allowed Groups are comma- or newline-separated exact IdP group names, preserving
+spaces through details → edit → no-op/mapping-only save for OIDC and SAML. This
+replaces the former whitespace split for that field only. Scopes, domains and
+emails keep their existing parsing; explicit empty restriction lists still clear
+them. Payload shape, secret omission and server-owned authorisation are unchanged.
+`SSOProvidersPanel.test.tsx`, `ssoProvidersModel.test.ts` and the settings
+architecture suite cover this boundary. Browser evidence uses the production
+panel, state hook, API client, Dialog, Toast and CSS with synthetic HTTP at desktop
+and 320px widths; it is not native IdP, encrypted persistence or restart proof.
+
 ### Locked update pill names the command-access option by its shared label (21 October 2026)
 
 For a host whose agent was installed without command access, the locked pill
@@ -7783,8 +7807,9 @@ OIDC, SAML, and multi-provider SSO are Community-tier capabilities.
 The group-to-role mapping form must retain IdP group names with embedded
 spaces through provider detail, edit, payload, and reload. Its entries are
 comma- or newline-delimited `group=roleId` pairs; whitespace within a group
-name is not an entry separator. Keep the existing whitespace parsing for
-OIDC scopes and the other allowed lists separate from mapping parsing.
+name is not an entry separator. Allowed Groups use the same comma/newline
+boundary so no-op saves preserve those exact names too. Keep the existing whitespace parsing for OIDC scopes,
+allowed domains and allowed emails separate from group-name parsing.
 `ssoProvidersModel.test.ts` and `SSOProvidersPanel.test.tsx` pin this round
 trip, and browser verification must inspect the saved mapping in the desktop
 and narrow edit dialog.

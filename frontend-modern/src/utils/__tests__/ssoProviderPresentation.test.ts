@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getSSOCopySuccessMessage,
+  getSSOCopyErrorMessage,
   getSSOProviderAddButtonLabel,
   getSSOCertificatePresentation,
   getSSOConnectionTestErrorMessage,
@@ -84,6 +85,7 @@ describe('ssoProviderPresentation', () => {
     expect(getSSOProviderToggleSuccessMessage(true)).toBe('SSO provider has been enabled.');
     expect(getSSOProviderToggleSuccessMessage(false)).toBe('SSO provider has been disabled.');
     expect(getSSOProviderToggleErrorMessage()).toBe('Unable to update the SSO provider.');
+    expect(getSSOCopyErrorMessage('Callback URL')).toContain('Select and copy the URL manually.');
     expect(getSSOCopySuccessMessage('XML')).toBe('XML has been copied to the clipboard.');
     expect(getSSOConnectionTestSuccessMessage()).toBe('Connection test completed successfully.');
     expect(getSSOConnectionTestFailureMessage('Bad certificate')).toBe(
