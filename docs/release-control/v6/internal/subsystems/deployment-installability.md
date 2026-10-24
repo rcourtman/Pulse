@@ -2999,7 +2999,8 @@ artifact-selection behaviour.
    names a specific change and where users find it, never a theme or benefit
    slogan, because the preview is all a user reads before installing.
    `scripts/generate-release-notes.sh` and
-   `docs/releases/RELEASE_NOTES_TEMPLATE.md` carry that authoring rule.
+   `docs/releases/RELEASE_NOTES_TEMPLATE.md` carry that authoring rule as
+   the shape of a bullet, not a shipped change a later release could copy.
    The post-update communication boundary does not announce telemetry payload
    changes. Those are disclosed in the dated `Payload changes` section of
    `docs/PRIVACY.md` and in the release notes of the first release that carries

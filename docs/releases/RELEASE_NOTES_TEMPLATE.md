@@ -6,9 +6,10 @@ what feels better or works now, not how it was implemented.
 ## Highlights
 
 - One to three of the release's biggest changes. Name the specific feature or
-  fix and where users find it, for example "Resource Overview shows alerts,
-  recent trends and longer history together", never a theme or benefit slogan
-  such as "See problems and trends together" or "Spend less time on setup".
+  fix and where users find it, starting with the page or feature and then
+  saying what it now does. Describe only changes in this release, never a
+  theme or benefit slogan such as "See problems and trends together" or "Spend
+  less time on setup".
   Keep each under 140 characters with no Markdown, links or issue references.
   The update banner shows these before users install, so each must make sense
   on its own.

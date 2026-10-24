@@ -192,12 +192,13 @@ then
 ## Highlights
 
 - [One to three of the release's biggest changes, each 140 characters or
-  fewer. Name the specific feature or fix and where users find it, for
-  example: Resource Overview shows alerts, recent trends and longer history
-  together. Never a theme or benefit slogan such as See problems and trends
-  together or Spend less time on setup. These preview the update before it is
-  installed, so each must make sense on its own. No markup, links or issue
-  references in this short list.]
+  fewer. Name the specific feature or fix and where users find it, starting
+  with the page or feature and then saying what it now does.
+  Describe only changes in this release.
+  Never a theme or benefit slogan such as See problems and trends together or
+  Spend less time on setup. These preview the update before it is installed,
+  so each must make sense on its own. No markup, links or issue references in
+  this short list.]
 
 ## Proxmox, PBS and backups
 
