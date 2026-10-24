@@ -66,9 +66,17 @@ test.describe("Operational trust protection posture", () => {
     );
 
     const postureRequests: string[] = [];
+    const postureResponses: Promise<{
+      data: { subjectResourceId: string; explanation: string }[];
+    }>[] = [];
     page.on("request", (request) => {
       if (request.url().includes("/api/recovery/postures")) {
         postureRequests.push(request.url());
+      }
+    });
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === "/api/recovery/postures") {
+        postureResponses.push(response.json());
       }
     });
 
@@ -120,11 +128,19 @@ test.describe("Operational trust protection posture", () => {
 
     const detailRow = coverageTable.locator("[data-inline-detail-for]").first();
     await expect(detailRow).toBeVisible();
+    const rowKey = await detailRow.getAttribute("data-inline-detail-for");
+    expect(rowKey).toMatch(/^resource:/);
+    const subjectID = rowKey!.slice("resource:".length);
+    const posture = (await Promise.all(postureResponses))
+      .flatMap((response) => response.data)
+      .find((entry) => entry.subjectResourceId === subjectID);
+    // Explanations are server-owned plain language, not a client-added
+    // "Protected:" prefix. Prove that the selected subject's actual response
+    // reaches its detail rather than merely accepting any non-empty copy.
+    expect(posture?.explanation.trim()).toBeTruthy();
+    await expect(detailRow).toContainText(posture!.explanation);
     await expect(detailRow).toContainText(
-      /Protected:|Needs attention:|Unprotected:|Unknown:/,
-    );
-    await expect(detailRow).toContainText(
-      /Restore evidence|No restore evidence has been discovered/,
+      /Restore evidence|Restore-point history is not confirmed complete\. Missing entries do not mean no backups exist\.|No restore points are visible in the current list\. Missing entries do not mean no backups exist\.|No restore points reported for this workload in the readable history\./,
     );
   });
 
