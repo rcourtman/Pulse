@@ -192,6 +192,8 @@ func TestNodeDiskUnknownLeavesIndependentMetricsAndAgentHandover(t *testing.T) {
 	m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.config.MetricTimeThresholds = map[string]map[string]int{"all": {"disk": 0, "cpu": 0, "memory": 0}}
+	m.config.MinimumDelta = 2
+	m.config.SuppressionWindow = 5
 	m.mu.Unlock()
 	node := nodeDiskSample("site-pve", 95)
 	m.CheckNode(node)
@@ -217,13 +219,16 @@ func TestNodeDiskUnknownLeavesIndependentMetricsAndAgentHandover(t *testing.T) {
 		t.Fatal("handover lost agent disk incident")
 	}
 	m.HandleHostRemoved(host)
-	// Handover release uses its real observation time. Later reports must
-	// advance the synthetic clock too, rather than predate that release.
+	// These are later reports, not a replay of the original observation.
 	clock.Store(int64(time.Second))
 	m.CheckNode(gap)
 	if testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "disk")) {
 		t.Fatal("removing agent invented a node reading")
 	}
+	// The existing 2% minimum delta suppresses a new occurrence at the same
+	// 95% within five minutes. Use a genuinely changed measured value; this
+	// control tests restored node evidence, not bypassing duplicate policy.
+	node.Disk = nodeDiskSample(node.ID, 98).Disk
 	clock.Add(int64(time.Second))
 	m.CheckNode(node)
 	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "disk")) {
