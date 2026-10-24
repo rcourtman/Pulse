@@ -4955,6 +4955,7 @@ func TestReleaseNotesGeneratorResolvesChannelSpecificComparisonRanges(t *testing
 		"Use no semicolon or em dash characters",
 		"Name the specific feature or fix and where users find it",
 		"Never a theme or benefit slogan",
+		"Describe only changes in this release",
 		"- **[Short outcome]** - [Where users notice it and why it matters.]",
 		"requesting one constrained revision",
 	} {
