@@ -663,3 +663,44 @@ func TestGuestMemoryClusterResourcesIsTypeAware(t *testing.T) {
 		}
 	}
 }
+
+func TestHostDiskUsagePercentMatchesCanonicalPresence(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		disks   []models.Disk
+		present bool
+		value   float64
+	}{
+		{name: "absent"},
+		{name: "no capacity", disks: []models.Disk{{}}},
+		{name: "unavailable", disks: []models.Disk{{Total: 100, Usage: -1}}},
+		{name: "invalid", disks: []models.Disk{{Total: 100, Usage: math.NaN()}}},
+		{name: "infinite", disks: []models.Disk{{Total: 100, Usage: math.Inf(1)}}},
+		{name: "inconsistent bytes", disks: []models.Disk{{Total: 100, Used: 101, Usage: 0}}},
+		{name: "zero", disks: []models.Disk{{Total: 100, Free: 100}}, present: true},
+		{name: "small percent", disks: []models.Disk{{Total: 1000, Used: 2, Usage: 0.2}}, present: true, value: 0.2},
+		{name: "first filesystem only", disks: []models.Disk{{}, {Total: 100, Usage: 25}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value, present := HostDiskUsagePercent(tc.disks)
+			if present != tc.present || value != tc.value {
+				t.Fatalf("disk usage = %v/%v, want %v/%v", value, present, tc.value, tc.present)
+			}
+			resource, _ := resourceFromHost(models.Host{ID: "disk-host", Disks: tc.disks})
+			viewValue, viewPresent := NewHostView(&resource).DiskUsagePercent()
+			if viewPresent != present || viewValue != value {
+				t.Fatalf("canonical view = %v/%v, report = %v/%v", viewValue, viewPresent, value, present)
+			}
+		})
+	}
+	for _, resource := range []*Resource{nil, {}, {Metrics: &ResourceMetrics{}}} {
+		if _, present := NewHostView(resource).DiskUsagePercent(); present {
+			t.Fatal("missing canonical metric became zero")
+		}
+	}
+	// Non-agent providers can report an aggregate without an agent inventory.
+	provider := &Resource{Metrics: &ResourceMetrics{Disk: &MetricValue{Percent: 0}}}
+	if value, present := NewHostView(provider).DiskUsagePercent(); !present || value != 0 {
+		t.Fatal("provider's explicit zero requires no agent inventory")
+	}
+}

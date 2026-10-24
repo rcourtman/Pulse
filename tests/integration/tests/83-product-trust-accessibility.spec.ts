@@ -224,7 +224,7 @@ test(`representative authenticated surfaces have no automatically detectable WCA
       await expect(installAgent).toBeFocused();
 
       await page.getByRole("button", {
-        name: /^(Agent update|\d+ (agent )?updates) for /,
+        name: /^(Agent update|\d+ (agent )?updates): open Agent Doctor for /,
       }).first().click();
       await expect(page.getByRole("heading", { name: "Agent Doctor", exact: true })).toBeVisible();
       expect(new URL(page.url()).searchParams.getAll("agents").length).toBeGreaterThan(0);

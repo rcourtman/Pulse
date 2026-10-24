@@ -4732,6 +4732,7 @@
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
         "tests/integration/scripts/relay-mobile-token-helper.go",
+        "tests/integration/scripts/settings-scroll-audit.mjs",
         "tests/integration/tests/helpers.ts",
         "tests/integration/tests/runtime-defaults.ts",
         "tests/integration/tests/vmware-workload-fixture.ts",
@@ -5381,6 +5382,20 @@
             "exact_files": [
               "tests/integration/tests/39-vmware-resource-detail-drawer.spec.ts",
               "tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts"
+            ]
+          },
+          {
+            "id": "browser-settings-scroll-fixture",
+            "label": "complete native settings scroll audit proof",
+            "match_prefixes": [],
+            "match_files": [
+              "tests/integration/scripts/settings-scroll-audit.mjs"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "tests/integration/scripts/settings-scroll-audit.test.mjs",
+              "tests/integration/tests/05-settings-mobile-audit.spec.ts"
             ]
           }
         ],

@@ -85,12 +85,12 @@ const gotoMobileRoute = async (
 // an ellipsis. The drawer is where a truncated table cell sends the reader
 // for the full value, so neither is allowed there.
 const findCutDrawerValues = (section: Element): string[] => {
-  // Below lg the inline drawer's content shell clips anything past it.
-  let shell: HTMLElement | null = section.parentElement;
-  while (shell && window.getComputedStyle(shell).overflowX !== "clip") {
-    shell = shell.parentElement;
-  }
-  if (!shell) return ["no clipping drawer content shell"];
+  // Find the canonical owner independently of computed overflow keywords.
+  // Cross-axis overflow normalization can report hidden/auto instead of clip.
+  // The checks below still measure every clipping ancestor and ellipsis.
+  const shell = section.closest("tr[data-inline-detail-row]")
+    ?.querySelector<HTMLElement>(":scope > td > div");
+  if (!shell) return ["no inline drawer content shell"];
 
   const offenders: string[] = [];
   const walker = document.createTreeWalker(

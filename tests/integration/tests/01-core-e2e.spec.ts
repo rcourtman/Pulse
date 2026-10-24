@@ -107,14 +107,10 @@ test.describe.serial('Core E2E flows', () => {
     });
     let targetEditIndex = -1;
     let resourceName = '';
-    let resourceNameOrdinal = 0;
-    const resourceNameCounts = new Map<string, number>();
     for (let i = 0; i < (await editControls.count()); i++) {
       const editControl = editControls.nth(i);
       const label = (await editControl.getAttribute('aria-label')) ?? '';
       const candidateName = label.replace(/^Edit thresholds for /, '');
-      const candidateOrdinal = resourceNameCounts.get(candidateName) ?? 0;
-      resourceNameCounts.set(candidateName, candidateOrdinal + 1);
       const resourceContainer = await resourceContainerForEditControl(editControl);
       const hasExistingOverride =
         (await resourceContainer.getByRole('button', { name: /^Revert to defaults for / }).count()) >
@@ -124,7 +120,6 @@ test.describe.serial('Core E2E flows', () => {
       }
       targetEditIndex = i;
       resourceName = candidateName;
-      resourceNameOrdinal = candidateOrdinal;
       break;
     }
     if (targetEditIndex < 0 || !resourceName) {
@@ -161,16 +156,6 @@ test.describe.serial('Core E2E flows', () => {
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
 
-    const updatedEditControl = page
-      .getByRole('button', { name: `Edit thresholds for ${resourceName}` })
-      .nth(resourceNameOrdinal);
-    const updatedResourceContainer =
-      await resourceContainerForEditControl(updatedEditControl);
-    const revertOverride = updatedResourceContainer.getByRole('button', {
-      name: `Revert to defaults for ${resourceName}`,
-    });
-    await expect(revertOverride).toBeVisible();
-
     const configResAfterCreate = await apiRequest(page, '/api/alerts/config');
     expect(configResAfterCreate.ok()).toBeTruthy();
     const configAfterCreate = (await configResAfterCreate.json()) as { overrides?: Record<string, unknown> };
@@ -180,6 +165,20 @@ test.describe.serial('Core E2E flows', () => {
     );
     expect(createdOverrideIds).toHaveLength(1);
     const createdOverrideId = createdOverrideIds[0];
+
+    // The compact label can change as cluster metadata arrives. Resolve the
+    // saved identity and use its full searchable name instead of holding an
+    // earlier presentation label or an ordinal among similarly named rows.
+    const targetResponse = await apiRequest(page, `/api/resources/${encodeURIComponent(createdOverrideId)}`);
+    expect(targetResponse.ok()).toBeTruthy();
+    const target = await targetResponse.json() as { name: string; canonicalIdentity?: { displayName?: string } };
+    const targetName = target.canonicalIdentity?.displayName || target.name;
+    expect(targetName).toBeTruthy();
+    await page.getByPlaceholder('Search resources...').fill(targetName);
+    await expect(editControls).toHaveCount(1);
+    const updatedResourceContainer = await resourceContainerForEditControl(editControls.first());
+    const revertOverride = updatedResourceContainer.getByRole('button', { name: /^Revert to defaults for / });
+    await expect(revertOverride).toBeVisible();
 
     await revertOverride.click();
     await expect(unsaved).toBeVisible();
@@ -214,15 +213,15 @@ test.describe.serial('Core E2E flows', () => {
     if ((await sectionToggleAfterReload.getAttribute('aria-expanded')) === 'false') {
       await sectionToggleAfterReload.click();
     }
-    const editControlAfterReload = page
-      .getByRole('button', { name: `Edit thresholds for ${resourceName}` })
-      .nth(resourceNameOrdinal);
+    await page.getByPlaceholder('Search resources...').fill(targetName);
+    const editControlAfterReload = proxmoxNodesSection.getByRole('button', { name: /^Edit thresholds for / });
+    await expect(editControlAfterReload).toHaveCount(1);
     await expect(editControlAfterReload).toBeVisible();
     const resourceContainerAfterReload =
       await resourceContainerForEditControl(editControlAfterReload);
     await expect(
       resourceContainerAfterReload.getByRole('button', {
-        name: `Revert to defaults for ${resourceName}`,
+        name: /^Revert to defaults for /,
       }),
     ).toHaveCount(0);
 

@@ -18,7 +18,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
-import { apiRequest, ensureAuthenticated } from "./helpers";
+import { apiRequest } from "./helpers";
 
 const MOCK_STABLE_VERSION = "99.0.0";
 const MOCK_RC_VERSION = "99.1.0-rc.1";
@@ -63,15 +63,14 @@ async function fetchUpdateStatus(page: Page): Promise<UpdateStatus> {
 
 test.describe.serial("update flow against the mock update server", () => {
   test.beforeEach(async ({ page }) => {
-    await ensureAuthenticated(page);
+    // This is an API contract. apiRequest carries the admitted primary token
+    // without mounting a dashboard and starting unrelated update polling for
+    // every case in the serial flow.
     if (mockUpdateServerWired === null) {
       const res = await apiRequest(page, "/api/updates/check?channel=stable");
-      if (!res.ok()) {
-        mockUpdateServerWired = false;
-      } else {
-        const info = (await res.json()) as UpdateInfo;
-        mockUpdateServerWired = info.latestVersion === MOCK_STABLE_VERSION;
-      }
+      expect(res.ok(), await res.text()).toBeTruthy();
+      const info = (await res.json()) as UpdateInfo;
+      mockUpdateServerWired = info.latestVersion === MOCK_STABLE_VERSION;
     }
     test.skip(
       !mockUpdateServerWired,

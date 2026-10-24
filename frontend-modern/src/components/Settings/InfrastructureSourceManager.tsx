@@ -1060,7 +1060,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           </span>
                                           <Show when={row.agentUpdateCount > 0}>
                                             <Show
-                                              when={props.onOpenAgentDoctor}
+                                              when={!props.readOnly && props.onOpenAgentDoctor}
                                               fallback={
                                                 <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
                                                   {row.agentUpdateCount === 1
@@ -1080,11 +1080,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     ),
                                                   )
                                                 }
+                                                aria-label={`${row.agentUpdateCount === 1 ? 'Agent update' : `${row.agentUpdateCount} updates`}: open Agent Doctor for ${row.name}`}
                                               >
                                                 {row.agentUpdateCount === 1
                                                   ? 'Agent update'
                                                   : `${row.agentUpdateCount} updates`}
-                                                <span class="sr-only"> for {row.name}</span>
                                               </button>
                                             </Show>
                                           </Show>
@@ -1680,7 +1680,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </span>
                                       <Show when={row.agentUpdateCount > 0}>
                                         <Show
-                                          when={props.onOpenAgentDoctor}
+                                          when={!props.readOnly && props.onOpenAgentDoctor}
                                           fallback={
                                             <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
                                               {row.agentUpdateCount === 1
@@ -1697,11 +1697,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 agentConnectionIDsForInfrastructureRow(row, true),
                                               )
                                             }
+                                            aria-label={`${row.agentUpdateCount === 1 ? 'Agent update' : `${row.agentUpdateCount} agent updates`}: open Agent Doctor for ${row.name}`}
                                           >
                                             {row.agentUpdateCount === 1
                                               ? 'Agent update'
                                               : `${row.agentUpdateCount} agent updates`}
-                                            <span class="sr-only"> for {row.name}</span>
                                           </button>
                                         </Show>
                                       </Show>

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "31c8d68038287ffa9b7d5074f1ae542332ae3a1d",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "b258d20128617c09017a40221be61436dd67a34986d5b150be3bf02c1c3c11ae",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "307ce7c8c83feb798cfc3e63ef5cfece306b00edce7ddd4a65f76041c0494f12"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=agent",
+    "/settings/infrastructure/agent-doctor",
+    "/patrol"
+  ],
+  "states": [
+    "Operator and read-only Infrastructure with singular/counted agent updates and both responsive layouts.",
+    "Patrol critical/flapping, approval and handled rows with complete visible-context names; full title remains available in the selected detail."
+  ],
+  "interactions": [
+    "Desktop keyboard and phone touch Add open the unchanged installer journey without generating a token; counted updates open only the affected Agent Doctor IDs.",
+    "Native desktop keyboard/phone touch Patrol selection opens the correct detail. Desktop Close and the existing narrow Back to list control clear selection and restore focus.",
+    "Eight unchanged WCAG-tag scans with exact-lock axe-core 4.14.0 report zero violations; no rules are excluded.",
+    "Actual production application consumes only synthetic read-only API/socket data; no source substitution, external mutation, browser Back/reload or native guest operation."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 1000
+    }
+  ],
+  "verified_at": "2026-10-24T19:51:29.471677Z",
+  "browsers": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1",
+    "WebKit 26.0 / Playwright 1.56.1"
+  ],
+  "evidence": "Lane RECEIPTS.md, BROWSER.json and PIXEL-REVIEW.json retain source/build/asset binding, initial fixture and version failures, a targeted correction of the phone-only return query, all 22 natively opened captures and the WebKit More-menu manual-review limitation. The extra scanner-incomplete assertion failed and is not automated clearance; the exact visible menu ID was read back. No installed recovery or release availability is claimed."
+}

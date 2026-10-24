@@ -305,10 +305,10 @@ describe('PatrolAttentionWorkbench', () => {
     try {
       renderWorkbench();
       const row = await screen.findByRole('button', { name: /Database VM · Disk pressure/ });
+      expect(row).not.toHaveAttribute('aria-label');
       expect(row).toHaveAccessibleName(
-        /Critical.*Database VM · Disk pressure.*The database disk is nearly full\..*Last seen 1m ago/,
+        'Critical Flapping · 11 changes in 24h Database VM · Disk pressure The database disk is nearly full. Last seen 1m ago',
       );
-      expect(row).toHaveTextContent('Last seen 1m ago');
       fireEvent.click(row);
       const detailRegion = await screen.findByRole('complementary', {
         name: 'Database VM · Disk pressure',
@@ -318,8 +318,9 @@ describe('PatrolAttentionWorkbench', () => {
       expect(detailRegion).toHaveTextContent(/first 10m ago.*latest 2m ago/);
       const held = vi.spyOn(patrolAttentionStore, 'load').mockResolvedValue(undefined);
       vi.advanceTimersByTime(60_000);
-      expect(row).toHaveTextContent('Last seen 2m ago');
-      expect(row).toHaveAccessibleName(/Last seen 2m ago/);
+      expect(row).toHaveAccessibleName(
+        'Critical Flapping · 11 changes in 24h Database VM · Disk pressure The database disk is nearly full. Last seen 2m ago',
+      );
       expect(detailRegion).toHaveTextContent('Last seen 2m ago');
       expect(detailRegion).toHaveTextContent(/first 11m ago.*latest 3m ago/);
       expect(apiMocks.getList).toHaveBeenCalledOnce();
@@ -468,10 +469,10 @@ describe('PatrolAttentionWorkbench', () => {
     renderWorkbench();
 
     const showAll = await screen.findByRole('button', { name: 'Show all 7 decisions' });
-    expect(screen.getAllByRole('button', { name: /Decision/ })).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: /Decision \d/ })).toHaveLength(5);
 
     fireEvent.click(showAll);
-    expect(screen.getAllByRole('button', { name: /Decision/ })).toHaveLength(7);
+    expect(screen.getAllByRole('button', { name: /Decision \d/ })).toHaveLength(7);
     expect(screen.getByRole('button', { name: 'Show fewer decisions' })).toBeInTheDocument();
   });
 

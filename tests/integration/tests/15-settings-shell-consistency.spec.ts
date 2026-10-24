@@ -43,9 +43,9 @@ const SETTINGS_SHELL_ROUTES = [
   },
   {
     route: '/settings/system-relay',
-    title: 'Remote Access',
+    title: 'Pulse Mobile',
     description:
-      'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
+      'Connect paired Pulse Mobile devices to this instance. Pulse Mobile is being retired on 31 March 2027, and paired phones keep working until then.',
   },
   {
     route: '/settings/security-auth',

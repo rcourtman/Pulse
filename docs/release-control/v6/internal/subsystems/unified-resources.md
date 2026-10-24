@@ -32,6 +32,17 @@ must not erase vCenter placement, host grouping or source-specific behavior
 that the websocket projection supplies. The REST mapping regression and the
 authoritative VMware drawer browser fixture cover that consuming boundary.
 
+### Host disk usage retains explicit presence
+
+`HostDiskUsagePercent` shares the existing canonical first-filesystem admission
+with host metric projection, history recording and legacy live fallback.
+`HostView.DiskUsagePercent` returns the presence of the canonical disk metric,
+not the zero default of a missing scalar accessor. Provider aggregate readings
+need no agent filesystem inventory. Neither helper establishes freshness or
+changes selection/identity. `TestHostDiskUsagePercentMatchesCanonicalPresence`
+pins absent/invalid/zero/low readings, unchanged first-filesystem selection and
+provider aggregate zero.
+
 ### Drawer history follows current source authority
 
 Resource drawers withdraw current chart fallbacks and cached live-only replies

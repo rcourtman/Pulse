@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Host-agent disk history distinguishes absence from zero
+
+History and full/infrastructure summary charts synthesize host-agent disk usage
+only when its canonical disk reading is present. An accepted report without a
+filesystem reading must not create a live 0% sample; a measured 0% remains
+available. A recorded disk series keeps its original values and timestamps,
+including when CPU has no history. Existing lease, error, query-selection and
+provider-aggregate contracts remain unchanged.
+
+`TestHostDiskUsageHistoryAndSummaryRespectPresence` exercises cold and recorded
+History (all/selected metrics), both summary routes and disk-only selection for
+missing, unavailable, measured-zero, low-percentage and nonzero readings on
+online/offline hosts. Browser proof must exercise the returned producer payload
+through the existing Machines drawer at desktop and narrow widths.
+
+
 ### Webhook deletion has an explicit committed acknowledgement
 
 `DELETE /api/notifications/webhooks/{id}` returns `success: true` after saved and

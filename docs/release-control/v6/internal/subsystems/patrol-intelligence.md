@@ -15,12 +15,16 @@
 
 ## Purpose
 
-Attention-row buttons derive their accessible names from their visible content,
-following the frontend primitives control-name contract. Severity, title,
-summary and relative observation age remain available to assistive technology
-in display order. A title-only override must not hide the other visible label
-text; selection, keyboard review and detail focus restoration keep their existing
-owners.
+### Attention selection retains visible evidence in its name (24 October 2026)
+
+Attention list buttons use their visible contents as the accessible name instead
+of replacing severity, summary, decision state and Last seen evidence with an
+Open-title label. Resource-leading titles, flapping/handled badges, pressed state
+and native keyboard/touch selection are preserved. The registered workbench
+suite checks the full accessible name, including changes to relative time,
+and existing review/detail/focus behaviour. No provider, action execution,
+authorisation or attention-state semantics change.
+
 Mobile return controls retain `Back to list` in their contextual names. The
 expanded resource-copy control retains its visible `Copy ID` name, including
 after copying; the fuller explanation remains its tooltip.

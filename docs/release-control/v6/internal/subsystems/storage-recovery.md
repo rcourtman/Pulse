@@ -30,6 +30,20 @@ reporting lease likewise supplies no new zero-valued chart observation or
 recovery proof. Storage and
 recovery consumers continue to require their own source observations.
 
+### Completed restore totals exclude incomplete inventory (24 October 2026)
+
+The Backups restore-point total, completed-byte total, PBS-target count and
+per-day count/volume chart all exclude explicitly running or terminally
+incomplete artifacts. The same completion predicate selects the last backup.
+Running and failed entries remain in the dated inventory and row evidence,
+with separate summary counts; inventory and day-group counts name entries,
+not completed backups. Unknown dates and unverified completed points remain
+evidence, not absent or failed points. Completion establishes neither an
+independent backup (guest snapshots remain distinct), tested restore nor guest
+thaw. Registered recovery-model and consuming-table tests cover mixed,
+incomplete-only, unknown-date and completion-transition controls without any
+new backup execution, QGA requests, schema or persisted state.
+
 ### Failed posture refreshes withdraw retained assessments (24 October 2026)
 
 Protection posture remains visible while a refresh is pending, but a settled

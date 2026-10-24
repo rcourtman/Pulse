@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### Visible action text remains in accessible names (24 October 2026)
+
+Infrastructure section shortcuts include their visible Add action and group
+identity in the accessible name. Update chips include the visible singular or
+counted update label, the affected system and Agent Doctor destination, at both
+responsive layouts. Read-only inventories expose no add/update action, including when a caller
+retains an Agent Doctor callback. Patrol
+attention rows derive their name from their visible severity, title, summary,
+decision/resource context and observation time rather than a title-only override.
+Native buttons, pressed state, focus and touch selection remain unchanged.
+Registered InfrastructureSourceManager and PatrolAttentionWorkbench tests cover
+scoped actions, counts, read-only rendering and time-varying accessible content;
+the consuming WCAG scan and its rules remain enforced.
+
 ### Agent first-report status
 
 Machines, resource detail drawers and agent connection rows use the shared
@@ -35,6 +49,18 @@ fallbacks when the owning source loses reporting authority. That transition
 starts a fresh read without waiting for the poll, while retaining actual stored
 series and rejecting a late live reply from the previous reporting state.
 Pending API polls retain their own wording.
+
+### Backups distinguishes completed points from inventory entries (24 October 2026)
+
+The existing health strip names completed restore points and separately counts
+running and failed entries. The existing per-day chart measures only completed
+restore points in both count and volume modes, while the dated table and its
+filters keep incomplete entries available for inspection. Table and day-group
+counters name entries so they cannot imply completion. The incomplete-only
+chart state says that no completed dated points are visible, not that no
+backup activity occurred. The consuming Backups tests cover summary, chart,
+volume, date selection and route views together; existing table interaction
+primitives, access boundaries and routes are unchanged.
 
 ### Backup posture failure and retry stay source-local (24 October 2026)
 

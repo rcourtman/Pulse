@@ -7,9 +7,18 @@ export const scrollSettingsToBottom = async (page) => {
   const step = await shell.evaluate((element) =>
     Math.max(240, Math.floor(element.clientHeight * 0.75)),
   );
-  for (let i = 0; i < 20; i += 1) {
+  // Fleet size determines the distance to the bottom. A fixed number of
+  // steps can stop halfway through a populated infrastructure page.
+  for (;;) {
+    const before = await settingsScrollPosition(page);
     await shell.evaluate((element, deltaY) => element.scrollBy(0, deltaY), step);
     await page.waitForTimeout(60);
+    const after = await settingsScrollPosition(page);
+    if (after.scrollTop >= after.maxScrollTop - 3 &&
+        after.maxScrollTop === before.maxScrollTop) return;
+    if (after.scrollTop <= before.scrollTop && after.maxScrollTop === before.maxScrollTop) {
+      throw new Error(`Settings content did not scroll: ${JSON.stringify(after)}`);
+    }
   }
 };
 

@@ -45,7 +45,7 @@ async function openProxmoxBackups(page: Page) {
   // The route commits before the Proxmox snapshot finishes loading. CI can
   // take more than a minute while all E2E shards share the runner, so wait for
   // the destination surface rather than the URL alone.
-  await expect(page.getByText("Backups per day").first()).toBeVisible({
+  await expect(page.getByText("Completed restore points per day").first()).toBeVisible({
     timeout: 120_000,
   });
   await expect(page.getByRole("group", { name: "Activity range" })).toBeVisible(
@@ -73,19 +73,19 @@ test.describe("Proxmox backups layout guards", () => {
     await openProxmoxBackups(page);
 
     // The Backups section now opens the date view directly.
-    const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
+    const dayButtons = page.getByRole("button", { name: /: \d+ restore points?$/ });
     await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
 
-    const totalCopy = page.getByText(/^\d+ backups$/).first();
+    const totalCopy = page.getByText(/^\d+ backup entries$/).first();
     await expect(totalCopy).toBeVisible();
 
     // Picking a day narrows the table without navigating away.
     const activeDay = page
-      .getByRole("button", { name: /: [1-9]\d* backups?$/ })
+      .getByRole("button", { name: /: [1-9]\d* restore points?$/ })
       .last();
     await activeDay.click();
     await expect(page).toHaveURL(/\/proxmox\/backups/);
-    await expect(page.getByText(/^\d+ of \d+ backups$/).first()).toBeVisible();
+    await expect(page.getByText(/^\d+ of \d+ backup entries$/).first()).toBeVisible();
   });
 
   test("long-range activity keeps the page inside the horizontal viewport", async ({
@@ -106,7 +106,7 @@ test.describe("Proxmox backups layout guards", () => {
       .getByRole("button", { name: "1y" })
       .click();
 
-    const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
+    const dayButtons = page.getByRole("button", { name: /: \d+ restore points?$/ });
     await expect.poll(() => dayButtons.count()).toBe(365);
 
     // A year of bars must stay contained: the chart may scroll internally but

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test as base, type Page } from '@playwright/test';
 
-import { createAuthenticatedStorageState, getMockMode, setMockMode } from './helpers';
+import { apiRequest, createAuthenticatedStorageState, getMockMode, setMockMode } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,6 +71,20 @@ test.describe.serial('Storage physical disk drawer history', () => {
 
     await ensureMockModeEnabled(page);
 
+    // Fixture disk placement is deterministic by node identity, rather than
+    // a fixed model/owner pair. Pin an actual serial-bearing Proxmox disk and
+    // prove that the drawer requests history for that same canonical serial.
+    const inventory = await apiRequest(page, '/api/resources?type=physical_disk&source=proxmox');
+    expect(inventory.ok()).toBeTruthy();
+    const { data: disks } = await inventory.json() as { data: Array<{
+      id: string;
+      physicalDisk?: { serial?: string; model?: string; devPath?: string };
+    }> };
+    const target = disks.find((resource) => resource.physicalDisk?.serial &&
+      resource.physicalDisk.model && resource.physicalDisk.devPath?.startsWith('/dev/nvme'));
+    expect(target, 'The mock estate must include a serial-bearing NVMe disk').toBeDefined();
+    const targetSerial = target!.physicalDisk!.serial!;
+
     const diskHistoryResponses = new Map<string, { resourceId: string; points: number }>();
     page.on('response', async (response) => {
       const url = response.url();
@@ -81,17 +95,18 @@ test.describe.serial('Storage physical disk drawer history', () => {
       if (parsed.searchParams.get('resourceType') !== 'disk') {
         return;
       }
-      const metric = parsed.searchParams.get('metric') || '';
-      if (!['diskread', 'diskwrite', 'disk'].includes(metric)) {
-        return;
-      }
+      if (parsed.searchParams.get('resourceId') !== targetSerial) return;
 
       try {
-        const payload = (await response.json()) as { resourceId?: string; points?: unknown[] };
-        diskHistoryResponses.set(metric, {
-          resourceId: payload.resourceId || '',
-          points: Array.isArray(payload.points) ? payload.points.length : 0,
-        });
+        const payload = (await response.json()) as {
+          resourceId?: string; metrics?: Record<string, unknown[]>;
+        };
+        for (const metric of ['diskread', 'diskwrite', 'disk']) {
+          diskHistoryResponses.set(metric, {
+            resourceId: payload.resourceId || '',
+            points: payload.metrics?.[metric]?.length || 0,
+          });
+        }
       } catch {
         // The drawer polls on an interval; a response can land while the page
         // is tearing down, and json() on it must not fail the test.
@@ -106,20 +121,17 @@ test.describe.serial('Storage physical disk drawer history', () => {
     await disksTab.click({ timeout: 30_000 });
     const search = page.getByRole('textbox', { name: /Search Proxmox storage/ });
     await expect(search).toBeVisible({ timeout: 30_000 });
-    await search.fill('nvme2');
+    await search.fill(target!.physicalDisk!.model!);
 
-    const row = page
-      .locator('table tbody tr')
-      .filter({ hasText: 'Samsung 980 PRO 2TB' })
-      .filter({ hasText: 'pve2' })
-      .first();
+    const row = page.locator(`table tbody tr[data-row-id=${JSON.stringify(target!.id)}]`);
 
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.getByRole('button', { name: /^Expand / }).click();
 
-    const detail = page.locator('[data-inline-detail-for]').filter({ has: page.getByText('Live I/O (30m)') }).first();
+    const detail = page.locator(`[data-inline-detail-for=${JSON.stringify(targetSerial)}]`);
     await expect(detail).toBeVisible();
-    await expect(detail.getByText('Collecting data... History will appear here.')).toHaveCount(0);
+    await expect(detail.getByRole('img', { name: 'Disk I/O history', exact: true })).toBeVisible();
+    await expect(detail.getByRole('combobox', { name: 'History range', exact: true })).toHaveValue('24h');
 
     await expect
       .poll(() => Array.from(diskHistoryResponses.keys()).sort().join(','))
@@ -128,7 +140,7 @@ test.describe.serial('Storage physical disk drawer history', () => {
     for (const metric of ['diskread', 'diskwrite', 'disk'] as const) {
       await expect
         .poll(() => diskHistoryResponses.get(metric)?.resourceId || '')
-        .toBe('SERIAL884006359727');
+        .toBe(targetSerial);
       await expect
         .poll(() => diskHistoryResponses.get(metric)?.points || 0)
         .toBeGreaterThan(0);
@@ -181,12 +193,11 @@ test.describe.serial('Storage physical disk drawer history', () => {
         if (parsed.searchParams.get('resourceType') !== 'disk') return;
         if (parsed.searchParams.get('resourceId') !== summarySeriesId) return;
 
-        const metric = parsed.searchParams.get('metric') || '';
-        if (!['diskread', 'diskwrite', 'disk'].includes(metric)) return;
-
         try {
-          const payload = (await response.json()) as { points?: unknown[] };
-          detailResponsePoints.set(metric, Array.isArray(payload.points) ? payload.points.length : 0);
+          const payload = (await response.json()) as { metrics?: Record<string, unknown[]> };
+          for (const metric of ['diskread', 'diskwrite', 'disk']) {
+            detailResponsePoints.set(metric, payload.metrics?.[metric]?.length || 0);
+          }
         } catch {
           // Ignore responses that resolve while the page is tearing down.
         }
@@ -198,29 +209,20 @@ test.describe.serial('Storage physical disk drawer history', () => {
 
         const detail = page.locator(`[data-inline-detail-for="${summarySeriesId}"]`);
         await expect(detail).toBeVisible();
-        await page.waitForTimeout(250);
-
-        const collectingCount = await detail
-          .getByText('Collecting data... History will appear here.')
-          .count();
-
-        if (collectingCount > 0) {
-          failures.push(`${rowText} [overlay]`);
-        } else {
-          for (const metric of ['diskread', 'diskwrite', 'disk'] as const) {
-            let points = 0;
-            try {
-              await expect.poll(() => detailResponsePoints.get(metric) || 0, {
-                timeout: 10_000,
-              }).toBeGreaterThan(0);
-              points = detailResponsePoints.get(metric) || 0;
-            } catch {
-              // Report every drawer without aborting at the first slow series.
-            }
-            if (points <= 0) {
-              failures.push(`${rowText} [${metric}:0 points via ${summarySeriesId || 'no-series-id'}]`);
-              break;
-            }
+        await expect(detail.getByRole('img', { name: 'Disk I/O history', exact: true })).toBeVisible();
+        for (const metric of ['diskread', 'diskwrite', 'disk'] as const) {
+          let points = 0;
+          try {
+            await expect.poll(() => detailResponsePoints.get(metric) || 0, {
+              timeout: 10_000,
+            }).toBeGreaterThan(0);
+            points = detailResponsePoints.get(metric) || 0;
+          } catch {
+            // Report every drawer without aborting at the first slow series.
+          }
+          if (points <= 0) {
+            failures.push(`${rowText} [${metric}:0 points via ${summarySeriesId || 'no-series-id'}]`);
+            break;
           }
         }
 

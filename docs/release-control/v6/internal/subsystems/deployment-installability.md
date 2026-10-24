@@ -1996,6 +1996,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 103. `scripts/release_lifecycle_rehearsal_versions.py`
 104. `.github/workflows/dependency-advisory-watch.yml`
 105. `scripts/dependency_advisory_watch.py`
+106. `tests/integration/scripts/settings-scroll-audit.mjs`
 
 `scripts/installtests/run_unix_contracts.py` is the canonical exhaustive native Unix installer execution runner. Its dedicated verification files are `scripts/installtests/native_unix_contract_runner_test.go` and `scripts/tests/test_native_installer_contract_runner.py`. Script-smoke discovery and the native Go wrapper execute that same Python control suite, so phase inventory, failure propagation and real compiled-Go exit behavior retain one verification source.
 
@@ -2999,7 +3000,8 @@ artifact-selection behaviour.
    names a specific change and where users find it, never a theme or benefit
    slogan, because the preview is all a user reads before installing.
    `scripts/generate-release-notes.sh` and
-   `docs/releases/RELEASE_NOTES_TEMPLATE.md` carry that authoring rule.
+   `docs/releases/RELEASE_NOTES_TEMPLATE.md` carry that authoring rule as
+   the shape of a bullet, not a shipped change a later release could copy.
    The post-update communication boundary does not announce telemetry payload
    changes. Those are disclosed in the dated `Payload changes` section of
    `docs/PRIVACY.md` and in the release notes of the first release that carries
@@ -3022,6 +3024,13 @@ artifact-selection behaviour.
    retry login. `tests/integration/scripts/fixture-auth.test.mjs` exercises the
    actual token helper with delayed and rejected bootstrap; the runtime-home
    onboarding browser contract also holds a real protected-state request.
+   Settings browser audits scroll the actual application content owner to its
+   observed bottom. Traversal must scale with the populated estate rather than
+   stop after a fixed number of wheel steps. The browser geometry regression
+   `tests/integration/scripts/settings-scroll-audit.test.mjs` retains native
+   Chromium/WebKit traversal of short and 30,000px content plus the positive
+   horizontal-overflow control; the live mobile audit keeps its bottom and
+   overflow assertions.
    The built `index.html` must not modulepreload lazy route chunks: the SRI
    plugin runs with `preloadDynamicChunks: false` so cold start fetches only the
    entry and its static vendor imports (route-level code splitting stays
