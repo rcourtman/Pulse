@@ -243,6 +243,11 @@ cannot supply a field or feedback type, and the next form field's contents are
 not secondary topics. These labels surface review work; they do not establish
 that a defect is reproduced or a request will be built.
 
+Edited reports may reorder fields. Any current form field at the same or a
+shallower heading level ends the topic field; changing that context alone must
+not reopen decomposition. Deeper topic subheadings remain part of the field,
+even when named after a form field such as **Installation type**.
+
 Headings and inline fields inside backtick or tilde code blocks and indented
 logs are evidence, not form declarations or field boundaries. A real field can
 still contain a fenced version or topic; do not discard that evidence. Version

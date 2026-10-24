@@ -540,6 +540,97 @@ test("topic classification stops at form fields but retains topic subheadings", 
   }
 });
 
+function topicBoundaryFields() {
+  const fields = new Set(["Additional context"]);
+  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    for (const [, label] of form.matchAll(/^      label: (.+)$/gm)) {
+      if (label !== "Additional actionable topics") fields.add(label);
+    }
+  }
+  return [...fields];
+}
+
+test("every current form field bounds a reordered topic declaration", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+  for (const field of topicBoundaryFields()) {
+    for (const newline of ["\n", "\r\n"]) {
+      for (const level of [2, 3]) {
+        for (const empty of ["", "None", "_No response_", "<!-- optional -->"]) {
+          const body = ["### Additional actionable topics", empty, "",
+            `${"#".repeat(level)} ${field.toUpperCase()}`, "Existing context, not another topic."].join(newline);
+          assert.equal(classifyAdditionalActionableTopics(body), false, body);
+        }
+      }
+    }
+  }
+});
+
+test("a form-named topic subheading remains actionable inside the declaration", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+  for (const field of topicBoundaryFields()) {
+    for (const level of [1, 2, 3, 4, 5]) {
+      const body = [`${"#".repeat(level)} Additional actionable topics`, "None", "",
+        `${"#".repeat(level + 1)} ${field}`, "A separate problem on this surface.", "",
+        `${"#".repeat(level)} Pulse version`, "6.5.0"].join("\n");
+      assert.equal(classifyAdditionalActionableTopics(body), true, body);
+    }
+  }
+});
+
+test("copied form-named headings cannot hide a later topic", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+  for (const copied of [
+    "```text\n### Agent version\n6.5.0\n```",
+    "> ### Agent version\n> 6.5.0",
+    "<pre>\n### Agent version\n6.5.0\n</pre>",
+    "<!--\n### Agent version\n6.5.0\n-->",
+  ]) {
+    const body = ["### Additional actionable topics", "None", "", copied, "",
+      "A separate problem still needs a disposition.", "", "### OS / environment", "API only"].join("\n");
+    assert.equal(classifyAdditionalActionableTopics(body), true, body);
+  }
+});
+
+test("opening or editing neighbouring context cannot invent a decomposition task", async () => {
+  for (const field of topicBoundaryFields()) {
+    for (const action of ["opened", "edited"]) {
+      const { github, calls } = createGithub();
+      const body = (value) => `### Additional actionable topics\nNone\n\n### ${field}\n${value}\n`;
+      const labels = ["enhancement", "needs-human", "release-blocker", "needs-retest-on-latest", "affects-6.5.0"];
+      const issue = { number: 2923, title: "Existing report", body: body("Corrected existing context"),
+        labels: labels.map(name => ({ name })) };
+      await syncLabels({ github, core: createCore(),
+        context: createContext({ action, issue, previousBody: body("Earlier existing context") }) });
+      assert.deepEqual(calls.addLabels, [], `${action}: ${field}`);
+      assert.deepEqual(calls.removeLabel, [], field);
+      assert.deepEqual(calls.createLabel, [], field);
+      assert.deepEqual(calls.createComment, [], field);
+      assert.deepEqual(calls.getLatestRelease, [], field);
+      assert.deepEqual(calls.paginate, [], field);
+    }
+  }
+});
+
+test("real revised topics still reopen review without disposing of existing tasks", async () => {
+  for (const existingTask of [false, true]) {
+    const { github, calls } = createGithub();
+    const previousBody = "### Additional actionable topics\nNone\n### Agent version\n6.5.0";
+    const body = "### Additional actionable topics\nNone\n#### Installation type\n" +
+      "The saved installer selection is also lost.\n### Agent version\n6.5.0";
+    const issue = { number: 2924, title: "Existing report", body,
+      labels: ["enhancement", "needs-human", "needs-retest-on-latest",
+        ...(existingTask ? ["needs-decomposition"] : [])].map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(),
+      context: createContext({ action: "edited", issue, previousBody }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), existingTask ? [] : [["needs-decomposition"]]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  }
+});
+
 test("hidden template fields cannot declare topics or override feedback type", () => {
   const { classifyAdditionalActionableTopics, classifyV6FeedbackType } = triage.internals;
   const hidden = ["<!--", "### Additional actionable topics", "A second bug.",
