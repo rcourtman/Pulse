@@ -591,7 +591,7 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getDetail.mockResolvedValue(detail(active));
     renderWorkbench();
 
-    fireEvent.click(await screen.findByRole('button', { name: /Database VM · Disk pressure/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Disk pressure on Database VM/ }));
     const link = await screen.findByRole('link', { name: 'Open resource' });
     await waitFor(() => expect(link).toHaveAttribute('href', '/vmware/overview'));
     expect(getResource).toHaveBeenCalledWith('agent-b602', expect.anything());

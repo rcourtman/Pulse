@@ -25,7 +25,8 @@
 Infrastructure section shortcuts include their visible Add action and group
 identity in the accessible name. Update chips include the visible singular or
 counted update label, the affected system and Agent Doctor destination, at both
-responsive layouts. Read-only inventories expose no add/update action. Patrol
+responsive layouts. Read-only inventories expose no add/update action, including when a caller
+retains an Agent Doctor callback. Patrol
 attention rows derive their name from their visible severity, title, summary,
 decision/resource context and observation time rather than a title-only override.
 Native buttons, pressed state, focus and touch selection remain unchanged.
