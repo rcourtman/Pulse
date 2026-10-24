@@ -187,7 +187,7 @@ func TestNodeDiskUnknownHonoursExplicitPolicy(t *testing.T) {
 }
 
 func TestNodeDiskUnknownLeavesIndependentMetricsAndAgentHandover(t *testing.T) {
-	m, _ := nodeDiskManager(t, false)
+	m, clock := nodeDiskManager(t, false)
 	m.mu.Lock()
 	m.config.NodeDefaults.CPU = &HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.config.NodeDefaults.Memory = &HysteresisThreshold{Trigger: 80, Clear: 70}
@@ -217,10 +217,14 @@ func TestNodeDiskUnknownLeavesIndependentMetricsAndAgentHandover(t *testing.T) {
 		t.Fatal("handover lost agent disk incident")
 	}
 	m.HandleHostRemoved(host)
+	// Handover release uses its real observation time. Later reports must
+	// advance the synthetic clock too, rather than predate that release.
+	clock.Store(int64(time.Second))
 	m.CheckNode(gap)
 	if testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "disk")) {
 		t.Fatal("removing agent invented a node reading")
 	}
+	clock.Add(int64(time.Second))
 	m.CheckNode(node)
 	if !testHasActiveAlert(t, m, canonicalMetricStateID(node.ID, "disk")) {
 		t.Fatal("fresh node disk did not regain ownership")
