@@ -5682,6 +5682,14 @@ demo login reaches the connected workspace instead of failing open on API-only
 reachability or remaining on the authenticated loading shell. The proof must
 use visible UI state rather than Playwright `networkidle`, because the public
 demo can keep background activity alive after the page is already usable.
+Since v6.5.0 demo mode signs a fresh visitor in with the published demo
+credentials, so the login form never stays on screen for a first visit. The
+smoke therefore proves that a fresh visitor reaches the connected workspace
+when the server reports demo mode, then sets the frontend's tab-scoped
+`pulse-demo-auto-login` marker in a separate context to keep proving the login
+form and a manual demo sign-in. The policy test pins that marker to
+`frontend-modern/src/utils/localStorage.ts`, so a rename fails source checks
+instead of the live demo step.
 That same demo-update verification boundary also owns the canonical v6 mock
 runtime state contract. `.github/workflows/update-demo-server.yml` must verify
 mock-mode readiness through the unified `/api/state` `resources[]` collection,

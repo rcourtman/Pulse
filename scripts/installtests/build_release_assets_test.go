@@ -2735,6 +2735,10 @@ func TestDemoPublicBrowserSmokeWaitsForVisibleLoginUI(t *testing.T) {
 		`getByLabel('Password').waitFor({ state: 'visible', timeout: 120000 })`,
 		`getByRole('button', { name: 'Sign in to Pulse' }).waitFor({ state: 'visible', timeout: 120000 })`,
 		`getByRole('status', { name: 'Backend and live data stream are connected.' })`,
+		`const DEMO_AUTO_LOGIN_KEY = 'pulse-demo-auto-login';`,
+		`await openDemo(browser, { suppressAutoLogin: false })`,
+		`await waitForConnectedWorkspace(visitor, visitorStartedAt, 'auto-signed-in visitor')`,
+		`await openDemo(browser, { suppressAutoLogin: true })`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
