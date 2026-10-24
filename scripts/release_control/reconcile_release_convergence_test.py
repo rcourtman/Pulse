@@ -798,21 +798,45 @@ class ReconciliationTests(unittest.TestCase):
         subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
-    def test_deleted_activation_owner_is_named_without_retry(self):
-        github = FakeGitHub()
+    @staticmethod
+    def delete_owner_run(github, error):
         fake_api = github.api
 
         def api(endpoint):
             if endpoint.endswith(f"/actions/runs/{github.owner_run_id}"):
-                raise subject.GitHubNotFound("GitHub object was not found")
+                raise error
             return fake_api(endpoint)
 
         github.api = api
-        with self.assertRaises(subject.ReconciliationError) as raised:
+
+    def test_deleted_activation_owner_is_terminal_for_fresh_controls(self):
+        # v6.5.0's owner run was deleted from Actions on 13 Oct 2026; the
+        # immutable marker still names it. Deletion implies a terminal run.
+        github = FakeGitHub()
+        self.delete_owner_run(github, subject.GitHubNotFound("GitHub object was not found"))
+        with contextlib.redirect_stdout(io.StringIO()) as output:
             subject.reconcile(github, github.run_id, 5)
-        self.assertNotIsInstance(raised.exception, subject.GitHubNotFound)
-        self.assertIn("owner run 90 for committed v6.5.0-rc.1", str(raised.exception))
-        self.assertIn("no longer exists", str(raised.exception))
+        self.assertIn("owner run 90 for committed v6.5.0-rc.1 was deleted", output.getvalue())
+        self.assertEqual(1, len(github.posts))
+        endpoint, payload = github.posts[0]
+        self.assertTrue(endpoint.endswith("/release-convergence.yml/dispatches"))
+        self.assertEqual("200", payload["inputs"]["source_release_run_id"])
+
+    def test_deleted_activation_owner_reruns_current_controls(self):
+        github = FakeGitHub(current_controls=True)
+        self.delete_owner_run(github, subject.GitHubNotFound("GitHub object was not found"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            subject.reconcile(github, github.run_id, 5)
+        self.assertEqual(
+            [(f"repos/{github.repository}/actions/runs/{github.run_id}/rerun", None)],
+            github.posts,
+        )
+
+    def test_unreadable_activation_owner_is_not_treated_as_deleted(self):
+        github = FakeGitHub()
+        self.delete_owner_run(github, subject.ReconciliationError("GitHub command failed"))
+        with self.assertRaises(subject.ReconciliationError):
+            subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
     def test_one_channel_failure_does_not_starve_the_other(self):
