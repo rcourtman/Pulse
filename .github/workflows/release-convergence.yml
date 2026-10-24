@@ -130,18 +130,35 @@ jobs:
               fi
               activation_owner_run_id="$(jq -r '.convergence_run_id' "${marker}")"
               if [ "${activation_owner_run_id}" != "${EXPECTED_CONVERGENCE_RUN_ID}" ]; then
-                original_status="$(
+                # The immutable marker outlives Actions history: runs are
+                # deleted by retention or by hand, and GitHub only deletes a
+                # run once it has completed or is older than two weeks, far
+                # beyond every job timeout here. A definite 404 is therefore
+                # a terminal owner. Any other read failure is unknown and
+                # keeps waiting.
+                owner_read_error="$(mktemp)"
+                if ! original_status="$(
                   gh api \
                     "repos/${{ github.repository }}/actions/runs/${activation_owner_run_id}" \
-                    --jq '.status' 2>/dev/null || true
-                )"
-                if [ "${original_status}" != "completed" ]; then
+                    --jq '.status' 2>"${owner_read_error}"
+                )"; then
+                  original_status=""
+                  if grep -q 'HTTP 404' "${owner_read_error}"; then
+                    original_status="deleted"
+                  fi
+                fi
+                rm -f "${owner_read_error}"
+                if [ "${original_status}" != "completed" ] && [ "${original_status}" != "deleted" ]; then
                   rm -f "${marker}"
                   echo "Original convergence owner ${activation_owner_run_id} is ${original_status:-unavailable}; successor adoption is not yet allowed."
                   sleep 2
                   continue
                 fi
-                echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."
+                if [ "${original_status}" = "deleted" ]; then
+                  echo "[OK] Adopting committed ${TAG}; convergence owner ${activation_owner_run_id} was deleted from Actions history and is terminal."
+                else
+                  echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."
+                fi
               fi
               activation_marker_sha256="$(sha256sum "${marker}" | awk '{print $1}')"
               server_image_digest="$(jq -r '.server_image_digest' "${marker}")"

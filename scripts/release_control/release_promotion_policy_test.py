@@ -904,13 +904,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 self.assertIn(surface_name, convergence_verdict)
                 self.assertIn("the committed release remains public", convergence_verdict)
 
-        self.assertIn("github.event.workflow_run.conclusion != 'success'", retry)
+        # GitHub does not deliver workflow_run for GITHUB_TOKEN-dispatched
+        # convergence runs, so the hourly schedule is the retry mechanism.
+        self.assertNotIn("workflow_run", yaml.safe_load(retry)[True])
         self.assertIn("cron: '37 * * * *'", retry)
         self.assertIn("workflow_dispatch:", retry)
         self.assertIn("reconcile_release_convergence.py", retry)
-        self.assertIn('--run-id "${RUN_ID}"', retry)
         self.assertIn("--latest", retry)
-        self.assertEqual(2, retry.count("PRO_REPOSITORY_TOKEN: ${{ secrets.WORKFLOW_PAT }}"))
+        self.assertEqual(1, retry.count("PRO_REPOSITORY_TOKEN: ${{ secrets.WORKFLOW_PAT }}"))
         self.assertNotIn("rerun-failed-jobs", retry)
         self.assertIn('actions/runs/{run_id}/rerun', reconciler)
         self.assertIn('release-convergence.yml/dispatches', reconciler)
@@ -1141,10 +1142,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("does not match the expected immutable release identity", await_commit)
         self.assertIn("EXPECTED_CONVERGENCE_RUN_ID: ${{ github.run_id }}", await_commit)
         self.assertIn('original_status}" != "completed"', await_commit)
+        # A deleted owner is terminal: GitHub only deletes completed runs or
+        # runs older than two weeks. Other read failures keep waiting.
+        self.assertIn("grep -q 'HTTP 404'", await_commit)
+        self.assertIn('original_status="deleted"', await_commit)
         self.assertIn("successor adoption is not yet allowed", await_commit)
         self.assertIn("activation_marker_sha256", await_commit)
 
-        self.assertIn("--run-id", retry)
+        self.assertIn("--latest", retry)
         self.assertIn("DISPLAY_TITLE = re.compile", reconciler)
         self.assertIn("source_run_id = int(source_text)", reconciler)
         self.assertIn('actions/runs/{source_run_id}', reconciler)

@@ -637,24 +637,26 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     )
     try:
         owner_run = github.api(f"repos/{repository}/actions/runs/{owner_run_id}")
-    except GitHubNotFound as exc:
-        # The immutable marker outlives Actions history. Once its owner run is
-        # deleted, release-convergence.yml can never adopt the tag (it waits
-        # for that owner to read "completed"), so a retry would only time out.
-        raise ReconciliationError(
-            f"activation marker owner run {owner_run_id} for committed {tag} no longer "
-            "exists in Actions history; convergence cannot adopt this release until an "
-            "operator resolves it. No retry was dispatched."
-        ) from exc
-    require_run_identity(
-        owner_run,
-        repository=repository,
-        workflow_id=convergence_workflow_id,
-        path=CONVERGENCE_PATH,
-        display_title=title,
-    )
-    if owner_run.get("status") != "completed":
-        raise ReconciliationError("activation marker owner is not terminal")
+    except GitHubNotFound:
+        # The immutable marker outlives Actions history. GitHub only deletes a
+        # run once it has completed or is older than two weeks, beyond every
+        # convergence job timeout, so a deleted owner is terminal and
+        # release-convergence.yml adopts the tag from it. The marker itself
+        # was validated above; there is no run left to bind its identity to.
+        print(
+            f"Activation marker owner run {owner_run_id} for committed {tag} was "
+            "deleted from Actions history; treating it as terminal."
+        )
+    else:
+        require_run_identity(
+            owner_run,
+            repository=repository,
+            workflow_id=convergence_workflow_id,
+            path=CONVERGENCE_PATH,
+            display_title=title,
+        )
+        if owner_run.get("status") != "completed":
+            raise ReconciliationError("activation marker owner is not terminal")
 
     default_commit = github.api(f"repos/{repository}/commits/{default_branch}").get("sha")
     if not isinstance(default_commit, str) or EXACT_SHA.fullmatch(default_commit) is None:

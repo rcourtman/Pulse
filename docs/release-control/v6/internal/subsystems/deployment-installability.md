@@ -3466,13 +3466,19 @@ artifact-selection behaviour.
    Reading a floating ref or a clobbered constant record is forbidden because
    cached prior bytes could authorize stale ownership.
    Convergence retry is a current-control reconciliation, not unconditional
-   replay of the failed run's checkout. A terminal failure delivered through
-   `workflow_run` must be reconciled, and an hourly or manual pass must inspect
-   the current immutable stable and preview channel heads so a missed event
-   cannot strand mutable aliases. Discovery must not fall back behind a mutable
+   replay of the failed run's checkout. An hourly or manual pass must inspect
+   the current immutable stable and preview channel heads; that schedule is the
+   retry mechanism, because GitHub does not deliver `workflow_run` for
+   convergence runs dispatched with `GITHUB_TOKEN`, and no event-driven retry
+   path may be presented as one. Discovery must not fall back behind a mutable
    channel head. Before mutation, reconciliation must bind the exact mainline
    workflow-dispatch identity, release, source run, activation marker and
-   original convergence owner; reject malformed marker digests; suppress a
+   original convergence owner. The immutable marker outlives Actions history:
+   an original owner that GitHub definitively reports as not found is terminal,
+   because GitHub deletes only completed runs or runs older than two weeks, so
+   both the reconciler and the successor's adoption wait proceed from the
+   marker alone, while any other owner read failure keeps waiting or fails.
+   Reconciliation must also reject malformed marker digests; suppress a
    newer matching run; and enforce one aggregate attempt budget across reruns
    and successor runs. If the failed run used the current default-branch commit,
    the complete run is rerun. If its checkout predates current controls, a fresh
