@@ -1658,7 +1658,7 @@ describe('completed restore-point summary and activity', () => {
     expect(day).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /: 5 restore points$/ })).not.toBeInTheDocument();
     expect(screen.getByText('Completed restore points per day')).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Volume', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
     expect(screen.getByText('Completed restore volume per day')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /: 3.00 KB$/ })).toBeInTheDocument();
     expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
@@ -1675,7 +1675,7 @@ describe('completed restore-point summary and activity', () => {
     expect(
       screen.getByRole('cell', { name: `${getRecoveryFullDateLabel('2026-10-04')} 2 entries` }),
     ).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('link', { name: 'Coverage', exact: true }));
+    await fireEvent.click(screen.getByRole('link', { name: 'Coverage' }));
     expect(screen.queryByText(/completed restore points with known dates/)).not.toBeInTheDocument();
     expect(
       screen.getByText(/0 completed restore points · 1 running · 1 failed/),
