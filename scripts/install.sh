@@ -669,10 +669,10 @@ collector_lifecycle_binary() {
 }
 
 resolve_safe_profile_hostname() {
+    # Pin the system hostname the agent already reports. hostname -f would
+    # rename a host to its FQDN on migration while root-profile hosts keep the
+    # short name, and the server's authority check accepts either form.
     local resolved_hostname="${HOSTNAME_OVERRIDE:-}"
-    if [[ -z "$resolved_hostname" ]]; then
-        resolved_hostname=$(hostname -f 2>/dev/null || true)
-    fi
     if [[ -z "$resolved_hostname" ]]; then
         resolved_hostname=$(hostname 2>/dev/null || true)
     fi

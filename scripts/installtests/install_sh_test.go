@@ -8328,6 +8328,36 @@ reduce_safe_profile_collector_authority
 	}
 }
 
+// Migrating to the safe profile must keep the name the agent already reported.
+// Pinning hostname -f renamed Proxmox hosts to their FQDN while every
+// root-profile host kept its short system hostname.
+func TestInstallSHSafeProfileHostnameKeepsSystemHostname(t *testing.T) {
+	script := `
+set -euo pipefail
+hostname() {
+	if [[ "${1:-}" == "-f" || "${1:-}" == "--fqdn" ]]; then
+		printf 'luna.nexus.example.test\n'
+	else
+		printf 'Luna\n'
+	fi
+}
+` + extractInstallShellFunction(t, "resolve_safe_profile_hostname") + `
+HOSTNAME_OVERRIDE=""
+resolve_safe_profile_hostname
+printf 'resolved=%s\n' "$HOSTNAME_OVERRIDE"
+HOSTNAME_OVERRIDE="Pinned.Example.Test."
+resolve_safe_profile_hostname
+printf 'explicit=%s\n' "$HOSTNAME_OVERRIDE"
+`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("resolve safe profile hostname: %v\n%s", err, out)
+	}
+	if got := string(out); got != "resolved=luna\nexplicit=pinned.example.test\n" {
+		t.Fatalf("safe profile hostname output = %q", got)
+	}
+}
+
 func TestInstallSHCollectorLifecycleRejectsActiveMITMForgedSuccess(t *testing.T) {
 	const token = "collector-mitm-secret"
 	var authorizationSeen bool
