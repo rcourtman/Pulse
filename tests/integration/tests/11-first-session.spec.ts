@@ -172,11 +172,11 @@ test.describe.serial("First-session experience", () => {
     // Visit a selection of key settings routes and verify the page renders
     // without console errors or blank screens.
     const keyRoutes = [
-      "/settings/system-general",
-      "/settings/system-updates",
-      "/settings/security-overview",
-      "/settings/security-auth",
-      "/settings/system-pro",
+      { path: "/settings/system-general", readyHeading: "Appearance" },
+      { path: "/settings/system-updates", readyHeading: "Updates" },
+      { path: "/settings/security-overview", readyHeading: "Security Overview" },
+      { path: "/settings/security-auth", readyHeading: "Authentication" },
+      { path: "/settings/system-pro", readyHeading: "Current plan" },
     ] as const;
 
     const consoleErrors: string[] = [];
@@ -193,7 +193,7 @@ test.describe.serial("First-session experience", () => {
     });
 
     try {
-      for (const route of keyRoutes) {
+      for (const { path: route, readyHeading } of keyRoutes) {
         // Retire the previous document before measuring this route. A
         // departing infrastructure row may still start its anomaly read;
         // that is not a Settings bootstrap request. Do not exempt anomalies
@@ -224,7 +224,10 @@ test.describe.serial("First-session experience", () => {
         // "Loading configuration...". Require the consuming panel, not just
         // the Settings shell, before judging requests and console output.
         await expect(
-          page.locator("[data-settings-content] [data-settings-panel]").first(),
+          page.locator("[data-settings-content]").getByRole("heading", {
+            name: readyHeading,
+            exact: true,
+          }),
           `Route ${route} did not finish loading a settings panel`,
         ).toBeVisible({ timeout: 10_000 });
         await expect(page.getByText("Loading configuration...", { exact: true })).toHaveCount(0);
