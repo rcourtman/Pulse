@@ -1097,7 +1097,7 @@ describe('independent Proxmox backup inventory reads', () => {
       if (failed === 'both') {
         expect(screen.getByText('Could not load Proxmox backup inventory')).toBeInTheDocument();
         expect(screen.getByText(/PVE backup inventory is unavailable/)).toBeInTheDocument();
-        expect(screen.queryByText(/0 restore points/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/completed restore points/)).not.toBeInTheDocument();
       }
       apiFetchMock.mockImplementation((url) =>
         Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : readPvePayload)),
