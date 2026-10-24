@@ -17,6 +17,20 @@
 
 ## Purpose
 
+### Native TrueNAS SCALE CPU uses the reported aggregate
+
+`reporting.realtime` may place its aggregate at `fields.cpu.cpu.usage`,
+beside per-core records. That aggregate is an available CPU sample even when
+its value is zero. Missing, null or invalid usage stays unavailable; per-core
+values and aggregate temperature cannot substitute for it. Previously supported
+flat and nested usage/total shapes retain their existing precedence.
+
+`TestRealtimeSCALEAggregateCPU` covers aggregate presence and legacy shapes;
+`TestJSONRPCSCALEAggregateCPUProjection` carries repeated JSON-RPC samples
+through system merge, provider and canonical resource JSON, including idle,
+nonzero, unavailable and recovery. The fixture is not installed-appliance or
+reporter recovery evidence. REST/CORE collection and CPU history are unchanged.
+
 ### Failed guest snapshot reads do not establish removal
 
 A snapshot listing is accepted only when its API call succeeds. In particular,

@@ -172,23 +172,67 @@ func TestDialPinnedIPsCancellationStopsBothWorkers(t *testing.T) {
 	}
 }
 
+type pinnedCloseObservedConn struct {
+	net.Conn
+	closed chan struct{}
+}
+
+func (c *pinnedCloseObservedConn) Close() error {
+	err := c.Conn.Close()
+	close(c.closed)
+	return err
+}
+
 func TestDialPinnedIPsClosesLateSuccessfulLoser(t *testing.T) {
-	winner, _ := pinnedTestConnection(t)
-	loser, peer := pinnedTestConnection(t)
-	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
-		if address == "192.0.2.2:443" {
-			return winner, nil
+	for _, alreadyClosed := range []bool{false, true} {
+		name := "read-immediately"
+		if alreadyClosed {
+			name = "already-closed"
 		}
-		// Model a connect that completes just as its cancellation arrives.
-		<-ctx.Done()
-		return loser, nil
+		t.Run(name, func(t *testing.T) {
+			winner, winnerPeer := pinnedTestConnection(t)
+			loser, peer := pinnedTestConnection(t)
+			observed := &pinnedCloseObservedConn{Conn: loser, closed: make(chan struct{})}
+			// net.Pipe refuses deadline changes once either endpoint closes.
+			// Arm the bound before cancellation can correctly close the loser.
+			require.NoError(t, peer.SetReadDeadline(time.Now().Add(time.Second)))
+			started := make(chan struct{})
+			dial := func(ctx context.Context, network, address string) (net.Conn, error) {
+				if address == "192.0.2.2:443" {
+					<-started
+					return winner, nil
+				}
+				close(started)
+				// Model a connect that completes just as its cancellation arrives.
+				<-ctx.Done()
+				return observed, nil
+			}
+			connection, err := dialPinnedIPs(context.Background(), "tcp", "443", []net.IP{net.ParseIP("192.0.2.1"), net.ParseIP("192.0.2.2")}, time.Second, dial)
+			require.NoError(t, err)
+			require.Same(t, winner, connection)
+			if alreadyClosed {
+				// Make the formerly failing ordering deterministic; a closed
+				// loser is the desired result, not a failed observation setup.
+				select {
+				case <-observed.closed:
+				case <-time.After(time.Second):
+					t.Fatal("the unused successful connection did not close")
+				}
+			}
+			_, err = peer.Read(make([]byte, 1))
+			require.ErrorIs(t, err, io.EOF, "the unused successful connection must close")
+
+			// Cancellation owns only the unused connection, not the winner.
+			require.NoError(t, winner.SetDeadline(time.Now().Add(time.Second)))
+			written := make(chan error, 1)
+			go func() { _, err := winnerPeer.Write([]byte{42}); written <- err }()
+			buf := make([]byte, 1)
+			_, err = connection.Read(buf)
+			require.NoError(t, err)
+			require.Equal(t, byte(42), buf[0])
+			require.NoError(t, <-written)
+		})
 	}
-	connection, err := dialPinnedIPs(context.Background(), "tcp", "443", []net.IP{net.ParseIP("192.0.2.1"), net.ParseIP("192.0.2.2")}, time.Second, dial)
-	require.NoError(t, err)
-	require.Same(t, winner, connection)
-	require.NoError(t, peer.SetReadDeadline(time.Now().Add(time.Second)))
-	_, err = peer.Read(make([]byte, 1))
-	require.ErrorIs(t, err, io.EOF, "the unused successful connection must close")
 }
 
 func TestDialPinnedIPsValidatesAndNormalizesCandidates(t *testing.T) {
