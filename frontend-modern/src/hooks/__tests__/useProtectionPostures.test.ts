@@ -7,7 +7,7 @@ import {
   normalizeProtectionPostureResourceIDs,
   useProtectionPostures,
 } from '@/hooks/useProtectionPostures';
-import type { ProtectionPosturesResponse } from '@/types/recovery';
+import type { ProtectionPosturesResponse, ProtectionState } from '@/types/recovery';
 
 const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: apiFetchJSONMock }));
@@ -96,5 +96,107 @@ describe('useProtectionPostures transport', () => {
     // the policy, and the hook joins 200-ID batches into one response, so a page
     // count or limit would only be invented client-side with no reader.
     expectTypeOf<keyof ProtectionPosturesResponse>().toEqualTypeOf<'data' | 'policy'>();
+  });
+
+  it.each<ProtectionState>(['protected', 'attention', 'unprotected', 'unknown'])(
+    'withdraws a retained %s assessment if any batch fails, until a complete retry succeeds',
+    async (state) => {
+      const resourceIDs = Array.from({ length: 201 }, (_, index) => `vm:${index}`);
+      const response = (url: string): ProtectionPosturesResponse => ({
+        data: new URL(url, 'https://pulse.invalid').searchParams
+          .getAll('resourceId')
+          .map((subjectResourceId) => ({
+            subjectResourceId,
+            state,
+            freshness: 'current',
+            verification: 'verified',
+            coverage: 'complete',
+            providerStates: [],
+            repositoryResourceIds: [],
+            evidenceIds: [],
+            explanation: 'Previous assessment',
+            evaluatedAt: '2026-10-24T04:15:12Z',
+          })),
+        policy: {
+          freshnessWindowSeconds: 604800,
+          verificationWindowSeconds: 3600,
+          requireVerification: true,
+        },
+      });
+      apiFetchJSONMock.mockImplementation(async (url: string) => response(url));
+      let dispose = () => {};
+      const hook = createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return useProtectionPostures(() => resourceIDs);
+      });
+      try {
+        await vi.waitFor(() => expect(hook.postures()).toHaveLength(201));
+        const failure = new Error('Second batch failed');
+        apiFetchJSONMock.mockImplementation(async (url: string) => {
+          if (new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId').length === 1)
+            throw failure;
+          return response(url);
+        });
+        const failedRead = hook.refetch();
+        expect(hook.postures()).toHaveLength(201);
+        await failedRead;
+        expect(hook.response.error).toBe(failure);
+        expect(hook.resolvedOnce()).toBe(true);
+        expect(hook.postures()).toEqual([]);
+        expect(hook.postureByResourceID().size).toBe(0);
+        expect(hook.policy().freshnessWindowSeconds).toBe(0);
+
+        const pending: (() => void)[] = [];
+        apiFetchJSONMock.mockImplementation(
+          (url: string) =>
+            new Promise<ProtectionPosturesResponse>((resolve) => {
+              pending.push(() => resolve(response(url)));
+            }),
+        );
+        const retry = hook.refetch();
+        expect(hook.response.loading).toBe(true);
+        expect(hook.postures()).toEqual([]);
+        expect(pending).toHaveLength(2);
+        pending[0]();
+        await Promise.resolve();
+        expect(hook.postures()).toEqual([]);
+        pending[1]();
+        await retry;
+        expect(hook.response.error).toBeNull();
+        expect(hook.postures()).toHaveLength(201);
+        expect(hook.policy().freshnessWindowSeconds).toBe(604800);
+      } finally {
+        dispose();
+      }
+    },
+  );
+
+  it('does not restore a failed cached assessment when Coverage remounts', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      data: [{ subjectResourceId: 'vm:1', state: 'protected' }],
+      policy: { freshnessWindowSeconds: 604800 },
+    });
+    let dispose = () => {};
+    const mount = () =>
+      createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return useProtectionPostures(() => ['vm:1']);
+      });
+    const original = mount();
+    await vi.waitFor(() => expect(original.postures()).toHaveLength(1));
+    apiFetchJSONMock.mockRejectedValue(new Error('Refresh failed'));
+    await original.refetch();
+    dispose();
+
+    apiFetchJSONMock.mockImplementation(() => new Promise(() => {}));
+    const remounted = mount();
+    try {
+      expect(remounted.response.error).toBeTruthy();
+      expect(remounted.postures()).toEqual([]);
+      expect(remounted.postureByResourceID().size).toBe(0);
+      expect(remounted.policy().freshnessWindowSeconds).toBe(0);
+    } finally {
+      dispose();
+    }
   });
 });

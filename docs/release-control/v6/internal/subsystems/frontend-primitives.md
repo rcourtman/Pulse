@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Backup posture failure and retry stay source-local (24 October 2026)
+
+The Backups posture notice offers a keyboard-operable retry with the existing
+inventory-notice styling, wrapping action and disabled pending state. It
+refreshes only posture, not independently readable PVE/PBS inventories. Rows,
+health counts and expanded explanations withdraw failed retained assessments
+until a complete successful response arrives; independently observed restore
+points remain usable. Consuming table tests cover the notice and projection
+together. This changes no shared query cache, route, server policy or execution
+authority.
+
 ### SSO editor feedback and exact group names (24 October 2026)
 
 The provider editor scrolls its fields independently of its header and recovery

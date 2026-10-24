@@ -22,6 +22,7 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
+import type { ProtectionPosturesResponse } from '@/types/recovery';
 import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
 import { eventBus } from '@/stores/events';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
@@ -1543,5 +1544,68 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     expect(detail).toHaveTextContent('History Partial');
     expect(detail).toHaveTextContent('Access Partial');
     expect(detail).not.toHaveTextContent('No restore points');
+  });
+});
+
+describe('Coverage withdraws failed protection assessments', () => {
+  it('replaces retained healthy rows, counts and explanations with Unknown, then retries only posture', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      mockBackupAPIs();
+      window.history.replaceState({}, '', '/proxmox/backups/coverage');
+      renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      const row = () =>
+        document.querySelector('[data-proxmox-backup-row="coverage"]') as HTMLElement;
+      await waitFor(() => expect(row()).toHaveTextContent('Protected'));
+      const accepted = (await apiFetchJSONMock.mock.results[0].value) as ProtectionPosturesResponse;
+      expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
+      fireEvent.click(within(row()).getByRole('button', { name: /expand details/i }));
+      const detail = await screen.findByTestId('proxmox-coverage-detail');
+      expect(detail).toHaveTextContent('A current verified backup is available.');
+
+      apiFetchJSONMock.mockRejectedValue(new Error('Synthetic posture refresh failed'));
+      await vi.advanceTimersByTimeAsync(30_000);
+      await screen.findByText(/Protection posture is unavailable/);
+      expect(row()).toHaveTextContent('Unknown');
+      expect(row()).not.toHaveTextContent('Protected');
+      expect(screen.getByText('protected', { exact: true }).closest('li')).toHaveTextContent(
+        /0\s*protected/,
+      );
+      expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+      expect(detail).not.toHaveTextContent('A current verified backup is available.');
+      expect(detail).not.toHaveTextContent('History Complete');
+      expect(detail).toHaveTextContent('Restore evidence');
+      expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
+      expect(document.querySelector('[data-coverage-strip-footnote]')).toBeNull();
+
+      const pending = deferred<typeof accepted>();
+      apiFetchJSONMock.mockReturnValue(pending.promise);
+      const retry = screen.getByRole('button', { name: 'Retry protection posture' });
+      fireEvent.click(retry);
+      expect(retry).toBeDisabled();
+      expect(retry).toHaveTextContent('Retrying');
+      expect(row()).toHaveTextContent('Unknown');
+      fireEvent.click(retry);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(3);
+      pending.resolve({
+        ...accepted,
+        data: accepted.data.map((posture) => ({
+          ...posture,
+          state: 'attention',
+          explanation: 'The current backup verification needs attention.',
+        })),
+      });
+      await waitFor(() => expect(row()).toHaveTextContent(/attention/i));
+      expect(detail).toHaveTextContent('The current backup verification needs attention.');
+      expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1 attention' })).toBeInTheDocument();
+      expect(document.querySelector('[data-coverage-strip-footnote]')).not.toBeNull();
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(1);
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
