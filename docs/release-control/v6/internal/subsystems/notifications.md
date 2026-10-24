@@ -39,6 +39,14 @@ operator retry, cancellation, audit/receipt readback and new-alert delivery.
 This is synthetic source proof, not evidence of prior exposure, installed-provider
 recovery or resolution of a reported notification outage.
 
+The DELETE acknowledgement includes `success: true` only after durable and live
+removal complete, retaining the legacy `status: "success"` field. The existing
+editor requires that explicit boolean before removing the visible destination;
+a successful mutation must not be displayed as failed or encourage a blind retry.
+Persistence/live-publication failures retain their existing refusal/rollback
+behaviour. `TestNotificationHandlers/DeleteWebhook` pins both success fields;
+its failure controls still prove that a rejected save never removes live state.
+
 ### Approved addresses share a bounded connection budget
 
 Webhook and HTTP Apprise transports pass their validated numeric destinations

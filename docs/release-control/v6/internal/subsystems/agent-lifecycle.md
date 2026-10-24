@@ -1687,6 +1687,11 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+Webhook DELETE acknowledges committed destination removal with `success: true`
+and the retained legacy status. It does not acknowledge agent removal, revoke an
+agent credential or change an already admitted agent/update job. Notification
+queue destination-ID revocation remains with the notification owner.
+
 Proxmox helper operation v2 carries the shared `ProxmoxLXCInventory` completeness and bounded omitted-VMID contract. V1 stays strict complete-only. The collector tries v1 only after an explicit unsupported-v2 response, under one unchanged operation deadline; transport, authorization and provider failures never select a broader fallback.
 
 The shared monitor constructor also composes notification bootstrap: it loads
