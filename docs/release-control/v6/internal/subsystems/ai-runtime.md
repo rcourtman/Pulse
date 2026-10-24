@@ -7111,6 +7111,30 @@ a capacity finding about `/backup` must not hide under the `/data` alert
 a stamped finding to its alert by `mirrors_alert_id`, which is the attention
 item's operational record ID.
 
+Demo findings carry the unified resource ID too. `synthesizeDemoPatrolFindings`
+reads mock values from the legacy snapshot and resolves the reference an
+alert on each record carries through Patrol's alert reference resolver, the
+way Inbox subjects resolve (`AttentionSubjectResourceID`), so a demo finding
+names the resource an Inbox item about the same record names. App containers
+resolve through the container views by host and container ID, because a
+Docker container alert reference binds only a complete container ID and mock
+containers carry short ones. Without a read state, or while it holds none of
+the record kinds the synthesizer reads (guests, storage, Docker hosts and
+containers, PBS, PMG), the resolver derives a registry from the snapshot, so a
+first cycle that races the ingest does not keep source IDs for the life of the
+process; a record a saved operator link folds into another resource keeps that
+derived ID until restart. Once the read state holds such records it is the
+only authority: a
+record it lacks or refuses (an operator link can fold a Docker host into a
+guest), or one that binds another type of resource, keeps its source ID rather
+than an ID from a registry without the operator's links. Guests are typed `vm`
+or `system-container`. Until 24
+October 2026 every demo finding carried the snapshot's source ID, so in mock
+and demo mode an Inbox item never joined a demo finding on its resource, the
+resource-scoped findings list and resource intelligence never listed one, and
+an offline Docker host's finding never folded under its `docker:<host>` alert
+(`TestPatrolService_RunDemoPatrolCycle_NamesUnifiedResources`).
+
 Flapping is owned by the existing storm throttler rather than a parallel
 mechanism. `FindingsStore.recordTransitionLifecycleLocked` routes every
 regressed, resolved, and auto_resolved transition through
