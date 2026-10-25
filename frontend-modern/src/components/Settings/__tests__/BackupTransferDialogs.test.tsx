@@ -159,7 +159,6 @@ describe('BackupTransferDialogs', () => {
         fireEvent.click(
           within(dialog).getByRole('button', {
             name: kind === 'import' ? 'Import' : 'Export',
-            exact: true,
           }),
         );
         await waitFor(() => expect(flow.isTransferring()).toBe(false));
@@ -192,7 +191,7 @@ describe('BackupTransferDialogs', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
     vi.stubGlobal('fetch', fetchMock);
     const flow = renderFlow('import', true);
-    fireEvent.click(screen.getByRole('button', { name: 'Import', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
     const prompt = await screen.findByRole('dialog', { name: 'API token required' });
     fireEvent.input(within(prompt).getByLabelText('API Token'), { target: { value: '   ' } });
     fireEvent.click(within(prompt).getByRole('button', { name: 'Authenticate' }));
@@ -225,7 +224,7 @@ describe('BackupTransferDialogs', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
     renderFlow();
-    fireEvent.click(screen.getByRole('button', { name: 'Import', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
     const prompt = await screen.findByRole('dialog', { name: 'API token required' });
     expect(within(prompt).getByRole('alert')).toHaveTextContent('Import was not confirmed');
     expect(document.querySelectorAll('[role=alert]')).toHaveLength(1);
