@@ -37,7 +37,10 @@ func mockChartTimestamps(duration time.Duration) []time.Time {
 	now := normalizeMockMetricTimestamp(time.Now().UTC(), defaultMockSampleInterval)
 	timestamps := buildTieredTimestamps(now, duration)
 	if len(timestamps) > 0 {
-		return timestamps
+		// Canonical values depend only on identity and timestamp. Select the
+		// chart's retained timestamps before synthesizing values, rather than
+		// computing a dense history for every guest and discarding most of it.
+		return sampleOnMockChartGrid(timestamps, func(at time.Time) time.Time { return at }, mockChartGridInterval(duration))
 	}
 
 	return []time.Time{
@@ -94,12 +97,16 @@ func mockChartGridInterval(duration time.Duration) time.Duration {
 // sampled at the same times keeps the same timestamps, as the poller writes
 // them. points must be in ascending timestamp order.
 func sampleMetricSeriesOnMockChartGrid(points []MetricPoint, interval time.Duration) []MetricPoint {
+	return sampleOnMockChartGrid(points, func(point MetricPoint) time.Time { return point.Timestamp }, interval)
+}
+
+func sampleOnMockChartGrid[T any](points []T, timestamp func(T) time.Time, interval time.Duration) []T {
 	if len(points) == 0 {
 		return nil
 	}
 	width := int64(interval)
 	if width <= 0 {
-		return cloneMetricSeries(points)
+		return append([]T(nil), points...)
 	}
 
 	bucketOf := func(ts time.Time) int64 {
@@ -111,9 +118,9 @@ func sampleMetricSeriesOnMockChartGrid(points []MetricPoint, interval time.Durat
 		return bucket
 	}
 
-	sampled := make([]MetricPoint, 0, len(points))
+	var sampled []T
 	for i, point := range points {
-		if i > 0 && i < len(points)-1 && bucketOf(point.Timestamp) == bucketOf(points[i-1].Timestamp) {
+		if i > 0 && i < len(points)-1 && bucketOf(timestamp(point)) == bucketOf(timestamp(points[i-1])) {
 			continue
 		}
 		sampled = append(sampled, point)

@@ -1196,6 +1196,14 @@ history, the store query path, chart point targets and mock values are unchanged
 pins identical cpu/memory/disk/network/disk-I/O timestamps for a mock VM, container
 and node, on synthetic and seeded history, at 1h, 4h, 24h and 7d.
 
+Synthetic chart fallbacks select that same retained timestamp grid before
+evaluating canonical metric values. A long-window request over the full demo
+estate must not synthesize hundreds of discarded readings for every series.
+The selected readings retain their exact canonical values and timestamps,
+including the oldest and newest reading. Historical seeding remains dense and
+unchanged. `mock_chart_history_test.go` proves the generation bound, parity with
+the former dense-then-thin timeline, and canonical values across resource types.
+
 ### Podman interval CPU selection — issue #2447
 
 Every Podman one-shot response uses consecutive cumulative CPU-time nanoseconds
