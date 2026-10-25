@@ -22,6 +22,7 @@ func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
 	}{
 		{"global fallback with empty tenant tokens", true, false, globalToken, "global"},
 		{"tenant token with different global tokens", true, true, tenantToken, "tenant"},
+		{"tenant token without global tokens", false, true, tenantToken, "tenant"},
 		{"unknown token is rejected", true, true, "unknown-token-123.12345678", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,6 +82,70 @@ func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
 			if !ok || record.Name != tc.wantRecord || !record.HasScope(config.ScopeMonitoringRead) {
 				t.Fatalf("expected %s monitoring token in context, got %#v", tc.wantRecord, token)
 			}
+			if !checkAuth(baseCfg, httptest.NewRecorder(), req, false) {
+				t.Fatal("route authentication rejected the middleware-validated credential")
+			}
+			if tc.wantRecord == "tenant" {
+				// A stale context record is not authority after revocation.
+				tenantCfg.APITokens = nil
+				if checkAuth(baseCfg, httptest.NewRecorder(), req, false) {
+					t.Fatal("route authentication accepted a revoked tenant credential")
+				}
+			}
 		})
+	}
+}
+
+func TestCheckAuthRejectsUnvalidatedTenantTokenContext(t *testing.T) {
+	cfg := &config.Config{}
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("X-Pulse-Org-ID", "tenant-a")
+	req.Header.Set("X-API-Token", "unvalidated-tenant-token.12345678")
+	record, err := config.NewAPITokenRecord("unvalidated-tenant-token.12345678", "forged-context", []string{config.ScopeWildcard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req = req.WithContext(internalauth.WithAPIToken(req.Context(), record))
+	if checkAuth(cfg, httptest.NewRecorder(), req, false) {
+		t.Fatal("caller-supplied token context authenticated without a live validated inventory")
+	}
+}
+
+func TestCheckAuthTenantSourceCannotChangeOrganisation(t *testing.T) {
+	const raw = "synthetic-live-tenant-token.12345678"
+	record, err := config.NewAPITokenRecord(raw, "tenant", []string{config.ScopeMonitoringRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := &config.Config{}
+	tenantCfg := &config.Config{APITokens: []config.APITokenRecord{*record}}
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	if _, err := mtp.GetPersistence("tenant-a"); err != nil {
+		t.Fatal(err)
+	}
+	mtm := monitoring.NewMultiTenantMonitor(base, mtp, nil)
+	t.Cleanup(mtm.Stop)
+	m := &monitoring.Monitor{}
+	setUnexportedField(t, m, "config", tenantCfg)
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"tenant-a": m})
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	req.Header.Set("X-Pulse-Org-ID", "tenant-a")
+	req.Header.Set("X-API-Token", raw)
+	req = extractAndStoreAuthContext(base, mtm, req)
+	if !checkAuth(base, httptest.NewRecorder(), req, false) {
+		t.Fatal("valid tenant credential was not usable")
+	}
+	req.Header.Set("X-Pulse-Org-ID", "tenant-b")
+	if checkAuth(base, httptest.NewRecorder(), req, false) {
+		t.Fatal("validated tenant source followed a changed organisation")
+	}
+	req.Header.Set("X-Pulse-Org-ID", "tenant-a")
+	// Replace the cached owner without changing the old config: revalidation
+	// must consult the replacement, not the earlier authenticated pointer.
+	replacement := &monitoring.Monitor{}
+	setUnexportedField(t, replacement, "config", &config.Config{})
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"tenant-a": replacement})
+	if checkAuth(base, httptest.NewRecorder(), req, false) {
+		t.Fatal("stale tenant config authenticated after runtime replacement")
 	}
 }
