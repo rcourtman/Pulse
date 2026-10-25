@@ -146,7 +146,13 @@ function classifyAdditionalActionableTopics(body) {
   const value = additionalActionableTopicsValue(body);
   if (value === null) return null;
 
-  const normalized = value
+  // Ordinary inline formatting does not turn "None" into a second topic.
+  // Keep block evidence, images and any qualifying text intact for review;
+  // only a single paragraph can supply an explicit no-topic response.
+  const blocks = lexer(value, { gfm: true });
+  const text = blocks.length === 1 && blocks[0].type === "paragraph"
+    ? inlineDeclarationText(blocks[0].tokens) : value;
+  const normalized = text
     .trim()
     .toLowerCase()
     .replace(/[.!]+$/g, "");
@@ -154,6 +160,7 @@ function classifyAdditionalActionableTopics(body) {
 
   return !new Set([
     "_no response_",
+    "no response",
     "n/a",
     "na",
     "no",
@@ -169,14 +176,14 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
-function inlineVersionText(tokens) {
+function inlineDeclarationText(tokens) {
   return (tokens || []).map((token) => {
-    // A release link's label is evidence; its destination and title are not.
+    // A link's visible label is evidence; its destination and title are not.
     // Unwrap only ordinary inline formatting, not images, struck-out values
     // or HTML. Code spans keep their literal text rather than parsing links
     // or comments inside them.
     if (["link", "strong", "em"].includes(token.type)) {
-      return inlineVersionText(token.tokens);
+      return inlineDeclarationText(token.tokens);
     }
     if (["codespan", "escape"].includes(token.type)) return token.text;
     return token.raw || "";
@@ -187,7 +194,7 @@ function normalizeLegacyVersionValue(value) {
   const raw = String(value).trim();
   const blocks = lexer(raw, { gfm: true });
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
-    ? inlineVersionText(blocks[0].tokens) : raw;
+    ? inlineDeclarationText(blocks[0].tokens) : raw;
   const visible = text.trim().replace(/^[`*_]+/, "");
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the

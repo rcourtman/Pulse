@@ -523,6 +523,79 @@ test("topic classification reads later paragraphs after an empty first line", ()
   }
 });
 
+const formattedNoTopicResponses = [
+  "**None**",
+  "*None.*",
+  "__N/A__",
+  "`none known`",
+  "**_No response_**",
+  '[None](https://example.invalid/context "not another topic")',
+];
+
+test("visible no-topic responses stay empty through ordinary inline formatting", () => {
+  for (const value of formattedNoTopicResponses) {
+    const body = `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), false, value);
+  }
+});
+
+test("no-topic formatting cannot discard qualifiers, block evidence or images", () => {
+  for (const value of [
+    "**None**, except the saved target changes after switching organisation.",
+    "None\n\n**The backup issue also affects another host.**",
+    "None\n\n```text\n### Pulse version\n6.5.0\n```",
+    "- **None**\n- The saved target also changes.",
+    "![None](https://example.invalid/evidence.png)",
+    "~~None~~",
+    "`**None**`",
+    "\\*None\\*",
+  ]) {
+    const body = `### Additional actionable topics\n${value}\n\n### Pulse version\n6.5.0`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), true, value);
+  }
+});
+
+test("formatted no-topic edits preserve completed reviews without public contact", async () => {
+  const labels = ["enhancement", "needs-human", "needs-retest-on-latest"];
+  const body = value => `### Additional actionable topics\n${value}\n\n### Desired outcome\nKeep the current workflow.`;
+  for (const value of formattedNoTopicResponses) {
+    for (const reviewed of [false, true]) {
+      for (const action of ["opened", "edited"]) {
+        const { github, calls } = createGithub();
+        const issueLabels = reviewed ? [...labels, "needs-decomposition"] : labels;
+        const issue = { number: 2926, title: "Existing feature request", body: body(value),
+          labels: issueLabels.map(name => ({ name })) };
+        await syncLabels({ github, core: createCore(), context: createContext({
+          action, issue, previousBody: body("None"),
+        }) });
+        assert.deepEqual(calls.addLabels, [], `${action}: ${value}`);
+        assert.deepEqual(calls.removeLabel, [], value);
+        assert.deepEqual(calls.createLabel, [], value);
+        assert.deepEqual(calls.createComment, [], value);
+        assert.deepEqual(calls.getLatestRelease, [], value);
+        assert.deepEqual(calls.paginate, [], value);
+      }
+    }
+  }
+});
+
+test("a qualified revision after a formatted empty response still requires review", async () => {
+  for (const value of formattedNoTopicResponses) {
+    const { github, calls } = createGithub();
+    const body = topic => `### Additional actionable topics\n${topic}\n\n### Pulse version\n6.5.0`;
+    const issue = { number: 2927, title: "Existing report", body: body(`${value}, except backup identity is also wrong.`),
+      labels: ["enhancement", "needs-human"].map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: body(value),
+    }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]], value);
+    assert.deepEqual(calls.removeLabel, [], value);
+    assert.deepEqual(calls.createComment, [], value);
+    assert.deepEqual(calls.getLatestRelease, [], value);
+    assert.deepEqual(calls.paginate, [], value);
+  }
+});
+
 test("topic classification stops at form fields but retains topic subheadings", () => {
   const { classifyAdditionalActionableTopics } = triage.internals;
   for (const newline of ["\n", "\r\n"]) {
