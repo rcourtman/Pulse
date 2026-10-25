@@ -12,6 +12,11 @@ vi.mock('@/stores/notifications', () => ({
 const fetchMock = vi.fn();
 const disposers: (() => void)[] = [];
 const passphrase = 'synthetic-passphrase';
+let timeoutSpy: ReturnType<typeof vi.spyOn>;
+const reloadTimers = () =>
+  timeoutSpy.mock.calls.flatMap((args, index) =>
+    args[1] === 2000 ? [timeoutSpy.mock.results[index].value] : [],
+  );
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -55,6 +60,7 @@ const response = (status = 200, body: unknown = { status: 'success', data: 'synt
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
   fetchMock.mockReset().mockResolvedValue(response());
   vi.stubGlobal('fetch', fetchMock);
   clearApiToken();
@@ -221,7 +227,7 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     await pending;
     expect(notificationStore.success).not.toHaveBeenCalled();
     expect(flow.transferError()).toContain('Import completed for workspace tenant-a');
-    expect(vi.getTimerCount()).toBe(0);
+    expect(reloadTimers()).toHaveLength(0);
     expect(flow.importPassphrase()).toBe('');
     expect(flow.importFile()).toBeNull();
   });
@@ -240,7 +246,7 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
       await pending;
       expect(notificationStore.success).not.toHaveBeenCalled();
       expect(URL.createObjectURL).not.toHaveBeenCalled();
-      expect(vi.getTimerCount()).toBe(0);
+      expect(reloadTimers()).toHaveLength(0);
     },
   );
 
@@ -295,7 +301,7 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(flow.transferError()).toContain('Import was not confirmed');
     expect(flow.showImportDialog()).toBe(true);
-    expect(vi.getTimerCount()).toBe(0);
+    expect(reloadTimers()).toHaveLength(0);
     expect(notificationStore.success).not.toHaveBeenCalled();
   });
 
@@ -320,16 +326,16 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     expect(flow.importPassphrase()).toBe('');
   });
 
-  it('cancels the successful-import reload timer when Settings is left or a new transfer is opened', async () => {
-    const { flow, dispose } = setup();
-    await flow.handleImport();
-    expect(vi.getTimerCount()).toBe(1);
-    dispose();
-    expect(vi.getTimerCount()).toBe(0);
-    const next = setup();
-    await next.flow.handleImport();
-    expect(vi.getTimerCount()).toBe(1);
-    next.flow.setShowExportDialog(true);
-    expect(vi.getTimerCount()).toBe(0);
-  });
+  it.each(['leave', 'reopen'] as const)(
+    'cancels the actual successful-import reload timer on %s',
+    async (action) => {
+      const { flow, dispose } = setup();
+      await flow.handleImport();
+      expect(reloadTimers()).toHaveLength(1);
+      const cancel = vi.spyOn(globalThis, 'clearTimeout');
+      if (action === 'leave') dispose();
+      else flow.setShowExportDialog(true);
+      expect(cancel).toHaveBeenCalledWith(reloadTimers()[0]);
+    },
+  );
 });
