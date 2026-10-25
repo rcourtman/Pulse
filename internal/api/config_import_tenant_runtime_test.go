@@ -64,12 +64,13 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 		return nil
 	}, "test")
 	cleanupTestRouter(t, router)
+	for _, orgID := range []string{"default", "tenant-a", "tenant-b"} {
+		logConfigImportRuntimeSettings(t, router, orgID, "before")
+		logConfigImportNodes(t, router, orgID, "synthetic-"+orgID+"-api-token.12345678", "before")
+	}
 	beforeDefault := cfg.DeepCopy()
 	beforeOther := monitors["tenant-b"].GetConfig().DeepCopy()
 	filesBefore := configImportFileDigests(t, persistences["default"], persistences["tenant-b"])
-	for _, orgID := range []string{"default", "tenant-a", "tenant-b"} {
-		logConfigImportSettings(t, router, orgID, "before")
-	}
 
 	source := config.NewConfigPersistence(t.TempDir())
 	seedConfigImportRuntime(t, source, "restored", "tenant-a", 137)
@@ -142,7 +143,7 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 		{"tenant-b", "synthetic-tenant-b-api-token.12345678", true},
 		{"default", "synthetic-default-api-token.12345678", true},
 	} {
-		r := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
+		r := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
 		r.Header.Set("X-Pulse-Org-ID", check.orgID)
 		r.Header.Set("X-API-Token", check.token)
 		response := httptest.NewRecorder()
@@ -152,9 +153,15 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 		}
 	}
 	for _, orgID := range []string{"default", "tenant-a", "tenant-b"} {
-		logConfigImportSettings(t, router, orgID, "after")
+		logConfigImportRuntimeSettings(t, router, orgID, "after")
+		tokenName := orgID
+		if orgID == "tenant-a" {
+			tokenName = "restored"
+		}
+		logConfigImportNodes(t, router, orgID, "synthetic-"+tokenName+"-api-token.12345678", "after")
 	}
-	// These are the same producers the existing settings page consumes.
+	// Internal effective-runtime settings are scoped. The separate public
+	// /api/system/settings surface intentionally remains instance-wide.
 	ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, "tenant-a")
 	settingsRec := httptest.NewRecorder()
 	router.configHandlers.HandleGetSystemSettings(settingsRec, httptest.NewRequest(http.MethodGet, "/api/system/settings", nil).WithContext(ctx))
@@ -205,7 +212,7 @@ func configImportFileDigests(t *testing.T, persistences ...*config.ConfigPersist
 
 // These readbacks contain only synthetic public settings, never archive/token
 // material. Verbose regression logs make runtime-versus-persistence drift clear.
-func logConfigImportSettings(t *testing.T, router *Router, orgID, phase string) {
+func logConfigImportRuntimeSettings(t *testing.T, router *Router, orgID, phase string) {
 	t.Helper()
 	ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)
 	rec := httptest.NewRecorder()
@@ -213,5 +220,32 @@ func logConfigImportSettings(t *testing.T, router *Router, orgID, phase string) 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("%s settings readback failed: %d", orgID, rec.Code)
 	}
-	t.Logf("SYNTHETIC_SETTINGS_READBACK %s %s %s", phase, orgID, bytes.TrimSpace(rec.Body.Bytes()))
+	t.Logf("SYNTHETIC_RUNTIME_SETTINGS_READBACK %s %s %s", phase, orgID, bytes.TrimSpace(rec.Body.Bytes()))
+}
+
+func logConfigImportNodes(t *testing.T, router *Router, orgID, token, phase string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil)
+	req.Header.Set("X-Pulse-Org-ID", orgID)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s %s node readback failed: %d", phase, orgID, rec.Code)
+	}
+	var nodes []NodeResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &nodes); err != nil {
+		t.Fatal(err)
+	}
+	expectedName := orgID
+	if phase == "after" && orgID == "tenant-a" {
+		expectedName = "restored"
+	}
+	if len(nodes) != 1 || nodes[0].Name != expectedName || nodes[0].Host != "https://"+expectedName+".invalid:8006" || !nodes[0].HasToken || !nodes[0].VerifySSL {
+		t.Errorf("%s %s consuming node API did not return its own trusted connection", phase, orgID)
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte("synthetic-"+expectedName+"-node-secret")) {
+		t.Error("node API exposed the stored credential")
+	}
+	t.Logf("SYNTHETIC_NODES_READBACK %s %s %s", phase, orgID, bytes.TrimSpace(rec.Body.Bytes()))
 }
