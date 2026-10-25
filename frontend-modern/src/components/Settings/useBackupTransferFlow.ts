@@ -205,7 +205,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       if (!active) return;
       if (currentOrgID() !== orgID) {
         fail(
-          `Import completed for workspace ${orgID}. The selected workspace changed; no reload was performed.`,
+          `Import completed for workspace ${orgID}. The selected workspace changed. No reload was performed.`,
         );
         showImport(false);
         setImportPassphrase('');

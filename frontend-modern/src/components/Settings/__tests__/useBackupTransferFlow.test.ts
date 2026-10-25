@@ -226,7 +226,9 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     result.resolve(response());
     await pending;
     expect(notificationStore.success).not.toHaveBeenCalled();
-    expect(flow.transferError()).toContain('Import completed for workspace tenant-a');
+    expect(flow.transferError()).toBe(
+      'Import completed for workspace tenant-a. The selected workspace changed. No reload was performed.',
+    );
     expect(reloadTimers()).toHaveLength(0);
     expect(flow.importPassphrase()).toBe('');
     expect(flow.importFile()).toBeNull();

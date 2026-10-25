@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "22a0aa113fd906c8ce16837fcaaaf7b0367d18e7",
+  "verified_at": "2026-10-25T08:05:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "dfda369004e4975f35814855116b9cca80e3107adc68fd768683be95353f268f",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "4c0981674d79d0568118d9bb69353427cb91bf2636ab96373d77021e9bc0a209"
+  },
+  "routes": [
+    "/settings/system/recovery (offline evidence fixture mounting the production useBackupTransferFlow, BackupTransferDialogs, apiClient, ToastContainer and CSS, not the full application shell)"
+  ],
+  "states": [
+    "API-token prompt presents complete manual-submission guidance, a masked token field and usable actions at desktop and narrow viewports.",
+    "Successful original-workspace response after selecting another organisation reports the completed destination and that no reload was performed."
+  ],
+  "interactions": [
+    "Keyboard-open at desktop and touch-open at narrow width. Choose a synthetic encrypted archive, enter a passphrase and submit through the real hook/API client to the safe loopback fixture.",
+    "Save a synthetic API token and verify no request, then explicitly submit once to the captured workspace.",
+    "Hold the import response, switch the selected workspace through the real apiClient setter, release the response and inspect the actual consuming notification. Verify the new workspace remains selected after the reload interval.",
+    "30 checks passed; all four screenshots opened with native view_image for pixel review."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 940,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": true
+    }
+  ],
+  "evidence": "Current lane RECEIPTS.md, browser-work/browser-result.json and PIXEL-REVIEW.md. Playwright 1.56.1",
+  "limitations": [
+    "Synthetic responses establish the changed messages and consuming frontend interactions, not backend persistence, authentication, full-app navigation, server idempotency, native recovery or release delivery.",
+    "Earlier configuration-transfer proof remains bound to its original source and own-parent receipt."
+  ]
+}

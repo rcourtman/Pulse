@@ -220,8 +220,8 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
             <div class="space-y-4">
               <p class="text-sm text-muted">
                 This Pulse instance requires an API token for export/import operations. Please enter
-                a token authorised for this workspace. Saving it does not repeat the transfer;
-                review the workspace and submit again yourself.
+                a token authorised for this workspace. Saving it does not repeat the transfer.
+                Review the workspace and submit again yourself.
               </p>
 
               <div class={formField}>

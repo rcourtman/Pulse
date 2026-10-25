@@ -2,7 +2,12 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BackupTransferDialogs } from '../BackupTransferDialogs';
 
-function renderTransfer(kind: 'export' | 'import', pending = false, error = '') {
+function renderTransfer(
+  kind: 'export' | 'import',
+  pending = false,
+  error = '',
+  showApiTokenModal = false,
+) {
   return render(() => (
     <BackupTransferDialogs
       securityStatus={() => null}
@@ -16,7 +21,7 @@ function renderTransfer(kind: 'export' | 'import', pending = false, error = '') 
       setImportFile={vi.fn()}
       showExportDialog={() => kind === 'export'}
       showImportDialog={() => kind === 'import'}
-      showApiTokenModal={() => false}
+      showApiTokenModal={() => showApiTokenModal}
       transferOrgID={() => 'tenant-fixture'}
       isTransferring={() => pending}
       transferError={() => error}
@@ -89,5 +94,12 @@ describe('BackupTransferDialogs', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Check the destination before trying again',
     );
+  });
+
+  it('explains that saving a token requires a deliberate transfer submission', () => {
+    renderTransfer('import', false, '', true);
+    const text = screen.getByRole('dialog', { name: 'API token required' }).textContent;
+    expect(text).toContain('Saving it does not repeat the transfer.');
+    expect(text).toContain('Review the workspace and submit again yourself.');
   });
 });
