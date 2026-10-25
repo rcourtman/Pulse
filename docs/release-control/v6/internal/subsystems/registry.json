@@ -5591,15 +5591,26 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
-              "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
               "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/BackupTransferDialogs.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useBackupTransferFlow.test.ts"
+            ]
+          },
+          {
+            "id": "settings-recovery-overview",
+            "label": "recovery overview disclosure and actions proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx"
             ]
           },
           {
