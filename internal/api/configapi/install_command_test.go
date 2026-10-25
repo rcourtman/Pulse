@@ -175,7 +175,7 @@ exit "${FAKE_CURL_EXIT:-0}"
 `)
 	writeExecutable(t, filepath.Join(bin, "sudo"), `#!/bin/sh
 printf '%s\n' "$@" >> "$FAKE_ROOT/argv"
-if [ "$1" = "-v" ]; then exit "${FAKE_SUDO_EXIT:-0}"; fi
+if [ "$1" = "-v" ] || { [ "$#" -eq 2 ] && [ "$1" = "-n" ] && [ "$2" = "true" ]; }; then exit "${FAKE_SUDO_EXIT:-0}"; fi
 exec "$@"
 `)
 	writeExecutable(t, filepath.Join(bin, "id"), `#!/bin/sh

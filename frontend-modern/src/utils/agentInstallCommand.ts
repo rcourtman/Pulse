@@ -231,7 +231,11 @@ export const buildUnixAgentInstallCommand = ({
     'set +xv;',
     'set -eu;',
     'umask 077;',
-    'if [ "$(id -u)" -eq 0 ]; then :; elif command -v sudo >/dev/null 2>&1; then sudo -v; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi;',
+    // Settle any sudo password before the silent token prompt. Alone,
+    // `sudo -v` demands a password even under NOPASSWD when another sudoers
+    // rule (Ubuntu's %sudo) needs one, and cloud-image users have none; a
+    // silent `sudo -n true` passes there first.
+    'if [ "$(id -u)" -eq 0 ]; then :; elif command -v sudo >/dev/null 2>&1; then if ! sudo -n true 2>/dev/null; then sudo -v; fi; else echo "Root privileges required. Run as root (su -) and retry." >&2; exit 1; fi;',
     'bootstrap_dir=$(mktemp -d /tmp/pulse-bootstrap.XXXXXX);',
     'install_script="$bootstrap_dir/install.sh";',
     'cleanup() { rm -f -- "$install_script"; rmdir -- "$bootstrap_dir"; };',

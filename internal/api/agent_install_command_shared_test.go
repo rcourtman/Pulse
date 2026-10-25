@@ -19,7 +19,9 @@ func requirePrivateBootstrapPrivilegeDispatch(t *testing.T, command string) {
 	// The shared producer selects its root/sudo argv inside an isolated
 	// subshell. Duplicating the credential reader into literal root and sudo
 	// branches would exceed the common pasted-line budget.
-	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then sudo -v;`)
+	// `sudo -v` alone refuses NOPASSWD cloud-image users whose %sudo rule
+	// needs a password; a silent `sudo -n true` must be tried first.
+	require.Contains(t, command, `elif command -v sudo >/dev/null 2>&1; then if ! sudo -n true 2>/dev/null; then sudo -v; fi;`)
 	require.Contains(t, command, `if [ "$(id -u)" -eq 0 ]; then set --; else set -- sudo; fi;`)
 	require.Contains(t, command, `"$@" bash -c `)
 	require.Equal(t, 1, strings.Count(command, "bash -c "), "the privileged body must be emitted once")
