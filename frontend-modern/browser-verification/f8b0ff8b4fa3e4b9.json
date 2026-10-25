@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "c5658b187e823477c78c45ef7328026318572316",
+  "verified_at": "2026-10-25T19:42:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/AlertResourceMetricEditor.tsx": "f8e4998a9b2d08ca3c8d630d198d70846c776f7a71a6e408d9dbc9d613996e6e",
+    "frontend-modern/src/components/Alerts/AlertResourceTableDesktop.tsx": "4cf1a55a197633917dda9170455041d2d785efed42ff0420ebe223cefc0a8271",
+    "frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx": "09e72e4883768b6386f18bdd7231900d20c90469752317032904e547f86340cf",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "3503bfa8663123fcd181755a282dfa512b2215217a8d038b66a826463ed6625b",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "c75ba11cbb2c665b6d2fafa618bd3fc53cce71b3d241a4d7af1dd2d580073d8f"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/alerts/thresholds/proxmox",
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 932
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree in mock mode on pulse-dev, headless Chromium, dark theme; the three changed files per table are byte-identical (sha256 checked) to the build measured.",
+    "Before at 1280px: Machines rows 37px (28px actions button), alert threshold rows 35px (24px toggles with my-px, 26px Global Defaults inputs) and 65px where a guest-filesystem reading note wrapped under the name, Settings > Infrastructure rows 39px (6px padding, 26px Manage) and 63px where a badge wrapped. After: Machines 33px (4 rows), thresholds 33px (92 + 104 rows), Settings > Infrastructure 33px (71 rows).",
+    "Expanded the Guest Filesystems thresholds group: rows with a reading note are 33px and read \"/ Usage unavailable  Guest filesystem stats unavailable while the VM is stopped.\" on one line, with the whole note in the title.",
+    "Row sweep of every platform tab at 375, 430 and 1280px (138 page loads, 220 tables): these three tables have no rows above 33.5px and no stacked cells. Phone widths are unchanged (these desktop tables give way to cards or keep their phone touch targets)."
+  ],
+  "interactions": [
+    "Inspected 1280px screenshots of Machines, Settings > Infrastructure and the expanded thresholds group; buttons, toggles and inputs keep their sizes and touch targets, only their layout overhang changed.",
+    "Alerts, Settings, standalone and pages component tests (271 files) pass under Node 24, including new pins for the Machines button overhang, Settings cell padding and non-wrapping system line, and the threshold reading note title."
+  ],
+  "proof_scope": "Desktop row height for Machines, alert thresholds and Settings > Infrastructure; thresholds, actions and infrastructure management behaviour unchanged."
+}

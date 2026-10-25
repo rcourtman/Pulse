@@ -279,7 +279,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                   checked={isChecked}
                   disabled={globallyDisabled}
                   onToggle={() => !globallyDisabled && props.onToggleDisabled?.(props.resource.id)}
-                  class="my-px"
+                  class="-my-0.5"
                   title={
                     globallyDisabled
                       ? 'Alerts disabled globally'
@@ -297,10 +297,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
       </TableCell>
 
       <TableCell class={getPlatformTableCellClassForKind('name')}>
-        <div
-          class="flex items-center gap-2 min-w-0"
-          classList={{ 'flex-wrap': Boolean(props.resource.readingMessage) }}
-        >
+        <div class="flex items-center gap-2 min-w-0">
           <Show
             when={props.resource.type === 'agent'}
             fallback={
@@ -341,12 +338,19 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
               {getAlertResourceTableCustomBadgeLabel()}
             </span>
           </Show>
+          {/* The reading note joins the name on its line and ends in an
+              ellipsis, with the whole note in its title, so the row stays
+              one line tall instead of wrapping a paragraph under the name. */}
+          <Show when={props.resource.readingMessage}>
+            <span
+              class="min-w-0 truncate text-xs text-muted"
+              title={props.resource.readingMessage}
+              data-alert-resource-reading-message
+            >
+              {props.resource.readingMessage}
+            </span>
+          </Show>
         </div>
-        <Show when={props.resource.readingMessage}>
-          <p class="mt-1 max-w-prose text-xs text-muted whitespace-normal break-words">
-            {props.resource.readingMessage}
-          </p>
-        </Show>
         <Show when={isEditing()}>
           <FormTextarea
             id={`note-${props.resource.id}`}

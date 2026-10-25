@@ -262,7 +262,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                         props.table.onToggleGlobalDisable?.();
                         props.table.setHasUnsavedChanges?.(true);
                       }}
-                      class="my-px"
+                      class="-my-0.5"
                       title="Global alerts toggle - disable all alerts for this resource type"
                       ariaLabel="Global alerts toggle"
                     />

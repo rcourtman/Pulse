@@ -69,7 +69,9 @@ export function AlertResourceMetricEditor(props: AlertResourceMetricEditorProps)
 
   return (
     <div
-      class={`flex items-center gap-1.5 ${props.layout === 'card' ? '[&_button]:min-h-11' : 'justify-center'} ${isDefault() ? 'w-full' : ''}`}
+      // In a table row the 26px input overhangs by 2px each way, so it does
+      // not set a 35px row beside the 33px rows of the other tables.
+      class={`flex items-center gap-1.5 ${props.layout === 'card' ? '[&_button]:min-h-11' : '-my-0.5 justify-center'} ${isDefault() ? 'w-full' : ''}`}
     >
       <div class={`relative ${props.layout === 'card' && isDefault() ? 'flex-1 min-w-0' : ''}`}>
         <input

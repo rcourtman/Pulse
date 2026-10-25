@@ -961,8 +961,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         row.isCluster ? '' : ''
                                       }`}
                                     >
-                                      <TableCell class="py-1.5 pl-3 pr-3 align-middle">
-                                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                                      <TableCell class="py-1 pl-3 pr-3 align-middle">
+                                        <div class="flex min-w-0 items-center gap-1.5">
                                           <Show
                                             when={infrastructureRowMonitoringPath(row)}
                                             fallback={
@@ -1008,7 +1008,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           <Show when={row.members.length > 0}>
                                             <button
                                               type="button"
-                                              class="inline-flex items-center gap-0.5 rounded-sm px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                                              class="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-sm px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
                                               aria-expanded={membersExpanded(row)}
                                               aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, row.ownerType === 'vmware' ? 'host' : 'node')} for ${row.name}`}
                                               onClick={() => toggleMembers(row)}
@@ -1028,7 +1028,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </div>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1.5 align-middle">
+                                      <TableCell class="px-3 py-1 align-middle">
                                         <Show
                                           when={row.coverageLabels.length > 0}
                                           fallback={
@@ -1051,7 +1051,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </Show>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1.5 align-middle">
+                                      <TableCell class="px-3 py-1 align-middle">
                                         <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
                                           <span
                                             class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
@@ -1102,14 +1102,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </TableCell>
 
                                       <Show when={actionColumnVisible()}>
-                                        <TableCell class="px-3 py-1.5 align-middle text-right">
+                                        <TableCell class="px-3 py-1 align-middle text-right">
                                           <Show
                                             when={rowInteractive(row)}
                                             fallback={
                                               <span class="text-xs text-muted">Read only</span>
                                             }
                                           >
-                                            <div class="flex items-center justify-end gap-1.5">
+                                            <div class="-my-0.5 flex items-center justify-end gap-1.5">
                                               <Show
                                                 when={
                                                   rowNeedsAgentCoverage(row) &&
@@ -1199,7 +1199,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           return (
                                             <>
                                               <TableRow class="border-b border-border-subtle">
-                                                <TableCell class="py-1.5 pl-3 pr-3 align-middle">
+                                                <TableCell class="py-1 pl-3 pr-3 align-middle">
                                                   <div class="min-w-0 pl-4">
                                                     <div class="flex min-w-0 items-center gap-1.5">
                                                       <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
@@ -1231,7 +1231,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   </div>
                                                 </TableCell>
 
-                                                <TableCell class="px-3 py-1.5 align-middle">
+                                                <TableCell class="px-3 py-1 align-middle">
                                                   <Show
                                                     when={member.coverageLabels.length > 0}
                                                     fallback={
@@ -1252,7 +1252,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   </Show>
                                                 </TableCell>
 
-                                                <TableCell class="px-3 py-1.5 align-middle">
+                                                <TableCell class="px-3 py-1 align-middle">
                                                   <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
                                                     <span
                                                       class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${member.statusClassName}`}
@@ -1266,7 +1266,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 </TableCell>
 
                                                 <Show when={actionColumnVisible()}>
-                                                  <TableCell class="px-3 py-1.5 align-middle text-right">
+                                                  <TableCell class="px-3 py-1 align-middle text-right">
                                                     <Show
                                                       when={
                                                         row.ownerType === 'pve' &&
@@ -1344,7 +1344,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                 {(server) => {
                                   return (
                                     <TableRow class={discoveryRowClass}>
-                                      <TableCell class="py-1.5 pl-3 pr-3 align-middle">
+                                      <TableCell class="py-1 pl-3 pr-3 align-middle">
                                         <div class="min-w-0">
                                           <div class="flex items-center gap-1.5">
                                             <div
@@ -1369,7 +1369,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </div>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1.5 align-middle">
+                                      <TableCell class="px-3 py-1 align-middle">
                                         <div
                                           class="whitespace-normal text-[12px] leading-4 text-muted"
                                           title={discoveredCoverageText(server)}
@@ -1378,7 +1378,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         </div>
                                       </TableCell>
 
-                                      <TableCell class="px-3 py-1.5 align-middle">
+                                      <TableCell class="px-3 py-1 align-middle">
                                         <div class="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
                                           <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
                                             Discovered
@@ -1390,7 +1390,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </TableCell>
 
                                       <Show when={actionColumnVisible()}>
-                                        <TableCell class="px-3 py-1.5 align-middle text-right">
+                                        <TableCell class="px-3 py-1 align-middle text-right">
                                           <Show
                                             when={props.onReviewDiscoveredSource}
                                             fallback={

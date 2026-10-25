@@ -5219,8 +5219,12 @@ without deleting mount identity, saved overrides or threshold controls. Native
 another source. Independent LXC platform storage does not inherit VM-only
 read reasons. A new accepted reading clears the explanation, including zero.
 
-The shared desktop row and phone card display the optional `readingMessage`
-as wrapping text beside the reading, not hover-only or truncated guidance.
+The phone card displays the optional `readingMessage` as wrapping text beside
+the reading. The desktop row puts it on the name's line, ending in an
+ellipsis with the whole note in its title, so the row stays one line instead
+of wrapping a paragraph under the name (rows had reached 65px). Desktop rows
+are 33px: the 24px alert toggles and the 26px Global Defaults threshold
+inputs overhang the row instead of setting a 35px height.
 Missing filesystem samples keep saved settings editable with an explicit
 unavailable label. Existing numeric serialization, identity, persistence,
 active-alert linkage, edit-time row stabilisation and threshold evaluation

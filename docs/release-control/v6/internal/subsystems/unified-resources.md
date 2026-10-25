@@ -2670,7 +2670,9 @@ reads before it carries a Proxmox disk reading forward.
 For SMART disk
 temperatures on rows that still render, the provenance travels on
 `agent.sensors.smart[].collection`: the Machines temperature cell
-(`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`), its tooltip and the
+(`AgentsMachinesTable.tsx`, `agentMachineTableModel.ts`; its desktop actions
+button overhangs the row by 2px each way so Machines rows are 33px, not 37px),
+its tooltip and the
 drawer's Thermals rows (`resourceDetailMappers.ts`) read it through
 `isPhysicalDiskTemperatureCurrent`, so a retained disk reading never stands for
 the machine while another disk has a current one. A positive direct

@@ -244,9 +244,22 @@ describe('ResourceTable', () => {
         ]);
         const props = makeProps({ columns: ['Disk %'] });
         render(() => <ResourceTable {...props} resources={resources()} />);
-        expect(
-          screen.getByText('Guest reads paused while the backup lock is reported.'),
-        ).not.toHaveClass('truncate');
+        const explanation = screen.getByText(
+          'Guest reads paused while the backup lock is reported.',
+        );
+        if (mobile) {
+          expect(explanation).not.toHaveClass('truncate');
+        } else {
+          // A desktop row stays one line: the note joins the name and ends in
+          // an ellipsis, with the whole note in its title.
+          expect(explanation).toHaveClass('truncate');
+          expect(explanation).toHaveAttribute(
+            'title',
+            'Guest reads paused while the backup lock is reported.',
+          );
+          expect(explanation.parentElement).toHaveClass('flex', 'items-center');
+          expect(explanation.parentElement).not.toHaveClass('flex-wrap');
+        }
         if (mobile)
           expect(screen.getByText('Last known 9.0 / 10.0 GB · 90.0%')).not.toHaveClass('truncate');
         setResources([

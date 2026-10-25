@@ -227,6 +227,19 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(infrastructureSourceManagerSource).toContain(
       'class="min-h-11 min-w-18 shrink-0 lg:min-h-0"',
     );
+    // Desktop rows stay one 33px line like the platform tables: 4px cell
+    // padding, a system line that never wraps its badges, and actions that
+    // overhang the row.
+    expect(infrastructureSourceManagerSource).toContain(
+      '<TableCell class="py-1 pl-3 pr-3 align-middle">',
+    );
+    expect(infrastructureSourceManagerSource).not.toMatch(/<TableCell class="[^"]*py-1\.5/);
+    expect(infrastructureSourceManagerSource).not.toContain(
+      'flex min-w-0 flex-wrap items-center gap-1.5',
+    );
+    expect(infrastructureSourceManagerSource).toContain(
+      '-my-0.5 flex items-center justify-end gap-1.5',
+    );
   });
 
   it.each([1440, 390])('keeps visible Add and update labels in scoped names at %ipx', (width) => {

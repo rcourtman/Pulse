@@ -1013,6 +1013,21 @@ fragments do not throw or move focus. The renderer and fragment helper are
 covered by `frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts`,
 with direct-link, reload and keyboard navigation verified in the live viewer.
 
+### Desktop table rows stay single-line
+
+Platform, Machines, alert threshold and Settings > Infrastructure desktop
+rows are one line of at most 33px, the height of the platform tables.
+Controls taller than the 24px line overhang the row with negative margins
+instead of setting its height: the Machines actions button (`sm:-my-0.5`,
+37px rows before), the Settings > Infrastructure Manage actions, and the
+alert threshold toggles and inputs. Settings > Infrastructure body cells use
+the platform tables' 4px vertical padding (39px rows before), and its system
+line keeps the name, collection badge and member toggle on one line,
+truncating the name, where a wrapped badge had made a 63px row. Long text
+ends in an ellipsis with its full value in the title. Alert History keeps
+its two-line Message below an 80rem card: at a 1280px window its message
+track is about 180px, and one line read "Docker service..." for most rows.
+
 ### Visible phone row disclosure keeps rows single-line
 
 `SummaryRowActionButton` keeps a 36 px disclosure target on phones, where
@@ -9793,8 +9808,9 @@ History and the native-facet-to-workload mapping with an unaffected second site.
 The Alerts Guest Filesystems projection now consumes the Workloads read
 admission instead of treating retained numeric fields as a current reading.
 Explicit native stopped-VM state and unavailable reads withdraw usage; retained
-reads are labelled Last known. The shared threshold row/card display a wrapping
-`readingMessage` next to the reading, including before a missing saved mount
+reads are labelled Last known. The threshold card displays a wrapping
+`readingMessage` next to the reading and the desktop row puts it on the
+name's line with its full text in the title, including before a missing saved mount
 has another sample, while preserving threshold values and override identities.
 Independent LXC platform storage and fresh zero remain unchanged.
 
