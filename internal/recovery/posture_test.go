@@ -2,6 +2,7 @@ package recovery
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -550,5 +551,107 @@ func TestBuildProtectionPostureUsesCanonicalPointIdentity(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestProtectionPostureClockBounds(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.FixedZone("source", 3600))
+	recent := now.Add(-time.Hour)
+	future := now.Add(48 * time.Hour)
+	atBoundary := now.Add(-DefaultProtectionFreshnessWindow)
+	tooOld := atBoundary.Add(-time.Nanosecond)
+	justAhead := now.Add(time.Nanosecond)
+	for _, tc := range []struct {
+		name         string
+		success      time.Time
+		verified     time.Time
+		require      bool
+		wantState    ProtectionState
+		wantFresh    ProtectionFreshness
+		wantVerified ProtectionVerification
+		wantText     string
+	}{
+		{"future-backup", future, future, true, ProtectionStateAttention, ProtectionFreshnessUnknown, ProtectionVerificationUnknown, "newest backup is dated in the future"},
+		{"future-backup-without-verification", future, time.Time{}, false, ProtectionStateAttention, ProtectionFreshnessUnknown, ProtectionVerificationUnknown, "newest backup is dated in the future"},
+		{"one-nanosecond-ahead", justAhead, justAhead, true, ProtectionStateAttention, ProtectionFreshnessUnknown, ProtectionVerificationUnknown, "newest backup is dated in the future"},
+		{"future-verification", recent, future, true, ProtectionStateAttention, ProtectionFreshnessCurrent, ProtectionVerificationUnknown, "verification is dated in the future"},
+		{"optional-future-verification", recent, future, false, ProtectionStateProtected, ProtectionFreshnessCurrent, ProtectionVerificationUnknown, "A recent backup is available"},
+		{"exactly-now", now, now, true, ProtectionStateProtected, ProtectionFreshnessCurrent, ProtectionVerificationVerified, "verified recently"},
+		{"exact-window-boundary", atBoundary, atBoundary, true, ProtectionStateProtected, ProtectionFreshnessCurrent, ProtectionVerificationVerified, "verified recently"},
+		{"expired-window", tooOld, tooOld, true, ProtectionStateAttention, ProtectionFreshnessStale, ProtectionVerificationStale, "older than 7 days"},
+		{"missing-verification", recent, time.Time{}, true, ProtectionStateAttention, ProtectionFreshnessCurrent, ProtectionVerificationUnverified, "missing or overdue"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			summary := protectionTestSummary(now, &tc.success)
+			summary.VerificationExpected = tc.require
+			summary.LastVerifiedAt = nil
+			if !tc.verified.IsZero() {
+				summary.LastVerifiedAt = &tc.verified
+			}
+			before := summary
+			posture := DeriveProtectionPostureAt("resource:vm-100", []ProtectionProviderSummary{summary}, DefaultProtectionPosturePolicy, now)
+			if posture.State != tc.wantState || posture.Freshness != tc.wantFresh || posture.Verification != tc.wantVerified {
+				t.Fatalf("state=%s freshness=%s verification=%s; want %s/%s/%s", posture.State, posture.Freshness, posture.Verification, tc.wantState, tc.wantFresh, tc.wantVerified)
+			}
+			if !strings.Contains(posture.Explanation, tc.wantText) {
+				t.Errorf("explanation=%q, want %q", posture.Explanation, tc.wantText)
+			}
+			if posture.Coverage != ProtectionCoverageComplete || !posture.LastSuccessfulPointAt.Equal(tc.success) || len(posture.ProviderStates) != 1 || !posture.ProviderStates[0].LastSuccessAt.Equal(tc.success) || !reflect.DeepEqual(summary, before) {
+				t.Error("clock assessment changed source evidence or collection coverage")
+			}
+			if tc.verified.IsZero() != (posture.LastVerifiedAt == nil) || (posture.LastVerifiedAt != nil && !posture.LastVerifiedAt.Equal(tc.verified)) {
+				t.Error("clock assessment rewrote the reported verification date")
+			}
+			if err := posture.Validate(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestProtectionPostureFuturePointsRetainAccessBoundaries(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 25, 11, 0, 0, 0, time.UTC)
+	recent, future := now.Add(-time.Hour), now.Add(48*time.Hour)
+	verified := true
+	for _, provider := range []Provider{ProviderProxmoxPVE, ProviderProxmoxPBS} {
+		t.Run(string(provider), func(t *testing.T) {
+			point := RecoveryPoint{ID: "backup", Provider: provider, ProviderScope: "source-a", Kind: KindBackup, Mode: ModeRemote, Outcome: OutcomeSuccess, CompletedAt: &future, Verified: &verified, SubjectResourceID: "resource:vm-100"}
+			observation, err := NewProtectionProviderObservation(provider, "inventory", "source-a", OutcomeSuccess, ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, true, now, now, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			build := func(points []RecoveryPoint, observations []ProtectionProviderObservation) ProtectionPosture {
+				return BuildProtectionPostureFromPointsAt(point.SubjectResourceID, points, observations, DefaultProtectionPosturePolicy, now)
+			}
+			posture := build([]RecoveryPoint{point}, []ProtectionProviderObservation{observation})
+			if posture.State != ProtectionStateAttention || posture.Freshness != ProtectionFreshnessUnknown || posture.Verification != ProtectionVerificationUnknown || !posture.LastSuccessfulPointAt.Equal(future) {
+				t.Fatalf("future point claimed current protection or lost evidence: %+v", posture)
+			}
+			denied, err := NewProtectionProviderObservation(provider, "inventory", "source-a", OutcomeFailed, ProtectionHistoryUnavailable, operationaltrust.EvidencePermissionsDenied, true, now, now, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := build([]RecoveryPoint{point}, []ProtectionProviderObservation{denied}); got.State != ProtectionStateUnknown || got.Coverage != ProtectionCoverageUnknown {
+				t.Fatalf("clock issue overrode unavailable access: %+v", got)
+			}
+			// An unreadable source's future date cannot invalidate a separately
+			// readable, recent backup or make its verification appear newer.
+			good := point
+			good.ID, good.ProviderScope, good.CompletedAt = "good-backup", "source-b", &recent
+			goodObservation, err := NewProtectionProviderObservation(provider, "inventory", "source-b", OutcomeSuccess, ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, true, now, now, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := build([]RecoveryPoint{point, good}, []ProtectionProviderObservation{denied, goodObservation})
+			if got.State != ProtectionStateProtected || got.Verification != ProtectionVerificationVerified || got.Freshness != ProtectionFreshnessCurrent || got.Coverage != ProtectionCoverageUnknown {
+				t.Fatalf("independently supported backup was invalidated: %+v", got)
+			}
+			point.CompletedAt = &recent
+			if got := build([]RecoveryPoint{point}, []ProtectionProviderObservation{observation}); got.State != ProtectionStateProtected || got.Freshness != ProtectionFreshnessCurrent || got.Verification != ProtectionVerificationVerified {
+				t.Fatalf("corrected source date did not recover: %+v", got)
+			}
+		})
 	}
 }
