@@ -27960,3 +27960,84 @@ func TestHostDiskUsageHistoryAndSummaryRespectPresence(t *testing.T) {
 		})
 	}
 }
+
+// Replay protection is behind the normal router authentication/CSRF and is
+// scoped to the selected workspace, not a global archive hash. Every monitored
+// node is disabled and every credential is synthetic.
+func TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped(t *testing.T) {
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(false) })
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_HOSTED_MODE", "false")
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+	mtp := config.NewMultiTenantPersistence(dir)
+	for _, orgID := range []string{"default", "tenant-a", "tenant-b"} {
+		if err := mtp.SaveOrganization(&models.Organization{ID: orgID, DisplayName: orgID, OwnerUserID: "import-owner"}); err != nil {
+			t.Fatal(err)
+		}
+		p, err := mtp.GetPersistence(orgID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seedConfigImportRuntime(t, p, orgID, orgID, 71)
+	}
+	cfg, err := config.LoadWithoutLoggingInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.AuthUser, cfg.AuthPass = "import-owner", "synthetic-password-hash"
+	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+	t.Cleanup(mtm.Stop)
+	defaultMonitor, err := mtm.GetMonitor("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := NewRouter(cfg, defaultMonitor, mtm, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	source := config.NewConfigPersistence(t.TempDir())
+	archive, err := source.ExportConfig("synthetic-replay-passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(ImportConfigRequest{Data: archive, Passphrase: "synthetic-replay-passphrase"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const session = "synthetic-replay-owner-session"
+	GetSessionStore().CreateSession(session, time.Hour, "browser", "127.0.0.1", "import-owner")
+	for _, orgID := range []string{"tenant-a", "tenant-b"} {
+		t.Run(orgID, func(t *testing.T) {
+			for _, want := range []int{http.StatusOK, http.StatusConflict} {
+				req := httptest.NewRequest(http.MethodPost, "/api/config/import", bytes.NewReader(body))
+				req.RemoteAddr = "127.0.0.1:1234"
+				req.Header.Set("X-Pulse-Org-ID", orgID)
+				req.Header.Set("X-CSRF-Token", generateCSRFToken(session))
+				req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+				rec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(rec, req)
+				if rec.Code != want {
+					t.Fatalf("scoped request = %d %s; want %d", rec.Code, rec.Body.String(), want)
+				}
+				if want == http.StatusConflict && (!strings.Contains(rec.Body.String(), "has not been imported again") || strings.Contains(rec.Body.String(), archive) || strings.Contains(rec.Body.String(), "synthetic-replay-passphrase")) {
+					t.Fatal("replay response lost truthful/private error boundary")
+				}
+			}
+		})
+	}
+	// A known archive must not become an authentication or CSRF bypass.
+	for _, authenticated := range []bool{false, true} {
+		counted := &countingConfigTransferBody{reader: bytes.NewReader(body)}
+		req := httptest.NewRequest(http.MethodPost, "/api/config/import", counted)
+		req.Header.Set("X-Pulse-Org-ID", "tenant-a")
+		req.RemoteAddr = "127.0.0.1:1234"
+		if authenticated {
+			req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if (rec.Code != http.StatusUnauthorized && rec.Code != http.StatusForbidden) || counted.reads != 0 {
+			t.Fatalf("replay bypassed auth/CSRF: status=%d reads=%d", rec.Code, counted.reads)
+		}
+	}
+}
