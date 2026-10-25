@@ -12,3 +12,16 @@ export const getPlatformStatusTextToneClass = (
   if (variant === 'muted') return 'text-muted';
   return '';
 };
+
+// When a row's state has no column of its own, its words join the name on the
+// same line rather than stacking under it, so the row stays one line tall.
+// Only a state that needs attention (red or amber) shows its words; healthy
+// and stopped already read in the dot's colour, and screen readers always get
+// the words. Name and state keep their full width while the cell has room and
+// shrink together, each to an ellipsis, only when it runs out.
+export const getPlatformInlineStateClass = (attention: boolean): string =>
+  attention ? 'min-w-0 truncate' : 'sr-only';
+
+export const isPlatformAttentionVariant = (
+  variant: StatusIndicatorVariant | null | undefined,
+): boolean => variant === 'danger' || variant === 'warning';

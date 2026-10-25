@@ -27,7 +27,11 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
+import {
+  getPlatformInlineStateClass,
+  getPlatformStatusTextToneClass,
+  isPlatformAttentionVariant,
+} from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -430,9 +434,9 @@ export const VsphereActivityTable: Component<{
                                 variant={activityStateVariant(activity.stateBucket)}
                                 title={formatActivityState(activity)}
                               />
-                              <div class="min-w-0">
+                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
                                 <div
-                                  class="truncate font-medium text-base-content"
+                                  class="min-w-0 truncate font-medium text-base-content"
                                   title={[
                                     activity.resourceName,
                                     formatResourceType(activity.resourceType),
@@ -445,9 +449,10 @@ export const VsphereActivityTable: Component<{
                                 >
                                   {activity.resourceName}
                                 </div>
-                                {/* A phone hides State; the same words read under the name. */}
+                                {/* A phone hides State; a state that needs attention joins the
+                                    name on its line. */}
                                 <span
-                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket))}`}
+                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(activityStateVariant(activity.stateBucket)))} ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket))}`}
                                   data-vsphere-activity-state-phone={activityStateVariant(
                                     activity.stateBucket,
                                   )}

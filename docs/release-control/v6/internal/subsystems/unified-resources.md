@@ -1289,13 +1289,20 @@ its dot's colour through `getPlatformStatusTextToneClass`: a Pod's Status
 ("CrashLoopBackOff" red, "Pending" amber, Running plain), a Deployment's Ready
 count while replicas are short, a controller's Exceptions. The Pods Status
 column takes 12 percent so a failure reason such as CrashLoopBackOff reads
-whole, and a phone, which hides that column, reads the same words under the
-Pod name. The TrueNAS and vSphere tables follow the same rule: a TrueNAS app,
-which has no State column, reads its state under its name at every width
-("Crashed" amber, Running plain); a share's State ("Disabled" red, "Attention"
-amber) and a vSphere activity's State ("Error" red) take the dot's tone; and
-where a phone hides a State column (shares, services, VMs, vSphere activity)
-the state, with any note such as "should be running", reads under the name. StatefulSet, DaemonSet, Job, and CronJob rows
+whole, and a phone, which hides that column, puts the same words on the Pod
+name's line. The TrueNAS, vSphere and Docker container tables follow the same
+rule: a TrueNAS app, which has no State column, gives its state the name's
+line at every width ("Crashed" amber); a share's State ("Disabled" red,
+"Attention" amber) and a vSphere activity's State ("Error" red) take the dot's
+tone; and where a phone hides a State column (shares, services, VMs, vSphere
+activity, Docker containers) the state, with any note such as "should be
+running", joins the name on its line. Rows stay one line tall: only a state
+that needs attention (red or amber, through `isPlatformAttentionVariant`)
+shows its words, and name and words shrink together to ellipses only when
+the cell runs out of room;
+healthy and stopped states read in the dot alone and stay available to
+screen readers (`getPlatformInlineStateClass`). Stacking the state under the
+name put two lines of text in every such phone row. StatefulSet, DaemonSet, Job, and CronJob rows
 render through
 `frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx` and must
 preserve the Kubernetes API status semantics for desired replica/node/job
@@ -1617,8 +1624,8 @@ cells without an ellipsis and sat above the row baseline. Docker image, network,
 volume, service, task, secret and config cells, Proxmox backup coverage,
 restore-evidence and recoverable cells, the Mail Gateway drawer's top domains,
 and vSphere host vCenter cells follow the same rule. The Docker service Update
-cell still wraps on phones and from md truncates inside its column instead of
-at a 10rem cap.
+cell truncates inside its column at every width instead of at a 10rem cap or
+wrapping onto a second phone line; the full rollout words stay in its title.
 Duration and interval cells keep the same split: unified-resource or
 source-specific consumers own which elapsed duration, human fallback, or poll
 interval field is meaningful, while dense platform table rendering must use

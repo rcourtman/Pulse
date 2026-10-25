@@ -8490,6 +8490,10 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('min-h-9');
     expect(subtabsSource).toContain('sm:min-h-10');
     expect(summaryRowActionButtonSource).toContain('h-9 w-9');
+    // A visible phone chevron keeps its 36px target without setting the
+    // row height: rows with one stay as tall as the 32px rows beside them.
+    expect(summaryRowActionButtonSource).toContain('-mx-1 -my-2.5');
+    expect(summaryRowActionButtonSource).toContain('sm:m-0');
     expect(searchFieldSource).toContain('min-h-11');
     expect(filterToolbarSource).toContain('min-h-11');
     // Phone and tablet drawers fill the table's visible width (the scroll

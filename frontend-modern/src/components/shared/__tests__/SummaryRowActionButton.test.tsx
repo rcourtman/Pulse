@@ -21,6 +21,9 @@ describe('SummaryRowActionButton', () => {
     expect(button).toHaveClass('w-9');
     expect(button).toHaveClass('sm:h-6');
     expect(button).toHaveClass('sm:w-6');
+    // A visible phone chevron overhangs the row instead of setting a 37px
+    // row height; the 36px target stays.
+    expect(button).toHaveClass('-mx-1', '-my-2.5', 'sm:m-0');
     expect(button).toHaveAttribute('aria-expanded', 'true');
     expect(button).toHaveAttribute('aria-controls', 'summary-row-detail-alpha');
 

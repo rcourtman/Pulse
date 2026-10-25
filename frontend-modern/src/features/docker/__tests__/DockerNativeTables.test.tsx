@@ -932,7 +932,7 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Healthy')).toHaveAttribute('data-docker-container-state', 'ok');
   });
 
-  it('puts the state words under the name where a phone row has no State column', () => {
+  it('puts state words that need attention beside the name where a phone row has no State column', () => {
     // A narrow table cannot give "Unhealthy" its own column beside the 40%
     // name, both metric pills and the Update control without cutting it.
     setViewportWidth(320);
@@ -966,10 +966,14 @@ describe('Docker native tables', () => {
     const unhealthy = screen.getByText('Unhealthy');
     expect(unhealthy).toHaveAttribute('data-docker-container-state', 'danger');
     expect(unhealthy.closest('td')).toBe(screen.getByText('edge-api').closest('td'));
-    // Every row carries the line, so the rows keep one height.
-    expect(screen.getByText('Running').closest('td')).toBe(
-      screen.getByText('edge-web').closest('td'),
-    );
+    // The words join the name on its line, so the row stays one line tall.
+    expect(unhealthy).toHaveClass('min-w-0', 'truncate');
+    expect(unhealthy.parentElement).toHaveClass('items-center');
+    expect(unhealthy.parentElement).not.toHaveClass('flex-col');
+    // A running container reads in its green dot; screen readers keep the words.
+    const running = screen.getByText('Running');
+    expect(running.closest('td')).toBe(screen.getByText('edge-web').closest('td'));
+    expect(running).toHaveClass('sr-only');
   });
 
   it('keeps a saved State sort only where the State column shows', () => {
@@ -1972,10 +1976,9 @@ describe('Docker native tables', () => {
     expect(screen.getByText('/4')).toHaveClass('platform-table-phone-only-inline');
     // The snake_case rollout token reads as words; the raw token stays in the title.
     expect(screen.getByText('Rollback started')).toBeInTheDocument();
-    expect(screen.getByText('Rollback started')).toHaveClass(
-      'whitespace-normal',
-      'wrap-break-word',
-    );
+    // One line at every width; the full words stay in the title.
+    expect(screen.getByText('Rollback started')).toHaveClass('truncate');
+    expect(screen.getByText('Rollback started')).not.toHaveClass('whitespace-normal');
     expect(
       screen.getByText('Rollback started').closest('[title]')?.getAttribute('title'),
     ).toContain('rollback_started');

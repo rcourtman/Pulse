@@ -1012,6 +1012,16 @@ fragments do not throw or move focus. The renderer and fragment helper are
 covered by `frontend-modern/src/features/docs/__tests__/docMarkdown.test.ts`,
 with direct-link, reload and keyboard navigation verified in the live viewer.
 
+### Visible phone row disclosure keeps rows single-line
+
+`SummaryRowActionButton` keeps a 36 px disclosure target on phones, where
+the Proxmox nodes, Docker hosts and vSphere hosts tables show it because the
+row tap scopes the table below. Negative margins let that target overhang
+the 14 px chevron, so the button no longer sets the row height: those rows
+had been 37 px beside the single-line 32 px rows of every other platform
+table. From the sm breakpoint the margins reset and the 24 px button is
+unchanged. `SummaryRowActionButton.test.tsx` pins the classes.
+
 ### Patrol mode route anchor opens its disclosure
 
 Patrol mode entry points in Settings and the licence panel link to
@@ -1883,8 +1893,9 @@ measured size and update verdict room without hiding identity or dropping the
 existing detail disclosure. The container projection retains its shared 30%
 phone identity reservation and five scan signals; off-row restart/host/consumer
 evidence remains in detail. Swarm rollout tokens read as words, with compact
-Running headings and wrapping rollout states on phones; raw rollout and
-placement evidence remain reachable through keyboard/touch row disclosure.
+Running headings and rollout states that truncate on one line on phones;
+raw rollout and placement evidence remain reachable through the title and
+keyboard/touch row disclosure.
 `platformOverviewLayout.guardrails.test.ts`, mounted
 Docker table tests and the desktop/touch-phone production-component browser
 fixture check these priorities, rather than treating an old percentage as an

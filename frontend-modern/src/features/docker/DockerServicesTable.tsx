@@ -451,7 +451,7 @@ export const DockerServicesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class={`block whitespace-normal wrap-break-word leading-3 md:truncate md:leading-normal ${updateTone()}`}
+                              class={`block truncate ${updateTone()}`}
                               title={update().title}
                               data-docker-service-update-tone={updateTone() ? 'warning' : 'none'}
                             >
