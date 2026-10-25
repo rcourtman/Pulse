@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### Configuration-import retries preserve the remote-agent boundary
+
+The import API's process-local replay admission rejects duplicate committed
+archives and overlapping workspace imports without another persistence or
+runtime reload. Its existing remote-agent-endpoint disclosure stays unchanged:
+configuration recovery does not retarget installed agents, replace enrollment
+or prove installed recovery. Different tenant imports retain separate admission
+and the normal authentication/CSRF/write-scope boundaries. The consuming-router
+control is `TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped`;
+loopback loss and failed-apply controls live in `config_import_replay_test.go`.
+
 Infrastructure Add shortcuts and update chips follow the frontend primitives
 visible-label naming contract. Their names preserve `Add` or the displayed
 update wording and append source or host context, while keeping the existing

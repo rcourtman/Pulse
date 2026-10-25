@@ -231,6 +231,7 @@ type ConfigHandlers struct {
 	recentAutoRegistered     map[string]time.Time
 	recentAutoRegMutex       sync.Mutex
 	autoRegisterMutex        sync.Mutex
+	importRequests           configImportRequests
 }
 
 // NewConfigHandlers creates a new ConfigHandlers instance

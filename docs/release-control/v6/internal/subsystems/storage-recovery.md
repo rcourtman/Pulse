@@ -21,6 +21,23 @@
 
 ## Purpose
 
+### Configuration-import replays cannot repeat recent replacement
+
+Import admission spans the existing file transaction and runtime apply. A
+committed equal archive/passphrase request is rejected for ten minutes after
+completion, even after a lost response or failed runtime apply; it cannot
+replace newer settings, credentials, metadata or recovery backups. Concurrent
+workspace imports are rejected, not queued. An uncommitted failure can retry
+after correction. The bounded, process-local registry fails closed rather
+than evict unexpired protection; it is not durable cross-restart idempotency.
+
+`config_import_replay_test.go` exercises real handler/persistence replacement,
+three loopback POSTs with response loss and newer legitimate edits, overlapping
+archives and failed apply. The scoped router and admission concurrency/expiry/
+capacity controls retain authentication and tenant separation. Complete legacy
+archives and successful transaction semantics remain unchanged. None of this
+is guest thaw, backup execution or original native recovery evidence.
+
 ### Agent startup is not storage evidence
 
 An agent's pending first report after a server restart is a monitoring-owned

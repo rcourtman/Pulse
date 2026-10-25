@@ -21,6 +21,32 @@
 
 ## Purpose
 
+### Configuration-import transport replays are bounded, not fresh recovery
+
+The existing import POST keeps authentication, write scope, CSRF and tenant
+resolution ahead of replay admission. A handler admits one import per workspace
+through persistence and runtime apply. Equal archive/passphrase requests that
+committed are rejected with HTTP 409 for ten minutes after completion, including
+when runtime apply failed or the response was lost. Neither a replacement write
+nor a reload is repeated, and a cached success cannot imply that a newer edit
+was restored. Different archives can be imported after the active import ends;
+uncommitted failures can retry after their cause is corrected.
+
+Admission stores only scoped full-request digests and completion times, never
+archives, passphrases or response bodies. Empty/default scope aliases share
+one admission; different tenants do not. The process-local registry holds at
+most 128 active/recent attempts and fails closed with HTTP 503 rather than
+evict an unexpired attempt. Active imports never expire; completed entries
+expire without extending their window on replay. This is a bounded transport
+safety measure, not durable cross-restart idempotency or installed recovery.
+
+`config_import_replay_test.go` exercises real persistence, newer credentials/
+settings/metadata, overlapping archives, runtime failure and loopback response
+loss. `config_import_admission_test.go` covers concurrency, expiry and capacity.
+`TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped` exercises the
+consuming router's tenant, authentication and CSRF boundaries. No guest/QGA,
+backup execution, database/driver/schema or native recovery route is added.
+
 ### Host-agent disk history distinguishes absence from zero
 
 History and full/infrastructure summary charts synthesize host-agent disk usage

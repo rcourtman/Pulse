@@ -3,6 +3,7 @@ package configapi
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
@@ -119,12 +120,27 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// A browser or proxy can resend a POST even when application retries are
+	// disabled. Admit only one import per workspace through persistence AND
+	// runtime apply, and retain committed attempts before writing the response.
+	attempt, rejection := h.importRequests.begin(orgID, req, time.Now())
+	if rejection != nil {
+		http.Error(w, rejection.message, rejection.status)
+		return
+	}
+	retainAttempt := true // Fail closed if an unexpected panic interrupts apply.
+	defer func() { h.importRequests.finish(attempt, retainAttempt, time.Now()) }()
+
 	// Capture actor identity before config swap (config replacement changes auth resolution)
 	deps := h.runtimeDependencies()
 	importUser := deps.AuthUsername(currentConfig, r)
 
 	// Import configuration.
 	if err := persistence.ImportConfig(req.Data, req.Passphrase); err != nil {
+		// No archive committed: a corrected storage failure or passphrase may
+		// be retried. Once persistence succeeds, even failed runtime apply
+		// must not replay the replacement over a newer legitimate edit.
+		retainAttempt = false
 		deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
 			"Import failed")
 		log.Error().Err(err).Msg("Failed to import configuration")
