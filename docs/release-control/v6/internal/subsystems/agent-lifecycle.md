@@ -3995,6 +3995,8 @@ screenshots as enrollment, update readiness or lifecycle verification.
     operator to review the same machine twice under a hostname row and an
     IP-only candidate row. Per-row Manage actions live directly on the
     `InfrastructureSourceManager` row and open the governed edit/detail flow;
+    the row stays one 33px line (4px cell padding, actions overhanging the
+    row, a system line that does not wrap its badges);
     `frontend-modern/src/components/Settings/useConnectionRowActions.ts`
     owns the pause/remove API dispatch, two-click remove confirm, and
     per-id action error presentation inside that flow. Last-error detail is rendered

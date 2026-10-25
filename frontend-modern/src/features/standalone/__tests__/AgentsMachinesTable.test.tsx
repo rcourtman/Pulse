@@ -931,6 +931,11 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
+    // The 28px desktop actions button overhangs the row instead of setting
+    // 37px rows; phones keep the 44px target.
+    expect(
+      screen.getByRole('button', { name: 'Machine actions for Removable Machine' }),
+    ).toHaveClass('-my-2', 'min-h-11', 'sm:-my-0.5', 'sm:min-h-0');
     await fireEvent.click(
       screen.getByRole('button', { name: 'Machine actions for Removable Machine' }),
     );

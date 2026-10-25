@@ -840,7 +840,7 @@ const AgentMachineActionsCell: Component<{
         label={`Machine actions for ${props.name}`}
         tone="muted"
         size="sm"
-        class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
+        class="-my-2 min-h-11 min-w-11 sm:-my-0.5 sm:min-h-0 sm:min-w-0"
         aria-haspopup="menu"
         aria-expanded={props.menuOpen ? 'true' : 'false'}
         onClick={(event) => {
