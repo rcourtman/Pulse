@@ -1024,9 +1024,9 @@ alert threshold toggles and inputs. Settings > Infrastructure body cells use
 the platform tables' 4px vertical padding (39px rows before), and its system
 line keeps the name, collection badge and member toggle on one line,
 truncating the name, where a wrapped badge had made a 63px row. Long text
-ends in an ellipsis with its full value in the title. Alert History keeps
-its two-line Message below an 80rem card: at a 1280px window its message
-track is about 180px, and one line read "Docker service..." for most rows.
+ends in an ellipsis with its full value in the title. Alert History rows
+are one line from a 50rem card once its icon row actions and compact Status
+give Message and Resource the width; below 50rem Message keeps two lines.
 
 ### Visible phone row disclosure keeps rows single-line
 
@@ -6718,14 +6718,17 @@ removed, so the visible widths sum to 100% and the table width is the sum of
 all nine; `App.architecture.test.ts` checks both at every density, the pixel
 minimums the content-bound tracks need at the narrowest card their density
 serves, that each density block sits inside its 50rem, 64rem or 80rem
-container query, and that Message keeps at least 18% of the card. Below an
-80rem card the Alert History table's Resource and Message cells wrap in a
+container query, and that Message keeps at least 18% of the card. Below a
+50rem card the Alert History table's Resource and Message cells wrap in a
 `line-clamp-2` wrapper that sets `whitespace-normal` itself (the global
 `.table-fixed td` rule forces nowrap), so more of a row reads without hover on
 a row that has no disclosure to recover the rest; Message keeps a two-line
 minimum height so its length never changes a row's height, which the shared
-windowing hook's single measured row assumes, and from an 80rem card both
-cells return to a one-line clamp (`@min-[80rem]:line-clamp-1`).
+windowing hook's single measured row assumes, and from a 50rem card both
+cells return to a one-line clamp (`@min-[50rem]:line-clamp-1`): icon-only
+Timeline/Resource row actions (100px instead of 177px) and a compact Status
+badge (108px instead of 119px) give Resource and Message the width that one
+line needs.
 Alert History investigation detail is also responsive by interaction model,
 not only by CSS. Desktop may keep Timeline and Resource incident detail inline
 with its table row, while the virtualized phone card list must open the shared

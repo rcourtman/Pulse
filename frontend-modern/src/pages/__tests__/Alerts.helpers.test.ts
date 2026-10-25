@@ -532,10 +532,10 @@ describe('tab path helpers', () => {
     // Message holds two lines on every row so the windowing hook's single
     // measured row height stays true as a long history scrolls.
     expect(alertHistoryTableAlertRowSource).toMatch(
-      /ALERT_HISTORY_MESSAGE_TEXT_CLASS =\s*'line-clamp-2 min-h-\[2lh\] @min-\[80rem\]:line-clamp-1 @min-\[80rem\]:min-h-0 whitespace-normal wrap-break-word /,
+      /ALERT_HISTORY_MESSAGE_TEXT_CLASS =\s*'line-clamp-2 min-h-\[2lh\] @min-\[50rem\]:line-clamp-1 @min-\[50rem\]:min-h-0 whitespace-normal wrap-break-word /,
     );
     expect(alertHistoryTableAlertRowSource).toMatch(
-      /ALERT_HISTORY_RESOURCE_TEXT_CLASS =\s*'line-clamp-2 @min-\[80rem\]:line-clamp-1 whitespace-normal wrap-break-word /,
+      /ALERT_HISTORY_RESOURCE_TEXT_CLASS =\s*'line-clamp-2 @min-\[50rem\]:line-clamp-1 whitespace-normal wrap-break-word /,
     );
     expect(alertHistoryTableAlertRowSource).not.toMatch(/max-w-\[\d+px\]/);
     expect(alertHistoryTableAlertRowSource).not.toMatch(

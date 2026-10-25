@@ -1175,9 +1175,10 @@ describe('Alert History column widths', () => {
 
   // Each density is sized for the narrowest card it serves, from the natural
   // widths measured in a real browser (padding included): "08:27 AM" in a 14px
-  // monospace, the Severity/Duration/Resource headers, a 119px "acknowledged"
-  // badge, and the three row actions on one line (177px). Below 800px the
-  // actions stack, so the base density only needs the widest single button.
+  // monospace, the Severity/Duration/Resource headers, the compact 11px
+  // "moved to agent" status badge (108px), and the three 24px icon row actions
+  // on one line (100px; worded buttons needed 177px). The base density only
+  // needs the actions' width at its percentage.
   // Message, the column that says what happened, may never fall under 18% of
   // the card. Type and Node, which appear from 1024px, get a floor too: the
   // longest type label, "Container Health", needs 119px with its padding.
@@ -1186,8 +1187,8 @@ describe('Alert History column widths', () => {
     resource: 93,
     severity: 86,
     duration: 91,
-    status: 119,
-    actions: 177,
+    status: 108,
+    actions: 100,
   } as const;
   const pixelNeeds: Array<{
     name: string;
@@ -1197,7 +1198,7 @@ describe('Alert History column widths', () => {
     {
       name: 'base',
       cardWidth: 600,
-      needs: { timestamp: 84, resource: 93, severity: 86, status: 119, actions: 80 },
+      needs: { timestamp: 84, resource: 93, severity: 86, status: 108, actions: 100 },
     },
     { name: '50rem', cardWidth: 800, needs: wideNeeds },
     { name: '64rem', cardWidth: 1024, needs: { ...wideNeeds, type: 120, node: 68 } },

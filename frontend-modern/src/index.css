@@ -492,11 +492,11 @@
     --alert-history-resource-width: 15.6%;
     --alert-history-type-width: 0%;
     --alert-history-severity-width: 14.4%;
-    --alert-history-message-width: 22.7%;
+    --alert-history-message-width: 21.3%;
     --alert-history-duration-width: 0%;
-    --alert-history-status-width: 19.9%;
+    --alert-history-status-width: 18%;
     --alert-history-node-width: 0%;
-    --alert-history-actions-width: 13.4%;
+    --alert-history-actions-width: 16.7%;
     width: 100%;
   }
 
@@ -596,14 +596,14 @@
 
     .table-scroll-shell table.alert-history-responsive-table {
       --alert-history-timestamp-width: 84px;
-      --alert-history-resource-width: 11.7%;
+      --alert-history-resource-width: 16%;
       --alert-history-type-width: 0px;
       --alert-history-severity-width: 86px;
       --alert-history-message-width: auto;
       --alert-history-duration-width: 91px;
-      --alert-history-status-width: 119px;
+      --alert-history-status-width: 108px;
       --alert-history-node-width: 0px;
-      --alert-history-actions-width: 177px;
+      --alert-history-actions-width: 100px;
       width: 100%;
     }
 
@@ -640,14 +640,14 @@
 
     .table-scroll-shell table.alert-history-responsive-table {
       --alert-history-timestamp-width: 84px;
-      --alert-history-resource-width: 9.1%;
+      --alert-history-resource-width: 13%;
       --alert-history-type-width: 120px;
       --alert-history-severity-width: 86px;
       --alert-history-message-width: auto;
       --alert-history-duration-width: 91px;
-      --alert-history-status-width: 119px;
+      --alert-history-status-width: 108px;
       --alert-history-node-width: 6.7%;
-      --alert-history-actions-width: 177px;
+      --alert-history-actions-width: 100px;
       width: 100%;
     }
   }
@@ -655,14 +655,14 @@
   @container (min-width: 80rem) {
     .table-scroll-shell table.alert-history-responsive-table {
       --alert-history-timestamp-width: 84px;
-      --alert-history-resource-width: 12%;
+      --alert-history-resource-width: 14%;
       --alert-history-type-width: 128px;
       --alert-history-severity-width: 86px;
       --alert-history-message-width: auto;
       --alert-history-duration-width: 91px;
-      --alert-history-status-width: 119px;
+      --alert-history-status-width: 108px;
       --alert-history-node-width: 8.5%;
-      --alert-history-actions-width: 177px;
+      --alert-history-actions-width: 100px;
       width: 100%;
     }
 

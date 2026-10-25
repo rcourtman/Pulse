@@ -1756,7 +1756,12 @@ and never falls under 18% of the card; `App.architecture.test.ts` holds those
 minimums and the 50rem, 64rem and 80rem switch points. From an 800px card the
 three actions share one line; below it they stack, which makes those rows
 taller, and rows there still differ by how many action buttons they stack.
-Below an 80rem card, Resource and Message cells wrap inside a `line-clamp-2`
+Table rows show Timeline and Resource as 24px icon buttons beside the
+Investigate icon (accessible names and titles say what each opens; cards keep
+the worded buttons), so the three actions need 100px instead of 177px, and
+Status uses a compact 11px badge that needs 108px for "moved to agent"
+instead of 119px. Resource and Message take that width.
+Below a 50rem card, Resource and Message cells wrap inside a `line-clamp-2`
 wrapper (`data-alert-history-cell`) instead of ending in an ellipsis after one
 line, so more of what happened reads without hover. A message or name longer
 than its two lines still ends in an ellipsis with the full text on its title;
@@ -1767,9 +1772,11 @@ never changes its row's height: the shared windowing hook sizes its spacers
 from a single measured row. Scrolling a 600-row history in 60px wheel steps
 (414 tracked comparisons) moved a tracked row by exactly the scroll distance
 with uniform 49px rows, while the same history with the minimum removed (rows
-of 39px and 49px) showed 46 steps where the row jumped by up to 20px. From an
-80rem card both cells return to a one-line clamp, the single 39px row that
-card already had (`@min-[80rem]:line-clamp-1`, minimum height released).
+of 39px and 49px) showed 46 steps where the row jumped by up to 20px. From a
+50rem card (a desktop window of about 1250px beside the sidebar) both cells
+return to a one-line clamp (`@min-[50rem]:line-clamp-1`, minimum height
+released) and rows are 33px like the other tables; the earlier 80rem switch
+left 1280-1440px windows with 49px two-line rows.
 Measured on the mock estate in a real browser (the estate regenerates on
 every run, so the row count differs: 88 before, 90 after), messages that ended
 in an ellipsis fell from 82 of 88 rows to 24 of 90 at a 1024px window with the

@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "0a844bdd340fc4f3df38d30548073fc2b4c06830",
+  "verified_at": "2026-10-25T21:56:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
+    "frontend-modern/src/index.css",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryItemActions.tsx": "260a03b94b8c6002d2ed7a37ec39fd1aa122d68d1ced2bc2a2d0110599f72a16",
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "1f3eaa52a4f432f4b48d9585d409865fd56e5039e9a7ae79f536733ebf0851cf",
+    "frontend-modern/src/index.css": "03c3054d36a58b6793e1fb821067f462f8a9abe79bedd9a974ac76a0bf9c0ff2",
+    "frontend-modern/src/utils/alertIncidentPresentation.ts": "1414e1437863b96071d5fd23b32ffe4eb656e883ac98a4db4ae1e5be29ec033b"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build in mock mode on pulse-dev, headless Chromium, dark theme, All time range (about 130 rows); runtime files sha256-identical to the measured build. Cut = a Message or Resource cell whose text runs past its visible lines.",
+    "Before (origin/main, two-line below 80rem): rows 49px at 1280/1366/1440px and 39px at 1920px; Message cut 30/13/6/13 and Resource cut 44/35/33/35 of ~132 rows at 1280/1366/1440/1920px. One line with the old columns (Actions 177px, Status 119px): Message cut 96/42/28 and Resource cut 99/97/90 at 1280/1366/1440px.",
+    "After: every row 33px at 1280, 1366, 1440 and 1920px. Message track 232/299/356/516px (was 180/250/310/457), Resource 134/146/157/201px (was 98/107/115/172), Actions 100px, Status 108px. Message cut 62/35/32/4 and Resource cut 76/62/50/31. Screenshots: at 1280px messages keep the object name (\"Docker service 'ops-jenkins' ...\") and resource names are whole except long disk/branch names; at 1440px most messages read whole.",
+    "Phone 390px: the card list is unchanged, no table, worded Timeline and Resource actions (46 buttons, none icon-only)."
+  ],
+  "interactions": [
+    "Inspected 1280 and 1440px screenshots of the history table; Timeline, Resource and Investigate are 24px icon buttons with titles and accessible names naming the alert/resource; the acknowledged/moved-to-agent status badges fit the 108px track.",
+    "Full frontend suite under Node 24 on this branch: 1276 of 1277 files passed; the one failure was a 5s timeout in the unrelated docs mirror test under load average 10-14, which passes alone (3/3)."
+  ],
+  "proof_scope": "Alert History desktop row layout, row action presentation and status badge size; alert data, actions behaviour, phone cards and windowing are unchanged."
+}
