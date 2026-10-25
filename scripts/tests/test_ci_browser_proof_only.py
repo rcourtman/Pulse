@@ -366,9 +366,9 @@ class WorkflowScopeTest(unittest.TestCase):
             self.assertNotIn(forbidden, job)
         self.assertLess(job.index("npm ci "), job.index("npm run test:triage"))
         # Hosted test admission adds coverage; it never replaces the separate
-        # issue-event tests that must still precede credential acquisition.
+        # issue-event tests that must still precede the label write.
         live = (ROOT / ".github/workflows/issue-version-label-sync.yml").read_text()
-        self.assertLess(live.index("npm run test:triage"), live.index("Mint triage bot token"))
+        self.assertLess(live.index("npm run test:triage"), live.index("Sync issue version metadata"))
 
     def test_actual_triage_recipes_preserve_install_and_test_failures(self):
         job = job_block(BUILD.read_text(), "triage-helper")

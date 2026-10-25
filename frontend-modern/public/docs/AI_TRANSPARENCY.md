@@ -31,7 +31,10 @@ released builds still go through Pulse's release qualification process.
   claims must stay consistent with the actual published source and checks.
 - **Issue triage.** Automated issue and discussion replies post
   under the dedicated `pulse-triage` bot identity and link back to this page.
-  Automated issue state changes use that identity as well. Mixed reports follow
+  Automated issue state changes use that identity as well, except those made
+  by the repository's own GitHub Actions workflows, which appear as
+  `github-actions[bot]`: silent version and form labels, and the alert issues
+  that scheduled checks open, update and close. Mixed reports follow
   the [topic-integrity triage contract](ISSUE_TRIAGE.md): automation can surface
   declared secondary topics, but a maintainer or triage agent must give every
   actionable topic a linked disposition. Private support email is handled by

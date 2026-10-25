@@ -7,8 +7,11 @@ on:
       - edited
       - reopened
 
+# Labels are written with the workflow's own GITHUB_TOKEN, scoped to issues.
+# No repository secret is needed, so the triage App key stays out of Actions.
 permissions:
   contents: read
+  issues: write
 
 jobs:
   sync:
@@ -40,20 +43,13 @@ jobs:
       - name: Install locked parser without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts
 
-      - name: Verify silent triage before obtaining its write credential
+      - name: Verify silent triage before writing labels
         run: npm run test:triage --prefix .github/scripts
-
-      - name: Mint triage bot token
-        id: triage-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          app-id: 2484142
-          private-key: ${{ secrets.PULSE_TRIAGE_APP_PRIVATE_KEY }}
 
       - name: Sync issue version metadata
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          github-token: ${{ steps.triage-token.outputs.token }}
+          github-token: ${{ github.token }}
           script: |
             const triage = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-version-triage.cjs`);
             await triage.syncLabels({ github, context, core });
