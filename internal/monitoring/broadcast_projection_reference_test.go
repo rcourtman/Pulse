@@ -36,6 +36,10 @@ func convertResourcesForBroadcastReference(
 	}
 	for _, r := range allResources {
 		input := monitorResourceToConvertInput(r)
+		// The parent map encoder independently checks the fixed wire records.
+		if input.Type == "vm" || input.Type == "system-container" || input.Type == "oci-container" {
+			input.PlatformData = parentProxmoxPlatformJSON(&r)
+		}
 		if len(input.Capabilities) > 0 {
 			id := capabilityCatalogID(input.Capabilities)
 			catalogs.capabilities[id] = input.Capabilities
