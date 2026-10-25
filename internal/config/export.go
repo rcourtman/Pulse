@@ -156,6 +156,12 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to decrypt import data: %w", err)
 	}
 
+	// Validate the archive envelope before zero-value decoding can turn a
+	// malformed backup into replacement settings, credentials or metadata.
+	if err := validateImportSections(decrypted); err != nil {
+		return err
+	}
+
 	// Unmarshal JSON
 	var exportData ExportData
 	if err := json.Unmarshal(decrypted, &exportData); err != nil {

@@ -132,3 +132,46 @@ func importValidationFiles(t *testing.T, dir string) map[string]importValidation
 	}
 	return files
 }
+
+func TestImportConfigAcceptsCompleteLegacyAndEmptyArchives(t *testing.T) {
+	for _, version := range []string{"4.0", "4.1", "4.2", "4.3", "4.4", "", "future"} {
+		t.Run("version_"+version, func(t *testing.T) {
+			cp := seedImportValidationState(t)
+			// All five sections have been emitted since 4.0. In particular,
+			// optional modern sections need not exist in a legitimate backup.
+			data := map[string]any{
+				"nodes": map[string]any{}, "alerts": map[string]any{},
+				"email": map[string]any{}, "system": map[string]any{},
+				"webhooks": nil, "unknownFutureField": "must remain compatible",
+			}
+			if version != "" {
+				data["version"] = version
+			}
+			if version == "4.4" {
+				data["webhooks"] = []any{}
+			}
+			encoded, err := json.Marshal(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cp.ImportConfig(encryptImportValidationData(t, encoded), "synthetic-import-validation-passphrase"); err != nil {
+				t.Fatalf("complete archive rejected: %v", err)
+			}
+			nodes, err := cp.LoadNodesConfig()
+			if err != nil || len(nodes.PVEInstances) != 0 {
+				t.Fatal("intentional empty node inventory was not applied")
+			}
+			tokens, err := cp.LoadAPITokens()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if version == "4.0" {
+				if len(tokens) != 1 || tokens[0].ID != "keep-token" {
+					t.Error("4.0 import did not preserve the existing token inventory")
+				}
+			} else if len(tokens) != 0 {
+				t.Error("complete archive no longer applies an intentionally empty token inventory")
+			}
+		})
+	}
+}
