@@ -81,7 +81,10 @@ func encryptImportValidationData(t *testing.T, data []byte) string {
 func seedImportValidationState(t *testing.T) *ConfigPersistence {
 	t.Helper()
 	cp := NewConfigPersistence(t.TempDir())
-	if err := cp.SaveNodesConfig([]PVEInstance{{Name: "keep-node", Host: "https://keep.invalid:8006", TokenValue: "synthetic-node-secret", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
+	// Agent-only, Docker, VMware and NAS installations can legitimately have
+	// no Proxmox nodes. The separate existing empty-node deletion guard does
+	// not protect their credentials, settings and metadata from this path.
+	if err := cp.SaveNodesConfig(nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	settings := DefaultSystemSettings()
