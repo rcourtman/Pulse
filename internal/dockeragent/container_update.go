@@ -465,6 +465,13 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	verifyInspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
 		return a.docker.ContainerInspect(callCtx, newContainerID)
 	})
+	if err == nil && wasRunning && replacementHealthStarting(verifyInspect) {
+		// Docker reports "starting" until the first probe passes, which with
+		// the default 30s interval is long after the crash window above, so
+		// an unhealthy replacement would otherwise never be rolled back.
+		reportProgress("Waiting for container health check...")
+		verifyInspect, err = a.waitForReplacementHealth(ctx, newContainerID, verifyInspect)
+	}
 	if err != nil {
 		result.Error = fmt.Sprintf("Failed to inspect new container: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to inspect new container")
@@ -474,8 +481,9 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 
 	if wasRunning {
-		// Check if running
-		if verifyInspect.State != nil && !verifyInspect.State.Running {
+		// Check if running. Docker keeps Running set while a crashed
+		// container waits to be restarted, so restarting counts as a crash.
+		if verifyInspect.State != nil && (!verifyInspect.State.Running || verifyInspect.State.Restarting) {
 			exitCode := 0
 			stateErr := ""
 			if verifyInspect.State != nil {
@@ -524,6 +532,55 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		Msg("Container update completed successfully")
 
 	return result
+}
+
+const (
+	dockerUpdateHealthPollInterval = 2 * time.Second
+	// Docker's default probe settles unhealthy after three 30s intervals, so
+	// this covers default health checks without holding the update open
+	// indefinitely. A check still starting at the cap is reported as such.
+	dockerUpdateHealthSettleCap = 3 * time.Minute
+)
+
+func (a *Agent) updateHealthSettleCap() time.Duration {
+	if a.healthSettleCap > 0 {
+		return a.healthSettleCap
+	}
+	return dockerUpdateHealthSettleCap
+}
+
+func replacementHealthStarting(inspect containertypes.InspectResponse) bool {
+	return inspect.State != nil && inspect.State.Running && !inspect.State.Restarting && inspect.State.Health != nil &&
+		strings.EqualFold(strings.TrimSpace(string(inspect.State.Health.Status)), "starting")
+}
+
+// waitForReplacementHealth polls a started replacement until its health check
+// leaves "starting", the container stops running or restarts, or the settle
+// cap elapses, returning the latest inspect for the caller's crash and health
+// checks. Inspects run under the settle cap, so reaching it mid-inspect ends
+// the wait rather than failing the update; the poll count also bounds the
+// loop when sleepFn does not sleep.
+func (a *Agent) waitForReplacementHealth(ctx context.Context, containerID string, inspect containertypes.InspectResponse) (containertypes.InspectResponse, error) {
+	settleCap := a.updateHealthSettleCap()
+	settleCtx, cancel := context.WithTimeout(ctx, settleCap)
+	defer cancel()
+	for polls := int(settleCap / dockerUpdateHealthPollInterval); polls > 0 && replacementHealthStarting(inspect); polls-- {
+		if settleCtx.Err() != nil {
+			break
+		}
+		sleepFn(dockerUpdateHealthPollInterval)
+		next, err := dockerCallWithRetry(settleCtx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
+			return a.docker.ContainerInspect(callCtx, containerID)
+		})
+		if err != nil {
+			if ctx.Err() == nil && settleCtx.Err() != nil {
+				break
+			}
+			return inspect, err
+		}
+		inspect = next
+	}
+	return inspect, nil
 }
 
 func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, originalName, originalID string, restart bool) bool {

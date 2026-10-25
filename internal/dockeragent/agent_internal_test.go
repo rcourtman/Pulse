@@ -1415,6 +1415,7 @@ func TestAgentHookSeamsArePerAgentFields(t *testing.T) {
 	}{
 		{field: "newTimerFn", want: reflect.TypeOf((func(time.Duration) *time.Timer)(nil))},
 		{field: "jsonMarshalFn", want: reflect.TypeOf((func(any) ([]byte, error))(nil))},
+		{field: "healthSettleCap", want: reflect.TypeOf(time.Duration(0))},
 	} {
 		field, ok := agentType.FieldByName(tc.field)
 		if !ok {
@@ -1435,8 +1436,9 @@ func TestAgentHookSeamsArePerAgentFields(t *testing.T) {
 // is exactly the race the per-Agent fields removed.
 func TestAgentHookSeamsHaveNoPackageGlobals(t *testing.T) {
 	forbidden := map[string]struct{}{
-		"newTimerFn":    {},
-		"jsonMarshalFn": {},
+		"newTimerFn":      {},
+		"jsonMarshalFn":   {},
+		"healthSettleCap": {},
 	}
 
 	sources, err := filepath.Glob("*.go")

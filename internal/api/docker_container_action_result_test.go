@@ -232,7 +232,7 @@ func TestDockerContainerUpdateIndependentObservationMustMatchState(t *testing.T)
 		{"stopped after update", "running", "exited", "", false, unified.ActionVerificationContradicted},
 		{"restarting", "running", "restarting", "", true, unified.ActionVerificationContradicted},
 		{"unhealthy", "running", "running", "unhealthy", true, unified.ActionVerificationContradicted},
-		{"starting healthcheck", "running", "running", "starting", true, unified.ActionVerificationContradicted},
+		{"starting healthcheck", "running", "running", "starting", true, unified.ActionVerificationInconclusive},
 		{"unknown health", "running", "running", "", true, unified.ActionVerificationContradicted},
 		{"missing agent readback", "", "running", "healthy", true, unified.ActionVerificationInconclusive},
 	} {
@@ -256,6 +256,9 @@ func TestDockerContainerUpdateIndependentObservationMustMatchState(t *testing.T)
 			if got := result.ActionResultV2.Verification; got.Status != tc.want || got.EvidenceClass != unified.ActionEvidenceIndependent {
 				t.Fatalf("verification = %+v, want %s / independent", got, tc.want)
 			}
+			if tc.health == "starting" && result.ActionResultV2.Verification.ReasonCode != "container_health_starting" {
+				t.Fatalf("reason = %q, want container_health_starting", result.ActionResultV2.Verification.ReasonCode)
+			}
 			if result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded {
 				t.Fatal("readback changed execution history")
 			}
@@ -274,7 +277,7 @@ func TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim(t *testing.T)
 		{"no healthcheck", "running", "none", true, unified.ActionVerificationConfirmed},
 		{"stopped preserved", "created", "none", false, unified.ActionVerificationConfirmed},
 		{"unhealthy", "running", "unhealthy", true, unified.ActionVerificationContradicted},
-		{"starting", "running", "starting", true, unified.ActionVerificationContradicted},
+		{"starting", "running", "starting", true, unified.ActionVerificationInconclusive},
 		{"restarting", "restarting", "healthy", true, unified.ActionVerificationContradicted},
 		{"unknown health", "running", "", true, unified.ActionVerificationInconclusive},
 	} {
@@ -290,6 +293,9 @@ func TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim(t *testing.T)
 			}
 			if got := result.ActionResultV2.Verification; got.Status != tc.want || got.EvidenceClass != unified.ActionEvidenceAgentAttested {
 				t.Fatalf("verification = %+v, want %s / agent_attested", got, tc.want)
+			}
+			if tc.health == "starting" && result.ActionResultV2.Verification.ReasonCode != "container_health_starting" {
+				t.Fatalf("reason = %q, want container_health_starting", result.ActionResultV2.Verification.ReasonCode)
 			}
 			if result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded {
 				t.Fatal("readback changed execution history")

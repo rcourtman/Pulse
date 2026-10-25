@@ -918,6 +918,14 @@ retention or recovery authority is added. The focused
 verification changes never rewrite successful execution history, including
 stopped replacements and missing readback.
 
+A running replacement whose health check is still `starting` is now
+inconclusive rather than contradicted, and the Docker module waits for that
+health to settle before deciding whether to roll back to the original
+container. Both are action-verification and container-lifecycle behaviour.
+Restoring the renamed original container is still action compensation, not a
+storage backup, recovery point or restore, and no storage or recovery path
+is added.
+
 
 Recovery consumers of security status must distinguish currentUsername (the validated caller identity) from privileged authUsername (administrator configuration). Presence of currentUsername in a scoped response does not authorise export, import, recovery or unprotected backup transfer; existing settings capabilities and backend enforcement still gate those operations.
 
