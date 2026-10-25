@@ -14,13 +14,23 @@ function escapeRegExp(value) {
 // rendering or executing any issue content. Only top-level declarations count.
 const { Lexer, lexer } = require("marked");
 
-function lexFieldValue(value, body) {
+// Keep one immutable Markdown snapshot per classification decision. Reports can
+// contain long copied logs; reparsing that body for each field adds work without
+// adding evidence. Never share this context across reports or event revisions.
+function parseReportMarkdown(body) {
+  const tokens = lexer(String(body || ""), { gfm: true });
+  return { lines: projectDeclarationLines(tokens), links: tokens.links };
+}
+
+function lexFieldValue(value, report) {
   // Reference links can be defined anywhere in the report. Extracting a field
   // must not discard that context and turn visible declarations into missing
   // versions or invented topics. Use only the locked parser's definitions;
   // destinations are never fetched or treated as declaration text.
   const fieldLexer = new Lexer({ gfm: true });
-  fieldLexer.tokens.links = lexer(String(body || ""), { gfm: true }).links;
+  // Field lexing can add definitions. Do not let it mutate the shared report
+  // definitions or change the meaning of a sibling field.
+  fieldLexer.tokens.links = Object.assign(Object.create(null), report.links);
   return fieldLexer.lex(value);
 }
 
@@ -46,7 +56,7 @@ function inlineProjection(tokens, maskCode = false) {
   }).join("");
 }
 
-function declarationLines(body) {
+function projectDeclarationLines(tokens) {
   const lines = [];
   const append = (text, declaration = false, metadata = text) => {
     const visible = text.split(/\r?\n/);
@@ -59,7 +69,7 @@ function declarationLines(body) {
       heading: null,
     }));
   };
-  for (const token of lexer(String(body || ""), { gfm: true })) {
+  for (const token of tokens) {
     if (token.type === "heading") {
       const text = inlineProjection(token.tokens).trim();
       lines.push({ text, metadata: text, delimiter: false, declaration: true,
@@ -101,9 +111,9 @@ function firstFieldValue(lines) {
   return value ? value.text.trim() : "";
 }
 
-function extractSectionValue(body, heading, followingHeadings = []) {
+function extractSectionValue(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
   if (!body) return null;
-  const lines = declarationLines(body);
+  const lines = report.lines;
   const pattern = new RegExp(`^${escapeRegExp(heading)}$`, "i");
   const start = lines.findIndex((line) => line.heading !== null && pattern.test(line.heading));
   if (start === -1) return null;
@@ -119,7 +129,7 @@ function extractSectionValue(body, heading, followingHeadings = []) {
   return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
 }
 
-function additionalActionableTopicsValue(body) {
+function additionalActionableTopicsValue(body, report = parseReportMarkdown(body)) {
   // Edited reports can move this field beside any other form field. Context
   // from those fields must not invent a topic or reopen a completed review.
   // Deeper subheadings still belong to the topic, even with a familiar name.
@@ -149,17 +159,17 @@ function additionalActionableTopicsValue(body) {
     "Current workflow",
     "Desired outcome",
     "Alternatives considered",
-  ]);
+  ], report);
 }
 
-function classifyAdditionalActionableTopics(body) {
-  const value = additionalActionableTopicsValue(body);
+function classifyAdditionalActionableTopics(body, report = parseReportMarkdown(body)) {
+  const value = additionalActionableTopicsValue(body, report);
   if (value === null) return null;
 
   // Ordinary inline formatting does not turn "None" into a second topic.
   // Keep block evidence, images and any qualifying text intact for review;
   // only a single paragraph can supply an explicit no-topic response.
-  const blocks = lexFieldValue(value, body);
+  const blocks = lexFieldValue(value, report);
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : value;
   const normalized = text
@@ -210,9 +220,9 @@ function inlineDeclarationText(tokens) {
   }).join("");
 }
 
-function normalizeLegacyVersionValue(value, body) {
+function normalizeLegacyVersionValue(value, report) {
   const raw = String(value).trim();
-  const blocks = lexFieldValue(raw, body);
+  const blocks = lexFieldValue(raw, report);
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : raw;
   const visible = text.trim().replace(/^[`*_]+/, "");
@@ -265,9 +275,9 @@ function extractTitlePulseVersion(title) {
   return leading && !declaredVersionIsTransition(neutral) ? normalizeVersion(leading[1]) : null;
 }
 
-function extractPulseVersion(title, body) {
+function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
   if (body) {
-    const lines = declarationLines(body);
+    const lines = report.lines;
     const versionHeading = lines.findIndex((line) =>
       line.heading !== null && /^Pulse[ \t]+version$/i.test(line.heading)
     );
@@ -275,7 +285,7 @@ function extractPulseVersion(title, body) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)), body);
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)), report);
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
@@ -295,25 +305,25 @@ function extractPulseVersion(title, body) {
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
       const inlineValue = visibleField ? visibleField[1].trim() : "";
-      if (inlineValue) return normalizeLegacyVersionValue(inlineValue, body);
+      if (inlineValue) return normalizeLegacyVersionValue(inlineValue, report);
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)), body);
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)), report);
     }
   }
 
   return extractTitlePulseVersion(title);
 }
 
-function classifyV6FeedbackType(body) {
-  const feedbackType = extractSectionValue(body, "Feedback type");
+function classifyV6FeedbackType(body, report = parseReportMarkdown(body)) {
+  const feedbackType = extractSectionValue(body, "Feedback type", [], report);
   if (!feedbackType) return null;
 
   // This is a single-choice field, not free-form evidence. A link's target
   // or title must not turn documentation/workflow feedback into a bug, and
   // prose, images or a withdrawn selection cannot supply a selected option.
-  const selected = firstFieldValue(declarationLines(feedbackType));
-  const blocks = lexFieldValue(selected, body);
+  const selected = firstFieldValue(parseReportMarkdown(feedbackType).lines);
+  const blocks = lexFieldValue(selected, report);
   const visible = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : selected;
   const normalized = visible.trim().toLowerCase().replace(/[ \t]+/g, " ");
@@ -373,15 +383,17 @@ async function ensureLabel(github, context, name, color, description) {
 function buildTriageState(issue, core, latestVersion) {
   const labelNames = new Set((issue.labels || []).map((label) => label.name));
   const nextLabels = new Set(labelNames);
-  const v6FeedbackClass = classifyV6FeedbackType(issue.body);
+  const report = parseReportMarkdown(issue.body);
+  const v6FeedbackClass = classifyV6FeedbackType(issue.body, report);
   if (v6FeedbackClass) {
     core.info(`Detected v6 feedback issue class: ${v6FeedbackClass}`);
     nextLabels.add(v6FeedbackClass);
   }
 
-  const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body);
+  const additionalTopicsValue = additionalActionableTopicsValue(issue.body, report);
+  const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body, report);
 
-  const reportedVersion = extractPulseVersion(issue.title, issue.body);
+  const reportedVersion = extractPulseVersion(issue.title, issue.body, report);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
   if (latestVersion) core.info(`Latest stable release: ${latestVersion}`);
 
@@ -391,6 +403,7 @@ function buildTriageState(issue, core, latestVersion) {
     reportedVersion,
     v6FeedbackClass,
     hasAdditionalActionableTopics,
+    additionalTopicsValue,
     isBugLike: nextLabels.has(BUG_LABEL),
     comparison:
       reportedVersion && latestVersion ? compareCore(reportedVersion, latestVersion) : null,
@@ -472,6 +485,7 @@ async function syncLabels({ github, context, core }) {
     nextLabels,
     reportedVersion,
     hasAdditionalActionableTopics,
+    additionalTopicsValue,
     isBugLike,
   } = buildTriageState(issue, core, null);
 
@@ -479,15 +493,14 @@ async function syncLabels({ github, context, core }) {
   // empty field cannot prove that comment topics were dispositioned, and an
   // unrelated or superseded event must not restore a label Community cleared.
   const previousBody = context.payload.changes?.body?.from;
-  const topicText = (body) => (additionalActionableTopicsValue(body) || "")
-    .replace(/\s+/g, " ").trim();
+  const topicText = (value) => (value || "").replace(/\s+/g, " ").trim();
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
     issue.updated_at === eventIssue.updated_at;
   const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
-      topicText(previousBody) !== topicText(issue.body))
+      topicText(additionalActionableTopicsValue(previousBody)) !== topicText(additionalTopicsValue))
   );
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");

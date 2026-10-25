@@ -2549,3 +2549,93 @@ test("silent triage retires borrowed versions without changing Community disposi
     }
   }
 });
+// Spy on the locked parser, not a production counter or elapsed-time threshold.
+// The complete report should be lexed once, even when fields use definitions
+// elsewhere in it. Field-sized lexing remains necessary and is not counted.
+for (const action of ["opened", "edited", "reopened"]) {
+  test(`one Markdown snapshot supplies the ${action} label decision`, async () => {
+    const { Lexer } = require("marked");
+    const originalLex = Lexer.prototype.lex;
+    const previousBody = [
+      "### Feedback type", "[selected]", "### Pulse version", "[server]",
+      "### Additional actionable topics", "[topics]", "",
+      "[selected]: https://example.invalid/type", // label still supplies text
+      "[server]: https://example.invalid/old", "[topics]: https://example.invalid/old",
+    ].join("\n").replace("[selected]\n", "Documentation issue\n")
+      .replace("[server]\n", "6.4.5\n").replace("[topics]\n", "None\n");
+    const body = [
+      "### Feedback type", "[Bug / regression][selected]",
+      "### Pulse version", "[6.5.0][server]",
+      "### Additional actionable topics", "[Another workflow problem][topics]",
+      "### Logs, screenshots, or diagnostics", "```text",
+      "Pulse version: 9.9.9", "### Feedback type", "Documentation issue", "```", "",
+      "[selected]: https://example.invalid/Documentation-issue",
+      "[server]: https://example.invalid/6.4.5", "[topics]: https://example.invalid/None",
+    ].join("\n");
+    const counts = new Map([[body, 0], [previousBody, 0]]);
+    Lexer.prototype.lex = function (source) {
+      if (counts.has(source)) counts.set(source, counts.get(source) + 1);
+      return originalLex.call(this, source);
+    };
+    const { github, calls } = createGithub();
+    const issue = { number: 2930, title: "Upgrade from 6.4.5", body,
+      labels: ["bug", "affects-6.4.5", "needs-human", "release-blocker",
+        "needs-retest-on-latest"].map(name => ({ name })) };
+    try {
+      await syncLabels({ github, context: createContext({ action, issue,
+        previousBody: action === "edited" ? previousBody : undefined }), core: createCore() });
+    } finally {
+      Lexer.prototype.lex = originalLex;
+    }
+    assert.equal(counts.get(body), 1, "full current report parses per decision");
+    assert.equal(counts.get(previousBody), action === "edited" ? 1 : 0,
+      "previous declaration is parsed only when the edited event needs comparison");
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [action === "reopened"
+      ? ["affects-6.5.0"] : ["affects-6.5.0", "needs-decomposition"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  });
+}
+
+test("Markdown snapshots never leak reference definitions between reports or revisions", async () => {
+  const { Lexer } = require("marked");
+  const originalLex = Lexer.prototype.lex;
+  const body = (version, topic) => [
+    "### Feedback type", "[Bug / regression][type]", "### Pulse version", version,
+    "### Additional actionable topics", topic, "", "[type]: https://example.invalid/type",
+    "[release]: https://example.invalid/6.4.5", "[topic]: https://example.invalid/topic",
+  ].join("\n");
+  const bodies = [body("[6.5.0][release]", "[Another topic][topic]"),
+    body("[unknown][release]", "[None][topic]"), body("[6.6.0-rc.6][release]", "None")];
+  const counts = new Map(bodies.map(value => [value, 0]));
+  Lexer.prototype.lex = function (source) {
+    if (counts.has(source)) counts.set(source, counts.get(source) + 1);
+    return originalLex.call(this, source);
+  };
+  const results = bodies.map((value, i) => {
+    const { github, calls } = createGithub();
+    const issue = { number: 2931 + i, title: "Bug", body: value,
+      labels: [{ name: "bug" }, { name: "needs-human" }] };
+    return { github, calls, issue };
+  });
+  try {
+    await Promise.all(results.map(({ github, issue }) => syncLabels({
+      github, context: createContext({ issue }), core: createCore(),
+    })));
+  } finally {
+    Lexer.prototype.lex = originalLex;
+  }
+  assert.deepEqual([...counts.values()], [1, 1, 1]);
+  assert.deepEqual(results.map(({ calls }) => calls.addLabels[0].labels), [
+    ["affects-6.5.0", "needs-decomposition"], ["needs-version-info"], ["affects-6.6.0-rc.6"],
+  ]);
+  for (const { calls } of results) {
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  }
+});
