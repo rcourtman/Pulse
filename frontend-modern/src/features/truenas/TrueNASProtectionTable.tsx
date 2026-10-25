@@ -431,8 +431,8 @@ export const TrueNASProtectionTable: Component<{
               <InlineNotice role="alert" tone="warning" aria-label="Protection refresh failed">
                 <p class="font-medium">Could not refresh TrueNAS protection.</p>
                 <p>
-                  Showing previously loaded events. Outcomes and counts may be out of date;
-                  newer activity may be missing.
+                  Showing previously loaded events. Outcomes and counts may be out of date; newer
+                  activity may be missing.
                 </p>
                 <Show when={props.onRefresh}>
                   <Button

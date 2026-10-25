@@ -140,14 +140,22 @@ describe('TrueNAS protection refresh evidence', () => {
     apiFetchJSON.mockRejectedValueOnce(new Error('transport unavailable'));
     await recovery().refetch({ background: true });
     apiFetchJSON.mockRejectedValueOnce(new Error('still unavailable'));
-    await fireEvent.click(within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' }));
+    await fireEvent.click(
+      within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' }),
+    );
     await vi.waitFor(() =>
-      expect(within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' })).toBeEnabled(),
+      expect(
+        within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' }),
+      ).toBeEnabled(),
     );
     expect(row('apps')).not.toBeNull();
     apiFetchJSON.mockResolvedValueOnce({ data: [] });
-    await fireEvent.click(within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' }));
-    await vi.waitFor(() => expect(screen.getByText('No TrueNAS protection activity')).toBeInTheDocument());
+    await fireEvent.click(
+      within(notice()).getByRole('button', { name: 'Refresh TrueNAS protection' }),
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByText('No TrueNAS protection activity')).toBeInTheDocument(),
+    );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(row('apps')).toBeNull();
   });
@@ -159,25 +167,32 @@ describe('TrueNAS protection refresh evidence', () => {
     expect(screen.getByText('Loading TrueNAS protection')).toBeInTheDocument();
     expect(screen.queryByText('No TrueNAS protection activity')).not.toBeInTheDocument();
     initial.reject(new Error('private-provider-detail'));
-    await vi.waitFor(() => expect(screen.getByText('Could not load TrueNAS protection')).toBeInTheDocument());
+    await vi.waitFor(() =>
+      expect(screen.getByText('Could not load TrueNAS protection')).toBeInTheDocument(),
+    );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('previously loaded');
     expect(document.body).not.toHaveTextContent('private-provider-detail');
     apiFetchJSON.mockResolvedValueOnce({ data: [] });
     await fireEvent.click(screen.getByRole('button', { name: 'Refresh', exact: true }));
-    await vi.waitFor(() => expect(screen.getByText('No TrueNAS protection activity')).toBeInTheDocument());
+    await vi.waitFor(() =>
+      expect(screen.getByText('No TrueNAS protection activity')).toBeInTheDocument(),
+    );
     expect(document.querySelector('[data-truenas-protection-row]')).toBeNull();
   });
 
-  it.each([401, 403])('withdraws retained events after HTTP %s instead of offering stale private rows', async (status) => {
-    apiFetchJSON.mockResolvedValueOnce({ data: [point('apps')] });
-    const recovery = mountProtection();
-    await expectLoaded();
-    apiFetchJSON.mockRejectedValueOnce(Object.assign(new Error('access denied'), { status }));
-    await recovery().refetch({ background: true });
-    expect(row('apps')).toBeNull();
-    expect(screen.getByText('Could not load TrueNAS protection')).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent('previously loaded');
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
+  it.each([401, 403])(
+    'withdraws retained events after HTTP %s instead of offering stale private rows',
+    async (status) => {
+      apiFetchJSON.mockResolvedValueOnce({ data: [point('apps')] });
+      const recovery = mountProtection();
+      await expectLoaded();
+      apiFetchJSON.mockRejectedValueOnce(Object.assign(new Error('access denied'), { status }));
+      await recovery().refetch({ background: true });
+      expect(row('apps')).toBeNull();
+      expect(screen.getByText('Could not load TrueNAS protection')).toBeInTheDocument();
+      expect(document.body).not.toHaveTextContent('previously loaded');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    },
+  );
 });
