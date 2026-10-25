@@ -74,7 +74,7 @@ func TestLoadTenantRuntimeConfigUsesScopedResourcesAndPreservesInstanceSettings(
 	if os.Getenv("PULSE_TENANT_IMPORT_SENTINEL") != "process" {
 		t.Error("tenant loader changed the process environment")
 	}
-	if !reflect.DeepEqual(base, before) {
+	if !reflect.DeepEqual(base.DeepCopy(), before) {
 		t.Error("tenant loader mutated the default config")
 	}
 	cfg.EnvOverrides["synthetic-test-lock"] = true
