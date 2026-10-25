@@ -7,11 +7,6 @@ Choose an actually [published software release](https://github.com/rcourtman/Pul
 not a draft, source tag or Helm-chart asset. Keep the existing runtime edition:
 public Community downloads do not replace a private Pro build.
 
-For the current v6 release candidate packet, see:
-
-- `docs/releases/RELEASE_NOTES_v6.6.0-rc.6.md`
-- `docs/releases/V6_CHANGELOG_v6.6.0-rc.6.md`
-
 For the current stable v6 packet, see:
 
 - `docs/releases/RELEASE_NOTES_v6.6.0.md`
