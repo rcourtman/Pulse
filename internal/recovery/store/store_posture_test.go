@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestStoreProtectionPosturePersistsProviderAwareTruth(t *testing.T) {
@@ -748,5 +749,46 @@ func TestBackupRollupConnectionWaitingHonoursDeadline(t *testing.T) {
 	}
 	if _, _, err := s.ListRollups(context.Background(), recovery.ListPointsOptions{Kind: recovery.KindBackup}); err != nil {
 		t.Fatalf("rollups after releasing held connection: %v", err)
+	}
+}
+
+func TestStoreProtectionPosturePublishesCanonicalLegacySubject(t *testing.T) {
+	t.Parallel()
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Now().UTC().Truncate(time.Second)
+	stale, fresh := now.Add(-17*24*time.Hour), now.Add(-time.Hour)
+	canonical := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeSystemContainer, "estate-a", 101)
+	legacy := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeSystemContainer, unifiedresources.SourceProxmox, "estate-a:old-node:101")
+	observation, err := recovery.NewProtectionProviderObservation(recovery.ProviderProxmoxPVE, "pve-backup-enumeration", "estate-a", recovery.OutcomeSuccess, recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, false, now, now, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpsertProtectionProviderObservations(context.Background(), []recovery.ProtectionProviderObservation{observation}); err != nil {
+		t.Fatal(err)
+	}
+	points := []recovery.RecoveryPoint{
+		{ID: "pve-backup:old", Provider: recovery.ProviderProxmoxPVE, ProviderScope: "estate-a", Kind: recovery.KindBackup, Mode: recovery.ModeLocal, Outcome: recovery.OutcomeSuccess, CompletedAt: &stale, SubjectResourceID: canonical},
+		{ID: "pve-backup:fresh", Provider: recovery.ProviderProxmoxPVE, ProviderScope: "estate-a", Kind: recovery.KindBackup, Mode: recovery.ModeLocal, Outcome: recovery.OutcomeSuccess, CompletedAt: &fresh, SubjectResourceID: legacy, SubjectRef: &recovery.ExternalRef{Type: "proxmox-lxc", ID: "estate-a:old-node:101", Namespace: "estate-a"}},
+	}
+	if err := store.UpsertPoints(context.Background(), points); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []recovery.ProtectionPostureQuery{{SubjectResourceIDs: []string{canonical}}, {State: recovery.ProtectionStateProtected}} {
+		got, total, err := store.ListProtectionPostures(context.Background(), q)
+		if err != nil || total != 1 || len(got) != 1 {
+			t.Fatalf("postures total=%d len=%d err=%v", total, len(got), err)
+		}
+		p := got[0]
+		if p.SubjectResourceID != canonical || p.State != recovery.ProtectionStateProtected || p.LastSuccessfulPointAt == nil || !p.LastSuccessfulPointAt.Equal(fresh) {
+			t.Fatalf("legacy point forked canonical posture: %+v", p)
+		}
+	}
+	attention, total, err := store.ListProtectionPostures(context.Background(), recovery.ProtectionPostureQuery{State: recovery.ProtectionStateAttention})
+	if err != nil || total != 0 || len(attention) != 0 {
+		t.Fatalf("obsolete attention posture remains: %+v total=%d err=%v", attention, total, err)
 	}
 }
