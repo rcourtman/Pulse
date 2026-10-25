@@ -165,7 +165,9 @@ This is a manual precaution for an affected **standalone Docker or plain Compose
 Pulse server**, before a scheduled freeze-enabled backup. It is **not incident
 recovery or an automatic backup hook**. Swarm, Kubernetes and other controllers
 need their own supported pause controls: stopping a container alone does not
-stop a controller from replacing it. Do not use this procedure if you cannot
+stop a controller from replacing it. For Kubernetes, start with the
+[controller-aware backup safety checks](KUBERNETES.md#proxmox-backup-safety),
+not the Docker commands below. Do not use this procedure if you cannot
 prevent another server from polling the affected guests.
 
 **Pulse monitoring and alerts are unavailable while stopped.** Arrange
