@@ -55,7 +55,7 @@ describe('Migration monitoring handover safety', () => {
     expect(text).toContain('If persistence is unknown, preserve the state');
     expect(text).toContain('do not delete or scale down the server to find out');
     expect(text.indexOf('Before stopping Pulse')).toBeLessThan(
-      text.indexOf('Stop Pulse before taking the consistent backup'),
+      text.indexOf('Stop Pulse before taking that'),
     );
   });
 

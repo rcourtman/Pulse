@@ -51,8 +51,9 @@ persistence is unknown, preserve the state through your deployment's recovery
 procedure first; do not delete or scale down the server to find out. See the
 [Kubernetes storage and controller checks](KUBERNETES.md#proxmox-backup-safety).
 
-Stop Pulse before taking the consistent backup; monitoring and alert delivery
-pause while it is stopped. Preserve every effective data path, the matching `.encryption.key`, audit data and signing key,
+Stop Pulse before taking that
+backup; monitoring and alert delivery pause while it is stopped. Preserve every
+effective data path, the matching `.encryption.key`, audit data and signing key,
 environment files, external certificates, binaries and service/container
 configuration together. Custom paths and organisation directories matter.
 Copying a live database file alone can omit its sidecar files.
