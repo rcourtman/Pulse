@@ -268,7 +268,10 @@ func BuildProtectionPostureFromPointsAt(
 	}
 
 	for _, point := range points {
-		if strings.TrimSpace(point.SubjectResourceID) != subjectResourceID {
+		// Use the same identity normalization as SubjectKeyForPoint. A stored
+		// Proxmox point can still carry a recognised legacy node-scoped ID
+		// even though its recovery rollup is keyed to the canonical guest.
+		if CanonicalSubjectResourceID(point.Provider, point.SubjectResourceID, point.SubjectRef) != subjectResourceID {
 			continue
 		}
 		scope := ProviderScopeForPoint(point)

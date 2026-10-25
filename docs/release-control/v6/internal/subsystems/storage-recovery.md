@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Canonical posture recognises recovery's Proxmox subject aliases
+
+Protection posture selects stored points using the same recognised Proxmox
+subject normalisation as recovery rollups. Retired node-scoped hashes, raw
+source triples and the legacy LXC prefix can advance the canonical guest's
+successful-point timestamp; a fresh point cannot be silently omitted while an
+older canonical point keeps the posture stale. Instance, guest and type
+boundaries remain in the existing identity resolver. Running archives, task-only
+success and partial/unreadable collection do not establish protection.
+
+`posture_test.go` covers mixed historical/current identities and adverse
+qualification/scope controls. The ordinary poll/async-ingest regression in
+`pve_backup_posture_identity_test.go` exercises four LXC guests across independent
+estates, with canonical and legacy resource views. These are synthetic source
+proofs, not confirmation of a reported installation's identity or recovery.
+
 ### Configuration-import replays cannot repeat recent replacement
 
 Import admission spans the existing file transaction and runtime apply. A

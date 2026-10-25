@@ -1,11 +1,13 @@
 package recovery
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func protectionTestSummary(
@@ -467,6 +469,86 @@ func TestFormatPostureWindowReadsAsDaysOrHours(t *testing.T) {
 	} {
 		if got := formatPostureWindow(tc.window); got != tc.want {
 			t.Fatalf("formatPostureWindow(%s) = %q, want %q", tc.window, got, tc.want)
+		}
+	}
+}
+
+// Canonical posture and rollups must select the same subject. Historical
+// node-scoped aliases are not another guest, nor permission to use another
+// installation's backup merely because the VMID/name is the same.
+func TestBuildProtectionPostureUsesCanonicalPointIdentity(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	stale, fresh := now.Add(-17*24*time.Hour), now.Add(-time.Hour)
+	for _, kind := range []struct {
+		typ unifiedresources.ResourceType
+		ref string
+	}{
+		{unifiedresources.ResourceTypeVM, "proxmox-vm"},
+		{unifiedresources.ResourceTypeSystemContainer, "proxmox-lxc"},
+	} {
+		for _, provider := range []Provider{ProviderProxmoxPVE, ProviderProxmoxPBS} {
+			t.Run(fmt.Sprintf("%s/%s", provider, kind.typ), func(t *testing.T) {
+				const instance = "estate-a"
+				source := instance + ":old-node:101"
+				canonical := unifiedresources.ProxmoxGuestCanonicalID(kind.typ, instance, 101)
+				aliases := []string{source, unifiedresources.SourceSpecificID(kind.typ, unifiedresources.SourceProxmox, source)}
+				if kind.typ == unifiedresources.ResourceTypeSystemContainer {
+					aliases = append(aliases, strings.Replace(aliases[1], "system-container-", "lxc-", 1))
+				}
+				observation, err := NewProtectionProviderObservation(provider, "backup-enumeration", instance, OutcomeSuccess, ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, false, now, now, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				baseline := RecoveryPoint{ID: "old-backup", Provider: provider, ProviderScope: instance, Kind: KindBackup, Mode: ModeLocal, Outcome: OutcomeSuccess, CompletedAt: &stale, SubjectResourceID: canonical}
+				for _, alias := range aliases {
+					t.Run(alias, func(t *testing.T) {
+						latest := baseline
+						latest.ID = "fresh-backup"
+						latest.CompletedAt = &fresh
+						latest.SubjectResourceID = alias
+						latest.SubjectRef = &ExternalRef{Type: kind.ref, ID: source, Namespace: instance, Name: "same-name"}
+						if SubjectKeyForPoint(latest) != SubjectKeyForPoint(baseline) {
+							t.Fatal("control does not share a canonical rollup")
+						}
+						got := BuildProtectionPostureFromPointsAt(canonical, []RecoveryPoint{baseline, latest}, []ProtectionProviderObservation{observation}, DefaultProtectionPosturePolicy, now)
+						if got.State != ProtectionStateProtected || got.Freshness != ProtectionFreshnessCurrent || got.LastSuccessfulPointAt == nil || !got.LastSuccessfulPointAt.Equal(fresh) {
+							t.Fatalf("fresh legacy point ignored: state=%s freshness=%s success=%v", got.State, got.Freshness, got.LastSuccessfulPointAt)
+						}
+						// Running files and successful task records remain distinct from a
+						// completed backup, even when their identity is a recognised alias.
+						for _, limiting := range []RecoveryPoint{
+							func() RecoveryPoint { p := latest; p.Outcome = OutcomeRunning; return p }(),
+							func() RecoveryPoint { p := latest; p.Kind = KindOther; return p }(),
+							func() RecoveryPoint {
+								p := latest
+								p.SubjectResourceID = unifiedresources.ProxmoxGuestCanonicalID(kind.typ, "estate-b", 101)
+								p.SubjectRef = &ExternalRef{Type: kind.ref, ID: "estate-b:node:101", Namespace: "estate-b", Name: "same-name"}
+								return p
+							}(),
+							func() RecoveryPoint {
+								p := latest
+								p.SubjectResourceID = unifiedresources.ProxmoxGuestCanonicalID(kind.typ, instance, 102)
+								p.SubjectRef = &ExternalRef{Type: kind.ref, ID: instance + ":node:102", Namespace: instance}
+								return p
+							}(),
+						} {
+							got := BuildProtectionPostureFromPointsAt(canonical, []RecoveryPoint{baseline, limiting}, []ProtectionProviderObservation{observation}, DefaultProtectionPosturePolicy, now)
+							if got.State != ProtectionStateAttention || got.LastSuccessfulPointAt == nil || !got.LastSuccessfulPointAt.Equal(stale) {
+								t.Fatalf("unqualified/foreign point renewed protection: %+v", got)
+							}
+						}
+						partial := observation.Clone()
+						partial.HistoryCompleteness = ProtectionHistoryPartial
+						partial.Evidence.Completeness = operationaltrust.EvidencePartial
+						partial.Evidence.Reason = &operationaltrust.EvidenceReason{Code: "partial_inventory"}
+						got = BuildProtectionPostureFromPointsAt(canonical, []RecoveryPoint{baseline, latest}, []ProtectionProviderObservation{partial}, DefaultProtectionPosturePolicy, now)
+						if got.State == ProtectionStateProtected || got.Coverage != ProtectionCoveragePartial {
+							t.Fatalf("alias bypassed limited collection: %+v", got)
+						}
+					})
+				}
+			})
 		}
 	}
 }
