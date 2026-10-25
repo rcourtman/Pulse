@@ -2478,3 +2478,74 @@ test("the silent consumer uses linked declarations without invented tasks or rep
     assert.equal(calls.getIssue.length, 2);
   }
 });
+
+test("unversioned server images and companion binaries cannot borrow a later version", () => {
+  const values = [
+    "rcourtman/pulse:latest; agent 6.5.0",
+    "license.pulserelay.pro/pulse-pro:latest; TrueNAS 25.10.3",
+    "rcourtman/pulse:6.6; agent 6.5.0",
+    "pulse:unknown; server 6.5.0 after recovery",
+    "pulse:latest (previously 6.4.5)",
+    "registry.6.4.5.invalid/pulse:latest; agent 6.5.0",
+    "pulse-agent v6.5.0",
+    "pulse-agent-helper 6.5.0",
+    "pulse-agent-runner:6.5.0",
+    "pulse-mcp 6.5.0",
+    "pulse-provider-msp 6.5.0",
+    "pulse-pro-agent v6.5.0",
+  ];
+  for (const value of values) {
+    for (const field of ["### Pulse version\n", "Pulse version: ", "- **Pulse version**: "]) {
+      for (const newline of ["\n", "\r\n"]) {
+        const body = `${field}${value}\n\n### Agent version\n6.4.5`;
+        assert.equal(triage.internals.extractPulseVersion("Pulse 6.4.5 upgrade failed",
+          body.replaceAll("\n", newline)), null, body);
+      }
+    }
+  }
+});
+
+test("a complete server token supplies its own version, not a registry or later number", () => {
+  for (const [value, expected] of [
+    ["v6.6.0-rc.6; agent 6.5.0", "6.6.0-rc.6"],
+    ["Pulse v6.6.0-rc.6; TrueNAS 25.10.3", "6.6.0-rc.6"],
+    ["server + pulse-agent v6.3.2", "6.3.2"],
+    ["pulse-v6.6.0-rc.6", "6.6.0-rc.6"],
+    ["pulse_v6.6.0-rc.6", "6.6.0-rc.6"],
+    ["pulse-pro-v6.6.0-rc.6", "6.6.0-rc.6"],
+    ["registry.6.4.5.invalid/pulse:6.6.0-rc.6; agent 6.5.0", "6.6.0-rc.6"],
+    ["registry.6.4.5.invalid/pulse-pro:v6.6.0-rc.6", "6.6.0-rc.6"],
+    ["**[registry.6.4.5.invalid/pulse:6.6.0-rc.6](https://example.invalid/6.5.0)**", "6.6.0-rc.6"],
+    ["registry.6.4.5.invalid/pulse:6.5.0 → 6.6.0-rc.6", null],
+    ["registry.6.4.5.invalid/pulse-pro:6.5.0 to latest", null],
+  ]) {
+    assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5",
+      `### Pulse version\n${value}\n\n### Agent version\n6.4.5`), expected, value);
+  }
+});
+
+test("silent triage retires borrowed versions without changing Community disposition", async () => {
+  for (const action of ["opened", "edited", "reopened"]) {
+    for (const [value, borrowedVersion] of [
+      ["rcourtman/pulse:latest; agent 6.5.0", "6.5.0"],
+      ["license.pulserelay.pro/pulse-pro:latest; TrueNAS 25.10.3", "25.10.3"],
+      ["pulse-agent v6.5.0", "6.5.0"],
+      ["rcourtman/pulse:6.6; agent 6.5.0", "6.5.0"],
+    ]) {
+      const { github, calls } = createGithub();
+      const preserved = ["bug", "needs-human", "release-blocker", "needs-decomposition",
+        "needs-retest-on-latest", "operator-reviewed"];
+      const issue = { number: 2929, title: "Pulse 6.4.5 upgrade failed",
+        body: `### Pulse version\n${value}\n\n### Agent version\n6.4.5`,
+        labels: [...preserved, `affects-${borrowedVersion}`].map(name => ({ name })) };
+      await syncLabels({ github, context: createContext({ action, issue }), core: createCore() });
+      assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]], value);
+      assert.deepEqual(calls.removeLabel.map(call => call.name), [`affects-${borrowedVersion}`], value);
+      assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"], value);
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.deepEqual(calls.paginate, []);
+      assert.equal(calls.getIssue.length, 2);
+    }
+  }
+});
