@@ -2751,12 +2751,176 @@ fi
 }
 
 func TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_config_backups.py"), "-v")
-	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
-	out, err := cmd.CombinedOutput()
+	// A cumulative suite budget is not an individual backup-control deadline.
+	// Keep all discovered controls serial and retain the existing per-control bound.
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_config_backups.py"), "ConfigBackupPublication", []string{
+		"test_two_successful_same_second_copies_are_separate_complete_snapshots",
+		"test_failed_partial_copy_does_not_mutate_or_delete_a_previous_snapshot",
+		"test_allocation_failure_stops_before_copy_or_rotation",
+		"test_headroom_failure_creates_no_stage_and_preserves_prior_snapshot",
+		"test_failed_publication_does_not_rotate_or_publish_a_snapshot",
+		"test_exit_zero_skipped_publication_preserves_file_directory_and_link",
+		"test_current_snapshot_survives_rotation_even_after_clock_moves_backwards",
+		"test_incomplete_copy_is_not_another_invocations_rotation_candidate",
+		"test_discard_removes_only_this_invocations_new_snapshot",
+		"test_missing_config_clears_stale_ownership_without_deleting_prior_snapshot",
+		"test_read_only_config_parent_uses_the_existing_hardened_unit_fallback",
+		"test_every_update_entry_stops_on_failed_backup_even_in_an_or_list",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+}
+
+// Run the emitted helper and real SSH verifier. Curl exits are modelled, so
+// these controls prove deadline arguments and safe failure, not a live outage.
+func TestRootManualUpdateDownloadDeadlines(t *testing.T) {
+	sourcePath := os.Getenv("PULSE_INSTALLER_UNDER_TEST")
+	if sourcePath == "" {
+		sourcePath = filepath.Join("..", "..", "install.sh")
+	}
+	source, err := filepath.Abs(sourcePath)
 	if err != nil {
-		t.Fatalf("configuration backup publication controls: %v\n%s", err, out)
+		t.Fatal(err)
+	}
+	assets := t.TempDir()
+	key := filepath.Join(assets, "key")
+	installer := filepath.Join(assets, "install.sh")
+	if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' EXECUTED \"$@\" > \"$FIXTURE/executed\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"-q", "-t", "ed25519", "-N", "", "-f", key},
+		{"-q", "-Y", "sign", "-f", key, "-n", "pulse-install", installer},
+	} {
+		if out, err := exec.Command("ssh-keygen", args...).CombinedOutput(); err != nil {
+			t.Fatalf("fixture signature: %v\n%s", err, out)
+		}
+	}
+	publicKey, err := os.ReadFile(key + ".pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fault := range []string{"success", "installer_timeout", "signature_timeout", "bad_signature", "first_allocation", "second_allocation"} {
+		t.Run(fault, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, leaf := range []string{"config", "temporary", "tools"} {
+				if err := os.Mkdir(filepath.Join(dir, leaf), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			config := filepath.Join(dir, "config", "system.json")
+			const configBytes = `{"updateChannel":"stable","preserve":"fixture"}`
+			if err := os.WriteFile(config, []byte(configBytes), 0600); err != nil {
+				t.Fatal(err)
+			}
+			helper := filepath.Join(dir, "update")
+			env := append(os.Environ(), "FIXTURE="+dir, "FIXTURE_ASSETS="+assets, "FAULT="+fault,
+				"INSTALLER_SOURCE="+source, "FIXTURE_PUBLIC_KEY="+strings.TrimSpace(string(publicKey)),
+				"PULSE_INSTALL_DIR="+dir, "PULSE_CONFIG_DIR="+filepath.Join(dir, "config"),
+				"PULSE_UPDATE_HELPER_PATH="+helper, "PULSE_PROFILE_PATH="+filepath.Join(dir, "profile"),
+				"PULSE_BASHRC_PATH="+filepath.Join(dir, "bashrc"))
+			generate := exec.Command("bash", "-c", `source "$INSTALLER_SOURCE"
+PINNED_RELEASE_SSH_PUBLIC_KEY="$FIXTURE_PUBLIC_KEY"
+setup_update_command`)
+			generate.Env = env
+			if out, err := generate.CombinedOutput(); err != nil {
+				t.Fatalf("generate helper: %v\n%s", err, out)
+			}
+			tools := map[string]string{
+				"mktemp": `#!/bin/bash
+set -eu
+count=0
+[[ ! -f "$FIXTURE/allocations" ]] || read -r count < "$FIXTURE/allocations"
+count=$((count + 1))
+printf '%s\n' "$count" > "$FIXTURE/allocations"
+[[ "$FAULT:$count" != first_allocation:1 && "$FAULT:$count" != second_allocation:2 ]] || exit 1
+exec /usr/bin/mktemp "$FIXTURE/temporary/input.XXXXXX"
+`,
+				"curl": `#!/bin/bash
+set -eu
+[[ "$1" == -q ]] || { echo 'ambient curl configuration is not disabled' >&2; exit 99; }
+url=""; dest=""; connect=""; maximum=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --connect-timeout) connect="$2"; shift 2 ;;
+        --max-time) maximum="$2"; shift 2 ;;
+        -o) dest="$2"; shift 2 ;;
+        -q|-fsSL) shift ;;
+        https://github.com/rcourtman/Pulse/releases/latest/download/install.sh*) url="$1"; shift ;;
+        *) exit 98 ;;
+    esac
+done
+printf '%s %s %s\n' "$url" "$connect" "$maximum" >> "$FIXTURE/transport"
+[[ "$connect" == 10 && "$maximum" == 60 ]] || { echo 'missing bootstrap download deadline' >&2; exit 99; }
+case "$url" in
+    *.sshsig) phase=signature; source="$FIXTURE_ASSETS/install.sh.sig" ;;
+    */install.sh) phase=installer; source="$FIXTURE_ASSETS/install.sh" ;;
+    *) exit 97 ;;
+esac
+# Retain partial writes too: neither failure may execute the installer or
+# leave a partial bootstrap input behind.
+if [[ "$FAULT" == "${phase}_timeout" ]]; then
+    printf partial > "$dest"
+    exit 28
+fi
+if [[ "$phase:$FAULT" == signature:bad_signature ]]; then
+    printf invalid > "$dest"
+else
+    cp "$source" "$dest"
+fi
+`,
+			}
+			for name, body := range tools {
+				if err := os.WriteFile(filepath.Join(dir, "tools", name), []byte(body), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", helper)
+			cmd.Env = append(env, "PATH="+filepath.Join(dir, "tools")+string(os.PathListSeparator)+os.Getenv("PATH"))
+			out, runErr := cmd.CombinedOutput()
+			calls, callErr := os.ReadFile(filepath.Join(dir, "executed"))
+			if fault == "success" {
+				if runErr != nil || callErr != nil || string(calls) != "EXECUTED\n--stable\n" || !strings.Contains(string(out), "Update complete!") {
+					t.Fatalf("valid signed installer: %v, %v, %q\n%s", runErr, callErr, calls, out)
+				}
+			} else {
+				if runErr == nil || !os.IsNotExist(callErr) || strings.Contains(string(out), "Update complete!") {
+					t.Fatalf("failed bootstrap reported/executed success: %v, %v\n%s", runErr, callErr, out)
+				}
+				if strings.Contains(fault, "timeout") {
+					want := "Failed to download Pulse installer"
+					if fault == "signature_timeout" {
+						want += " signature"
+					}
+					if !strings.Contains(string(out), want) {
+						t.Fatalf("missing download failure diagnostic: %s", out)
+					}
+				}
+			}
+			if ctx.Err() != nil {
+				t.Fatalf("helper exceeded fixture bound: %v\n%s", ctx.Err(), out)
+			}
+			entries, err := os.ReadDir(filepath.Join(dir, "temporary"))
+			if err != nil || len(entries) != 0 {
+				t.Errorf("bootstrap left temporary inputs: %v, %v", entries, err)
+			}
+			got, err := os.ReadFile(config)
+			if err != nil || string(got) != configBytes {
+				t.Fatalf("bootstrap changed saved configuration: %v, %q", err, got)
+			}
+			transport, err := os.ReadFile(filepath.Join(dir, "transport"))
+			wantRequests := 2
+			if fault == "installer_timeout" {
+				wantRequests = 1
+			} else if strings.Contains(fault, "allocation") {
+				wantRequests = 0
+			}
+			if err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if got := strings.Count(string(transport), "\n"); got != wantRequests {
+				t.Errorf("bootstrap requests = %d, want %d (no retries): %q", got, wantRequests, transport)
+			}
+		})
 	}
 }

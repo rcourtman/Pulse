@@ -4353,14 +4353,18 @@ if [[ \${#helper_args[@]} -gt 0 ]]; then
 fi
 
 echo "Updating Pulse..."
+tmp_installer=""
+tmp_signature=""
+trap 'rm -f "\$tmp_installer" "\$tmp_signature"' EXIT
 tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX)
 tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
-trap 'rm -f "\$tmp_installer" "\$tmp_signature"' EXIT
-if ! curl -fsSL "\$INSTALLER_URL" -o "\$tmp_installer"; then
+# Do not let ambient curl retries or a stalled bootstrap hold update forever.
+# No installer/service change is allowed until both bounded downloads verify.
+if ! curl -q -fsSL --connect-timeout 10 --max-time 60 "\$INSTALLER_URL" -o "\$tmp_installer"; then
     echo "Failed to download Pulse installer from \$INSTALLER_URL" >&2
     exit 1
 fi
-if ! curl -fsSL "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
+if ! curl -q -fsSL --connect-timeout 10 --max-time 60 "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
     echo "Failed to download Pulse installer signature from \$INSTALLER_SIG_URL" >&2
     exit 1
 fi

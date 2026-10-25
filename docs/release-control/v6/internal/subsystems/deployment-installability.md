@@ -6364,6 +6364,35 @@ The helper forwards both parsed channels explicitly, including the stable
 default for an existing file, so the containing installer cannot reinterpret
 that same configuration through its older saved-preference reader.
 
+The helper fetches its installer and signature separately with ten-second
+connection and sixty-second whole-request limits, without implicit retries.
+Curl's first `-q` option disables ambient configuration, which otherwise could
+introduce retries beyond those limits. Cleanup is armed before either temporary
+input is allocated, so failure of the second allocation also removes the first.
+A failed or partial download stops before signature verification or installer
+execution; signature failure still forbids execution. Saved settings remain
+untouched, and failed bootstrap cannot print the successful-update message.
+
+`TestRootManualUpdateDownloadDeadlines` executes the emitted helper with a real
+SSH verifier and modelled transport/allocation faults. Six controls cover both
+partial-download timeouts, both allocation failures, invalid signatures and a
+successful signed bootstrap. They require the deadline/config-isolation options,
+no request replay, temporary-input cleanup and saved-configuration preservation.
+They do not measure live network deadlines or establish installed/native recovery.
+The native systemd proof's closed transport adapter separately admits this exact
+manual-helper envelope alongside the existing unattended envelope. Its registered
+portable control runs the actual emitted helper and real verifier through that
+adapter, and rejects altered deadlines, retries or TLS options without online
+fallback. This preserves the hosted manual-recovery consumer, not native acceptance.
+
+Configuration-backup publication verification also uses the existing serial
+per-control runner. All twelve current methods are required, all discovered
+future methods run, and each retains the thirty-second execution bound. A
+single cumulative suite budget must not cut off the final safety control.
+The Python controls' own ten-second shell bounds and every backup assertion
+remain unchanged; no host-contention diagnosis or production deadline change
+follows from a cumulative harness timeout.
+
 `TestManualUpdateChannelAdmission` generates and executes the actual helper
 against local transport fixtures and genuinely signed installer/sidecar bytes.
 It checks final arguments and the actual installer channel-selection functions,

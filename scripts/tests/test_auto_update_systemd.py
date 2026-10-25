@@ -145,6 +145,52 @@ class NativeContracts(unittest.TestCase):
                     self.assertEqual(result.returncode, 97)
                     self.assertFalse((root / "refused").exists())
 
+    def test_transport_accepts_emitted_manual_helper_and_rejects_option_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for leaf in ("tools", "tmp", "config"):
+                (root / leaf).mkdir(mode=0o700)
+            for name in ("curl", "mktemp"):
+                path = root / "tools" / name
+                path.write_text(native.TRANSPORT)
+                path.chmod(0o755)
+            installer = root / "installer"
+            installer.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$PULSE_NATIVE_ROOT/executed"\n')
+            key = root / "key"
+            subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
+                           check=True, capture_output=True)
+            subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", str(key),
+                            "-n", "pulse-install", str(installer)], check=True, capture_output=True)
+            Path(str(installer) + ".sig").rename(root / "installer.sshsig")
+            helper = root / "update"
+            env = {**os.environ, "PULSE_NATIVE_ROOT": str(root),
+                   "FIXTURE_KEY": (root / "key.pub").read_text().strip(),
+                   "PULSE_INSTALL_DIR": str(root), "PULSE_CONFIG_DIR": str(root / "config"),
+                   "PULSE_UPDATE_HELPER_PATH": str(helper),
+                   "PULSE_PROFILE_PATH": str(root / "profile"),
+                   "PULSE_BASHRC_PATH": str(root / "bashrc"),
+                   "PATH": str(root / "tools") + os.pathsep + os.environ["PATH"]}
+            generated = subprocess.run(["bash", "-c", 'source "$1"; '
+                                       'PINNED_RELEASE_SSH_PUBLIC_KEY="$FIXTURE_KEY"; setup_update_command',
+                                       "fixture", str(ROOT / "install.sh")], env=env, capture_output=True)
+            self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
+            result = subprocess.run(["bash", str(helper), "--version", "v0.0.1"],
+                                    env=env, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual((root / "executed").read_text(), "--version\nv0.0.1\n")
+            self.assertEqual(list((root / "tmp").iterdir()), [])
+            flags = ["-q", "-fsSL", "--connect-timeout", "10", "--max-time", "60"]
+            url = "https://github.com/rcourtman/Pulse/releases/latest/download/install.sh"
+            for changed in (flags[1:], [*flags, "--insecure"], [*flags, "--retry", "3"],
+                            [arg if arg != "60" else "61" for arg in flags],
+                            [arg if arg != "10" else "11" for arg in flags]):
+                with self.subTest(flags=changed):
+                    target = root / "refused"
+                    result = subprocess.run([str(root / "tools/curl"), *changed, url, "-o", str(target)],
+                                            env=env, capture_output=True, timeout=10)
+                    self.assertEqual(result.returncode, 97)
+                    self.assertFalse(target.exists())
+
     def test_real_verifier_accepts_fixture_and_refuses_tampering(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
