@@ -6364,6 +6364,22 @@ The helper forwards both parsed channels explicitly, including the stable
 default for an existing file, so the containing installer cannot reinterpret
 that same configuration through its older saved-preference reader.
 
+The helper fetches its installer and signature separately with ten-second
+connection and sixty-second whole-request limits, without implicit retries.
+Curl's first `-q` option disables ambient configuration, which otherwise could
+introduce retries beyond those limits. Cleanup is armed before either temporary
+input is allocated, so failure of the second allocation also removes the first.
+A failed or partial download stops before signature verification or installer
+execution; signature failure still forbids execution. Saved settings remain
+untouched, and failed bootstrap cannot print the successful-update message.
+
+`TestRootManualUpdateDownloadDeadlines` executes the emitted helper with a real
+SSH verifier and modelled transport/allocation faults. Six controls cover both
+partial-download timeouts, both allocation failures, invalid signatures and a
+successful signed bootstrap. They require the deadline/config-isolation options,
+no request replay, temporary-input cleanup and saved-configuration preservation.
+They do not measure live network deadlines or establish installed/native recovery.
+
 `TestManualUpdateChannelAdmission` generates and executes the actual helper
 against local transport fixtures and genuinely signed installer/sidecar bytes.
 It checks final arguments and the actual installer channel-selection functions,
