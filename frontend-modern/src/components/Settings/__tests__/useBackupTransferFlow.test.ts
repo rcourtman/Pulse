@@ -94,9 +94,8 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
       await (kind === 'import' ? flow.handleImport() : flow.handleExport());
       expect(fetchMock).not.toHaveBeenCalled();
       expect(flow.transferOrgID()).toBe('tenant-a');
-      expect(notificationStore.error).toHaveBeenCalledWith(
-        expect.stringContaining('Organisation changed'),
-      );
+      expect(flow.transferError()).toContain('Organisation changed');
+      expect(notificationStore.error).not.toHaveBeenCalled();
     },
   );
 
@@ -232,6 +231,8 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     expect(reloadTimers()).toHaveLength(0);
     expect(flow.importPassphrase()).toBe('');
     expect(flow.importFile()).toBeNull();
+    expect(flow.showImportDialog()).toBe(true);
+    expect(notificationStore.error).not.toHaveBeenCalled();
   });
 
   it.each(['export', 'import'] as const)(

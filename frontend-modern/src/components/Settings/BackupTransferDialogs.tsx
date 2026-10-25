@@ -24,7 +24,9 @@ interface BackupTransferDialogsProps {
   transferOrgID: Accessor<string>;
   isTransferring: Accessor<boolean>;
   transferError: Accessor<string>;
+  transferNotice: Accessor<string>;
   apiTokenInput: Accessor<string>;
+  apiTokenError: Accessor<string>;
   setApiTokenInput: (value: string) => void;
   handleExport: () => void;
   handleImport: () => void;
@@ -44,14 +46,19 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
           panelClass="max-w-md"
           ariaLabel="Export configuration"
         >
-          <Card padding="lg" class="max-w-md w-full">
+          <Card padding="lg" class="max-w-md w-full min-h-0 overflow-y-auto">
             <SectionHeader title="Export configuration" size="md" class="mb-4" />
             <p class="mb-4 text-sm text-muted break-all">
               Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
             </p>
-            <Show when={props.transferError()}>
+            <Show when={props.transferError() && !props.showApiTokenModal()}>
               <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
                 {props.transferError()}
+              </p>
+            </Show>
+            <Show when={props.transferNotice() && !props.showApiTokenModal()}>
+              <p role="status" class="mb-4 text-sm text-muted">
+                {props.transferNotice()}
               </p>
             </Show>
             <Show when={props.isTransferring()}>
@@ -214,8 +221,13 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
           panelClass="max-w-md"
           ariaLabel="API token required"
         >
-          <Card padding="lg" class="max-w-md w-full">
+          <Card padding="lg" class="max-w-md w-full min-h-0 overflow-y-auto">
             <SectionHeader title="API token required" size="md" class="mb-4" />
+            <Show when={props.apiTokenError() || props.transferError()}>
+              <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
+                {props.apiTokenError() || props.transferError()}
+              </p>
+            </Show>
 
             <div class="space-y-4">
               <p class="text-sm text-muted">
@@ -274,14 +286,19 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
           panelClass="max-w-md"
           ariaLabel="Import configuration"
         >
-          <Card padding="lg" class="max-w-md w-full">
+          <Card padding="lg" class="max-w-md w-full min-h-0 overflow-y-auto">
             <SectionHeader title="Import configuration" size="md" class="mb-4" />
             <p class="mb-4 text-sm text-muted break-all">
               Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
             </p>
-            <Show when={props.transferError()}>
+            <Show when={props.transferError() && !props.showApiTokenModal()}>
               <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
                 {props.transferError()}
+              </p>
+            </Show>
+            <Show when={props.transferNotice() && !props.showApiTokenModal()}>
+              <p role="status" class="mb-4 text-sm text-muted">
+                {props.transferNotice()}
               </p>
             </Show>
             <Show when={props.isTransferring()}>

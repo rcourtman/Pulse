@@ -1,6 +1,10 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BackupTransferDialogs } from '../BackupTransferDialogs';
+import { useBackupTransferFlow } from '../useBackupTransferFlow';
+import { ToastContainer } from '@/components/Toast/Toast';
+import { clearApiToken, setOrgID } from '@/utils/apiClient';
+import type { SecurityStatus } from '@/types/config';
 
 function renderTransfer(
   kind: 'export' | 'import',
@@ -25,7 +29,9 @@ function renderTransfer(
       transferOrgID={() => 'tenant-fixture'}
       isTransferring={() => pending}
       transferError={() => error}
+      transferNotice={() => ''}
       apiTokenInput={() => ''}
+      apiTokenError={() => ''}
       setApiTokenInput={vi.fn()}
       handleExport={vi.fn()}
       handleImport={vi.fn()}
@@ -38,7 +44,12 @@ function renderTransfer(
 }
 
 describe('BackupTransferDialogs', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    clearApiToken();
+    setOrgID(null);
+  });
 
   it('discloses the actual archive scope before exporting', () => {
     renderTransfer('export');
@@ -101,5 +112,135 @@ describe('BackupTransferDialogs', () => {
     const text = screen.getByRole('dialog', { name: 'API token required' }).textContent;
     expect(text).toContain('Saving it does not repeat the transfer.');
     expect(text).toContain('Review the workspace and submit again yourself.');
+  });
+
+  function renderFlow(kind: 'export' | 'import' = 'import', tokenOnly = false) {
+    const securityStatus = () =>
+      ({ hasAuthentication: !tokenOnly, apiTokenConfigured: tokenOnly }) as SecurityStatus;
+    let flow!: ReturnType<typeof useBackupTransferFlow>;
+    setOrgID('tenant-fixture');
+    document.cookie = 'pulse_csrf=synthetic-csrf; Path=/';
+    render(() => {
+      flow = useBackupTransferFlow({ securityStatus });
+      return (
+        <>
+          <button
+            onClick={() =>
+              kind === 'import' ? flow.setShowImportDialog(true) : flow.setShowExportDialog(true)
+            }
+          >
+            Open transfer
+          </button>
+          <BackupTransferDialogs {...flow} securityStatus={securityStatus} />
+          <ToastContainer />
+        </>
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open transfer' }));
+    if (kind === 'import') {
+      flow.setImportPassphrase('synthetic-passphrase');
+      flow.setImportFile({ text: async () => '{"data":"synthetic-archive"}' } as File);
+    } else flow.setExportPassphrase('synthetic-passphrase');
+    return flow;
+  }
+
+  it.each(['export', 'import'] as const)(
+    'keeps repeated %s failures in one persistent dialog alert without toast stacking',
+    async (kind) => {
+      const refusal =
+        'A configuration import is still running for this workspace. This request has not been applied; wait for it to finish and check the configuration before retrying.';
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => new Response(refusal, { status: 409 }));
+      vi.stubGlobal('fetch', fetchMock);
+      const flow = renderFlow(kind);
+      const dialog = screen.getByRole('dialog');
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        fireEvent.click(
+          within(dialog).getByRole('button', {
+            name: kind === 'import' ? 'Import' : 'Export',
+            exact: true,
+          }),
+        );
+        await waitFor(() => expect(flow.isTransferring()).toBe(false));
+        expect(fetchMock).toHaveBeenCalledTimes(attempt);
+        expect(within(dialog).getAllByRole('alert')).toHaveLength(1);
+        expect(within(dialog).getByRole('alert')).toHaveTextContent(refusal);
+        expect(
+          screen.queryByRole('button', { name: 'Dismiss notification', hidden: true }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.getByRole('region', { name: 'Notifications', hidden: true }),
+        ).toBeEmptyDOMElement();
+      }
+      if (kind === 'import') {
+        expect(within(dialog).getByRole('alert')).toHaveTextContent('Import was not confirmed');
+        expect(flow.importPassphrase()).toBe('synthetic-passphrase');
+        expect(flow.importFile()).not.toBeNull();
+      }
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(flow.importPassphrase()).toBe('');
+      expect(flow.exportPassphrase()).toBe('');
+      fireEvent.click(screen.getByRole('button', { name: 'Open transfer' }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('keeps token validation and saved status in the active dialog without replaying import', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'));
+    vi.stubGlobal('fetch', fetchMock);
+    const flow = renderFlow('import', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Import', exact: true }));
+    const prompt = await screen.findByRole('dialog', { name: 'API token required' });
+    fireEvent.input(within(prompt).getByLabelText('API Token'), { target: { value: '   ' } });
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Authenticate' }));
+    expect(within(prompt).getByRole('alert')).toHaveTextContent('Please enter the API token');
+    expect(document.querySelectorAll('[role=alert]')).toHaveLength(1);
+    fireEvent.input(within(prompt).getByLabelText('API Token'), {
+      target: { value: 'synthetic-token' },
+    });
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Authenticate' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import configuration' });
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'API token saved. Review the workspace',
+    );
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    expect(flow.apiTokenInput()).toBe('');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('region', { name: 'Notifications', hidden: true }),
+    ).toBeEmptyDOMElement();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open transfer' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('returns the uncertain-import warning from a refused token prompt to the original dialog', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async () => new Response(JSON.stringify({ error: 'API token required' }), { status: 403 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    renderFlow();
+    fireEvent.click(screen.getByRole('button', { name: 'Import', exact: true }));
+    const prompt = await screen.findByRole('dialog', { name: 'API token required' });
+    expect(within(prompt).getByRole('alert')).toHaveTextContent('Import was not confirmed');
+    expect(document.querySelectorAll('[role=alert]')).toHaveLength(1);
+    fireEvent.input(within(prompt).getByLabelText('API Token'), {
+      target: { value: 'synthetic-token' },
+    });
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Authenticate' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import configuration' });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Check the destination before trying again',
+    );
+    expect(within(dialog).getByRole('status')).toHaveTextContent('submit the transfer again');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('region', { name: 'Notifications', hidden: true }),
+    ).toBeEmptyDOMElement();
   });
 });
