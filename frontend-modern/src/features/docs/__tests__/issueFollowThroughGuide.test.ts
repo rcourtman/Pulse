@@ -26,8 +26,7 @@ function followThrough(): HTMLElement {
   return section;
 }
 
-const prose = (element: HTMLElement): string =>
-  (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+const prose = (element: HTMLElement): string => (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('public issue follow-through guidance', () => {
   it('keeps resolution, stable-release retest and timeout distinct in rendered paragraphs', () => {
@@ -80,11 +79,15 @@ describe('public issue follow-through guidance', () => {
     const text = prose(article);
     expect(text).toContain('Stable publication is targeted seven days after the last stable release');
     expect(text).toContain('one day earlier, reserving its full 24-hour soak');
-    expect(text).toContain('An important fix ships in the next beta, not through an early candidate or stable release');
+    expect(text).toContain(
+      'An important fix ships in the next beta, not through an early candidate or stable release',
+    );
     expect(text).toContain('unless a release-blocker requires a fresh candidate');
     expect(text).not.toContain('Every 14 days');
     expect(text).not.toContain('An early cut can bring');
-    expect(article.querySelector('a[href="/docs/RELEASE_PROCESS"]')?.hasAttribute('data-doc-link')).toBe(true);
+    expect(article.querySelector('a[href="/docs/RELEASE_PROCESS"]')?.hasAttribute('data-doc-link')).toBe(
+      true,
+    );
     const releaseSource = readFileSync(path.join(shippedDocs, 'RELEASE_PROCESS.md'), 'utf8');
     expect(releaseSource).toBe(readFileSync(path.join(repoRoot, 'docs/RELEASE_PROCESS.md'), 'utf8'));
     const release = renderGuide('RELEASE_PROCESS', releaseSource);
