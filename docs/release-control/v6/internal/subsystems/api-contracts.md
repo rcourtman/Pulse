@@ -21,6 +21,34 @@
 
 ## Purpose
 
+### Configuration imports distinguish saved files from live recovery
+
+After an archive commits, every attempted live alert, webhook, email and guest
+metadata reload must succeed before the import acknowledges success. A failed
+read or unavailable component of a present monitor returns HTTP 500 with a
+bounded, fixed component list and a failed audit outcome. Independent reloads
+still run; raw errors, private paths, destinations and archive inputs never
+enter that response or audit detail. The complete plain-text error stays below
+the API client's 200-character boundary, including its newline, so the existing
+recovery dialog retains the explanation instead of reporting success and
+reloading the page.
+
+This is a **saved, incompletely applied** outcome, not rollback or permission to
+repeat a replacement. Committed replay admission remains retained, including
+after this failure. Operators check the destination's live settings before
+relying on them. Initialization contexts without a monitor remain supported;
+a present monitor with a missing alert/notification manager fails gracefully,
+not by panic or a successful live-apply claim.
+
+`TestHandleImportConfigRuntimeOutcome` exercises each read failure, combined
+failure, missing managers, successful independent application, bounded private
+errors, audit outcomes and newer-edit/replay preservation using real imports.
+`TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome` binds the
+real router, authentication, metadata reader, no-store and replay response.
+The registered frontend transport test and browser proof consume these
+post-commit responses through the unchanged recovery flow. This establishes
+neither notification delivery nor installed/native recovery.
+
 ### Configuration-import transport replays are bounded, not fresh recovery
 
 The existing import POST keeps authentication, write scope, CSRF and tenant
@@ -10263,8 +10291,10 @@ archive and rebinds shared runtime state, the reload path must tolerate absent
 notification or monitoring managers and degrade gracefully instead of
 panicking on optional side effects. `/api/config/import` may be exercised from
 proof or setup contexts that do not yet have every long-lived runtime manager
-wired, but the contract must still leave the imported configuration readable
-through the canonical API surface.
+wired. A missing monitor remains supported; a missing component of a present
+monitor or a failed attempted reload returns an explicit saved-but-incomplete
+error. The imported configuration remains readable through the canonical API
+surface, and a committed replacement is not automatically retried.
 `/api/config/export` and `/api/config/import` are therefore router auth-bypass
 entries only so their handlers can own stricter route-local auth and
 public-network checks; global middleware must not preempt those handlers or

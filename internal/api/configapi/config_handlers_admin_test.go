@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 )
 
 func TestHandleExportConfig(t *testing.T) {
@@ -106,6 +107,9 @@ func TestHandleImportConfig(t *testing.T) {
 	}
 
 	handler := newTestConfigHandlers(t, cfg)
+	// A successful live apply requires its notification settings reader, but
+	// these configuration-only tests must never start delivery workers.
+	setUnexportedField(t, handler.defaultMonitor, "notificationMgr", &notifications.NotificationManager{})
 	// Mock reload function to avoid actual reload logic failure
 	handler.reloadFunc = func() error { return nil }
 	// Force usage of the persistence instance we prepared (dummyPersistence)

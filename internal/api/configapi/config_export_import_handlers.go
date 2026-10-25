@@ -3,6 +3,7 @@ package configapi
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
@@ -186,24 +187,37 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 
 	// Also reload alert and notification configs explicitly
 	// (the monitor reload only reloads nodes unless it's a full reload).
-	if h.getMonitor(r.Context()) != nil {
+	// Persistence has already committed. Continue independent reloads, but do
+	// not turn a partial live apply into a successful import acknowledgement.
+	// Only fixed component names may reach the response or audit detail.
+	var reloadFailures []string
+	if monitor := h.getMonitor(r.Context()); monitor != nil {
 		// Reload alert configuration.
 		if alertConfig, err := h.getPersistence(r.Context()).LoadAlertConfig(); err == nil {
-			h.getMonitor(r.Context()).GetAlertManager().UpdateConfig(*alertConfig)
-			log.Info().Msg("Reloaded alert configuration after import")
+			if alertManager := monitor.GetAlertManager(); alertManager == nil {
+				reloadFailures = append(reloadFailures, "alert settings")
+				log.Warn().Msg("Skipped alert reload after import because alert manager is unavailable")
+			} else {
+				alertManager.UpdateConfig(*alertConfig)
+				log.Info().Msg("Reloaded alert configuration after import")
+			}
 		} else {
+			reloadFailures = append(reloadFailures, "alert settings")
 			log.Warn().Err(err).Msg("Failed to reload alert configuration after import")
 		}
 
+		notificationMgr := monitor.GetNotificationManager()
 		// Reload webhook configuration.
 		if webhooks, err := h.getPersistence(r.Context()).LoadWebhooks(); err == nil {
-			notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
 			if notificationMgr == nil {
+				reloadFailures = append(reloadFailures, "webhook settings")
 				log.Warn().Msg("Skipped webhook reload after import because notification manager is unavailable")
 			} else {
 				// Clear existing webhooks and add new ones.
+				webhooksApplied := true
 				for _, webhook := range notificationMgr.GetWebhooks() {
 					if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
+						webhooksApplied = false
 						log.Warn().Err(err).Str("webhook", webhook.ID).Msg("Failed to delete existing webhook during reload")
 					}
 				}
@@ -211,21 +225,28 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 				for _, webhook := range webhooks {
 					notificationMgr.AddWebhook(webhook)
 				}
-				log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
+				if webhooksApplied {
+					log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
+				} else {
+					reloadFailures = append(reloadFailures, "webhook settings")
+				}
 			}
 		} else {
+			reloadFailures = append(reloadFailures, "webhook settings")
 			log.Warn().Err(err).Msg("Failed to reload webhook configuration after import")
 		}
 
 		// Reload email configuration.
 		if emailConfig, err := h.getPersistence(r.Context()).LoadEmailConfig(); err == nil {
-			if notificationMgr := h.getMonitor(r.Context()).GetNotificationManager(); notificationMgr == nil {
+			if notificationMgr == nil {
+				reloadFailures = append(reloadFailures, "email settings")
 				log.Warn().Msg("Skipped email reload after import because notification manager is unavailable")
 			} else {
 				notificationMgr.SetEmailConfig(*emailConfig)
 				log.Info().Msg("Reloaded email configuration after import")
 			}
 		} else {
+			reloadFailures = append(reloadFailures, "email settings")
 			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
 		}
 	}
@@ -233,10 +254,19 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	// Reload guest metadata from disk.
 	if h.guestMetadataHandler != nil {
 		if err := h.guestMetadataHandler.Reload(r.Context()); err != nil {
+			reloadFailures = append(reloadFailures, "guest metadata")
 			log.Warn().Err(err).Msg("Failed to reload guest metadata after import")
 		} else {
 			log.Info().Msg("Reloaded guest metadata after import")
 		}
+	}
+
+	if len(reloadFailures) != 0 {
+		failed := strings.Join(reloadFailures, ", ")
+		deps.AuditEvent(orgID, "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
+			"Configuration saved but live reload incomplete: "+failed)
+		http.Error(w, "Configuration saved, but live reload failed: "+failed+". Check the destination before relying on it. Do not repeat the import.", http.StatusInternalServerError)
+		return
 	}
 
 	deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, true,

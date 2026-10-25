@@ -21,6 +21,22 @@
 
 ## Purpose
 
+### Saved configuration is not successful live recovery
+
+Configuration import returns an explicit saved-but-incomplete error and failed
+audit outcome when an attempted live alert, notification or guest metadata
+reload fails. Independent reloads continue, but the recovery dialog must not
+close and claim success or schedule its normal success reload. The response
+names only fixed components, never private errors, destinations or archive
+inputs, and fits the consuming API client's plain-text bound. Persistence is
+already committed: this is not rollback, nor a reason to repeat the import.
+The existing bounded replay admission protects newer edits after partial apply.
+Initialization without a monitor remains supported; absent sub-managers in a
+present monitor fail without panic. The real-import runtime-outcome and router
+contract tests, frontend transport suite and source-bound consuming browser
+proof cover the distinction. No workload, database schema, guest-agent request
+or native recovery operation changes.
+
 ### Future backup dates cannot establish current protection
 
 Protection freshness and verification must fall at or before their evaluation

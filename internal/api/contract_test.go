@@ -28046,3 +28046,95 @@ func TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped(t *testing.T) 
 		}
 	}
 }
+
+// A post-commit metadata read failure must reach the browser as an incomplete
+// apply, not a 200 success that closes the recovery dialog and reloads the page.
+func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_HOSTED_MODE", "false")
+	dir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dir)
+	const rawToken = "synthetic-import-runtime-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	cfg.DataPath, cfg.ConfigPath = dir, dir
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	reloads := 0
+	router := NewRouter(cfg, nil, nil, nil, func() error {
+		reloads++
+		// Fault after persistence has committed, before the real metadata reload.
+		path := filepath.Join(dir, "guest_metadata.json")
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		return os.Mkdir(path, 0700)
+	}, "test")
+	cleanupTestRouter(t, router)
+
+	source := config.NewConfigPersistence(t.TempDir())
+	if err := source.SaveNodesConfig([]config.PVEInstance{{Name: "runtime-fixture", Host: "https://runtime.invalid:8006", TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-runtime-token", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.SaveAPITokens([]config.APITokenRecord{record}); err != nil {
+		t.Fatal(err)
+	}
+	settings := config.DefaultSystemSettings()
+	settings.PublicURL = "https://imported.invalid"
+	if err := source.SaveSystemSettings(*settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.GetGuestMetadataStore().Set("synthetic:101", &config.GuestMetadata{Description: "imported metadata"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := source.GetGuestMetadataStore().Close(time.Second); err != nil {
+			t.Error(err)
+		}
+	})
+	const passphrase = "synthetic-runtime-contract-passphrase"
+	archive, err := source.ExportConfig(passphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(ImportConfigRequest{Data: archive, Passphrase: passphrase})
+	if err != nil {
+		t.Fatal(err)
+	}
+	submit := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/config/import", bytes.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:1234"
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	rec := submit()
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(rec.Body.String(), "Configuration saved, but live reload failed: guest metadata.") || strings.Contains(rec.Body.String(), "success") {
+		t.Fatalf("incomplete apply = %d %s", rec.Code, rec.Body.String())
+	}
+	for _, private := range []string{dir, archive, passphrase, rawToken, "guest_metadata.json"} {
+		if strings.Contains(rec.Body.String(), private) {
+			t.Error("runtime failure exposed private input or storage detail")
+		}
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Error("recovery error lost the router's no-store boundary")
+	}
+	committed, err := router.persistence.LoadSystemSettings()
+	if err != nil || committed.PublicURL != settings.PublicURL {
+		t.Fatalf("partial apply must not pretend to roll back the commit: %#v %v", committed, err)
+	}
+	committed.PublicURL = "https://newer.invalid"
+	if err := router.persistence.SaveSystemSettings(*committed); err != nil {
+		t.Fatal(err)
+	}
+	if replay := submit(); replay.Code != http.StatusConflict || reloads != 1 {
+		t.Fatalf("replay after partial apply = %d %s; reloads=%d", replay.Code, replay.Body.String(), reloads)
+	}
+	newer, err := router.persistence.LoadSystemSettings()
+	if err != nil || newer.PublicURL != committed.PublicURL {
+		t.Fatalf("replay replaced a newer legitimate edit: %#v %v", newer, err)
+	}
+}
