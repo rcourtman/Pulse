@@ -51,7 +51,7 @@ func replayTestRequest(t *testing.T, name string) ImportConfigRequest {
 	t.Helper()
 	data := config.ExportData{
 		Version:       "4.4",
-		Nodes:         config.NodesConfig{PVEInstances: []config.PVEInstance{{Name: name, Host: "https://" + name + ".invalid:8006", Disabled: true, VerifySSL: true, TokenValue: "synthetic-" + name + "-secret"}}},
+		Nodes:         config.NodesConfig{PVEInstances: []config.PVEInstance{{Name: name, Host: "https://" + name + ".invalid:8006", Disabled: true, VerifySSL: true, TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-" + name + "-secret"}}},
 		System:        *config.DefaultSystemSettings(),
 		GuestMetadata: map[string]*config.GuestMetadata{"synthetic:101": {Description: name}},
 		APITokens:     []config.APITokenRecord{{ID: name, Hash: "synthetic-" + name + "-hash", OrgID: "default"}},
@@ -82,7 +82,7 @@ func replayTestSubmit(h *ConfigHandlers, body []byte) *httptest.ResponseRecorder
 func replayTestNewerEdit(t *testing.T, h *ConfigHandlers) {
 	t.Helper()
 	p := h.defaultPersistence
-	if err := p.SaveNodesConfig([]config.PVEInstance{{Name: "newer-edit", Host: "https://newer.invalid:8006", TokenValue: "synthetic-newer-secret", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
+	if err := p.SaveNodesConfig([]config.PVEInstance{{Name: "newer-edit", Host: "https://newer.invalid:8006", TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-newer-secret", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	settings := config.DefaultSystemSettings()
