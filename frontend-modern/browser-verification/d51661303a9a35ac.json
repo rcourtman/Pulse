@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "0c0532e843fd2b82ebb76b44334ba506d1ad2217",
+  "verified_at": "2026-10-25T12:53:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "74e1da39ad59104068ce82b993d09174cbc6bbdb7e01412d440a87400d3366d0"
+  },
+  "routes": [
+    "/proxmox/backups/coverage (offline consuming fixture: production ProxmoxBackupsTable, protection hook, API client, recovery model, Coverage detail panel and application CSS; synthetic HTTP, not full-app authentication)"
+  ],
+  "states": [
+    "Two same-kind backup providers retain distinct readable and denied scope identities beside their own job, history and access evidence. Missing scope is explicitly Unknown; server-owned Attention and independently readable artifact remain unchanged.",
+    "Long unbroken scope wraps visibly at desktop/light and 320px/dark without horizontal page overflow. Baseline and final screenshots opened with native view_image."
+  ],
+  "interactions": [
+    "26 final browser checks: desktop keyboard expansion/collapse, narrow natural row tap/collapse, provider/status association, missing scope, long-name wrapping and document width. Read-only fixture traffic and no page runtime errors.",
+    "12 baseline checks independently reproduce absent source identities at both widths. Driver/setup failures are retained separately and not counted as passing proof."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 760,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "theme": "dark",
+      "touch": true
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, BROWSER-BINDING.json, PIXEL-REVIEW.md and browser/baseline-*.png, browser/final-*.png. Fixture and drivers are evidence only.",
+  "limitations": [
+    "Synthetic HTTP sources; no backend collection/authentication, installed recovery, guest/QGA action, restore/thaw, reporter-cause reproduction or release acceptance."
+  ]
+}
