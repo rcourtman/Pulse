@@ -8603,7 +8603,7 @@ func TestInstallSHUninstallRetainsCredentialsWhenSavedURLIsMissing(t *testing.T)
 }
 
 func TestInstallSHSystemdTeardownRequiresObservedQuiescence(t *testing.T) {
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_systemd_teardown.py"), "AgentSystemdTeardown", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_systemd_teardown.py"), "AgentSystemdTeardown", []string{
 		"test_unknown_read_stop_and_disable_retain_every_artifact",
 		"test_unsettled_or_unknown_states_never_authorise_deletion",
 		"test_helper_socket_and_service_are_reconciled_together",
@@ -8629,7 +8629,7 @@ func TestInstallSHOpenRCTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix shell/OpenRC controls; Windows has its own native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_openrc_teardown.py"), "AgentOpenRCTeardown", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_openrc_teardown.py"), "AgentOpenRCTeardown", []string{
 		"test_stop_and_disable_refusals_retain_every_local_file",
 		"test_failed_partial_or_diagnostic_observations_are_not_replaced_by_another_read",
 		"test_independent_post_stop_and_runlevel_reads_are_mandatory",
@@ -8649,7 +8649,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unix rc.d/SysV controls; Windows has its own native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_legacy_teardown.py"), "AgentLegacyTeardown", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_legacy_teardown.py"), "AgentLegacyTeardown", []string{
 		"test_stop_refusal_retains_all_local_recovery",
 		"test_manager_refusal_precedes_remote_and_state_erasure",
 		"test_ignored_stop_disable_and_reactivation_are_not_success",
@@ -8675,7 +8675,7 @@ func TestInstallSHUpstartTeardownRequiresObservedQuiescence(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("DSM Upstart shell controls; Windows has its own native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_upstart_teardown.py"), "AgentUpstartTeardown", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_upstart_teardown.py"), "AgentUpstartTeardown", []string{
 		"test_link_fixture_preserves_exclusive_no_target_directory_semantics",
 		"test_link_fixture_exposes_the_old_directory_restore_race",
 		"test_refused_manager_precedes_remote_and_state_erasure",
@@ -8700,7 +8700,7 @@ func TestInstallSHTrueNASScaleBootTasksRetireBeforeRecoveryErasure(t *testing.T)
 	if runtime.GOOS == "windows" {
 		t.Skip("TrueNAS SCALE shell controls; Windows has its own native SCM gate")
 	}
-	runPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_truenas_teardown.py"), "AgentTrueNASTeardown", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "installtests", "agent_truenas_teardown.py"), "AgentTrueNASTeardown", []string{
 		"test_unavailable_or_untrusted_task_inventory_cannot_remove_recovery",
 		"test_foreign_or_indirect_bootstrap_is_not_mutated",
 		"test_missing_activation_target_cannot_hide_an_owned_task",

@@ -162,7 +162,7 @@ func TestAutoUpdateDownloadFailures(t *testing.T) {
 // Service-state admission is independent of the signed/metadata transaction
 // matrix below; no native service or published input is used by this fixture.
 func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
-	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateServiceState", []string{
 		"test_manager_diagnostics_refuse_initial_update_and_restart",
 		"test_manager_diagnostics_after_install_retain_backup_without_mutation",
 		"test_manager_diagnostics_after_stop_retain_backup_without_restart",
@@ -176,7 +176,7 @@ func TestAutoUpdateServiceStateFailsClosed(t *testing.T) {
 // Keep the full real-sink matrix mandatory, but give it its own existing-size
 // bound rather than exhausting the service-state suite's manager deadlines.
 func TestAutoUpdateLogSinkFailures(t *testing.T) {
-	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
+	runParallelPythonFixtureControls(t, repoFile("scripts", "tests", "test_auto_update_service_state.py"), "UpdateLogSinks", []string{
 		"test_logger_double_keeps_complete_argument_frames_and_exit_sequence",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_failure_drains_installer_and_preserves_recovery",

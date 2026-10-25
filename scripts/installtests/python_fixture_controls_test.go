@@ -15,12 +15,23 @@ import (
 
 // A suite's cumulative runtime is not a service or installer deadline. Give
 // each independent control the existing bound, while the native phase keeps
-// its overall Go timeout. Each method owns a separate Python process and its
-// private fixture files: use Go's bounded -parallel budget instead of adding
-// every independent manager timeout to the containing suite's critical path.
+// its overall Go timeout. Default to serial execution: private files/processes
+// alone do not isolate a control that reads the real machine-wide inventory.
 // Discovery runs every method, including future ones, and the required list
 // prevents deleting a safety control unnoticed.
 func runPythonFixtureControls(t *testing.T, script, class string, required []string, bound time.Duration, env ...string) {
+	t.Helper()
+	runScheduledPythonFixtureControls(t, script, class, required, bound, false, env...)
+}
+
+// Opt in only classes with independent fixture state and modelled manager /
+// process inventories. Go's existing -parallel limit bounds process admission.
+func runParallelPythonFixtureControls(t *testing.T, script, class string, required []string, bound time.Duration, env ...string) {
+	t.Helper()
+	runScheduledPythonFixtureControls(t, script, class, required, bound, true, env...)
+}
+
+func runScheduledPythonFixtureControls(t *testing.T, script, class string, required []string, bound time.Duration, parallel bool, env ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), bound)
 	controls, err := discoverPythonFixtureControls(ctx, script, class, required, env...)
@@ -31,7 +42,9 @@ func runPythonFixtureControls(t *testing.T, script, class string, required []str
 	t.Logf("Discovered %d %s controls; each retains its %s bound", len(controls), class, bound)
 	for _, name := range controls {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
+			if parallel {
+				t.Parallel()
+			}
 			// Start the existing per-control deadline after scheduler admission,
 			// never while this method is waiting for a parallel worker.
 			ctx, cancel := context.WithTimeout(context.Background(), bound)
@@ -48,7 +61,11 @@ func runPythonFixtureControls(t *testing.T, script, class string, required []str
 func TestPythonFixtureControlsBoundedParallelExecution(t *testing.T) {
 	const probeRoot = "PULSE_TEST_PYTHON_CONTROL_PROBE_ROOT"
 	if root := os.Getenv(probeRoot); root != "" {
-		runPythonFixtureControls(t, filepath.Join(root, "controls.py"), "Controls",
+		run := runParallelPythonFixtureControls
+		if _, err := os.Stat(filepath.Join(root, "serial-helper")); err == nil {
+			run = runPythonFixtureControls
+		}
+		run(t, filepath.Join(root, "controls.py"), "Controls",
 			[]string{"test_first", "test_second", "test_third", "test_fourth"}, 15*time.Second,
 			probeRoot+"="+root)
 		return
@@ -88,11 +105,13 @@ if __name__ == "__main__": unittest.main(verbosity=2)
 	for _, tc := range []struct {
 		name, fault, parallel, diagnostic string
 		passed                            bool
+		serialHelper                      bool
 	}{
-		{"bounded parallel", "", "2", "", true},
-		{"failed control", "fail", "2", "retained adverse control", false},
-		{"skipped control", "skip", "2", "did not execute exactly one passing control", false},
-		{"serial adverse control", "", "1", "serial control execution", false},
+		{"bounded parallel", "", "2", "", true, false},
+		{"failed control", "fail", "2", "retained adverse control", false, false},
+		{"skipped control", "skip", "2", "did not execute exactly one passing control", false, false},
+		{"serial scheduler adverse control", "", "1", "serial control execution", false, false},
+		{"serial helper preserves ordering", "", "2", "serial control execution", false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -101,6 +120,11 @@ if __name__ == "__main__": unittest.main(verbosity=2)
 			}
 			if err := os.WriteFile(filepath.Join(root, "fault"), []byte(tc.fault), 0600); err != nil {
 				t.Fatal(err)
+			}
+			if tc.serialHelper {
+				if err := os.WriteFile(filepath.Join(root, "serial-helper"), nil, 0600); err != nil {
+					t.Fatal(err)
+				}
 			}
 			binary, err := os.Executable()
 			if err != nil {
