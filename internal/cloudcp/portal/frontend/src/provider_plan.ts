@@ -118,9 +118,11 @@ function renderCurrentPlan(plan: ProviderPlanState, canManage: boolean, busy: st
   } else {
     // The renewal date lives in Manage billing; the licence date only
     // matters, and only shows, once the subscription has stopped renewing.
+    // The licence does not say whether renewal was cancelled for the period
+    // end, so this copy must not promise that it renews.
     description = paidLicenceInGrace(plan, now)
       ? 'Your subscription has not renewed. Your clients keep this plan until ' + expires + '. Open Manage billing to renew or update your payment method.'
-      : 'Up to ' + clientWorkspaces(plan.workspace_limit) + '. Renews automatically while your subscription is active.';
+      : 'Up to ' + clientWorkspaces(plan.workspace_limit) + '. Open Manage billing to see when your subscription will renew or end.';
     if (canManage) {
       cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' +
         (busy ? ' disabled' : '') + '>' + (busy === 'manage-billing' ? 'Opening…' : 'Manage billing') + '</button>';
