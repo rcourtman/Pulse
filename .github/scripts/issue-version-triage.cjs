@@ -12,7 +12,17 @@ function escapeRegExp(value) {
 
 // Use the same locked GFM lexer as Pulse's Markdown surfaces, without
 // rendering or executing any issue content. Only top-level declarations count.
-const { lexer } = require("marked");
+const { Lexer, lexer } = require("marked");
+
+function lexFieldValue(value, body) {
+  // Reference links can be defined anywhere in the report. Extracting a field
+  // must not discard that context and turn visible declarations into missing
+  // versions or invented topics. Use only the locked parser's definitions;
+  // destinations are never fetched or treated as declaration text.
+  const fieldLexer = new Lexer({ gfm: true });
+  fieldLexer.tokens.links = lexer(String(body || ""), { gfm: true }).links;
+  return fieldLexer.lex(value);
+}
 
 function inlineProjection(tokens, maskCode = false) {
   return (tokens || []).map((token) => {
@@ -149,7 +159,7 @@ function classifyAdditionalActionableTopics(body) {
   // Ordinary inline formatting does not turn "None" into a second topic.
   // Keep block evidence, images and any qualifying text intact for review;
   // only a single paragraph can supply an explicit no-topic response.
-  const blocks = lexer(value, { gfm: true });
+  const blocks = lexFieldValue(value, body);
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : value;
   const normalized = text
@@ -190,9 +200,9 @@ function inlineDeclarationText(tokens) {
   }).join("");
 }
 
-function normalizeLegacyVersionValue(value) {
+function normalizeLegacyVersionValue(value, body) {
   const raw = String(value).trim();
-  const blocks = lexer(raw, { gfm: true });
+  const blocks = lexFieldValue(raw, body);
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : raw;
   const visible = text.trim().replace(/^[`*_]+/, "");
@@ -245,7 +255,7 @@ function extractPulseVersion(title, body) {
       // The explicit running-version field is authoritative, even when it is
       // incomplete. A title may name the old image in an upgrade report, and
       // neighbouring fields may contain an unrelated agent version.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)));
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(versionHeading + 1)), body);
     }
     for (let i = 0; i < lines.length; i += 1) {
       if (!lines[i].declaration) continue;
@@ -265,10 +275,10 @@ function extractPulseVersion(title, body) {
         /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
       );
       const inlineValue = visibleField ? visibleField[1].trim() : "";
-      if (inlineValue) return normalizeLegacyVersionValue(inlineValue);
+      if (inlineValue) return normalizeLegacyVersionValue(inlineValue, body);
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
-      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)));
+      return normalizeLegacyVersionValue(firstFieldValue(lines.slice(i + 1)), body);
     }
   }
 
@@ -283,7 +293,7 @@ function classifyV6FeedbackType(body) {
   // or title must not turn documentation/workflow feedback into a bug, and
   // prose, images or a withdrawn selection cannot supply a selected option.
   const selected = firstFieldValue(declarationLines(feedbackType));
-  const blocks = lexer(selected, { gfm: true });
+  const blocks = lexFieldValue(selected, body);
   const visible = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : selected;
   const normalized = visible.trim().toLowerCase().replace(/[ \t]+/g, " ");
