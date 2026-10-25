@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute receipt-only diff admission and the workflows' actual verdict paths."""
+"""Execute receipt/triage-only admission and the workflows' actual verdict paths."""
 
 import importlib.util
 import os
@@ -19,6 +19,9 @@ E2E = ROOT / ".github/workflows/test-e2e.yml"
 SPEC = importlib.util.spec_from_file_location("ci_browser_proof_only", SCRIPT)
 SCOPE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SCOPE)
+TRIAGE_SPEC = importlib.util.spec_from_file_location("ci_triage_only", ROOT / "scripts/ci_triage_only.py")
+TRIAGE = importlib.util.module_from_spec(TRIAGE_SPEC)
+TRIAGE_SPEC.loader.exec_module(TRIAGE)
 RECEIPT = "frontend-modern/browser-verification/2026-10-14-proof.json"
 JOBS = ("tier-selection", "test-images", "e2e", "agent-registration")
 
@@ -84,13 +87,61 @@ class ReceiptScopeTest(unittest.TestCase):
             ])
 
 
+class TriageScopeTest(unittest.TestCase):
+    def test_only_complete_exact_triage_inputs_are_eligible(self):
+        self.assertTrue(TRIAGE.triage_only_paths(list(TRIAGE.TRIAGE_INPUTS)))
+        self.assertFalse(TRIAGE.triage_only_paths([]))
+        for path in TRIAGE.TRIAGE_INPUTS:
+            with self.subTest(path=path):
+                self.assertTrue(TRIAGE.triage_only_paths([path]))
+                for suffix in (b".extra", b"/extra", b"\ninternal/api/server.go"):
+                    self.assertFalse(TRIAGE.triage_only_paths([path + suffix]))
+
+    def test_product_tests_controls_templates_workflows_and_unknown_files_keep_runtime(self):
+        for path in (
+            b"frontend-modern/src/App.tsx", b"frontend-modern/package-lock.json",
+            b"internal/api/server.go", b"internal/api/server_test.go", b"go.mod", b"go.sum",
+            b"install.sh", b"scripts/tests/run.sh", b"tests/integration/playwright.config.ts",
+            b".github/workflows/build-and-test.yml", b".github/workflows/issue-version-label-sync.yml",
+            b".github/ISSUE_TEMPLATE/bug_report.yml", b".github/scripts/other.cjs", b"docs/other.md",
+            b"scripts/ci_triage_only.py", b"scripts/tests/test_ci_browser_proof_only.py",
+            RECEIPT.encode(), b"other/.github/scripts/package.json",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(TRIAGE.triage_only_paths([*TRIAGE.TRIAGE_INPUTS, path]))
+
+    def test_unknown_failed_incomplete_or_missing_diff_keeps_runtime(self):
+        for base, head in (("", "a" * 40), ("HEAD^", "a" * 40), ("a" * 40, "main")):
+            with patch.object(TRIAGE.subprocess, "run") as run:
+                self.assertFalse(TRIAGE.triage_only_diff(base, head))
+                run.assert_not_called()
+        path = b".github/scripts/issue-version-triage.cjs"
+        for output, code in ((b"", 0), (path, 0), (path + b"\0", 1)):
+            with patch.object(TRIAGE.subprocess, "run", return_value=subprocess.CompletedProcess([], code, output)):
+                self.assertFalse(TRIAGE.triage_only_diff("a" * 40, "b" * 40))
+        for error in (OSError("fixture unavailable"), subprocess.TimeoutExpired("git", 30)):
+            with patch.object(TRIAGE.subprocess, "run", side_effect=error):
+                self.assertFalse(TRIAGE.triage_only_diff("a" * 40, "b" * 40))
+
+    def test_complete_null_delimited_diff_disables_rename_and_external_diff(self):
+        path = b".github/scripts/issue-version-triage.cjs\0"
+        for output, expected in ((path, True), (path * 4000 + b"internal/api/server.go\0", False)):
+            with patch.object(TRIAGE.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, output)) as run:
+                self.assertEqual(TRIAGE.triage_only_diff("a" * 40, "b" * 40), expected)
+                self.assertEqual(run.call_args.args[0], [
+                    "git", "diff", "--no-ext-diff", "--no-renames", "--name-only", "-z",
+                    "a" * 40, "b" * 40, "--",
+                ])
+
+
 class GitTreeScopeTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.repo = Path(self.temp.name)
         self.git("init", "-q", "--initial-branch=main")
-        for name in ("scripts/ci_browser_proof_only.py", "scripts/go-test-compile-required.sh"):
+        for name in ("scripts/ci_browser_proof_only.py", "scripts/ci_triage_only.py",
+                     "scripts/go-test-compile-required.sh"):
             path = self.repo / name
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, path)
@@ -160,13 +211,15 @@ class GitTreeScopeTest(unittest.TestCase):
             "github.event_name": "pull_request", "github.event.pull_request.base.sha": base,
             "github.event.before": base, "github.sha": head,
         })
-        output = self.repo / "outputs"
-        if output.exists():
-            output.unlink()
-        result = subprocess.run(["bash", "-c", script], cwd=self.repo, capture_output=True,
-                                text=True, timeout=10, env={**os.environ, "GITHUB_OUTPUT": str(output)})
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        return dict(line.split("=", 1) for line in output.read_text().splitlines())
+        # Workflow output is runner evidence, not a source change. Keep it
+        # outside the fixture repository so the next commit cannot stage it
+        # and accidentally turn an isolated change into a mixed tree diff.
+        with tempfile.TemporaryDirectory() as output_dir:
+            output = Path(output_dir) / "outputs"
+            result = subprocess.run(["bash", "-c", script], cwd=self.repo, capture_output=True,
+                                    text=True, timeout=10, env={**os.environ, "GITHUB_OUTPUT": str(output)})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return dict(line.split("=", 1) for line in output.read_text().splitlines())
 
     def test_actual_build_classifier_omits_only_receipt_runtime_checks(self):
         self.write(RECEIPT, "{}\n")
@@ -201,7 +254,7 @@ class GitTreeScopeTest(unittest.TestCase):
             ".github/ISSUE_TEMPLATE/bug_report.yml", ".github/ISSUE_TEMPLATE/config.yml",
             ".github/workflows/issue-version-label-sync.yml",
             ".github/workflows/build-and-test.yml", ".github/workflows/policy-consumer.yaml",
-            "docs/ISSUE_TRIAGE.md", "scripts/tests/test_ci_browser_proof_only.py",
+            "docs/ISSUE_TRIAGE.md", "scripts/ci_triage_only.py", "scripts/tests/test_ci_browser_proof_only.py",
         ):
             with self.subTest(path=path):
                 before = self.git("rev-parse", "HEAD")
@@ -209,7 +262,7 @@ class GitTreeScopeTest(unittest.TestCase):
                 head = self.commit()
                 self.assertEqual(self.classify(before, head)["triage_helper"], "true")
 
-    def test_triage_admission_uses_complete_range_and_does_not_expand_runtime_skip(self):
+    def test_triage_admission_uses_complete_range_and_keeps_mixed_runtime_checks(self):
         self.write("docs/ISSUE_TRIAGE.md", "Changed operator guidance\n")
         guidance = self.commit()
         self.assertEqual(self.classify(self.base, guidance), {
@@ -223,7 +276,7 @@ class GitTreeScopeTest(unittest.TestCase):
         self.write(".github/scripts/issue-version-triage.cjs", "// changed parser\n")
         parser = self.commit()
         self.assertEqual(self.classify(proof, parser), {
-            "code": "true", "frontend_deps": "false", "go_compile": "false",
+            "code": "false", "frontend_deps": "false", "go_compile": "false",
             "triage_helper": "true",
         })
         self.write("frontend-modern/package-lock.json", "{}\n")
@@ -232,6 +285,49 @@ class GitTreeScopeTest(unittest.TestCase):
         self.assertEqual(combined["frontend_deps"], "true")
         self.assertEqual(combined["code"], "true")
         self.assertEqual(combined["triage_helper"], "true")
+
+    def test_isolated_triage_inputs_use_the_dedicated_check(self):
+        for path in sorted(TRIAGE.TRIAGE_INPUTS):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                self.write(path.decode(), "triage fixture\n")
+                head = self.commit()
+                self.assertEqual(self.classify(before, head), {
+                    "code": "false", "frontend_deps": "false", "go_compile": "false",
+                    "triage_helper": "true",
+                })
+
+    def test_triage_skip_cannot_hide_source_renames_or_quoted_paths(self):
+        self.write("internal/api/fixture.go", "package fixture\nvar Changed = true\n")
+        product = self.commit()
+        self.write(".github/scripts/issue-version-triage.cjs", "// parser fixture\n")
+        parser = self.commit()
+        self.assertEqual(self.classify(product, parser)["code"], "false")
+        self.assertEqual(self.classify(self.base, parser)["code"], "true")
+        (self.repo / "internal/api/fixture.go").rename(self.repo / ".github/scripts/issue-version-triage.test.cjs")
+        renamed = self.commit()
+        self.assertEqual(self.classify(parser, renamed)["code"], "true")
+        self.write(".github/scripts/issue-version-triage.cjs\ninternal/api/fixture.go", "// quoted filename\n")
+        quoted = self.commit()
+        self.assertEqual(self.classify(renamed, quoted)["code"], "true")
+
+    def test_selector_failure_cannot_be_mistaken_for_a_narrow_change(self):
+        self.write(".github/scripts/issue-version-triage.cjs", "// parser fixture\n")
+        self.write("scripts/ci_triage_only.py", "raise SystemExit(42)\n")
+        head = self.commit()
+        self.assertEqual(self.classify(self.base, head)["code"], "true")
+
+    def test_controls_and_workflow_edits_cannot_skip_their_own_runtime_tests(self):
+        for path in ("scripts/ci_triage_only.py", "scripts/tests/test_ci_browser_proof_only.py",
+                     ".github/workflows/build-and-test.yml"):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+                with (self.repo / path).open("a") as control:
+                    control.write("\n# Changed CI control\n")
+                head = self.commit()
+                self.assertEqual(self.classify(before, head)["code"], "true")
+                self.assertEqual(self.classify(before, head)["triage_helper"], "true")
 
     def test_triage_path_lookalikes_and_unrelated_code_do_not_select_it(self):
         for path in (

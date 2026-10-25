@@ -119,6 +119,19 @@ jobs:
             echo "triage_helper=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The isolated issue parser is not application source. Its complete
+          # proposed-source tests run in triage-helper instead of queuing the
+          # unrelated frontend, backend and installer suites. The selector
+          # consumes a complete NUL-delimited diff with an exact allowlist;
+          # mixed changes and changes to this admission still get runtime CI.
+          if [ "$(python3 scripts/ci_triage_only.py --base "$base" --head "${{ github.sha }}")" = true ]; then
+            echo "Issue-triage-only tree diff; dedicated triage checks apply, application checks are not applicable."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "frontend_deps=false" >> "$GITHUB_OUTPUT"
+            echo "go_compile=false" >> "$GITHUB_OUTPUT"
+            echo "triage_helper=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           changed=$(git diff --name-only "$base" "${{ github.sha }}")
           printf 'Changed files:\n%s\n' "$changed"
           # The issue-event job tests before minting its App token, but that
@@ -126,7 +139,7 @@ jobs:
           # policy on the proposed source too, including documentation-only
           # guidance and every workflow consumed by the policy tests.
           triage_helper=false
-          if printf '%s\n' "$changed" | grep -E '^\.github/scripts/(issue-version-triage(\.test)?\.cjs|triage-comment-policy\.test\.cjs|package(-lock)?\.json)$|^\.github/ISSUE_TEMPLATE/|^\.github/workflows/|^docs/ISSUE_TRIAGE\.md$|^scripts/tests/test_ci_browser_proof_only\.py$' >/dev/null; then
+          if printf '%s\n' "$changed" | grep -E '^\.github/scripts/(issue-version-triage(\.test)?\.cjs|triage-comment-policy\.test\.cjs|package(-lock)?\.json)$|^\.github/ISSUE_TEMPLATE/|^\.github/workflows/|^docs/ISSUE_TRIAGE\.md$|^scripts/(ci_triage_only\.py|tests/test_ci_browser_proof_only\.py)$' >/dev/null; then
             triage_helper=true
           fi
           echo "triage_helper=$triage_helper" >> "$GITHUB_OUTPUT"
