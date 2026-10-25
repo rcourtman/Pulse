@@ -15,7 +15,12 @@
 
 ## Purpose
 
-### Community transition refund preparation
+### Dormant transition refund preparation
+
+The expanded transition-refund proposal was withdrawn before activation.
+Pulse's published refund policy is unchanged, and Community product changes
+do not depend on implementing that programme. The source below remains
+dormant technical preparation, not an active offer or activation task.
 
 `pulse-pro:license-server/v6_commercial_refunds.go` owns the admin-only annual
 transition refund preview. Its proposed announcement and release dates do not
@@ -44,14 +49,12 @@ withdrawal cannot race that intent. Unrequested historical quotes cannot begin
 cancellation. Already-dispatched obligations retain recovery. There is no
 blanket payout or automatic subscription cancellation.
 
-The Community history/probe/seat boundary and Business sales pause remain
-pending the notice-bound cutover. Before a refund exit is offered, adopt the
-programme and complete prior-refund/credit and renewal-period reconciliation,
-the separate recent-first-purchase remedy, failed/absent-refund recovery,
-production-schema migration proof and external event/runtime convergence.
-Customer-wide outstanding billing requires explicit reconciliation. No payment
-effect may be inferred from an unsigned preview or its dates. The preparation
-record is
+The Community commercial cutover remains separately governed. Preserve
+existing subscriptions, pricing protection and purchased rights. Do not
+activate or extend the withdrawn refund programme as part of that cutover.
+Existing ordinary refund handling remains unchanged. Separately justified
+financial work would require its own adopted scope and operational proof.
+The historical preparation record is
 `docs/release-control/v6/internal/records/community-transition-refund-preparation-2026-10-25.md`.
 
 ### Reporting measurement precedes commercial feature decisions

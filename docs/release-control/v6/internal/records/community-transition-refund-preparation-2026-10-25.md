@@ -1,11 +1,27 @@
-# Community transition refund preparation
+# Community transition refund preparation: historical record
+
+**Status, 25 October 2026: proposal withdrawn before activation.**
+
+The expanded transition-refund proposal described below is no longer part of
+current planning. Pulse's published refund policy remains unchanged. No
+programme dates or production payment actions were adopted by this preparation.
+
+Community product changes do not depend on implementing or activating this
+withdrawn programme. The prepared source and tests remain dormant technical
+work. Any separate future use requires its own reviewed policy and proof.
+
+The following sections preserve the historical preparation record. Their
+proposed eligibility rules and implementation requirements are superseded,
+and must not be treated as an active roadmap or customer refund offer.
+
+## Historical technical preparation
 
 25 October 2026. Commercial preparation under L2 and L3. The preview and
 subsequent annual quote/apply preparation do not adopt programme dates, deploy
 the service, change the published offer, remove runtime gates or authorize
 production payment actions.
 
-## Prepared boundary
+### Prepared boundary
 
 `pulse-pro:license-server/v6_commercial_refunds.go` binds the requested
 subscription and invoice to a configured annual Pulse price, one complete annual
@@ -55,7 +71,7 @@ local fence only through an explicit, audited operator attestation of provider
 evidence that the request cannot complete. An active read or elapsed time is
 insufficient. No financial request is repeated by that resolution.
 
-## Individual requests
+### Individual requests
 
 Refunds are on request; there is no blanket payout or automatic cancellation.
 Publish clear terms and a simple request route so customers need not argue a
@@ -80,7 +96,7 @@ full, including monthly renewals up to cancellation. This amount rule still
 needs its separate original-payment/history proof and implementation; the
 annual-only executor does not provide that remedy yet.
 
-## Remaining implementation
+### Remaining implementation
 
 Keep the public free-feature change out of the automatic release train until
 the notice and effective release are coordinated. Community history, remote
@@ -116,7 +132,7 @@ cancellation resolution cannot apply to an already canceled subscription.
 This record does not close the external commercial transition proof or claim
 that the free-feature release or complete customer programme has shipped.
 
-## Verification
+### Verification
 
 The standalone license-server Go suite includes
 `v6_commercial_refunds_test.go` for exact-payment admission, grandfathered and
