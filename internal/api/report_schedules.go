@@ -722,7 +722,7 @@ func (h *ReportingHandlers) generateScheduledFileReport(ctx context.Context, sch
 	if schedule.Kind == config.ReportScheduleKindVMInventory {
 		snapshot, ok := h.getReportingEnrichmentSnapshot(ctx, orgID)
 		if !ok {
-			return generatedMultiReport{}, fmt.Errorf("VM inventory is unavailable. Check this organization's infrastructure connections before running again.")
+			return generatedMultiReport{}, errors.New(vmInventoryUnavailableMessage)
 		}
 		return generateVMInventoryReport(snapshot, now)
 	}

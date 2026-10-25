@@ -5136,7 +5136,7 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 }
 
 func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
-	handler := NewReportingHandlers(nil, nil)
+	handler := newReportingHandlersWithInventoryForTest(t, "default")
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export?format=csv", nil)
 	rec := httptest.NewRecorder()
 
