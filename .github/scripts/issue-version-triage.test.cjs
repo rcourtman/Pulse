@@ -2285,6 +2285,74 @@ test("title fallback retains explicit Pulse and neutral version-leading declarat
   assert.equal(extractPulseVersion("Upgrade from Pulse 6.4.5 to Pulse 6.5.0", "Legacy report."), null);
 });
 
+test("version-field transitions do not assert a failing source or target release", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const value of [
+    "6.5.0 → 6.6.0-rc.1",
+    "v6.5.0->v6.6.0-rc.1",
+    "6.5.0 => unknown",
+    "6.5.0 to latest",
+    "6.5.0 &rarr; 6.6.0-rc.1",
+    "**6.5.0** to **6.6.0-rc.1**",
+    "`6.5.0 → 6.6.0-rc.1` (recovered to 6.5.0)",
+    "[6.5.0](https://example.invalid/6.4.5) → [6.6.0-rc.1](https://example.invalid/6.4.5)",
+    "server 6.5.0 → server 6.6.0-rc.1",
+    "rcourtman/pulse:6.5.0 → rcourtman/pulse:6.6.0-rc.1",
+    "pulse-pro-v6.5.0-linux-amd64.tar.gz → pulse-pro-v6.6.0-rc.1-linux-amd64.tar.gz",
+  ]) {
+    for (const field of ["### Pulse version\n", "Pulse version: ", "- **Pulse version**: "]) {
+      for (const newline of ["\n", "\r\n"]) {
+        const body = `${field}${value}\n\n### Agent version\n6.5.0\n\n` +
+          "### Upgrade attempt and recovery\nRecovered to 6.5.0; failing executable unknown.";
+        assert.equal(extractPulseVersion("Pulse 6.4.5 upgrade failed",
+          body.replaceAll("\n", newline)), null, body);
+      }
+    }
+  }
+});
+
+test("title transitions stay ambiguous without discarding a separately declared failing runtime", () => {
+  const { extractPulseVersion } = triage.internals;
+  for (const title of [
+    "Pulse 6.5.0 → 6.6.0-rc.1 failed",
+    "[Bug]: v6.5.0 to v6.6.0-rc.1 failed",
+    "[Bug]: rcourtman/pulse:6.5.0 => rcourtman/pulse:6.6.0-rc.1",
+    "6.5.0 → unknown after recovery",
+  ]) {
+    assert.equal(extractPulseVersion(title, "Legacy report."), null, title);
+    assert.equal(extractPulseVersion(title, "### Pulse version\n6.6.0-rc.1"), "6.6.0-rc.1", title);
+  }
+  for (const [value, expected] of [
+    ["6.6.0-rc.1 (upgraded from 6.5.0)", "6.6.0-rc.1"],
+    ["6.5.0 to reproduce the backup failure", "6.5.0"],
+    ["rcourtman/pulse:6.6.0-rc.1; agent 6.5.0", "6.6.0-rc.1"],
+  ]) {
+    assert.equal(extractPulseVersion("Upgrade from v6.4.5", `### Pulse version\n${value}`), expected);
+  }
+  assert.equal(extractPulseVersion("TrueNAS 25.04.0 → 25.10.0 fails in Pulse 6.5.0",
+    "Legacy report."), "6.5.0");
+});
+
+test("transition metadata consumer preserves Community state without inferring a release or contacting the reporter", async () => {
+  for (const [title, body] of [
+    ["Upgrade failed", "### Pulse version\n6.5.0 → 6.6.0-rc.1\n### Agent version\n6.5.0"],
+    ["Pulse 6.5.0 to 6.6.0-rc.1 failed", "Legacy report."],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2928, title, body,
+      labels: ["bug", "affects-6.5.0", "needs-human", "release-blocker", "needs-decomposition",
+        "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-version-info"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0"]);
+    assert.deepEqual(calls.createLabel.map(call => call.name), ["needs-version-info"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
+
 test("title-version label consumer corrects only its own metadata without contact or release inference", async () => {
   for (const [title, body, version] of [
     ["[Bug]: vSphere 8.0.3 enrichment fails", "Legacy report.", null],

@@ -57,6 +57,9 @@ version or asset, route, original time and timezone, last recorded updater or
 installer result, what stopped, and recovery already performed. Keep the version
 running at failure separate from the version observed after recovery; accept
 unknowns and use evidence already supplied anywhere in the thread.
+Automatic version labels do not choose an endpoint from a source-to-target
+sequence such as `6.5.0 → 6.6.0-rc.1`, even in the version field or title. Triage
+uses the full chronology; an ambiguous label is not a reason to re-request facts.
 
 A verified download signature establishes artifact authenticity, not completed
 installation, successful rollback or a healthy running service. `Broken pipe`
