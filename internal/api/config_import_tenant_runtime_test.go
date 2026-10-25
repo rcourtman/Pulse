@@ -119,7 +119,7 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 			t.Errorf("non-target %s monitor replaced or unavailable", orgID)
 		}
 	}
-	if !reflect.DeepEqual(cfg, beforeDefault) || !reflect.DeepEqual(monitors["tenant-b"].GetConfig(), beforeOther) {
+	if !reflect.DeepEqual(cfg.DeepCopy(), beforeDefault) || !reflect.DeepEqual(monitors["tenant-b"].GetConfig().DeepCopy(), beforeOther) {
 		t.Error("non-target runtime configuration or credentials changed")
 	}
 	if !reflect.DeepEqual(configImportFileDigests(t, persistences["default"], persistences["tenant-b"]), filesBefore) {
