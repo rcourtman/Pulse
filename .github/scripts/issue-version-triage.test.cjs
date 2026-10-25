@@ -542,8 +542,9 @@ test("topic classification stops at form fields but retains topic subheadings", 
 
 function topicBoundaryFields() {
   const fields = new Set(["Additional context"]);
-  for (const name of ["bug_report.yml", "v6_rc_feedback.yml"]) {
-    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+  const directory = path.resolve(__dirname, "../ISSUE_TEMPLATE");
+  for (const name of fs.readdirSync(directory).filter(name => /\.ya?ml$/.test(name))) {
+    const form = fs.readFileSync(path.join(directory, name), "utf8");
     for (const [, label] of form.matchAll(/^      label: (.+)$/gm)) {
       if (label !== "Additional actionable topics") fields.add(label);
     }
@@ -610,6 +611,35 @@ test("opening or editing neighbouring context cannot invent a decomposition task
       assert.deepEqual(calls.paginate, [], field);
     }
   }
+});
+
+test("feature context edits preserve a cleared review while real topic edits restore it", async () => {
+  const { github, calls } = createGithub();
+  const body = (context, topic = "None") => [
+    "### Additional actionable topics", topic, "",
+    "### Desired outcome", context, "",
+    "### Alternatives considered", "An existing workaround.",
+  ].join("\n");
+  const labels = ["enhancement", "needs-human", "needs-retest-on-latest"];
+  const issue = { number: 2925, title: "Existing feature request", body: body("Clarified outcome"),
+    labels: labels.map(name => ({ name })) };
+  await syncLabels({ github, core: createCore(), context: createContext({
+    action: "edited", issue, previousBody: body("Original outcome"),
+  }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.createLabel, []);
+
+  const revised = { ...issue, body: body("Clarified outcome", "Also retain failed attempts in History.") };
+  const context = createContext({
+    action: "edited", issue: revised, previousBody: issue.body,
+  });
+  github.currentIssue = { ...context.payload.issue, state: "open" };
+  await syncLabels({ github, core: createCore(), context });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
 });
 
 test("real revised topics still reopen review without disposing of existing tasks", async () => {
