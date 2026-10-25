@@ -3050,6 +3050,12 @@ artifact-selection behaviour.
    Chromium/WebKit traversal of short and 30,000px content plus the positive
    horizontal-overflow control; the live mobile audit keeps its bottom and
    overflow assertions.
+Bottom position and horizontal width are judged from the same browser snapshot.
+If content reflows after traversal, the audit finishes the changed extent before
+accepting that snapshot. A scroll reset with an unchanged extent remains an
+error. Native browser controls reproduce a reflow between the old separate reads,
+verify the newly revealed footer and retain both overflow and scroll-reset
+negative controls.
    The built `index.html` must not modulepreload lazy route chunks: the SRI
    plugin runs with `preloadDynamicChunks: false` so cold start fetches only the
    entry and its static vendor imports (route-level code splitting stays
