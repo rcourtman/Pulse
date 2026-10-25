@@ -1974,6 +1974,9 @@ func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *C
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	client.allowInsecureRPC = true
+	// The fixture owns persistent sessions too. Stop and join their keepalive
+	// before later tests replace the package logger to inspect close records.
+	t.Cleanup(client.Close)
 	return client
 }
 
@@ -2543,5 +2546,50 @@ func TestSystemTelemetryFailureCategoriesAreBounded(t *testing.T) {
 		if err != nil || strings.Contains(string(body), "provider-private-text") {
 			t.Fatalf("unbounded failure detail: %s %v", body, err)
 		}
+	}
+}
+
+func TestClientFixtureOwnsRPCSessionLifetime(t *testing.T) {
+	var client *Client
+	var session *trueNASRPCClient
+	// Also clean up the adverse control when the old helper is restored.
+	t.Cleanup(func() {
+		if client != nil {
+			client.Close()
+		}
+	})
+	t.Run("fixture lifetime", func(t *testing.T) {
+		fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
+			switch request.Method {
+			case "auth.login_ex":
+				return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+			case "auth.login_with_api_key":
+				return protocolFixtureReply{result: true}
+			default:
+				return protocolFixtureReply{result: []any{}}
+			}
+		}, nil)
+		client = mustClientForServer(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", InsecureSkipVerify: true})
+		if _, err := client.GetPools(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		session = client.rpc
+		if session == nil || session.keepaliveDone == nil {
+			t.Fatal("fixture did not open a maintained RPC session")
+		}
+	})
+	if client == nil || session == nil {
+		t.Fatal("fixture failed before opening its session")
+	}
+	client.rpcMu.Lock()
+	closed, retained := client.closed, client.rpc != nil
+	client.rpcMu.Unlock()
+	if !closed || retained {
+		t.Fatal("fixture cleanup left its authenticated RPC client open")
+	}
+	select {
+	case <-session.keepaliveDone:
+	default:
+		t.Fatal("fixture cleanup did not join its session keepalive")
 	}
 }

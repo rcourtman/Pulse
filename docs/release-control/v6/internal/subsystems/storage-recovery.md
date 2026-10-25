@@ -37,6 +37,25 @@ contract tests, frontend transport suite and source-bound consuming browser
 proof cover the distinction. No workload, database schema, guest-agent request
 or native recovery operation changes.
 
+### TrueNAS snapshot collection is not creation evidence
+
+Undated or zero-date ZFS snapshots retain no start/completion time and have
+Unknown outcome. Their IDs remain stable across polls regardless of collection
+time; native dated snapshot IDs/times and replication semantics are unchanged.
+On store open, former successful snapshot rows with no start become undated
+Unknown observations: completion-only rows used the old collection-time fallback,
+and rows with neither date could come from a zero native date. Every
+row, ID and reference remains; valid detail objects retain the old synthetic
+value as `legacyCollectedAtMs`, not creation evidence. No schema or retention
+change, deletion, native snapshot, replication or restore is performed.
+
+Undated snapshots cannot create successful-point, attempt-date or dated-series
+claims from collection/insertion time. The mapper, reopened-store, rollup and
+series controls in `mapper/truenas/mapper_test.go` and `store/store_test.go`
+cover missing/zero/known dates, repeated collection, legacy correction and
+provider/kind/mode isolation. The consuming TrueNAS Protection table and guide
+retain missing dates as unavailable evidence rather than a fresh backup.
+
 ### Future backup dates cannot establish current protection
 
 Protection freshness and verification must fall at or before their evaluation
