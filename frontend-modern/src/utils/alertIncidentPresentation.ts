@@ -95,16 +95,19 @@ export function getAlertResolutionDetail(resolution?: AlertResolution | null): s
   return resolution.summary?.trim() || undefined;
 }
 
+// A table row passes `compact` for an 11px badge with tighter padding, so the
+// Status track needs about 108px for "moved to agent" instead of 119px.
 export function getAlertHistoryStatusPresentation(
   status?: string | null,
+  options: { compact?: boolean } = {},
 ): AlertHistoryStatusPresentation {
   const normalized = (status ?? '').trim().toLowerCase();
+  const badge = options.compact ? 'text-[11px] px-1.5' : 'text-xs px-2';
 
   if (normalized === 'active') {
     return {
       label: 'active',
-      className:
-        'text-xs px-2 py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 font-medium',
+      className: `${badge} py-0.5 rounded-sm bg-red-100 dark:bg-red-900/25 text-red-700 dark:text-red-300 font-medium`,
       rowClassName: 'bg-red-50 dark:bg-red-900/25',
     };
   }
@@ -112,8 +115,7 @@ export function getAlertHistoryStatusPresentation(
   if (normalized === 'acknowledged') {
     return {
       label: 'acknowledged',
-      className:
-        'text-xs px-2 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
+      className: `${badge} py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300`,
       rowClassName: '',
     };
   }
@@ -123,15 +125,14 @@ export function getAlertHistoryStatusPresentation(
   if (normalized === ALERT_HISTORY_MOVED_STATUS) {
     return {
       label: 'moved to agent',
-      className:
-        'text-xs px-2 py-0.5 rounded-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300',
+      className: `${badge} py-0.5 rounded-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300`,
       rowClassName: '',
     };
   }
 
   return {
     label: normalized || 'resolved',
-    className: 'text-xs px-2 py-0.5 rounded-sm bg-surface-hover text-base-content',
+    className: `${badge} py-0.5 rounded-sm bg-surface-hover text-base-content`,
     rowClassName: '',
   };
 }

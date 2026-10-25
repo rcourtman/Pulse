@@ -141,9 +141,11 @@ describe('AlertHistoryTableAlertRow', () => {
     expect(message.dataset.alertHistoryCell).toBe('message');
     expect(message.className).toContain('line-clamp-2');
     expect(message.className).toContain('min-h-[2lh]');
-    // From an 80rem card both cells return to one line at the old row height.
-    expect(message.className).toContain('@min-[80rem]:line-clamp-1');
-    expect(message.className).toContain('@min-[80rem]:min-h-0');
+    // From a 50rem card (a desktop window of about 1250px) both cells return to
+    // one line: icon row actions and a compact status give them the width.
+    expect(message.className).toContain('@min-[50rem]:line-clamp-1');
+    expect(message.className).toContain('@min-[50rem]:min-h-0');
+    expect(message.className).not.toContain('80rem');
     expect(message.className).toContain('whitespace-normal');
     expect(message.className).toContain('wrap-break-word');
     expect(message.className).not.toContain('truncate');
@@ -153,11 +155,34 @@ describe('AlertHistoryTableAlertRow', () => {
     const resource = screen.getByText('standalone2-iso-library');
     expect(resource.dataset.alertHistoryCell).toBe('resource');
     expect(resource.className).toContain('line-clamp-2');
-    expect(resource.className).toContain('@min-[80rem]:line-clamp-1');
+    expect(resource.className).toContain('@min-[50rem]:line-clamp-1');
     expect(resource.className).toContain('whitespace-normal');
     expect(resource.className).toContain('wrap-break-word');
     expect(resource.className).not.toContain('truncate');
     expect(resource).toHaveAttribute('title', 'standalone2-iso-library');
     expect(resource.closest('td')?.className).not.toMatch(/max-w-\[/);
+  });
+
+  // Worded Timeline and Resource buttons took 177px with Investigate; as 24px
+  // icons beside it the actions need about 100px, which Message and Resource
+  // take so a row reads on one line. Names and titles still say what each opens.
+  it('shows the row actions as named icon buttons on one line', () => {
+    const { container } = renderRow(historyItem({}));
+    const timeline = container.querySelector('[data-alert-history-action="timeline"]');
+    const resource = container.querySelector('[data-alert-history-action="resource"]');
+    expect(timeline).toHaveClass('h-6', 'w-6');
+    expect(resource).toHaveClass('h-6', 'w-6');
+    expect(timeline).toHaveTextContent('');
+    expect(timeline?.querySelector('svg')).toBeInTheDocument();
+    expect(resource?.querySelector('svg')).toBeInTheDocument();
+    expect(timeline).toHaveAttribute('title', 'Timeline');
+    expect(timeline?.getAttribute('aria-label')).toMatch(/timeline/i);
+    expect(resource?.getAttribute('aria-label')).toMatch(/minipc/);
+    expect(timeline?.parentElement).toHaveClass('flex-nowrap');
+  });
+
+  it('uses the compact status badge in the table row', () => {
+    renderRow(historyItem({ status: 'acknowledged' }));
+    expect(screen.getByText('acknowledged')).toHaveClass('text-[11px]', 'px-1.5');
   });
 });

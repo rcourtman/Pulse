@@ -116,6 +116,21 @@ describe('alertIncidentPresentation', () => {
     });
   });
 
+  // The history table row uses an 11px badge so the Status track needs 108px
+  // for "moved to agent" instead of 119px; the cards keep the 12px badge.
+  it('gives a table row the compact status badge without changing the card badge', () => {
+    expect(getAlertHistoryStatusPresentation('acknowledged', { compact: true })).toEqual({
+      label: 'acknowledged',
+      className:
+        'text-[11px] px-1.5 py-0.5 rounded-sm bg-yellow-100 dark:bg-yellow-900/25 text-yellow-700 dark:text-yellow-300',
+      rowClassName: '',
+    });
+    expect(
+      getAlertHistoryStatusPresentation(ALERT_HISTORY_MOVED_STATUS, { compact: true }).className,
+    ).toContain('text-[11px] px-1.5');
+    expect(getAlertHistoryStatusPresentation('resolved').className).toContain('text-xs px-2');
+  });
+
   it('says a handed-over alert did not recover, and leaves recoveries alone', () => {
     expect(getAlertResolutionDetail(undefined)).toBeUndefined();
     expect(

@@ -17,18 +17,18 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 
 type AlertHistoryAlert = ReturnType<AlertHistoryState['groupedAlerts']>[number]['alerts'][number];
 
-// Below an 80rem card the cells that say which resource and what happened wrap
-// instead of ending in an ellipsis after one line. Message then holds two lines,
-// so its length never changes the row's height: the windowing hook sizes its
-// spacers from one measured row, and rows of mixed heights make a long history
-// jump as it scrolls. From an 80rem card the message track is wide enough for
-// one line, so both cells return to a one-line clamp, the single-line row the
-// other platform tables keep. Text past its lines ends in an ellipsis and keeps
-// its title.
+// Below a 50rem card (a 1024px window) the message track is about 110px, too
+// narrow to tell alerts apart on one line, so the cells that say which
+// resource and what happened wrap and Message holds two lines on every row:
+// the windowing hook sizes its spacers from one measured row, and rows of
+// mixed heights make a long history jump as it scrolls. From a 50rem card the
+// icon row actions and compact status leave Message and Resource enough room
+// for one line, the single-line row the other platform tables keep. Text past
+// its line ends in an ellipsis and keeps its title.
 const ALERT_HISTORY_MESSAGE_TEXT_CLASS =
-  'line-clamp-2 min-h-[2lh] @min-[80rem]:line-clamp-1 @min-[80rem]:min-h-0 whitespace-normal wrap-break-word text-base-content';
+  'line-clamp-2 min-h-[2lh] @min-[50rem]:line-clamp-1 @min-[50rem]:min-h-0 whitespace-normal wrap-break-word text-base-content';
 const ALERT_HISTORY_RESOURCE_TEXT_CLASS =
-  'line-clamp-2 @min-[80rem]:line-clamp-1 whitespace-normal wrap-break-word text-base-content';
+  'line-clamp-2 @min-[50rem]:line-clamp-1 whitespace-normal wrap-break-word text-base-content';
 
 interface AlertHistoryTableAlertRowProps {
   alert: AlertHistoryAlert;
@@ -37,7 +37,8 @@ interface AlertHistoryTableAlertRowProps {
 
 export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps) {
   const rowKey = () => props.state.getIncidentRowKey(props.alert);
-  const historyStatusPresentation = () => getAlertHistoryStatusPresentation(props.alert.status);
+  const historyStatusPresentation = () =>
+    getAlertHistoryStatusPresentation(props.alert.status, { compact: true });
   // An open threshold alert's live reading turns stale when evaluations stop,
   // so it rechecks on the shared clock; the last breach moves to the hover.
   const now = useRelativeTimeNow();
@@ -117,7 +118,12 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
         </TableCell>
 
         <TableCell class={getPlatformTableCellClassForKind('badge')}>
-          <AlertHistoryItemActions alert={props.alert} state={props.state} class="justify-center" />
+          <AlertHistoryItemActions
+            alert={props.alert}
+            state={props.state}
+            class="justify-center"
+            iconOnly
+          />
         </TableCell>
       </TableRow>
 
