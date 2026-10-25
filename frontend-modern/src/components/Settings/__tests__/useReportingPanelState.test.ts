@@ -191,7 +191,9 @@ describe('useReportingPanelState', () => {
       "VM inventory is unavailable. Check this organization's infrastructure connections before running again.";
     apiFetchMock.mockImplementation((url: string) => {
       if (url.startsWith('/api/admin/reports/inventory/vms/export?')) {
-        return Promise.resolve(jsonResponse({ code: 'inventory_unavailable', error: message }, 503));
+        return Promise.resolve(
+          jsonResponse({ code: 'inventory_unavailable', error: message }, 503),
+        );
       }
       return Promise.resolve(
         jsonResponse(url.endsWith('/schedules') ? schedulesPayload : catalogPayload),
