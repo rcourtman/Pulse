@@ -553,7 +553,7 @@ which retention tiers have observations in that snapshot. Every present tier
 participates in the shared indexed overlap query. Presence never stands in for
 per-series coverage. The store retains at most 32 compiled read-statement shapes
 and 32 SQL templates keyed only by parameter counts, tier order and aggregation
-shape, projection and physical layout. Alphabetic named SQLite bindings supply each current identity, window and
+shape, projection, physical layout and bounded integer transport. Alphabetic named SQLite bindings supply each current identity, window and
 display step once across all branches. Bindings use `database/sql.Named` so the
 driver need not repeatedly convert ordinals to strings while matching a large
 parameter set. Names describe parameter positions only. Resource IDs and all
@@ -580,6 +580,15 @@ not be decoded again for every returned point. Query-plan tests exercise the run
 including all tier priorities and metric filters. Multi-stage rollups preserve
 recorded minima and maxima instead of taking extrema from bucket averages.
 Already discarded historical extrema cannot be reconstructed by this change.
+
+Filtered raw value fleets carry each observation's timestamp and statement-local
+series number in one SQLite integer when the requested window proves that the
+product and sum fit a signed 64-bit integer. The decoder uses floor division for
+negative epochs. Extreme timestamp windows retain separate columns. This
+transport choice participates in the SQL shape key, so a cached ordinary-window
+query cannot be reused for an overflowing window. It changes neither stored
+identity nor API representation, metric selection, retention reconciliation,
+returned floating-point values or chronological ordering.
 
 The `retained-metric-query-coverage` follow-up addresses the specific first-tier
 query defect reproduced during Patrol outcome qualification. Returned points
