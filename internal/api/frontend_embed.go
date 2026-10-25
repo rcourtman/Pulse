@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 
@@ -287,6 +288,15 @@ func serveFrontendHandler() http.HandlerFunc {
 			}
 		}
 
+		// A missing static resource is not a client-side route. Returning the
+		// app shell here conceals missing docs/chunks behind a successful HTML
+		// response. Keep extensionless viewer routes such as /docs/RECOVERY.
+		if isFrontendAssetPath(p) {
+			w.Header().Set("Cache-Control", "no-store")
+			http.NotFound(w, r)
+			return
+		}
+
 		// For SPA routing, serve index.html for non-API routes
 		if !strings.HasPrefix(p, "/api/") &&
 			!strings.HasPrefix(p, "/ws") {
@@ -304,5 +314,19 @@ func serveFrontendHandler() http.HandlerFunc {
 
 		// Not found
 		http.NotFound(w, r)
+	}
+}
+
+func isFrontendAssetPath(p string) bool {
+	if p == "/assets" || strings.HasPrefix(p, "/assets/") {
+		return true
+	}
+	switch strings.ToLower(path.Ext(p)) {
+	case ".html", ".js", ".mjs", ".css", ".map", ".json", ".md",
+		".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico",
+		".woff", ".woff2", ".ttf", ".otf", ".wasm", ".txt", ".xml", ".webmanifest":
+		return true
+	default:
+		return false
 	}
 }
