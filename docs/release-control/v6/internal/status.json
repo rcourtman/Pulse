@@ -4580,7 +4580,7 @@
     },
     {
       "id": "RA41",
-      "summary": "The released self-hosted commercial surface remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, and support policy: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay, while unproved self-service plan and cadence transitions remain unavailable and unadvertised until their external lifecycle and Relay version-floor proof passes. Any Community transition refund or cancellation of paid access requires an individually recorded, verified customer request; the programme must not issue blanket refunds or automatically cancel subscriptions.",
+      "summary": "The released self-hosted commercial surface remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, and support policy: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay, while unproved self-service plan and cadence transitions remain unavailable and unadvertised until their external lifecycle and Relay version-floor proof passes. No blanket refund or automatic subscription cancellation is introduced by this work. The expanded transition-refund proposal is withdrawn and is not an activation dependency for Community product changes; the published refund policy remains unchanged.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "manual",
@@ -9577,7 +9577,7 @@
     },
     {
       "id": "community-commercial-transition-cutover",
-      "summary": "Activate the notice-bound Community transition remedy after adopted policy, prior-refund/credit and renewal-period reconciliation, recent-first-purchase proof, failed/absent-refund recovery, production-schema migration proof and external event/runtime convergence. Annual legacy/v6 quote/apply preparation does not close these obligations.",
+      "summary": "Complete the notice-bound Community commercial cutover with coherent artifacts, grants, public offer and access guidance, preserved subscriptions/prices/purchased rights, safe legacy/v6 runtime convergence and demonstrated remaining paid value. The expanded transition-refund proposal is withdrawn; its first-purchase, multi-payment and programme-activation work is not a prerequisite for the Community changes. Ordinary refund policy remains unchanged.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-10-25",
