@@ -1299,7 +1299,9 @@ func TestStore_OpenCorrectsTrueNASSnapshotCollectionTimes(t *testing.T) {
 		p.SubjectRef = &recovery.ExternalRef{Type: "fixture-control", ID: tc.id, Name: tc.id}
 		controls = append(controls, p)
 	}
-	seed := append([]recovery.RecoveryPoint{legacy, second}, controls...)
+	legacyZero := legacy
+	legacyZero.ID, legacyZero.CompletedAt = "legacy-zero-date", nil
+	seed := append([]recovery.RecoveryPoint{legacy, second, legacyZero}, controls...)
 	if err := db.UpsertPoints(ctx, seed); err != nil {
 		t.Fatal(err)
 	}
@@ -1331,7 +1333,7 @@ func TestStore_OpenCorrectsTrueNASSnapshotCollectionTimes(t *testing.T) {
 		for _, p := range points {
 			byID[p.ID] = p
 		}
-		for _, original := range []recovery.RecoveryPoint{legacy, second, broken} {
+		for _, original := range []recovery.RecoveryPoint{legacy, second, legacyZero, broken} {
 			p, ok := byID[original.ID]
 			if !ok || p.Outcome != recovery.OutcomeUnknown || p.CompletedAt != nil || p.StartedAt != nil {
 				t.Errorf("legacy collection still claims completion: %+v", p)
@@ -1340,8 +1342,15 @@ func TestStore_OpenCorrectsTrueNASSnapshotCollectionTimes(t *testing.T) {
 				t.Errorf("correction lost artifact evidence: %+v", p)
 			}
 			if original.ID != broken.ID {
-				if p.Details["retained"] != "artifact-evidence" || p.Details["legacyCollectedAtMs"] != float64(original.CompletedAt.UnixMilli()) {
-					t.Errorf("lost prior collection evidence: %+v", p.Details)
+				if p.Details["retained"] != "artifact-evidence" {
+					t.Errorf("lost artifact evidence: %+v", p.Details)
+				}
+				if original.CompletedAt != nil {
+					if p.Details["legacyCollectedAtMs"] != float64(original.CompletedAt.UnixMilli()) {
+						t.Errorf("lost prior collection evidence: %+v", p.Details)
+					}
+				} else if _, ok := p.Details["legacyCollectedAtMs"]; ok {
+					t.Errorf("invented collection evidence for a legacy zero date: %+v", p.Details)
 				}
 			}
 		}

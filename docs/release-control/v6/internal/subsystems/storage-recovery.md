@@ -26,8 +26,9 @@
 Undated or zero-date ZFS snapshots retain no start/completion time and have
 Unknown outcome. Their IDs remain stable across polls regardless of collection
 time; native dated snapshot IDs/times and replication semantics are unchanged.
-On store open, former successful snapshot rows with a completion but no start
-(the old collection-time fallback) become undated Unknown observations. Every
+On store open, former successful snapshot rows with no start become undated
+Unknown observations: completion-only rows used the old collection-time fallback,
+and rows with neither date could come from a zero native date. Every
 row, ID and reference remains; valid detail objects retain the old synthetic
 value as `legacyCollectedAtMs`, not creation evidence. No schema or retention
 change, deletion, native snapshot, replication or restore is performed.
