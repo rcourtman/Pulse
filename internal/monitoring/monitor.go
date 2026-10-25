@@ -7890,10 +7890,8 @@ func monitorPlatformData(resource *unifiedresources.Resource, resourceType strin
 				"connectionHealth": monitorSourceStatus(resource.SourceStatus, unifiedresources.SourceProxmox),
 			}
 		}
-	case "vm":
-		payload = buildProxmoxVMPayload(resource)
-	case "system-container", "oci-container":
-		payload = buildProxmoxVMPayload(resource)
+	case "vm", "system-container", "oci-container":
+		return monitorRawJSON(buildProxmoxVMPayload(resource))
 	case "agent":
 		if resource.Proxmox != nil {
 			payload = map[string]interface{}{
@@ -8155,55 +8153,84 @@ func monitorStoragePlatformData(resource *unifiedresources.Resource, platformID 
 	return payload
 }
 
-func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []map[string]interface{} {
+// Fixed wire records avoid rebuilding and sorting a map for every guest and
+// filesystem on every broadcast. Fields stay in the former map encoder's
+// lexical order, including explicit zero/null values, so raw JSON stays equal.
+type broadcastProxmoxDisk struct {
+	Device     string  `json:"device"`
+	Free       int64   `json:"free"`
+	Mountpoint string  `json:"mountpoint"`
+	Total      int64   `json:"total"`
+	Type       string  `json:"type"`
+	Usage      float64 `json:"usage"`
+	Used       int64   `json:"used"`
+}
+
+type broadcastProxmoxGuest struct {
+	BackupInProgress bool                   `json:"backupInProgress"`
+	Balloon          int64                  `json:"balloon"`
+	CPUs             int                    `json:"cpus"`
+	DiskRead         int64                  `json:"diskRead"`
+	DiskWrite        int64                  `json:"diskWrite"`
+	Disks            []broadcastProxmoxDisk `json:"disks"`
+	Instance         string                 `json:"instance"`
+	IPAddresses      []string               `json:"ipAddresses"`
+	LastBackup       time.Time              `json:"lastBackup"`
+	NetworkIn        int64                  `json:"networkIn"`
+	NetworkOut       int64                  `json:"networkOut"`
+	Node             string                 `json:"node"`
+	Sources          []string               `json:"sources,omitempty"`
+	SwapTotal        int64                  `json:"swapTotal"`
+	SwapUsed         int64                  `json:"swapUsed"`
+	Template         bool                   `json:"template"`
+	VMID             int                    `json:"vmid"`
+}
+
+func convertProxmoxDisks(disks []unifiedresources.DiskInfo) []broadcastProxmoxDisk {
 	if len(disks) == 0 {
 		return nil
 	}
 
-	out := make([]map[string]interface{}, 0, len(disks))
+	out := make([]broadcastProxmoxDisk, 0, len(disks))
 	for _, d := range disks {
 		usage := float64(0)
 		if d.Total > 0 {
 			usage = float64(d.Used) / float64(d.Total) * 100
 		}
-		out = append(out, map[string]interface{}{
-			"total":      d.Total,
-			"used":       d.Used,
-			"free":       d.Free,
-			"usage":      usage,
-			"mountpoint": d.Mountpoint,
-			"type":       d.Filesystem,
-			"device":     d.Device,
+		out = append(out, broadcastProxmoxDisk{
+			Device: d.Device, Free: d.Free, Mountpoint: d.Mountpoint,
+			Total: d.Total, Type: d.Filesystem, Usage: usage, Used: d.Used,
 		})
 	}
 	return out
 }
 
-func buildProxmoxVMPayload(resource *unifiedresources.Resource) map[string]interface{} {
+func buildProxmoxVMPayload(resource *unifiedresources.Resource) *broadcastProxmoxGuest {
 	if resource.Proxmox == nil {
 		return nil
 	}
-	return map[string]interface{}{
-		"vmid":       resource.Proxmox.VMID,
-		"node":       resource.Proxmox.NodeName,
-		"instance":   resource.Proxmox.Instance,
-		"cpus":       resource.Proxmox.CPUs,
-		"template":   resource.Proxmox.Template,
-		"networkIn":  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
-		"networkOut": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
-		"diskRead":   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
-		"diskWrite": monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
+	return &broadcastProxmoxGuest{
+		VMID:       resource.Proxmox.VMID,
+		Node:       resource.Proxmox.NodeName,
+		Instance:   resource.Proxmox.Instance,
+		CPUs:       resource.Proxmox.CPUs,
+		Template:   resource.Proxmox.Template,
+		NetworkIn:  monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetIn }),
+		NetworkOut: monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.NetOut }),
+		DiskRead:   monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue { return metrics.DiskRead }),
+		DiskWrite: monitorMetricInt64(resource.Metrics, func(metrics *unifiedresources.ResourceMetrics) *unifiedresources.MetricValue {
 			return metrics.DiskWrite
 		}),
-		"disks":      convertProxmoxDisks(resource.Proxmox.Disks),
-		"swapUsed":   resource.Proxmox.SwapUsed,
-		"swapTotal":  resource.Proxmox.SwapTotal,
-		"balloon":    resource.Proxmox.Balloon,
-		"lastBackup": resource.Proxmox.LastBackup,
+		Disks:      convertProxmoxDisks(resource.Proxmox.Disks),
+		SwapUsed:   resource.Proxmox.SwapUsed,
+		SwapTotal:  resource.Proxmox.SwapTotal,
+		Balloon:    resource.Proxmox.Balloon,
+		LastBackup: resource.Proxmox.LastBackup,
 		// A backup of this guest is running right now; lastBackup still
 		// points at the latest completed backup.
-		"backupInProgress": resource.Proxmox.BackupInProgress,
-		"ipAddresses":      append([]string(nil), resource.Identity.IPAddresses...),
+		BackupInProgress: resource.Proxmox.BackupInProgress,
+		IPAddresses:      append([]string(nil), resource.Identity.IPAddresses...),
+		Sources:          monitorSourceKeys(resource.Sources),
 	}
 }
 
