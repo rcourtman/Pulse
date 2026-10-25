@@ -834,3 +834,169 @@ func TestDecodeUpdateContainerPayloadUsesReceiverMarshaller(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateContainer_WaitsForReplacementHealthToSettle(t *testing.T) {
+	swap(t, &sleepFn, func(time.Duration) {})
+	maxPolls := int(dockerUpdateHealthSettleCap / dockerUpdateHealthPollInterval)
+
+	for _, tc := range []struct {
+		name      string
+		sequence  []string // replacement health per inspect; the last value repeats
+		after     string   // once the sequence is exhausted: "exited", "restarting" or "error"
+		wantOK    bool
+		wantPolls int
+	}{
+		{name: "starting then healthy", sequence: []string{"starting", "starting", "healthy"}, wantOK: true, wantPolls: 3},
+		{name: "starting then unhealthy rolls back", sequence: []string{"starting", "unhealthy"}, wantPolls: 2},
+		{name: "exits while starting rolls back", sequence: []string{"starting", "starting"}, after: "exited", wantPolls: 3},
+		{name: "restarting while starting rolls back", sequence: []string{"starting"}, after: "restarting", wantPolls: 2},
+		{name: "inspect failure while starting rolls back", sequence: []string{"starting"}, after: "error", wantPolls: 2},
+		{name: "still starting at the cap is kept", sequence: []string{"starting"}, wantOK: true, wantPolls: maxPolls + 1},
+		{name: "no health check does not wait", sequence: []string{""}, wantOK: true, wantPolls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				mu        sync.Mutex
+				polls     int
+				removed   []string
+				cleanupCh = make(chan struct{}, 1)
+			)
+			agent := &Agent{
+				docker: &fakeDockerClient{
+					containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
+						if id != "new123" {
+							return baseInspect(), nil
+						}
+						mu.Lock()
+						defer mu.Unlock()
+						inspect := baseInspect()
+						inspect.Image = "sha256:new0000000000"
+						health := tc.sequence[min(polls, len(tc.sequence)-1)]
+						exhausted := polls >= len(tc.sequence)
+						polls++
+						switch {
+						case exhausted && tc.after == "error":
+							return containertypes.InspectResponse{}, errors.New("daemon unavailable")
+						case exhausted && tc.after == "exited":
+							inspect.State = &containertypes.State{Running: false, ExitCode: 1}
+						case exhausted && tc.after == "restarting":
+							inspect.State = &containertypes.State{Running: true, Restarting: true, ExitCode: 1, Health: &containertypes.Health{Status: containertypes.Starting}}
+						case health != "":
+							inspect.State = &containertypes.State{Running: true, Health: &containertypes.Health{Status: containertypes.HealthStatus(health)}}
+						}
+						return inspect, nil
+					},
+					imagePullFn: func(context.Context, string, dockerImagePullOptions) (io.ReadCloser, error) {
+						return io.NopCloser(strings.NewReader("{}")), nil
+					},
+					containerStopFn:   func(context.Context, string, dockerContainerStopOptions) error { return nil },
+					containerRenameFn: func(context.Context, string, string) error { return nil },
+					containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
+						return containertypes.CreateResponse{ID: "new123"}, nil
+					},
+					containerStartFn: func(context.Context, string, dockerContainerStartOptions) error { return nil },
+					containerRemoveFn: func(_ context.Context, id string, _ dockerContainerRemoveOptions) error {
+						mu.Lock()
+						removed = append(removed, id)
+						mu.Unlock()
+						select {
+						case cleanupCh <- struct{}{}:
+						default:
+						}
+						return nil
+					},
+				},
+				logger:     zerolog.Nop(),
+				newTimerFn: immediateTimer,
+			}
+
+			result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
+			if result.Success != tc.wantOK {
+				t.Fatalf("success = %t (error %q), want %t", result.Success, result.Error, tc.wantOK)
+			}
+			if tc.wantOK {
+				select { // the backup is removed asynchronously after success
+				case <-cleanupCh:
+				case <-time.After(5 * time.Second):
+					t.Fatal("backup cleanup did not run")
+				}
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if polls != tc.wantPolls {
+				t.Fatalf("replacement inspected %d times, want %d", polls, tc.wantPolls)
+			}
+			if tc.wantOK {
+				if result.RollbackAttempted {
+					t.Fatal("a healthy or still-starting replacement must not be rolled back")
+				}
+				return
+			}
+			if !result.RollbackAttempted || len(removed) == 0 || removed[0] != "new123" {
+				t.Fatalf("expected rollback to remove the replacement, removed=%v rollback=%t", removed, result.RollbackAttempted)
+			}
+		})
+	}
+}
+
+func TestUpdateContainer_SettleCapEndsHungHealthInspect(t *testing.T) {
+	swap(t, &sleepFn, func(time.Duration) {})
+
+	var (
+		mu     sync.Mutex
+		polls  int
+		rolled bool
+	)
+	agent := &Agent{
+		docker: &fakeDockerClient{
+			containerInspectFn: func(ctx context.Context, id string) (containertypes.InspectResponse, error) {
+				if id != "new123" {
+					return baseInspect(), nil
+				}
+				mu.Lock()
+				polls++
+				first := polls == 1
+				mu.Unlock()
+				if !first {
+					<-ctx.Done() // a daemon that stops answering mid-wait
+					return containertypes.InspectResponse{}, ctx.Err()
+				}
+				inspect := baseInspect()
+				inspect.State = &containertypes.State{Running: true, Health: &containertypes.Health{Status: containertypes.Starting}}
+				return inspect, nil
+			},
+			imagePullFn: func(context.Context, string, dockerImagePullOptions) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader("{}")), nil
+			},
+			containerStopFn:   func(context.Context, string, dockerContainerStopOptions) error { return nil },
+			containerRenameFn: func(context.Context, string, string) error { return nil },
+			containerCreateFn: func(context.Context, *containertypes.Config, *containertypes.HostConfig, *network.NetworkingConfig, *v1.Platform, string) (containertypes.CreateResponse, error) {
+				return containertypes.CreateResponse{ID: "new123"}, nil
+			},
+			containerStartFn: func(context.Context, string, dockerContainerStartOptions) error { return nil },
+			containerRemoveFn: func(_ context.Context, id string, _ dockerContainerRemoveOptions) error {
+				mu.Lock()
+				rolled = rolled || id == "new123"
+				mu.Unlock()
+				return nil
+			},
+		},
+		logger:          zerolog.Nop(),
+		newTimerFn:      immediateTimer,
+		healthSettleCap: 4 * time.Second,
+	}
+
+	started := time.Now()
+	result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
+	if elapsed := time.Since(started); elapsed > 30*time.Second {
+		t.Fatalf("hung inspect held the update for %s, want it bounded by the settle cap", elapsed)
+	}
+	if !result.Success || result.RollbackAttempted {
+		t.Fatalf("reaching the settle cap mid-inspect must keep the replacement: success=%t rollback=%t error=%q", result.Success, result.RollbackAttempted, result.Error)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if rolled {
+		t.Fatal("the replacement was removed")
+	}
+}

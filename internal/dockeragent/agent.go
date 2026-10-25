@@ -176,6 +176,7 @@ type Agent struct {
 	manualCheckCollect  func(context.Context) (agentsdocker.Report, error) // test seam for bounded manual checks
 	newTimerFn          func(time.Duration) *time.Timer                    // test seam; per-Agent so async goroutines never read a shared global (nil = time.NewTimer)
 	jsonMarshalFn       func(any) ([]byte, error)                          // test seam; per-Agent so async goroutines never read a shared global (nil = json.Marshal)
+	healthSettleCap     time.Duration                                      // test seam; per-Agent update health wait (zero = dockerUpdateHealthSettleCap)
 	backgroundMu        sync.Mutex                                         // protects updateCheckRunning, cleanupTaskRunning
 	updateCheckRunning  bool
 	cleanupTaskRunning  bool

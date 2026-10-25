@@ -4259,13 +4259,32 @@ container ID is insufficient to confirm a running agent readback. A running
 replacement must report state `running` and health `healthy` or explicit
 `none`. Known unsuitable health or lifecycle states contradict verification;
 missing or unrecognised running health yields `inconclusive` with
-`container_health_unknown`. This does not change execution or compensation
-history, introduce a wire field, or require stopped replacements to run.
+`container_health_unknown`. A running replacement whose health check is still
+`starting` yields `inconclusive` with `container_health_starting`, matching
+start and restart verification. Docker has not yet settled the health check in
+that state (no probe has run, or failures have not reached the retry
+threshold), so it is not evidence against the update. This does not change
+execution or compensation history, introduce a wire field, or require stopped
+replacements to run.
+
+The Docker agent (`internal/dockeragent/container_update.go`) polls a started
+replacement whose health is `starting` every 2s, for at most 3 minutes, before
+judging it. Docker's default probe first runs 30s after start, so the 5s crash
+check alone usually saw `starting` on health-checked images and rarely reached
+its unhealthy rollback. A replacement that turns `unhealthy`, stops, or is
+`restarting` (Docker keeps `Running` set while a crashed container waits to
+restart) is rolled back. One still `starting` at the cap is kept, and the host
+agent's readback then reports `starting`.
 
 Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
 in `internal/api/docker_container_action_result_test.go` covers healthy,
 no-healthcheck, stopped, unhealthy, starting, restarting and unknown-health
 readbacks. The typed-dispatch fixture supplies explicit no-healthcheck evidence.
+`TestUpdateContainer_WaitsForReplacementHealthToSettle` in
+`internal/dockeragent/container_update_test.go` covers settling healthy,
+settling unhealthy, exiting, restarting or failing inspection during the wait,
+the cap and no health check. `TestUpdateContainer_SettleCapEndsHungHealthInspect`
+covers an inspect that hangs past the cap, which ends the wait without rollback.
 
 
 The public connection ledger and action APIs must project telemetry liveness

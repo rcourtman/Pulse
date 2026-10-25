@@ -108,6 +108,11 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 			if facts.After.Running && !agentexec.IsDockerContainerHealth(facts.After.Health) {
 				status = unified.ActionVerificationInconclusive
 				reason = "container_health_unknown"
+			} else if dockerUpdateFactsMatch(facts, facts.After.ContainerID) && dockerUpdateHealthStarting(facts.After.State, facts.After.Running, facts.After.Health) {
+				// A first probe that has not run yet is not evidence against
+				// the update, matching start and restart verification.
+				status = unified.ActionVerificationInconclusive
+				reason = "container_health_starting"
 			} else if dockerUpdateFactsMatch(facts, facts.After.ContainerID) &&
 				(!facts.After.Running || (facts.After.State == "running" &&
 					agentexec.DockerContainerHealthAllowsVerifiedRunningState(facts.After.Health))) {
@@ -146,6 +151,12 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 		if !facts.ReadbackRan || facts.After.State == "" {
 			status = unified.ActionVerificationInconclusive
 			reason = "agent_readback_unavailable"
+		} else if dockerUpdateFactsMatch(facts, independent.Snapshot.ContainerID) &&
+			independent.Snapshot.State == facts.After.State &&
+			independent.Snapshot.Running == facts.After.Running &&
+			dockerUpdateHealthStarting(independent.Snapshot.State, independent.Snapshot.Running, independent.Snapshot.Health) {
+			status = unified.ActionVerificationInconclusive
+			reason = "container_health_starting"
 		} else if dockerUpdateFactsMatch(facts, independent.Snapshot.ContainerID) &&
 			independent.Snapshot.State == facts.After.State &&
 			independent.Snapshot.Running == facts.After.Running &&
@@ -252,6 +263,10 @@ func dockerUpdateFactsMatch(facts agentexec.DockerContainerUpdateResultPayload, 
 		return false
 	}
 	return strings.EqualFold(facts.NewContainerID, observedContainerID)
+}
+
+func dockerUpdateHealthStarting(state string, running bool, health string) bool {
+	return running && state == "running" && strings.EqualFold(strings.TrimSpace(health), agentexec.DockerContainerHealthStarting)
 }
 
 func dockerContainerFactSummary(facts agentexec.DockerContainerLifecycleResultPayload) string {

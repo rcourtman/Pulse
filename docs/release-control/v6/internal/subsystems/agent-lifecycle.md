@@ -4112,13 +4112,29 @@ has not settled or has deteriorated after module success. The API must retain
 the completed mutation as execution history without treating replacement
 identity alone as confirmed running health. Agent-attested verification requires
 running state and healthy or explicit no-healthcheck evidence for running
-replacements; unknown health remains inconclusive. This does not trigger an
+replacements; unknown health remains inconclusive, and so does health that is
+still `starting` (`container_health_starting`). This does not trigger an
 automatic resend or rollback and preserves deliberately stopped updates.
+
+Before the module declares success, it waits for a started replacement's
+health check to settle. Docker reports `starting` until the first probe passes,
+which with the default 30s interval is long after the 5s crash check, so that
+check alone rarely saw `unhealthy`. The module re-inspects every 2s for at
+most 3 minutes while health is `starting`. A replacement that turns
+`unhealthy`, stops, is `restarting` (Docker keeps `Running` set while a crashed
+container waits to restart), or cannot be inspected is rolled back to the
+original. One still `starting` at the cap is kept. Reaching the cap during an
+inspect ends the wait and does not fail the update. The cap is the per-Agent
+`healthSettleCap` seam (zero means 3 minutes), not a package global.
 
 Verification: `TestDockerContainerUpdateAgentReadbackMustSupportRunningClaim`
 asserts both verification outcomes and unchanged successful execution.
 `TestDockerContainerActionExecutorDispatchesTypedUpdate` retains typed-only
 dispatch with explicit no-healthcheck readback evidence.
+`TestUpdateContainer_WaitsForReplacementHealthToSettle` and
+`TestUpdateContainer_SettleCapEndsHungHealthInspect` in
+`internal/dockeragent/container_update_test.go` cover the settle wait, each
+rollback trigger, the cap and a hung inspect.
 
 
 Command-capable agent completion must prove more than fresh telemetry. The
