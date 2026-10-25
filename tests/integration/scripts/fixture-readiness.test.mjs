@@ -186,10 +186,31 @@ test('actual workflow shell admits healthy fixtures and stops broken ones before
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('completed stable failure receipts are uploaded before probation can be cancelled', () => {
+test('stable receipt conditions retain failed attempts before probation can be cancelled', () => {
+  const conditions = [];
   for (const name of ['Upload Playwright report', 'Upload JUnit results']) {
     assert.ok(steps.indexOf(`- name: ${name}`) < steps.indexOf('- name: Run probation-tier E2E suite'), name);
-    assert.match(step(name), /!cancelled\(\) && steps\.stable\.outcome == 'failure'/);
+    const expression = step(name)?.match(/^\s+if: \$\{\{ (.+) \}\}$/m)?.[1];
+    assert.ok(expression, `missing receipt condition: ${name}`);
+    conditions.push(expression);
+  }
+  // Exercise the actual Actions expressions. Parentheses and additional
+  // failed-attempt evidence must not weaken cancellation or failure receipts.
+  for (const [outcome, failedAttempt, cancelled, report, junit] of [
+    ['failure', false, false, true, true],
+    ['success', true, false, true, true],
+    ['success', false, false, false, true],
+    ['skipped', false, false, false, false],
+    ['failure', true, true, false, false],
+    ['success', true, true, false, false],
+  ]) {
+    const context = {
+      steps: { stable: { outcome } },
+      cancelled: () => cancelled,
+      hashFiles: () => failedAttempt ? 'retained-failed-attempt' : '',
+    };
+    assert.deepEqual(conditions.map(expression => runInNewContext(expression, context)),
+      [report, junit], `${outcome}, failed attempt: ${failedAttempt}, cancelled: ${cancelled}`);
   }
   assert.match(step('Upload failed fixture admission'), /!cancelled\(\) && steps\.fixture\.outcome == 'failure'/);
   assert.match(step('Run probation-tier E2E suite (non-gating)'), /continue-on-error: true/);
