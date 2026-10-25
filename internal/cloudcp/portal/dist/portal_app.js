@@ -2753,7 +2753,7 @@
         cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' + (busy ? " disabled" : "") + ">" + (busy === "manage-billing" ? "Opening\u2026" : "Manage billing") + "</button>";
       }
     } else {
-      description = paidLicenceInGrace(plan, now) ? "Your subscription has not renewed. Your clients keep this plan until " + expires + ". Open Manage billing to renew or update your payment method." : "Up to " + clientWorkspaces(plan.workspace_limit) + ". Renews automatically while your subscription is active.";
+      description = paidLicenceInGrace(plan, now) ? "Your subscription has not renewed. Your clients keep this plan until " + expires + ". Open Manage billing to renew or update your payment method." : "Up to " + clientWorkspaces(plan.workspace_limit) + ". Open Manage billing to see when your subscription will renew or end.";
       if (canManage) {
         cta = '<button class="btn-secondary billing-action-button" type="button" data-provider-plan-action="manage-billing"' + (busy ? " disabled" : "") + ">" + (busy === "manage-billing" ? "Opening\u2026" : "Manage billing") + "</button>";
       }

@@ -83,7 +83,10 @@ describe('renderProviderPlanHTML', () => {
     const renewing = renderProviderPlanHTML(view({
       plan: evaluationPlan({ plan_version: 'msp_solo', evaluation: false, workspace_limit: 3, expires_at: '2026-11-06T00:00:00Z' }),
     }), true, 2, now);
-    expect(renewing).toContain('Renews automatically');
+    // A subscription cancelled for the period end looks the same here, so the
+    // copy points to Manage billing instead of promising a renewal.
+    expect(renewing).toContain('Open Manage billing to see when your subscription will renew or end.');
+    expect(renewing).not.toContain('Renews automatically');
     expect(renewing).toContain('2 of 3 client workspaces in use');
     expect(renewing).not.toContain('2026');
     expect(renewing).not.toContain('Nov');
