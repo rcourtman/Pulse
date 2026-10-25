@@ -118,11 +118,12 @@ const mergeRecord = <T extends JsonRecord>(incoming?: T, existing?: T): T | unde
   return { ...existing, ...incoming };
 };
 
-// Native VM facets carry a runtime state and an explicit guest-agent outcome.
-// Their optional read reason, lock, false expected flag and guest filesystems
-// are omitempty on wire. A new outcome supersedes those fields, not unrelated
-// richer metadata; withdrawn filesystems must not hide a linked agent's.
-// Partial/legacy facets without that evidence must retain the prior facts.
+// Native guest runtime facets omit backupInProgress when false. Their positive
+// VMID and runtime state distinguish them from thin/legacy enrichment. This
+// applies to LXC too, independently of any QEMU guest-agent outcome.
+// Only an explicit guest-agent outcome also withdraws its optional read reason,
+// lock, false expected flag and filesystems. Neither withdrawal establishes thaw.
+// Partial/legacy facets without the relevant evidence retain the prior facts.
 const mergeProxmoxFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T | undefined => {
   const merged = mergeRecord(incoming, existing);
   if (
@@ -132,12 +133,16 @@ const mergeProxmoxFacet = <T extends JsonRecord>(incoming?: T, existing?: T): T 
     !Number.isInteger(incoming.vmid) ||
     incoming.vmid <= 0 ||
     typeof incoming.runtimeStatus !== 'string' ||
-    !incoming.runtimeStatus.trim() ||
-    typeof incoming.guestAgentStatus !== 'string' ||
-    !incoming.guestAgentStatus.trim()
+    !incoming.runtimeStatus.trim()
   )
     return merged;
   const next = { ...merged };
+  if (!Object.prototype.hasOwnProperty.call(incoming, 'backupInProgress')) {
+    delete next.backupInProgress;
+  }
+  if (typeof incoming.guestAgentStatus !== 'string' || !incoming.guestAgentStatus.trim()) {
+    return next;
+  }
   for (const key of ['diskStatusReason', 'guestAgentExpected', 'lock', 'disks']) {
     if (!Object.prototype.hasOwnProperty.call(incoming, key)) delete next[key];
   }
@@ -508,6 +513,9 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
       }
     }
     if (platformData.disks !== undefined) proxmoxPayload.disks = platformData.disks;
+    if (typeof platformData.backupInProgress === 'boolean') {
+      proxmoxPayload.backupInProgress = platformData.backupInProgress;
+    }
     if (Object.keys(proxmoxPayload).length > 0) {
       normalized.proxmox = proxmoxPayload;
     }

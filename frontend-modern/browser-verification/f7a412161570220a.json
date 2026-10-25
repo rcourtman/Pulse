@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "1d4e20a46e9cec7eb54c80194f2c3ecc69928035",
+  "verified_at": "2026-10-25T15:01:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "1465e396c728241ae84fd09af3394e23e2c83fb04b7414ee0e414f86b089cb1b"
+  },
+  "routes": [
+    "/tmp/broadcast-wire-proof/fixture.html?mode=full (evidence-only production Workloads rows and guest drawer)",
+    "/tmp/broadcast-wire-proof/fixture.html?mode=delta (same production consumers)"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 1000
+    },
+    {
+      "width": 360,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Actual encoded Core synthetic guest snapshots: initially inactive, active, then same-identity native false omitted with legacy false",
+    "Labelled thin native facet retains prior active backup; missing activity is not a completion claim",
+    "Labelled uncertain guest read keeps completion-uncertain and independent thaw guidance after backup activity clears",
+    "Labelled LXC active then omitted native false with no QEMU status",
+    "Independent guest identity and last completed backup timestamps preserved"
+  ],
+  "interactions": [
+    "Keyboard row activation on Chromium/light desktop; touch row selection on WebKit/dark phone",
+    "Switch initial \u2192 updated \u2192 thin \u2192 empty \u2192 uncertain while keeping the same VM drawer open",
+    "Close VM drawer and select LXC; switch LXC active \u2192 cleared without reopening",
+    "Verify no stale Running claim, no advanced backup completion timestamp, no withdrawn filesystem/IP contents and no horizontal page overflow"
+  ],
+  "browser": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0",
+    "checks": 677,
+    "captures_natively_viewed": 10
+  },
+  "proof_binding": {
+    "compiled_source_sha": "52486b5492fd984cb9adbdede2e12f6b28a30017",
+    "containing_source_sha": "1d4e20a46e9cec7eb54c80194f2c3ecc69928035",
+    "complete_frontend_tree_sha": "9b7740c68cf43421d2ea48fe754e6206f0860308",
+    "scope": "Reused exact-source static fixture with byte-identical complete frontend tree, 250 imported production modules and both manifests. Actual Core producer bytes retained from f08e6bb27685dce26da6cac78df83a7fd418088c; producer packages and Go manifests also match containing source. Synthetic, offline, read-only; not native guest recovery."
+  }
+}
