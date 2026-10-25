@@ -216,13 +216,13 @@ function normalizeLegacyVersionValue(value, body) {
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : raw;
   const visible = text.trim().replace(/^[`*_]+/, "");
-  if (declaredVersionIsTransition(visible)) return null;
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the
   // Community and Pro server archive names; companion binaries and signatures
   // cannot establish the attempted server executable's version.
   const filename = visible.match(/^pulse-[^\s`*_]+/i)?.[0];
   if (filename && /\.(?:tar\.gz|tgz|zip|exe|sha256|sig|sshsig)(?:\.|$)/i.test(filename)) {
+    if (declaredVersionIsTransition(visible)) return null;
     const archive = filename.match(
       /^pulse-(?:pro-)?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.(?:tar\.gz|tgz)$/i
     );
@@ -232,8 +232,16 @@ function normalizeLegacyVersionValue(value, body) {
   }
   // Keep an explicitly shared server/agent version (as in #1788), without
   // mining a sentence such as "unknown; agent version 6.5.0" for a number.
-  return /^(?:v?\d+\.\d+\.\d+\b|(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+v?\d+\.\d+\.\d+\b|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:|pulse[-_])/i.test(visible)
-    ? normalizeVersion(visible) : null;
+  // The complete version must follow its server prefix immediately. An
+  // unversioned/incomplete image or a companion binary cannot borrow an
+  // agent/platform number later in the value (or one in the registry name).
+  const declared = visible.match(
+    /^(?:(?:pulse|server(?:[ \t]*\+[ \t]*pulse-agent)?)[ \t]+|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?:[ \t]*|pulse(?:-pro)?[-_])?v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/i
+  );
+  if (!declared) return null;
+  const version = declared[1];
+  return declaredVersionIsTransition(version + visible.slice(declared[0].length))
+    ? null : normalizeVersion(version);
 }
 
 function extractTitlePulseVersion(title) {
