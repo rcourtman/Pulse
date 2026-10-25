@@ -47,9 +47,34 @@ class SnapshotIdentityTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.verify(pr)
 
+    def test_post_merge_ref_identifies_its_merged_snapshot_by_head_name(self):
+        dispatch = 'refs/heads/release-dispatch/packet-1'
+        self.assertEqual('release/v6.4', snapshot.source_branch(dispatch, 'release/v6.4', '42'))
+        self.assertEqual(self.merge, snapshot.reviewed_merge(
+            self.pr, repository='rcourtman/Pulse', ref=dispatch, branch='release/v6.4', sha=self.sha))
+        for head_ref in ('release-candidate/other', 'release-dispatch/packet-1', 'maintainer/packet-1'):
+            with self.subTest(head_ref=head_ref), self.assertRaises(ValueError):
+                pr = deepcopy(self.pr)
+                pr['head']['ref'] = head_ref
+                snapshot.reviewed_merge(pr, repository='rcourtman/Pulse', ref=dispatch,
+                                        branch='release/v6.4', sha=self.sha)
+
+    def test_snapshot_head_admits_only_reserved_snapshot_names(self):
+        self.assertEqual('release-candidate/v6.6.1-rc.1-20261101T000000Z',
+                         snapshot.snapshot_head('release-dispatch/v6.6.1-rc.1-20261101T000000Z'))
+        self.assertEqual('release-candidate/packet-1', snapshot.snapshot_head('release-candidate/packet-1'))
+        for branch in ('release-dispatch/', 'release-dispatch/a/b', 'release-dispatch/a b',
+                       'maintainer/packet-1', 'main', 'xrelease-dispatch/packet-1'):
+            with self.subTest(branch=branch), self.assertRaises(ValueError):
+                snapshot.snapshot_head(branch)
+
     def test_unbound_dispatch_inputs_are_rejected(self):
+        dispatch = 'refs/heads/release-dispatch/packet-1'
         for args in [(self.ref, '', '42'), (self.ref, 'main', ''),
                      (self.ref, 'feature/other', '42'), (self.ref, 'main', '../42'),
+                     (dispatch, '', '42'), (dispatch, 'main', ''), (dispatch, 'feature/other', '42'),
+                     ('refs/heads/release-dispatch/a/b', 'main', '42'),
+                     ('refs/tags/release-dispatch/packet-1', 'main', '42'),
                      ('refs/heads/main', 'main', '42'), ('refs/tags/v6.4.4-beta.1', '', '')]:
             with self.subTest(args=args), self.assertRaises(ValueError):
                 snapshot.source_branch(*args)
@@ -64,9 +89,14 @@ class SnapshotIdentityTest(unittest.TestCase):
                 snapshot.check_workflow(old)
 
     def test_workflow_verifies_ancestry_without_requiring_current_tip(self):
+        for ref in (self.ref, 'refs/heads/release-dispatch/packet-1'):
+            with self.subTest(ref=ref):
+                self.verify_main(ref)
+
+    def verify_main(self, ref):
         with tempfile.TemporaryDirectory() as raw:
             output = Path(raw) / 'output'
-            env = {'GITHUB_REF': self.ref, 'RELEASE_SOURCE_BRANCH': 'release/v6.4',
+            env = {'GITHUB_REF': ref, 'RELEASE_SOURCE_BRANCH': 'release/v6.4',
                    'RELEASE_PULL_REQUEST': '42', 'GITHUB_REPOSITORY': 'rcourtman/Pulse',
                    'GITHUB_SHA': self.sha, 'GITHUB_WORKFLOW_SHA': self.sha,
                    'GITHUB_OUTPUT': str(output)}

@@ -1276,7 +1276,14 @@ preparation PR's qualified head stays fixed on `release-candidate/<packet>`
 while its governed source branch continues receiving work. Dispatch verifies
 that the canonical PR merged into the version's governed source line, that its
 head and ref match the admitted snapshot, and that its merge remains in that
-line's published history. Qualification, workflow execution, compiler dispatch
+line's published history. A dispatch may also run from
+`release-dispatch/<packet>`, a ref reserved for creation after merge. It must
+identify a merged PR whose head is `release-candidate/<packet>` at the
+dispatched commit, so release secrets can be confined to refs that exist only
+after merge while unmerged `release-candidate/*` heads stay outside them. The
+snapshot check validates identity only; restricting who can create or move
+`release-dispatch/*` refs belongs to a repository ruleset, and until that
+ruleset is active the namespace carries no extra trust. Qualification, workflow execution, compiler dispatch
 and published artifacts bind to that head, not a later merge or branch tip.
 The source workflow must implement the snapshot input and provenance contract
 before the release train spends an exact qualification run on it. Later
