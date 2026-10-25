@@ -170,6 +170,12 @@ func (tx *importTransaction) Commit() error {
 					continue
 				}
 				tx.backups[target] = ""
+			} else {
+				// This target did not exist before the import. Restoring its
+				// absence matters just as much as restoring an overwritten file.
+				if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+					joinRestoreErr(fmt.Errorf("remove new target %s during restore: %w", target, err))
+				}
 			}
 		}
 		return restoreErr
@@ -203,11 +209,12 @@ func (tx *importTransaction) Commit() error {
 			return failWithRestore(fmt.Errorf("stat destination %s: %w", target, err))
 		}
 
+		// Track the target before replacement: a failed rename after moving
+		// the original into a backup must restore that original too.
+		applied = append(applied, target)
 		if err := os.Rename(stagedPath, target); err != nil {
 			return failWithRestore(fmt.Errorf("apply staged file to %s: %w", target, err))
 		}
-
-		applied = append(applied, target)
 	}
 
 	// Successful commit: remove backups. Keep success behavior, but surface cleanup failures in logs.
