@@ -248,6 +248,7 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 
 	reason := strings.TrimSpace(snap.StateReason)
 	message := fmt.Sprintf("Connection '%s' is %s", snap.Name, snap.State)
+	summary := capitalizeFirst(string(snap.State))
 	if reason != "" {
 		message = fmt.Sprintf("%s: %s", message, reason)
 	}
@@ -306,6 +307,7 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		ResourceName:  snap.Name,
 		Instance:      snap.Name,
 		Message:       message,
+		Summary:       summary,
 		Correlation:   correlation,
 		Metadata:      metadata,
 		AddToRecent:   true,

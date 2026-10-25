@@ -13,17 +13,19 @@ import (
 )
 
 type canonicalLifecycleAlertParams struct {
-	Spec                         alertspecs.ResourceAlertSpec
-	Evidence                     alertspecs.AlertEvidence
-	IntentSignal                 string
-	PolicyDisabledNoLock         func() bool
-	AlertID                      string
-	AlertType                    string
-	ResourceID                   string
-	ResourceName                 string
-	Node                         string
-	Instance                     string
-	Message                      string
+	Spec                 alertspecs.ResourceAlertSpec
+	Evidence             alertspecs.AlertEvidence
+	IntentSignal         string
+	PolicyDisabledNoLock func() bool
+	AlertID              string
+	AlertType            string
+	ResourceID           string
+	ResourceName         string
+	Node                 string
+	Instance             string
+	Message              string
+	// Summary is Message without its subject; see Alert.Summary.
+	Summary                      string
 	Value                        float64
 	Threshold                    float64
 	Correlation                  *AlertCorrelation
@@ -38,16 +40,18 @@ type canonicalLifecycleAlertParams struct {
 }
 
 type canonicalStatefulAlertParams struct {
-	Spec                         alertspecs.ResourceAlertSpec
-	Evidence                     alertspecs.AlertEvidence
-	RecoveryConfirmations        int
-	AlertID                      string
-	AlertType                    string
-	ResourceID                   string
-	ResourceName                 string
-	Node                         string
-	Instance                     string
-	Message                      string
+	Spec                  alertspecs.ResourceAlertSpec
+	Evidence              alertspecs.AlertEvidence
+	RecoveryConfirmations int
+	AlertID               string
+	AlertType             string
+	ResourceID            string
+	ResourceName          string
+	Node                  string
+	Instance              string
+	Message               string
+	// Summary is Message without its subject; see Alert.Summary.
+	Summary                      string
 	Value                        float64
 	Threshold                    float64
 	StartTimeOverride            time.Time
@@ -468,6 +472,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			Node:         params.Node,
 			Instance:     params.Instance,
 			Message:      params.Message,
+			Summary:      params.Summary,
 			Value:        params.Value,
 			Threshold:    params.Threshold,
 			StartTime:    incident.StartedAt,
@@ -737,10 +742,13 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			result.Transition = transition(alertspecs.EvaluationTransitionSeverityChanged, alertspecs.AlertStateFiring, alertspecs.AlertStateFiring)
 		}
 		message := params.Message
+		summary := params.Summary
 		value := params.Value
 		threshold := params.Threshold
 		if params.MessageBuilder != nil {
 			message, value, threshold = params.MessageBuilder(result)
+			// A built message has no matching summary; rows show it whole.
+			summary = ""
 		}
 		// The stateful family stamps occurrences at the observation (or the
 		// caller's override, e.g. a backup timestamp), not the pending run
@@ -758,6 +766,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			Node:         params.Node,
 			Instance:     params.Instance,
 			Message:      message,
+			Summary:      summary,
 			Value:        value,
 			Threshold:    threshold,
 			StartTime:    startTime,

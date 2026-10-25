@@ -1376,6 +1376,8 @@ export interface Alert {
   nodeDisplayName?: string;
   instance: string;
   message: string;
+  /** The message without its subject, for rows that already name the resource. */
+  summary?: string;
   value: number;
   threshold: number;
   startTime: string;

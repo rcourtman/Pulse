@@ -278,6 +278,7 @@ func (m *Manager) checkNodeOffline(node models.Node) {
 		Node:         node.Name,
 		Instance:     node.Instance,
 		Message:      fmt.Sprintf("Node '%s' is offline", node.Name),
+		Summary:      "Offline",
 		Correlation:  correlation,
 		Metadata: map[string]interface{}{
 			"resourceType":     "node",

@@ -759,3 +759,57 @@ func TestRestoredBackupRevalidationPreservesQuietHoursReplay(t *testing.T) {
 		t.Fatal("revalidated backup did not enter normal quiet-hours delivery")
 	}
 }
+
+// Summary is the message without its subject. It travels with the message
+// through both canonical evaluators, and a built message clears it because no
+// summary matches text composed at evaluation time.
+func TestCanonicalEvaluatorsCarrySummaryWithMessage(t *testing.T) {
+	m := newTestManager(t)
+	spec, err := buildCanonicalConnectivitySpec("node-1", "Node 1", unifiedresources.ResourceType("node"), AlertLevelCritical, 1, false)
+	if err != nil {
+		t.Fatalf("build connectivity spec: %v", err)
+	}
+	if _, ok := m.evaluateCanonicalLifecycleAlert(canonicalLifecycleAlertParams{
+		Spec:         spec,
+		Evidence:     alertspecs.AlertEvidence{ObservedAt: time.Now(), Connectivity: &alertspecs.ConnectivityEvidence{Signal: "status", Connected: false}},
+		AlertID:      canonicalConnectivityStateID("node-1"),
+		AlertType:    "connectivity",
+		ResourceID:   "node-1",
+		ResourceName: "Node 1",
+		Message:      "Node 'Node 1' is offline",
+		Summary:      "Offline",
+	}); !ok {
+		t.Fatal("expected canonical lifecycle evaluation")
+	}
+	alert := testRequireActiveAlert(t, m, canonicalConnectivityStateID("node-1"))
+	if alert.Message != "Node 'Node 1' is offline" || alert.Summary != "Offline" {
+		t.Fatalf("lifecycle alert message/summary = %q / %q", alert.Message, alert.Summary)
+	}
+
+	gapSpec, err := buildCanonicalServiceGapSpec("svc-1", "web", unifiedresources.ResourceTypeDockerService, "web", 10, 50, false)
+	if err != nil {
+		t.Fatalf("build service gap spec: %v", err)
+	}
+	if _, ok := m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
+		Spec: gapSpec,
+		Evidence: alertspecs.AlertEvidence{
+			ObservedAt: time.Now(),
+			ServiceGap: &alertspecs.ServiceGapEvidence{Service: "web", Desired: 4, Running: 1},
+		},
+		AlertID:      "docker-service-health-svc-1",
+		AlertType:    "docker-service-health",
+		ResourceID:   "svc-1",
+		ResourceName: "web",
+		Message:      "Docker service 'web' is running 1 of 4 desired tasks",
+		Summary:      "Running 1 of 4 desired tasks",
+		MessageBuilder: func(alertspecs.EvaluationResult) (string, float64, float64) {
+			return "built message", 75, 50
+		},
+	}); !ok {
+		t.Fatal("expected canonical stateful evaluation")
+	}
+	built := testRequireActiveAlert(t, m, "docker-service-health-svc-1")
+	if built.Message != "built message" || built.Summary != "" {
+		t.Fatalf("built alert message/summary = %q / %q, want built message and no summary", built.Message, built.Summary)
+	}
+}

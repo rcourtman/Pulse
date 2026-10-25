@@ -175,22 +175,25 @@ var (
 
 // Alert represents an active alert (simplified for State)
 type Alert struct {
-	ID              string     `json:"id"`
-	Type            string     `json:"type"`
-	Level           string     `json:"level"`
-	ResourceID      string     `json:"resourceId"`
-	ResourceName    string     `json:"resourceName"`
-	Node            string     `json:"node"`
-	NodeDisplayName string     `json:"nodeDisplayName,omitempty"`
-	Instance        string     `json:"instance"`
-	Message         string     `json:"message"`
-	Value           float64    `json:"value"`
-	Threshold       float64    `json:"threshold"`
-	StartTime       time.Time  `json:"startTime"`
-	LastSeen        *time.Time `json:"lastSeen,omitempty"`
-	Acknowledged    bool       `json:"acknowledged"`
-	AckTime         *time.Time `json:"ackTime,omitempty"`
-	AckUser         string     `json:"ackUser,omitempty"`
+	ID              string `json:"id"`
+	Type            string `json:"type"`
+	Level           string `json:"level"`
+	ResourceID      string `json:"resourceId"`
+	ResourceName    string `json:"resourceName"`
+	Node            string `json:"node"`
+	NodeDisplayName string `json:"nodeDisplayName,omitempty"`
+	Instance        string `json:"instance"`
+	Message         string `json:"message"`
+	// Summary is Message without its subject, for rows that already name the
+	// resource; empty when the message has no separate subject.
+	Summary      string     `json:"summary,omitempty"`
+	Value        float64    `json:"value"`
+	Threshold    float64    `json:"threshold"`
+	StartTime    time.Time  `json:"startTime"`
+	LastSeen     *time.Time `json:"lastSeen,omitempty"`
+	Acknowledged bool       `json:"acknowledged"`
+	AckTime      *time.Time `json:"ackTime,omitempty"`
+	AckUser      string     `json:"ackUser,omitempty"`
 	// MetricStatus is the live evaluation behind an open threshold alert.
 	MetricStatus *MetricAlertStatus `json:"metricStatus,omitempty"`
 	// Metadata carries alert-engine annotations (notably resourceType) so the

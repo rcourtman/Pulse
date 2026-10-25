@@ -1271,6 +1271,9 @@ func TestHandleHostOfflineNamesSilentAgentNotHostOutage(t *testing.T) {
 	if want := "Pulse agent on 'delly' stopped reporting"; alert.Message != want {
 		t.Fatalf("message = %q, want %q", alert.Message, want)
 	}
+	if want := "Pulse agent stopped reporting"; alert.Summary != want {
+		t.Fatalf("summary = %q, want %q", alert.Summary, want)
+	}
 	if want := "delly (Host Agent)"; alert.ResourceName != want {
 		t.Fatalf("resource name = %q, want %q", alert.ResourceName, want)
 	}
@@ -3140,6 +3143,14 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 	if missing, ok := alert.Metadata["missingTasks"].(int); !ok || missing != 2 {
 		t.Fatalf("expected missingTasks metadata to be 2, got %v", alert.Metadata["missingTasks"])
 	}
+	// The message names the service for notifications; the summary is the
+	// condition alone for rows whose Resource cell already names it.
+	if want := "Docker service 'web' is running 2 of 4 desired tasks"; alert.Message != want {
+		t.Fatalf("message = %q, want %q", alert.Message, want)
+	}
+	if want := "Running 2 of 4 desired tasks"; alert.Summary != want {
+		t.Fatalf("summary = %q, want %q", alert.Summary, want)
+	}
 
 	// Resolve by restoring replicas
 	host.Services[0].RunningTasks = 4
@@ -3147,6 +3158,20 @@ func TestDockerServiceReplicaAlerts(t *testing.T) {
 
 	if testHasActiveAlert(t, m, alertID) {
 		t.Fatalf("expected service alert %s to be cleared when replicas restored", alertID)
+	}
+	// The resolved read model carries the summary to the history table.
+	foundResolved := false
+	for _, resolved := range m.GetRecentlyResolved() {
+		if resolved.Alert.ResourceID != resourceID {
+			continue
+		}
+		foundResolved = true
+		if want := "Running 2 of 4 desired tasks"; resolved.Alert.Summary != want {
+			t.Fatalf("resolved summary = %q, want %q", resolved.Alert.Summary, want)
+		}
+	}
+	if !foundResolved {
+		t.Fatalf("expected service alert %s in recently resolved", alertID)
 	}
 }
 
@@ -3346,6 +3371,9 @@ func TestDockerServiceUpdateStateAlert(t *testing.T) {
 	}
 	if state, ok := alert.Metadata["updateState"].(string); !ok || state != "rollback_failed" {
 		t.Fatalf("expected updateState metadata to be rollback_failed, got %v", alert.Metadata["updateState"])
+	}
+	if want := "Update state: rollback_failed (Rollback failed)"; alert.Summary != want {
+		t.Fatalf("summary = %q, want %q", alert.Summary, want)
 	}
 }
 
@@ -23075,6 +23103,20 @@ func TestZFSAlertsNameTheirStorage(t *testing.T) {
 		alert := testRequireActiveAlert(t, m, id)
 		if got := alert.Metadata["storageResourceId"]; got != "pve1-local-zfs" {
 			t.Errorf("%s: storageResourceId = %v, want pve1-local-zfs", id, got)
+		}
+	}
+}
+
+func TestCapitalizeFirstMakesAStandaloneSummary(t *testing.T) {
+	for in, want := range map[string]string{
+		"":             "",
+		"paused":       "Paused",
+		"Exited (137)": "Exited (137)",
+		"unreachable":  "Unreachable",
+		"élan":         "Élan",
+	} {
+		if got := capitalizeFirst(in); got != want {
+			t.Fatalf("capitalizeFirst(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

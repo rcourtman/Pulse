@@ -1770,6 +1770,10 @@ new host-agent removal or installed re-enrolment qualification.
 
 The shared security-status route may expose the validated caller currentUsername to authenticated clients, including organisation-scoped local sessions. This presentation identity is not an agent credential, enrollment grant or command authority; agent download, enrollment and token-scope checks remain independent of this field.
 
+`models.Alert` in `internal/models/models.go` gains an optional `Summary`
+beside `Message`, presentation copy for alert rows; it carries no agent
+identity, enrollment, token or command authority.
+
 `internal/models/models.go` and `internal/monitoring/monitor.go` also carry
 monitoring-owned Proxmox cluster node identity and membership-confirmation
 state. Provider instances with equal cluster/member display names must not

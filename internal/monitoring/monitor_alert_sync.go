@@ -65,6 +65,7 @@ func (m *Monitor) activeAlertsSnapshot() []models.Alert {
 			NodeDisplayName: alert.NodeDisplayName,
 			Instance:        alert.Instance,
 			Message:         alert.Message,
+			Summary:         alert.Summary,
 			Value:           alert.Value,
 			Threshold:       alert.Threshold,
 			StartTime:       alert.StartTime,

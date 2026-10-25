@@ -4184,7 +4184,10 @@ service-history reads plus denial/recovery without fabricated samples.
     contract together. Monitoring may pass the current unified-resource snapshot
     into the alert manager, but threshold selection, override identity, active
     alert state, and notification delivery remain alerts-owned. The monitoring
-    sync bridge must not introduce per-platform evaluator branches.
+    sync bridge must not introduce per-platform evaluator branches. It copies
+    the alert's `Summary` beside `Message` into `models.Alert`, as the mock
+    fixture graph does for its active alerts, so state snapshots carry the
+    subject-free copy the history table shows.
 20. Add or change PBS API transport, optional node identity collection, or PBS
     HTTP retry classification through `pkg/pbs/client.go`. HTTP status decisions
     must use the concrete client error status rather than rendered error or body

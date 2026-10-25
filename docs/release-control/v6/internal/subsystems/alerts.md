@@ -1761,6 +1761,19 @@ Investigate icon (accessible names and titles say what each opens; cards keep
 the worded buttons), so the three actions need 100px instead of 177px, and
 Status uses a compact 11px badge that needs 108px for "moved to agent"
 instead of 119px. Resource and Message take that width.
+An alert may carry `Summary`, its message without the subject the row's
+Resource cell already names ("Running 1 of 3 desired tasks" for "Docker
+service 'web' is running 1 of 3 desired tasks", "Offline", "Powered off").
+Builders set it beside `Message` where they name their own resource: Docker
+service gap and update state, Docker host offline, Docker container state,
+health, restart loop, OOM kill, memory limit and image update, node, PBS and
+PMG offline, guest powered off, Pulse agent stopped reporting, storage
+unavailable, connection state and external probe silence. Both canonical
+lifecycle evaluators copy it into the alert they build, so it changes with
+the message; a `MessageBuilder` clears it because a built message has no
+matching summary. History rows lead with `Summary` and keep the full message
+in their title; cards, notifications and detail views keep the message, and
+history recorded before alerts carried a summary shows its message.
 Below a 50rem card, Resource and Message cells wrap inside a `line-clamp-2`
 wrapper (`data-alert-history-cell`) instead of ending in an ellipsis after one
 line, so more of what happened reads without hover. A message or name longer
