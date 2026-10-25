@@ -39,7 +39,9 @@ describe('TrueNAS protection evidence help', () => {
     expect(text).toContain('does not certify that every dataset is protected');
     expect(text).toContain('It is not an independent copy');
     expect(text).toContain('Running or Unknown is not a completed copy');
-    expect(text).toContain('remote mode alone does not establish a separate machine or failure domain');
+    expect(text).toContain(
+      'remote mode alone does not establish a separate machine or failure domain',
+    );
   });
 
   it('keeps the bounded collection and timestamp limitations visible beside the comparison', () => {
@@ -50,7 +52,9 @@ describe('TrueNAS protection evidence help', () => {
     );
     const snapshots = mapper.match(/maxTrueNASSnapshotsPerIngest\s*=\s*(\d+)/)![1];
     const replications = mapper.match(/maxTrueNASReplicationsPerIngest\s*=\s*(\d+)/)![1];
-    expect(text).toContain(`${snapshots} snapshots and ${replications} replication tasks per collection`);
+    expect(text).toContain(
+      `${snapshots} snapshots and ${replications} replication tasks per collection`,
+    );
     expect(text).toContain('retained events can outlive their source artifact');
     expect(text).toContain('Pulse can show the collection time as Completed');
     expect(text).toContain("confirm the native snapshot's creation time");
@@ -72,10 +76,14 @@ describe('TrueNAS protection evidence help', () => {
       'Direction',
       'Last snapshot',
     ]) {
-      expect([...section.querySelectorAll('strong')].map((node) => node.textContent)).toContain(label);
+      expect([...section.querySelectorAll('strong')].map((node) => node.textContent)).toContain(
+        label,
+      );
     }
     expect(text).toContain('existing received-snapshot and task records');
-    expect(text).toContain('unavailable evidence, not a failed verification or a zero-sized backup');
+    expect(text).toContain(
+      'unavailable evidence, not a failed verification or a zero-sized backup',
+    );
     expect(text).toContain('Snapshot Size is reported used space');
     expect(text).toContain('does not prove that snapshot or replication reads succeeded');
     expect(text).toContain('Do not run a new snapshot, replication, verification or restore');
