@@ -40,7 +40,7 @@ func TestLoadTenantRuntimeConfigUsesScopedResourcesAndPreservesInstanceSettings(
 		TLSCertFile: "instance-cert", TLSKeyFile: "instance-key", FrontendPort: 7655,
 		APITokens:    []config.APITokenRecord{{ID: "default-token", Hash: "synthetic-default-hash"}},
 		PVEInstances: []config.PVEInstance{{Name: "default-node", TokenValue: "synthetic-default-secret"}},
-		PublicURL:    "https://default.invalid", PVEPollingInterval: 42 * time.Second,
+		PublicURL:    "https://default.invalid", PVEPollingInterval: 42 * time.Second, PBSPollingInterval: 71 * time.Second, AllowedOrigins: "https://instance-ui.invalid",
 		HideLocalLogin: true, Discovery: config.DefaultDiscoveryConfig(),
 		EnvOverrides: map[string]bool{"PVE_POLLING_INTERVAL": true, "PULSE_AUTH_HIDE_LOCAL_LOGIN": true, "discoveryMaxConcurrent": true},
 	}
@@ -105,6 +105,12 @@ func TestLoadTenantRuntimeConfigEmptyInventoryDoesNotInheritCredentials(t *testi
 	}
 	if _, err := loadTenantRuntimeConfig(base, nil); err == nil {
 		t.Error("missing persistence was accepted")
+	}
+	if err := os.WriteFile(filepath.Join(p.GetConfigDir(), "api_tokens.json"), []byte("{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadTenantRuntimeConfig(base, p); err == nil {
+		t.Error("unreadable scoped credentials fell back to another token inventory")
 	}
 }
 
