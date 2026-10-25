@@ -576,7 +576,10 @@ func (s *Store) writeProtectionPostures(
 		points := pointsByKey[key]
 		subjectResourceID := ""
 		for _, point := range points {
-			if value := strings.TrimSpace(point.SubjectResourceID); value != "" {
+			// The bucket's subject key already recognises Proxmox legacy
+			// aliases. Publish that same canonical subject, not whichever
+			// historical representation the newest point happened to carry.
+			if value := recovery.CanonicalSubjectResourceID(point.Provider, point.SubjectResourceID, point.SubjectRef); value != "" {
 				subjectResourceID = value
 				break
 			}
