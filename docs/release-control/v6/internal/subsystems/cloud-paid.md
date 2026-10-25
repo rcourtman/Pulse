@@ -35,6 +35,15 @@ are not lease-reclaimed, pending refunds remain pending, and an operator's
 negative cancellation resolution requires retained provider evidence rather
 than elapsed time. The programme is absent by default.
 
+Refunds and cancellation of paid access require an individually recorded,
+verified customer request. Canonical support evidence, explicit request
+attestation and exact subscription identity bind each new quote. Original
+receipt time determines whether a claim is timely, even when processed later.
+The cancellation-intent transaction rechecks the request and case binding;
+withdrawal cannot race that intent. Unrequested historical quotes cannot begin
+cancellation. Already-dispatched obligations retain recovery. There is no
+blanket payout or automatic subscription cancellation.
+
 The Community history/probe/seat boundary and Business sales pause remain
 pending the notice-bound cutover. Before a refund exit is offered, adopt the
 programme and complete prior-refund/credit and renewal-period reconciliation,
@@ -341,6 +350,7 @@ establish Compose mounts, tenant provisioning or installed provider recovery.
 96. `pulse-pro:license-server/v6_schema.go`
 97. `pulse-pro:license-server/admin_refund_provider.go`
 98. `pulse-pro:license-server/admin_support.go`
+99. `pulse-pro:license-server/v6_commercial_refund_claims.go`
 
 ## Shared Boundaries
 

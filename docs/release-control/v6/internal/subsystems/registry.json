@@ -3714,6 +3714,7 @@
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
         "pulse-pro:license-server/v6_commercial_projection.go",
+        "pulse-pro:license-server/v6_commercial_refund_claims.go",
         "pulse-pro:license-server/v6_commercial_refund_exits.go",
         "pulse-pro:license-server/v6_commercial_refund_quotes.go",
         "pulse-pro:license-server/v6_commercial_refund_schema.go",
@@ -4602,6 +4603,7 @@
               "pulse-pro:license-server/admin_refund_provider.go",
               "pulse-pro:license-server/admin_support.go",
               "pulse-pro:license-server/v6_commercial_projection.go",
+              "pulse-pro:license-server/v6_commercial_refund_claims.go",
               "pulse-pro:license-server/v6_commercial_refund_exits.go",
               "pulse-pro:license-server/v6_commercial_refund_quotes.go",
               "pulse-pro:license-server/v6_commercial_refund_schema.go",
@@ -4614,6 +4616,7 @@
               "pulse-pro:license-server/admin_refund_safety_test.go",
               "pulse-pro:license-server/admin_support_test.go",
               "pulse-pro:license-server/v6_commercial_projection_test.go",
+              "pulse-pro:license-server/v6_commercial_refund_claims_test.go",
               "pulse-pro:license-server/v6_commercial_refund_exits_test.go",
               "pulse-pro:license-server/v6_commercial_transitions_test.go",
               "pulse-pro:license-server/v6_store_test.go"
