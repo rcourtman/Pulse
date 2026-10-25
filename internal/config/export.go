@@ -258,15 +258,13 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := c.GetGuestMetadataStore().commitImport(tx, exportData.GuestMetadata); err != nil {
 		return fmt.Errorf("failed to commit import transaction: %w", err)
 	}
 	committed = true
-
-	// Import guest metadata into the active persistence scope.
-	if err := c.GetGuestMetadataStore().ReplaceAll(exportData.GuestMetadata); err != nil {
-		log.Warn().Err(err).Msg("Failed to import guest metadata")
-	}
+	c.mu.Lock()
+	c.cleanupOldBackups(c.nodesFile + ".backup-*")
+	c.mu.Unlock()
 
 	return nil
 }
