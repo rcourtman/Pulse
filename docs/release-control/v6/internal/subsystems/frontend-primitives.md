@@ -1864,6 +1864,9 @@ removal/failure retention and containing publication remain separate evidence.
 142. `frontend-modern/src/components/Settings/__tests__/settingsLocalization.test.ts`
 143. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
+- `frontend-modern/src/components/Settings/BackupTransferDialogs.tsx`
+- `frontend-modern/src/components/Settings/useBackupTransferFlow.ts`
+
 ## Shared Boundaries
 
 ### Transport-independent operator rows
@@ -9997,3 +10000,32 @@ transcript block moved to `frontend-modern/src/components/patrol/` with its
 `CopyValueButton` composition intact. The External agents settings page lives
 at `/settings/pulse-intelligence/agents`; the old `/assistant` path redirects
 there.
+
+### Configuration transfers retain their confirmed workspace
+
+Recovery's export/import dialogs capture and display the effective workspace ID
+when opened, including explicit `default` scope. Their production flow freezes
+inputs before asynchronous file reads, binds both POSTs through the API client's
+`expectedOrgID` and `retry: false`, and rejects a changed workspace before dispatch
+(including the client's post-CSRF recheck). An invalid organisation must never
+fall back to default, and a CSRF refusal must not replay a transfer. Only one
+transfer can be pending; controls and dismissal remain disabled while waiting.
+
+Token entry saves a credential without submitting either transfer. The operator
+must review the target and submit explicitly, including after a server refusal.
+A failed/unknown import response is not proof that nothing applied: persistent
+in-dialog guidance requires checking the destination before another attempt.
+Exports discard late data after a workspace change; successful imports identify
+the original workspace and never reload a different one. Leaving Settings aborts
+the client's wait and suppresses late downloads, notices and reload timers; it
+does not promise to undo a server-side import or prevent transport-level replay.
+A non-retrying application fetch is not server-side single-application protection.
+Existing archive formats,
+authorisation, scope and encrypted payloads remain unchanged.
+
+`useBackupTransferFlow.test.ts` runs the real API client across delayed file/CSRF
+preparation, scope switches, duplicate calls, non-retryable failures, token entry,
+unmount, archive compatibility and cleanup. `BackupTransferDialogs.test.tsx`
+checks target/error disclosure and pending input/action states. Browser evidence
+must exercise the production flow and consuming dialogs at desktop and narrow
+widths with safe responses, not a replacement transfer implementation.

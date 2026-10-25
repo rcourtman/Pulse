@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BackupTransferDialogs } from '../BackupTransferDialogs';
 
-function renderTransfer(kind: 'export' | 'import') {
+function renderTransfer(kind: 'export' | 'import', pending = false, error = '') {
   return render(() => (
     <BackupTransferDialogs
       securityStatus={() => null}
@@ -17,6 +17,9 @@ function renderTransfer(kind: 'export' | 'import') {
       showExportDialog={() => kind === 'export'}
       showImportDialog={() => kind === 'import'}
       showApiTokenModal={() => false}
+      transferOrgID={() => 'tenant-fixture'}
+      isTransferring={() => pending}
+      transferError={() => error}
       apiTokenInput={() => ''}
       setApiTokenInput={vi.fn()}
       handleExport={vi.fn()}
@@ -62,5 +65,29 @@ describe('BackupTransferDialogs', () => {
     expect(guide).toHaveAttribute('href', '/docs/MIGRATION');
     expect(guide).toHaveAttribute('target', '_blank');
     expect(guide).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it.each(['export', 'import'] as const)(
+    'shows the fixed workspace, disables pending %s inputs and exposes progress',
+    (kind) => {
+      renderTransfer(kind, true);
+      expect(screen.getByText('tenant-fixture')).toBeInTheDocument();
+      const dialog = screen.getByRole('dialog');
+      for (const control of dialog.querySelectorAll('input, button')) {
+        expect(control).toBeDisabled();
+      }
+      expect(screen.getByRole('status')).toHaveTextContent('while Pulse waits for a response');
+    },
+  );
+
+  it('keeps uncertain outcome guidance readable in the import dialog', () => {
+    renderTransfer(
+      'import',
+      false,
+      'Import was not confirmed. Check the destination before trying again.',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Check the destination before trying again',
+    );
   });
 });
