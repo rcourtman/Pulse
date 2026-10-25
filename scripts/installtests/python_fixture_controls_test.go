@@ -15,8 +15,11 @@ import (
 
 // A suite's cumulative runtime is not a service or installer deadline. Give
 // each independent control the existing bound, while the native phase keeps
-// its overall Go timeout. Discovery runs every method, including future ones,
-// and the required list prevents deleting a safety control unnoticed.
+// its overall Go timeout. Each method owns a separate Python process and its
+// private fixture files: use Go's bounded -parallel budget instead of adding
+// every independent manager timeout to the containing suite's critical path.
+// Discovery runs every method, including future ones, and the required list
+// prevents deleting a safety control unnoticed.
 func runPythonFixtureControls(t *testing.T, script, class string, required []string, bound time.Duration, env ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), bound)
@@ -28,6 +31,9 @@ func runPythonFixtureControls(t *testing.T, script, class string, required []str
 	t.Logf("Discovered %d %s controls; each retains its %s bound", len(controls), class, bound)
 	for _, name := range controls {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			// Start the existing per-control deadline after scheduler admission,
+			// never while this method is waiting for a parallel worker.
 			ctx, cancel := context.WithTimeout(context.Background(), bound)
 			defer cancel()
 			output, err := executePythonFixtureControl(ctx, script, class, name, env...)
@@ -35,6 +41,100 @@ func runPythonFixtureControls(t *testing.T, script, class string, required []str
 				t.Fatal(err)
 			}
 			t.Logf("%s", output)
+		})
+	}
+}
+
+func TestPythonFixtureControlsBoundedParallelExecution(t *testing.T) {
+	const probeRoot = "PULSE_TEST_PYTHON_CONTROL_PROBE_ROOT"
+	if root := os.Getenv(probeRoot); root != "" {
+		runPythonFixtureControls(t, filepath.Join(root, "controls.py"), "Controls",
+			[]string{"test_first", "test_second", "test_third", "test_fourth"}, 15*time.Second,
+			probeRoot+"="+root)
+		return
+	}
+
+	// The first control must observe a second, independently running process.
+	// Serial execution is an explicit adverse control, not a timing speed claim.
+	// Every process records its invocation, including failed/skipped methods;
+	// one adverse result must not suppress the other discovered safety controls.
+	const source = `import os, pathlib, time, unittest
+root = pathlib.Path(os.environ["PULSE_TEST_PYTHON_CONTROL_PROBE_ROOT"])
+class Controls(unittest.TestCase):
+    def control(self):
+        name = self._testMethodName
+        (root / ("started-" + name)).write_text("started")
+        active = root / ("active-" + name)
+        active.write_text("active")
+        try:
+            deadline = time.monotonic() + 5
+            while len(list(root.glob("started-*"))) < 2:
+                self.assertLess(time.monotonic(), deadline, "serial control execution")
+                time.sleep(0.01)
+            self.assertLessEqual(len(list(root.glob("active-*"))), 2, "parallel worker budget exceeded")
+            if name == "test_first":
+                fault = (root / "fault").read_text()
+                if fault == "fail": self.fail("retained adverse control")
+                if fault == "skip": self.skipTest("must not count as passing")
+            (root / ("completed-" + name)).write_text("completed")
+        finally:
+            active.unlink()
+    def test_first(self): self.control()
+    def test_second(self): self.control()
+    def test_third(self): self.control()
+    def test_fourth(self): self.control()
+if __name__ == "__main__": unittest.main(verbosity=2)
+`
+	for _, tc := range []struct {
+		name, fault, parallel, diagnostic string
+		passed                            bool
+	}{
+		{"bounded parallel", "", "2", "", true},
+		{"failed control", "fail", "2", "retained adverse control", false},
+		{"skipped control", "skip", "2", "did not execute exactly one passing control", false},
+		{"serial adverse control", "", "1", "serial control execution", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "controls.py"), []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "fault"), []byte(tc.fault), 0600); err != nil {
+				t.Fatal(err)
+			}
+			binary, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, binary,
+				"-test.run=^TestPythonFixtureControlsBoundedParallelExecution$",
+				"-test.count=1", "-test.parallel="+tc.parallel, "-test.v")
+			cmd.Env = append(os.Environ(), probeRoot+"="+root)
+			output, runErr := cmd.CombinedOutput()
+			if ctx.Err() != nil || (runErr == nil) != tc.passed {
+				t.Fatalf("parallel fixture verdict: %v (context %v), want pass=%t\n%s", runErr, ctx.Err(), tc.passed, output)
+			}
+			if tc.diagnostic != "" && !strings.Contains(string(output), tc.diagnostic) {
+				t.Fatalf("lost adverse control diagnostic %q:\n%s", tc.diagnostic, output)
+			}
+			started, err := filepath.Glob(filepath.Join(root, "started-*"))
+			if err != nil || len(started) != 4 {
+				t.Fatalf("not every discovered control ran: %v, %v\n%s", started, err, output)
+			}
+			completed, err := filepath.Glob(filepath.Join(root, "completed-*"))
+			want := 3
+			if tc.passed {
+				want = 4
+			}
+			if err != nil || len(completed) != want {
+				t.Fatalf("wrong completed control inventory: %v, %v; want %d\n%s", completed, err, want, output)
+			}
+			active, err := filepath.Glob(filepath.Join(root, "active-*"))
+			if err != nil || len(active) != 0 {
+				t.Fatalf("control cleanup incomplete: %v, %v", active, err)
+			}
 		})
 	}
 }
