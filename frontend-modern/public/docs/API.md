@@ -800,6 +800,19 @@ Request body:
 }
 ```
 
+Import replaces the included settings; it is not an idempotent merge. HTTP 500
+can follow a **saved** archive when live apply fails. In particular,
+`Configuration saved, but live reload failed:` names the affected live
+components, not a rejected file or rollback. Other components may already have
+applied. Do not automatically retry this POST after an error or lost response.
+
+HTTP 409 can mean an import is still running or the same backup was submitted
+recently. It does not establish the original attempt's outcome. The duplicate
+guard is temporary and process-local; waiting or restarting does not make a
+retry safe. Follow the [saved-or-uncertain import checks](MIGRATION.md#when-an-import-fails-or-times-out)
+before another submission or migration cutover. Preserve the redacted error,
+not the archive, passphrase or raw configuration, in a report.
+
 ---
 
 ## 🧭 Setup & Discovery
