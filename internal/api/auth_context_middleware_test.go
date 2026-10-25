@@ -139,6 +139,9 @@ func TestExtractAndStoreAuthContext_SessionCookie(t *testing.T) {
 }
 
 func TestExtractAndStoreAuthContext_InvalidBearerDoesNotFallBackToSession(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	t.Cleanup(GetSessionStore().Shutdown)
+
 	record, err := config.NewAPITokenRecord("ctx-valid-token-123.12345678", "ctx-token", []string{config.ScopeMonitoringRead})
 	if err != nil {
 		t.Fatalf("new token record: %v", err)
