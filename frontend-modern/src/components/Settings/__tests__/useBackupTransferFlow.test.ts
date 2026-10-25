@@ -1,5 +1,5 @@
 import { createRoot } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { apiClient, clearApiToken, getApiToken, getOrgID, setOrgID } from '@/utils/apiClient';
 import { notificationStore } from '@/stores/notifications';
 import type { SecurityStatus } from '@/types/config';
@@ -12,7 +12,7 @@ vi.mock('@/stores/notifications', () => ({
 const fetchMock = vi.fn();
 const disposers: (() => void)[] = [];
 const passphrase = 'synthetic-passphrase';
-let timeoutSpy: ReturnType<typeof vi.spyOn>;
+let timeoutSpy: MockInstance<typeof globalThis.setTimeout>;
 const reloadTimers = () =>
   timeoutSpy.mock.calls.flatMap((args, index) =>
     args[1] === 2000 ? [timeoutSpy.mock.results[index].value] : [],
