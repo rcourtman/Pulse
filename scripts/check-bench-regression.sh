@@ -2,7 +2,8 @@
 # check-bench-regression.sh — Parse benchstat output for significant regressions.
 #
 # Usage: bash scripts/check-bench-regression.sh <benchstat-output-file>
-# Exits 0 if no regressions >10% with p<0.05, exits 1 otherwise. Comparisons
+# Exits 0 if no regressions >10% with p<0.05, exits 1 otherwise. More time,
+# bytes/op and allocs/op are worse; less byte throughput is worse. Comparisons
 # with fewer than 10 samples are rejected because benchstat cannot treat them
 # as a statistically trustworthy CI signal.
 #
@@ -51,18 +52,31 @@ if [ "$low_sample_count" -ne 0 ]; then
   exit 1
 fi
 
-# Use POSIX-compatible awk to find statistically significant regressions.
-# Matches lines with +XX.XX% (p=0.XXX ...) and checks both thresholds.
+# Benchstat prints a separate table for each metric. Go SetBytes benchmarks
+# report byte throughput (normally tidied to B/s), where a decrease is worse.
+# Other metrics, including headerless legacy comparisons, retain the existing
+# lower-is-better rule. Include the unit in each finding so scaled values such
+# as 63Mi cannot be mistaken for throughput when they actually mean bytes/op.
 awk -v threshold="$THRESHOLD" -v p_max="$P_MAX" '
-/\+[0-9].*%.*\(p=/ {
-  match($0, /\+[0-9]+\.?[0-9]*%/)
-  pct = substr($0, RSTART+1, RLENGTH-2) + 0
+/vs base/ {
+  header = $0
+  gsub(/│/, "|", header)
+  if (split(header, columns, /\|/) >= 3) {
+    metric = columns[2]
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", metric)
+    higher_is_better = (metric ~ /^([kKMGTPE]i?)?B\/s$/)
+  }
+}
+/[-+][0-9].*%.*\(p=/ {
+  match($0, /[-+][0-9]+\.?[0-9]*%/)
+  pct = substr($0, RSTART, RLENGTH-1) + 0
 
   match($0, /p=[0-9]+\.[0-9]+/)
   pval = substr($0, RSTART+2, RLENGTH-2) + 0
 
-  if (pct > threshold && pval < p_max) {
-    print
+  regression = higher_is_better ? -pct : pct
+  if (regression > threshold && pval < p_max) {
+    print (metric == "" ? "" : "[" metric "] ") $0
   }
 }' "$COMPARISON_FILE" > "$TMPFILE"
 
