@@ -81,6 +81,9 @@ func TestStorageForecastSharesLifecycleWithStaticUsageAlert(t *testing.T) {
 	m.SetResolvedCallback(func(string) { resolved++ })
 
 	storage := models.Storage{
+		Total:    1000,
+		Used:     720,
+		Free:     280,
 		ID:       "storage-forecast-1",
 		Name:     "archive",
 		Node:     "pve1",
@@ -162,7 +165,7 @@ func TestStorageForecastTreatsUncertainEvidenceAsUnknown(t *testing.T) {
 	m.config.StorageDefault = HysteresisThreshold{Trigger: 80, Clear: 70}
 	m.mu.Unlock()
 
-	storage := models.Storage{ID: "storage-forecast-unknown", Name: "media", Status: "active", Usage: 70}
+	storage := models.Storage{Total: 1000, Used: 700, Free: 300, ID: "storage-forecast-unknown", Name: "media", Status: "active", Usage: 70}
 	trusted := CapacityTrendObservation{
 		Ready: true, Reason: "increasing", ObservedAt: time.Now(), DailyChange: 6,
 		Confidence: 0.99, SampleCount: 300, BucketCount: 48, CoverageSpan: 48 * time.Hour,
