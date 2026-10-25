@@ -26,13 +26,23 @@ commercial catalog without requiring a migrated v6 licence. The preview is not
 an executable transition quote and never cancels, refunds, changes entitlements
 or sends customer mail.
 
+The annual exit extends the existing quote authority with original-payment
+terms and real legacy/v6 targets. Intent precedes each provider mutation;
+canonical projection, legacy termination, version-floor outbox and confirmed
+cancellation progress share a transaction before refund intent. All application
+subscription/refund writers respect the active-exit fence. Uncertain outcomes
+are not lease-reclaimed, pending refunds remain pending, and an operator's
+negative cancellation resolution requires retained provider evidence rather
+than elapsed time. The programme is absent by default.
+
 The Community history/probe/seat boundary and Business sales pause remain
-pending the notice-bound cutover. Before a refund exit is offered, the existing
-commercial authority still needs a durable, policy-bound quote and one-attempt
-execution with exact cancellation, original-payment refund, cross-generation
-entitlement termination, version-floor invalidation and reconciliation proof.
-No payment effect may be inferred from an unsigned preview or its dates. The
-preparation record is
+pending the notice-bound cutover. Before a refund exit is offered, adopt the
+programme and complete prior-refund/credit and renewal-period reconciliation,
+the separate recent-first-purchase remedy, failed/absent-refund recovery,
+production-schema migration proof and external event/runtime convergence.
+Customer-wide outstanding billing requires explicit reconciliation. No payment
+effect may be inferred from an unsigned preview or its dates. The preparation
+record is
 `docs/release-control/v6/internal/records/community-transition-refund-preparation-2026-10-25.md`.
 
 ### Reporting measurement precedes commercial feature decisions
@@ -324,6 +334,13 @@ establish Compose mounts, tenant provisioning or installed provider recovery.
 89. `pulse-pro:license-server/entrypoint.sh.template`
 90. `pulse-pro:license-server/secrets.env.template`
 91. `pulse-pro:license-server/v6_commercial_refunds.go`
+92. `pulse-pro:license-server/v6_commercial_refund_exits.go`
+93. `pulse-pro:license-server/v6_commercial_refund_quotes.go`
+94. `pulse-pro:license-server/v6_commercial_refund_schema.go`
+95. `pulse-pro:license-server/v6_commercial_projection.go`
+96. `pulse-pro:license-server/v6_schema.go`
+97. `pulse-pro:license-server/admin_refund_provider.go`
+98. `pulse-pro:license-server/admin_support.go`
 
 ## Shared Boundaries
 

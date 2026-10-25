@@ -1,9 +1,9 @@
 # Community transition refund preparation
 
-25 October 2026. Commercial preparation under L2 and L3. This slice adds an
-admin-only calculation of an annual transition refund from proposed announcement
-and release dates. It does not activate a programme, change the published offer,
-remove runtime gates or authorize payment actions.
+25 October 2026. Commercial preparation under L2 and L3. The preview and
+subsequent annual quote/apply preparation do not adopt programme dates, deploy
+the service, change the published offer, remove runtime gates or authorize
+production payment actions.
 
 ## Prepared boundary
 
@@ -29,9 +29,31 @@ purchase remedy is explicitly not evaluated, and monthly payments are out of
 scope. Unsupported cohorts have private 422 reasons, distinct from unavailable
 provider evidence.
 
-All provider operations are GETs. No subscription, refund, local licence,
-commercial projection, revocation event or customer email is changed. Existing
-full-refund and support-cancellation paths retain their current semantics.
+The preview makes provider GETs only and remains unexecutable. Its proposed
+dates cannot activate the separate annual exit authority.
+
+The annual exit extends the existing durable commercial quote authority.
+Original payment and policy terms bind real legacy/v6 targets through complete
+invoice and checkout chains. Only refund exits may omit a primary v6 licence;
+normal quote constraints and existing records are preserved by migration.
+The programme is absent by default and has no adopted dates.
+
+Permanent local rights with conflicting recurring billing links require
+manual reconciliation. Unrelated permanent purchases are preserved.
+
+Cancellation and refund each have a persisted, compare-and-set intent before
+their provider request. No lease reclaim resends an uncertain financial call.
+An authoritative canceled read, matching legacy termination, canonical v6
+projection/version-floor outbox and confirmed progress commit together before
+refund intent. Removing current programme configuration after cancellation
+does not discard that saved obligation. Pending refunds remain pending.
+
+All application subscription/refund writers share the active-exit fence.
+Read-only provider reconciliation remains available without an active
+programme. An uncertain cancellation that did not execute can release its
+local fence only through an explicit, audited operator attestation of provider
+evidence that the request cannot complete. An active read or elapsed time is
+insufficient. No financial request is repeated by that resolution.
 
 ## Remaining implementation
 
@@ -43,12 +65,15 @@ Pro retains supported investigation/actions, custom roles and reporting at
 protected prices. The proposed Business checkout pause must be coherent with
 public copy and preserve original rights and support promises.
 
-Before offering the annual exit, extend the existing commercial transition
-authority with a durable quote bound to the adopted programme, exact invoice
-and charge, and the applicable local licence generations. Re-read financial
-evidence before execution. A known pre-mutation failure differs from an
-uncertain financial outcome. Do not reclaim or automatically retry uncertain
-cancellation or refund work.
+Before offering the annual exit, adopt the programme and complete explicit
+prior-refund/credit, renewal-period and failed/absent-refund reconciliation.
+The prepared authority refuses ambiguous cases. A manual replacement needs
+provider evidence, exact payment binding and a retained purpose; it must not
+turn into an automatic financial retry. Outstanding customer invoices and
+pending invoice items require reconciliation because subscription cancellation
+can affect customer-wide collection. Keep the recent-first-purchase remedy
+separate and bind its exact original payment, rather than reuse email/newest-
+payment selection.
 
 Confirmed cancellation must terminate paid rights through the canonical local
 projection and version-floor path, including matching legacy entitlements.
@@ -58,8 +83,13 @@ credits/invoices, and customer-runtime convergence before activation. Full
 recent-first-purchase remedies remain distinct from unused annual time.
 
 These are active residuals in `community-commercial-transition-cutover`.
+
+Confirmed provider cancellation with an unconfirmed local projection is a
+separate manual recovery case. Reconcile changed/missing local rights before
+recording cancellation confirmed or authorizing payment; the negative
+cancellation resolution cannot apply to an already canceled subscription.
 This record does not close the external commercial transition proof or claim
-that the free-feature release or complete refund executor has shipped.
+that the free-feature release or complete customer programme has shipped.
 
 ## Verification
 
@@ -67,5 +97,10 @@ The standalone license-server Go suite includes
 `v6_commercial_refunds_test.go` for exact-payment admission, grandfathered and
 current annual prices, currency preservation, partial/full prior refunds,
 integer rounding, malformed evidence, interrupted reads, admin-only admission
-and absence of a public route. The source is prepared independently of any
-production deployment or provider test-mode mutation.
+and absence of a public route. `v6_commercial_refund_exits_test.go` covers
+legacy/v6 termination with unrelated purchases preserved, uncertain/pending
+provider outcomes, concurrent confirmations, atomic rollback, stale evidence,
+operator-attested negative resolution, late partial-refund events, existing
+writer fencing and upgrade preservation of ordinary customer quotes. The
+source is prepared independently of production deployment and provider
+test-mode mutation.

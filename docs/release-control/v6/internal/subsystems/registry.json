@@ -3702,6 +3702,8 @@
         "pulse-pro:landing-page/index.html",
         "pulse-pro:landing-page/manage.html",
         "pulse-pro:landing-page/thanks.html",
+        "pulse-pro:license-server/admin_refund_provider.go",
+        "pulse-pro:license-server/admin_support.go",
         "pulse-pro:license-server/admin_ui.go",
         "pulse-pro:license-server/entrypoint.sh.template",
         "pulse-pro:license-server/grandfathering.go",
@@ -3711,11 +3713,16 @@
         "pulse-pro:license-server/secrets.env.template",
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
+        "pulse-pro:license-server/v6_commercial_projection.go",
+        "pulse-pro:license-server/v6_commercial_refund_exits.go",
+        "pulse-pro:license-server/v6_commercial_refund_quotes.go",
+        "pulse-pro:license-server/v6_commercial_refund_schema.go",
         "pulse-pro:license-server/v6_commercial_refunds.go",
         "pulse-pro:license-server/v6_commercial_transitions.go",
         "pulse-pro:license-server/v6_grants.go",
         "pulse-pro:license-server/v6_handlers.go",
         "pulse-pro:license-server/v6_reconcile.go",
+        "pulse-pro:license-server/v6_schema.go",
         "pulse-pro:license-server/v6_store.go",
         "pulse-pro:relay-server/main.go",
         "pulse-pro:relay-server/registry.go",
@@ -3808,6 +3815,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pulse-pro:license-server/v6_commercial_refund_exits_test.go",
               "pulse-pro:license-server/v6_commercial_transitions_test.go"
             ]
           },
@@ -4501,6 +4509,7 @@
               "pkg/licensing/activation_store_test.go",
               "pkg/licensing/grant_refresh_test.go",
               "pkg/licensing/installation_status_poll_test.go",
+              "pulse-pro:license-server/v6_commercial_refund_exits_test.go",
               "pulse-pro:license-server/v6_commercial_refunds_test.go",
               "pulse-pro:license-server/v6_status_test.go"
             ]
@@ -4549,7 +4558,8 @@
             "test_prefixes": [],
             "exact_files": [
               "pulse-pro:license-server/commercial_strict_json_test.go",
-              "pulse-pro:license-server/main_test.go"
+              "pulse-pro:license-server/main_test.go",
+              "pulse-pro:license-server/v6_commercial_refund_exits_test.go"
             ]
           },
           {
@@ -4580,7 +4590,33 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pulse-pro:license-server/v6_commercial_refund_exits_test.go",
               "pulse-pro:license-server/v6_commercial_refunds_test.go"
+            ]
+          },
+          {
+            "id": "community-transition-refund-exit",
+            "label": "annual transition refund binding and one-attempt execution proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:license-server/admin_refund_provider.go",
+              "pulse-pro:license-server/admin_support.go",
+              "pulse-pro:license-server/v6_commercial_projection.go",
+              "pulse-pro:license-server/v6_commercial_refund_exits.go",
+              "pulse-pro:license-server/v6_commercial_refund_quotes.go",
+              "pulse-pro:license-server/v6_commercial_refund_schema.go",
+              "pulse-pro:license-server/v6_schema.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:license-server/admin_refund_preflight_test.go",
+              "pulse-pro:license-server/admin_refund_safety_test.go",
+              "pulse-pro:license-server/admin_support_test.go",
+              "pulse-pro:license-server/v6_commercial_projection_test.go",
+              "pulse-pro:license-server/v6_commercial_refund_exits_test.go",
+              "pulse-pro:license-server/v6_commercial_transitions_test.go",
+              "pulse-pro:license-server/v6_store_test.go"
             ]
           }
         ],
