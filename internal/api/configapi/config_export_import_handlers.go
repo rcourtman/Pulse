@@ -106,12 +106,25 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Capture the resolved scope once. A non-default request must never use
+	// the single-runtime fallback or commit an archive without a scoped apply.
+	orgID := apicontext.OrgID(r.Context())
+	isTenant := orgID != "" && orgID != "default"
+	currentConfig, persistence, _ := h.getContextState(r.Context())
+	h.stateMu.RLock()
+	mtMonitor := h.mtMonitor
+	h.stateMu.RUnlock()
+	if currentConfig == nil || persistence == nil || (isTenant && mtMonitor == nil) {
+		http.Error(w, "Configuration runtime unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
 	// Capture actor identity before config swap (config replacement changes auth resolution)
 	deps := h.runtimeDependencies()
-	importUser := deps.AuthUsername(h.getConfig(r.Context()), r)
+	importUser := deps.AuthUsername(currentConfig, r)
 
 	// Import configuration.
-	if err := h.getPersistence(r.Context()).ImportConfig(req.Data, req.Passphrase); err != nil {
+	if err := persistence.ImportConfig(req.Data, req.Passphrase); err != nil {
 		deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
 			"Import failed")
 		log.Error().Err(err).Msg("Failed to import configuration")
@@ -119,27 +132,39 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Reload configuration from disk.
-	newConfig, err := config.Load()
-	if err != nil {
-		deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
-			"Import succeeded but config reload failed")
-		log.Error().Err(err).Msg("Failed to reload configuration after import")
-		http.Error(w, "Configuration imported but failed to reload", http.StatusInternalServerError)
-		return
-	}
-
-	// Update the config reference.
-	*h.getConfig(r.Context()) = *newConfig
-
-	// Reload monitor with new configuration.
-	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
-				"Import succeeded but monitor reload failed")
-			log.Error().Err(err).Msg("Failed to reload monitor after import")
+	if isTenant {
+		// Recreate only this tenant. Loading process-global configuration here
+		// copied the default org's paths and credentials into the live tenant,
+		// and the shared hook restarted unrelated monitoring.
+		if _, err := mtMonitor.ReloadTenant(orgID); err != nil {
+			deps.AuditEvent(orgID, "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
+				"Import succeeded but tenant runtime reload failed")
+			log.Error().Err(err).Str("org_id", orgID).Msg("Failed to apply imported tenant configuration")
 			http.Error(w, "Configuration imported but failed to apply changes", http.StatusInternalServerError)
 			return
+		}
+	} else {
+		// The default organization retains its existing instance-wide reload.
+		// Reloading must not reinitialize the process logger under live workers.
+		newConfig, err := config.LoadWithoutLoggingInit()
+		if err != nil {
+			deps.AuditEvent(orgID, "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
+				"Import succeeded but config reload failed")
+			log.Error().Err(err).Msg("Failed to reload configuration after import")
+			http.Error(w, "Configuration imported but failed to reload", http.StatusInternalServerError)
+			return
+		}
+		config.Mu.Lock()
+		*currentConfig = *newConfig
+		config.Mu.Unlock()
+		if h.reloadFunc != nil {
+			if err := h.reloadFunc(); err != nil {
+				deps.AuditEvent(orgID, "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
+					"Import succeeded but monitor reload failed")
+				log.Error().Err(err).Msg("Failed to reload monitor after import")
+				http.Error(w, "Configuration imported but failed to apply changes", http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 
