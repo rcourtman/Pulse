@@ -552,7 +552,10 @@ func explicitAPITokenFromRequest(r *http.Request) (string, bool) {
 	return "", false
 }
 
-func validateGlobalAPITokenLocked(cfg *config.Config, token string) (*config.APITokenRecord, bool) {
+// validateAPITokenLocked requires config.Mu.RLock and returns with it still
+// held. Both inventories need exclusive ownership to normalize token metadata
+// and update LastUsedAt. Return a detached snapshot before dropping the writer.
+func validateAPITokenLocked(cfg *config.Config, token string) (*config.APITokenRecord, bool) {
 	if cfg == nil || token == "" || !cfg.IsValidAPIToken(token) {
 		return nil, false
 	}
@@ -560,6 +563,10 @@ func validateGlobalAPITokenLocked(cfg *config.Config, token string) (*config.API
 	config.Mu.RUnlock()
 	config.Mu.Lock()
 	record, ok := cfg.ValidateAPIToken(token)
+	if ok {
+		clone := record.Clone()
+		record = &clone
+	}
 	config.Mu.Unlock()
 	config.Mu.RLock()
 
@@ -575,12 +582,12 @@ func validateAPITokenAgainstConfigsLocked(globalCfg, targetCfg *config.Config, t
 	}
 
 	if targetCfg != nil && targetCfg != globalCfg {
-		if record, ok := targetCfg.ValidateAPIToken(token); ok {
+		if record, ok := validateAPITokenLocked(targetCfg, token); ok {
 			return record, true
 		}
 	}
 
-	return validateGlobalAPITokenLocked(globalCfg, token)
+	return validateAPITokenLocked(globalCfg, token)
 }
 
 // CheckProxyAuth validates proxy authentication headers
@@ -755,7 +762,15 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 		Msg("Checking authentication")
 
 	authenticateToken := func(token string) bool {
-		if record, ok := validateAPITokenAgainstConfigsLocked(cfg, tenantTokenConfigForRequest(r), token); ok {
+		targetCfg := tenantTokenConfigForRequest(r)
+		if record, ok := validateAPITokenAgainstConfigsLocked(cfg, targetCfg, token); ok {
+			// Validation temporarily releases the read lock. A reload may have
+			// replaced the selected owner during that transition; do not attach
+			// authority from the old inventory. Resolve only cached owners, and
+			// keep monitor locks outside the config writer's critical section.
+			if targetCfg != nil && tenantTokenConfigForRequest(r) != targetCfg {
+				return false
+			}
 			attachAPITokenRecord(r, record)
 			if authenticatedUser := apiTokenAuthenticatedUser(record); authenticatedUser != "" {
 				w.Header().Set("X-Authenticated-User", authenticatedUser)
@@ -1394,7 +1409,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 		// an unauthorized request, that initialization can exceed an API client
 		// timeout and leave cleanup queued behind the same cold start.
 		if explicitTokenProvided {
-			if record, ok := validateGlobalAPITokenLocked(cfg, providedToken); ok {
+			if record, ok := validateAPITokenLocked(cfg, providedToken); ok {
 				attachAPITokenRecord(r, record)
 				return attachUserContext(r, apiTokenAuthenticatedUser(record))
 			}
@@ -1423,6 +1438,12 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 
 		validateToken := func(token string) (*http.Request, bool) {
 			if record, ok := validateAPITokenAgainstConfigsLocked(cfg, targetConfig, token); ok {
+				if targetOrgID != "" && targetConfig != cfg {
+					owner, exists := mtm.PeekMonitor(targetOrgID)
+					if !exists || owner == nil || owner.GetConfig() != targetConfig {
+						return nil, false
+					}
+				}
 				attachAPITokenRecord(r, record)
 				if targetOrgID != "" && targetConfig != cfg {
 					*r = *r.WithContext(context.WithValue(r.Context(), tenantTokenSourceContextKey, tenantTokenSource{manager: mtm, orgID: targetOrgID}))

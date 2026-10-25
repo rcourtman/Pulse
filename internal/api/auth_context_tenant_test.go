@@ -98,6 +98,93 @@ func TestCheckAuthTenantConcurrentValidation(t *testing.T) {
 	}
 }
 
+func TestCheckAuthTenantSourceCannotChangeDuringValidation(t *testing.T) {
+	const orgID = "tenant-a"
+	const raw = "synthetic-replaced-during-validation.12345678"
+	record, err := config.NewAPITokenRecord(raw, "old-owner", []string{config.ScopeMonitoringRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := &config.Config{}
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatal(err)
+	}
+	makeManager := func(cfg *config.Config) *monitoring.MultiTenantMonitor {
+		t.Helper()
+		monitor := &monitoring.Monitor{}
+		setUnexportedField(t, monitor, "config", cfg)
+		manager := monitoring.NewMultiTenantMonitor(base, mtp, nil)
+		setUnexportedField(t, manager, "monitors", map[string]*monitoring.Monitor{orgID: monitor})
+		t.Cleanup(manager.Stop)
+		return manager
+	}
+	oldManager := makeManager(&config.Config{APITokens: []config.APITokenRecord{*record}})
+	newManager := makeManager(&config.Config{})
+	r := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	r.Header.Set("X-Pulse-Org-ID", orgID)
+	r.Header.Set("X-API-Token", raw)
+	r = extractAndStoreAuthContext(base, oldManager, r)
+	r = r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, orgID))
+	source := r.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource)
+	resolutions := 0
+	source.resolveManager = func() *monitoring.MultiTenantMonitor {
+		resolutions++
+		if resolutions == 1 {
+			return oldManager
+		}
+		return newManager
+	}
+	r = r.WithContext(context.WithValue(r.Context(), tenantTokenSourceContextKey, source))
+	if checkAuth(base, httptest.NewRecorder(), r, false) {
+		t.Fatal("route auth accepted the owner replaced across metadata validation")
+	}
+	if resolutions < 2 {
+		t.Fatal("route auth did not recheck its live owner after the lock transition")
+	}
+}
+
+func TestValidateAPITokenAgainstConfigsLockedReturnsDetachedSnapshot(t *testing.T) {
+	const raw = "synthetic-detached-token-snapshot.12345678"
+	for _, inventory := range []string{"tenant", "global"} {
+		t.Run(inventory, func(t *testing.T) {
+			record, err := config.NewAPITokenRecord(raw, "snapshot", []string{config.ScopeMonitoringRead})
+			if err != nil {
+				t.Fatal(err)
+			}
+			record.OrgIDs = []string{"tenant-a"}
+			record.Metadata = map[string]string{apiTokenMetadataOwnerUserID: "tenant-owner"}
+			base, tenant := &config.Config{}, &config.Config{}
+			live := tenant
+			if inventory == "global" {
+				live = base
+			}
+			live.APITokens = []config.APITokenRecord{*record}
+			config.Mu.RLock()
+			got, ok := validateAPITokenAgainstConfigsLocked(base, tenant, raw)
+			// The helper must restore the caller's read ownership.
+			if config.Mu.TryLock() {
+				config.Mu.Unlock()
+				t.Error("token validation lost the caller's config read lock")
+			}
+			config.Mu.RUnlock()
+			if !ok || got == nil || got.LastUsedAt == nil {
+				t.Fatal("valid credential returned no usage snapshot")
+			}
+			got.Scopes[0] = config.ScopeSettingsWrite
+			got.OrgIDs[0] = "tenant-b"
+			got.Metadata[apiTokenMetadataOwnerUserID] = "changed-owner"
+			*got.LastUsedAt = time.Time{}
+			config.Mu.RLock()
+			stored := live.APITokens[0].Clone()
+			config.Mu.RUnlock()
+			if !reflect.DeepEqual(stored.Scopes, []string{config.ScopeMonitoringRead}) || !reflect.DeepEqual(stored.OrgIDs, []string{"tenant-a"}) || stored.Metadata[apiTokenMetadataOwnerUserID] != "tenant-owner" || (stored.LastUsedAt == nil || stored.LastUsedAt.IsZero()) {
+				t.Error("returned auth snapshot aliases live authority or usage metadata")
+			}
+		})
+	}
+}
+
 func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
 	const globalToken = "global-token-123.12345678"
 	const tenantToken = "tenant-token-123.12345678"
