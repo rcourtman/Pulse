@@ -25,6 +25,15 @@ already in progress, a guest is unresponsive or an operation's state is unknown,
 do not restart pods or send guest-agent probes to diagnose it. Use the
 guest/platform's recovery procedure and preserve the original evidence.
 
+**Check data persistence before stopping pods.** Confirm the installed server's
+effective data paths use retained persistent storage, not `emptyDir` or the
+container filesystem: deleting those pods can lose configuration, history and
+credentials. The chart defaults to persistence, but setting
+`persistence.enabled=false` uses `emptyDir`. If persistence is unknown or state
+is ephemeral, stop here and arrange preserved-state maintenance before the
+backup window; do not scale down as a diagnostic. A configuration export alone
+does not cover [full-state recovery](MIGRATION.md#full-state-recovery).
+
 1. **Identify every Pulse server and its owner.** Confirm the cluster,
    namespace, controller and existing pods for each server polling the affected
    guests, including servers outside this cluster. Record the actual desired

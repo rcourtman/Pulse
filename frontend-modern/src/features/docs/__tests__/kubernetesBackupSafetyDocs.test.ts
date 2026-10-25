@@ -29,7 +29,7 @@ function safetySection() {
 const text = (element: Element) => element.textContent!.replace(/\s+/g, ' ');
 
 describe('Kubernetes server backup safety in shipped documentation', () => {
-  it('puts server safety before installation, separately from the Kubernetes-only collector', () => {
+  it('puts server safety before installation, separately from the collector', () => {
     const article = articleFor('KUBERNETES');
     const headings = [...article.querySelectorAll('h2')].map((heading) => heading.id);
     expect(headings.indexOf('proxmox-backup-safety')).toBeGreaterThanOrEqual(0);
@@ -38,11 +38,41 @@ describe('Kubernetes server backup safety in shipped documentation', () => {
     );
     const safety = safetySection();
     expect(text(safety)).toContain('including with API-only monitoring');
-    expect(text(safety)).toContain("stopping its DaemonSet does not stop the server's Proxmox polling");
+    expect(text(safety)).toContain('stopping its DaemonSet does not stop the server');
     expect(safety.querySelectorAll('ol > li')).toHaveLength(4);
     // No copied scale/delete/Helm command can discard the required identity,
     // reconciliation and prior-state checks when used on a different cluster.
-    expect(safety.querySelector('pre, code')).toBeNull();
+    expect(safety.querySelector('pre')).toBeNull();
+  });
+
+  it('blocks pod shutdown when state would be lost, matching the chart storage branches', () => {
+    const section = safetySection();
+    const copy = text(section);
+    for (const phrase of [
+      'Check data persistence before stopping pods',
+      'effective data paths use retained persistent storage',
+      'deleting those pods can lose configuration, history and credentials',
+      'persistence.enabled=false uses emptyDir',
+      'If persistence is unknown or state is ephemeral, stop here',
+      'do not scale down as a diagnostic',
+      'A configuration export alone does not cover full-state recovery',
+    ])
+      expect(copy).toContain(phrase);
+    const persistence = [...section.querySelectorAll('p')].find((p) =>
+      p.textContent?.includes('Check data persistence'),
+    )!;
+    expect(persistence.compareDocumentPosition(section.querySelector('ol')!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    const chart = readFileSync(
+      path.join(repoRoot, 'deploy/helm/pulse/templates/deployment.yaml'),
+      'utf8',
+    );
+    expect(chart).toContain('.Values.persistence.enabled');
+    expect(chart).toContain('persistentVolumeClaim:');
+    expect(chart).toContain('emptyDir: {}');
+    expect(section.querySelector('a[href="/docs/MIGRATION#full-state-recovery"]')).not.toBeNull();
+    expect(articleFor('MIGRATION').querySelector('#full-state-recovery')).not.toBeNull();
   });
 
   it('requires a controller-aware stop, not pod deletion or a paused rollout', () => {
@@ -89,7 +119,7 @@ describe('Kubernetes server backup safety in shipped documentation', () => {
     );
   });
 
-  it('restores actual prior state without replaying installation or losing data and credentials', () => {
+  it('restores prior state without replaying installation or losing credentials', () => {
     const step = text(safetySection().querySelectorAll('ol > li')[3]);
     for (const phrase of [
       'after all checks pass',
@@ -107,7 +137,8 @@ describe('Kubernetes server backup safety in shipped documentation', () => {
   it('connects both deployment guides and troubleshooting to real shipped safety headings', () => {
     const kubernetes = articleFor('KUBERNETES');
     const vm = articleFor('VM_DISK_MONITORING');
-    expect(kubernetes.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]')).not.toBeNull();
+    const backupLink = kubernetes.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]');
+    expect(backupLink).not.toBeNull();
     expect(vm.querySelector('#backup-safety')).not.toBeNull();
     expect(vm.querySelector('a[href="/docs/KUBERNETES#proxmox-backup-safety"]')).not.toBeNull();
     const troubleshooting = kubernetes.querySelector('[id="4-troubleshooting"]')!;
