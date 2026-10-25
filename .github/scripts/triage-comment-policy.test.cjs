@@ -12,7 +12,10 @@ const issueMutationPatterns = [
   /syncLabels/,
 ];
 
-test("automated workflow issue mutations use the dedicated triage identity", () => {
+// The triage App installation can administer the repository, so its key must
+// not be an Actions secret any workflow on any branch could read. Workflow
+// issue mutations use the run's own GITHUB_TOKEN, scoped to issues.
+test("automated workflow issue mutations use an issues-scoped GITHUB_TOKEN, not a secret", () => {
   const publishers = [];
 
   for (const name of fs.readdirSync(workflowDir)) {
@@ -23,19 +26,17 @@ test("automated workflow issue mutations use the dedicated triage identity", () 
     publishers.push(name);
     assert.match(
       workflow,
-      /actions\/create-github-app-token@[0-9a-f]{40}/,
-      `${name} must mint a pinned GitHub App token`
+      /^permissions:\n  contents: read\n  issues: write\n(?! )/m,
+      `${name} must grant exactly contents: read and issues: write`
     );
+    assert.doesNotMatch(workflow, /^\s+permissions:/m, `${name} must not override permissions per job`);
     assert.match(
       workflow,
-      /private-key: \$\{\{ secrets\.PULSE_TRIAGE_APP_PRIVATE_KEY \}\}/,
-      `${name} must use the triage App private key`
+      /github-token: \$\{\{ github\.token \}\}/,
+      `${name} must pass the run's GITHUB_TOKEN to github-script`
     );
-    assert.match(
-      workflow,
-      /github-token: \$\{\{ steps\.triage-token\.outputs\.token \}\}/,
-      `${name} must pass the triage App token to github-script`
-    );
+    assert.doesNotMatch(workflow, /secrets\./, `${name} must not read repository secrets`);
+    assert.doesNotMatch(workflow, /create-github-app-token/, `${name} must not mint an App token`);
   }
 
   assert.deepEqual(publishers.sort(), [

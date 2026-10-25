@@ -1847,12 +1847,12 @@ test("the actual label consumer keeps copied declarations from changing report o
 });
 
 
-test("triage workflow prepares and checks the exact parser before minting its write token", () => {
+test("triage workflow prepares and checks the exact parser before writing labels", () => {
   const workflow = fs.readFileSync(path.resolve(__dirname, "../workflows/issue-version-label-sync.yml"), "utf8");
   const install = workflow.indexOf("run: npm ci --ignore-scripts --no-audit --no-fund --prefix .github/scripts");
   const check = workflow.indexOf("run: npm run test:triage --prefix .github/scripts");
-  const credential = workflow.indexOf("- name: Mint triage bot token");
-  assert.ok(install >= 0 && check > install && credential > check);
+  const write = workflow.indexOf("- name: Sync issue version metadata");
+  assert.ok(install >= 0 && check > install && write > check);
   assert.match(workflow, /node-version: '24'/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
   assert.match(workflow, /persist-credentials: false/);
