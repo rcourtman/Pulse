@@ -10,7 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func TestLoadTenantRuntimeConfigUsesScopedResourcesAndPreservesEnvironment(t *testing.T) {
+func TestLoadTenantRuntimeConfigUsesScopedResourcesAndPreservesInstanceSettings(t *testing.T) {
 	p := config.NewConfigPersistence(t.TempDir())
 	settings := config.DefaultSystemSettings()
 	settings.PublicURL = "https://tenant.invalid"
@@ -59,14 +59,14 @@ func TestLoadTenantRuntimeConfigUsesScopedResourcesAndPreservesEnvironment(t *te
 	if len(cfg.APITokens) != 1 || cfg.APITokens[0].ID != "tenant-token" || cfg.APIToken != "synthetic-tenant-hash" {
 		t.Error("tenant API tokens did not replace inherited tokens and legacy alias")
 	}
-	if cfg.PublicURL != settings.PublicURL || cfg.AllowedOrigins != settings.AllowedOrigins || cfg.PBSPollingInterval != 137*time.Second || !cfg.DisableDockerUpdateActions {
-		t.Error("saved tenant settings were not applied")
+	if cfg.PublicURL != base.PublicURL || cfg.AllowedOrigins != base.AllowedOrigins || cfg.PBSPollingInterval != base.PBSPollingInterval || cfg.DisableDockerUpdateActions != base.DisableDockerUpdateActions {
+		t.Error("tenant archive settings overrode instance-wide runtime policy")
 	}
 	if cfg.PVEPollingInterval != 42*time.Second || !cfg.HideLocalLogin || cfg.Discovery.MaxConcurrent != 11 {
 		t.Error("tenant settings bypassed effective process environment locks")
 	}
-	if !reflect.DeepEqual(cfg.Discovery.SubnetAllowlist, settings.DiscoveryConfig.SubnetAllowlist) {
-		t.Error("unlocked discovery setting was not applied")
+	if !reflect.DeepEqual(cfg.Discovery, base.Discovery) {
+		t.Error("tenant archive settings overrode instance-wide discovery policy")
 	}
 	if cfg.AuthUser != base.AuthUser || cfg.AuthPass != base.AuthPass || cfg.ProxyAuthSecret != base.ProxyAuthSecret || cfg.TLSCertFile != base.TLSCertFile || cfg.TLSKeyFile != base.TLSKeyFile || cfg.FrontendPort != base.FrontendPort {
 		t.Error("tenant loader changed process identity or listener settings")
@@ -84,7 +84,7 @@ func TestLoadTenantRuntimeConfigUsesScopedResourcesAndPreservesEnvironment(t *te
 	}
 }
 
-func TestLoadTenantRuntimeConfigEmptyInventoryAndCorruptSettings(t *testing.T) {
+func TestLoadTenantRuntimeConfigEmptyInventoryDoesNotInheritCredentials(t *testing.T) {
 	p := config.NewConfigPersistence(t.TempDir())
 	base := &config.Config{PVEInstances: []config.PVEInstance{{Name: "default"}}, APITokens: []config.APITokenRecord{{ID: "default", Hash: "synthetic-hash"}}, APIToken: "synthetic-hash"}
 	cfg, err := loadTenantRuntimeConfig(base, p)
@@ -97,8 +97,8 @@ func TestLoadTenantRuntimeConfigEmptyInventoryAndCorruptSettings(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(p.GetConfigDir(), "system.json"), []byte("{invalid"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loadTenantRuntimeConfig(base, p); err == nil {
-		t.Error("unreadable tenant settings fell back to the default config")
+	if _, err := loadTenantRuntimeConfig(base, p); err != nil {
+		t.Errorf("tenant-local system record incorrectly became instance policy: %v", err)
 	}
 	if _, err := loadTenantRuntimeConfig(nil, p); err == nil {
 		t.Error("missing base config was accepted")

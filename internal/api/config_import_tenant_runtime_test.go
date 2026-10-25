@@ -105,8 +105,8 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 	if len(afterCfg.PVEInstances) != 1 || afterCfg.PVEInstances[0].Name != "restored" || afterCfg.PVEInstances[0].TokenValue != "synthetic-restored-node-secret" {
 		t.Error("selected tenant runtime did not apply only its imported nodes/credentials")
 	}
-	if afterCfg.PublicURL != "https://restored.invalid" || afterCfg.PBSPollingInterval != 137*time.Second {
-		t.Errorf("selected tenant runtime settings = URL %q, PBS %s; want imported values", afterCfg.PublicURL, afterCfg.PBSPollingInterval)
+	if afterCfg.PublicURL != beforeDefault.PublicURL || afterCfg.PBSPollingInterval != beforeDefault.PBSPollingInterval {
+		t.Errorf("selected tenant runtime settings = URL %q, PBS %s; want effective instance values", afterCfg.PublicURL, afterCfg.PBSPollingInterval)
 	}
 	if afterCfg.DataPath != persistences["tenant-a"].GetConfigDir() || afterCfg.ConfigPath != persistences["tenant-a"].GetConfigDir() {
 		t.Error("selected tenant runtime adopted a non-target storage path")
@@ -169,8 +169,8 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 	if err := json.Unmarshal(settingsRec.Body.Bytes(), &settings); err != nil {
 		t.Fatal(err)
 	}
-	if settings.PublicURL != "https://restored.invalid" || settings.PBSPollingInterval != 137 {
-		t.Error("consuming settings handler did not read back the imported tenant values")
+	if settings.PublicURL != beforeDefault.PublicURL || settings.PBSPollingInterval != int(beforeDefault.PBSPollingInterval.Seconds()) {
+		t.Error("internal runtime settings no longer matched instance-wide policy")
 	}
 }
 
