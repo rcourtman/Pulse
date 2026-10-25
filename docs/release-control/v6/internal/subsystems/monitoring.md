@@ -8270,3 +8270,20 @@ are unchanged. This shapes synthetic readings only, not live measurements.
 a fixed seven-day point/series equivalence and byte-accounting regression, and
 host generation/tick checks across cache/database/backup/general role changes.
 The existing `TestBuildFixtureStateIncludesHostAgents` assertion stays intact.
+
+### Unpinned cluster members link to their Proxmox address (24 October 2026)
+
+With strict TLS, a cluster member that has no per-member certificate pin is
+dialed by its bare node name so the certificate can be validated. Members that
+join after the others were pinned land in that state. Their runtime node
+`GuestURL` was empty, so the frontend replaced the bare name with an address
+guessed from the node's interfaces and picked a bridge every member shares
+(a support report opened another node's internal address). When no member or
+connection link override exists and the dial URL is a bare label,
+`resolveNodeConnectionInfo` now sets the link to the address Proxmox reports
+for that member, keeping the dial scheme and port. Operator link overrides,
+FQDN and IP dial URLs, and the dial URL itself are unchanged.
+
+`internal/monitoring/monitor_pve_cluster_refresh_test.go` registers the
+unpinned strict-member link, override precedence and the URL builder cases
+(custom port, IPv6, FQDN, IP and missing address).

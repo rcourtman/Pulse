@@ -4,6 +4,8 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -25,6 +27,8 @@ func resolveNodeConnectionInfo(instanceCfg *config.PVEInstance, discoveryCfg con
 				}
 				if ep.GuestURL != "" {
 					guestURL = ep.GuestURL
+				} else if guestURL == "" {
+					guestURL = clusterMemberBrowserURL(ep, connectionHost)
 				}
 				break
 			}
@@ -32,6 +36,36 @@ func resolveNodeConnectionInfo(instanceCfg *config.PVEInstance, discoveryCfg con
 	}
 
 	return connectionHost, guestURL
+}
+
+// clusterMemberBrowserURL gives a cluster member's web interface link the
+// address Proxmox reports for that node when Pulse dials it by a bare
+// hostname. Strict TLS without a per-member pin dials by name so the
+// certificate can be validated, but a browser often cannot resolve that
+// label, and the frontend would otherwise guess an address from the node's
+// interfaces, which picks bridges every member shares.
+func clusterMemberBrowserURL(endpoint config.ClusterEndpoint, connectionHost string) string {
+	ip := net.ParseIP(strings.TrimSpace(endpoint.EffectiveIP()))
+	if ip == nil {
+		return ""
+	}
+	parsed, err := url.Parse(connectionHost)
+	if err != nil || parsed.Hostname() == "" {
+		return ""
+	}
+	host := parsed.Hostname()
+	if net.ParseIP(host) != nil || strings.Contains(host, ".") {
+		return ""
+	}
+	port := parsed.Port()
+	if port == "" {
+		port = "8006"
+	}
+	scheme := parsed.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
+	return scheme + "://" + net.JoinHostPort(ip.String(), port)
 }
 
 func (m *Monitor) determineNodeIDAndStatus(instanceName string, instanceCfg *config.PVEInstance, node proxmox.Node) (string, string) {
