@@ -2069,6 +2069,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
 	m.alertManager.SetMetricWindowProvider(m.metricWindowPoints)
 	m.alertManager.EnableShadowFeed()
+	// Finish startup configuration mutations before publishing the monitor to
+	// API handlers. Start runs asynchronously for tenants, so consolidation
+	// there can race with auto-registration on this same configuration pointer.
+	// Build caches and clients from the consolidated inventory as well.
+	m.consolidateDuplicateClusters()
 	m.registerBuiltInPollProviders()
 	m.buildInstanceInfoCache(cfg)
 
@@ -2259,10 +2264,6 @@ func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Du
 
 // Start begins the monitoring loop
 func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
-	// Consolidate any duplicate cluster instances before starting
-	// This fixes the case where multiple agents registered from the same cluster
-	m.consolidateDuplicateClusters()
-
 	pollingInterval := m.effectivePVEPollingInterval()
 	log.Info().
 		Dur("pollingInterval", pollingInterval).
