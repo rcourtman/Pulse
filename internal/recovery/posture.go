@@ -522,15 +522,20 @@ func DeriveProtectionPostureAt(
 		stateLastVerifiedAt = supportedLastVerifiedAt
 		stateVerificationExpected = supportedVerificationExpected
 	}
-	if stateLastSuccessAt != nil {
+	// A negative age is clock uncertainty, not a recent backup. Retain the
+	// provider's timestamps as evidence, but never turn them into a current
+	// or verified assessment until they are within the evaluation's past.
+	if stateLastSuccessAt != nil && !stateLastSuccessAt.After(now) {
 		if now.Sub(*stateLastSuccessAt) <= policy.FreshnessWindow {
 			posture.Freshness = ProtectionFreshnessCurrent
 		} else {
 			posture.Freshness = ProtectionFreshnessStale
 		}
 	}
-	if stateLastSuccessAt != nil {
+	if stateLastSuccessAt != nil && !stateLastSuccessAt.After(now) {
 		switch {
+		case stateLastVerifiedAt != nil && stateLastVerifiedAt.After(now):
+			// Keep verification unknown; a future date proves no recency.
 		case stateLastVerifiedAt != nil &&
 			now.Sub(*stateLastVerifiedAt) <= policy.VerificationWindow:
 			posture.Verification = ProtectionVerificationVerified
@@ -576,8 +581,12 @@ func DeriveProtectionPostureAt(
 		switch {
 		case hasInvalidatingFailure:
 			posture.Explanation = "A backup exists, but one of its backup sources has reported a failure."
+		case stateLastSuccessAt != nil && stateLastSuccessAt.After(now):
+			posture.Explanation = "The newest backup is dated in the future, so Pulse cannot confirm its age. Check the backup source and Pulse server clocks."
 		case posture.Freshness == ProtectionFreshnessStale:
 			posture.Explanation = fmt.Sprintf("The newest confirmed backup is older than %s.", formatPostureWindow(policy.FreshnessWindow))
+		case stateVerificationExpected && stateLastVerifiedAt != nil && stateLastVerifiedAt.After(now):
+			posture.Explanation = "The backup verification is dated in the future, so Pulse cannot confirm it. Check the backup source and Pulse server clocks."
 		case stateVerificationExpected && posture.Verification != ProtectionVerificationVerified:
 			posture.Explanation = "A recent backup exists, but its verification is missing or overdue."
 		default:

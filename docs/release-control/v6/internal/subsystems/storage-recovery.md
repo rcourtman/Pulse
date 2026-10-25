@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Future backup dates cannot establish current protection
+
+Protection freshness and verification must fall at or before their evaluation
+time as well as within the existing policy windows. A future-dated backup has
+Unknown freshness and needs Attention; required future-dated verification is
+Unknown and needs Attention rather than a verified claim. Explanations name
+the clock uncertainty. Optional verification cannot claim Verified from a
+future date, but does not invalidate an otherwise current backup.
+
+Reported dates, artifacts and collection/access evidence are retained unchanged;
+clock uncertainty neither proves absence nor overrides denied access. Normal
+dates recover through the existing read and poll paths. The registered
+`posture_test.go` clock controls cover both policy boundaries and PVE/PBS
+source/access separation. `pve_backup_posture_clock_test.go` drives the real
+synthetic poll, async ingest, requested and state-filtered posture reads, and
+clock correction. No clock mutation, backup execution or native recovery is
+established by these fixtures.
+
 ### Canonical posture recognises recovery's Proxmox subject aliases
 
 Protection posture selects stored points and publishes its subject ID using
