@@ -135,6 +135,10 @@ function additionalActionableTopicsValue(body) {
     "Additional context",
     "Logs, screenshots, or diagnostics",
     "Confirmations",
+    "Problem",
+    "Current workflow",
+    "Desired outcome",
+    "Alternatives considered",
   ]);
 }
 
