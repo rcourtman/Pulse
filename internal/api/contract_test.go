@@ -27996,6 +27996,11 @@ func TestContract_ConfigImportReplayRemainsAuthenticatedAndScoped(t *testing.T) 
 	router := NewRouter(cfg, defaultMonitor, mtm, nil, nil, "test")
 	cleanupTestRouter(t, router)
 	source := config.NewConfigPersistence(t.TempDir())
+	// A populated target deliberately refuses an empty-node replacement.
+	// Use an ordinary valid backup, not an attempted inventory wipe.
+	if err := source.SaveNodesConfig([]config.PVEInstance{{Name: "replay-fixture", Host: "https://replay-fixture.invalid:8006", TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-replay-secret", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
 	archive, err := source.ExportConfig("synthetic-replay-passphrase")
 	if err != nil {
 		t.Fatal(err)
