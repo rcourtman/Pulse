@@ -279,26 +279,29 @@ function classifyV6FeedbackType(body) {
   const feedbackType = extractSectionValue(body, "Feedback type");
   if (!feedbackType) return null;
 
-  // This is a single-choice field, not the later examples pasted beneath it.
-  const normalized = firstFieldValue(declarationLines(feedbackType)).toLowerCase();
-  if (
-    normalized.includes("bug") ||
-    normalized.includes("regression") ||
-    normalized.includes("upgrade / migration issue") ||
-    normalized.includes("performance issue")
-  ) {
-    return BUG_LABEL;
+  // This is a single-choice field, not free-form evidence. A link's target
+  // or title must not turn documentation/workflow feedback into a bug, and
+  // prose, images or a withdrawn selection cannot supply a selected option.
+  const selected = firstFieldValue(declarationLines(feedbackType));
+  const blocks = lexer(selected, { gfm: true });
+  const visible = blocks.length === 1 && blocks[0].type === "paragraph"
+    ? inlineDeclarationText(blocks[0].tokens) : selected;
+  const normalized = visible.trim().toLowerCase().replace(/[ \t]+/g, " ");
+  switch (normalized) {
+    case "bug":
+    case "regression":
+    case "bug / regression":
+    case "upgrade / migration issue":
+    case "performance issue":
+      return BUG_LABEL;
+    case "documentation issue":
+      return DOCS_LABEL;
+    case "ux / workflow friction":
+    case "other actionable feedback":
+      return ENHANCEMENT_LABEL;
+    default:
+      return null;
   }
-  if (normalized.includes("documentation issue")) {
-    return DOCS_LABEL;
-  }
-  if (
-    normalized.includes("ux / workflow friction") ||
-    normalized.includes("other actionable feedback")
-  ) {
-    return ENHANCEMENT_LABEL;
-  }
-  return null;
 }
 
 function parseCore(version) {

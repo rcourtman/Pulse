@@ -204,6 +204,96 @@ test("syncLabels only adds documentation classification for non-bug v6 feedback"
   assert.deepEqual(calls.addLabels[0].labels, ["documentation"]);
 });
 
+
+test("feedback classification follows visible selected text, not link destinations or titles", () => {
+  const { classifyV6FeedbackType } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const [selection, expected] of [
+      ['[Documentation issue](https://example.invalid/bugs)', "documentation"],
+      ['[Documentation issue](https://example.invalid/context "Bug / regression")', "documentation"],
+      ['[**Documentation issue**](https://example.invalid/bugs "Performance issue")', "documentation"],
+      ['[UX / workflow friction](https://example.invalid/bugs)', "enhancement"],
+      ['[Other actionable feedback](https://example.invalid/regression)', "enhancement"],
+      ['[Unknown](https://example.invalid/bugs "Performance issue")', null],
+      ['Documentation issue [details](https://example.invalid/bugs)', null],
+    ]) {
+      assert.equal(classifyV6FeedbackType([
+        "### Feedback type", selection, "", "### Pulse version", "unknown",
+      ].join(newline)), expected, selection);
+    }
+  }
+});
+
+test("feedback classification accepts each form choice and legacy bug selections", () => {
+  const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE/v6_rc_feedback.yml"), "utf8");
+  const field = form.split("    id: feedback_type\n")[1].split("  - type: ")[0];
+  const selections = [...field.matchAll(/^        - (.+)$/gm)].map(match => match[1]);
+  const expected = {
+    "Bug / regression": "bug",
+    "Upgrade / migration issue": "bug",
+    "UX / workflow friction": "enhancement",
+    "Performance issue": "bug",
+    "Documentation issue": "documentation",
+    "Other actionable feedback": "enhancement",
+  };
+  assert.deepEqual(selections.sort(), Object.keys(expected).sort());
+  for (const [selection, label] of Object.entries({ ...expected, Bug: "bug", Regression: "bug" })) {
+    for (const value of [selection, selection.toUpperCase(), `**${selection}**`,
+      `\`${selection}\``, `[${selection}](https://example.invalid/context)`]) {
+      assert.equal(triage.internals.classifyV6FeedbackType(`### Feedback type\n${value}\n`), label, value);
+    }
+  }
+});
+
+test("examples, withdrawn selections and prose do not invent a feedback class", () => {
+  for (const selection of [
+    '![Bug / regression](https://example.invalid/image.png)',
+    '~~Bug / regression~~', '> Bug / regression', '<span>Bug / regression</span>',
+    'Not a bug; asking about debugging', 'Unknown; Performance issue elsewhere',
+    '_No response_', 'unknown', '',
+  ]) {
+    assert.equal(triage.internals.classifyV6FeedbackType(
+      `### Feedback type\n${selection}\n\n### What happened?\nBug / regression\n`), null, selection);
+  }
+});
+
+test("syncLabels consumes the selected feedback class without invented version demands or contact", async () => {
+  for (const action of ["opened", "edited", "reopened"]) {
+    for (const [selection, classification] of [
+      ['[Documentation issue](https://example.invalid/bugs "Performance issue")', "documentation"],
+      ['[UX / workflow friction](https://example.invalid/bugs)', "enhancement"],
+      ['[Unknown](https://example.invalid/bugs)', null],
+      ['![Bug / regression](https://example.invalid/image.png)', null],
+      ['~~Bug / regression~~', null],
+    ]) {
+      const { github, calls } = createGithub();
+      const labels = ["needs-human", "needs-retest-on-latest", "needs-decomposition", "operator-reviewed"];
+      const issue = { number: 2930, title: "Existing feedback", labels: labels.map(name => ({ name })),
+        body: `### Feedback type\n${selection}\n\n### Pulse version\nunknown\n` };
+      await syncLabels({ github, core: createCore(), context: createContext({ action, issue }) });
+      assert.deepEqual(calls.addLabels.map(call => call.labels), classification ? [[classification]] : [], selection);
+      assert.deepEqual(calls.createLabel, [], selection);
+      assert.deepEqual(calls.removeLabel, [], selection);
+      assert.deepEqual(calls.createComment, [], selection);
+      assert.deepEqual(calls.getLatestRelease, [], selection);
+      assert.deepEqual(calls.paginate, [], selection);
+    }
+  }
+});
+
+test("an unrecognised feedback selection cannot undo an existing maintainer bug classification", async () => {
+  const { github, calls } = createGithub();
+  const labels = ["bug", "affects-6.5.0", "needs-human", "needs-retest-on-latest", "needs-decomposition"];
+  const issue = { number: 2931, title: "Existing report", labels: labels.map(name => ({ name })),
+    body: '### Feedback type\n[Unknown](https://example.invalid/bugs)\n\n### Pulse version\n6.5.0\n' };
+  await syncLabels({ github, core: createCore(), context: createContext({ issue }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
 test("syncLabels marks declared secondary topics for decomposition", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.4.1" });
   const issue = {
