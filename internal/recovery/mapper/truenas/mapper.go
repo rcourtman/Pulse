@@ -3,7 +3,6 @@ package truenasmapper
 import (
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery/idgen"
@@ -42,11 +41,6 @@ func FromTrueNASSnapshot(connectionID string, snapshot *truenas.FixtureSnapshot)
 
 	conn := strings.TrimSpace(connectionID)
 	host := strings.TrimSpace(snapshot.System.Hostname)
-	collectedAt := snapshot.CollectedAt
-	if collectedAt.IsZero() {
-		collectedAt = time.Now().UTC()
-	}
-
 	points := make([]recovery.RecoveryPoint, 0, len(snapshot.ZFSSnapshots)+len(snapshot.ReplicationTasks))
 
 	zfsSnaps := append([]truenas.ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
@@ -86,10 +80,15 @@ func FromTrueNASSnapshot(connectionID string, snapshot *truenas.FixtureSnapshot)
 		}
 
 		completedAt := s.CreatedAt
+		if completedAt != nil && completedAt.IsZero() {
+			completedAt = nil
+		}
 		startedAt := completedAt
+		outcome := recovery.OutcomeSuccess
 		if completedAt == nil {
-			t := collectedAt
-			completedAt = &t
+			// A collection observes an artifact, not when it was created. Keep
+			// undated snapshots unknown and their IDs stable across collections.
+			outcome = recovery.OutcomeUnknown
 		}
 
 		id := idgen.StableID(string(recovery.ProviderTrueNAS), conn, "zfs-snapshot", full, idgen.TimeKey(completedAt, startedAt))
@@ -99,7 +98,7 @@ func FromTrueNASSnapshot(connectionID string, snapshot *truenas.FixtureSnapshot)
 			Provider:    recovery.ProviderTrueNAS,
 			Kind:        recovery.KindSnapshot,
 			Mode:        recovery.ModeSnapshot,
-			Outcome:     recovery.OutcomeSuccess,
+			Outcome:     outcome,
 			StartedAt:   startedAt,
 			CompletedAt: completedAt,
 			SizeBytes:   s.UsedBytes,

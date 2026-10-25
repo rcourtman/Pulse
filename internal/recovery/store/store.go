@@ -733,7 +733,7 @@ func (s *Store) initSchema() error {
 	if _, err := s.db.Exec(postMigrationIndexes); err != nil {
 		return err
 	}
-	return nil
+	return s.correctTrueNASSnapshotCollectionTimes()
 }
 
 func (s *Store) ensureColumn(table string, column string, typeSQL string) error {
@@ -1940,9 +1940,12 @@ func (s *Store) ListRollups(ctx context.Context, opts recovery.ListPointsOptions
 		args = append(args, strings.TrimSpace(opts.SubjectResourceID))
 	}
 
-	// Rollup time window is based on the best-known timestamp for a point.
-	// Prefer completed, then started, then created.
-	tsExpr := "COALESCE(completed_at_ms, started_at_ms, created_at_ms)"
+	// An undated TrueNAS snapshot has no native attempt time. Its insertion
+	// time is collection evidence, not a snapshot creation or backup attempt.
+	// Preserve the historical fallback for other recovery producers.
+	tsExpr := `CASE WHEN provider = 'truenas' AND kind = 'snapshot' AND mode = 'snapshot'
+		THEN COALESCE(completed_at_ms, started_at_ms)
+		ELSE COALESCE(completed_at_ms, started_at_ms, created_at_ms) END`
 	if opts.From != nil && !opts.From.IsZero() {
 		where = append(where, tsExpr+" >= ?")
 		args = append(args, opts.From.UTC().UnixMilli())

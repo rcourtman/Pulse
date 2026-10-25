@@ -56,7 +56,10 @@ describe('TrueNAS protection evidence help', () => {
       `${snapshots} snapshots and ${replications} replication tasks per collection`,
     );
     expect(text).toContain('retained events can outlive their source artifact');
-    expect(text).toContain('Pulse can show the collection time as Completed');
+    expect(text).toContain('Missing snapshot creation time is Unknown');
+    expect(text).toContain('the row has no Completed timestamp');
+    expect(text).toContain('A new collection cannot make an undated snapshot newer');
+    expect(text).toContain('corrected on upgrade without deleting snapshot history');
     expect(text).toContain("confirm the native snapshot's creation time");
     expect(text).toContain('Running remains incomplete even if a timestamp is present');
     expect(text).toContain('Replication with no known last-run time is Unknown');

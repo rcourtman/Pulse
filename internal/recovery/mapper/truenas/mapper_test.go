@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery/idgen"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 )
 
@@ -292,5 +293,65 @@ func TestFromTrueNASSnapshot_FinishedReplication(t *testing.T) {
 				t.Error("provider state lost")
 			}
 		})
+	}
+}
+
+func TestFromTrueNASSnapshot_MissingCreationTime(t *testing.T) {
+	collected := time.Date(2026, 10, 25, 20, 0, 0, 0, time.UTC)
+	zero := time.Time{}
+	for _, tc := range []struct {
+		name    string
+		created *time.Time
+	}{
+		{"absent", nil},
+		{"zero", &zero},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := &truenas.FixtureSnapshot{ZFSSnapshots: []truenas.ZFSSnapshot{{
+				ID: "tank/apps@daily", FullName: "tank/apps@daily", CreatedAt: tc.created,
+			}}}
+			var id string
+			for _, at := range []time.Time{collected, collected.Add(time.Hour), {}} {
+				snapshot.CollectedAt = at
+				points := FromTrueNASSnapshot("nas-a", snapshot)
+				if len(points) != 1 {
+					t.Fatalf("got %d points, want 1", len(points))
+				}
+				p := points[0]
+				if p.StartedAt != nil || p.CompletedAt != nil || p.Outcome != recovery.OutcomeUnknown {
+					t.Errorf("undated snapshot gained creation/success evidence: %+v", p)
+				}
+				if p.ID == "" {
+					t.Fatal("missing artifact identity")
+				}
+				if id != "" && id != p.ID {
+					t.Errorf("collection changed ID: %s -> %s", id, p.ID)
+				}
+				id = p.ID
+				if p.SubjectRef.ID != "tank/apps" || p.Details["snapshot"] != "daily" {
+					t.Errorf("lost snapshot identity: %+v", p)
+				}
+				other := FromTrueNASSnapshot("nas-b", snapshot)
+				if other[0].ID == id {
+					t.Error("connections share an artifact ID")
+				}
+			}
+		})
+	}
+}
+
+func TestFromTrueNASSnapshot_PreservesNativeCreationTimeAndIdentity(t *testing.T) {
+	created := time.Date(2026, 10, 1, 12, 30, 0, 123000000, time.FixedZone("native", 3600))
+	snapshot := &truenas.FixtureSnapshot{ZFSSnapshots: []truenas.ZFSSnapshot{{
+		FullName: "tank/apps@daily", CreatedAt: &created,
+	}}}
+	wantID := idgen.StableID("truenas", "nas-a", "zfs-snapshot", "tank/apps@daily", created.UTC().Format(time.RFC3339Nano))
+	for _, at := range []time.Time{created.Add(time.Hour), created.Add(24 * time.Hour), {}} {
+		snapshot.CollectedAt = at
+		p := FromTrueNASSnapshot("nas-a", snapshot)[0]
+		if p.ID != wantID || p.Outcome != recovery.OutcomeSuccess || p.StartedAt == nil || p.CompletedAt == nil ||
+			!p.StartedAt.Equal(created) || !p.CompletedAt.Equal(created) {
+			t.Fatalf("native creation/identity changed: %+v, want %s at %s", p, wantID, created)
+		}
 	}
 }
