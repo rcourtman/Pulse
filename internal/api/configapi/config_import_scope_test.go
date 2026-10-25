@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
 func TestHandleImportConfigTenantWithoutRuntimeDoesNotFallBack(t *testing.T) {
@@ -48,5 +49,24 @@ func TestHandleImportConfigTenantWithoutRuntimeDoesNotFallBack(t *testing.T) {
 	}
 	if after.PublicURL != "https://default.invalid" || cfg.PublicURL != "https://default.invalid" || reloads != 0 {
 		t.Error("missing tenant runtime fell back to default persistence or reload")
+	}
+}
+
+func TestConfigHandlersTenantManagerReferenceTracksReplacement(t *testing.T) {
+	first := monitoring.NewMultiTenantMonitor(&config.Config{}, nil, nil)
+	second := monitoring.NewMultiTenantMonitor(&config.Config{}, nil, nil)
+	t.Cleanup(first.Stop)
+	t.Cleanup(second.Stop)
+	h := &ConfigHandlers{mtMonitor: first}
+	if h.MultiTenantMonitor() != first {
+		t.Fatal("initial scoped owner missing")
+	}
+	h.SetMultiTenantMonitor(second)
+	if h.MultiTenantMonitor() != second {
+		t.Fatal("replacement scoped owner not visible")
+	}
+	h.SetMultiTenantMonitor(nil)
+	if h.MultiTenantMonitor() != nil {
+		t.Fatal("removed scoped owner remained usable")
 	}
 }

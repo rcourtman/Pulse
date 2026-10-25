@@ -203,13 +203,21 @@ const (
 // a tenant credential. It identifies the live inventory, not an authentication
 // grant: route auth must revalidate the presented token against that inventory.
 type tenantTokenSource struct {
-	manager *monitoring.MultiTenantMonitor
-	orgID   string
+	manager        *monitoring.MultiTenantMonitor
+	resolveManager func() *monitoring.MultiTenantMonitor
+	orgID          string
 }
 
 func tenantTokenConfigForRequest(r *http.Request) *config.Config {
 	source, ok := r.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource)
-	if !ok || source.manager == nil || source.orgID == "" || source.orgID == "default" {
+	if !ok || source.orgID == "" || source.orgID == "default" {
+		return nil
+	}
+	manager := source.manager
+	if source.resolveManager != nil {
+		manager = source.resolveManager()
+	}
+	if manager == nil {
 		return nil
 	}
 	orgID := strings.TrimSpace(GetOrgID(r.Context()))
@@ -222,7 +230,7 @@ func tenantTokenConfigForRequest(r *http.Request) *config.Config {
 	// Do not start a cold tenant during a second auth check. Resolve the live
 	// cached owner again, so import/replacement or revocation between middleware
 	// and route enforcement cannot authenticate through a stale config pointer.
-	monitor, exists := source.manager.PeekMonitor(orgID)
+	monitor, exists := manager.PeekMonitor(orgID)
 	if !exists || monitor == nil {
 		return nil
 	}
@@ -1334,10 +1342,18 @@ func isAdminBypassRequest(ctx context.Context) bool {
 // Note: This middleware does NOT enforce authentication - it only populates context.
 // Use RequireAuth for enforcement.
 func AuthContextMiddleware(cfg *config.Config, mtm *monitoring.MultiTenantMonitor, next http.Handler) http.Handler {
+	return authContextMiddlewareWithMonitorResolver(cfg, func() *monitoring.MultiTenantMonitor { return mtm }, next)
+}
+
+func authContextMiddlewareWithMonitorResolver(cfg *config.Config, resolve func() *monitoring.MultiTenantMonitor, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Try to extract auth info and store in context WITHOUT enforcing auth
-		// This allows tenant middleware to check authorization later
-		r = extractAndStoreAuthContext(cfg, mtm, r)
+		// The router's monitor manager can be replaced by an instance reload.
+		// Resolve its current owner both here and during route revalidation.
+		r = extractAndStoreAuthContext(cfg, resolve(), r)
+		if source, ok := r.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource); ok {
+			source.resolveManager = resolve
+			r = r.WithContext(context.WithValue(r.Context(), tenantTokenSourceContextKey, source))
+		}
 		next.ServeHTTP(w, r)
 	})
 }

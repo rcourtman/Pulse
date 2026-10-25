@@ -353,7 +353,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	handler = tenantMiddleware.Middleware(handler)
 
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
-	handler = AuthContextMiddleware(cfg, r.mtMonitor, handler)
+	handler = authContextMiddlewareWithMonitorResolver(cfg, r.configHandlers.MultiTenantMonitor, handler)
 
 	handler = UniversalRateLimitMiddlewareWithConfig(r.endpointRateLimitConfig, handler)
 	r.wrapped = handler

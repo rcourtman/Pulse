@@ -300,6 +300,14 @@ func (h *ConfigHandlers) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonito
 	}
 }
 
+// MultiTenantMonitor returns the current owner used by scoped configuration
+// and authentication, including after an instance-wide monitor replacement.
+func (h *ConfigHandlers) MultiTenantMonitor() *monitoring.MultiTenantMonitor {
+	h.stateMu.RLock()
+	defer h.stateMu.RUnlock()
+	return h.mtMonitor
+}
+
 // SetMonitor updates the default-org monitor reference used by the config handlers.
 func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
 	h.stateMu.Lock()

@@ -149,3 +149,62 @@ func TestCheckAuthTenantSourceCannotChangeOrganisation(t *testing.T) {
 		t.Fatal("stale tenant config authenticated after runtime replacement")
 	}
 }
+
+func TestAuthContextMiddlewareUsesCurrentTenantManager(t *testing.T) {
+	const orgID = "tenant-a"
+	const oldRaw = "synthetic-before-reload-token.12345678"
+	const newRaw = "synthetic-after-reload-token.12345678"
+	base := &config.Config{}
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatal(err)
+	}
+	makeManager := func(raw string) *monitoring.MultiTenantMonitor {
+		t.Helper()
+		record, err := config.NewAPITokenRecord(raw, "synthetic", []string{config.ScopeMonitoringRead})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := &config.Config{APITokens: []config.APITokenRecord{*record}}
+		monitor := &monitoring.Monitor{}
+		setUnexportedField(t, monitor, "config", cfg)
+		manager := monitoring.NewMultiTenantMonitor(base, mtp, nil)
+		setUnexportedField(t, manager, "monitors", map[string]*monitoring.Monitor{orgID: monitor})
+		t.Cleanup(manager.Stop)
+		return manager
+	}
+	oldManager, newManager := makeManager(oldRaw), makeManager(newRaw)
+	current := oldManager
+	replaceBetweenChecks := false
+	handler := authContextMiddlewareWithMonitorResolver(base, func() *monitoring.MultiTenantMonitor { return current }, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if replaceBetweenChecks {
+			current = newManager
+		}
+		if !checkAuth(base, w, r, false) {
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, tc := range []struct {
+		name, raw string
+		replace   bool
+		status    int
+	}{
+		{"old owner", oldRaw, false, http.StatusOK},
+		{"owner changes before enforcement", oldRaw, true, http.StatusUnauthorized},
+		{"new owner", newRaw, false, http.StatusOK},
+		{"old token after replacement", oldRaw, false, http.StatusUnauthorized},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			replaceBetweenChecks = tc.replace
+			req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+			req.Header.Set("X-Pulse-Org-ID", orgID)
+			req.Header.Set("X-API-Token", tc.raw)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.status)
+			}
+		})
+	}
+}
