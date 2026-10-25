@@ -3711,6 +3711,7 @@
         "pulse-pro:license-server/secrets.env.template",
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
+        "pulse-pro:license-server/v6_commercial_refunds.go",
         "pulse-pro:license-server/v6_commercial_transitions.go",
         "pulse-pro:license-server/v6_grants.go",
         "pulse-pro:license-server/v6_handlers.go",
@@ -4500,6 +4501,7 @@
               "pkg/licensing/activation_store_test.go",
               "pkg/licensing/grant_refresh_test.go",
               "pkg/licensing/installation_status_poll_test.go",
+              "pulse-pro:license-server/v6_commercial_refunds_test.go",
               "pulse-pro:license-server/v6_status_test.go"
             ]
           },
@@ -4566,6 +4568,19 @@
               "pulse-pro:license-server/grandfathering_test.go",
               "pulse-pro:license-server/main_test.go",
               "pulse-pro:scripts/tests/test_grandfathered_recurring_cutover_preview.py"
+            ]
+          },
+          {
+            "id": "community-transition-refund-preview",
+            "label": "read-only exact-payment annual transition refund calculation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:license-server/v6_commercial_refunds.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:license-server/v6_commercial_refunds_test.go"
             ]
           }
         ],
