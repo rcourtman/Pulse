@@ -4,12 +4,99 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+func TestCheckAuthTenantConcurrentValidation(t *testing.T) {
+	const orgID = "tenant-a"
+	const raw = "synthetic-concurrent-tenant-token.12345678"
+	for _, inventory := range []string{"tenant", "global"} {
+		t.Run(inventory, func(t *testing.T) {
+			record, err := config.NewAPITokenRecord(raw, "concurrent", []string{config.ScopeMonitoringRead})
+			if err != nil {
+				t.Fatal(err)
+			}
+			record.OrgID = orgID
+			record.Metadata = map[string]string{apiTokenMetadataOwnerUserID: "tenant-owner"}
+			base, tenant := &config.Config{}, &config.Config{}
+			tokenConfig := tenant
+			if inventory == "global" {
+				tokenConfig = base
+			}
+			tokenConfig.APITokens = []config.APITokenRecord{*record}
+			before := record.Clone()
+			mtp := config.NewMultiTenantPersistence(t.TempDir())
+			if _, err := mtp.GetPersistence(orgID); err != nil {
+				t.Fatal(err)
+			}
+			manager := monitoring.NewMultiTenantMonitor(base, mtp, nil)
+			t.Cleanup(manager.Stop)
+			// A cached fake owner exercises auth without starting a runtime,
+			// opening a database or contacting a monitored node.
+			monitor := &monitoring.Monitor{}
+			setUnexportedField(t, monitor, "config", tenant)
+			setUnexportedField(t, manager, "monitors", map[string]*monitoring.Monitor{orgID: monitor})
+			newRequest := func() *http.Request {
+				r := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+				r.Header.Set("X-Pulse-Org-ID", orgID)
+				r.Header.Set("X-API-Token", raw)
+				return r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, orgID))
+			}
+			for _, stage := range []string{"route revalidation", "middleware and route"} {
+				t.Run(stage, func(t *testing.T) {
+					seed := extractAndStoreAuthContext(base, manager, newRequest())
+					started := time.Now().UTC()
+					start := make(chan struct{})
+					var callers sync.WaitGroup
+					for range 4 {
+						callers.Go(func() {
+							<-start
+							for range 32 {
+								r := seed.Clone(seed.Context())
+								if stage == "middleware and route" {
+									r = extractAndStoreAuthContext(base, manager, newRequest())
+								}
+								w := httptest.NewRecorder()
+								if !checkAuth(base, w, r, false) {
+									t.Error("valid concurrent credential was rejected")
+									return
+								}
+								got := getAPITokenRecordFromRequest(r)
+								if got == nil || got.ID != record.ID || got.OrgID != orgID || apiTokenAuthenticatedUser(got) != "tenant-owner" || got.LastUsedAt == nil || got.LastUsedAt.Before(started) {
+									t.Error("route auth lost token identity, organisation, owner or usage metadata")
+									return
+								}
+								if !ensureScope(w, r, config.ScopeMonitoringRead) || ensureScope(httptest.NewRecorder(), r, config.ScopeSettingsWrite) {
+									t.Error("concurrent validation changed token scope enforcement")
+									return
+								}
+							}
+						})
+					}
+					close(start)
+					callers.Wait()
+				})
+			}
+			config.Mu.RLock()
+			after := tokenConfig.APITokens[0].Clone()
+			config.Mu.RUnlock()
+			if after.LastUsedAt == nil {
+				t.Error("successful validation did not update the live inventory")
+			}
+			after.LastUsedAt = nil
+			if !reflect.DeepEqual(after, before) {
+				t.Error("validation changed token authority or identity")
+			}
+		})
+	}
+}
 
 func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
 	const globalToken = "global-token-123.12345678"
