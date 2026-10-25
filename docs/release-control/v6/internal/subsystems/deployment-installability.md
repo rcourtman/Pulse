@@ -3544,7 +3544,15 @@ artifact-selection behaviour.
    depending on current-directory repository discovery.
    A failed activation after immutable readiness has passed may use the
    activation-only recovery workflow. Recovery must accept only a completed
-   failed `create-release.yml` run whose failures are confined to activation,
+   failed `create-release.yml` run whose failures are confined to activation.
+   The run may come from `main` or from a release-train snapshot ref
+   (`release-candidate/<packet>` or `release-dispatch/<packet>`). A snapshot run
+   is admitted only when main's `release_snapshot.py` proves it ran at the
+   merged head of exactly one `release-candidate/<packet>` release PR; the
+   source run's own `prepare` job ran that ref's code and proves nothing.
+   Recovery itself refuses to run unless dispatched on `main`, so that check is
+   main's code.
+   Recovery must also
    require the successful `release_readiness` DAG join as the canonical proof
    that every immutable gate succeeded when the source run has that job, and
    reject every failure outside the activation boundary. Runs made after the

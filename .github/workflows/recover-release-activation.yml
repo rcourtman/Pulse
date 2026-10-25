@@ -24,6 +24,7 @@ permissions:
   actions: write
   contents: write
   packages: read
+  pull-requests: read
 
 jobs:
   recover_activation:
@@ -35,6 +36,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Snapshot provenance checks that the merged release PR is in main's history.
+          fetch-depth: 0
 
       - name: Qualify the quarantined source run
         id: qualify
@@ -44,6 +47,11 @@ jobs:
           SOURCE_RELEASE_RUN_ID: ${{ inputs.source_release_run_id }}
         run: |
           set -euo pipefail
+          # Snapshot provenance below must be checked by main's own code.
+          if [[ "${GITHUB_REF}" != refs/heads/main ]]; then
+            echo "::error::Activation recovery must be dispatched on main, not ${GITHUB_REF}."
+            exit 1
+          fi
           if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((rc|alpha|beta)\.[0-9]+))?$ ]]; then
             echo "::error::Invalid recovery tag ${TAG}."
             exit 1
@@ -60,19 +68,52 @@ jobs:
           trap cleanup EXIT
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}" > "${source_run}"
+          # The release train dispatches on a release-candidate/ or post-merge
+          # release-dispatch/ snapshot ref rather than main. Such a run is
+          # admitted only after the snapshot check below proves it ran at the
+          # exact head of a merged release PR.
           jq -e \
             --arg repository "${GITHUB_REPOSITORY}" \
             '.event == "workflow_dispatch" and
              .path == ".github/workflows/create-release.yml" and
-             .head_branch == "main" and
+             (.head_branch == "main" or
+              (.head_branch | test("^release-(candidate|dispatch)/[0-9A-Za-z._-]+$"))) and
              .head_repository.full_name == $repository and
              .status == "completed" and
              .conclusion == "failure" and
              (.head_sha | test("^[0-9a-f]{40}$"))' \
             "${source_run}" >/dev/null || {
-              echo "::error::Run ${SOURCE_RELEASE_RUN_ID} is not a completed failed mainline create-release run."
+              echo "::error::Run ${SOURCE_RELEASE_RUN_ID} is not a completed failed create-release run from main or a release snapshot."
               exit 1
             }
+          source_branch=$(jq -r '.head_branch' "${source_run}")
+          if [[ "${source_branch}" != main ]]; then
+            # The source run's own prepare job ran that branch's code, so it
+            # proves nothing here. Re-check provenance with main's snapshot
+            # check: the run's commit must be the merged head of its release PR.
+            candidate_branch="${source_branch}"
+            if [[ "${source_branch}" == release-dispatch/* ]]; then
+              candidate_branch="release-candidate/${source_branch#release-dispatch/}"
+            fi
+            run_sha=$(jq -r '.head_sha' "${source_run}")
+            snapshot_prs=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=main&head=${GITHUB_REPOSITORY_OWNER}:${candidate_branch}&per_page=100" \
+              | jq -r --arg ref "${candidate_branch}" --arg sha "${run_sha}" \
+                '[.[] | select(.merged_at != null and .head.ref == $ref and .head.sha == $sha) | .number] | @tsv')
+            if [[ ! "${snapshot_prs}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Run ${SOURCE_RELEASE_RUN_ID} on ${source_branch} is not the merged head of exactly one ${candidate_branch} release PR."
+              exit 1
+            fi
+            snapshot_output=$(mktemp)
+            GITHUB_REF="refs/heads/${source_branch}" GITHUB_SHA="${run_sha}" GITHUB_WORKFLOW_SHA="${run_sha}" \
+              RELEASE_SOURCE_BRANCH=main RELEASE_PULL_REQUEST="${snapshot_prs}" GITHUB_OUTPUT="${snapshot_output}" \
+              python3 scripts/release_control/release_snapshot.py || {
+                rm -f "${snapshot_output}"
+                echo "::error::Run ${SOURCE_RELEASE_RUN_ID} failed release snapshot provenance."
+                exit 1
+              }
+            rm -f "${snapshot_output}"
+          fi
 
           gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}/jobs?per_page=100" \
