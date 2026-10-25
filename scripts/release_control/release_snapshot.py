@@ -12,19 +12,33 @@ import subprocess
 
 SHA = re.compile(r"[0-9a-f]{40}")
 SNAPSHOT_REF = re.compile(r"release-candidate/[0-9A-Za-z._-]+")
+# Post-merge dispatch refs. Only the release dispatcher can create or move
+# them, so the release environment can admit them while unmerged
+# release-candidate heads stay outside it. Each mirrors its PR's head name.
+DISPATCH_REF = re.compile(r"release-dispatch/([0-9A-Za-z._-]+)")
 SOURCE_BRANCH = re.compile(r"main|release/v[0-9]+\.[0-9]+")
+
+
+def snapshot_head(branch: str) -> str:
+    """Return the PR head branch a snapshot dispatch branch must identify."""
+    dispatch = DISPATCH_REF.fullmatch(branch)
+    if dispatch:
+        return "release-candidate/" + dispatch.group(1)
+    if SNAPSHOT_REF.fullmatch(branch):
+        return branch
+    raise ValueError("release dispatch is not a reserved snapshot ref")
 
 
 def source_branch(ref: str, requested: str, pull_request: str) -> str:
     if not ref.startswith("refs/heads/"):
         raise ValueError("release dispatch must name a branch ref")
     branch = ref.removeprefix("refs/heads/")
-    if SNAPSHOT_REF.fullmatch(branch):
+    if SNAPSHOT_REF.fullmatch(branch) or DISPATCH_REF.fullmatch(branch):
         if not SOURCE_BRANCH.fullmatch(requested) or not re.fullmatch(r"[1-9][0-9]*", pull_request):
             raise ValueError("snapshot dispatch requires its governed source branch and merged pull request")
         return requested
     if requested or pull_request:
-        raise ValueError("snapshot provenance inputs require a reserved release-candidate ref")
+        raise ValueError("snapshot provenance inputs require a reserved release-candidate or release-dispatch ref")
     if not SOURCE_BRANCH.fullmatch(branch):
         raise ValueError("release dispatch is outside a governed source branch")
     return branch
@@ -36,7 +50,7 @@ def reviewed_merge(pr: dict, *, repository: str, ref: str, branch: str, sha: str
     head, base = pr.get("head", {}), pr.get("base", {})
     if pr.get("merged") is not True or pr.get("state") != "closed":
         raise ValueError("release snapshot pull request is not merged")
-    if head.get("sha") != sha or head.get("ref") != ref.removeprefix("refs/heads/"):
+    if head.get("sha") != sha or head.get("ref") != snapshot_head(ref.removeprefix("refs/heads/")):
         raise ValueError("pull request does not identify the dispatched snapshot")
     if base.get("ref") != branch:
         raise ValueError("pull request belongs to another release line")
