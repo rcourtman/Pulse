@@ -44,9 +44,15 @@ an import error or skipped import does not confirm a successful transfer.
 ### Full-state recovery
 
 If you need the same installation's history and excluded state, retain a
-consistent filesystem/volume backup as well. Stop Pulse before taking that
-backup; monitoring and alert delivery pause while it is stopped. Preserve every
-effective data path, the matching `.encryption.key`, audit data and signing key,
+consistent filesystem/volume backup as well. Before stopping Pulse, confirm
+that all state survives the stop: a container's writable layer or Kubernetes
+`emptyDir` is not retained storage when its container or pod is replaced. If
+persistence is unknown, preserve the state through your deployment's recovery
+procedure first; do not delete or scale down the server to find out. See the
+[Kubernetes storage and controller checks](KUBERNETES.md#proxmox-backup-safety).
+
+Stop Pulse before taking the consistent backup; monitoring and alert delivery
+pause while it is stopped. Preserve every effective data path, the matching `.encryption.key`, audit data and signing key,
 environment files, external certificates, binaries and service/container
 configuration together. Custom paths and organisation directories matter.
 Copying a live database file alone can omit its sidecar files.
@@ -104,8 +110,12 @@ configuration import as proof of a complete multi-organisation migration.
    is complete.
 2. Install Pulse at the destination using the [installation guide](INSTALL.md).
    Configure destination-local administrator access before importing. Keep the
-   destination isolated from agents and notification destinations during the
-   trial so two servers do not send duplicate alerts or remote actions.
+   destination isolated from **monitored provider APIs, agents, notification
+   destinations and remote-action targets before its first start or import**.
+   Imported credentials can start collection immediately, including QEMU Guest
+   Agent requests through Proxmox. API-only is not a passive trial. Keep this
+   isolation for a full-state recovery trial too; give it separate restored
+   storage, never the source's live data volume.
 3. If the destination already has useful settings, export them first. Open
    **Settings → System → Recovery → Restore Configuration**, select the file
    and enter its passphrase. Import replaces the included configuration and
@@ -120,6 +130,37 @@ threads. Use the authenticated settings form rather than a command containing
 a password, API token or session cookie.
 
 ## Cut over and verify
+
+### Hand over monitoring once
+
+Validate destination-local sign-in and the imported settings while the trial
+is isolated. **Fresh provider readings belong after the handover below**, not
+while both servers can poll the same guests. Hiding rows, disabling alerts or
+turning off backup polling does not stop guest-agent collection.
+
+1. Plan an outage with independent monitoring and alert coverage. Do not cut
+   over during a backup, freeze/thaw or an unresponsive-guest incident; use
+   [Backup safety](VM_DISK_MONITORING.md#backup-safety) if those states are
+   uncertain. An OK backup alone does not establish guest recovery.
+2. Using the deployment's supported controls, stop **every source Pulse server**
+   that monitors the transferred resources, not just its agents or browser.
+   First confirm retained storage as above, record prior service/replica and
+   automatic-update states, and prevent an updater or controller from restarting
+   it. Require a confirmed normal shutdown; a deleted pod, paused log display,
+   failed stop or unknown state is not a completed handover. Do not force-kill
+   or delete state to satisfy this check.
+3. A stopped server does not cancel a guest-agent request already issued.
+   Confirm existing guest/backup operations have ended normally through
+   established platform/workload checks, not new guest-agent probes or an
+   arbitrary delay. If this is unknown, keep the destination isolated and
+   resolve it before enabling collection.
+4. Only then allow the destination to reach the intended providers and retarget
+   agents. Keep the source stopped and its automation paused during the checks
+   below. For full-state recovery, reconcile retained pending notifications and
+   actions before allowing delivery or execution; a configuration-only import
+   does not contain those queues.
+
+### Check the destination
 
 - **Login and permissions:** verify destination-local administrator access and
   any imported SSO provider, group mappings and callback address. Re-create
@@ -146,9 +187,15 @@ a password, API token or session cookie.
   Relay is no longer sold; do not enable it as a new migration route.
 
 Retire the old installation only after these checks succeed. Keep the private,
-consistent pre-move backup for recovery. If validation fails, stop the trial
-destination before returning traffic to the intact source; check agent URLs
-and avoid two active writers. There is no guaranteed five-minute recovery time.
+consistent pre-move backup for recovery. If validation fails, keep the source
+intact and isolate the destination from providers, agents, notifications and
+action targets. Confirm the destination is
+stopped and cannot be automatically restarted before returning traffic or
+restoring the source's recorded prior-active controls. If shutdown or in-flight
+operations are uncertain, do not enable a second poller. Preserve the failed
+destination for diagnosis; do not copy its changed data over the source or
+re-import merely to retry. Check agent URLs and avoid two active writers.
+There is no guaranteed five-minute recovery time.
 
 ## Troubleshooting
 
