@@ -784,6 +784,9 @@ Request body:
 { "passphrase": "use-a-strong-passphrase" }
 ```
 Returns an encrypted export bundle in `data`. Passphrases must be at least 12 characters.
+The archive can contain provider and SSO secrets; `settings:read` does not make
+its contents safe to share. Follow the [installation, organisation and access
+checks](MIGRATION.md#confirm-organisation-and-access) before exporting or importing.
 
 ### Import Configuration
 `POST /api/config/import` (instance admin for the default organization, tenant

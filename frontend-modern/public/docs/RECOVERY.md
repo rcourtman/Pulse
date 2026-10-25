@@ -22,6 +22,10 @@ not a VM, container, dataset or PVC. Import **replaces** the included settings
 and API-token records; it does not merge them. Export the destination's existing
 configuration before importing, retain the original passphrase privately, and
 follow the [transfer and validation steps](MIGRATION.md#transfer-the-included-configuration).
+First [confirm the installation, organisation and access](MIGRATION.md#confirm-organisation-and-access)
+for each side of the transfer. The archive passphrase does not grant permission
+to replace settings, and configuration import does not migrate organisation
+membership or rebind API tokens to a different organisation.
 Do not import configuration, restore Pulse data or restart monitoring to clear
 a guest freeze or an incorrect backup badge. Follow the independent guest-safety
 checks below and the provider's recovery procedure instead.
