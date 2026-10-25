@@ -1118,6 +1118,12 @@ func convertMetricsForChart(
 	maxPoints int,
 ) VMChartData {
 	converted := make(VMChartData, len(metrics))
+	// Metrics from one observation batch commonly share a timeline. Keep only
+	// this conversion's last timeline and selected indices, not values or a
+	// cross-request cache. Compare every timestamp: equal bounds and length
+	// alone do not establish equal interior observations.
+	var timeline []int64
+	var indices []int
 	for metricType, metricPoints := range metrics {
 		if !sparklineMetrics[metricType] {
 			continue
@@ -1134,20 +1140,32 @@ func convertMetricsForChart(
 			converted[metricType] = points
 			continue
 		}
-		// Oldest-data metadata describes the source observations, not just
-		// those selected for display (also for degenerate/unsorted inputs).
-		for _, point := range metricPoints {
-			if ts := point.Timestamp.UnixMilli(); ts < *oldestTimestamp {
+		// Oldest-data metadata still covers every source observation, including
+		// unselected or unsorted points. Convert each timestamp only once.
+		sameTimeline := len(timeline) == len(metricPoints)
+		if cap(timeline) < len(metricPoints) {
+			timeline = make([]int64, len(metricPoints))
+		} else {
+			timeline = timeline[:len(metricPoints)]
+		}
+		for i, point := range metricPoints {
+			ts := point.Timestamp.UnixMilli()
+			if sameTimeline && timeline[i] != ts {
+				sameTimeline = false
+			}
+			timeline[i] = ts
+			if ts < *oldestTimestamp {
 				*oldestTimestamp = ts
 			}
 		}
-		indices := chartPointIndices(len(metricPoints), maxPoints, func(i int) int64 {
-			return metricPoints[i].Timestamp.UnixMilli()
-		})
+		if !sameTimeline {
+			indices = chartPointIndices(len(timeline), maxPoints, func(i int) int64 {
+				return timeline[i]
+			})
+		}
 		points := make([]MetricPoint, len(indices))
 		for i, index := range indices {
-			point := metricPoints[index]
-			points[i] = MetricPoint{Timestamp: point.Timestamp.UnixMilli(), Value: point.Value}
+			points[i] = MetricPoint{Timestamp: timeline[index], Value: metricPoints[index].Value}
 		}
 		converted[metricType] = points
 	}
