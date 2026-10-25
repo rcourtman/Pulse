@@ -375,6 +375,17 @@ class E2EImageWorkflowTest(unittest.TestCase):
                 self.assertNotIn("docker", step.lower())
         self.assertIn("timeout-minutes: 60", job_block(workflow, "e2e"))
         self.assertIn("shard: [1, 2, 3, 4, 5, 6, 7, 8]", job_block(workflow, "e2e"))
+        consumer = job_block(workflow, "e2e")
+        geometry_start = consumer.index("- name: Validate native settings scroll geometry\n")
+        geometry_end = consumer.index("\n      - name:", geometry_start)
+        geometry = consumer[geometry_start:geometry_end]
+        self.assertIn("if: matrix.shard == 1\n", geometry)
+        self.assertIn("working-directory: tests/integration\n", geometry)
+        self.assertIn("run: node --test scripts/settings-scroll-audit.test.mjs\n", geometry)
+        self.assertNotIn("continue-on-error", geometry)
+        self.assertNotIn("||", geometry)
+        self.assertLess(consumer.index("npx playwright install --with-deps chromium webkit"), geometry_start)
+        self.assertLess(geometry_start, consumer.index("- name: Admit the source-bound test images"))
         self.assertIn("timeout-minutes: 30", job_block(workflow, "agent-registration"))
         verdict = job_block(workflow, "e2e-verdict")
         self.assertIn("      - test-images\n", verdict)
@@ -405,6 +416,9 @@ class E2EImageWorkflowTest(unittest.TestCase):
             ("PULSE_E2E_MANIFEST_SHA256: ${{ needs.test-images.outputs.manifest-sha256 }}", "PULSE_E2E_MANIFEST_SHA256: unchecked"),
             ("      - test-images\n", ""),
             ("path: ~/.cache/pulse-browser-os-packages\n", "path: ${{ runner.temp }}/pulse-e2e-images\n"),
+            ("if: matrix.shard == 1\n", "if: matrix.shard == 2\n"),
+            ("run: node --test scripts/settings-scroll-audit.test.mjs\n",
+             "run: node --test scripts/settings-scroll-audit.test.mjs || true\n"),
         ):
             with self.subTest(mutation=new):
                 with self.assertRaises(AssertionError):
