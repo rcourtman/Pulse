@@ -72,6 +72,59 @@ Pulse has collected; an absent tab is not proof of successful collection.
 For missing or stale data, use the [polling checks](#stale-truenas-data) before
 testing the connection or restarting.
 
+## Read TrueNAS protection evidence
+
+Open **TrueNAS → Protection** and clear the search and outcome filter to
+**All**. The **Healthy** filter selects successful events; it does not certify
+that every dataset is protected. The event count is not a complete backup
+inventory: collection is bounded to 500 snapshots and 200 replication tasks
+per collection, and retained events can outlive their source artifact.
+
+| Row kind | What it records | What to check separately |
+|---|---|---|
+| **Snapshot**, target **Local ZFS** | A snapshot observed on the source TrueNAS system | It is not an independent copy. Confirm the snapshot still exists and can survive the failure you need to recover from. |
+| **Replication** | A task's reported last-run state and source/target details | A configured task, **Running** or **Unknown** is not a completed copy. Confirm the intended target and its existing received snapshot in TrueNAS. |
+
+Expand the row, including on a phone, and compare it with the same existing
+record in TrueNAS:
+
+1. **Identify the source.** Compare **Host**, **Dataset**, **Full name** or
+   **Snapshot**. For replication also compare **Task ID**, **Source datasets**,
+   **Target dataset** and **Direction**. Similar dataset or task names on two
+   appliances do not identify the same copy. A target dataset name or the
+   API's remote mode alone does not establish a separate machine or failure
+   domain; confirm the actual destination in TrueNAS.
+2. **Read the outcome and times together.** **Started**, **Completed** and
+   **Last snapshot** describe collected evidence, not a restore test.
+   **Running** remains incomplete even if a timestamp is present. A successful
+   snapshot observation does not establish successful replication.
+   **Current timestamp limitation:** when TrueNAS supplies no snapshot creation
+   time, Pulse can show the collection time as **Completed**. Do not use that
+   displayed time alone to judge backup age or retention; confirm the native
+   snapshot's creation time. Replication with no known last-run time is
+   **Unknown**, not a newly completed copy.
+3. **Check the destination without starting work.** Use the provider's existing
+   received-snapshot and task records. Confirm the same source snapshot, target
+   and successful transfer result. Missing **Verified**, **Size** or timestamp
+   fields are unavailable evidence, not a failed verification or a zero-sized
+   backup. Snapshot **Size** is reported used space, not the size of a complete
+   independent backup or replication transfer.
+
+A green TrueNAS connection does not prove that snapshot or replication reads
+succeeded. If records are absent or disagree, keep the existing native evidence
+and follow the [stale-data checks](#stale-truenas-data); do not assume an empty
+or filtered list means no backups. Do not run a new snapshot, replication,
+verification or restore, delete records, change retention or widen permissions
+just to make the views agree. Keep full dataset paths, appliance names,
+credentials and inventories private; report only the version, affected view,
+time and a consistently aliased comparison.
+
+For actual recovery, use TrueNAS's procedure and an isolated destination, not
+the live dataset as a diagnostic target. See [what recovery evidence establishes](RECOVERY.md#what-the-evidence-means).
+Neither a successful event nor a corrected display proves application recovery
+or guest thaw. For an unresponsive guest or uncertain freeze/thaw, stop this
+comparison and use [Backup safety](VM_DISK_MONITORING.md#backup-safety).
+
 ## Disk temperature and health
 
 In **TrueNAS → Storage**, read the disk's **Health** reason and details, not
