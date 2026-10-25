@@ -38,6 +38,19 @@ describe('agentInstallCommand', () => {
     expect(command).toContain('--insecure');
   });
 
+  // `sudo -v` alone asks NOPASSWD cloud-image users for a password they do
+  // not have whenever another rule (Ubuntu's %sudo) needs one.
+  it('tries a silent sudo before falling back to sudo -v', () => {
+    const command = buildUnixAgentInstallCommand({
+      baseUrl: 'https://pulse.example',
+      token: 'token-123',
+    });
+
+    expect(command).toContain(
+      'elif command -v sudo >/dev/null 2>&1; then if ! sudo -n true 2>/dev/null; then sudo -v; fi;',
+    );
+  });
+
   it('shell-quotes canonical URL and token-file bootstrap transport', () => {
     const command = buildUnixAgentInstallCommand({
       baseUrl: "https://pulse.example/base path/agent's",
@@ -519,7 +532,7 @@ exec /bin/stty "$@"`,
   fake('id', 'if [ "$1" = -u ]; then echo "$FAKE_UID"; else exec /usr/bin/id "$@"; fi');
   fake(
     'sudo',
-    'printf "%s\\n" "$@" >> "$ARGV"; [ "$FAIL_AT" != sudo ] || exit 1; [ "$1" != -v ] || exit 0; exec "$@"',
+    'printf "%s\\n" "$@" >> "$ARGV"; [ "$FAIL_AT" != sudo ] || exit 1; [ "$1" != -v ] || exit 0; [ "$*" != "-n true" ] || exit 0; exec "$@"',
   );
   fake(
     'mktemp',

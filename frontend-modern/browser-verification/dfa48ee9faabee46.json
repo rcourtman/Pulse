@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "a4febe855194305d5616d438b5b8fd379817774e",
+  "verified_at": "2026-10-25T19:40:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/agentInstallCommand.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/agentInstallCommand.ts": "937016008072d8eebcc85894a8259496484cbe001c1071444814686e9190e849"
+  },
+  "routes": [
+    "/settings/infrastructure?add=linux-host"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree served by vite preview and proxied to the pulse-dev :7699 perf rig (token-required auth); Chromium headless, desktop 1280x800 and touch-phone 390x844.",
+    "Before a token exists the Linux path offers only Generate token. After generation all ten Unix install commands on the page (Linux, private-token-file, macOS and the other Unix families) read 'then if ! sudo -n true 2>/dev/null; then sudo -v; fi;' and none use a bare 'sudo -v'; the two remaining code fragments are the literal word sudo in guidance.",
+    "Token reveal dialog unchanged; after Escape the Install on Linux and private-file commands render in their code blocks with the copy control. No page horizontal overflow and no page errors at either width.",
+    "Shell behaviour on the same Ubuntu 24.04 cloud-init host (NOPASSWD user, no password): the old preflight prints 'sudo: a password is required'; the new one passes without a prompt because the silent 'sudo -n true' succeeds, leaving 'sudo -v' only for hosts that need a password.",
+    "The synthetic install tokens minted on the rig during the runs were revoked afterwards (DELETE 204 each) and the preview server stopped."
+  ],
+  "interactions": [
+    "Sign in, open Settings > Infrastructure, Add infrastructure, Install Pulse Agent.",
+    "Generate token, dismiss the reveal with Escape, scroll to the Install on Linux command and read every visible code block."
+  ]
+}
