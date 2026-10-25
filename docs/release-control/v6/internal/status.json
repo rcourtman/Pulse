@@ -5161,6 +5161,10 @@
           {
             "kind": "lane-followup",
             "id": "cloud-commercial-transition-external-proof"
+          },
+          {
+            "kind": "lane-followup",
+            "id": "community-commercial-transition-cutover"
           }
         ]
       },
@@ -9564,6 +9568,24 @@
       "subsystem_ids": [
         "deployment-installability"
       ]
+    },
+    {
+      "id": "community-commercial-transition-cutover",
+      "summary": "Complete the notice-bound Community transition remedy through the commercial authority: adopted policy, exact-payment annual preview, durable quote/apply, prior-refund reconciliation, cross-generation entitlement termination and external event/runtime proof before customer activation.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-10-25",
+      "lane_ids": [
+        "L3"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "repo_ids": [
+        "pulse",
+        "pulse-pro"
+      ],
+      "cross_repo": true
     }
   ],
   "coverage_gaps": [

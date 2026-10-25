@@ -15,6 +15,26 @@
 
 ## Purpose
 
+### Community transition refund preparation
+
+`pulse-pro:license-server/v6_commercial_refunds.go` owns the admin-only annual
+transition refund preview. Its proposed announcement and release dates do not
+activate a programme. It reads an exact configured annual subscription,
+invoice, payment intent and captured charge, in the charge's original integer
+currency units. Both grandfathered recurring and current prices use the existing
+commercial catalog without requiring a migrated v6 licence. The preview is not
+an executable transition quote and never cancels, refunds, changes entitlements
+or sends customer mail.
+
+The Community history/probe/seat boundary and Business sales pause remain
+pending the notice-bound cutover. Before a refund exit is offered, the existing
+commercial authority still needs a durable, policy-bound quote and one-attempt
+execution with exact cancellation, original-payment refund, cross-generation
+entitlement termination, version-floor invalidation and reconciliation proof.
+No payment effect may be inferred from an unsigned preview or its dates. The
+preparation record is
+`docs/release-control/v6/internal/records/community-transition-refund-preparation-2026-10-25.md`.
+
 ### Reporting measurement precedes commercial feature decisions
 
 Schema-v20 reporting usage exports only aggregate generation by closed report
@@ -303,6 +323,7 @@ establish Compose mounts, tenant provisioning or installed provider recovery.
 88. `pulse-pro:license-server/README.md`
 89. `pulse-pro:license-server/entrypoint.sh.template`
 90. `pulse-pro:license-server/secrets.env.template`
+91. `pulse-pro:license-server/v6_commercial_refunds.go`
 
 ## Shared Boundaries
 
