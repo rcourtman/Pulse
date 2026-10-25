@@ -4745,6 +4745,7 @@
         "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
+        "tests/integration/scripts/managed-local-backend.mjs",
         "tests/integration/scripts/relay-mobile-token-helper.go",
         "tests/integration/scripts/settings-scroll-audit.mjs",
         "tests/integration/tests/helpers.ts",
@@ -5267,6 +5268,7 @@
             "test_prefixes": [],
             "exact_files": [
               "tests/integration/scripts/fixture-auth.test.mjs",
+              "tests/integration/scripts/organization-fixtures.test.mjs",
               "tests/integration/tests/62-runtime-home-onboarding-contract.spec.ts"
             ]
           },

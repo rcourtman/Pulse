@@ -1997,6 +1997,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 104. `.github/workflows/dependency-advisory-watch.yml`
 105. `scripts/dependency_advisory_watch.py`
 106. `tests/integration/scripts/settings-scroll-audit.mjs`
+107. `tests/integration/scripts/managed-local-backend.mjs`
 
 `scripts/installtests/run_unix_contracts.py` is the canonical exhaustive native Unix installer execution runner. Its dedicated verification files are `scripts/installtests/native_unix_contract_runner_test.go` and `scripts/tests/test_native_installer_contract_runner.py`. Script-smoke discovery and the native Go wrapper execute that same Python control suite, so phase inventory, failure propagation and real compiled-Go exit behavior retain one verification source.
 
@@ -3057,6 +3058,23 @@ artifact-selection behaviour.
    overflow assertions. Infrastructure onboarding uses this same content-owner
    audit, including its bottom-position assertion. Its SPA route assertions
    observe the requested URL rather than wait for the document's load event.
+   Organization audits use the worker's authenticated cookie context to create
+   and activate their API fixtures before entering the workspace. The initial
+   load observes the complete organization list without an intervening reload.
+   The audit owns created organization IDs before preparation starts, so a
+   preparation failure still reaches the same explicit cleanup boundary.
+   License activation has a 15-second server request deadline and tenant
+   deletion permits 30 seconds of graceful shutdown. Their fixture requests
+   use explicit 20-second and 35-second bounds so the default 10-second browser
+   action timeout cannot discard the server verdict. The overall journey
+   deadlines and ordinary API request timeout remain unchanged. Shared creation
+   cleans up an ID when activation fails before returning it, and batch cleanup
+   attempts every owned ID while retaining failures. The controlled organization
+   fixture tests preserve rejection, timeout and incomplete-shutdown failures.
+   Managed native backend teardown copies its final server log to the existing
+   test-results directory before removing its runtime root. Missing pre-launch
+   logs still permit cleanup; a failed diagnostic copy cannot silently discard
+   the runtime containing that evidence.
    Bottom position and horizontal width are judged from the same browser snapshot.
    If content reflows after traversal, the audit finishes the changed extent before
    accepting that snapshot. A scroll reset with an unchanged extent remains an

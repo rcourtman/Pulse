@@ -1733,7 +1733,9 @@ export async function activateOfflineOrganization(page: Page, orgId = "default")
   if (!key) return;
   const headers = { "X-Pulse-Org-ID": orgId, "X-Org-ID": orgId };
   const activation = await apiRequest(page, "/api/license/activate", {
-    method: "POST", headers, data: { license_key: key },
+    // The issuer request alone has a 15s server deadline. The browser's
+    // 10s action timeout must not pre-empt a valid activation response.
+    method: "POST", headers, data: { license_key: key }, timeout: 20_000,
   });
   if (!activation.ok()) throw new Error(`Offline org activation failed: ${activation.status()}`);
   const response = await apiRequest(page, "/api/license/runtime-capabilities", { headers });
@@ -1765,18 +1767,47 @@ export async function createOrg(
     throw new Error("Failed to create org: response missing org id");
   }
 
-  await activateOfflineOrganization(page, payload.id);
+  try {
+    await activateOfflineOrganization(page, payload.id);
+  } catch (error) {
+    // The API creation already succeeded. Keep ownership if subsequent
+    // activation fails before the caller can receive and track the ID.
+    try {
+      await deleteOrg(page, payload.id);
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], `Organization ${payload.id} activation and cleanup failed`);
+    }
+    throw error;
+  }
   return { id: payload.id };
 }
 
 export async function deleteOrg(page: Page, orgId: string): Promise<void> {
   const res = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgId)}`, {
     method: "DELETE",
+    // Tenant deletion allows 30s for graceful shutdown before reporting an
+    // incomplete teardown. Retain that verdict instead of abandoning at 10s.
+    timeout: 35_000,
+    headers: { "X-Org-ID": "default", "X-Pulse-Org-ID": "default" },
   });
-  if (!res.ok() && res.status() !== 404) {
+  if (![204, 404].includes(res.status())) {
     throw new Error(
-      `Failed to delete org: ${res.status()} ${await res.text()}`,
+      `Failed to delete org ${orgId}: ${res.status()} ${await res.text()}`,
     );
+  }
+}
+
+export async function deleteOrgs(page: Page, orgIds: readonly string[]): Promise<void> {
+  const failures: unknown[] = [];
+  for (const orgId of [...orgIds].reverse()) {
+    try {
+      await deleteOrg(page, orgId);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length) {
+    throw new AggregateError(failures, "Organization fixture cleanup failed");
   }
 }
 

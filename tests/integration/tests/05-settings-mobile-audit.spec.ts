@@ -6,9 +6,9 @@ import { test as base, expect } from "@playwright/test";
 import {
   apiRequest,
   activateOfflineOrganization,
-  ensureSessionAuthenticated,
   createAuthenticatedStorageState,
   createOrg,
+  deleteOrgs,
 } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -96,19 +96,15 @@ const MOBILE_VIEWPORTS = [
 const prepareOrganizationAuditFixture = async (
   page: import("@playwright/test").Page,
   route: string,
-): Promise<string[]> => {
+  createdOrgIDs: string[],
+): Promise<void> => {
   if (!(ORGANIZATION_SETTINGS_ROUTES as readonly string[]).includes(route))
-    return [];
+    return;
 
   if (process.env.PULSE_E2E_OFFLINE_ACTIVATION_KEY) {
-    await ensureSessionAuthenticated(page);
     await activateOfflineOrganization(page);
   }
 
-  await page.goto("/settings/infrastructure", {
-    waitUntil: "domcontentloaded",
-  });
-  const createdOrgIDs: string[] = [];
   let targetOrgID = "";
 
   if (route === "/settings/organization/sharing") {
@@ -119,7 +115,12 @@ const prepareOrganizationAuditFixture = async (
 
   const source = await createOrg(page, "Mobile Audit Organization");
   createdOrgIDs.push(source.id);
-  await page.reload({ waitUntil: "domcontentloaded" });
+  // The worker fixture already supplies a cookie session. Arrange the API
+  // fixtures before the first workspace load so admission sees the complete
+  // organization list without a second bootstrap or an intervening reload.
+  await page.goto("/settings/infrastructure", {
+    waitUntil: "domcontentloaded",
+  });
   const organizationSwitcher = page.getByRole("combobox", {
     name: "Organization",
   });
@@ -175,7 +176,6 @@ const prepareOrganizationAuditFixture = async (
     ).toBeTruthy();
   }
 
-  return createdOrgIDs;
 };
 
 const test = base.extend<{}, WorkerFixtures>({
@@ -211,12 +211,13 @@ test.describe("Settings mobile optimization audit", () => {
     test(`no horizontal overflow after full scroll on ${route}`, async ({
       page,
     }) => {
-      const createdOrgIDs = await prepareOrganizationAuditFixture(page, route);
+      const createdOrgIDs: string[] = [];
       try {
+        await prepareOrganizationAuditFixture(page, route, createdOrgIDs);
         for (const viewport of MOBILE_VIEWPORTS) {
           await page.setViewportSize(viewport);
           await page.goto(route, { waitUntil: "domcontentloaded" });
-          await page.waitForURL((url) => url.pathname === route, {
+          await expect(page).toHaveURL((url) => url.pathname === route, {
             timeout: 15000,
           });
           expect(
@@ -293,35 +294,20 @@ test.describe("Settings mobile optimization audit", () => {
           }
         }
       } finally {
-        if (createdOrgIDs.length > 0) {
-          const organizationSwitcher = page.getByRole("combobox", {
-            name: "Organization",
-          });
-          if (await organizationSwitcher.isVisible().catch(() => false)) {
-            await organizationSwitcher.selectOption("default");
-            await expect(organizationSwitcher).toHaveValue("default", {
-              timeout: 20000,
+        try {
+          if (createdOrgIDs.length > 0) {
+            const organizationSwitcher = page.getByRole("combobox", {
+              name: "Organization",
             });
+            if (await organizationSwitcher.isVisible().catch(() => false)) {
+              await organizationSwitcher.selectOption("default");
+              await expect(organizationSwitcher).toHaveValue("default", {
+                timeout: 20000,
+              });
+            }
           }
-        }
-        for (const orgID of [...createdOrgIDs].reverse()) {
-          const response = await apiRequest(
-            page,
-            `/api/orgs/${encodeURIComponent(orgID)}`,
-            {
-              method: "DELETE",
-              headers: {
-                "X-Org-ID": "default",
-                "X-Pulse-Org-ID": "default",
-              },
-            },
-          );
-          const responseBody =
-            response.status() === 204 ? "" : await response.text();
-          expect(
-            [204, 404].includes(response.status()),
-            `cleanup organization ${orgID}: ${response.status()} ${responseBody}`,
-          ).toBeTruthy();
+        } finally {
+          await deleteOrgs(page, createdOrgIDs);
         }
       }
     });
@@ -332,7 +318,7 @@ test.describe("Settings mobile optimization audit", () => {
       page,
     }) => {
       await page.goto(route, { waitUntil: "domcontentloaded" });
-      await page.waitForURL((url) => url.pathname === expectedPath, {
+      await expect(page).toHaveURL((url) => url.pathname === expectedPath, {
         timeout: 15000,
       });
       expect(new URL(page.url()).pathname).toBe(expectedPath);
@@ -346,7 +332,7 @@ test.describe("Settings mobile optimization audit", () => {
     await page.goto("/settings/system-general", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(
+    await expect(page).toHaveURL(
       (url) => url.pathname === "/settings/system-general",
       {
         timeout: 15000,
