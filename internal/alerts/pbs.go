@@ -125,21 +125,22 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 		return
 	}
 
-	// Endpoint failure is not evidence of metric recovery. Connectivity above
-	// remains independent, as do explicit policy suppression and full outages.
-	if pbs.NodeMetricsUnavailable {
-		return
-	}
-
-	m.evaluateUnifiedMetrics(&UnifiedResourceInput{
+	input := &UnifiedResourceInput{
 		ID:       pbs.ID,
 		Type:     "pbs",
 		Name:     pbs.Name,
 		Node:     pbs.Host,
 		Instance: pbs.Name,
-		CPU:      &UnifiedResourceMetric{Percent: pbs.CPU},
-		Memory:   &UnifiedResourceMetric{Percent: pbs.Memory},
-	}, thresholds, nil)
+	}
+	// Endpoint failure is a missing observation, not merely a pause in metric
+	// evaluation. Let the shared evaluator interrupt activation/recovery runs
+	// and intent grace without changing an open alert's trusted evidence.
+	// Connectivity above and full-outage precedence remain independent.
+	if !pbs.NodeMetricsUnavailable {
+		input.CPU = &UnifiedResourceMetric{Percent: pbs.CPU}
+		input.Memory = &UnifiedResourceMetric{Percent: pbs.Memory}
+	}
+	m.evaluateUnifiedMetrics(input, thresholds, nil)
 }
 
 // checkPBSOffline creates an alert for offline PBS instances

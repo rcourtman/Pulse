@@ -15,6 +15,21 @@
 
 ## Purpose
 
+### Missing PBS node-status polls restart metric timing
+
+When PBS node-status collection fails, absent CPU and memory observations pass
+through the shared metric evaluator. Pending activation, explicit intent grace
+and memory recovery timing restart without changing an open occurrence, its
+acknowledgement, trusted readings or lifecycle history. A fresh poll must satisfy
+the existing full delay; missing time cannot establish continuous evidence.
+Measured zero retains normal recovery, including immediate CPU recovery.
+
+`pbs_observation_continuity_test.go` covers both metrics, legacy and explicit
+grace, recovery boundaries, retained low/high values, exact-PBS isolation and
+live/shadow agreement. Global pause, disabled policy and full-outage precedence
+remain unchanged. No collector, connectivity, schema or transport changes;
+synthetic manager/browser proof is not installed PBS or recipient recovery.
+
 
 ### Storage capacity warnings require observed byte counters
 
