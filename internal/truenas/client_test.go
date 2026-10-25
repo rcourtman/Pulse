@@ -2560,10 +2560,14 @@ func TestClientFixtureOwnsRPCSessionLifetime(t *testing.T) {
 	})
 	t.Run("fixture lifetime", func(t *testing.T) {
 		fixture := newProtocolFixture(t, func(_ int, request trueNASRPCRequest) protocolFixtureReply {
-			if request.Method == "auth.login_ex" {
+			switch request.Method {
+			case "auth.login_ex":
 				return protocolFixtureReply{result: map[string]any{"response_type": "SUCCESS"}}
+			case "auth.login_with_api_key":
+				return protocolFixtureReply{result: true}
+			default:
+				return protocolFixtureReply{result: []any{}}
 			}
-			return protocolFixtureReply{result: []any{}}
 		}, nil)
 		client = mustClientForServer(t, fixture.server.URL, ClientConfig{APIKey: "fixture-key", InsecureSkipVerify: true})
 		if _, err := client.GetPools(context.Background()); err != nil {
