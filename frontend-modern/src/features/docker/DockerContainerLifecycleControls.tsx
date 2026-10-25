@@ -206,11 +206,14 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
           </For>
         }
       >
+        {/* The 28px menu button overhangs the row by 2px each way, so it no
+            longer sets a 37px row height beside the 33px rows of every other
+            table. */}
         <button
           ref={menuTriggerRef}
           type="button"
           id={menuButton.triggerId}
-          class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border ${enabledButtonClass}`}
+          class={`-my-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border ${enabledButtonClass}`}
           title={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
           aria-label={`Container actions for ${dockerContainerLifecycleName(props.resource)}`}
           aria-haspopup="menu"

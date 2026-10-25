@@ -1259,6 +1259,11 @@ describe('Docker native tables', () => {
       />
     ));
 
+    // The 28px menu button overhangs the row rather than setting a 37px row.
+    expect(screen.getByRole('button', { name: 'Container actions for edge-web' })).toHaveClass(
+      '-my-0.5',
+      'h-7',
+    );
     fireEvent.click(
       screen.getByRole('button', {
         name: 'Container actions for edge-web',

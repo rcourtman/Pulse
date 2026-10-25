@@ -99,6 +99,15 @@ row. It creates no read, timer, layout observer, collection or recovery action.
 Unmarked current cache-aware readings add no component or control. Dense row
 geometry, column widths, bars/sparklines and hover-history ownership remain.
 The phone target extends within the cell without increasing the row rhythm.
+Each cue is a 12 px icon on the bar's line rather than a word under the bar,
+which put a second line of text in the row: a history icon for a retained
+reading, a question mark for a cache-inclusive or unknown-freshness one, and
+an alert for a disk read the user can fix (amber). The word (`Last known`,
+`Cache?`, `Denied`) stays in the button's accessible name and dialog, the
+reason in its title and assistive text, and its 24 px target overhangs the
+icon so the row height does not change for it. In compact (phone and narrow)
+cells the icon is 10 px and overhangs the cell's right padding, so the bar gives
+up about 8 px and still shows its percentage whole.
 
 Same-identity observations update an open explanation; a genuinely current
 observation removes the cue and returns focus to the row's existing disclosure.
