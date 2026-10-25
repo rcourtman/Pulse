@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -166,5 +167,98 @@ func TestServeIndexWithNonceAddsNonceToGeneratedInlineTags(t *testing.T) {
 	}
 	if got := strings.Count(body, `nonce="test-nonce"`); got != 3 {
 		t.Fatalf("nonce count = %d, want 3 in body %q", got, body)
+	}
+}
+
+func TestServeFrontendHandlerMissingAssetsDoNotBecomeSPA(t *testing.T) {
+	resetDevProxy()
+	t.Cleanup(resetDevProxy)
+	t.Setenv("FRONTEND_DEV_SERVER", "")
+	tmp := t.TempDir()
+	for name, content := range map[string]string{
+		"index.html":               "<html>app-shell-marker</html>",
+		"docs/RECOVERY.md":         "# Recovery\nShipped recovery guidance.",
+		"assets/index-abc123.js":   "window.loaded = true;",
+		"assets/index-abc123.css":  "body{}",
+		"docs/nested/RECOVERY.md":  "# Nested recovery\nShipped nested guidance.",
+		"docs/release-notes-v6.md": "# Release notes\nShipped notes.",
+	} {
+		file := filepath.Join(tmp, name)
+		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PULSE_FRONTEND_DIR", tmp)
+	handler := serveFrontendHandler()
+
+	for _, target := range []string{
+		"/assets/missing-chunk.js", "/assets/missing.css?v=2", "/assets/no-extension",
+		"/assets", "/assets/", "/docs/NOT_SHIPPED.md", "/docs/nested/NOT_SHIPPED.md",
+		"/docs/NOT_SHIPPED.MD?version=old", "/missing.js", "/missing.mjs", "/missing.css",
+		"/missing.map", "/missing.json", "/missing.html", "/favicon.ico", "/missing.svg",
+		"/missing.png", "/missing.jpg", "/missing.jpeg", "/missing.gif", "/missing.webp",
+		"/missing.avif", "/missing.woff", "/missing.woff2", "/missing.ttf", "/missing.otf",
+		"/missing.wasm", "/robots.txt", "/missing.xml", "/manifest.webmanifest",
+	} {
+		t.Run(target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			handler(rec, httptest.NewRequest(http.MethodGet, target, nil))
+			if rec.Code != http.StatusNotFound {
+				t.Errorf("missing asset status = %d, want 404", rec.Code)
+			}
+			if got := rec.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
+				t.Errorf("missing asset content type = %q", got)
+			}
+			if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+				t.Errorf("missing asset cache control = %q, want no-store", got)
+			}
+			if strings.Contains(rec.Body.String(), "app-shell-marker") {
+				t.Error("missing asset returned the application shell")
+			}
+		})
+	}
+
+	for _, target := range []string{
+		"/", "/app/settings", "/docs", "/docs/", "/docs/RECOVERY",
+		"/docs/NOT_SHIPPED", "/docs/nested/RECOVERY", "/docs/release-notes-v6",
+		"/workloads/guest.example", "/assets-overview",
+	} {
+		t.Run("route"+target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			handler(rec, httptest.NewRequest(http.MethodGet, target, nil))
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "app-shell-marker") {
+				t.Errorf("client route must still receive the shell: status=%d body=%q", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		target      string
+		contentType string
+		contains    string
+		immutable   bool
+	}{
+		{"/docs/RECOVERY.md", "text/plain; charset=utf-8", "Shipped recovery guidance.", false},
+		{"/docs/nested/RECOVERY.md", "text/plain; charset=utf-8", "Shipped nested guidance.", false},
+		{"/docs/release-notes-v6.md", "text/plain; charset=utf-8", "Shipped notes.", false},
+		{"/assets/index-abc123.js", "application/javascript; charset=utf-8", "window.loaded = true;", true},
+		{"/assets/index-abc123.css", "text/css; charset=utf-8", "body{}", true},
+	} {
+		t.Run("shipped"+tc.target, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			handler(rec, httptest.NewRequest(http.MethodGet, tc.target, nil))
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), tc.contains) {
+				t.Errorf("shipped content changed: status=%d body=%q", rec.Code, rec.Body.String())
+			}
+			if got := rec.Header().Get("Content-Type"); got != tc.contentType {
+				t.Errorf("content type = %q, want %q", got, tc.contentType)
+			}
+			if got := strings.Contains(rec.Header().Get("Cache-Control"), "immutable"); got != tc.immutable {
+				t.Errorf("immutable cache = %t, want %t", got, tc.immutable)
+			}
+		})
 	}
 }
