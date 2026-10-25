@@ -170,6 +170,112 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).toContain('Access Sufficient');
   });
 
+  it('keeps each provider scope beside its own access and history evidence', () => {
+    const scoped = {
+      ...row,
+      protectionPosture: {
+        ...row.protectionPosture!,
+        providerStates: [
+          row.protectionPosture!.providerStates[0],
+          {
+            ...row.protectionPosture!.providerStates[0],
+            scope: 'pbs-other-estate',
+            jobState: 'unknown',
+            historyCompleteness: 'unavailable',
+            permissions: 'denied',
+          },
+        ],
+      },
+    } as WorkloadCoverageRow;
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[scoped]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+      />
+    ));
+
+    const readable = screen.getByText('Scope pbs-main').closest('tr')!;
+    const denied = screen.getByText('Scope pbs-other-estate').closest('tr')!;
+    expect(readable).not.toBe(denied);
+    expect(within(readable).getByText('Access Sufficient')).toBeVisible();
+    expect(within(readable).getByText('History Complete')).toBeVisible();
+    expect(within(denied).getByText('Access Denied')).toBeVisible();
+    expect(within(denied).getByText('History Unavailable')).toBeVisible();
+    expect(within(denied).queryByText('Access Sufficient')).not.toBeInTheDocument();
+  });
+
+  it.each(['', '   ', undefined])(
+    'names absent scope %j Unknown instead of guessing the guest node',
+    (scope) => {
+      const unscoped = {
+        ...row,
+        protectionPosture: {
+          ...row.protectionPosture!,
+          providerStates: [{ ...row.protectionPosture!.providerStates[0], scope }],
+        },
+      } as WorkloadCoverageRow;
+      renderInRouter(() => (
+        <ProxmoxCoverageTable
+          rows={[unscoped]}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKey="w1"
+          onToggleExpand={() => {}}
+          showTaskColumn={false}
+        />
+      ));
+
+      const provider = screen.getByText('Scope Unknown').closest('tr')!;
+      expect(within(provider).getByText('Access Sufficient')).toBeVisible();
+      expect(provider).not.toHaveTextContent('pve1');
+    },
+  );
+
+  it('renders a long markup-like scope as wrapping text, not HTML or a link', () => {
+    const scope = '<img src=x onerror=alert(1)>' + 'a'.repeat(200);
+    const scoped = {
+      ...row,
+      protectionPosture: {
+        ...row.protectionPosture!,
+        providerStates: [{ ...row.protectionPosture!.providerStates[0], scope: ` ${scope} ` }],
+      },
+    };
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[scoped]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey="w1"
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => 320}
+      />
+    ));
+
+    const label = screen.getByText(`Scope ${scope}`);
+    expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
+    expect(label.querySelector('img, a')).toBeNull();
+  });
+
   it('heads the workload drawer with its posture and links to the workload', async () => {
     const onToggleExpand = vi.fn();
     const linked = {

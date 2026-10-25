@@ -203,6 +203,7 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
           makeDetailRow(
             providerLabel(provider.provider),
             [
+              `Scope ${provider.scope?.trim() || 'Unknown'}`,
               `Job ${evidenceQualityLabel(provider.jobState)}`,
               `History ${evidenceQualityLabel(provider.historyCompleteness)}`,
               `Access ${evidenceQualityLabel(provider.permissions)}`,
@@ -210,10 +211,15 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
             {
               layout: 'stacked',
               valueContent: (
-                <span class="flex flex-wrap gap-x-3 text-left font-normal leading-snug">
-                  <span>Job {evidenceQualityLabel(provider.jobState)}</span>
-                  <span>History {evidenceQualityLabel(provider.historyCompleteness)}</span>
-                  <span>Access {evidenceQualityLabel(provider.permissions)}</span>
+                <span class="block space-y-1 text-left font-normal leading-snug">
+                  <span class="block whitespace-normal wrap-anywhere">
+                    Scope {provider.scope?.trim() || 'Unknown'}
+                  </span>
+                  <span class="flex flex-wrap gap-x-3">
+                    <span>Job {evidenceQualityLabel(provider.jobState)}</span>
+                    <span>History {evidenceQualityLabel(provider.historyCompleteness)}</span>
+                    <span>Access {evidenceQualityLabel(provider.permissions)}</span>
+                  </span>
                 </span>
               ),
             },
