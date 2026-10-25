@@ -28,6 +28,9 @@ func TestHandleImportConfigMetadataFailureDoesNotApplyOrSucceed(t *testing.T) {
 			if err := p.SaveAPITokens([]config.APITokenRecord{{ID: "keep-token", Hash: "synthetic-token-hash", OrgID: "default"}}); err != nil {
 				t.Fatal(err)
 			}
+			if err := os.WriteFile(filepath.Join(cfg.DataPath, ".env"), []byte("AUTO_UPDATE_ENABLED=true\nPOLLING_INTERVAL=77\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
 			store := p.GetGuestMetadataStore()
 			if err := store.Set("keep:101", &config.GuestMetadata{Description: "Retained operator metadata"}); err != nil {
 				t.Fatal(err)

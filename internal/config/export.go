@@ -262,6 +262,9 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 		return fmt.Errorf("failed to commit import transaction: %w", err)
 	}
 	committed = true
+	c.mu.Lock()
+	c.cleanupOldBackups(c.nodesFile + ".backup-*")
+	c.mu.Unlock()
 
 	return nil
 }

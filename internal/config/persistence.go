@@ -473,6 +473,16 @@ func (c *ConfigPersistence) writeConfigFileLocked(path string, data []byte, perm
 	return nil
 }
 
+// writeConfigBackupLocked preserves ordinary backup writes, but makes them
+// part of an active import instead of changing recovery files before commit.
+// Caller must hold c.mu.
+func (c *ConfigPersistence) writeConfigBackupLocked(path string, data []byte, perm os.FileMode) error {
+	if c.tx != nil {
+		return c.tx.StageFile(path, data, perm)
+	}
+	return c.fs.WriteFile(path, data, perm)
+}
+
 // preserveCorruptConfigFileLocked moves a config file that failed to parse or
 // decrypt aside to <path>.corrupt-<timestamp>. Loaders return empty data with
 // a nil error for such files, so read-modify-write savers would otherwise
@@ -782,7 +792,7 @@ func (c *ConfigPersistence) persistAPITokensLocked(tokens []APITokenRecord) erro
 
 	// Backup previous state (best effort).
 	if existing, err := c.fs.ReadFile(c.apiTokensFile); err == nil && len(existing) > 0 {
-		if err := c.fs.WriteFile(c.apiTokensFile+".backup", existing, 0600); err != nil {
+		if err := c.writeConfigBackupLocked(c.apiTokensFile+".backup", existing, 0600); err != nil {
 			log.Warn().Err(err).Msg("Failed to create API token backup file")
 		}
 	}
@@ -1634,7 +1644,7 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		// Create timestamped backup
 		timestampedBackup := fmt.Sprintf("%s.backup-%s", c.nodesFile, time.Now().Format("20060102-150405"))
 		if backupData, err := c.fs.ReadFile(c.nodesFile); err == nil {
-			if err := c.fs.WriteFile(timestampedBackup, backupData, 0600); err != nil {
+			if err := c.writeConfigBackupLocked(timestampedBackup, backupData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to create timestamped backup of nodes config")
 			} else {
 				log.Info().Str("backup", timestampedBackup).Msg("Created timestamped backup of nodes config")
@@ -1644,13 +1654,16 @@ func (c *ConfigPersistence) saveNodesConfig(pveInstances []PVEInstance, pbsInsta
 		// Also maintain a "latest" backup for quick recovery
 		latestBackup := c.nodesFile + ".backup"
 		if backupData, err := c.fs.ReadFile(c.nodesFile); err == nil {
-			if err := c.fs.WriteFile(latestBackup, backupData, 0600); err != nil {
+			if err := c.writeConfigBackupLocked(latestBackup, backupData, 0600); err != nil {
 				log.Warn().Err(err).Msg("Failed to create latest backup of nodes config")
 			}
 		}
 
-		// Clean up old timestamped backups (keep last 10)
-		c.cleanupOldBackups(c.nodesFile + ".backup-*")
+		// Imports prune only after the entire archive commits. A failed
+		// recovery must not delete an older, still usable backup.
+		if c.tx == nil {
+			c.cleanupOldBackups(c.nodesFile + ".backup-*")
+		}
 	}
 
 	// Encrypt if crypto manager is available
@@ -2037,6 +2050,9 @@ func (c *ConfigPersistence) saveSystemSettingsLocked(settings SystemSettings) er
 	// Also update the .env file if it exists
 	envFile := filepath.Join(c.configDir, ".env")
 	if err := c.updateEnvFile(envFile, settings); err != nil {
+		if c.tx != nil {
+			return fmt.Errorf("stage imported environment settings: %w", err)
+		}
 		log.Warn().Err(err).Msg("Failed to update .env file")
 		// Don't fail the operation if .env update fails
 	}
@@ -3876,6 +3892,9 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		if perm == 0 {
 			perm = 0600
 		}
+	}
+	if c.tx != nil {
+		return c.writeConfigFileLocked(envFile, []byte(content), perm)
 	}
 	if err := c.fs.WriteFile(tempFile, []byte(content), perm); err != nil {
 		return fmt.Errorf("write temp env file %s: %w", tempFile, err)
