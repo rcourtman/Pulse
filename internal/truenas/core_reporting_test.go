@@ -243,10 +243,15 @@ func (s *core13ReportingTransport) RoundTrip(r *http.Request) (*http.Response, e
 	s.reportingCalls++
 	var request struct {
 		Graphs []map[string]any `json:"graphs"`
-		Query  map[string]any   `json:"query"`
+		Query  map[string]any   `json:"reporting_query"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		return nil, err
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil {
+		return nil, fmt.Errorf("invalid CORE REST reporting envelope: %w", err)
+	}
+	if len(request.Graphs) == 0 || request.Query["aggregate"] != true {
+		return nil, fmt.Errorf("missing graphs or reporting_query range")
 	}
 	s.requested = append(s.requested, request.Graphs...)
 	var responses []trueNASReportingGetDataResponse

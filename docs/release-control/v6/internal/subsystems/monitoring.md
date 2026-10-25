@@ -2006,8 +2006,8 @@ are not native appliance or containing-release acceptance.
 A connection proven to run a recognized legacy CORE/FreeNAS release has no
 `reporting.realtime` JSON-RPC subscription, so live system telemetry and
 host-chart history are reconstructed from the REST reporting API
-(`reporting.get_data`, served as a POST endpoint keyed by its `graphs` and
-`query` parameters). The reporting `memory` and `arcsize` graphs supply the
+(`reporting.get_data`, served as a POST endpoint keyed by the middleware
+schema names `graphs` and `reporting_query`). The reporting `memory` and `arcsize` graphs supply the
 available and ARC readings that the JSON-RPC realtime subscription otherwise
 provides. When no available-memory reading can be established, the provider
 must not derive usage from an absent available value: the system memory metric is
@@ -2023,6 +2023,30 @@ and projection proofs, not native CORE appliance acceptance or reporter
 confirmation.
 
 
+
+### CORE REST envelope and captured History targets — issues #2077 and #2964
+
+Legacy REST `POST /reporting/get_data` sends exactly `graphs` and
+`reporting_query`. WebSocket's positional second argument is not a REST key
+named `query`: CORE rejects that unknown attribute before collecting any graph.
+Live reads and native History share this envelope and unchanged aggregate,
+start/end range, graph catalogue and optional-graph isolation. TLS, authentication,
+transport selection and per-metric zero/unknown semantics are unchanged.
+
+The monitor's resource snapshot carries its captured generation's resolved
+History target into the detached REST seed, including authoritative absence.
+It never guesses a native connection ID from a display name, consults a later
+registry generation or decorates shared view rows. This restores the existing
+canonical History identity contract rather than adding a route or schema.
+
+`TestCORE13RESTReportingQueryResourceJourney` and
+`TestCORE13RESTReportingChartJourney` exercise the real pinned-TLS
+client/provider, authenticated resources and chart route, native History,
+free/ARC memory, unavailable/partial/zero/recovered readings, retained historical
+observations and access revocation. `TestUnifiedSnapshotPreservesCapturedHistoryTargets`
+protects captured coordinates, authoritative absence and detached ownership.
+These schema-faithful synthetic controls are not native appliance acceptance,
+reporter confirmation, data-pool recovery or release availability.
 
 ### TrueNAS partial samples and nonblocking telemetry diagnostics — issue #2077
 
