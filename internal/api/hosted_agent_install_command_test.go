@@ -38,7 +38,7 @@ func TestHostedTenantAgentInstallCommand_GeneratesOrgBoundTokenAndCommand(t *tes
 	_, err := router.multiTenant.GetPersistence(orgID)
 	require.NoError(t, err)
 
-	// Initialize tenant monitor to verify we update already-loaded tenant configs.
+	// Initialize the tenant monitor to verify an already-loaded runtime sees the token.
 	router.mtMonitor = monitoring.NewMultiTenantMonitor(cfg, router.multiTenant, nil)
 	t.Cleanup(router.mtMonitor.Stop)
 	tenantMonitor, err := router.mtMonitor.GetMonitor(orgID)
@@ -86,10 +86,35 @@ func TestHostedTenantAgentInstallCommand_GeneratesOrgBoundTokenAndCommand(t *tes
 	}
 	require.True(t, found, "expected persisted org-bound token record matching response token")
 
-	// Existing tenant monitor config sees the token immediately.
-	require.NotNil(t, tenantMonitor.GetConfig())
-	_, ok := tenantMonitor.GetConfig().ValidateAPIToken(resp.Token)
-	require.True(t, ok, "expected tenant monitor config to validate newly issued token")
+	// The existing tenant monitor sees the instance record immediately, and
+	// its own config copy gains no second copy that revocation would miss.
+	record, ok := cfg.ValidateAPIToken(resp.Token)
+	require.True(t, ok)
+	config.Mu.RLock()
+	_, _, visible := monitoring.FindAPITokenLocked(tenantMonitor.APITokenInventories(), record.ID)
+	config.Mu.RUnlock()
+	require.True(t, visible, "expected tenant monitor to see newly issued token")
+	require.Empty(t, tenantMonitor.GetConfig().APITokens)
+}
+
+// The control plane can also mint for the runtime's default organization;
+// that token stays in the instance inventory bound to "default".
+func TestGenerateHostedTenantAgentInstallCommandMintsForDefaultOrg(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := &config.Config{DataPath: dataDir, PublicURL: "https://cloud.example.com"}
+	result, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
+		Config:      cfg,
+		Persistence: config.NewConfigPersistence(dataDir),
+		MultiTenant: config.NewMultiTenantPersistence(dataDir),
+		HostedMode:  true,
+		OrgID:       "default",
+		InstallType: "pve",
+		BaseURL:     "https://cloud.example.com",
+	})
+	require.NoError(t, err)
+	record, ok := cfg.ValidateAPIToken(result.Token)
+	require.True(t, ok)
+	require.Equal(t, "default", record.OrgID)
 }
 
 func TestGenerateHostedTenantAgentInstallCommandEnforcesHostedOrgBoundary(t *testing.T) {
@@ -234,15 +259,14 @@ func TestHostedTenantAgentInstallTokenCannotReportToOtherTenant(t *testing.T) {
 	require.NoError(t, err)
 
 	install, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
-		Config:        cfg,
-		Persistence:   persistence,
-		MultiTenant:   multiTenant,
-		TenantMonitor: mtm,
-		HostedMode:    true,
-		OrgID:         "client-a",
-		InstallType:   "pve",
-		OwnerUserID:   "owner-1",
-		BaseURL:       "https://client-a.msp.example.com",
+		Config:      cfg,
+		Persistence: persistence,
+		MultiTenant: multiTenant,
+		HostedMode:  true,
+		OrgID:       "client-a",
+		InstallType: "pve",
+		OwnerUserID: "owner-1",
+		BaseURL:     "https://client-a.msp.example.com",
 	})
 	require.NoError(t, err)
 

@@ -10,7 +10,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,15 +20,14 @@ type hostedTenantAgentInstallCommandResponse struct {
 }
 
 type HostedTenantAgentInstallCommandOptions struct {
-	Config        *config.Config
-	Persistence   *config.ConfigPersistence
-	MultiTenant   *config.MultiTenantPersistence
-	TenantMonitor *monitoring.MultiTenantMonitor
-	HostedMode    bool
-	OrgID         string
-	InstallType   string
-	OwnerUserID   string
-	BaseURL       string
+	Config      *config.Config
+	Persistence *config.ConfigPersistence
+	MultiTenant *config.MultiTenantPersistence
+	HostedMode  bool
+	OrgID       string
+	InstallType string
+	OwnerUserID string
+	BaseURL     string
 }
 
 type HostedTenantAgentInstallCommandResult struct {
@@ -68,7 +66,7 @@ func GenerateHostedTenantAgentInstallCommand(opts HostedTenantAgentInstallComman
 	}
 
 	tokenName := fmt.Sprintf("cloud-tenant-agent-%s-%s-%d", orgID, installType, time.Now().UTC().Unix())
-	rawToken, record, err := issueAndPersistAgentInstallToken(opts.Config, opts.Persistence, issueAgentInstallTokenOptions{
+	rawToken, record, err := agenttokens.IssueAndPersistForOrganization(opts.Config, opts.Persistence, issueAgentInstallTokenOptions{
 		TokenName:   tokenName,
 		OrgID:       orgID,
 		OwnerUserID: strings.TrimSpace(opts.OwnerUserID),
@@ -85,17 +83,6 @@ func GenerateHostedTenantAgentInstallCommand(opts HostedTenantAgentInstallComman
 	if err != nil {
 		return nil, err
 	}
-
-	// If the tenant monitor is already initialized, ensure it sees the new token immediately.
-	// If not initialized, future GetMonitor() calls will deep-copy the updated base config.
-	config.Mu.Lock()
-	if opts.TenantMonitor != nil {
-		if m, ok := opts.TenantMonitor.PeekMonitor(orgID); ok && m != nil && m.GetConfig() != nil {
-			m.GetConfig().APITokens = append(m.GetConfig().APITokens, *record)
-			m.GetConfig().SortAPITokens()
-		}
-	}
-	config.Mu.Unlock()
 
 	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
 		BaseURL:            baseURL,
@@ -135,15 +122,14 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 	}
 
 	result, err := GenerateHostedTenantAgentInstallCommand(HostedTenantAgentInstallCommandOptions{
-		Config:        r.config,
-		Persistence:   r.persistence,
-		MultiTenant:   r.multiTenant,
-		TenantMonitor: r.mtMonitor,
-		HostedMode:    r.hostedMode,
-		OrgID:         orgID,
-		InstallType:   payload.Type,
-		OwnerUserID:   apiTokenOwnerUserIDForRequest(r.config, req),
-		BaseURL:       r.resolvePublicURL(req),
+		Config:      r.config,
+		Persistence: r.persistence,
+		MultiTenant: r.multiTenant,
+		HostedMode:  r.hostedMode,
+		OrgID:       orgID,
+		InstallType: payload.Type,
+		OwnerUserID: apiTokenOwnerUserIDForRequest(r.config, req),
+		BaseURL:     r.resolvePublicURL(req),
 	})
 	if err != nil {
 		switch {

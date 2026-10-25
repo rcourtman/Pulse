@@ -417,3 +417,32 @@ func TestSecurityTokens_InvalidTokenHeaderReturns401(t *testing.T) {
 		t.Fatal("invalid token should not update LastUsedAt")
 	}
 }
+
+// A client workspace's agent install token lives in the instance inventory,
+// bound to the client org, so the org's token list can revoke it and the
+// agent stops reporting at once.
+func TestSecurityTokensDeleteRevokesTenantAgentInstallToken(t *testing.T) {
+	w := newHostedClientWorkspace(t)
+	token := w.mintFromSettings(t, `{"type":"host","name":"client-host"}`)
+	if rec := w.report(t, token); rec.Code != http.StatusOK {
+		t.Fatalf("report status = %d: %s", rec.Code, rec.Body.String())
+	}
+	record, ok := w.cfg.ValidateAPIToken(token)
+	if !ok {
+		t.Fatal("install token missing from the instance inventory")
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/security/tokens/"+record.ID, nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, hostedClientOrgID))
+	rec := httptest.NewRecorder()
+	w.router.handleDeleteAPIToken(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d (body=%q)", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if w.cfg.IsValidAPIToken(token) {
+		t.Fatal("deleted token still authenticates")
+	}
+	if rec := w.report(t, token); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("report after delete status = %d, want 401", rec.Code)
+	}
+}

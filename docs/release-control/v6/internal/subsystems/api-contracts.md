@@ -5156,6 +5156,24 @@ auto-register mutation boundary.
 
 ## Current State
 
+### Tenant agent install tokens authenticate header-less agents
+
+`POST /api/agent-install-command` in a tenant organization (every provider
+MSP client workspace) returns a token that authenticates the installed
+agent's reports without `X-Pulse-Org-ID`. The response shape is unchanged.
+The record is stored in the instance token inventory bound to the request
+organization by `OrgID`, so it appears in that organization's
+`/api/security/tokens` list and deleting it there revokes the agent.
+`/api/connections` and Agent Doctor judge tenant agent credentials from the
+same inventory. The control plane's
+`POST /api/admin/orgs/{id}/agent-install-command` keeps its response and
+stores its token the same way, including for `default`. Before, the Settings
+token landed only in the organization's config copy and every report got
+`401` (v6.5.0, v6.6.0). Proof: the `TestHostedClientWorkspace*` tests in
+`internal/api/host_agent_removal_lifecycle_integration_test.go` and
+`TestSecurityTokensDeleteRevokesTenantAgentInstallToken` in
+`internal/api/security_tokens_lifecycle_test.go`.
+
 ### AI Discovery removed (2026-10-11)
 
 The [AI runtime retirement boundary](ai-runtime.md#ai-discovery-removed-2026-10-11)

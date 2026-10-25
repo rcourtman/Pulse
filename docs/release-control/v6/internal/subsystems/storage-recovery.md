@@ -3332,6 +3332,18 @@ vdev layout is reported` in
 
 ## Current State
 
+### Tenant agent install tokens persist in the instance token store
+
+A tenant organization's agent install tokens are persisted in the instance
+`api_tokens.json` (bound by `OrgID`), not in `orgs/<id>/api_tokens.json`. In
+a provider-hosted client runtime that is the runtime's own data root, which
+provider backups already capture. Proxmox install-grant consumption,
+install-time command-policy markers and revocation are written to the store
+that holds the record. A duplicate that an earlier version persisted in the
+organization's file stays authoritative for its grant state and is revoked
+together with the instance record. Proof: the `TestHostedClientWorkspace*`
+tests in `internal/api/host_agent_removal_lifecycle_integration_test.go`.
+
 Webhook destination edits restore submitted masks per key while preserving
 explicit map edits/removals. They retain encrypted persistence, serialized
 save-before-publish and owned rollback on live publication failure; invalid

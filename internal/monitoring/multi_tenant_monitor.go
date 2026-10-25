@@ -210,10 +210,17 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get persistence for org %s: %w", orgID, err)
 	}
+	var instancePersistence *config.ConfigPersistence
 	if orgID != "default" {
 		tenantConfig, err = loadTenantRuntimeConfig(mtm.baseConfig, tenantPersistence)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load configuration for org %s: %w", orgID, err)
+		}
+		// The org's own config copy holds none of the instance tokens bound
+		// to it, which is where its agent install tokens live.
+		instancePersistence, err = mtm.persistence.GetPersistence("default")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get instance persistence for org %s: %w", orgID, err)
 		}
 	} else {
 		tenantConfig.PVEInstances = nil
@@ -244,6 +251,9 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 	// Set org ID for tenant isolation
 	// This enables tenant-scoped WebSocket broadcasts
 	monitor.SetOrgID(orgID)
+	if instancePersistence != nil {
+		monitor.SetInstanceAPITokenInventory(mtm.baseConfig, instancePersistence)
+	}
 
 	// Stamp this org's identity into webhook payloads so external receivers
 	// (PSA/ticketing bridges) can route by tenant. Resolved lazily so a

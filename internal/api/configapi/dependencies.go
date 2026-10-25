@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -115,6 +116,56 @@ type issueAgentInstallTokenOptions = agenttokens.IssueOptions
 
 func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.ConfigPersistence, opts issueAgentInstallTokenOptions) (string, *config.APITokenRecord, error) {
 	return agenttokens.IssueAndPersist(cfg, persistence, opts)
+}
+
+// agentTokenInventories returns the token inventories the request
+// organization's agents authenticate with, in the order of
+// monitoring.Monitor.APITokenInventories: the request organization's own
+// config, then for a tenant organization the instance inventory limited to
+// tokens bound to it.
+func (h *ConfigHandlers) agentTokenInventories(ctx context.Context) []monitoring.APITokenInventory {
+	cfg, persistence, monitor := h.getContextState(ctx)
+	if cfg == nil {
+		return nil
+	}
+	inventories := []monitoring.APITokenInventory{{Config: cfg, Persistence: persistence}}
+	if monitor != nil && monitor.GetConfig() == cfg {
+		for _, inventory := range monitor.APITokenInventories() {
+			if inventory.OrgID != "" {
+				inventories = append(inventories, inventory)
+			}
+		}
+	}
+	return inventories
+}
+
+// issueAgentInstallTokenForRequest mints an install token for the request's
+// organization. cfg and persistence are the request organization's state from
+// getContextState. In a tenant organization that state is the org's own
+// config copy, whose inventory agent authentication never reads, so the token
+// goes to the instance inventory bound to the organization instead, the same
+// as the control plane's hosted tenant install command. Every provider MSP
+// client workspace is such an organization: before this, an agent installed
+// with a token generated in the client's own Settings could not authenticate.
+func (h *ConfigHandlers) issueAgentInstallTokenForRequest(ctx context.Context, cfg *config.Config, persistence *config.ConfigPersistence, opts issueAgentInstallTokenOptions) (string, *config.APITokenRecord, error) {
+	if inventories := h.agentTokenInventories(ctx); len(inventories) > 1 {
+		instance := inventories[len(inventories)-1]
+		opts.OrgID = instance.OrgID
+		return agenttokens.IssueAndPersistForOrganization(instance.Config, instance.Persistence, opts)
+	}
+	return issueAndPersistAgentInstallToken(cfg, persistence, opts)
+}
+
+// validateAgentTokenLocked validates rawToken against the inventories from
+// agentTokenInventories. The caller holds config.Mu for writing, because
+// validation records LastUsedAt.
+func validateAgentTokenLocked(inventories []monitoring.APITokenInventory, rawToken string) (*config.APITokenRecord, bool) {
+	for _, inventory := range inventories {
+		if record, ok := inventory.Config.ValidateAPIToken(rawToken); ok && inventory.Owns(record) {
+			return record, true
+		}
+	}
+	return nil, false
 }
 
 func hostAgentInstallScopes(enableCommands bool) []string {

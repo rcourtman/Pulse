@@ -1405,6 +1405,20 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### Tenant agent install tokens are org-bound instance credentials
+
+Agent install tokens minted for a tenant organization, from its Settings or
+from the control plane, are instance-inventory records bound by `OrgID` to
+exactly that organization. A tenant monitor sees only records bound solely
+to its organization: tokens bound to another organization, multi-org tokens
+and default-org or instance-wide tokens stay invisible to it, and the
+org-bound authority rules (no instance administration) apply unchanged.
+Deleting the token from the organization's token list, or removing the agent
+that uses it, stops it at once; there is no second copy in the
+organization's config for a header-selected request to fall back to. Proof:
+`TestSecurityTokensDeleteRevokesTenantAgentInstallToken` in
+`internal/api/security_tokens_lifecycle_test.go`.
+
 ### Telemetry `discovery_enabled` now reports network discovery only (2026-10-11)
 
 With AI Discovery removed, the telemetry snapshot's `discovery_enabled` flag
