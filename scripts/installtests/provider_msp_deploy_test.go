@@ -523,9 +523,9 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 	doc := string(repoDocBytes)
 	assertContainsAll(t, doc,
 		"signed provider bundle published",
-		"with Pulse v6.4.1",
+		"with Pulse v6.6.0",
 		"**not** download the moving `main` branch archive",
-		`export PULSE_VERSION=v6.4.1`,
+		`export PULSE_VERSION=v6.6.0`,
 		`PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"`,
 		`releases/download/${PULSE_VERSION}`,
 		"ssh-keygen -Y verify",
@@ -537,12 +537,39 @@ func TestProviderMSPEvaluationDocsUsePublishedSignedBundle(t *testing.T) {
 		"a setup-stage marker, and a signup-source",
 		"this is not a claim",
 		"that setup makes no other network requests",
-		"contact request remains separate from the licence activation",
+		// Paid plans are bought from Plan in the provider portal (v6.6.0), so
+		// the guide must send providers there rather than to a request form.
+		"open **Plan** in the provider portal",
+		"**Manage billing**",
+		"## Upgrading to a new release",
+		"sudo -E bash ./upgrade.sh --dry-run",
+		"sudo -E bash ./upgrade.sh --rollout-tenants",
+		"Without `--rollout-tenants`, client runtimes keep running their current",
+		// A v6.4.x control plane keeps stopping clients, which blocks the gate.
+		"(cd /opt/pulse-provider-msp && sudo docker compose stop control-plane)",
+		"sudo docker start $(sudo docker ps -aq --filter 'name=^pulse-t-[A-Z0-9]+$')",
+		"run the dry run again from\nthe extracted bundle directory",
+		"Scale, at 40 client workspaces, is the largest plan",
+		"sudo docker compose run --rm control-plane provider-msp bootstrap",
 		`sudo -E bash ./setup.sh`,
 	)
+	flat := strings.Join(strings.Fields(doc), " ")
+	for _, stale := range []string{"within seconds", "a custom licence is issued", "assisted upgrade path"} {
+		if strings.Contains(flat, stale) {
+			t.Fatalf("MSP guide still says %q", stale)
+		}
+	}
+	// Starting every pulse-t- container would also start retained .pre-<run> copies.
+	if strings.Contains(doc, "--filter 'name=^pulse-t-')") {
+		t.Fatal("MSP guide starts retained pre-rollout runtime copies")
+	}
 	assertNotContainsAny(t, doc,
 		"Pulse/archive/refs/heads/main.tar.gz",
 		"evaluation request is anonymous",
+		"assisted upgrade path",
+		"Send the derived public key",
+		"msp.html#evaluate",
+		"a custom licence is issued",
 		"credentials never leave the",
 		"cd Pulse-main/deploy/provider-msp",
 		"sudo -E ./setup.sh",

@@ -7768,8 +7768,17 @@ Windows runtime or service-lifecycle acceptance.
 
 ### Published MSP evaluation bundle guidance
 
-The MSP guide and its shipped mirror select the signed v6.4.1 provider archive,
-not a moving source archive. Verification of the pinned SSH identity/namespace
+The MSP guide and its shipped mirror select the signed v6.6.0 provider archive,
+not a moving source archive. Its portal sells every MSP plan from Plan, so the
+guide describes self-serve purchase, plan change and cancellation through
+Manage billing, the 14-day paid-period margin plus the 7-day lapse grace, and
+upgrading by running `upgrade.sh` from a newly verified bundle, with client
+runtimes moving only under `--rollout-tenants`. It no longer routes paid
+licences through an assisted request, a setup-help form or a custom licence:
+no plan above 40 clients exists. A v6.4.x control plane stops client runtimes
+and blocks the upgrade gate; the guide gives the verified stop-and-start
+recovery. Host commands run as root because setup writes a root-only `.env`.
+The archive receipt below belongs to the earlier v6.4.1 selection. Verification of the pinned SSH identity/namespace
 and checksum precedes extraction and privileged setup. The licence request
 contains the generated public key, setup-stage and signup-source fields, plus
 email only when explicitly supplied. Describe that request rather than asserting

@@ -89,7 +89,7 @@ Pulse Pro capabilities.
 - [Community, Relay, and Pro capabilities](PULSE_PRO.md)
 - [Relay and Pulse Mobile handoff](RELAY.md)
 - [Multi-tenant organizations](MULTI_TENANT.md) (Enterprise/custom)
-- [Provider-hosted MSP operations](MSP.md) (request-assisted)
+- [Provider-hosted MSP operations](MSP.md) (self-serve evaluation and purchase)
 
 Pulse Cloud is not generally available. Ordinary self-hosted Pulse remains the
 primary installation path; MSP and Enterprise access are explicit commercial
