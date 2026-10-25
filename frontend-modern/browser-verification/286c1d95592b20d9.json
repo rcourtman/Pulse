@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "7cdf408449adb5fc4ecea4c1558c48d26545c78e",
+  "verified_at": "2026-10-25T11:22:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "eabe10943a006b155231384143b2a10f88b77fdd7cf548c81442093a795abfa4",
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "663cb40ec030614504eb73a172c9641d0cdbdf1e75bfc24617bface94f5b89b2"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 430,
+      "height": 932
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Private mock stack (Vite from the sidecar, dark theme), Proxmox overview guest table, 36 guest rows in the first node group, Backup column hidden at phone and tablet widths so the backup shield renders in the name cell.",
+    "Before at 375px: every guest row 43.5px, with the shield on its own line under the name; 3 of 36 names truncated. After at 375px: every row 32px with the shield inline after the name; 9 of 36 names truncated (the 19+ character names), name cell 143px unchanged. At 430px: all rows 32px, 4 of 36 truncated.",
+    "Tablet 768px: rows 32px, shield inline with computed margin 0 (sm reset). Desktop 1280px: Backup column badge in its own cell, no name-cell shield, 138 of 140 rows 32px as before."
+  ],
+  "interactions": [
+    "Phone 375px tap on the inline shield opens the 'Backup status details for artifact-cache-310' dialog without expanding the guest row; Escape closes it and returns aria-expanded to false.",
+    "Phone 375px tap on the guest name expands the guest drawer (Collapse control present, no dialog), so the shield's 24px target does not steal the row tap.",
+    "Shield hit box measured at 24x24px at phone width while the row stays 32px; widening the 38% name column was rejected because CPU/MEM/DISK chips at 57px already clip."
+  ],
+  "proof_scope": "Workloads guest-row presentation on the Proxmox overview only; backup evidence semantics, thresholds and drawer content are unchanged."
+}

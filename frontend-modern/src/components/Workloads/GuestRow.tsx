@@ -478,15 +478,16 @@ export function GuestRow(props: GuestRowProps) {
                   title={guestStatus().label}
                   ariaLabel={guestStatus().label}
                   size="xs"
-                  class={usesCondensedIdentity() ? 'self-start mt-1.5' : undefined}
                 />
+                {/* Condensed rows keep the backup shield on the name's line:
+                    the name truncates first, so the row stays one line tall. */}
                 <div
-                  class={`min-w-0 group/name ${usesCondensedIdentity() ? 'flex flex-1 flex-col items-start gap-0.5' : 'flex items-center gap-1.5'}`}
+                  class={`min-w-0 group/name flex items-center ${usesCondensedIdentity() ? 'flex-1 gap-1' : 'gap-1.5'}`}
                 >
                   <ResourceNameWithWebInterfaceLink
                     name={props.guest.name}
                     url={customUrl()}
-                    class={`min-w-0 ${usesCondensedIdentity() ? 'w-full [&>a]:hidden' : ''}`}
+                    class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
                     nameClass="truncate text-[11px] font-medium text-base-content select-none"
                   />
                   {/* Show backup indicator in name cell only if backup column is hidden */}
