@@ -10,6 +10,62 @@ This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kub
 - `helm` (v3+) installed locally
 - `kubectl` configured to talk to your cluster
 
+## Proxmox backup safety
+
+**A Kubernetes-hosted Pulse server can still send QEMU Guest Agent requests to
+Proxmox VMs, including with API-only monitoring.** The Kubernetes-only collector
+below is a separate component: stopping its DaemonSet does not stop the server's
+Proxmox polling. Read [Backup safety](VM_DISK_MONITORING.md#backup-safety) before
+changing an affected installation.
+
+For an affected server, prepare a controller-aware pause **before a planned
+freeze-enabled backup**, using your cluster's normal maintenance procedure.
+This is not incident recovery or an automatic backup hook. If a backup is
+already in progress, a guest is unresponsive or an operation's state is unknown,
+do not restart pods or send guest-agent probes to diagnose it. Use the
+guest/platform's recovery procedure and preserve the original evidence.
+
+1. **Identify every Pulse server and its owner.** Confirm the cluster,
+   namespace, controller and existing pods for each server polling the affected
+   guests, including servers outside this cluster. Record the actual desired
+   replica count and whether each deployment controller, autoscaler, GitOps
+   reconciler and automatic updater was active. Keep that record private.
+   The chart's default is not evidence of your installed state. An unknown
+   owner or another polling server prevents a confirmed pause.
+2. **Prevent replacement, then stop the server through its owning controller.**
+   Use the controller's supported maintenance controls, including suspending
+   reconciliation or autoscaling where needed, before deliberately scaling the
+   server to zero. Deleting a pod only invites its controller to replace it;
+   pausing a Deployment rollout does not stop existing pods. Confirm the
+   desired count remains zero, every previous server process has terminated
+   normally and no replacement is polling. A force-deleted, terminating or
+   unreachable pod, a failed shutdown or missing termination evidence is not
+   a confirmed stop. Do not force deletion, uninstall Helm, delete PVCs or
+   recreate Secrets to satisfy this check. **Pulse monitoring and alerts are
+   unavailable while stopped**; arrange independent outage coverage.
+3. **Keep the pause until independent recovery checks pass.** Stopping the
+   server does not cancel a guest-agent request already issued. Let existing
+   operations finish normally; if their state is unknown, do not start the
+   planned backup on the strength of zero replicas or an elapsed wait. After
+   the backup ends, established checks independent of Pulse and the QEMU Guest
+   Agent must confirm **thaw, fresh successful workload writes to every
+   filesystem covered by the backup, and workload liveness**. An OK task, an
+   absent lock, a console connection or a write to only the OS disk is not
+   enough. If any check fails or is unavailable, keep the pause and use the
+   guest/platform's recovery procedure, without a new backup or probe.
+4. **Restore only the recorded prior state after all checks pass.** Restore
+   each server's original desired count and only the reconciliation,
+   autoscaling and updater controls that were active beforehand. A previously
+   zero-replica server stays at zero; an unknown prior state is not permission
+   to start it. Preserve the existing image, PVCs, configuration, identities
+   and credentials. Confirm the intended server is ready and monitoring is
+   fresh before relying on alerts again. Do not use an install command from
+   this page as a restart or recovery shortcut.
+
+If your cluster cannot establish these conditions, do not treat a deleted pod
+or a successful scale request as permission to start the planned backup. This
+guidance does not establish that a native freeze/thaw defect has been fixed.
+
 ## 1. Deploying the Pulse Server
 
 The Pulse Server is the central hub that collects metrics and manages agents.
@@ -437,6 +493,10 @@ Talos Linux is immutable, so you cannot install the agent via the shell script. 
     ```
 
 ## 4. Troubleshooting
+
+For a Proxmox backup, freeze/thaw or unresponsive-guest incident, the
+[backup safety checks](#proxmox-backup-safety) take precedence over setup or
+pod restarts. A Kubernetes pod's Ready state does not prove guest thaw.
 
 Start with the affected pod's existing status and a bounded, locally reviewed
 log excerpt around the original failure. Missing usage, missing inventory and
