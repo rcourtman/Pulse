@@ -1887,8 +1887,8 @@ describe('GuestRow', () => {
         const name = screen.getByText('backup-guest');
         expect(lock.parentElement).toHaveClass('flex-col', 'items-start', 'min-w-0');
         expect(lock.parentElement).toContainElement(name);
-        expect(name.parentElement).toHaveClass('w-full');
-        expect(name.parentElement?.parentElement).toHaveClass('flex-col', 'items-start');
+        expect(name.parentElement?.parentElement).toHaveClass('flex', 'items-center');
+        expect(name.parentElement?.parentElement).not.toHaveClass('flex-col');
         expect(name.parentElement?.parentElement?.parentElement).toHaveClass('w-full');
         expect(lock).toHaveClass('whitespace-normal', 'break-words', 'max-w-full');
         expect(lock).not.toHaveAttribute('tabindex');
@@ -2505,6 +2505,31 @@ describe('GuestRow', () => {
       ).toBeVisible();
       expect(onClick).not.toHaveBeenCalled();
     });
+
+    // A stacked phone identity put the shield on a second line under the name
+    // and grew every phone row from 32px to 43.5px on a 375px mock stack. The
+    // shield shares the name's line, and its 24px target overhangs the 14px
+    // icon instead of adding height or taking the truncating name's width.
+    it.each(['narrow', 'phone'] as const)(
+      'regression: keeps the %s backup indicator on the name line',
+      (workloadTableLayoutMode) => {
+        const guest = makeGuest({
+          type: 'qemu',
+          workloadType: 'vm',
+          lastBackup: Date.now() - 3_600_000,
+        });
+        renderGuestRow({ guest, workloadTableLayoutMode, visibleColumnIds: ['name', 'cpu'] });
+        const indicator = screen.getByRole('button', { name: /^Last backup:/ });
+        const nameLine = screen.getByText(guest.name).parentElement?.parentElement;
+
+        expect(indicator.parentElement).toBe(nameLine);
+        expect(nameLine).toHaveClass('flex', 'items-center');
+        expect(nameLine).not.toHaveClass('flex-col');
+        expect(indicator.className.split(/\s+/)).toEqual(
+          expect.arrayContaining(['-my-1', '-mx-[5px]', 'sm:m-0']),
+        );
+      },
+    );
 
     // #2858: the amber shield names the operator's own limits (this mock's
     // stale limit is 48 hours, not the 72-hour default) and links to them.

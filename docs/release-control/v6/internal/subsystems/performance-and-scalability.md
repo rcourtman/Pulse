@@ -208,9 +208,12 @@ guest recovery, ordinary QEMU-only polling or release availability.
 
 ### Narrow Workloads identity during guest locks
 
-In narrow and phone layouts, the guest name and status occupy the first line;
-the unchanged backup evidence control moves below the name with a 24 px touch
-target (see Accessible Workloads backup evidence). The guest lock occupies a separate, wrapping line below
+In narrow and phone layouts, the status, guest name and backup evidence control
+share one line, so a guest row stays a single line tall: the name truncates
+first, and the control's 24 px touch target overhangs its 14 px shield through
+negative margins instead of adding height or taking the name's width (see
+Accessible Workloads backup evidence). Stacking the control below the name grew
+every 375 px phone row from 32 px to 43.5 px. The guest lock occupies a separate, wrapping line below
 that identity. It must not consume the name's
 horizontal space or spill into the adjacent metrics. The full lock remains
 visible; a long name keeps its full title and existing truncation. Wider layouts
@@ -4366,7 +4369,8 @@ not trigger the enclosing guest row. The Backup column badge keeps a touch
 target of at least 44px. The name indicator keeps 24px (the WCAG 2.2 AA
 minimum): on phones the whole guest row is the disclosure target and the expand
 chevron is screen-reader only, so a 44px box covered the lower left of every
-row's tap area and grew phone rows from about 34px to 64px. Compact desktop
+row's tap area and grew phone rows from about 34px to 64px. On phones that
+target overhangs the shield rather than setting the row height. Compact desktop
 shields and the existing status colours remain.
 
 The Backup column badge does not truncate. Running (73px with its shield) and
