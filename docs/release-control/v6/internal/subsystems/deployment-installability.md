@@ -31,7 +31,10 @@ and installer/signature downgrade controls require zero plaintext requests,
 while direct and redirected HTTPS deliver the signed installer and exact
 arguments. Existing deadline, invalid-signature, allocation and cleanup controls
 remain mandatory. The native systemd recipe's closed transport adapter admits
-only the new exact envelope. These offline transport controls are not signed
+only the new exact envelope. Channel-preference tests use that same HTTPS-only
+envelope and require the invalid-signature control to fetch both inputs and
+reach the actual SSH verifier, rather than pass on an unrelated adapter error.
+These offline transport controls are not signed
 published-artifact, native systemd or original LXC recovery acceptance.
 
 ### Manual update helpers retain the running reader

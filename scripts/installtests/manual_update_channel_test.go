@@ -165,16 +165,20 @@ setup_update_command
 set -eu
 url=""
 dest=""
+https_only=false
+https_redirects_only=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o) dest="$2"; shift 2 ;;
         https://github.com/rcourtman/Pulse/releases/latest/download/install.sh*) url="$1"; shift ;;
         -q|-fsSL) shift ;;
         --connect-timeout|--max-time) shift 2 ;;
+        --proto) [[ "$2" == '=https' ]] || exit 95; https_only=true; shift 2 ;;
+        --proto-redir) [[ "$2" == '=https' ]] || exit 95; https_redirects_only=true; shift 2 ;;
         *) exit 98 ;;
     esac
 done
-[[ -n "$url" && -n "$dest" ]] || exit 97
+[[ -n "$url" && -n "$dest" && "$https_only" == true && "$https_redirects_only" == true ]] || exit 97
 printf '%s\n' "$url" >> "$MANUAL_UPDATE_TRANSPORT"
 case "$url" in
     *.sshsig) if [[ "$BAD_SIGNATURE" == true ]]; then printf invalid > "$dest"; else cp "$FIXTURE_ASSETS/install.sh.sig" "$dest"; fi ;;
@@ -203,7 +207,18 @@ esac
 				if _, err := os.Stat(calls); !os.IsNotExist(err) {
 					t.Fatalf("rejected helper executed installer: %v\n%s", err, out)
 				}
-				if !tc.badSignature {
+				if tc.badSignature {
+					// A transport-fixture refusal must not masquerade as proof
+					// that the actual SSH verifier rejected a bad signature.
+					got, err := os.ReadFile(transport)
+					const assetURL = "https://github.com/rcourtman/Pulse/releases/latest/download/install.sh"
+					if err != nil || string(got) != assetURL+"\n"+assetURL+".sshsig\n" {
+						t.Fatalf("signature control did not fetch both signed inputs: %v, %q\n%s", err, got, out)
+					}
+					if !strings.Contains(string(out), "Cryptographic signature verification failed") {
+						t.Fatalf("signature control did not reach the actual verifier: %s", out)
+					}
+				} else {
 					if _, err := os.Stat(transport); !os.IsNotExist(err) {
 						t.Fatalf("invalid preference reached download: %v\n%s", err, out)
 					}
