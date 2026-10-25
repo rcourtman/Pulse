@@ -375,6 +375,10 @@ History just to change a colour.
 
 ### Backups are visible but Coverage says Unprotected
 
+For local PVE `vzdump` archives rather than PBS records, use the
+[PVE Coverage comparison](RECOVERY.md#local-pve-backups-are-newer-than-coverage).
+It does not require adding a PBS connection.
+
 The **Backup health** strip and the backup list answer different questions.
 If they disagree, use **PBS's own backup and verification records** for the
 same guest while checking Pulse's assessment; do not assume either a failed
