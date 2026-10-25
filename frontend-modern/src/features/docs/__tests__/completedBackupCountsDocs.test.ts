@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildBackupActivityTimeline } from '@/features/proxmox/proxmoxBackupActivityPresentation';
+import { COVERAGE_COLUMNS } from '@/features/proxmox/proxmoxBackupsTablePresentation';
 import {
   isCompletedRecoveryArtifact,
   selectWorkloadRecoveryArtifacts,
@@ -110,7 +111,8 @@ describe('completed backup count guidance', () => {
       expect(selected.ageUnknown?.backup).toBe(true);
     }
     expect(text()).toContain('They are not independent backups');
-    expect(text()).toContain("do not fill Coverage's Latest backup");
+    const latestLabel = COVERAGE_COLUMNS.find((column) => column.id === 'latest')!.label;
+    expect(text()).toContain(`do not fill Coverage's ${latestLabel}`);
     expect(text()).toContain('age stays unknown rather than choosing an older dated backup');
   });
 
