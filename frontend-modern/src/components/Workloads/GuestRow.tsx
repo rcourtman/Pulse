@@ -656,95 +656,116 @@ export function GuestRow(props: GuestRowProps) {
             data-workload-col="memory"
             title={memoryReadStatus()?.message}
           >
-            <Show
-              when={isSparklineMode()}
-              fallback={
-                <div class="h-4">
-                  <Show
-                    when={historyLensVisible()}
-                    fallback={
+            {/* The bar and any reading cue share one line, so a caveat never
+                adds a second line under the bar. */}
+            <div class={`flex items-center ${usesCompactTableLayout() ? 'gap-0.5' : 'gap-1'}`}>
+              <div class="min-w-0 flex-1">
+                <Show
+                  when={isSparklineMode()}
+                  fallback={
+                    <div class="h-4">
                       <Show
-                        when={!memoryDisplayUnavailable()}
+                        when={historyLensVisible()}
                         fallback={
-                          <div class="flex justify-center">
-                            <span class="text-xs text-slate-400" title={memoryUnavailableTooltip()}>
-                              -
-                            </span>
-                          </div>
+                          <Show
+                            when={!memoryDisplayUnavailable()}
+                            fallback={
+                              <div class="flex justify-center">
+                                <span
+                                  class="text-xs text-slate-400"
+                                  title={memoryUnavailableTooltip()}
+                                >
+                                  -
+                                </span>
+                              </div>
+                            }
+                          >
+                            <div
+                              title={
+                                isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)
+                              }
+                            >
+                              <StackedMemoryBar
+                                used={props.guest.memory?.used || 0}
+                                total={memoryDisplayTotal()}
+                                unavailable={memoryDisplayUnavailable()}
+                                reading={memoryReading()}
+                                percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
+                                cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
+                                cacheInclusiveLabel={
+                                  isHostMemoryBasis() ? undefined : 'Shown in Proxmox'
+                                }
+                                balloon={
+                                  isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)
+                                }
+                                swapUsed={
+                                  isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)
+                                }
+                                swapTotal={
+                                  isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)
+                                }
+                                resourceId={metricsKey()}
+                                anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
+                                thresholds={memoryThresholds()}
+                                severityPercent={
+                                  isHostMemoryBasis()
+                                    ? usagePercent(
+                                        props.guest.memory?.used,
+                                        props.guest.memory?.total,
+                                        props.guest.memory?.usage,
+                                      )
+                                    : undefined
+                                }
+                                comparisonTotalLabel={
+                                  isHostMemoryBasis() ? 'Host total' : undefined
+                                }
+                                tooltipTitle={
+                                  isHostMemoryBasis()
+                                    ? `${props.parentNodeName?.trim() || 'Host'} memory share`
+                                    : undefined
+                                }
+                              />
+                            </div>
+                          </Show>
                         }
                       >
-                        <div
-                          title={isHostMemoryBasis() ? undefined : (memoryTooltip() ?? undefined)}
-                        >
-                          <StackedMemoryBar
-                            used={props.guest.memory?.used || 0}
-                            total={memoryDisplayTotal()}
-                            unavailable={memoryDisplayUnavailable()}
-                            reading={memoryReading()}
-                            percentOnly={isHostMemoryBasis() ? undefined : memoryPercentOnly()}
-                            cache={isHostMemoryBasis() ? 0 : (props.guest.memory?.cache ?? 0)}
-                            cacheInclusiveLabel={
-                              isHostMemoryBasis() ? undefined : 'Shown in Proxmox'
-                            }
-                            balloon={isHostMemoryBasis() ? 0 : (props.guest.memory?.balloon ?? 0)}
-                            swapUsed={isHostMemoryBasis() ? 0 : (props.guest.memory?.swapUsed ?? 0)}
-                            swapTotal={
-                              isHostMemoryBasis() ? 0 : (props.guest.memory?.swapTotal ?? 0)
-                            }
-                            resourceId={metricsKey()}
-                            anomaly={isHostMemoryBasis() ? null : memoryAnomaly()}
-                            thresholds={memoryThresholds()}
-                            severityPercent={
-                              isHostMemoryBasis()
-                                ? usagePercent(
-                                    props.guest.memory?.used,
-                                    props.guest.memory?.total,
-                                    props.guest.memory?.usage,
-                                  )
-                                : undefined
-                            }
-                            comparisonTotalLabel={isHostMemoryBasis() ? 'Host total' : undefined}
-                            tooltipTitle={
-                              isHostMemoryBasis()
-                                ? `${props.parentNodeName?.trim() || 'Host'} memory share`
-                                : undefined
-                            }
-                          />
+                        <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                          {renderMemorySparkline()}
                         </div>
                       </Show>
-                    }
-                  >
-                    <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                      {renderMemorySparkline()}
                     </div>
-                  </Show>
-                </div>
-              }
-            >
-              {renderMemorySparkline()}
-            </Show>
-            <Show when={memoryReadStatus()}>
-              {(status) => (
-                <Show
-                  when={status().label}
-                  fallback={
-                    <span data-workload-memory-read-status class="sr-only">
-                      {status().message}
-                    </span>
                   }
                 >
-                  {(label) => (
-                    <WorkloadReadingStatus
-                      metric="Memory"
-                      guestId={guestId()}
-                      guestName={props.guest.name}
-                      label={label()}
-                      message={status().message}
-                    />
-                  )}
+                  {renderMemorySparkline()}
                 </Show>
-              )}
-            </Show>
+              </div>
+              <Show when={memoryReadStatus()}>
+                {(status) => (
+                  <Show
+                    when={status().label}
+                    fallback={
+                      <span data-workload-memory-read-status class="sr-only">
+                        {status().message}
+                      </span>
+                    }
+                  >
+                    {(label) => (
+                      <WorkloadReadingStatus
+                        metric="Memory"
+                        compact={usesCompactTableLayout()}
+                        guestId={guestId()}
+                        guestName={props.guest.name}
+                        label={label()}
+                        message={status().message}
+                        kind={
+                          status().valueLabelContext === 'last known' ? 'retained' : 'uncertain'
+                        }
+                      />
+                    )}
+                  </Show>
+                )}
+              </Show>
+            </div>
           </td>
         </Show>
 
@@ -755,62 +776,76 @@ export function GuestRow(props: GuestRowProps) {
             data-workload-col="disk"
             title={diskReadStatus()?.message}
           >
-            <Show when={isSparklineMode()}>{renderDiskSparkline()}</Show>
-            <Show when={!isSparklineMode()}>
-              <Show
-                when={hasDiskUsage()}
-                fallback={
-                  <div class="flex justify-center">
-                    <span class="text-xs text-slate-400" title={getDiskStatusTooltip()}>
-                      -
-                    </span>
-                  </div>
-                }
-              >
-                <div class="h-4">
+            {/* The bar and any reading cue share one line, so a caveat never
+                adds a second line under the bar. */}
+            <div class={`flex items-center ${usesCompactTableLayout() ? 'gap-0.5' : 'gap-1'}`}>
+              <div class="min-w-0 flex-1">
+                <Show when={isSparklineMode()}>{renderDiskSparkline()}</Show>
+                <Show when={!isSparklineMode()}>
                   <Show
-                    when={historyLensVisible()}
+                    when={hasDiskUsage()}
                     fallback={
-                      <StackedDiskBar
-                        mode={usesCompactTableLayout() ? 'aggregate' : undefined}
-                        disks={props.guest.disks}
-                        aggregateDisk={props.guest.disk}
-                        anomaly={diskAnomaly()}
-                        thresholds={diskThresholds()}
-                        reading={diskUsageRead()}
-                      />
+                      <div class="flex justify-center">
+                        <span class="text-xs text-slate-400" title={getDiskStatusTooltip()}>
+                          -
+                        </span>
+                      </div>
                     }
                   >
-                    <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
-                      {renderDiskSparkline()}
+                    <div class="h-4">
+                      <Show
+                        when={historyLensVisible()}
+                        fallback={
+                          <StackedDiskBar
+                            mode={usesCompactTableLayout() ? 'aggregate' : undefined}
+                            disks={props.guest.disks}
+                            aggregateDisk={props.guest.disk}
+                            anomaly={diskAnomaly()}
+                            thresholds={diskThresholds()}
+                            reading={diskUsageRead()}
+                          />
+                        }
+                      >
+                        <div class="h-4 animate-in fade-in-0 duration-100 motion-reduce:animate-none">
+                          {renderDiskSparkline()}
+                        </div>
+                      </Show>
                     </div>
                   </Show>
-                </div>
-              </Show>
-            </Show>
-            <Show when={diskReadStatus()}>
-              {(status) => (
-                <Show
-                  when={status().label}
-                  fallback={
-                    <span data-workload-disk-read-status class="sr-only">
-                      {status().message}
-                    </span>
-                  }
-                >
-                  {(label) => (
-                    <WorkloadReadingStatus
-                      metric="Disk"
-                      guestId={guestId()}
-                      guestName={props.guest.name}
-                      label={label()}
-                      message={status().message}
-                      needsAction={status().needsAction}
-                    />
-                  )}
                 </Show>
-              )}
-            </Show>
+              </div>
+              <Show when={diskReadStatus()}>
+                {(status) => (
+                  <Show
+                    when={status().label}
+                    fallback={
+                      <span data-workload-disk-read-status class="sr-only">
+                        {status().message}
+                      </span>
+                    }
+                  >
+                    {(label) => (
+                      <WorkloadReadingStatus
+                        metric="Disk"
+                        compact={usesCompactTableLayout()}
+                        guestId={guestId()}
+                        guestName={props.guest.name}
+                        label={label()}
+                        message={status().message}
+                        kind={
+                          status().valueLabelContext === 'last known'
+                            ? 'retained'
+                            : status().needsAction
+                              ? 'error'
+                              : 'uncertain'
+                        }
+                        needsAction={status().needsAction}
+                      />
+                    )}
+                  </Show>
+                )}
+              </Show>
+            </div>
           </td>
         </Show>
 

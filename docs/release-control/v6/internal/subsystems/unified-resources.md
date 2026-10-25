@@ -1230,7 +1230,9 @@ mode and optional-column set at the mode's narrowest table; the 100px states
 a layout's narrow end when several optional columns show. Its room comes only
 from the CPU bar, which never shows a sublabel, and the collapsed actions menu,
 so every other column, including the memory bar's used/total sublabel, keeps
-its width. Hidden header/body columns
+its width. That menu's 28px button overhangs the row by 2px each way, so a
+container row is 33px at desktop like every other platform table rather than
+the 37px the button had set. Hidden header/body columns
 are symmetric. Swarm rollout tokens render as words with raw state retained in
 the title; task starts use the shared relative-time primitive with their exact
 timestamp retained. Native table/model/guardrail tests and the production

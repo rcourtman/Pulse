@@ -774,7 +774,7 @@ describe('GuestRow', () => {
         // A stopped VM has no filesystem reading to give: the dash says so,
         // and the reason is the title and assistive text, not a caption.
         expect(cell.querySelector('[data-workload-disk-read-status]')).toHaveClass('sr-only');
-        expect(cell.querySelector('[aria-hidden="true"]')).toBeNull();
+        expect(cell.querySelector('[data-workload-reading-label]')).toBeNull();
         expect(cell).toHaveTextContent(
           'Guest filesystem stats unavailable while the VM is stopped.',
         );
@@ -997,9 +997,11 @@ describe('GuestRow', () => {
             metricDisplayMode: mode,
           });
           const notice = container.querySelector('[data-workload-disk-read-status]');
-          expect(notice).toHaveTextContent('Last known');
           expect(notice).toHaveTextContent(`Using last known disk stats. ${message}`);
-          expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
+          expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+            'data-workload-reading-label',
+            'Last known',
+          );
           expect(notice).not.toHaveAttribute('tabindex');
           if (mode === 'bars') {
             expect(screen.getByTestId('disk-bar')).toHaveAttribute(
@@ -1055,21 +1057,28 @@ describe('GuestRow', () => {
         for (const reason of ['vm-stopped', 'agent-disabled', 'agent-not-running']) {
           const notice = render(reason);
           expect(notice).toHaveClass('sr-only');
-          expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+          expect(notice?.querySelector('[data-workload-reading-label]')).toBeNull();
         }
         const denied = render('permission-denied');
         expect(denied?.className).toContain('text-amber-700');
-        expect(denied?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^No permission$/);
+        expect(denied?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+          'data-workload-reading-label',
+          'No permission',
+        );
         expect(denied?.querySelector('.sr-only')).toHaveTextContent('Permission denied.');
         const agentError = render('agent-error');
         expect(agentError?.className).toContain('text-amber-700');
-        expect(agentError?.querySelector('[aria-hidden="true"]')).toHaveTextContent(
-          /^Agent error$/,
+        expect(agentError?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+          'data-workload-reading-label',
+          'Agent error',
         );
         // A retained reading says so first; its reason stays amber.
         const retained = render('prev-agent-error');
         expect(retained?.className).toContain('text-amber-700');
-        expect(retained?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^Last known$/);
+        expect(retained?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+          'data-workload-reading-label',
+          'Last known',
+        );
       });
 
       it(`withdraws the ${mode} notice only on a fresh same-VM observation`, () => {
@@ -1086,9 +1095,9 @@ describe('GuestRow', () => {
           </table>
         ));
         const row = container.querySelector('tr');
-        expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
-          'Last known',
-        );
+        expect(
+          container.querySelector('[data-workload-disk-read-status] [data-workload-reading-label]'),
+        ).toHaveAttribute('data-workload-reading-label', 'Last known');
         setGuest(makeGuest({ diskStatusReason: 'prev-agent-busy', lock: '' }));
         expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
           'earlier guest request',
@@ -1119,17 +1128,17 @@ describe('GuestRow', () => {
       const row = container.querySelector('tr')!;
       fireEvent.pointerEnter(row, { pointerType: 'mouse' });
       expect(screen.queryByTestId('disk-bar')).not.toBeInTheDocument();
-      expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
-        'Last known',
-      );
+      expect(
+        container.querySelector('[data-workload-disk-read-status] [data-workload-reading-label]'),
+      ).toHaveAttribute('data-workload-reading-label', 'Last known');
       expect(
         screen.getByRole('img', { name: 'test-vm disk usage history, last known 50%' }),
       ).toBeInTheDocument();
       fireEvent.pointerLeave(row, { pointerType: 'mouse' });
       expect(screen.getByTestId('disk-bar')).toBeInTheDocument();
-      expect(container.querySelector('[data-workload-disk-read-status]')).toHaveTextContent(
-        'Last known',
-      );
+      expect(
+        container.querySelector('[data-workload-disk-read-status] [data-workload-reading-label]'),
+      ).toHaveAttribute('data-workload-reading-label', 'Last known');
     });
 
     it('does not announce retained sparkline data as current', () => {
@@ -1158,7 +1167,16 @@ describe('GuestRow', () => {
         </table>
       ));
       let notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Prior');
+      expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+        'data-workload-reading-label',
+        'Prior',
+      );
+      // A retained reading is a history icon beside the bar, not a word under it.
+      expect(notice?.querySelector('button')).toHaveAttribute(
+        'data-workload-reading-kind',
+        'retained',
+      );
+      expect(notice?.parentElement).toHaveClass('flex', 'items-center');
       expect(notice?.querySelector('.sr-only')).toHaveTextContent(
         'Using last known disk stats. Guest request timed out. Completion is uncertain. Do not restart the guest agent during a backup.',
       );
@@ -1169,7 +1187,7 @@ describe('GuestRow', () => {
         }),
       );
       notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(notice?.querySelector('[data-workload-reading-label]')).toBeNull();
       expect(notice).toHaveTextContent(
         'Guest reads paused while Proxmox reports a VM operation lock',
       );
@@ -1180,7 +1198,14 @@ describe('GuestRow', () => {
         }),
       );
       notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^Denied$/);
+      expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+        'data-workload-reading-label',
+        'Denied',
+      );
+      expect(notice?.querySelector('button')).toHaveAttribute(
+        'data-workload-reading-kind',
+        'error',
+      );
       expect(notice?.querySelector('.sr-only')).toHaveTextContent('Permission denied.');
     });
 
@@ -1234,14 +1259,17 @@ describe('GuestRow', () => {
       setGuest(agentGuest({ agentStale: true }));
       expect(screen.getByTestId('disk-bar')).toHaveAttribute('data-reading-message', lastKnown);
       let notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toHaveTextContent('Last known');
+      expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+        'data-workload-reading-label',
+        'Last known',
+      );
       expect(notice).toHaveAttribute('title', lastKnown);
       expect(notice?.className).toContain('text-muted');
 
       setGuest(agentGuest({ agentStale: true, status: 'stopped', diskStatusReason: 'vm-stopped' }));
       expect(screen.queryByTestId('disk-bar')).toBeNull();
       notice = container.querySelector('[data-workload-disk-read-status]');
-      expect(notice?.querySelector('[aria-hidden="true"]')).toBeNull();
+      expect(notice?.querySelector('[data-workload-reading-label]')).toBeNull();
       expect(notice).toHaveTextContent(
         'Guest filesystem stats unavailable while the VM is stopped.',
       );
@@ -1342,7 +1370,10 @@ describe('GuestRow', () => {
           visibleColumnIds: ['name', 'memory'],
         });
         const notice = container.querySelector(noticeSelector);
-        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent('Last known');
+        expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+          'data-workload-reading-label',
+          'Last known',
+        );
         expect(notice?.querySelector('.sr-only')).toHaveTextContent(
           'Last known. Source: QEMU guest agent. Observed: 2026-09-30 11:00:00 UTC. Not a current measurement.',
         );
@@ -1460,7 +1491,10 @@ describe('GuestRow', () => {
           visibleColumnIds: ['name', 'memory'],
         });
         const notice = container.querySelector(noticeSelector);
-        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent('May include cache');
+        expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+          'data-workload-reading-label',
+          'May include cache',
+        );
         const message = notice?.querySelector('.sr-only');
         expect(message).toHaveTextContent('Current. Source: Proxmox. Observed: 2026-09-30');
         expect(message).toHaveTextContent(
@@ -1522,8 +1556,8 @@ describe('GuestRow', () => {
           visibleColumnIds: ['name', 'memory'],
         });
         expect(
-          container.querySelector(noticeSelector)?.querySelector('[aria-hidden]'),
-        ).toHaveTextContent('May include cache');
+          container.querySelector(noticeSelector)?.querySelector('[data-workload-reading-label]'),
+        ).toHaveAttribute('data-workload-reading-label', 'May include cache');
       });
 
       it(`keeps a high container cache reading free of a ${mode} caption`, () => {
@@ -1561,10 +1595,11 @@ describe('GuestRow', () => {
           </table>
         ));
         const row = container.querySelector('tr');
-        const caption = () => container.querySelector(`${noticeSelector} [aria-hidden]`);
+        const caption = () =>
+          container.querySelector(`${noticeSelector} [data-workload-reading-label]`);
         expect(caption()).toBeNull();
         setGuest(makeGuest({ type: 'qemu', memory: memoryAt(90) }));
-        expect(caption()).toHaveTextContent('May include cache');
+        expect(caption()).toHaveAttribute('data-workload-reading-label', 'May include cache');
         setGuest(makeGuest({ type: 'qemu', memory: memoryAt(30) }));
         expect(caption()).toBeNull();
         expect(container.querySelector(noticeSelector)).toHaveClass('sr-only');
@@ -1589,8 +1624,8 @@ describe('GuestRow', () => {
           parentMemoryTotal: 64 * 1024 ** 3,
         });
         expect(
-          container.querySelector(noticeSelector)?.querySelector('[aria-hidden]'),
-        ).toHaveTextContent('May include cache');
+          container.querySelector(noticeSelector)?.querySelector('[data-workload-reading-label]'),
+        ).toHaveAttribute('data-workload-reading-label', 'May include cache');
       });
 
       it(`keeps a container's cache caveat out of the ${mode} row label`, () => {
@@ -1752,7 +1787,10 @@ describe('GuestRow', () => {
         workloadTableLayoutMode: 'phone',
       });
       const notice = container.querySelector(noticeSelector);
-      expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(label);
+      expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+        'data-workload-reading-label',
+        label,
+      );
       expect(notice?.querySelector('.sr-only')).toHaveTextContent('QEMU guest agent');
       expect(notice?.querySelector('.sr-only')).toHaveTextContent('2026-09-30 11:00:00 UTC');
       expect(notice).not.toHaveTextContent('future-state');
@@ -1784,8 +1822,23 @@ describe('GuestRow', () => {
         workloadTableLayoutMode: 'phone',
       });
       const notice = container.querySelector(noticeSelector);
-      expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(/^Cache\?$/);
+      expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+        'data-workload-reading-label',
+        'Cache?',
+      );
       expect(notice?.querySelector('.sr-only')).toHaveTextContent('may include cached memory');
+      // The cue shares the bar's line: a word under the bar made a second line
+      // in a 32px phone row. Its 24px target overhangs the 10px phone icon and
+      // the cell's right padding, so the bar keeps room for its percentage.
+      const cue = notice?.querySelector('button');
+      expect(cue).toHaveAttribute('data-workload-reading-kind', 'uncertain');
+      expect(cue).toHaveAccessibleName(/Memory reading for .*: Cache\?/);
+      expect(cue).toHaveClass('-ml-[7px]', '-mr-[11px]', 'h-6', 'w-6');
+      expect(cue?.querySelector('svg')).toHaveClass('h-2.5', 'w-2.5');
+      expect(notice?.parentElement).toHaveClass('gap-0.5');
+      expect(notice?.tagName).toBe('SPAN');
+      expect(notice?.parentElement).toHaveClass('flex', 'items-center');
+      expect(notice?.parentElement).not.toHaveClass('flex-col');
     });
 
     it.each([
@@ -1803,7 +1856,10 @@ describe('GuestRow', () => {
           visibleColumnIds: ['name', 'memory'],
         });
         const notice = container.querySelector(noticeSelector);
-        expect(notice?.querySelector('[aria-hidden]')).toHaveTextContent(label);
+        expect(notice?.querySelector('[data-workload-reading-label]')).toHaveAttribute(
+          'data-workload-reading-label',
+          label,
+        );
         expect(notice).not.toHaveTextContent('May include cache');
         // The caveat still reaches the user, beside the freshness warning.
         expect(notice?.querySelector('.sr-only')).toHaveTextContent('may include cached memory');

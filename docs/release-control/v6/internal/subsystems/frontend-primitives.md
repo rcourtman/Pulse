@@ -478,8 +478,9 @@ sources and guest kinds the backend marks `MayIncludeCache`) keeps its numbers,
 colour and thresholds;
 the shared presentation adds `mayIncludeCache` and a `cacheNote` saying a high
 percentage alone does not show memory pressure and which fix can supply the
-guest's own figure. A VM row shows `May include cache` (`Cache?` in compact
-layouts) only while the guest's own memory meets its warning or critical
+guest's own figure. A VM row shows a cache cue, a question-mark icon beside
+the memory bar whose accessible name says `May include cache` (`Cache?` in
+compact layouts), only while the guest's own memory meets its warning or critical
 threshold, the figure that colours the bar in host-share mode too, which is
 when a cache-inclusive figure reads as pressure; below that the caveat is the
 cell title, the chart's native hover title and assistive text, not a label on every

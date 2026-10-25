@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "b8529ad89f6e22e7d006c83dc03ef1f220daac7d",
+  "verified_at": "2026-10-25T17:34:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRow.tsx",
+    "frontend-modern/src/components/Workloads/WorkloadReadingStatus.tsx",
+    "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRow.tsx": "6c96fb192c3ca54a85461ff3d8d6021c337b0943fe5358bc58e1026271853ef2",
+    "frontend-modern/src/components/Workloads/WorkloadReadingStatus.tsx": "b367c9d87a49e83830538163a205a14e01b32fa86ded94684f37bffa5f4fd80a",
+    "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx": "e336a9572bd41ee51fa844f942409b710e9c65eb211701367efd8c75e16b1faf"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 900
+    },
+    {
+      "width": 375,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree in mock mode on pulse-dev, headless Chromium, dark theme, touch phone emulation below 768px.",
+    "Proxmox guest with a cache-inclusive memory reading above warning (searched \"postgres-primary\" so its node group renders on a phone): before, \"Cache?\" sat on a second line under the memory bar; after, a question-mark cue sits beside the bar on one line at 375, 430 and 1280px, the row is 32px, and the bar shows \"84%\" whole on phones (an earlier 12px icon cut it to \"8...\", so compact cells use a 10px icon overhanging the right padding). Accessible name keeps \"Cache?\" / \"May include cache\".",
+    "Docker containers table at 1280px: rows were 37px because the 28px actions menu button set the height; after, 74 of 75 rows are 33px (one 32.5px), matching the other desktop platform tables, with the button unchanged in size.",
+    "Row sweep of every platform tab at 375, 430 and 1280px (138 page loads, 220 tables): no platform table row taller than 33.5px and no stacked platform cells. Remaining desktop rows above 33.5px are on pages this change does not touch (Standalone machines, Alert history, Alert thresholds, Settings infrastructure)."
+  ],
+  "interactions": [
+    "Cue button keeps a 24x24 target (measured) and opens the existing reading dialog; row tap behaviour unchanged. Inspected screenshots of the cue row at all three widths and the desktop Docker containers table.",
+    "GuestRow, Workloads and Docker component tests (131 files) pass under Node 24, including new assertions that the cue shares the bar line, keeps its label in the accessible name and kind attribute, and that the Docker menu button overhangs the row."
+  ],
+  "proof_scope": "Workloads memory/disk reading cue placement and Docker container row height; reading semantics, dialog content and container actions are unchanged."
+}
