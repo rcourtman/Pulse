@@ -2997,6 +2997,112 @@ None yet.
                 self.assertEqual(requirements[0]["exact_files"], [proof])
                 self.assertFalse(requirements[0]["allow_same_subsystem_tests"])
 
+    def test_configuration_transfer_surfaces_use_their_own_behavioral_proofs(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
+        proofs = [
+            "frontend-modern/src/components/Settings/__tests__/BackupTransferDialogs.test.tsx",
+            "frontend-modern/src/components/Settings/__tests__/useBackupTransferFlow.test.ts",
+        ]
+        for runtime in [
+            "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+            "frontend-modern/src/components/Settings/useBackupTransferFlow.ts",
+        ]:
+            with self.subTest(runtime=runtime):
+                requirements = build_verification_requirements(rule, [runtime])
+                self.assertEqual(
+                    requirements,
+                    [{
+                        "id": "settings-configuration-transfer",
+                        "label": "configuration transfer target and dispatch proof",
+                        "touched_runtime_files": [runtime],
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": proofs,
+                    }],
+                )
+                for proof in proofs:
+                    self.assertEqual(
+                        staged_verification_files_for_requirement(rule, requirements[0], [proof]),
+                        [proof],
+                    )
+                # Overview copy and generic framing cannot prove transfer safety.
+                self.assertEqual(
+                    staged_verification_files_for_requirement(
+                        rule,
+                        requirements[0],
+                        [
+                            "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx",
+                            "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                        ],
+                    ),
+                    [],
+                )
+
+    def test_recovery_overview_requires_its_direct_behavioral_proof(self):
+        rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
+        runtime = "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx"
+        proof = "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx"
+        requirements = build_verification_requirements(rule, [runtime])
+        self.assertEqual(
+            requirements,
+            [{
+                "id": "settings-recovery-overview",
+                "label": "recovery overview disclosure and actions proof",
+                "touched_runtime_files": [runtime],
+                "allow_same_subsystem_tests": False,
+                "test_prefixes": [],
+                "exact_files": [proof],
+            }],
+        )
+        self.assertEqual(
+            staged_verification_files_for_requirement(rule, requirements[0], [proof]),
+            [proof],
+        )
+        self.assertEqual(
+            staged_verification_files_for_requirement(
+                rule,
+                requirements[0],
+                [
+                    "frontend-modern/src/components/Settings/__tests__/BackupTransferDialogs.test.tsx",
+                    "frontend-modern/src/components/Settings/__tests__/useBackupTransferFlow.test.ts",
+                    "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                ],
+            ),
+            [],
+        )
+
+    def test_recovery_and_transfer_edits_require_independent_proofs(self):
+        rules = load_subsystem_rules()
+        overview = "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx"
+        overview_proof = "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx"
+        transfer_proofs = [
+            "frontend-modern/src/components/Settings/__tests__/BackupTransferDialogs.test.tsx",
+            "frontend-modern/src/components/Settings/__tests__/useBackupTransferFlow.test.ts",
+        ]
+        for transfer in [
+            "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+            "frontend-modern/src/components/Settings/useBackupTransferFlow.ts",
+        ]:
+            for transfer_proof in transfer_proofs:
+                for paths, expected in [
+                    ([transfer, overview_proof], 1),
+                    ([transfer, transfer_proof], 0),
+                    ([overview, transfer_proof], 1),
+                    ([overview, overview_proof], 0),
+                    ([overview, transfer, overview_proof], 1),
+                    ([overview, transfer, transfer_proof], 1),
+                    ([overview, transfer, overview_proof, transfer_proof], 0),
+                ]:
+                    with (
+                        self.subTest(paths=paths),
+                        patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
+                        patch("canonical_completion_guard.load_subsystem_rules", return_value=rules),
+                        # Isolate verification routing from contract-edit checks.
+                        patch("canonical_completion_guard.required_contract_updates", return_value={}),
+                        redirect_stderr(io.StringIO()),
+                    ):
+                        self.assertEqual(check_staged_contracts(paths), expected)
+
     def test_frontend_primitive_remaining_settings_shells_use_specific_guardrails(self):
         rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "frontend-primitives")
         runtime_files = [
@@ -3005,7 +3111,6 @@ None yet.
             "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
             "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
             "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
-            "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
             "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
         ]

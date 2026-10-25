@@ -5601,6 +5601,19 @@
             ]
           },
           {
+            "id": "settings-recovery-overview",
+            "label": "recovery overview disclosure and actions proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx"
+            ]
+          },
+          {
             "id": "settings-update-install-guide",
             "label": "settings update install guide proof",
             "match_prefixes": [],
@@ -5772,7 +5785,6 @@
               "frontend-modern/src/components/Settings/networkSettingsModel.ts",
               "frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/OperationsPanel.tsx",
-              "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
               "frontend-modern/src/components/Settings/Settings.tsx",

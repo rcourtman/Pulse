@@ -10003,6 +10003,23 @@ there.
 
 ### Configuration transfers retain their confirmed workspace
 
+Recovery's overview identifies the selected-workspace configuration export as
+limited rather than a full-server backup before either dialog is opened. It
+names Proxmox connections, discloses missing history, TrueNAS/vSphere, local
+login credentials and agent enrolment state, and links the shipped migration
+guide for complete scope and full-state recovery. Restore warns to back up the
+destination and describes replacement of included settings and API-token records,
+never a merge option. `RecoverySettingsPanel.test.tsx` covers the visible scope,
+existing dialog actions and passphrase defaults; desktop/narrow browser proof
+must inspect the overview and follow both actions into the production dialogs.
+Archive formats, server application and access authority do not change.
+
+The overview has its own `settings-recovery-overview` verification policy,
+requiring `RecoverySettingsPanel.test.tsx`. That copy/action test is not transfer
+safety proof: `settings-configuration-transfer` retains its existing dialog/flow
+test alternatives without the overview test. Changes spanning both policies must
+satisfy both; generic settings framing cannot substitute for either.
+
 Recovery's export/import dialogs capture and display the effective workspace ID
 when opened, including explicit `default` scope. Their production flow freezes
 inputs before asynchronous file reads, binds both POSTs through the API client's

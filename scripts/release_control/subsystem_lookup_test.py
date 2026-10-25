@@ -2630,6 +2630,63 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_separates_transfer_and_recovery_overview_proofs(self) -> None:
+        runtime_files = [
+            "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+            "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+            "frontend-modern/src/components/Settings/useBackupTransferFlow.ts",
+        ]
+        transfer_proofs = [
+            "frontend-modern/src/components/Settings/__tests__/BackupTransferDialogs.test.tsx",
+            "frontend-modern/src/components/Settings/__tests__/useBackupTransferFlow.test.ts",
+        ]
+        overview_proofs = [
+            "frontend-modern/src/components/Settings/__tests__/RecoverySettingsPanel.test.tsx",
+        ]
+        result = lookup_paths(runtime_files)
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"frontend-primitives"},
+        )
+        self.assertEqual({item["path"] for item in result["files"]}, set(runtime_files))
+        for file_entry in result["files"]:
+            with self.subTest(runtime=file_entry["path"]):
+                self.assertEqual(file_entry["classification"], "runtime")
+                self.assertEqual(len(file_entry["matches"]), 1)
+                match = file_entry["matches"][0]
+                self.assertEqual(match["subsystem"], "frontend-primitives")
+                self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/frontend-primitives.md")
+                self.assertEqual(match["lane_context"]["lane_id"], "L8")
+                is_overview = file_entry["path"].endswith("/RecoverySettingsPanel.tsx")
+                self.assertEqual(
+                    match["verification_requirement"]["id"],
+                    "settings-recovery-overview" if is_overview else "settings-configuration-transfer",
+                )
+                self.assertEqual(
+                    match["verification_requirement"]["exact_files"],
+                    overview_proofs if is_overview else transfer_proofs,
+                )
+        requirements = result["impacted_subsystems"][0]["verification_requirements"]
+        self.assertEqual(
+            {item["id"] for item in requirements},
+            {"settings-configuration-transfer", "settings-recovery-overview"},
+        )
+
+        # Reverse lookup must not advertise overview tests as transfer proof,
+        # nor transfer tests as overview proof.
+        proof_result = lookup_paths(transfer_proofs + overview_proofs)
+        for file_entry in proof_result["files"]:
+            with self.subTest(proof=file_entry["path"]):
+                self.assertEqual(file_entry["classification"], "test-or-fixture")
+                self.assertEqual(len(file_entry["matches"]), 1)
+                self.assertEqual(
+                    file_entry["matches"][0]["verification_requirement"]["id"],
+                    "settings-recovery-overview"
+                    if file_entry["path"] in overview_proofs
+                    else "settings-configuration-transfer",
+                )
+
     def test_lookup_paths_assigns_remaining_settings_shell_panels_to_frontend_primitives(self) -> None:
         runtime_files = [
             "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
@@ -2640,7 +2697,6 @@ class SubsystemLookupTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
             "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
             "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
-            "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
             "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
             "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
             "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
