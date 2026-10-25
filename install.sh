@@ -4257,8 +4257,16 @@ setup_update_command() {
     # already installed and the service stopped (#1630). The path can
     # legitimately be unwritable — the unattended updater runs under
     # ProtectSystem=strict, and transient read-only filesystems hit this too.
-    mkdir -p "$(dirname "$update_helper_path")" 2>/dev/null || true
-    if ! cat 2>/dev/null > "$update_helper_path" <<EOF
+    # The old helper may still be executing this installer. Never truncate its
+    # inode: Bash can otherwise resume at the old offset in the new script and
+    # report a syntax error after an otherwise successful update.
+    local staged_helper
+    if ! mkdir -p "$(dirname "$update_helper_path")" 2>/dev/null || \
+       ! staged_helper=$(mktemp "${update_helper_path}.staged.XXXXXX" 2>/dev/null); then
+        print_warn "Could not write the 'update' helper to $update_helper_path (read-only filesystem?); skipping optional update command setup"
+        return 0
+    fi
+    if ! cat 2>/dev/null > "$staged_helper" <<EOF
 #!/usr/bin/env bash
 # Pulse update command
 # This script re-runs the Pulse installer using the configured manual channel
@@ -4381,12 +4389,22 @@ echo ""
 echo "Update complete! Pulse will restart automatically."
 EOF
     then
+        rm -f -- "$staged_helper" 2>/dev/null || true
         print_warn "Could not write the 'update' helper to $update_helper_path (read-only filesystem?); skipping optional update command setup"
         return 0
     fi
 
-    chmod +x "$update_helper_path" 2>/dev/null || \
-        print_warn "Could not mark $update_helper_path executable"
+    # mktemp starts at 0600 even with a permissive umask. Publish a complete,
+    # parseable executable on the same filesystem; -T must not write into a
+    # directory accidentally occupying the helper path. Failure keeps the old
+    # helper and remains non-fatal for the surrounding installer (#1630).
+    if ! chmod 0755 "$staged_helper" 2>/dev/null || \
+       ! bash -n "$staged_helper" 2>/dev/null || \
+       ! mv -fT -- "$staged_helper" "$update_helper_path" 2>/dev/null; then
+        rm -f -- "$staged_helper" 2>/dev/null || true
+        print_warn "Could not replace the 'update' helper at $update_helper_path; keeping the previous helper"
+        return 0
+    fi
 
     # Ensure /usr/local/bin is in PATH for all users
     if ! grep -q '/usr/local/bin' "$profile_path" 2>/dev/null; then

@@ -2,6 +2,7 @@ package installtests
 
 import (
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -2920,6 +2921,185 @@ fi
 			}
 			if got := strings.Count(string(transport), "\n"); got != wantRequests {
 				t.Errorf("bootstrap requests = %d, want %d (no retries): %q", got, wantRequests, transport)
+			}
+		})
+	}
+}
+
+// Only setup_update_command runs: no downloads, system services or installed
+// application are involved. The override admits an exact parent-source control.
+func manualUpdatePublicationFixture(t *testing.T) (string, string, []string) {
+	t.Helper()
+	source := os.Getenv("PULSE_INSTALLER_UNDER_TEST")
+	if source == "" {
+		source = repoFile("install.sh")
+	}
+	source, err := filepath.Abs(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "update with spaces")
+	env := append(os.Environ(), "PUBLICATION_SOURCE="+source, "PUBLICATION_ROOT="+dir,
+		"PULSE_INSTALL_DIR="+filepath.Join(dir, "install"), "PULSE_CONFIG_DIR="+filepath.Join(dir, "config"),
+		"PULSE_UPDATE_HELPER_PATH="+helper, "PULSE_PROFILE_PATH="+filepath.Join(dir, "profile"),
+		"PULSE_BASHRC_PATH="+filepath.Join(dir, "bashrc"))
+	return dir, helper, env
+}
+
+func runManualUpdatePublication(t *testing.T, env []string, script string) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", "-c", script)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil || ctx.Err() != nil {
+		t.Fatalf("helper publication: %v (deadline %v)\n%s", err, ctx.Err(), out)
+	}
+	return out
+}
+
+func assertManualUpdateStageRemoved(t *testing.T, helper string) {
+	t.Helper()
+	staged, err := filepath.Glob(helper + ".staged.*")
+	if err != nil || len(staged) != 0 {
+		t.Fatalf("publication left staging files: %v, %v", staged, err)
+	}
+}
+
+func assertPublishedManualUpdateHelper(t *testing.T, helper string) {
+	t.Helper()
+	info, err := os.Stat(helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o755 {
+		t.Fatalf("helper mode = %v, want regular 0755", info.Mode())
+	}
+	body, err := os.ReadFile(helper)
+	if err != nil || !strings.Contains(string(body), "# Pulse update command\n") {
+		t.Fatalf("missing complete generated helper: %v\n%s", err, body)
+	}
+	if out, err := exec.Command("bash", "-n", helper).CombinedOutput(); err != nil {
+		t.Fatalf("published helper syntax: %v\n%s", err, out)
+	}
+	assertManualUpdateStageRemoved(t, helper)
+}
+
+func TestManualUpdateHelperPublication(t *testing.T) {
+	t.Run("fresh_under_private_umask", func(t *testing.T) {
+		_, helper, env := manualUpdatePublicationFixture(t)
+		runManualUpdatePublication(t, env, `set -euo pipefail
+source "$PUBLICATION_SOURCE"
+umask 077
+setup_update_command`)
+		assertPublishedManualUpdateHelper(t, helper)
+	})
+
+	t.Run("running_reader_keeps_old_inode", func(t *testing.T) {
+		dir, helper, env := manualUpdatePublicationFixture(t)
+		renderer := filepath.Join(dir, "refresh.sh")
+		if err := os.WriteFile(renderer, []byte(`set -euo pipefail
+source "$PUBLICATION_SOURCE"
+setup_update_command
+printf 'renderer completed\n'
+`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// A child installer replaces the script while its parent Bash still has
+		// unread commands. Padding exceeds Bash's read-ahead buffer, independent
+		// of the emitted helper's size or the interpreter's current line offset.
+		old := "#!/bin/bash\nset -euo pipefail\n" +
+			"trap 'printf old-cleanup > \"$PUBLICATION_ROOT/cleanup\"' EXIT\n" +
+			"bash \"$PUBLICATION_ROOT/refresh.sh\"\n" +
+			strings.Repeat("# unread original helper bytes\n", 4096) +
+			"printf 'old reader completed\\n'\n"
+		if err := os.WriteFile(helper, []byte(old), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		reader, err := os.Open(helper)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reader.Close()
+		before, err := reader.Stat()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := runManualUpdatePublication(t, env, `exec bash "$PULSE_UPDATE_HELPER_PATH"`)
+		if !strings.Contains(string(out), "renderer completed\n") || !strings.Contains(string(out), "old reader completed\n") {
+			t.Errorf("replacement interrupted the running helper:\n%s", out)
+		}
+		if cleanup, err := os.ReadFile(filepath.Join(dir, "cleanup")); err != nil || string(cleanup) != "old-cleanup" {
+			t.Errorf("original helper cleanup did not complete: %v, %q", err, cleanup)
+		}
+		after, err := os.Stat(helper)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if os.SameFile(before, after) {
+			t.Error("publication rewrote the running helper's inode")
+		}
+		retained, err := io.ReadAll(reader)
+		if err != nil || string(retained) != old {
+			t.Errorf("publication changed the old reader's bytes: %v", err)
+		}
+		assertPublishedManualUpdateHelper(t, helper)
+	})
+
+	for _, fault := range []string{"allocate", "write", "mode", "syntax", "rename", "directory"} {
+		t.Run("preserve_on_"+fault+"_failure", func(t *testing.T) {
+			dir, helper, env := manualUpdatePublicationFixture(t)
+			const original = "#!/bin/bash\nprintf 'original helper\\n'\n"
+			target := helper
+			if fault == "directory" {
+				if err := os.Mkdir(helper, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				target = filepath.Join(helper, "unrelated")
+			}
+			if err := os.WriteFile(target, []byte(original), 0o751); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Stat(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			faults := map[string]string{
+				"allocate": "mktemp() { return 1; }",
+				"write":    "cat() { printf partial; return 1; }",
+				"mode":     "chmod() { return 1; }",
+				"syntax":   "bash() { return 1; }",
+				"rename":   "mv() { return 1; }",
+			}
+			out := runManualUpdatePublication(t, env, `set -euo pipefail
+source "$PUBLICATION_SOURCE"
+`+faults[fault]+`
+setup_update_command
+printf 'installer continued\n'`)
+			if !strings.Contains(string(out), "[WARN]") || !strings.Contains(string(out), "installer continued\n") {
+				t.Errorf("optional failure did not warn and continue:\n%s", out)
+			}
+			body, err := os.ReadFile(target)
+			if err != nil || string(body) != original {
+				t.Errorf("failed publication damaged the previous helper: %v, %q", err, body)
+			}
+			after, err := os.Stat(target)
+			if err != nil || !os.SameFile(before, after) || after.Mode() != before.Mode() {
+				t.Errorf("failed publication changed original identity or mode: %v", err)
+			}
+			if fault == "directory" {
+				children, err := os.ReadDir(helper)
+				if err != nil || len(children) != 1 || children[0].Name() != "unrelated" {
+					t.Errorf("publication wrote into a directory destination: %v, %v", children, err)
+				}
+			}
+			assertManualUpdateStageRemoved(t, helper)
+			for _, name := range []string{"profile", "bashrc"} {
+				if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+					t.Errorf("failed publication continued with PATH mutation: %s, %v", name, err)
+				}
 			}
 		})
 	}

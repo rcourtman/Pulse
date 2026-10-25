@@ -15,6 +15,33 @@
 ```
 
 ## Purpose
+### Manual update helpers retain the running reader
+
+`install.sh setup_update_command` stages the manual update helper beside its
+configured destination, validates Bash syntax and sets mode `0755` before an
+atomic no-directory-target replacement. The installer must not truncate the
+helper inode: an older `/bin/update` may still be reading it while waiting for
+the signed installer to finish. That reader, its remaining commands and its
+cleanup trap keep the original bytes even when the replacement has a different
+length. The new helper keeps the existing signature, channel, path and argument
+contracts; no service, data, rollback or automatic-update consent changes.
+
+Allocation, partial write, mode, syntax or replacement failure warns and returns
+success for this optional setup, preserving the previous helper and removing
+only this invocation's staging file. A directory occupying the helper path is
+not a destination directory for the staged file. An unwritable destination
+still cannot abort the surrounding installer after it has stopped the service
+(the existing #1630 guarantee).
+
+`TestManualUpdateHelperPublication` in
+`scripts/installtests/root_install_sh_test.go` runs the actual renderer under a
+private umask, replaces a script with a live Bash reader and unread commands,
+checks its open file descriptor and cleanup, and injects each preparation or
+replacement failure. Existing emitted-helper signature/channel/download and
+read-only-path tests remain required. These ordinary-user filesystem controls
+are not signed native install/upgrade/rollback or customer recovery acceptance;
+the observed published-pair lifecycle failure retains its own result.
+
 ### Telemetry schema release disclosures follow receiver compatibility
 
 `docs/releases/TELEMETRY_SCHEMA_V19.md` carries the extended-history telemetry notice for
