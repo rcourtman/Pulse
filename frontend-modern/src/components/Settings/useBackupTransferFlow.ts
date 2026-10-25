@@ -1,237 +1,257 @@
-import { Accessor, createSignal } from 'solid-js';
+import { Accessor, createSignal, onCleanup } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
-import { logger } from '@/utils/logger';
 import {
   apiFetchJSON,
+  getOrgID,
   getApiToken as getApiClientToken,
   setApiToken as setApiClientToken,
 } from '@/utils/apiClient';
 import type { SecurityStatus } from '@/types/config';
 
-type ApiTokenModalSource = 'export' | 'import' | null;
-
 interface UseBackupTransferFlowParams {
   securityStatus: Accessor<SecurityStatus | null>;
 }
+
+const CHANGED_WORKSPACE =
+  'Organisation changed. Close this dialog and reopen it in the intended workspace.';
 
 export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowParams) {
   const [exportPassphrase, setExportPassphrase] = createSignal('');
   const [useCustomPassphrase, setUseCustomPassphrase] = createSignal(false);
   const [importPassphrase, setImportPassphrase] = createSignal('');
   const [importFile, setImportFile] = createSignal<File | null>(null);
-  const [showExportDialog, setShowExportDialog] = createSignal(false);
-  const [showImportDialog, setShowImportDialog] = createSignal(false);
+  const [showExportDialog, showExport] = createSignal(false);
+  const [showImportDialog, showImport] = createSignal(false);
   const [showApiTokenModal, setShowApiTokenModal] = createSignal(false);
   const [apiTokenInput, setApiTokenInput] = createSignal('');
-  const [apiTokenModalSource, setApiTokenModalSource] = createSignal<ApiTokenModalSource>(null);
+  const [transferOrgID, setTransferOrgID] = createSignal('default');
+  const [isTransferring, setIsTransferring] = createSignal(false);
+  const [transferError, setTransferError] = createSignal('');
+  let active = true;
+  let controller: AbortController | undefined;
+  let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const closeExportDialog = () => {
-    setShowExportDialog(false);
-    setExportPassphrase('');
-    setUseCustomPassphrase(false);
+  onCleanup(() => {
+    active = false;
+    controller?.abort();
+    clearTimeout(reloadTimer);
+  });
+
+  const currentOrgID = () => getOrgID() || 'default';
+  const fail = (message: string) => {
+    setTransferError(message);
+    notificationStore.error(message);
   };
-
-  const closeImportDialog = () => {
-    setShowImportDialog(false);
-    setImportPassphrase('');
-    setImportFile(null);
+  const checkWorkspace = () => {
+    if (currentOrgID() === transferOrgID()) return true;
+    fail(CHANGED_WORKSPACE);
+    return false;
   };
 
   const closeApiTokenModal = () => {
     setShowApiTokenModal(false);
     setApiTokenInput('');
   };
+  const closeExportDialog = () => {
+    if (isTransferring()) return;
+    showExport(false);
+    setExportPassphrase('');
+    setUseCustomPassphrase(false);
+    closeApiTokenModal();
+  };
+  const closeImportDialog = () => {
+    if (isTransferring()) return;
+    showImport(false);
+    setImportPassphrase('');
+    setImportFile(null);
+    closeApiTokenModal();
+  };
+  const openDialog = (kind: 'export' | 'import') => {
+    if (isTransferring()) return;
+    clearTimeout(reloadTimer);
+    closeExportDialog();
+    closeImportDialog();
+    setTransferError('');
+    setTransferOrgID(currentOrgID());
+    if (kind === 'export') showExport(true);
+    else showImport(true);
+  };
+  const setShowExportDialog = (open: boolean) =>
+    open ? openDialog('export') : closeExportDialog();
+  const setShowImportDialog = (open: boolean) =>
+    open ? openDialog('import') : closeImportDialog();
+
+  const needsApiToken = () => {
+    if (
+      !securityStatus()?.hasAuthentication &&
+      securityStatus()?.apiTokenConfigured &&
+      !getApiClientToken()
+    ) {
+      setShowApiTokenModal(true);
+      return true;
+    }
+    return false;
+  };
 
   const handleExport = async () => {
-    if (!exportPassphrase()) {
-      const hasAuth = securityStatus()?.hasAuthentication;
-      notificationStore.error(
-        hasAuth
-          ? useCustomPassphrase()
-            ? 'Please enter a passphrase'
-            : 'Please enter your password'
+    if (!active || !showExportDialog() || isTransferring() || !checkWorkspace()) return;
+    setTransferError('');
+    const passphrase = exportPassphrase();
+    if (!passphrase) {
+      fail(
+        securityStatus()?.hasAuthentication && !useCustomPassphrase()
+          ? 'Please enter your password'
           : 'Please enter a passphrase',
       );
       return;
     }
-
-    // Backend requires at least 12 characters for encryption security
-    if (exportPassphrase().length < 12) {
-      const hasAuth = securityStatus()?.hasAuthentication;
-      notificationStore.error(
-        hasAuth && !useCustomPassphrase()
+    if (passphrase.length < 12) {
+      fail(
+        securityStatus()?.hasAuthentication && !useCustomPassphrase()
           ? 'Your password must be at least 12 characters. Please use a custom passphrase instead.'
           : 'Passphrase must be at least 12 characters long',
       );
       return;
     }
+    if (needsApiToken()) return;
 
-    // Only check for API token if user is not authenticated via password
-    // If user is logged in with password, session auth is sufficient
-    const hasPasswordAuth = securityStatus()?.hasAuthentication;
-    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getApiClientToken()) {
-      setApiTokenModalSource('export');
-      setShowApiTokenModal(true);
-      return;
-    }
-
+    const orgID = transferOrgID();
+    controller = new AbortController();
+    setIsTransferring(true);
     try {
-      // Get CSRF token from cookie
-      const csrfCookie = document.cookie.split('; ').find((row) => row.startsWith('pulse_csrf='));
-      const csrfToken = csrfCookie
-        ? decodeURIComponent(csrfCookie.split('=').slice(1).join('='))
-        : undefined;
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      // Add CSRF token if available
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
-      }
-
-      // Add API token if configured
-      const apiToken = getApiClientToken();
-      if (apiToken) {
-        headers['X-API-Token'] = apiToken;
-      }
-
-      const data = await apiFetchJSON<any>('/api/config/export', {
+      const data = await apiFetchJSON('/api/config/export', {
         method: 'POST',
-        body: JSON.stringify({ passphrase: exportPassphrase() }),
+        body: JSON.stringify({ passphrase }),
+        expectedOrgID: orgID,
+        retry: false,
+        signal: controller.signal,
       });
+      if (!active || !checkWorkspace()) return;
 
-      // Create and download file
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `pulse-config-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
+      try {
+        a.href = url;
+        a.download = `pulse-config-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+      } finally {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
       notificationStore.success('Configuration exported successfully');
-      setShowExportDialog(false);
+      showExport(false);
       setExportPassphrase('');
+      setUseCustomPassphrase(false);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to export configuration';
-      notificationStore.error(errorMessage);
-      logger.error('Export error', error);
+      if (active) fail(error instanceof Error ? error.message : 'Failed to export configuration');
+    } finally {
+      if (active) setIsTransferring(false);
     }
   };
 
   const handleImport = async () => {
-    if (!importPassphrase()) {
-      notificationStore.error('Please enter the password');
+    if (!active || !showImportDialog() || isTransferring() || !checkWorkspace()) return;
+    setTransferError('');
+    const passphrase = importPassphrase();
+    const file = importFile();
+    if (!passphrase) {
+      fail('Please enter the password');
       return;
     }
-
-    if (!importFile()) {
-      notificationStore.error('Please select a file to import');
+    if (!file) {
+      fail('Please select a file to import');
       return;
     }
+    if (needsApiToken()) return;
 
-    // Only check for API token if user is not authenticated via password
-    // If user is logged in with password, session auth is sufficient
-    const hasPasswordAuth = securityStatus()?.hasAuthentication;
-    if (!hasPasswordAuth && securityStatus()?.apiTokenConfigured && !getApiClientToken()) {
-      setApiTokenModalSource('import');
-      setShowApiTokenModal(true);
-      return;
-    }
-
+    // Freeze the confirmed target and inputs before the asynchronous file read.
+    const orgID = transferOrgID();
+    controller = new AbortController();
+    const signal = controller.signal;
+    setIsTransferring(true);
+    let submitted = false;
     try {
-      const fileContent = await importFile()!.text();
+      const fileContent = await file.text();
+      if (!active || !checkWorkspace()) return;
 
-      // Support three formats:
-      // 1. UI export: {status: "success", data: "base64string"}
-      // 2. Legacy format: {data: "base64string"}
-      // 3. CLI export: raw base64 string (no JSON wrapper)
-      let encryptedData: string;
-
-      // Try to parse as JSON first
+      // UI/legacy JSON envelopes, JSON strings and raw CLI base64 remain supported.
+      let encryptedData: unknown;
       try {
-        const exportData = JSON.parse(fileContent);
-
-        if (typeof exportData === 'string') {
-          // Raw base64 string wrapped in JSON (edge case)
-          encryptedData = exportData;
-        } else if (exportData.data) {
-          // Standard format with data field
-          encryptedData = exportData.data;
-        } else {
-          notificationStore.error(
-            'Invalid backup file format. Expected encrypted data in "data" field.',
-          );
-          return;
-        }
-      } catch (_parseError) {
-        // Not JSON - treat entire contents as raw base64 from CLI export
+        const parsed: unknown = JSON.parse(fileContent);
+        encryptedData =
+          typeof parsed === 'string'
+            ? parsed
+            : parsed && typeof parsed === 'object' && 'data' in parsed
+              ? parsed.data
+              : undefined;
+      } catch {
         encryptedData = fileContent.trim();
       }
-
-      await apiFetchJSON('/api/config/import', {
-        method: 'POST',
-        body: JSON.stringify({
-          passphrase: importPassphrase(),
-          data: encryptedData,
-        }),
-      });
-
-      notificationStore.success('Configuration imported successfully. Reloading...');
-      setShowImportDialog(false);
-      setImportPassphrase('');
-      setImportFile(null);
-
-      // Reload page to apply new configuration
-      setTimeout(() => window.location.reload(), 2000);
-    } catch (error) {
-      const errorText = error instanceof Error ? error.message : String(error);
-
-      // Handle specific error cases if possible, though apiFetch usually handles 401/403
-      // But for Import, we might want to trigger the token modal if it was a token issue
-      // Note: apiFetch throws Error with message.
-
-      const normalizedError = errorText.toLowerCase();
-      if (
-        errorText.includes('API_TOKEN') ||
-        errorText.includes('API_TOKENS') ||
-        normalizedError.includes('api token') ||
-        normalizedError.includes('x-api-token')
-      ) {
-        setApiTokenModalSource('import');
-        setShowApiTokenModal(true);
+      if (typeof encryptedData !== 'string' || !encryptedData.trim()) {
+        fail('Invalid backup file format. Expected encrypted data in "data" field.');
         return;
       }
 
-      notificationStore.error(errorText || 'Failed to import configuration');
-      logger.error('Import error', error);
+      submitted = true;
+      await apiFetchJSON('/api/config/import', {
+        method: 'POST',
+        body: JSON.stringify({ passphrase, data: encryptedData }),
+        expectedOrgID: orgID,
+        retry: false,
+        signal,
+      });
+      if (!active) return;
+      if (currentOrgID() !== orgID) {
+        fail(
+          `Import completed for workspace ${orgID}. The selected workspace changed. No reload was performed.`,
+        );
+        showImport(false);
+        setImportPassphrase('');
+        setImportFile(null);
+        return;
+      }
+
+      notificationStore.success('Configuration imported successfully. Reloading...');
+      showImport(false);
+      setImportPassphrase('');
+      setImportFile(null);
+      // Never reload a different workspace or an unmounted Settings view.
+      reloadTimer = setTimeout(() => {
+        if (active && currentOrgID() === orgID) window.location.reload();
+      }, 2000);
+    } catch (error) {
+      if (!active) return;
+      const errorText = error instanceof Error ? error.message : 'Failed to import configuration';
+      fail(
+        submitted
+          ? `${errorText} Import was not confirmed and may have applied. Check the destination before trying again.`
+          : errorText,
+      );
+      if (/api[_ -]?tokens?|x-api-token/i.test(errorText)) setShowApiTokenModal(true);
+    } finally {
+      if (active) setIsTransferring(false);
     }
   };
 
   const handleApiTokenAuthenticate = () => {
-    if (!apiTokenInput()) {
-      notificationStore.error('Please enter the API token');
+    if (!active || isTransferring() || !checkWorkspace()) {
+      closeApiTokenModal();
       return;
     }
-
-    const tokenValue = apiTokenInput()!;
-    setApiClientToken(tokenValue);
-    const source = apiTokenModalSource();
-    setShowApiTokenModal(false);
-    setApiTokenInput('');
-    setApiTokenModalSource(null);
-
-    // Retry the operation that triggered the modal
-    if (source === 'export') {
-      void handleExport();
-    } else if (source === 'import') {
-      void handleImport();
+    if (!apiTokenInput().trim()) {
+      fail('Please enter the API token');
+      return;
     }
+    setApiClientToken(apiTokenInput());
+    if (!getApiClientToken()) {
+      fail('Please enter a valid API token');
+      return;
+    }
+    closeApiTokenModal();
+    // Saving a credential is not consent to replay a possibly applied import.
+    notificationStore.info('API token saved. Review the workspace and submit the transfer again.');
   };
 
   return {
@@ -250,6 +270,9 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     showApiTokenModal,
     apiTokenInput,
     setApiTokenInput,
+    transferOrgID,
+    isTransferring,
+    transferError,
     handleExport,
     handleImport,
     closeExportDialog,

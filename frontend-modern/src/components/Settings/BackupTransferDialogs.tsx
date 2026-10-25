@@ -21,6 +21,9 @@ interface BackupTransferDialogsProps {
   showExportDialog: Accessor<boolean>;
   showImportDialog: Accessor<boolean>;
   showApiTokenModal: Accessor<boolean>;
+  transferOrgID: Accessor<string>;
+  isTransferring: Accessor<boolean>;
+  transferError: Accessor<string>;
   apiTokenInput: Accessor<string>;
   setApiTokenInput: (value: string) => void;
   handleExport: () => void;
@@ -43,6 +46,19 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
         >
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="Export configuration" size="md" class="mb-4" />
+            <p class="mb-4 text-sm text-muted break-all">
+              Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
+            </p>
+            <Show when={props.transferError()}>
+              <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
+                {props.transferError()}
+              </p>
+            </Show>
+            <Show when={props.isTransferring()}>
+              <p role="status" class="mb-4 text-sm text-muted">
+                Exporting configuration. Keep this dialog open while Pulse waits for a response.
+              </p>
+            </Show>
 
             <div class="space-y-4">
               <Show when={props.securityStatus()?.hasAuthentication}>
@@ -51,6 +67,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
                         type="radio"
+                        disabled={props.isTransferring()}
                         checked={!props.useCustomPassphrase()}
                         onChange={() => {
                           props.setUseCustomPassphrase(false);
@@ -71,6 +88,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     <label class="flex items-start gap-3 cursor-pointer">
                       <input
                         type="radio"
+                        disabled={props.isTransferring()}
                         checked={props.useCustomPassphrase()}
                         onChange={() => props.setUseCustomPassphrase(true)}
                         class="mt-1 text-blue-600 focus:ring-blue-500"
@@ -98,6 +116,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </label>
                 <input
                   id="backup-export-passphrase"
+                  disabled={props.isTransferring()}
                   type="password"
                   value={props.exportPassphrase()}
                   onInput={(event) => props.setExportPassphrase(event.currentTarget.value)}
@@ -165,6 +184,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <button
                   type="button"
                   onClick={props.closeExportDialog}
+                  disabled={props.isTransferring()}
                   class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
@@ -173,6 +193,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   type="button"
                   onClick={props.handleExport}
                   disabled={
+                    props.isTransferring() ||
                     !props.exportPassphrase() ||
                     (props.useCustomPassphrase() && props.exportPassphrase().length < 12)
                   }
@@ -199,7 +220,8 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
             <div class="space-y-4">
               <p class="text-sm text-muted">
                 This Pulse instance requires an API token for export/import operations. Please enter
-                the API token configured on the server.
+                a token authorised for this workspace. Saving it does not repeat the transfer.
+                Review the workspace and submit again yourself.
               </p>
 
               <div class={formField}>
@@ -254,6 +276,19 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
         >
           <Card padding="lg" class="max-w-md w-full">
             <SectionHeader title="Import configuration" size="md" class="mb-4" />
+            <p class="mb-4 text-sm text-muted break-all">
+              Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
+            </p>
+            <Show when={props.transferError()}>
+              <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
+                {props.transferError()}
+              </p>
+            </Show>
+            <Show when={props.isTransferring()}>
+              <p role="status" class="mb-4 text-sm text-muted">
+                Importing configuration. Keep this dialog open while Pulse waits for a response.
+              </p>
+            </Show>
 
             <div class="space-y-4">
               <div class={formField}>
@@ -262,6 +297,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </label>
                 <input
                   id="backup-import-file"
+                  disabled={props.isTransferring()}
                   type="file"
                   accept=".json"
                   onChange={(event) => {
@@ -278,6 +314,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </label>
                 <input
                   id="backup-import-passphrase"
+                  disabled={props.isTransferring()}
                   type="password"
                   value={props.importPassphrase()}
                   onInput={(event) => props.setImportPassphrase(event.currentTarget.value)}
@@ -316,6 +353,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <button
                   type="button"
                   onClick={props.closeImportDialog}
+                  disabled={props.isTransferring()}
                   class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
@@ -323,7 +361,9 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <button
                   type="button"
                   onClick={props.handleImport}
-                  disabled={!props.importPassphrase() || !props.importFile()}
+                  disabled={
+                    props.isTransferring() || !props.importPassphrase() || !props.importFile()
+                  }
                   class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Import

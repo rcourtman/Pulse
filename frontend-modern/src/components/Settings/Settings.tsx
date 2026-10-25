@@ -228,6 +228,9 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         showExportDialog={backupTransferFlow.showExportDialog}
         showImportDialog={backupTransferFlow.showImportDialog}
         showApiTokenModal={backupTransferFlow.showApiTokenModal}
+        transferOrgID={backupTransferFlow.transferOrgID}
+        isTransferring={backupTransferFlow.isTransferring}
+        transferError={backupTransferFlow.transferError}
         apiTokenInput={backupTransferFlow.apiTokenInput}
         setApiTokenInput={backupTransferFlow.setApiTokenInput}
         handleExport={backupTransferFlow.handleExport}
