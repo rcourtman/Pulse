@@ -2603,13 +2603,14 @@ for (const action of ["opened", "edited", "reopened"]) {
 test("Markdown snapshots never leak reference definitions between reports or revisions", async () => {
   const { Lexer } = require("marked");
   const originalLex = Lexer.prototype.lex;
-  const body = (version, topic) => [
+  const body = (version, topic, hasReleaseDefinition = true) => [
     "### Feedback type", "[Bug / regression][type]", "### Pulse version", version,
     "### Additional actionable topics", topic, "", "[type]: https://example.invalid/type",
-    "[release]: https://example.invalid/6.4.5", "[topic]: https://example.invalid/topic",
+    ...(hasReleaseDefinition ? ["[release]: https://example.invalid/6.4.5"] : []),
+    "[topic]: https://example.invalid/topic",
   ].join("\n");
   const bodies = [body("[6.5.0][release]", "[Another topic][topic]"),
-    body("[unknown][release]", "[None][topic]"), body("[6.6.0-rc.6][release]", "None")];
+    body("[6.6.0][release]", "[None][topic]", false), body("[6.6.0-rc.6][release]", "None")];
   const counts = new Map(bodies.map(value => [value, 0]));
   Lexer.prototype.lex = function (source) {
     if (counts.has(source)) counts.set(source, counts.get(source) + 1);
@@ -2617,7 +2618,7 @@ test("Markdown snapshots never leak reference definitions between reports or rev
   };
   const results = bodies.map((value, i) => {
     const { github, calls } = createGithub();
-    const issue = { number: 2931 + i, title: "Bug", body: value,
+    const issue = { number: i === 1 ? 2932 : 2931, title: "Bug", body: value,
       labels: [{ name: "bug" }, { name: "needs-human" }] };
     return { github, calls, issue };
   });
@@ -2637,5 +2638,32 @@ test("Markdown snapshots never leak reference definitions between reports or rev
     assert.deepEqual(calls.createComment, []);
     assert.deepEqual(calls.getLatestRelease, []);
     assert.deepEqual(calls.paginate, []);
+  }
+});
+
+test("non-rendered reference definitions cannot invent secondary topics at the end of a report", () => {
+  for (const value of ["", "None", "[None][empty]", "**[None][empty]**"]) {
+    for (const newline of ["\n", "\r\n"]) {
+      const body = `### Additional actionable topics\n${value}\n\n` +
+        "[empty]: https://example.invalid/another-bug\n";
+      assert.equal(triage.internals.classifyAdditionalActionableTopics(body.replaceAll("\n", newline)), false);
+    }
+  }
+  for (const value of ["Another bug", "None, except another workflow problem", "[Another bug][empty]"]) {
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(
+      `### Additional actionable topics\n${value}\n\n[empty]: https://example.invalid/None\n`
+    ), true, value);
+  }
+});
+
+test("literal reference-definition examples remain visible evidence for topic review", () => {
+  for (const example of [
+    "```markdown\n[example]: https://example.invalid/topic\n```",
+    "    [example]: https://example.invalid/topic",
+    "`[example]: https://example.invalid/topic`",
+  ]) {
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(
+      `### Additional actionable topics\nNone\n\n${example}\n`
+    ), true, example);
   }
 });

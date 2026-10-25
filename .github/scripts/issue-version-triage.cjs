@@ -95,7 +95,10 @@ function projectDeclarationLines(tokens) {
           append(item.raw);
         }
       }
-    } else if (token.type === "html" && /^\s*<!--/.test(token.raw)) {
+    } else if (token.type === "def" ||
+        (token.type === "html" && /^\s*<!--/.test(token.raw))) {
+      // Reference definitions resolve visible labels but do not render as
+      // field content. Their URLs must not invent secondary issue topics.
       append("");
     } else {
       // Block quotes (including lazy continuation), HTML, tables and nested
