@@ -2751,14 +2751,22 @@ fi
 }
 
 func TestRootInstallScriptConfigBackupPublicationPreservesPriorSnapshots(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_config_backups.py"), "-v")
-	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("configuration backup publication controls: %v\n%s", err, out)
-	}
+	// A cumulative suite budget is not an individual backup-control deadline.
+	// Keep all discovered controls serial and retain the existing per-control bound.
+	runPythonFixtureControls(t, repoFile("scripts", "tests", "test_server_config_backups.py"), "ConfigBackupPublication", []string{
+		"test_two_successful_same_second_copies_are_separate_complete_snapshots",
+		"test_failed_partial_copy_does_not_mutate_or_delete_a_previous_snapshot",
+		"test_allocation_failure_stops_before_copy_or_rotation",
+		"test_headroom_failure_creates_no_stage_and_preserves_prior_snapshot",
+		"test_failed_publication_does_not_rotate_or_publish_a_snapshot",
+		"test_exit_zero_skipped_publication_preserves_file_directory_and_link",
+		"test_current_snapshot_survives_rotation_even_after_clock_moves_backwards",
+		"test_incomplete_copy_is_not_another_invocations_rotation_candidate",
+		"test_discard_removes_only_this_invocations_new_snapshot",
+		"test_missing_config_clears_stale_ownership_without_deleting_prior_snapshot",
+		"test_read_only_config_parent_uses_the_existing_hardened_unit_fallback",
+		"test_every_update_entry_stops_on_failed_backup_even_in_an_or_list",
+	}, 30*time.Second, "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
 }
 
 // Run the emitted helper and real SSH verifier. Curl exits are modelled, so

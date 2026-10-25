@@ -6385,6 +6385,14 @@ portable control runs the actual emitted helper and real verifier through that
 adapter, and rejects altered deadlines, retries or TLS options without online
 fallback. This preserves the hosted manual-recovery consumer, not native acceptance.
 
+Configuration-backup publication verification also uses the existing serial
+per-control runner. All twelve current methods are required, all discovered
+future methods run, and each retains the thirty-second execution bound. A
+single cumulative suite budget must not cut off the final safety control.
+The Python controls' own ten-second shell bounds and every backup assertion
+remain unchanged; no host-contention diagnosis or production deadline change
+follows from a cumulative harness timeout.
+
 `TestManualUpdateChannelAdmission` generates and executes the actual helper
 against local transport fixtures and genuinely signed installer/sidecar bytes.
 It checks final arguments and the actual installer channel-selection functions,
