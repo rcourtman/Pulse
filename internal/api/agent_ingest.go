@@ -192,22 +192,16 @@ func reconcileInstallTokenCommandPolicy(monitor *monitoring.Monitor, requestReco
 		return nil
 	}
 
-	cfg := monitor.GetConfig()
-	if cfg == nil {
-		return nil
-	}
-
 	// Authentication stores a clone in the request context. Re-read the live
 	// record so concurrent scope changes and an already-consumed intent marker
-	// are authoritative.
+	// are authoritative. A tenant org's install tokens live in the instance
+	// inventory, so search every inventory the monitor's agents use.
+	inventories := monitor.APITokenInventories()
 	var record *config.APITokenRecord
 	config.Mu.RLock()
-	for index := range cfg.APITokens {
-		if cfg.APITokens[index].ID == requestRecord.ID {
-			clone := cfg.APITokens[index].Clone()
-			record = &clone
-			break
-		}
+	if live, _, found := monitoring.FindAPITokenLocked(inventories, requestRecord.ID); found {
+		clone := live.Clone()
+		record = &clone
 	}
 	config.Mu.RUnlock()
 	if record == nil {
@@ -234,14 +228,9 @@ func reconcileInstallTokenCommandPolicy(monitor *monitoring.Monitor, requestReco
 		return fmt.Errorf("persist desired command policy: %w", err)
 	}
 
-	persistence := monitor.GetConfigPersistence()
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
-	for index := range cfg.APITokens {
-		live := &cfg.APITokens[index]
-		if live.ID != requestRecord.ID {
-			continue
-		}
+	if live, inventory, found := monitoring.FindAPITokenLocked(inventories, requestRecord.ID); found {
 		if strings.TrimSpace(live.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]) != "" {
 			return nil
 		}
@@ -249,8 +238,8 @@ func reconcileInstallTokenCommandPolicy(monitor *monitoring.Monitor, requestReco
 			live.Metadata = make(map[string]string)
 		}
 		live.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey] = host.ID
-		if persistence != nil {
-			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		if inventory.Persistence != nil {
+			if err := inventory.Persistence.SaveAPITokens(inventory.Config.APITokens); err != nil {
 				delete(live.Metadata, agenttokens.CommandPolicyAppliedAgentIDMetadataKey)
 				return fmt.Errorf("persist install-token command-policy marker: %w", err)
 			}

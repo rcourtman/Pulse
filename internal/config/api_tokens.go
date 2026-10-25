@@ -164,6 +164,13 @@ func (r *APITokenRecord) CanAccessOrg(orgID string) bool {
 	return r.OrgID == orgID
 }
 
+// BoundOnlyToOrg reports whether orgID is the one organization this token is
+// bound to. Multi-org and unbound tokens are not owned by any single org.
+func (r *APITokenRecord) BoundOnlyToOrg(orgID string) bool {
+	bound := r.GetBoundOrgs()
+	return orgID != "" && len(bound) == 1 && bound[0] == orgID
+}
+
 // IsLegacyToken returns true if this token has no org binding (deprecated/unbound).
 func (r *APITokenRecord) IsLegacyToken() bool {
 	return r.OrgID == "" && len(r.OrgIDs) == 0

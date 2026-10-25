@@ -136,6 +136,23 @@ func IssueAndPersist(cfg *config.Config, persistence *config.ConfigPersistence, 
 	return rawToken, record, err
 }
 
+// IssueAndPersistForOrganization mints an install token for one
+// organization of a multi-tenant runtime, typically a tenant org. The record
+// goes into the instance inventory, bound to opts.OrgID, because that is the
+// inventory agent
+// authentication reads: agents never send X-Pulse-Org-ID, so the org binding
+// on an instance token is what routes their reports to the organization's
+// runtime. A token kept only in the organization's own config copy cannot
+// authenticate any agent request. The instance record is the only copy; the
+// org's monitor reads it through Monitor.APITokenInventories.
+func IssueAndPersistForOrganization(instanceCfg *config.Config, instancePersistence *config.ConfigPersistence, opts IssueOptions) (string, *config.APITokenRecord, error) {
+	opts.OrgID = strings.TrimSpace(opts.OrgID)
+	if opts.OrgID == "" {
+		return "", nil, fmt.Errorf("%w: organization is required", ErrRecord)
+	}
+	return IssueAndPersist(instanceCfg, instancePersistence, opts)
+}
+
 func issueAndPersistReplacing(
 	cfg *config.Config,
 	persistence *config.ConfigPersistence,

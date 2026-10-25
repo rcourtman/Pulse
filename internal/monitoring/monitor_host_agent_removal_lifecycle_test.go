@@ -1571,3 +1571,58 @@ func TestAgentContainerReadingsAreNotShownForANodeSplitFromTheAgent(t *testing.T
 		t.Fatalf("a linked agent's reading was not shown: %+v", control.Disks)
 	}
 }
+
+// An earlier version could persist a duplicate of a tenant agent token in the
+// org's own config, carrying grant state the instance record lacks. When the
+// instance inventory cannot commit the revocation, the org copy must survive
+// too, or the stale instance record becomes the only copy.
+func TestRevokeAPITokenRestoresEveryInventoryWhenOneCannotCommit(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("a read-only directory does not stop root from writing")
+	}
+	const orgID = "t-CLIENT0003"
+	record, err := config.NewAPITokenRecord("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "agent", []string{config.ScopeAgentReport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.OrgID = orgID
+	instanceRecord := record.Clone()
+	ownRecord := record.Clone()
+	ownRecord.Metadata = map[string]string{"proxmox_registration_completed": "true"}
+
+	ownDir, instanceDir := t.TempDir(), t.TempDir()
+	ownPersistence := config.NewConfigPersistence(ownDir)
+	instancePersistence := config.NewConfigPersistence(instanceDir)
+	if err := ownPersistence.SaveAPITokens([]config.APITokenRecord{ownRecord}); err != nil {
+		t.Fatal(err)
+	}
+	if err := instancePersistence.SaveAPITokens([]config.APITokenRecord{instanceRecord}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(instanceDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(instanceDir, 0o700) })
+
+	own := &config.Config{APITokens: []config.APITokenRecord{ownRecord}}
+	m := &Monitor{config: own, persistence: ownPersistence}
+	m.instanceTokens = APITokenInventory{
+		Config:      &config.Config{APITokens: []config.APITokenRecord{instanceRecord}},
+		Persistence: instancePersistence,
+		OrgID:       orgID,
+	}
+
+	if _, err := m.revokeAPIToken(record.ID); err == nil {
+		t.Fatal("revocation reported success although the instance inventory could not commit")
+	}
+	if len(own.APITokens) != 1 || own.APITokens[0].Metadata["proxmox_registration_completed"] != "true" {
+		t.Fatalf("org copy after failed revocation = %+v, want the consumed grant restored", own.APITokens)
+	}
+	persisted, err := ownPersistence.LoadAPITokens()
+	if err != nil || len(persisted) != 1 || persisted[0].Metadata["proxmox_registration_completed"] != "true" {
+		t.Fatalf("persisted org copy = %+v (err %v), want the consumed grant restored", persisted, err)
+	}
+	if len(m.instanceTokens.Config.APITokens) != 1 {
+		t.Fatal("instance record was not restored after its save failed")
+	}
+}

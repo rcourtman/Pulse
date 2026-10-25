@@ -4633,6 +4633,38 @@ Regression coverage: `TestHostedRuntimeMintsAgentInstallTokensWithoutLocalAuth`
 and `TestSelfHostedRuntimeWithoutAuthStillOmitsInstallToken` in
 `internal/api/configapi/hosted_agent_install_token_test.go`.
 
+### Tenant install tokens live in the instance inventory
+
+An install token that `POST /api/agent-install-command` mints for a tenant
+organization of a multi-tenant runtime is stored only in the instance token
+inventory, bound to that organization by `OrgID`. Agents never send
+`X-Pulse-Org-ID`, so agent authentication finds a token only in the instance
+inventory and routes the report by the token's organization binding. Before,
+the handler wrote the token only to the organization's own config copy, so
+every agent installed from a provider MSP client workspace's Settings got
+`401` on every report (v6.5.0 and v6.6.0). The control plane's hosted tenant
+install command already stored its token there; both now share
+`agenttokens.IssueAndPersistForOrganization`, and the control plane no longer
+keeps an in-memory copy in the tenant config.
+
+A tenant monitor reads and changes its agents' credentials through
+`Monitor.APITokenInventories`: its own config, then the instance records
+bound only to its organization. Proxmox install bootstrap and
+auto-register, install-time command policy, Connections, Agent Doctor's
+token inventory and agent-removal revocation all act on the record where it
+lives, so a grant, a policy marker or a revocation persists with the
+credential and survives a tenant reload. Own config comes first so a
+duplicate that an earlier version persisted there keeps its grant state,
+and revocation commits in every inventory or in none. The default
+organization and single-runtime installs keep one inventory. Regression
+coverage: the `TestHostedClientWorkspace*` tests in
+`internal/api/host_agent_removal_lifecycle_integration_test.go` (reports,
+Connections, reload before first use, removal revocation),
+`TestTenantProxmoxInstallTokenGrantLivesOnInstanceRecord` in
+`internal/api/configapi/tenant_install_token_inventory_test.go` and
+`TestRevokeAPITokenRestoresEveryInventoryWhenOneCannotCommit` in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go`.
+
 ### Org managers reach the agent install path in their own organization
 
 An owner or admin of the selected organization now receives

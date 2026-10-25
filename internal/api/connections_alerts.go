@@ -36,7 +36,13 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.pveInstances = cfg.PVEInstances
 		inputs.pbsInstances = cfg.PBSInstances
 		inputs.pmgInstances = cfg.PMGInstances
-		inputs.apiTokens = append([]config.APITokenRecord(nil), cfg.APITokens...)
+		// A tenant org's agent tokens live in the instance inventory; its
+		// monitor sees them alongside its own config.
+		if monitor != nil && monitor.GetConfig() == cfg {
+			inputs.apiTokens = monitor.APITokenSnapshot()
+		} else {
+			inputs.apiTokens = append([]config.APITokenRecord(nil), cfg.APITokens...)
+		}
 		inputs.agentTokenInventoryKnown = true
 		inputs.pvePollingInterval = cfg.PVEPollingInterval
 		inputs.pbsPollingInterval = cfg.PBSPollingInterval

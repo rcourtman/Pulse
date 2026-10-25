@@ -4370,6 +4370,23 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+### Tenant monitors read agent credentials from both token inventories
+
+A non-default organization's monitor config is a deep copy whose `APITokens`
+hold only the organization's own `api_tokens.json`, while its agent install
+tokens live in the instance inventory bound to it.
+`MultiTenantMonitor.GetMonitor` hands the monitor that inventory
+(`SetInstanceAPITokenInventory`). `Monitor.APITokenInventories` lists the
+organization's own config, then the instance records bound only to it
+(`APITokenRecord.BoundOnlyToOrg`); `APITokenSnapshot` copies them under
+`config.Mu` for Connections and Agent Doctor; `FindAPITokenLocked` returns a
+record with the inventory that persists it. Agent removal revokes the
+credential in every inventory that holds it or, if one cannot commit, in
+none. Proof: `TestRevokeAPITokenRestoresEveryInventoryWhenOneCannotCommit` in
+`internal/monitoring/monitor_host_agent_removal_lifecycle_test.go` and
+`TestAgentFleetTokenInventoryIncludesInstanceTokensBoundToTenant` in
+`internal/monitoring/agent_fleet_doctor_test.go`.
+
 ### PBS authentication keeps an ended response caller's outcome
 
 Initial and ordinary PBS authentication preserve the owning caller's context

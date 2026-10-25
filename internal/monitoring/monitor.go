@@ -1377,6 +1377,7 @@ type Monitor struct {
 	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
 	backupAlertEvalMu          sync.Mutex                                 // Coalesce global rollup reads and order failure/recovery publication.
 	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
+	instanceTokens             APITokenInventory                          // Instance inventory holding agent tokens bound to this tenant org; see APITokenInventories
 	pbsBackupPollers           map[string]bool                            // Track PBS backup polling goroutines per instance
 	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
 	runtimePollingMu           sync.RWMutex                               // Guards runtimePollingOverride; polling goroutines read it every cycle

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,11 +13,13 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
+	"github.com/stretchr/testify/require"
 )
 
 type hostRemovalLifecycleHTTPRuntime struct {
@@ -804,4 +807,173 @@ func TestAgentConfigFetchAuditsNewDeliveriesAndEveryFailure(t *testing.T) {
 	if failures != 2 {
 		t.Fatalf("failed fetch audit events = %d, want every failure", failures)
 	}
+}
+
+const hostedClientOrgID = "t-CLIENT0001"
+
+type hostedClientWorkspace struct {
+	cfg    *config.Config
+	mtm    *monitoring.MultiTenantMonitor
+	router *Router
+}
+
+// newHostedClientWorkspace builds a hosted runtime whose client workspace is
+// the tenant organization hostedClientOrgID, the shape of every provider MSP
+// client runtime.
+func newHostedClientWorkspace(t *testing.T) *hostedClientWorkspace {
+	t.Helper()
+	t.Cleanup(func() { SetMultiTenantEnabled(false) })
+	SetMultiTenantEnabled(true)
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+	setMockModeForTest(t, false)
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+		// seedHostedAIBillingState signs its lease for this instance host.
+		PublicURL: "https://t-hostedai.cloud.pulserelay.pro",
+	}
+	multiTenant := config.NewMultiTenantPersistence(dataDir)
+	_, err := multiTenant.GetPersistence(hostedClientOrgID)
+	require.NoError(t, err)
+	seedHostedAIBillingState(t, multiTenant, hostedClientOrgID)
+	mtm := monitoring.NewMultiTenantMonitor(cfg, multiTenant, nil)
+	t.Cleanup(mtm.Stop)
+	_, err = mtm.GetMonitor(hostedClientOrgID)
+	require.NoError(t, err)
+
+	return &hostedClientWorkspace{cfg: cfg, mtm: mtm, router: NewRouter(cfg, nil, mtm, nil, nil, "1.0.0")}
+}
+
+// mintFromSettings generates an install token the way the client workspace's
+// Settings > Infrastructure page does: in the client organization.
+func (w *hostedClientWorkspace) mintFromSettings(t *testing.T, body string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", strings.NewReader(body))
+	req.Host = "t-hostedai.cloud.pulserelay.pro"
+	req = req.WithContext(context.WithValue(req.Context(), apicontext.OrgIDContextKey, hostedClientOrgID))
+	rec := httptest.NewRecorder()
+	w.router.configHandlers.HandleAgentInstallCommand(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	var minted AgentInstallCommandResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &minted))
+	require.NotEmpty(t, minted.Token, "client workspace returned no install token")
+	return minted.Token
+}
+
+// report posts a host report the way an installed agent does: with its token
+// and without naming an organization.
+func (w *hostedClientWorkspace) report(t *testing.T, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-client-host", Version: "1.0.0", Type: "unified"},
+		Host: agentshost.HostInfo{
+			ID:        "machine-client-host",
+			MachineID: "machine-client-host",
+			Hostname:  "client-host",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+	w.router.Handler().ServeHTTP(rec, req)
+	return rec
+}
+
+func (w *hostedClientWorkspace) clientMonitor(t *testing.T) *monitoring.Monitor {
+	t.Helper()
+	monitor, ok := w.mtm.PeekMonitor(hostedClientOrgID)
+	require.True(t, ok)
+	return monitor
+}
+
+// On v6.5.0-v6.6.0 a Settings install token landed only in the client
+// organization's config copy, which agent authentication never reads, so
+// every report was rejected with 401 and the client never received data.
+func TestHostedClientWorkspaceInstallTokenAuthenticatesAgentReports(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{name: "host agent", body: `{"type":"host","name":"client-host"}`},
+		{name: "proxmox agent", body: `{"type":"pve"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newHostedClientWorkspace(t)
+			token := w.mintFromSettings(t, tc.body)
+
+			rec := w.report(t, token)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+			record, ok := w.cfg.ValidateAPIToken(token)
+			require.True(t, ok, "install token is missing from the instance inventory agents authenticate against")
+			require.Equal(t, hostedClientOrgID, record.OrgID, "install token must be bound to the client organization")
+			require.Empty(t, w.clientMonitor(t).GetConfig().APITokens, "the instance record must be the only copy")
+
+			// The client's Connections view judges the agent's credential
+			// from the same inventory.
+			monitor := w.clientMonitor(t)
+			inputs := buildAggregatorInputsWithRuntimeSources(context.Background(), monitor.GetConfig(), nil, monitor, aggregatorRuntimeSources{orgID: hostedClientOrgID})
+			require.True(t, inputs.agentTokenInventoryKnown)
+			visible := false
+			for _, candidate := range inputs.apiTokens {
+				visible = visible || candidate.ID == record.ID
+			}
+			require.True(t, visible, "Connections cannot see the client agent's credential")
+
+			require.Len(t, w.clientMonitor(t).GetLiveHostsSnapshot(), 1, "agent report must land in the client organization")
+			if defaultMonitor, ok := w.mtm.PeekMonitor("default"); ok {
+				require.Empty(t, defaultMonitor.GetLiveHostsSnapshot(), "agent report leaked into the default organization")
+			}
+		})
+	}
+}
+
+// The client runtime can reload between minting and the agent's first
+// report. The token must not depend on in-memory state of the old runtime,
+// and the install-time command policy must still be applied.
+func TestHostedClientWorkspaceInstallTokenSurvivesTenantReload(t *testing.T) {
+	w := newHostedClientWorkspace(t)
+	token := w.mintFromSettings(t, `{"type":"host","name":"client-host","enableCommands":true}`)
+
+	_, err := w.mtm.ReloadTenant(hostedClientOrgID)
+	require.NoError(t, err)
+
+	rec := w.report(t, token)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	require.Len(t, w.clientMonitor(t).GetLiveHostsSnapshot(), 1)
+
+	config.Mu.RLock()
+	record, _, found := monitoring.FindAPITokenLocked(w.clientMonitor(t).APITokenInventories(), w.cfg.APITokens[0].ID)
+	applied := ""
+	if found {
+		applied = record.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]
+	}
+	config.Mu.RUnlock()
+	require.True(t, found, "reloaded client runtime cannot see its agent token")
+	require.NotEmpty(t, applied, "install-time command policy was not applied after a reload")
+}
+
+// Removing the client's last agent revokes its credential. The credential
+// lives in the instance inventory, so that is where revocation must land.
+func TestHostedClientWorkspaceAgentRemovalRevokesInstanceToken(t *testing.T) {
+	w := newHostedClientWorkspace(t)
+	token := w.mintFromSettings(t, `{"type":"host","name":"client-host"}`)
+	require.Equal(t, http.StatusOK, w.report(t, token).Code)
+
+	hosts := w.clientMonitor(t).GetLiveHostsSnapshot()
+	require.Len(t, hosts, 1)
+	_, err := w.clientMonitor(t).RemoveHostAgent(hosts[0].ID)
+	require.NoError(t, err)
+
+	require.False(t, w.cfg.IsValidAPIToken(token), "removed agent's credential is still live in the instance inventory")
+	persisted, err := config.NewConfigPersistence(w.cfg.DataPath).LoadAPITokens()
+	require.NoError(t, err)
+	require.Empty(t, persisted, "revocation did not reach the persisted instance inventory")
+	require.Equal(t, http.StatusUnauthorized, w.report(t, token).Code)
 }

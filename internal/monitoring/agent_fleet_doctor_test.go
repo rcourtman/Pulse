@@ -1102,3 +1102,27 @@ func containsString(values []string, want string) bool {
 	}
 	return false
 }
+
+// A tenant org's agent install tokens live in the instance inventory. Agent
+// Doctor counts the ones bound to that org as live credentials, and no other
+// org's or instance-wide token.
+func TestAgentFleetTokenInventoryIncludesInstanceTokensBoundToTenant(t *testing.T) {
+	const orgID = "t-CLIENT0004"
+	monitor := &Monitor{config: &config.Config{}, orgID: orgID}
+	monitor.SetInstanceAPITokenInventory(&config.Config{APITokens: []config.APITokenRecord{
+		{ID: "client-agent", OrgID: orgID},
+		{ID: "other-client", OrgID: "t-OTHER"},
+		{ID: "shared", OrgIDs: []string{orgID, "t-OTHER"}},
+		{ID: "instance-admin", OrgID: "default"},
+	}}, nil)
+
+	inventory := monitor.agentFleetTokenInventory(time.Now())
+	if _, ok := inventory.active["client-agent"]; !ok {
+		t.Fatalf("tenant agent credential missing from Agent Doctor inventory: %+v", inventory.active)
+	}
+	for _, id := range []string{"other-client", "shared", "instance-admin"} {
+		if _, ok := inventory.active[id]; ok {
+			t.Fatalf("Agent Doctor inventory for %s includes %s", orgID, id)
+		}
+	}
+}

@@ -23,6 +23,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -294,43 +295,40 @@ func (h *ConfigHandlers) prepareProxmoxInstallBootstrap(ctx context.Context, req
 		return false, nil
 	}
 
+	inventories := h.agentTokenInventories(ctx)
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
-	cfg := h.getConfig(ctx)
-	if cfg == nil {
+	if len(inventories) == 0 {
 		return false, fmt.Errorf("configuration unavailable")
 	}
-	for i := range cfg.APITokens {
-		record := &cfg.APITokens[i]
-		if record.ID != auth.tokenID {
-			continue
-		}
-		if !canBootstrapProxmoxInstallRegistration(record, req) {
-			return false, nil
-		}
-		if strings.TrimSpace(record.Metadata["bound_hostname"]) != "" {
-			return true, nil
-		}
-
-		if record.Metadata == nil {
-			record.Metadata = make(map[string]string)
-		}
-		previousMetadata := make(map[string]string, len(record.Metadata))
-		for key, value := range record.Metadata {
-			previousMetadata[key] = value
-		}
-		record.Metadata["bound_hostname"] = strings.TrimSpace(req.ServerName)
-		record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
-		if persistence := h.getPersistence(ctx); persistence != nil {
-			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-				record.Metadata = previousMetadata
-				return false, fmt.Errorf("persist Proxmox install token host binding: %w", err)
-			}
-		}
+	record, inventory, found := monitoring.FindAPITokenLocked(inventories, auth.tokenID)
+	if !found {
+		return false, fmt.Errorf("Proxmox install token no longer exists")
+	}
+	if !canBootstrapProxmoxInstallRegistration(record, req) {
+		return false, nil
+	}
+	if strings.TrimSpace(record.Metadata["bound_hostname"]) != "" {
 		return true, nil
 	}
-	return false, fmt.Errorf("Proxmox install token no longer exists")
+
+	if record.Metadata == nil {
+		record.Metadata = make(map[string]string)
+	}
+	previousMetadata := make(map[string]string, len(record.Metadata))
+	for key, value := range record.Metadata {
+		previousMetadata[key] = value
+	}
+	record.Metadata["bound_hostname"] = strings.TrimSpace(req.ServerName)
+	record.Metadata["bound_at"] = time.Now().UTC().Format(time.RFC3339)
+	if inventory.Persistence != nil {
+		if err := inventory.Persistence.SaveAPITokens(inventory.Config.APITokens); err != nil {
+			record.Metadata = previousMetadata
+			return false, fmt.Errorf("persist Proxmox install token host binding: %w", err)
+		}
+	}
+	return true, nil
 }
 
 func (h *ConfigHandlers) proxmoxInstallBootstrapAvailable(ctx context.Context, req *AutoRegisterRequest) bool {
@@ -339,19 +337,11 @@ func (h *ConfigHandlers) proxmoxInstallBootstrapAvailable(ctx context.Context, r
 		return false
 	}
 
+	inventories := h.agentTokenInventories(ctx)
 	config.Mu.RLock()
 	defer config.Mu.RUnlock()
-	cfg := h.getConfig(ctx)
-	if cfg == nil {
-		return false
-	}
-	for i := range cfg.APITokens {
-		record := &cfg.APITokens[i]
-		if record.ID == auth.tokenID {
-			return canBootstrapProxmoxInstallRegistration(record, req)
-		}
-	}
-	return false
+	record, _, found := monitoring.FindAPITokenLocked(inventories, auth.tokenID)
+	return found && canBootstrapProxmoxInstallRegistration(record, req)
 }
 
 // proxmoxInstallBootstrapConsumption records a grant consumption that can be
@@ -445,35 +435,31 @@ func (h *ConfigHandlers) completeProxmoxInstallBootstrap(ctx context.Context, re
 		return nil, nil
 	}
 
-	persistence := h.getPersistence(ctx)
+	inventories := h.agentTokenInventories(ctx)
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
-	cfg := h.getConfig(ctx)
-	if cfg == nil {
+	if len(inventories) == 0 {
 		return nil, fmt.Errorf("configuration unavailable")
 	}
-	for i := range cfg.APITokens {
-		record := &cfg.APITokens[i]
-		if record.ID != auth.tokenID {
-			continue
-		}
-		if completedProxmoxInstallRegistrationMatches(record, req) {
-			return nil, nil
-		}
-		if !canBootstrapProxmoxInstallRegistration(record, req) {
-			return nil, fmt.Errorf("Proxmox install registration grant is no longer available")
-		}
-		consumption := recordProxmoxInstallBootstrapConsumption(record, req, host, node)
-		if persistence != nil {
-			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-				consumption.restore(record.Metadata)
-				return nil, fmt.Errorf("persist Proxmox install registration grant: %w", err)
-			}
-		}
-		return consumption, nil
+	record, inventory, found := monitoring.FindAPITokenLocked(inventories, auth.tokenID)
+	if !found {
+		return nil, fmt.Errorf("Proxmox install token no longer exists")
 	}
-	return nil, fmt.Errorf("Proxmox install token no longer exists")
+	if completedProxmoxInstallRegistrationMatches(record, req) {
+		return nil, nil
+	}
+	if !canBootstrapProxmoxInstallRegistration(record, req) {
+		return nil, fmt.Errorf("Proxmox install registration grant is no longer available")
+	}
+	consumption := recordProxmoxInstallBootstrapConsumption(record, req, host, node)
+	if inventory.Persistence != nil {
+		if err := inventory.Persistence.SaveAPITokens(inventory.Config.APITokens); err != nil {
+			consumption.restore(record.Metadata)
+			return nil, fmt.Errorf("persist Proxmox install registration grant: %w", err)
+		}
+	}
+	return consumption, nil
 }
 
 // rollbackProxmoxInstallBootstrap restores a grant consumed by
@@ -487,39 +473,32 @@ func (h *ConfigHandlers) rollbackProxmoxInstallBootstrap(ctx context.Context, co
 		return
 	}
 
-	persistence := h.getPersistence(ctx)
+	inventories := h.agentTokenInventories(ctx)
 	config.Mu.Lock()
 	defer config.Mu.Unlock()
 
-	cfg := h.getConfig(ctx)
-	if cfg == nil {
+	record, inventory, found := monitoring.FindAPITokenLocked(inventories, consumption.tokenID)
+	if !found {
 		return
 	}
-	for i := range cfg.APITokens {
-		record := &cfg.APITokens[i]
-		if record.ID != consumption.tokenID {
-			continue
-		}
-		if record.Metadata == nil {
-			record.Metadata = make(map[string]string)
-		}
-		consumption.restore(record.Metadata)
-		if persistence != nil {
-			if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
-				log.Error().
-					Err(err).
-					Str("token_id", consumption.tokenID).
-					Str("type", consumption.proxmoxType).
-					Msg("Failed to restore Proxmox install registration grant after a failed source save")
-				return
-			}
-		}
-		log.Warn().
-			Str("token_id", consumption.tokenID).
-			Str("type", consumption.proxmoxType).
-			Msg("Restored Proxmox install registration grant after a failed source save")
-		return
+	if record.Metadata == nil {
+		record.Metadata = make(map[string]string)
 	}
+	consumption.restore(record.Metadata)
+	if inventory.Persistence != nil {
+		if err := inventory.Persistence.SaveAPITokens(inventory.Config.APITokens); err != nil {
+			log.Error().
+				Err(err).
+				Str("token_id", consumption.tokenID).
+				Str("type", consumption.proxmoxType).
+				Msg("Failed to restore Proxmox install registration grant after a failed source save")
+			return
+		}
+	}
+	log.Warn().
+		Str("token_id", consumption.tokenID).
+		Str("type", consumption.proxmoxType).
+		Msg("Restored Proxmox install registration grant after a failed source save")
 }
 
 // HandleSetupScript serves the setup script for Proxmox/PBS nodes
@@ -1965,10 +1944,10 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 	// source of its declared type, bound to the first presenting hostname.
 	if !authenticated {
 		if apiToken, hasToken := explicitAPITokenFromRequest(r); hasToken {
+			inventories := h.agentTokenInventories(r.Context())
 			config.Mu.Lock()
-			cfg := h.getConfig(r.Context())
-			if cfg != nil {
-				record, ok := cfg.ValidateAPIToken(apiToken)
+			if len(inventories) > 0 {
+				record, ok := validateAgentTokenLocked(inventories, apiToken)
 				if ok && record != nil && record.HasScope(config.ScopeAgentReport) {
 					// Reject cross-org tokens: if the request context has an explicit
 					// non-default org, the token must belong to that same org.
@@ -2586,7 +2565,7 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	rawToken := ""
 	if h.authConfiguredForAgentLifecycle(cfg) {
 		tokenName := fmt.Sprintf("proxmox-agent-%s-%d", installType, time.Now().Unix())
-		rawToken, _, err = issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
+		rawToken, _, err = h.issueAgentInstallTokenForRequest(r.Context(), cfg, persistence, issueAgentInstallTokenOptions{
 			TokenName:   tokenName,
 			OwnerUserID: h.apiTokenOwnerUserIDForRequest(cfg, r),
 			Scopes:      proxmoxAgentInstallScopes(req.EnableCommands),
@@ -2659,7 +2638,7 @@ func (h *ConfigHandlers) handleHostAgentInstallToken(w http.ResponseWriter, r *h
 	if tokenName == "" {
 		tokenName = fmt.Sprintf("host-agent-%d", time.Now().Unix())
 	}
-	rawToken, record, err := issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
+	rawToken, record, err := h.issueAgentInstallTokenForRequest(r.Context(), cfg, persistence, issueAgentInstallTokenOptions{
 		TokenName:   tokenName,
 		OwnerUserID: h.apiTokenOwnerUserIDForRequest(cfg, r),
 		Scopes:      hostAgentInstallScopes(req.EnableCommands),

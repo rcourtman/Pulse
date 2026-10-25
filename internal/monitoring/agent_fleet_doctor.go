@@ -262,9 +262,7 @@ func (m *Monitor) agentFleetTokenInventory(now time.Time) agentFleetTokenInvento
 		active:  make(map[string]config.APITokenRecord),
 		expired: make(map[string]struct{}),
 	}
-	config.Mu.RLock()
-	defer config.Mu.RUnlock()
-	for _, record := range m.config.APITokens {
+	for _, record := range m.APITokenSnapshot() {
 		id := strings.TrimSpace(record.ID)
 		if id == "" {
 			continue
@@ -273,7 +271,7 @@ func (m *Monitor) agentFleetTokenInventory(now time.Time) agentFleetTokenInvento
 			inventory.expired[id] = struct{}{}
 			continue
 		}
-		inventory.active[id] = record.Clone()
+		inventory.active[id] = record
 	}
 	return inventory
 }
