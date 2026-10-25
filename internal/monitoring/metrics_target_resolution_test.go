@@ -7,6 +7,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // useMockEstate enables the default mock estate with the given node count,
@@ -91,6 +93,12 @@ func resourceIDsWithTargets(tb testing.TB, view monitorUnifiedStateView) []strin
 // a pass costs microseconds however slowly the process runs, not an estate
 // build per lookup.
 func BenchmarkMockMetricsTargetResolutionAfterTick(b *testing.B) {
+	// Fixture lifecycle logs would split the benchmark's result line during
+	// calibration. Keep setup and cleanup inside the same quiet logger scope.
+	originalLogger := log.Logger
+	log.Logger = zerolog.Nop()
+	b.Cleanup(func() { log.Logger = originalLogger })
+
 	useMockEstate(b, mock.DefaultConfig.NodeCount, time.Second)
 	m := newMockEstateMonitor()
 	ids := resourceIDsWithTargets(b, m.currentUnifiedStateView())

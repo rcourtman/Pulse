@@ -4099,6 +4099,11 @@ hosts or PBS instances it throws away (see "Mock-mode metrics-target lookups
 ride the fixture structure revision" in the monitoring contract for the callers
 and the measurements).
 
+The mock lookup benchmark keeps the fixture logger quiet through setup,
+calibration and cleanup, then restores it. Untimed fixture logs otherwise split
+Go's result line and leave benchstat without that sample. The measured lookup
+work and reported lookup count stay unchanged.
+
 ### Update evidence reuses the bounded node observation
 
 Package evidence adds only one bounded status, one bounded reason, and the
