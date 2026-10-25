@@ -2306,3 +2306,107 @@ test("title-version label consumer corrects only its own metadata without contac
     assert.equal(calls.getIssue.length, 2);
   }
 });
+
+test("version fields retain document-wide full, collapsed and shortcut reference links", () => {
+  for (const [value, definitions, expected] of [
+    ["[6.5.0][release]", '[release]: https://example.invalid/6.4.5 "6.4.5"', "6.5.0"],
+    ["[6.5.0][]", "[6.5.0]: https://example.invalid/6.4.5", "6.5.0"],
+    ["[6.5.0]", "[6.5.0]: https://example.invalid/6.4.5", "6.5.0"],
+    ["**[`v6.5.0`][ReLeAsE]**", "[release]: https://example.invalid/6.4.5", "6.5.0"],
+    ["[pulse-pro-v6.6.0-rc.6-linux-arm64.tar.gz][release]",
+      "[release]: https://example.invalid/6.4.5", "6.6.0-rc.6"],
+    ["[unknown][release]", '[release]: https://example.invalid/6.5.0 "6.5.0"', null],
+  ]) {
+    for (const field of ["### Pulse version\n", "Pulse version: ", "- **Pulse version**: "]) {
+      const report = `${field}${value}\n\n### Agent version\n6.4.5`;
+      for (const body of [`${definitions}\n\n${report}`, `${report}\n\n${definitions}`]) {
+        for (const newline of ["\n", "\r\n"]) {
+          assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5",
+            body.replaceAll("\n", newline)), expected, body);
+        }
+      }
+    }
+  }
+});
+
+test("reference definitions cannot invent values from destinations, examples or hidden content", () => {
+  for (const [value, definitions] of [
+    ["[release][6.5.0]", "[6.5.0]: https://example.invalid/6.5.0"],
+    ["![6.5.0][release]", "[release]: https://example.invalid/6.5.0"],
+    ["~~[6.5.0][release]~~", "[release]: https://example.invalid/6.5.0"],
+    ["`[6.5.0][release]`", "[release]: https://example.invalid/6.5.0"],
+    ["[6.5.0][release]", "<!--\n[release]: https://example.invalid/6.5.0\n-->"],
+    ["[6.5.0][release]", "```markdown\n[release]: https://example.invalid/6.5.0\n```"],
+    ["[6.5.0][release]", "    [release]: https://example.invalid/6.5.0"],
+    ["[6.5.0][release]", "[other]: https://example.invalid/6.5.0"],
+  ]) {
+    assert.equal(triage.internals.extractPulseVersion("Upgrade from v6.4.5",
+      `### Pulse version\n${value}\n\n### Agent version\n6.4.5\n\n${definitions}`), null, value);
+  }
+});
+
+test("reference-linked feedback follows every visible form choice, not its definition", () => {
+  for (const [selection, expected] of [
+    ["Bug / regression", "bug"], ["Upgrade / migration issue", "bug"],
+    ["Performance issue", "bug"], ["Documentation issue", "documentation"],
+    ["UX / workflow friction", "enhancement"], ["Other actionable feedback", "enhancement"],
+  ]) {
+    for (const [value, definitions] of [
+      [`[${selection}][choice]`, '[choice]: https://example.invalid/bug "Bug / regression"'],
+      [`[${selection}][]`, `[${selection}]: https://example.invalid/bug`],
+      [`[${selection}]`, `[${selection}]: https://example.invalid/bug`],
+    ]) {
+      const report = `### Feedback type\n${value}\n\n### Pulse version\nunknown`;
+      for (const body of [`${definitions}\n\n${report}`, `${report}\n\n${definitions}`]) {
+        assert.equal(triage.internals.classifyV6FeedbackType(body), expected, body);
+      }
+    }
+  }
+  for (const value of ["[choice][bug]", "![Bug / regression][bug]",
+    "~~[Bug / regression][bug]~~", "`[Bug / regression][bug]`"]) {
+    assert.equal(triage.internals.classifyV6FeedbackType(
+      `### Feedback type\n${value}\n\n### Pulse version\nunknown\n\n[bug]: https://example.invalid/bug`), null, value);
+  }
+});
+
+test("linked no-topic responses stay empty without discarding qualifications or evidence", () => {
+  for (const value of ["[None][topic]", "[None][]", "[None]", "**[`None`][topic]**"]) {
+    const definitions = '[topic]: https://example.invalid/bug "Bug / regression"\n[None]: https://example.invalid/bug';
+    for (const [topic, expected] of [[value, false],
+      [`${value}, except the saved target also changes.`, true],
+      [`${value}\n\nThe installer also loses its selection.`, true]]) {
+      const report = `### Additional actionable topics\n${topic}\n\n### Desired outcome\nKeep the current workflow.`;
+      for (const body of [`${definitions}\n\n${report}`, `${report}\n\n${definitions}`]) {
+        assert.equal(triage.internals.classifyAdditionalActionableTopics(body), expected, body);
+      }
+    }
+  }
+  for (const topic of ["![None][topic]", "~~[None][topic]~~", "`[None][topic]`", "[None][undefined]"]) {
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(
+      `### Additional actionable topics\n${topic}\n\n### Pulse version\n6.5.0\n\n[topic]: https://example.invalid/bug`), true, topic);
+  }
+});
+
+test("the silent consumer uses linked declarations without invented tasks or reporter contact", async () => {
+  for (const [selection, version, expectedLabels] of [
+    ["Documentation issue", "unknown", ["documentation"]],
+    ["Bug / regression", "6.5.0", ["affects-6.5.0", "bug"]],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2928, title: "Current feedback", labels: ["needs-human",
+      "release-blocker", "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+    body: `### Feedback type\n[${selection}][choice]\n\n### Pulse version\n[${version}][release]\n\n` +
+      "### Additional actionable topics\n[None][topic]\n\n### What happened?\nCurrent report.\n\n" +
+      '[choice]: https://example.invalid/bug "Bug / regression"\n' +
+      '[release]: https://example.invalid/6.4.5 "6.4.5"\n[topic]: https://example.invalid/bug' };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [expectedLabels]);
+    assert.deepEqual(calls.createLabel.map(call => call.name),
+      version === "6.5.0" ? ["affects-6.5.0"] : []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
