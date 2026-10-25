@@ -55,6 +55,31 @@ local fence only through an explicit, audited operator attestation of provider
 evidence that the request cannot complete. An active read or elapsed time is
 insufficient. No financial request is repeated by that resolution.
 
+## Individual requests
+
+Refunds are on request; there is no blanket payout or automatic cancellation.
+Publish clear terms and a simple request route so customers need not argue a
+complaint. Every new executable annual exit requires a recorded explicit
+request, verified canonical support case, exact subscription binding and
+required audit. An operator-attested external request creates or references a
+canonical general case, retaining opaque evidence references and its original
+receipt time without backdating case creation. A generic support contact does
+not count as consent.
+
+Requests received from announcement through 60 days after the effective date
+are timely. Processing after that deadline does not invalidate an on-time
+request. The programme and effective date still govern first execution. Request
+withdrawal and persisted cancellation intent are mutually exclusive; once a
+request has been dispatched, recovery follows its saved financial obligation.
+Existing unrequested quotes cannot start cancellation, while already-dispatched
+obligations remain recoverable after upgrade or privacy deletion.
+
+For an eligible first-time buyer in the 30 days before announcement who asks
+for the remedy, the agreed amount is every payment on that new subscription in
+full, including monthly renewals up to cancellation. This amount rule still
+needs its separate original-payment/history proof and implementation; the
+annual-only executor does not provide that remedy yet.
+
 ## Remaining implementation
 
 Keep the public free-feature change out of the automatic release train until
@@ -101,6 +126,10 @@ and absence of a public route. `v6_commercial_refund_exits_test.go` covers
 legacy/v6 termination with unrelated purchases preserved, uncertain/pending
 provider outcomes, concurrent confirmations, atomic rollback, stale evidence,
 operator-attested negative resolution, late partial-refund events, existing
-writer fencing and upgrade preservation of ordinary customer quotes. The
-source is prepared independently of production deployment and provider
+writer fencing and upgrade preservation of ordinary customer quotes.
+`v6_commercial_refund_claims_test.go` adds request-only admission, explicit
+instruction, canonical v5/v6 identity, verified external intake, atomic
+case/request/audit persistence, original receipt deadlines, withdrawal/intent
+exclusion, changed ownership/case evidence, privacy deletion and recovery of
+already-dispatched historical obligations. The source is prepared independently of production deployment and provider
 test-mode mutation.

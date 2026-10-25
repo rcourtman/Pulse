@@ -4580,7 +4580,7 @@
     },
     {
       "id": "RA41",
-      "summary": "The released self-hosted commercial surface remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, and support policy: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay, while unproved self-service plan and cadence transitions remain unavailable and unadvertised until their external lifecycle and Relay version-floor proof passes.",
+      "summary": "The released self-hosted commercial surface remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, and support policy: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay, while unproved self-service plan and cadence transitions remain unavailable and unadvertised until their external lifecycle and Relay version-floor proof passes. Any Community transition refund or cancellation of paid access requires an individually recorded, verified customer request; the programme must not issue blanket refunds or automatically cancel subscriptions.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "manual",
@@ -4653,6 +4653,12 @@
         {
           "repo": "pulse-pro",
           "path": "license-server/main_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_commercial_refund_claims_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
