@@ -26,18 +26,37 @@ FAILURES=0
 
 step() { printf '\n=== %s ===\n' "$1"; }
 fail() { printf 'FAIL: %s\n' "$1"; FAILURES=$((FAILURES + 1)); }
+source_read_failed() {
+  printf 'Cannot %s (git exit %s); no passing pre-push verdict is available.\n' "$2" "$1" >&2
+  exit 2
+}
 
 if ! BASE_SHA=$(git rev-parse --verify --quiet "${BASE}^{commit}"); then
   echo "Base ref $BASE not found; run git fetch origin first." >&2
   exit 2
 fi
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
+DIRTY=false
+status=0
+git diff --quiet || status=$?
+case "$status" in
+  0) ;;
+  1) DIRTY=true ;;
+  *) source_read_failed "$status" "inspect unstaged changes" ;;
+esac
+status=0
+git diff --cached --quiet || status=$?
+case "$status" in
+  0) ;;
+  1) DIRTY=true ;;
+  *) source_read_failed "$status" "inspect staged changes" ;;
+esac
+if [ "$DIRTY" = true ]; then
   echo "Note: working tree has uncommitted changes; only committed work is checked."
 fi
 
-HEAD_SHA=$(git rev-parse --verify HEAD)
-AHEAD=$(git rev-list --count "$BASE_SHA".."$HEAD_SHA")
+HEAD_SHA=$(git rev-parse --verify HEAD) || source_read_failed "$?" "resolve HEAD"
+AHEAD=$(git rev-list --count "$BASE_SHA".."$HEAD_SHA") || source_read_failed "$?" "count outgoing commits"
 if [ "$AHEAD" -eq 0 ]; then
   echo "No commits ahead of $BASE; nothing to check."
   exit 0
@@ -49,8 +68,11 @@ if ! RANGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
   echo "Base ref $BASE has no common ancestor with HEAD; choose a base in this history." >&2
   exit 2
 fi
-CHANGED=$(git diff --name-only "$RANGE_BASE" "$HEAD_SHA")
+CHANGED=$(git diff --name-only "$RANGE_BASE" "$HEAD_SHA") || source_read_failed "$?" "list changed files"
 CHANGED_GO=$(printf '%s\n' "$CHANGED" | grep -E '\.go$' || true)
+# Admit the whole commit/parent inventory before interpreting it. A process
+# substitution hides rev-list's exit and can silently omit required guards.
+COMMITS=$(git rev-list --reverse --no-merges --parents "$BASE_SHA".."$HEAD_SHA") || source_read_failed "$?" "list outgoing commits"
 
 # Match Build and Test's strict audit paths. A known-rejected graph should not
 # wait for the expensive source checks, or get a local passing verdict instead.
@@ -66,11 +88,11 @@ if printf '%s\n' "$CHANGED" | grep -E '^frontend-modern/package(-lock)?\.json$|^
 fi
 
 step "Canonical completion guard (per commit, CI mode)"
-while IFS= read -r commit; do
+while read -r commit parents; do
   if [ -z "$commit" ]; then
     continue
   fi
-  if ! git rev-parse --verify --quiet "${commit}^" >/dev/null; then
+  if [ -z "$parents" ]; then
     echo "Skipping root commit $commit (no parent to diff against)."
     continue
   fi
@@ -78,15 +100,21 @@ while IFS= read -r commit; do
   # Match canonical-governance.yml exactly: the prepare-commit-msg hook
   # persists an intentional local bypass as a trailer, so recover that
   # reason when validating already-created commits before push.
-  reason=$(git log -1 --format='%(trailers:key=Contract-Neutral,valueonly,separator=; )' "$commit" | tr '\n' ' ')
+  reason=$(git log -1 --format='%(trailers:key=Contract-Neutral,valueonly,separator=; )' "$commit" | tr '\n' ' ') || source_read_failed "$?" "read Contract-Neutral trailer for $commit"
+  files=$(git diff-tree --no-commit-id --name-only -r "$commit") || source_read_failed "$?" "list changed files for $commit"
   echo "Checking $commit"
-  if ! git diff-tree --no-commit-id --name-only -r "$commit" | \
+  if ! printf '%s\n' "$files" | \
     PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="$reason" \
       python3 scripts/release_control/canonical_completion_guard.py \
         --files-from-stdin --diff-base "${commit}^" --commit "$commit"; then
     fail "canonical completion guard @ $commit"
   fi
-done < <(git rev-list --reverse --no-merges "$BASE_SHA".."$HEAD_SHA")
+done <<< "$COMMITS"
+
+if [ "$FAILURES" -gt 0 ]; then
+  echo "Canonical completion guard failed; remaining source checks have not run." >&2
+  exit 1
+fi
 
 # Type-checking cannot establish rendered acceptance. Use the existing final
 # content guard, including receipt-only edits and merge resolutions, without

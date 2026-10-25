@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -240,13 +241,14 @@ class DevPrepushFrontendTest(DevPrepushFixture):
         self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
         self.assertEqual(len(guards), 1)
 
-    def test_canonical_failure_is_not_cleared_by_a_clean_audit(self):
+    def test_canonical_failure_stops_source_checks_after_a_clean_audit(self):
         self.change("frontend-modern/package.json")
         self.env["PREPUSH_GUARD_STATUS"] = "4"
         result, calls, guards = self.run_gate()
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertNotIn("All pre-push checks passed", result.stdout)
-        self.assertEqual([call["args"] for call in calls], [["audit", "--json"], ["run", "type-check"]])
+        self.assertIn("Canonical completion guard failed; remaining source checks have not run", result.stderr)
+        self.assertEqual([call["args"] for call in calls], [["audit", "--json"]])
         self.assertEqual(len(guards), 1)
 
     def test_documentation_only_has_no_frontend_checks(self):
@@ -283,6 +285,129 @@ class DevPrepushFrontendTest(DevPrepushFixture):
         paths = r"^frontend-modern/package(-lock)?\.json$|^scripts/(npm-audit-retry\.sh|npm_audit_process\.py)$"
         self.assertIn(paths, classification)
         self.assertIn(paths, PREPUSH.read_text())
+
+
+class DevPrepushSourceReadsTest(DevPrepushFixture):
+    """Failed Git reads are unavailable evidence, including partial stdout."""
+
+    def setUp(self):
+        super().setUp()
+        self.browser_calls = Path(self.directory.name) / "browser-calls"
+        self.go_calls = Path(self.directory.name) / "go-calls"
+        self.env.update(
+            PREPUSH_REAL_GIT=shutil.which("git"),
+            PREPUSH_BROWSER_CALLS=str(self.browser_calls),
+            PREPUSH_GO_CALLS=str(self.go_calls),
+        )
+        self.write(
+            "scripts/release_control/browser_verification_guard.py",
+            "import os\n"
+            "with open(os.environ['PREPUSH_BROWSER_CALLS'],'a') as output:\n"
+            " output.write('browser guard\\n')\n",
+        )
+        self.git("add", "--", "scripts/release_control/browser_verification_guard.py")
+        self.git("commit", "--quiet", "-m", "Track downstream fixture checks")
+        self.base = self.git("rev-parse", "HEAD").stdout.strip()
+        self.change("frontend-modern/src/example.ts")
+        self.head = self.change("internal/fixture/example.go", trailer="fixture only")
+        self.env["PREPUSH_FIXTURE_HEAD"] = self.head
+
+        git = self.bin / "git"
+        git.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os,sys\n"
+            "args=sys.argv[1:]\n"
+            "mode=os.environ.get('PREPUSH_GIT_FAULT')\n"
+            "faults={\n"
+            " 'unstaged': args == ['diff','--quiet'],\n"
+            " 'staged': args == ['diff','--cached','--quiet'],\n"
+            " 'head': args == ['rev-parse','--verify','HEAD'],\n"
+            " 'ahead': args[:2] == ['rev-list','--count'],\n"
+            " 'range-files': args[:2] == ['diff','--name-only'],\n"
+            " 'commits': args[:2] == ['rev-list','--reverse'],\n"
+            " 'trailer': args[:1] == ['log'],\n"
+            " 'commit-files': args[:1] == ['diff-tree'],\n"
+            "}\n"
+            "if faults.get(mode,False):\n"
+            " if os.environ.get('PREPUSH_GIT_PARTIAL') == 'true':\n"
+            "  print({'head':os.environ['PREPUSH_FIXTURE_HEAD'],"
+            "'ahead':'1','commits':os.environ['PREPUSH_FIXTURE_HEAD'],"
+            "'trailer':'fixture partial trailer'}.get(mode,'README.md'))\n"
+            " print('fixture Git read failure: '+mode,file=sys.stderr)\n"
+            " sys.exit(73)\n"
+            "os.execv(os.environ['PREPUSH_REAL_GIT'],['git',*args])\n",
+            encoding="utf-8",
+        )
+        git.chmod(0o755)
+        go = self.bin / "go"
+        go.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json,os,sys\n"
+            "with open(os.environ['PREPUSH_GO_CALLS'],'a') as output:\n"
+            " output.write(json.dumps(sys.argv[1:])+'\\n')\n",
+            encoding="utf-8",
+        )
+        go.chmod(0o755)
+
+    def assert_no_downstream_checks(self):
+        for path in (self.browser_calls, self.go_calls):
+            self.assertFalse(path.exists() and path.read_text(), str(path))
+
+    def test_failed_source_reads_stop_before_incomplete_evidence_is_used(self):
+        operations = {
+            "unstaged": "inspect unstaged changes",
+            "staged": "inspect staged changes",
+            "head": "resolve HEAD",
+            "ahead": "count outgoing commits",
+            "range-files": "list changed files",
+            "commits": "list outgoing commits",
+            "trailer": "read Contract-Neutral trailer for",
+            "commit-files": "list changed files for",
+        }
+        for mode, operation in operations.items():
+            for partial in ("false", "true"):
+                with self.subTest(mode=mode, partial=partial):
+                    for path in (self.calls, self.guard_calls, self.browser_calls, self.go_calls):
+                        path.write_text("")
+                    self.env.update(PREPUSH_GIT_FAULT=mode, PREPUSH_GIT_PARTIAL=partial)
+                    result, calls, guards = self.run_gate()
+                    self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                    self.assertIn("fixture Git read failure: " + mode, result.stderr)
+                    self.assertIn("Cannot " + operation, result.stderr)
+                    self.assertIn("git exit 73", result.stderr)
+                    self.assertNotIn("All pre-push checks passed", result.stdout)
+                    self.assertEqual(calls, [])
+                    self.assertEqual(guards, [])
+                    self.assert_no_downstream_checks()
+
+    def test_all_canonical_failures_are_reported_before_source_checks_stop(self):
+        self.env["PREPUSH_GUARD_STATUS"] = "4"
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(len(guards), 2)
+        self.assertEqual(result.stdout.count("FAIL: canonical completion guard @"), 2)
+        self.assertIn("remaining source checks have not run", result.stderr)
+        self.assertEqual(calls, [])
+        self.assert_no_downstream_checks()
+
+    def test_successful_source_reads_keep_every_downstream_check(self):
+        # Ordinary dirty index/worktree exits are 1, not read failures. The
+        # committed source still gets every guard, Go check and type-check.
+        self.write("README.md", "staged fixture delta\n")
+        self.git("add", "--", "README.md")
+        self.write("README.md", "unstaged fixture delta\n")
+        result, calls, guards = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("only committed work is checked", result.stdout)
+        self.assertIn("All pre-push checks passed", result.stdout)
+        self.assertEqual(len(guards), 2)
+        self.assertEqual([call["args"] for call in calls], [["run", "type-check"]])
+        self.assertEqual(self.browser_calls.read_text(), "browser guard\n")
+        commands = [json.loads(line) for line in self.go_calls.read_text().splitlines()]
+        self.assertEqual(len(commands), 3)
+        self.assertEqual(commands[0], ["build", "./..."])
+        self.assertEqual(commands[1][0:2], ["test", "./internal/mutationregistry"])
+        self.assertEqual(commands[2], ["test", "-count=1", "-timeout", "15m", "./internal/fixture"])
 
 
 class DevPrepushBrowserTest(DevPrepushFixture):
