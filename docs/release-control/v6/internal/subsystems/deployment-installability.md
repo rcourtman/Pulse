@@ -1996,6 +1996,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 103. `scripts/release_lifecycle_rehearsal_versions.py`
 104. `.github/workflows/dependency-advisory-watch.yml`
 105. `scripts/dependency_advisory_watch.py`
+106. `tests/integration/scripts/settings-scroll-audit.mjs`
 
 `scripts/installtests/run_unix_contracts.py` is the canonical exhaustive native Unix installer execution runner. Its dedicated verification files are `scripts/installtests/native_unix_contract_runner_test.go` and `scripts/tests/test_native_installer_contract_runner.py`. Script-smoke discovery and the native Go wrapper execute that same Python control suite, so phase inventory, failure propagation and real compiled-Go exit behavior retain one verification source.
 
@@ -3015,6 +3016,56 @@ artifact-selection behaviour.
    deterministic token authentication after setup, and may use the server setup
    API as a fallback only when the UI wizard fails to complete cleanly under the
    managed hot-dev runtime.
+   A successful token probe and a protected workspace URL do not establish
+   completed browser bootstrap. Token, cookie reuse and password login wait for
+   the mounted authenticated app shell on its resolved workspace destination
+   before returning control to a journey. A mounted shell at `/`, `/login` or
+   `/infrastructure` still has a default redirect pending and cannot admit the
+   next deep link. Browser rejection
+   remains an authentication failure rather than a reason to accept the URL or
+   retry login. `tests/integration/scripts/fixture-auth.test.mjs` exercises the
+   actual token helper with delayed and rejected bootstrap; the runtime-home
+   onboarding browser contract also holds a real protected-state request.
+   Its cookie control withholds the admission facet and resource snapshot,
+   proves a mounted entry still fails admission, then releases the snapshot
+   and follows the requested install handoff without being redirected away.
+   That regression creates and revokes its own token through the admitted
+   session and shared browser-token helper. It must work with cookie-only and
+   primary-token fixtures without replacing their remembered credential.
+   Protected full-page navigations also await that mounted-shell boundary
+   before judging a consuming panel. A loading root is not a ready workspace.
+   The delayed-token browser regression owns a fresh page and holds only that
+   page's bootstrap reads, so reads from a departing document cannot release
+   or stall its control. Responsive threshold edits leave the whole desktop
+   row or use the card's Save control before asserting a staged change.
+   The Core E2E Docker stack explicitly sets bounded development-only general
+   and update request budgets for isolated browser contexts sharing one bridge
+   IP. Production limits and authentication limits remain enforced. The API
+   contracts subsystem owns validation and exhaustion semantics.
+   Core E2E retains a tier's HTML diagnostic report when it fails or produces
+   a first-retry trace/failure screenshot, including a retry that passes. Small
+   JUnit results are retained for every completed tier. Stable receipts are
+   uploaded before probation starts, and both tiers keep the existing three-day
+   retention. Artifact presence controls retention, not release readiness or
+   probation promotion.
+   Settings browser audits scroll the actual application content owner to its
+   observed bottom. Traversal must scale with the populated estate rather than
+   stop after a fixed number of wheel steps. The browser geometry regression
+   `tests/integration/scripts/settings-scroll-audit.test.mjs` retains native
+   Chromium/WebKit traversal of short and 30,000px content plus the positive
+   horizontal-overflow control; the live mobile audit keeps its bottom and
+   overflow assertions. Infrastructure onboarding uses this same content-owner
+   audit, including its bottom-position assertion. Its SPA route assertions
+   observe the requested URL rather than wait for the document's load event.
+   Bottom position and horizontal width are judged from the same browser snapshot.
+   If content reflows after traversal, the audit finishes the changed extent before
+   accepting that snapshot. A scroll reset with an unchanged extent remains an
+   error. Native browser controls reproduce a reflow between the old separate reads,
+   verify the newly revealed footer and retain both overflow and scroll-reset
+   negative controls. Core E2E runs this native geometry proof once, in shard 1
+   after Chromium/WebKit installation and before image admission or container
+   startup. Its failure stops that shard and reaches the existing E2E verdict.
+   The proof must not depend on probation admission or ignore a failed command.
    The built `index.html` must not modulepreload lazy route chunks: the SRI
    plugin runs with `preloadDynamicChunks: false` so cold start fetches only the
    entry and its static vendor imports (route-level code splitting stays
@@ -6488,6 +6539,13 @@ truth inside Playwright helpers. `tests/integration/tests/helpers.ts` may
 offer request trackers for browser-shell contract proofs, but those helpers
 must observe page-originated traffic only and must not blur browser runtime
 requests together with `page.request` or other direct API helper calls.
+Provider inventory fixtures must own every inventory input consumed by their
+journey. `tests/integration/tests/vmware-workload-fixture.ts` serves its canonical
+REST snapshot with a mocked empty socket so a live frame cannot replace its VM
+identity during drawer inspection. Its resource-detail and exclusion-integrity
+browser proofs exercise read-only context and retain provider-admin prohibitions.
+This synthetic fixture does not establish live vCenter or websocket acceptance.
+
 The shared authenticated browser fixture must not report the default mock
 runtime ready from inventory alone while historical chart initialization is
 still running. When Core E2E requests the default mock-readiness gate, the

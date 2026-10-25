@@ -3350,6 +3350,9 @@ a new API state machine, queue contract, or verification-accounting field.
    attention projection by severity, then actionable review posture, then
    observation recency, but it must preserve every API-owned lifecycle,
    evidence, protection, action, and verification fact in selected detail.
+   Attention-row control names expose the displayed record in source order,
+   through the Patrol and frontend primitives visible-label contract; rendering
+   must not replace those facts with a title-only accessible name.
    The first-party `Inbox`, `Protection`, and `Activity` modes are a mutually
    exclusive presentation boundary, not API query modes: Inbox consumes the
    canonical attention projection, Protection consumes retained objectives,
@@ -12420,6 +12423,25 @@ Router's or the package-global limiters. Limits, windows, tenant selection,
 revocation and response payloads are unchanged. The connected lifetime and
 ownership controls are in `router_limiter_lifecycle_test.go`; the integration
 fixture's cleanup also runs on a failed listener/request assertion.
+
+### Development browser fixture rate budgets
+
+`internal/api/rate_limit_config.go` owns endpoint-category budgets. Production
+keeps the general API budget at 500 requests per minute and the update budget
+at 60. Only exact `PULSE_DEV=true` admits the explicit
+`PULSE_DEV_GENERAL_API_RATE_LIMIT` and `PULSE_DEV_UPDATE_API_RATE_LIMIT`
+overrides. Each value must be an integer from its production default through
+100000, otherwise the production default applies. These settings never change
+authentication, configuration, recovery or export budgets.
+
+The Core E2E Docker stack sets 5000 general requests and 600 update requests
+per minute because isolated browser contexts share one bridge IP. The real
+update banner continues to fetch plans. The override is finite, retains 429
+and rate-limit headers when exhausted, and does not disable enforcement.
+`rate_limit_config_test.go` covers opt-in and invalid inputs;
+`rate_limit_journey_budget_test.go` exercises the middleware with changing
+cookies at one non-loopback address, including exhaustion and the unchanged
+ten-attempt login budget.
 
 ### Report-merge undoes operator links
 

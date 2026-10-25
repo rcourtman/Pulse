@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
 import {
   createAuthenticatedStorageState,
+  apiRequest,
+  authenticateWithAPIToken,
   ensureAuthenticated,
+  waitForAuthenticatedAppShell,
 } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -104,6 +107,108 @@ test.describe("runtime-home onboarding contract", () => {
     await expect(
       page.getByRole("button", { name: /Generate token/i }),
     ).toHaveCount(0);
+  });
+
+  test("waits for token bootstrap before navigating to the agent install handoff", async ({ page }) => {
+    await ensureAuthenticated(page);
+    const created = await apiRequest(page, "/api/security/tokens", {
+      method: "POST",
+      data: { name: "E2E browser bootstrap regression", scopes: ["*"] },
+    });
+    expect(created.ok()).toBeTruthy();
+    const { token, record } = await created.json() as { token: string; record: { id: string } };
+    expect(token).toBeTruthy();
+    expect(record.id).toBeTruthy();
+    // This page owns only the bootstrap being tested. Replacing the setup
+    // page would also intercept its departing document's in-flight reads.
+    const bootstrapPage = await page.context().newPage();
+    let releaseBootstrap!: () => void;
+    const bootstrapHold = new Promise<void>(resolve => { releaseBootstrap = resolve; });
+    let notifyBlocked!: () => void;
+    const blocked = new Promise<void>(resolve => { notifyBlocked = resolve; });
+    const holdState = async (route: import("@playwright/test").Route) => {
+      notifyBlocked();
+      await bootstrapHold;
+      await route.continue();
+    };
+    let authentication: Promise<boolean> | undefined;
+    try {
+      await bootstrapPage.route("**/api/state/summary", holdState);
+      let completed = false;
+      authentication = authenticateWithAPIToken(bootstrapPage, token).then(result => { completed = true; return result; });
+      await Promise.race([blocked, authentication]);
+      expect(completed, "token authentication must await protected browser bootstrap").toBe(false);
+      releaseBootstrap();
+      expect(await authentication).toBe(true);
+      await bootstrapPage.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
+      await expect(bootstrapPage).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+      await expect(bootstrapPage.getByRole("dialog").getByRole("heading", {
+        name: "Add Pulse Agent", exact: true,
+      })).toBeVisible();
+    } finally {
+      releaseBootstrap();
+      await authentication?.catch(() => {});
+      await bootstrapPage.unroute("**/api/state/summary", holdState);
+      await bootstrapPage.close();
+      const revoked = await apiRequest(page, `/api/security/tokens/${encodeURIComponent(record.id)}`, {
+        method: "DELETE",
+      });
+      expect(revoked.ok(), "the test-owned bootstrap token must be revoked").toBeTruthy();
+    }
+  });
+
+  test("waits for a mounted cookie workspace to finish its default redirect", async ({ page }) => {
+    await ensureAuthenticated(page);
+    const workspacePage = await page.context().newPage();
+    let released = false;
+    const frames: Array<{
+      socket: import("@playwright/test").WebSocketRoute;
+      message: string | Buffer;
+    }> = [];
+    try {
+      // A missing first admission facet leaves navigation dependent on the
+      // resource snapshot. Hold that snapshot after the shell has mounted.
+      await workspacePage.route("**/api/resources?**", async route => {
+        const url = new URL(route.request().url());
+        if (url.searchParams.get("limit") !== "1" || url.searchParams.get("page") !== "1") {
+          await route.continue();
+          return;
+        }
+        const response = await route.fetch();
+        expect(response.ok()).toBeTruthy();
+        const payload = await response.json();
+        expect(payload.aggregations?.platformAdmission).toBeTruthy();
+        delete payload.aggregations.platformAdmission;
+        await route.fulfill({ response, json: payload });
+      });
+      await workspacePage.routeWebSocket("**/ws*", socket => {
+        const server = socket.connectToServer();
+        server.onMessage(message => {
+          if (released) socket.send(message);
+          else frames.push({ socket, message });
+        });
+      });
+      await workspacePage.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+      await expect(workspacePage.locator(".app-scroll-shell")).toBeVisible();
+      await expect(workspacePage).toHaveURL(/\/infrastructure$/);
+      // This is a bounded negative control, not a larger authentication
+      // deadline. A mounted entry must still fail admission while unresolved.
+      await expect(waitForAuthenticatedAppShell(workspacePage, 250)).rejects.toThrow(/Timeout/);
+      await expect.poll(() => frames.length).toBeGreaterThan(0);
+      released = true;
+      for (const { socket, message } of frames.splice(0)) socket.send(message);
+      await waitForAuthenticatedAppShell(workspacePage);
+      expect(["/", "/login", "/infrastructure"]).not.toContain(new URL(workspacePage.url()).pathname);
+      await workspacePage.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
+      await expect(workspacePage).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+      await expect(workspacePage.getByRole("dialog").getByRole("heading", {
+        name: "Add Pulse Agent", exact: true,
+      })).toBeVisible();
+    } finally {
+      released = true;
+      frames.length = 0;
+      await workspacePage.close();
+    }
   });
 
   test("retires legacy platform-management paths to the not-found page", async ({

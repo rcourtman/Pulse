@@ -7,7 +7,6 @@ import { createAuthenticatedStorageState } from './helpers';
 import { installVmwareWorkloadResourceRoute } from './vmware-workload-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCREENSHOT_PATH = '/tmp/vmware-resource-detail-drawer.png';
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -69,20 +68,24 @@ test.describe('VMware resource detail drawer', () => {
       drawer.getByRole('heading', { level: 2, name: 'warehouse-api-01' }),
     ).toBeVisible();
 
-    // Placement context comes from the vCenter inventory, rendered read-only.
-    await expect(drawer.getByRole('heading', { name: 'vSphere' })).toBeVisible();
-    await expect(drawer.getByText('Lab vCenter', { exact: true })).toBeVisible();
-    await expect(drawer.getByText('Primary DC', { exact: true })).toBeVisible();
-    await expect(drawer.getByText('Production Cluster', { exact: true })).toBeVisible();
+    // Placement evidence lives in the shared technical disclosure.
+    const details = drawer.getByTestId('guest-technical-details');
+    await details.locator('summary').click();
+    await expect(details).toHaveAttribute('open', '');
+    await expect(details.getByText('vSphere', { exact: true })).toBeVisible();
+    await expect(details.getByText('Lab vCenter', { exact: true })).toBeVisible();
+    await expect(details.getByText('Primary DC', { exact: true })).toBeVisible();
+    await expect(details.getByText('Production Cluster', { exact: true })).toBeVisible();
 
-    // Host placement and guest identity surface alongside.
-    await expect(drawer.getByText('esxi-01.lab.local')).toBeVisible();
-    await expect(drawer.getByRole('heading', { name: 'Guest Info' })).toBeVisible();
+    // The guest's canonical network identity remains visible alongside.
+    await expect(drawer.getByText('10.42.10.121', { exact: true })).toBeVisible();
+    await expect(page.getByText('esxi-01.lab.local', { exact: true })).toBeVisible();
 
     // Phase-1 VMware stays on shared read paths: the browser never talks to
     // provider-local vmware endpoints for drawer context.
     expect(unexpectedVmwareApiCall).toBeNull();
 
-    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+    await details.getByText('Lab vCenter', { exact: true }).click({ trial: true });
+    await page.screenshot({ path: testInfo.outputPath('vmware-resource-detail.png'), fullPage: true });
   });
 });

@@ -15,6 +15,19 @@
 
 ## Purpose
 
+Infrastructure Add shortcuts and update chips follow the frontend primitives
+visible-label naming contract. Their names preserve `Add` or the displayed
+update wording and append source or host context, while keeping the existing
+installer destination and affected-agent scope. An Agent Doctor destination
+does not replace the update chip's visible action in its accessible name.
+Agent Doctor keeps evidence at its notice tone's full text contrast. Its
+scrollable repair, inspection, removal and credential commands are native
+keyboard focus targets with visible focus, so long commands remain readable
+without a pointer; copy actions and execution authority are unchanged.
+The command-access description in the installer must remain readable against
+its consent panel in both themes through the shared semantic text tokens. The
+operator needs that explanation before choosing host command authority.
+
 ### Accepted host reports preserve disk-reading presence
 
 An accepted host report is not evidence of a disk measurement. Disk history
@@ -23,7 +36,6 @@ unavailable/absent readings stay absent while measured zero remains available.
 Enrollment, receipt freshness, removal, correlation and stored observations keep
 their existing semantics. The host disk recording and API presence regressions
 cover this distinction; they do not establish installed guest recovery.
-
 
 ### Command access is a named token-step choice, not a legacy option (21 October 2026)
 
@@ -10325,3 +10337,14 @@ requests and existing access, organization and Community SSO gates remain;
 `TestContractSSOAmbiguousSavePreservesDetail` and the SSO/RBAC JSON admission
 tests establish configuration/account preservation, not installed agent or
 guest recovery.
+
+### Browser fixture update budgets
+
+The development-only update API budget in `internal/api/rate_limit_config.go`
+admits aggregate update-banner traffic from isolated browser contexts sharing
+one test-stack IP. Production keeps 60 update requests per minute, while the
+test stack explicitly requests 600. The independent ten-attempt login budget,
+agent report admission, enrollment, credential revocation and installed updater
+contracts remain unchanged. The middleware exhaustion controls in
+`rate_limit_journey_budget_test.go` prove bounded HTTP admission, not an agent
+update, restart or recovery outcome.

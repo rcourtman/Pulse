@@ -10,7 +10,8 @@ import (
 
 const (
 	defaultGeneralAPIRateLimit = 500
-	maxDevGeneralAPIRateLimit  = 100000
+	defaultUpdateAPIRateLimit  = 60
+	maxDevAPIRateLimit         = 100000
 )
 
 // EndpointRateLimitConfig defines rate limiting configuration for different endpoint categories
@@ -42,7 +43,7 @@ func newEndpointRateLimitConfig() *EndpointRateLimitConfig {
 		RecoveryEndpoints: NewRateLimiter(3, 10*time.Minute), // 3 attempts per 10 minutes
 
 		// Update operations: allow frequent polling during updates
-		UpdateEndpoints: NewRateLimiter(60, 1*time.Minute), // 60 checks per minute (modal polls every 2s)
+		UpdateEndpoints: NewRateLimiter(developmentAPIRateLimit("PULSE_DEV_UPDATE_API_RATE_LIMIT", defaultUpdateAPIRateLimit), 1*time.Minute),
 
 		// WebSocket connections: per-connection limits
 		WebSocketEndpoints: NewRateLimiter(30, 1*time.Minute), // 30 new connections per minute
@@ -73,13 +74,19 @@ func (cfg *EndpointRateLimitConfig) Stop() {
 }
 
 func generalAPIRateLimit() int {
+	return developmentAPIRateLimit("PULSE_DEV_GENERAL_API_RATE_LIMIT", defaultGeneralAPIRateLimit)
+}
+
+// Isolated browser contexts share one Docker bridge IP. Explicit development
+// budgets admit that aggregate traffic while retaining finite enforcement.
+func developmentAPIRateLimit(variable string, productionLimit int) int {
 	if os.Getenv("PULSE_DEV") != "true" {
-		return defaultGeneralAPIRateLimit
+		return productionLimit
 	}
 
-	configured, err := strconv.Atoi(strings.TrimSpace(os.Getenv("PULSE_DEV_GENERAL_API_RATE_LIMIT")))
-	if err != nil || configured < defaultGeneralAPIRateLimit || configured > maxDevGeneralAPIRateLimit {
-		return defaultGeneralAPIRateLimit
+	configured, err := strconv.Atoi(strings.TrimSpace(os.Getenv(variable)))
+	if err != nil || configured < productionLimit || configured > maxDevAPIRateLimit {
+		return productionLimit
 	}
 	return configured
 }

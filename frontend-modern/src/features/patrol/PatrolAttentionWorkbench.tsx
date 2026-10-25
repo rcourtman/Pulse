@@ -955,8 +955,8 @@ function AttentionDetail(props: {
             class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-sm px-2 text-sm font-medium text-muted hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 lg:hidden"
             aria-label={
               props.queueLabel === 'Handled issue'
-                ? 'Back to handled issues'
-                : 'Back to attention list'
+                ? 'Back to list of handled issues'
+                : 'Back to list of Patrol attention'
             }
             onClick={props.onClose}
           >
@@ -1081,7 +1081,8 @@ function AttentionDetail(props: {
                   value={loaded().item.subjectResourceId}
                   copied={copiedResourceId() === loaded().item.subjectResourceId}
                   onCopyValue={copyResourceId}
-                  label="Copy resource identifier"
+                  label="Copy ID"
+                  title="Copy resource identifier"
                   variant="ghost"
                   size="xs"
                   class="min-h-11 sm:min-h-0"

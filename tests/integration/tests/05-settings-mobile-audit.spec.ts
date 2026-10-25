@@ -1,4 +1,4 @@
-import { auditHorizontalOverflow, scrollSettingsToBottom, settingsScrollPosition } from '../scripts/settings-scroll-audit.mjs';
+import { auditSettingsAtBottom } from '../scripts/settings-scroll-audit.mjs';
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -274,15 +274,14 @@ test.describe("Settings mobile optimization audit", () => {
             });
             expect(clippedOrOverlapping, `Audit header at ${viewport.width}px`).toEqual([]);
           }
-          await scrollSettingsToBottom(page);
-          const position = await settingsScrollPosition(page);
+          const audit = await auditSettingsAtBottom(page);
+          const position = audit.scrollPosition!;
           const atBottom = position.scrollTop >= position.maxScrollTop - 3;
           expect(
             atBottom,
-            `Expected to reach the bottom while auditing ${route} on a ${viewport.label}`,
+            `Expected to reach the bottom while auditing ${route} on a ${viewport.label}: ${JSON.stringify(position)}`,
           ).toBeTruthy();
 
-          const audit = await auditHorizontalOverflow(page);
           expect(
             audit.pageWidth,
             `Mobile overflow on ${route} at ${viewport.width}px (viewport=${audit.viewportWidth}, page=${audit.pageWidth}, offenders=${JSON.stringify(audit.offenders)})`,

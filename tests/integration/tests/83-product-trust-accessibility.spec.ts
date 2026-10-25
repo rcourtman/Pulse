@@ -160,10 +160,16 @@ test("Actions remains named, directly reachable, keyboard accessible, and free o
   });
 });
 
-test("representative authenticated surfaces have no automatically detectable WCAG A/AA violations", async ({
+for (const theme of ["light", "dark"] as const) {
+test(`representative authenticated surfaces have no automatically detectable WCAG A/AA violations (${theme})`, async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(preference => {
+    localStorage.setItem("pulseThemePreference", preference);
+    localStorage.setItem("darkMode", String(preference === "dark"));
+    localStorage.removeItem("pulse_dark_mode");
+  }, theme);
   const surfaces = [
     { route: "/alerts/overview", heading: "Alerts Overview" },
     { route: "/settings/infrastructure", heading: "Infrastructure" },
@@ -176,6 +182,10 @@ test("representative authenticated surfaces have no automatically detectable WCA
     await expect(
       page.getByRole("heading", { level: 1, name: surface.heading }),
     ).toBeVisible();
+    if (surface.route === "/patrol") {
+      await page.getByRole("list", { name: "Patrol attention items", exact: true })
+        .getByRole("button").first().hover();
+    }
     expect(
       await scanForWcagViolations(page),
       `${surface.route} should have no automatically detectable WCAG A/AA violations`,
@@ -202,9 +212,53 @@ test("representative authenticated surfaces have no automatically detectable WCA
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
       await expect(addButton).toBeFocused();
+
+      const installAgent = page.getByRole("button", { name: "Add Pulse Agent hosts", exact: true });
+      await installAgent.focus();
+      await page.keyboard.press("Enter");
+      const installer = page.getByRole("dialog");
+      await expect(installer.getByRole("heading", { name: "Add Pulse Agent", exact: true })).toBeVisible();
+      expect(await scanForWcagViolations(page)).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(installer).toBeHidden();
+      await expect(installAgent).toBeFocused();
+
+      await page.getByRole("button", {
+        name: /^(Agent update|\d+ (agent )?updates): open Agent Doctor for /,
+      }).first().click();
+      await expect(page.getByRole("heading", { name: "Agent Doctor", exact: true })).toBeVisible();
+      expect(new URL(page.url()).searchParams.getAll("agents").length).toBeGreaterThan(0);
+      const command = page.locator("pre").first();
+      await expect(command).toBeVisible();
+      await command.focus();
+      await expect(command).toBeFocused();
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(() => command.evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
+      expect(await scanForWcagViolations(page)).toEqual([]);
+    }
+
+    if (surface.route === "/patrol") {
+      const list = page.getByRole("list", { name: "Patrol attention items", exact: true });
+      const item = list.getByRole("button").first();
+      await item.focus();
+      await page.keyboard.press("Enter");
+      const detail = page.getByRole("complementary");
+      await expect(detail).toBeVisible();
+      await expect(detail).toHaveAttribute("aria-busy", "false");
+      const selectedTitle = await detail.getByRole("heading", { level: 3 }).first().innerText();
+      expect(await scanForWcagViolations(page)).toEqual([]);
+      await detail.getByText("Evidence and history", { exact: true }).click();
+      await expect(detail.getByRole("button", { name: "Copy ID", exact: true })).toBeVisible();
+      expect(await scanForWcagViolations(page)).toEqual([]);
+      const back = detail.getByRole("button", { name: "Back to list of Patrol attention", exact: true });
+      if (await back.isVisible()) await back.click();
+      else await detail.getByRole("button", { name: "Close attention detail", exact: true }).click();
+      await expect(detail).toBeHidden();
+      await expect(list.locator("button:focus")).toContainText(selectedTitle);
     }
   }
 });
+}
 
 test("populated platform tables expose one named disclosure control per resource", async ({
   page,

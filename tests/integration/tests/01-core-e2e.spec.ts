@@ -107,14 +107,10 @@ test.describe.serial('Core E2E flows', () => {
     });
     let targetEditIndex = -1;
     let resourceName = '';
-    let resourceNameOrdinal = 0;
-    const resourceNameCounts = new Map<string, number>();
     for (let i = 0; i < (await editControls.count()); i++) {
       const editControl = editControls.nth(i);
       const label = (await editControl.getAttribute('aria-label')) ?? '';
       const candidateName = label.replace(/^Edit thresholds for /, '');
-      const candidateOrdinal = resourceNameCounts.get(candidateName) ?? 0;
-      resourceNameCounts.set(candidateName, candidateOrdinal + 1);
       const resourceContainer = await resourceContainerForEditControl(editControl);
       const hasExistingOverride =
         (await resourceContainer.getByRole('button', { name: /^Revert to defaults for / }).count()) >
@@ -124,7 +120,6 @@ test.describe.serial('Core E2E flows', () => {
       }
       targetEditIndex = i;
       resourceName = candidateName;
-      resourceNameOrdinal = candidateOrdinal;
       break;
     }
     if (targetEditIndex < 0 || !resourceName) {
@@ -148,28 +143,27 @@ test.describe.serial('Core E2E flows', () => {
     const cpuInput = editorContainer.locator('input[type="number"]').first();
     await expect(cpuInput).toBeVisible();
     await cpuInput.fill(String(overrideValue));
-    await cpuInput.blur();
+    await expect(cpuInput).toHaveValue(String(overrideValue));
+    const unsaved = page.getByText('You have unsaved changes');
+    // Tabbing to a sibling control keeps the draft inside the editor.
+    await cpuInput.press('Tab');
+    expect(await editorContainer.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    await expect(unsaved).toHaveCount(0);
+    // Desktop commits when focus leaves the whole row. Cards retain the
+    // draft until Save. Move focus outside the editor, including its slider,
+    // and wait for the active layout's actual commit boundary.
+    await page.getByPlaceholder('Search resources...').focus();
     const commitMobileEdit = page.getByRole('button', {
       name: `Save threshold edits for ${resourceName}`,
     });
+    await expect(unsaved.or(commitMobileEdit).first()).toBeVisible();
     if (await commitMobileEdit.isVisible().catch(() => false)) {
       await commitMobileEdit.click();
     }
 
-    const unsaved = page.getByText('You have unsaved changes');
     await expect(unsaved).toBeVisible();
     await page.getByRole('button', { name: 'Save Changes' }).click();
     await expect(unsaved).not.toBeVisible();
-
-    const updatedEditControl = page
-      .getByRole('button', { name: `Edit thresholds for ${resourceName}` })
-      .nth(resourceNameOrdinal);
-    const updatedResourceContainer =
-      await resourceContainerForEditControl(updatedEditControl);
-    const revertOverride = updatedResourceContainer.getByRole('button', {
-      name: `Revert to defaults for ${resourceName}`,
-    });
-    await expect(revertOverride).toBeVisible();
 
     const configResAfterCreate = await apiRequest(page, '/api/alerts/config');
     expect(configResAfterCreate.ok()).toBeTruthy();
@@ -180,6 +174,20 @@ test.describe.serial('Core E2E flows', () => {
     );
     expect(createdOverrideIds).toHaveLength(1);
     const createdOverrideId = createdOverrideIds[0];
+
+    // The compact label can change as cluster metadata arrives. Resolve the
+    // saved identity and use its full searchable name instead of holding an
+    // earlier presentation label or an ordinal among similarly named rows.
+    const targetResponse = await apiRequest(page, `/api/resources/${encodeURIComponent(createdOverrideId)}`);
+    expect(targetResponse.ok()).toBeTruthy();
+    const target = await targetResponse.json() as { name: string; canonicalIdentity?: { displayName?: string } };
+    const targetName = target.canonicalIdentity?.displayName || target.name;
+    expect(targetName).toBeTruthy();
+    await page.getByPlaceholder('Search resources...').fill(targetName);
+    await expect(editControls).toHaveCount(1);
+    const updatedResourceContainer = await resourceContainerForEditControl(editControls.first());
+    const revertOverride = updatedResourceContainer.getByRole('button', { name: /^Revert to defaults for / });
+    await expect(revertOverride).toBeVisible();
 
     await revertOverride.click();
     await expect(unsaved).toBeVisible();
@@ -196,7 +204,7 @@ test.describe.serial('Core E2E flows', () => {
 
     await page.reload();
     if (!/\/alerts\/thresholds/.test(page.url())) {
-      await page.goto('/alerts/overview');
+      await page.goto('/alerts/overview', { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
       const toggle = page.getByRole('checkbox', {
         name: 'Send notifications',
@@ -214,21 +222,22 @@ test.describe.serial('Core E2E flows', () => {
     if ((await sectionToggleAfterReload.getAttribute('aria-expanded')) === 'false') {
       await sectionToggleAfterReload.click();
     }
-    const editControlAfterReload = page
-      .getByRole('button', { name: `Edit thresholds for ${resourceName}` })
-      .nth(resourceNameOrdinal);
+    await page.getByPlaceholder('Search resources...').fill(targetName);
+    const editControlAfterReload = proxmoxNodesSection.getByRole('button', { name: /^Edit thresholds for / });
+    await expect(editControlAfterReload).toHaveCount(1);
     await expect(editControlAfterReload).toBeVisible();
     const resourceContainerAfterReload =
       await resourceContainerForEditControl(editControlAfterReload);
     await expect(
       resourceContainerAfterReload.getByRole('button', {
-        name: `Revert to defaults for ${resourceName}`,
+        name: /^Revert to defaults for /,
       }),
     ).toHaveCount(0);
 
     // Restore prior activation state to keep the test safe against real instances.
     if (!alertsInitiallyEnabled) {
-      await page.goto('/alerts/overview');
+      await page.getByRole('button', { name: 'Overview', exact: true }).click();
+      await expect(page).toHaveURL(/\/alerts\/overview/);
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
       const alertsToggleRestore = page.getByRole('checkbox', {
         name: 'Send notifications',

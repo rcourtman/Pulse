@@ -137,6 +137,16 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
       ]),
     );
     expect(commands.every((command) => !command.includes('--update'))).toBe(true);
+    const inspection = screen
+      .getByRole('button', { name: 'Copy safe-profile inspection command' })
+      .parentElement!.querySelector('pre')!;
+    inspection.focus();
+    expect(inspection).toHaveFocus();
+    const apply = screen
+      .getByRole('button', { name: 'Copy safe-profile apply command' })
+      .parentElement!.querySelector('pre')!;
+    apply.focus();
+    expect(apply).toHaveFocus();
   });
 
   it('offers explicit rotation for an issued credential when the runner is disconnected', () => {

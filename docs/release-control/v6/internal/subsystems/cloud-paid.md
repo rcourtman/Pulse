@@ -1072,7 +1072,10 @@ responsive shell appear to ignore an operator.
     App-shell navigation rendered by `frontend-modern/src/AppLayout.tsx` must
     also keep decorative icon titles out of tab accessible names, so hosted and
     self-hosted chrome announce the canonical tab label plus meaningful badge
-    counts rather than duplicating branded SVG titles. The Patrol-owned utility
+    counts rather than duplicating branded SVG titles. Small navigation counts
+    must retain readable contrast in
+    both themes; changing a theme must not replace a readable critical badge
+    with a lighter background that fails text contrast. The Patrol-owned utility
     destination remains `Patrol` over the same `/patrol` route; it must not
     alter hosted org bootstrap, entitlement loading, or commercial posture
     loading. Its badge may consume only the existing Patrol attention summary.

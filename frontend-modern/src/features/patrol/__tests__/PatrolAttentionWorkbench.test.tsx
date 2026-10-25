@@ -540,9 +540,7 @@ describe('PatrolAttentionWorkbench', () => {
     });
     expect(within(detailRegion).getByText('Writes may fail.')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Evidence and history')).toBeInTheDocument();
-    expect(
-      within(detailRegion).getByRole('button', { name: 'Copy resource identifier' }),
-    ).toBeInTheDocument();
+    expect(within(detailRegion).getByRole('button', { name: 'Copy ID' })).toBeInTheDocument();
     expect(within(detailRegion).queryByText('pve:vm:101')).not.toBeInTheDocument();
     expect(
       within(detailRegion).getByText(/latest backup has not been verified/i),
@@ -550,7 +548,7 @@ describe('PatrolAttentionWorkbench', () => {
     expect(within(detailRegion).getByText('Proxmox VE')).toBeInTheDocument();
     expect(within(detailRegion).getByText('Observing to Open')).toBeInTheDocument();
     expect(
-      within(detailRegion).getByRole('button', { name: 'Back to attention list' }),
+      within(detailRegion).getByRole('button', { name: 'Back to list of Patrol attention' }),
     ).toHaveTextContent('Back to list');
     expect(
       within(detailRegion).getByRole('button', { name: 'Close attention detail' }),
@@ -713,7 +711,7 @@ describe('PatrolAttentionWorkbench', () => {
       name: 'Database VM · Disk pressure',
     });
     const header = within(detailRegion)
-      .getByRole('button', { name: 'Back to attention list' })
+      .getByRole('button', { name: 'Back to list of Patrol attention' })
       .closest('div.sticky');
     expect(header).toHaveClass('top-0', 'bg-surface/95');
 

@@ -299,7 +299,7 @@
     --color-border-subtle: var(--color-slate-800);
     --color-border-base: var(--color-slate-700);
     --color-text-base: var(--color-slate-100);
-    --color-text-muted: var(--color-slate-400);
+    --color-text-muted: var(--color-slate-300);
     --color-summary-row-bg: rgba(56, 189, 248, 0.08);
     --color-summary-row-bg-hover: rgba(56, 189, 248, 0.12);
     --color-summary-row-border: rgba(56, 189, 248, 0.18);

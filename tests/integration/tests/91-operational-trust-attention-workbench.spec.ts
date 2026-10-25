@@ -742,7 +742,7 @@ test("starts from the normal monitor shell and reaches the canonical attention q
     page.getByRole("region", { name: "Patrol decision inbox" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Open pve-main · CPU pressure" }),
+    page.getByRole("button", { name: /pve-main · CPU pressure/ }),
   ).toBeVisible();
   await expect(
     page.getByRole("tab", { name: "Inbox", exact: true }),
@@ -810,7 +810,7 @@ test("makes active operational work primary and preserves the evidence boundary"
   ).toHaveCount(0);
 
   const itemButton = queue.getByRole("button", {
-    name: "Open pve-main · CPU pressure",
+    name: /pve-main · CPU pressure/,
   });
   await itemButton.focus();
   await page.keyboard.press("Enter");
@@ -870,7 +870,7 @@ test("makes active operational work primary and preserves the evidence boundary"
   ).toBeVisible();
   await expect(
     attentionList.getByRole("button", {
-      name: "Open pve-main · CPU pressure",
+      name: /pve-main · CPU pressure/,
     }),
   ).toHaveCount(0);
 
@@ -879,12 +879,12 @@ test("makes active operational work primary and preserves the evidence boundary"
   });
   const closeDetailButton =
     (page.viewportSize()?.width ?? 1280) < 1024
-      ? advancedDetail.getByRole("button", { name: "Back to attention list" })
+      ? advancedDetail.getByRole("button", { name: "Back to list of Patrol attention" })
       : advancedDetail.getByRole("button", { name: "Close attention detail" });
   await closeDetailButton.click();
   await expect(
     attentionList.getByRole("button", {
-      name: "Open Connection state unknown for pve-edge",
+      name: /Connection state unknown for pve-edge/,
     }),
   ).toBeFocused();
   await expect(page).not.toHaveURL(/attention=/);
@@ -899,7 +899,7 @@ test("puts the selected detail in view on a phone without page overflow", async 
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
   const itemButton = page.getByRole("button", {
-    name: "Open pve-main · CPU pressure",
+    name: /pve-main · CPU pressure/,
   });
   await itemButton.click();
 
@@ -914,7 +914,7 @@ test("puts the selected detail in view on a phone without page overflow", async 
     ),
   ).toBeVisible();
   const backToList = detailPanel.getByRole("button", {
-    name: "Back to attention list",
+    name: "Back to list of Patrol attention",
   });
   await expect(backToList).toBeVisible();
   await expect(detailPanel.getByText("Decision 1 of 2")).toBeVisible();
@@ -1394,7 +1394,7 @@ for (const verification of [
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
     const itemButton = page.getByRole("button", {
-      name: "Open API container is unhealthy",
+      name: /API container is unhealthy/,
     });
     await itemButton.focus();
     await page.keyboard.press("Enter");
@@ -1453,14 +1453,14 @@ for (const verification of [
 
     if (verification === "confirmed") {
       await expect(
-        detailPanel.getByText(/restart postcondition was confirmed/i),
+        detailPanel.getByText(/action postcondition was confirmed/i),
       ).toBeVisible();
       await expect(
         detailPanel.getByText(/issue stays open until fresh health evidence/i),
       ).toBeVisible();
     } else {
       await expect(
-        detailPanel.getByText(/restart did not satisfy its postcondition/i),
+        detailPanel.getByText(/action did not satisfy its postcondition/i),
       ).toBeVisible();
       await expect(detailPanel.getByText(/issue remains open/i)).toBeVisible();
       const overflows = await page.evaluate(

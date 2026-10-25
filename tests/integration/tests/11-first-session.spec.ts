@@ -8,6 +8,7 @@ import {
   primaryNavigationLink,
   trackBrowserRequests,
   waitForPulseReady,
+  waitForAuthenticatedAppShell,
 } from "./helpers";
 
 /**
@@ -285,15 +286,39 @@ test.describe.serial("First-session experience", () => {
         route: "/settings/support/reporting",
         expectedURL: /\/settings\/support\/reporting/,
         feature: "advanced_reporting",
-        paywallIndicator: /Advanced Reporting/i,
+        paywallIndicator: /Advanced Reporting|Pulse Pro runtime required/i,
       },
       {
         route: "/settings/security-webhooks",
         expectedURL: /\/settings\/security-webhooks/,
         feature: "audit_logging",
-        paywallIndicator: /Audit (Logging|Webhooks)/i,
+        paywallIndicator: /Audit (Logging|Webhooks)|Pulse Pro runtime required/i,
       },
     ] as const;
+
+    await page.addInitScript(() => {
+      (window as any).__pulseFlashDetected = false;
+      const selector =
+        '[data-settings-content] form input:not([type="search"]), [data-settings-content] form textarea, [data-settings-content] form select';
+      const checkForFlash = () => {
+        const visible = Array.from(document.querySelectorAll(selector)).some(
+          element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden",
+        );
+        if (visible) {
+          (window as any).__pulseFlashDetected = true;
+        }
+      };
+      const observer = new MutationObserver(checkForFlash);
+      (window as any).__pulseFlashObserver = observer;
+      // Document exists before documentElement, including at init-script time.
+      // Scope detection to the gated panel so sign-in controls are not mistaken
+      // for unlocked licensed content.
+      observer.observe(document, {
+        childList: true, subtree: true, attributes: true,
+        attributeFilter: ["class", "style", "hidden"],
+      });
+      checkForFlash();
+    });
 
     try {
       for (const {
@@ -305,67 +330,31 @@ test.describe.serial("First-session experience", () => {
         const hasFeature = features.has(feature);
 
         if (!hasFeature) {
-          // Install a MutationObserver via addInitScript BEFORE navigating so it
-          // runs before any app code. This catches transient form elements that
-          // flash before the paywall renders (flash-of-unlocked-content).
-          await page.addInitScript(() => {
-            (window as any).__pulseFlashDetected = false;
-            const SELECTOR =
-              'form input:not([type="search"]), form textarea, form select';
-
-            const checkForFlash = () => {
-              const els = document.querySelectorAll(SELECTOR);
-              if (els.length > 0) {
-                (window as any).__pulseFlashDetected = true;
-              }
-            };
-
-            const observer = new MutationObserver(checkForFlash);
-
-            // Start observing on documentElement immediately (always available
-            // in addInitScript context), so we catch body insertion and all
-            // subsequent DOM mutations including app boot. This avoids the gap
-            // where DOMContentLoaded fires after app scripts.
-            observer.observe(document.documentElement, {
-              childList: true,
-              subtree: true,
-            });
-            // Also do an immediate check in case DOM is already populated.
-            checkForFlash();
-
-            // Auto-disconnect after 5 seconds to avoid leaking.
-            setTimeout(() => observer.disconnect(), 5000);
-          });
-
           await page.goto(route, { waitUntil: "domcontentloaded" });
+          await waitForAuthenticatedAppShell(page);
           await page.waitForURL(expectedURL, { timeout: 10_000 });
           await expect(page.locator("#root")).toBeVisible();
 
-          // Wait for the page to settle, then read the observer result.
-          await page.waitForTimeout(2_000);
-          const flashDetected = await page.evaluate(
-            () => (window as any).__pulseFlashDetected === true,
-          );
+          const paywallIndicator = page
+            .getByRole("main")
+            .getByRole("heading", { level: 4, name: paywallPattern });
+          await expect(
+            paywallIndicator,
+            `Gated route ${route} (feature=${feature}) should show its gate when unavailable`,
+          ).toBeVisible({ timeout: 5_000 });
 
+          // Observe through actual gate readiness, including a slow bootstrap.
+          const flashDetected = await page.evaluate(() => {
+            (window as any).__pulseFlashObserver?.disconnect();
+            return (window as any).__pulseFlashDetected === true;
+          });
           expect(
             flashDetected,
             `Gated route ${route} (feature=${feature}) showed form elements on unlicensed tier (flash-of-unlocked-content)`,
           ).toBe(false);
-
-          // Paywall indicator should be visible.
-          const paywallIndicator = page
-            .getByRole("main")
-            .getByText(paywallPattern)
-            .first();
-          const isPaywallVisible = await paywallIndicator
-            .isVisible({ timeout: 5_000 })
-            .catch(() => false);
-          expect(
-            isPaywallVisible,
-            `Gated route ${route} (feature=${feature}) should show paywall when feature is not available`,
-          ).toBeTruthy();
         } else {
           await page.goto(route, { waitUntil: "domcontentloaded" });
+          await waitForAuthenticatedAppShell(page);
           await page.waitForURL(expectedURL, { timeout: 10_000 });
           await expect(page.locator("#root")).toBeVisible();
 
