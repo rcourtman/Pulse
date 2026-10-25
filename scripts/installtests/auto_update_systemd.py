@@ -65,7 +65,8 @@ if pathlib.Path(sys.argv[0]).name == "mktemp":
 # arbitrary curl option parser. The short form is used by isolated controls.
 flags = ["--disable", "-fsSL", "--connect-timeout", "5", "--max-time", "60",
          "--proto", "=https", "--proto-redir", "=https"]
-manual_flags = ["-q", "-fsSL", "--connect-timeout", "10", "--max-time", "60"]
+manual_flags = ["-q", "-fsSL", "--connect-timeout", "10", "--max-time", "60",
+                "--proto", "=https", "--proto-redir", "=https"]
 if args[:len(flags)] == flags:
     args = args[len(flags):]
 elif args[:len(manual_flags)] == manual_flags:

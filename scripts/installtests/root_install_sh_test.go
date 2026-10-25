@@ -2,13 +2,17 @@ package installtests
 
 import (
 	"context"
+	"encoding/pem"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -2838,11 +2842,13 @@ exec /usr/bin/mktemp "$FIXTURE/temporary/input.XXXXXX"
 				"curl": `#!/bin/bash
 set -eu
 [[ "$1" == -q ]] || { echo 'ambient curl configuration is not disabled' >&2; exit 99; }
-url=""; dest=""; connect=""; maximum=""
+url=""; dest=""; connect=""; maximum=""; protocols=""; redirects=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --connect-timeout) connect="$2"; shift 2 ;;
         --max-time) maximum="$2"; shift 2 ;;
+        --proto) protocols="$2"; shift 2 ;;
+        --proto-redir) redirects="$2"; shift 2 ;;
         -o) dest="$2"; shift 2 ;;
         -q|-fsSL) shift ;;
         https://github.com/rcourtman/Pulse/releases/latest/download/install.sh*) url="$1"; shift ;;
@@ -2851,6 +2857,7 @@ while [[ $# -gt 0 ]]; do
 done
 printf '%s %s %s\n' "$url" "$connect" "$maximum" >> "$FIXTURE/transport"
 [[ "$connect" == 10 && "$maximum" == 60 ]] || { echo 'missing bootstrap download deadline' >&2; exit 99; }
+[[ "$protocols" == =https && "$redirects" == =https ]] || { echo 'missing bootstrap HTTPS restriction' >&2; exit 99; }
 case "$url" in
     *.sshsig) phase=signature; source="$FIXTURE_ASSETS/install.sh.sig" ;;
     */install.sh) phase=installer; source="$FIXTURE_ASSETS/install.sh" ;;
@@ -2921,6 +2928,141 @@ fi
 			}
 			if got := strings.Count(string(transport), "\n"); got != wantRequests {
 				t.Errorf("bootstrap requests = %d, want %d (no retries): %q", got, wantRequests, transport)
+			}
+		})
+	}
+}
+
+// Exercise the emitted helper with real curl, TLS and SSH signatures. The
+// adapter changes only the two fixed GitHub URLs and the fixture CA, retaining
+// production options. No service, external host or installed binary is used.
+func TestRootManualUpdateHTTPSOnly(t *testing.T) {
+	curl, err := exec.LookPath("curl")
+	if err != nil {
+		t.Fatal("curl is required for the installer transport controls: ", err)
+	}
+	assets := t.TempDir()
+	key := filepath.Join(assets, "key")
+	installer := filepath.Join(assets, "installer")
+	const payload = "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$PUBLICATION_ROOT/executed\"\n"
+	if err := os.WriteFile(installer, []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"-q", "-t", "ed25519", "-N", "", "-f", key},
+		{"-q", "-Y", "sign", "-f", key, "-n", "pulse-install", installer},
+	} {
+		if out, err := exec.Command("ssh-keygen", args...).CombinedOutput(); err != nil {
+			t.Fatalf("fixture signing: %v\n%s", err, out)
+		}
+	}
+	publicKey, err := os.ReadFile(key + ".pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := os.ReadFile(installer + ".sig")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fault := range []string{"https", "https_redirect", "http_initial", "http_installer_redirect", "http_signature_redirect"} {
+		t.Run(fault, func(t *testing.T) {
+			dir, helper, env := manualUpdatePublicationFixture(t)
+			var plainRequests, tlsRequests atomic.Int32
+			serve := func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "signature") {
+					_, _ = w.Write(signature)
+				} else {
+					_, _ = io.WriteString(w, payload)
+				}
+			}
+			plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				plainRequests.Add(1)
+				serve(w, r)
+			}))
+			defer plain.Close()
+			tls := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tlsRequests.Add(1)
+				if (fault == "http_installer_redirect" && r.URL.Path == "/installer") ||
+					(fault == "http_signature_redirect" && r.URL.Path == "/signature") {
+					http.Redirect(w, r, plain.URL+r.URL.Path, http.StatusFound)
+				} else if fault == "https_redirect" && !strings.HasPrefix(r.URL.Path, "/cdn/") {
+					http.Redirect(w, r, "/cdn"+r.URL.Path, http.StatusFound)
+				} else {
+					serve(w, r)
+				}
+			}))
+			defer tls.Close()
+			ca := filepath.Join(dir, "fixture-ca.pem")
+			if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tls.Certificate().Raw}), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			tools := filepath.Join(dir, "tools")
+			if err := os.Mkdir(tools, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			adapter := `#!/bin/bash
+set -euo pipefail
+[[ "$1" == -q ]] || exit 97
+shift
+args=()
+for arg in "$@"; do
+    case "$arg" in
+        https://github.com/rcourtman/Pulse/releases/latest/download/install.sh) arg="$FIXTURE_ORIGIN/installer" ;;
+        https://github.com/rcourtman/Pulse/releases/latest/download/install.sh.sshsig) arg="$FIXTURE_ORIGIN/signature" ;;
+    esac
+    args+=("$arg")
+done
+exec "$REAL_CURL" -q --cacert "$FIXTURE_CA" "${args[@]}"
+`
+			if err := os.WriteFile(filepath.Join(tools, "curl"), []byte(adapter), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			// Keep every allocated bootstrap input private to this fixture and
+			// observable after success/refusal, including the signer's scratch.
+			if err := os.WriteFile(filepath.Join(tools, "mktemp"), []byte("#!/bin/bash\nexec /usr/bin/mktemp \"$PUBLICATION_ROOT/input.XXXXXX\"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			origin := tls.URL
+			if fault == "http_initial" {
+				origin = plain.URL
+			}
+			env = append(env, "FIXTURE_PUBLIC_KEY="+strings.TrimSpace(string(publicKey)),
+				"FIXTURE_ORIGIN="+origin, "FIXTURE_CA="+ca, "REAL_CURL="+curl,
+				"PATH="+tools+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"NO_PROXY=*", "no_proxy=*")
+			runManualUpdatePublication(t, env, `source "$PUBLICATION_SOURCE"
+PINNED_RELEASE_SSH_PUBLIC_KEY="$FIXTURE_PUBLIC_KEY"
+setup_update_command`)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", helper, "--version", "v0.0.1")
+			cmd.Env = env
+			out, runErr := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("fixture exceeded deadline: %v\n%s", ctx.Err(), out)
+			}
+			executed, executedErr := os.ReadFile(filepath.Join(dir, "executed"))
+			if strings.HasPrefix(fault, "https") {
+				wantTLS := int32(2)
+				if fault == "https_redirect" {
+					wantTLS = 4
+				}
+				if runErr != nil || executedErr != nil || string(executed) != "--version\nv0.0.1\n" || tlsRequests.Load() != wantTLS {
+					t.Errorf("authenticated HTTPS did not execute the signed installer once: %v, %v, %q, TLS=%d\n%s", runErr, executedErr, executed, tlsRequests.Load(), out)
+				}
+			} else {
+				if runErr == nil || !os.IsNotExist(executedErr) || strings.Contains(string(out), "Update complete!") {
+					t.Errorf("plaintext transport reached installer/success: %v, %v\n%s", runErr, executedErr, out)
+				}
+				if !strings.Contains(string(out), "Failed to download Pulse installer") {
+					t.Errorf("missing bootstrap refusal diagnostic: %s", out)
+				}
+			}
+			if plainRequests.Load() != 0 {
+				t.Errorf("sent %d unauthenticated HTTP requests", plainRequests.Load())
+			}
+			if litter, err := filepath.Glob(filepath.Join(dir, "input.*")); err != nil || len(litter) != 0 {
+				t.Errorf("bootstrap inputs survived: %v, %v", litter, err)
 			}
 		})
 	}
