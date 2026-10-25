@@ -252,4 +252,73 @@ Example-4  100.0n ± 1%  105.0n ± 1%  +5.00% (p=0.001 n=10)
 EOF
 bash "${ROOT_DIR}/scripts/check-bench-regression.sh" "${WORK_DIR}/clean.txt" >/dev/null
 
+# Go SetBytes benchmarks add byte-throughput tables alongside time and
+# allocation costs. Respect their opposite direction without relaxing either
+# the significance/sample gates or the existing cost-metric verdicts.
+while read -r metric delta pvalue samples expected; do
+  candidate="$(awk -v delta="${delta}" 'BEGIN { printf "%.2f", 100 * (1 + delta / 100) }')"
+  cat > "${WORK_DIR}/metric.txt" <<EOF
+          │ baseline.txt │     candidate.txt      │
+          │ ${metric}   │ ${metric} vs base      │
+Example-4  100.00 ± 1%  ${candidate} ± 1%  ${delta}% (p=${pvalue} n=${samples})
+EOF
+  set +e
+  output="$(bash "${ROOT_DIR}/scripts/check-bench-regression.sh" "${WORK_DIR}/metric.txt" 2>&1)"
+  status=$?
+  set -e
+  if [[ "${status}" != "${expected}" ]]; then
+    printf 'wrong verdict for %s %s%% p=%s n=%s: %s\n%s\n' \
+      "${metric}" "${delta}" "${pvalue}" "${samples}" "${status}" "${output}" >&2
+    exit 1
+  fi
+  if [[ "${status}" == 1 && "${samples}" == 10 ]]; then
+    grep -qF "[${metric}] Example-4" <<<"${output}"
+  fi
+done <<'EOF'
+B/s +11.00 0.001 10 0
+B/s -11.00 0.001 10 1
+MB/s +11.00 0.001 10 0
+MB/s -11.00 0.001 10 1
+KiB/s -11.00 0.001 10 1
+B/s -10.00 0.001 10 0
+B/s -11.00 0.050 10 0
+B/s -11.00 0.001 5 1
+B/s +11.00 0.001 5 1
+sec/op -11.00 0.001 10 0
+sec/op +11.00 0.001 10 1
+B/op -11.00 0.001 10 0
+B/op +12.37 0.043 10 1
+allocs/op -11.00 0.001 10 0
+allocs/op +11.00 0.001 10 1
+widgets/op +11.00 0.001 10 1
+EOF
+
+# Reset direction at every table, even when a cost table follows throughput.
+# Retain the observed allocation finding from job121147231331: this repair
+# must not turn its real B/op increase into a throughput improvement.
+cat > "${WORK_DIR}/mixed.txt" <<'EOF'
+          │ baseline.txt │     candidate.txt      │
+          │ B/s          │ B/s vs base            │
+TransferGain-4  100.0Mi ± 1%  111.0Mi ± 1%  +11.00% (p=0.001 n=10)
+          │ baseline.txt │     candidate.txt      │
+          │ sec/op       │ sec/op vs base         │
+Slower-4  100.0n ± 1%  111.0n ± 1%  +11.00% (p=0.001 n=10)
+          │ baseline.txt │     candidate.txt      │
+          │ B/s          │ B/s vs base            │
+TransferLoss-4  100.0Mi ± 1%  89.00Mi ± 1%  -11.00% (p=0.001 n=10)
+          │ baseline.txt │     candidate.txt      │
+          │ B/op         │ B/op vs base           │
+BroadcastMetricsSnapshot/views-clean/json-frame/point-targets-4  63.15Mi ± 13%  70.96Mi ± 1%  +12.37% (p=0.043 n=10)
+EOF
+set +e
+output="$(bash "${ROOT_DIR}/scripts/check-bench-regression.sh" "${WORK_DIR}/mixed.txt" 2>&1)"
+status=$?
+set -e
+[[ "${status}" == 1 ]]
+grep -qF '3 regressed benchmark(s):' <<<"${output}"
+grep -qF '[sec/op] Slower-4' <<<"${output}"
+grep -qF '[B/s] TransferLoss-4' <<<"${output}"
+grep -qF '[B/op] BroadcastMetricsSnapshot/views-clean/json-frame/point-targets-4' <<<"${output}"
+! grep -qF 'TransferGain-4' <<<"${output}"
+
 echo "all CI benchmark tests passed"
