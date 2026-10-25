@@ -60,11 +60,18 @@ requests are opened by `pulse-triage[bot]` and state what changed, why it
 was needed, which reports or demand-ledger entries it answers, and what
 validation was used, so the record on GitHub is the record of the decision.
 
-Every 14 days after the last stable release, the train cuts the next minor
-release candidate from the head of `main`. It carries everything on `main` at
-that cut, not a selected set of fixes. Repairs go on `main`, not onto an older
-release line. An early cut can bring the next minor release forward when an
-important fix should not wait. Patch releases are not scheduled.
+Stable publication is targeted seven days after the last stable release. The
+next minor release candidate becomes eligible one day earlier, reserving its
+full 24-hour soak; preparation and qualification can move publication later.
+It is cut from the head of `main` and carries everything on `main` at that cut,
+not a selected set of fixes. Repairs go on `main`, not onto an older release
+line. Patch releases are not scheduled.
+
+Between stable releases, daily betas carry new changes from `main`; no beta is
+cut within a day of the candidate being due. An important fix ships in the next
+beta, not through an early candidate or stable release. Work merged during a
+candidate's soak waits for the next cycle unless a `release-blocker` requires
+a fresh candidate. A beta is not promoted to stable.
 
 The candidate soaks for 24 hours on the opt-in preview channel, then is promoted
 unchanged to stable unless an open issue labelled `release-blocker` stops
@@ -93,9 +100,12 @@ explanation; a feature request's demand-ledger entry is not an implemented featu
 After a fix for every reported symptom ships in a stable release, the maintainer
 names that version and asks for a retest in the original issue. That reply says
 the issue will be closed after 14 days without a reply and can be reopened.
-The 14 days start with that stable-release retest reply, not the fix commit,
-a beta or a release candidate. Only retest when it is safe; do not repeat an
-outage, update or backup just to answer.
+Normally, the 14 days start with that stable-release retest reply. If an earlier
+retest request named a beta or release candidate carrying the same fix, and the
+limit on repeated unanswered contact prevents another reply, count from the
+later of that request and the stable release's publication. A beta or release
+candidate alone never starts the timeout, nor does a fix commit. Only retest
+when it is safe; do not repeat an outage, update or backup just to answer.
 
 Only after at least 14 days without any reply from the reporter, and with no
 other person reporting the same problem since that retest request, may the

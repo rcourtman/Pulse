@@ -23,13 +23,33 @@ class TransparencyDocsTest(unittest.TestCase):
     def test_all_main_minor_cycle_not_selective_backports(self):
         for path, text in self.documents():
             with self.subTest(document=path):
-                self.assertIn("Every 14 days after the last stable release", text)
-                self.assertIn("next minor release candidate from the head of `main`", text)
+                self.assertIn("Stable publication is targeted seven days after the last stable release", text)
+                self.assertIn("next minor release candidate becomes eligible one day earlier", text)
+                self.assertIn("reserving its full 24-hour soak", text)
+                self.assertIn("preparation and qualification can move publication later", text)
+                self.assertIn("cut from the head of `main`", text)
                 self.assertIn("everything on `main` at that cut", text)
                 self.assertIn("Repairs go on `main`, not onto an older release line", text)
-                self.assertIn("An early cut can bring the next minor release forward", text)
+                self.assertIn("An important fix ships in the next beta, not through an early candidate or stable release", text)
+                self.assertIn("no beta is cut within a day of the candidate being due", text)
                 self.assertIn("Patch releases are not scheduled", text)
                 self.assertNotIn("takes only backports", text)
+                self.assertNotIn("Every 14 days", text)
+                self.assertNotIn("An early cut can bring", text)
+
+    def test_linked_release_guide_does_not_offer_an_early_cut_or_soak_replacement(self):
+        for directory in ("docs", "frontend-modern/public/docs"):
+            path = ROOT / directory / "RELEASE_PROCESS.md"
+            text = " ".join(path.read_text(encoding="utf-8").split()).replace("**", "")
+            with self.subTest(document=path):
+                self.assertIn("seven days after the last stable release", text)
+                self.assertIn("one day earlier", text)
+                self.assertIn("Nothing brings that cut forward", text)
+                self.assertIn("an important fix ships in the next daily beta", text)
+                self.assertIn("Only a `release-blocker` requires a fresh candidate", text)
+                self.assertIn("does not replace a soaking candidate or bring stable publication forward", text)
+                self.assertIn("same required checks and full 24-hour soak", text)
+                self.assertNotIn("can bring", text)
 
     def test_blockers_need_a_fresh_candidate_not_a_changed_soak(self):
         for path, text in self.documents():
@@ -75,7 +95,10 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("fix for every reported symptom ships in a stable release", text)
                 self.assertIn("closed after 14 days without a reply and can be reopened", text)
                 self.assertIn("start with that stable-release retest reply", text)
-                self.assertIn("not the fix commit, a beta or a release candidate", text)
+                self.assertIn("earlier retest request named a beta or release candidate carrying the same fix", text)
+                self.assertIn("limit on repeated unanswered contact prevents another reply", text)
+                self.assertIn("later of that request and the stable release's publication", text)
+                self.assertIn("A beta or release candidate alone never starts the timeout, nor does a fix commit", text)
                 self.assertIn("at least 14 days without any reply from the reporter", text)
                 self.assertIn("no other person reporting the same problem since that retest request", text)
 

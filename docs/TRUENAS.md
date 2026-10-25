@@ -388,6 +388,28 @@ do not run it during a backup, freeze/thaw or an unresponsive-host incident
 merely to obtain an export. Keep the existing observations instead. See
 [safe diagnostics collection](TROUBLESHOOTING.md#collect-diagnostics-safely).
 
+### CORE 13 rejects the reporting request
+
+For **TrueNAS CORE 13**, `POST /reporting/get_data` returning HTTP **400** with
+`The following attributes are not expected: query` means the appliance rejected
+Pulse's reporting request format. It is not an invalid API key or evidence that
+the NAS is idle. A successful **Test connection**, fresh inventory or advancing
+`observed.collectedAt` does not establish that CPU, memory or History was measured.
+
+Use TrueNAS's own **Reporting** graphs for CPU, memory and I/O while Pulse's
+collection is unavailable. A displayed zero or an empty History panel alongside
+this rejection is **not a measured idle value**. Do not rotate the key, recreate
+the connection, install an agent, switch transport or weaken TLS verification
+to address this request-format error; those actions do not correct it.
+
+Keep the existing, locally reviewed error and affected versions in your original
+report; [the CORE request-format report](https://github.com/rcourtman/Pulse/issues/2964)
+tracks this failure. If versions or native graph replies are already supplied,
+do not collect them again. A newer release is a reason to retest only when it
+contains the relevant correction, not simply because its version is higher.
+Other missing-reading failures still need their own evidence; this specific
+error does not diagnose every CORE or SCALE problem.
+
 ### Inventory works but CPU, memory or History is missing
 
 Services, uptime, hardware capacity and disk temperatures can be collected
@@ -396,7 +418,9 @@ does not establish a live reading; check the CPU/memory usage columns and
 History series separately. A disk-utilisation line does not establish that
 CPU, memory or network History is available.
 
-Check whether the corresponding graphs work in the TrueNAS web UI. If Pulse
+If the existing error is the [CORE 13 request-format rejection](#core-13-rejects-the-reporting-request),
+follow that guidance rather than collecting another graph response. Otherwise,
+check whether the corresponding graphs work in the TrueNAS web UI. If Pulse
 still shows missing readings, report the affected panels, running Pulse and
 TrueNAS versions, and the relevant sanitized evidence above. Do not replace
 an otherwise working key or clear stored History merely because a graph is
