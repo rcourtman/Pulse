@@ -18,7 +18,10 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
+import {
+  getPlatformInlineStateClass,
+  getPlatformStatusTextToneClass,
+} from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
@@ -352,13 +355,14 @@ export const TrueNASServicesTable: Component<{
                                 variant={serviceStatusVariant(status())}
                                 title={formatPlatformTableTitleCaseValue(status())}
                               />
-                              <div class="flex min-w-0 flex-col">
+                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
                                 <div class="min-w-0 truncate font-medium text-base-content">
                                   {formatServiceName(row.service.service)}
                                 </div>
-                                {/* A phone hides State; the state and any note read under the name. */}
+                                {/* A phone hides State; a state that needs attention joins the
+                                    name on its line. */}
                                 <span
-                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
+                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(Boolean(note()))} ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
                                   data-truenas-service-state-phone={note() ? note()!.tone : 'none'}
                                 >
                                   <span class="min-w-0 truncate">

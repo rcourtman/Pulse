@@ -116,6 +116,14 @@ describe('TrueNASServicesTable', () => {
     const smartPhoneLine = smartNameCell.querySelector('[data-truenas-service-state-phone]');
     expect(smartPhoneLine).toHaveClass('platform-table-phone-only-inline', 'text-red-600');
     expect(smartPhoneLine).toHaveTextContent('Stopped · should be running');
+    // The words join the name on its line rather than stacking under it.
+    expect(smartPhoneLine).toHaveClass('min-w-0', 'truncate');
+    expect(smartPhoneLine?.parentElement).toHaveClass('items-center');
+    expect(smartPhoneLine?.parentElement).not.toHaveClass('flex-col');
+    // A chosen stop needs no words on a phone; the grey dot says it.
+    expect(
+      screen.getByText('SSH').closest('td')?.querySelector('[data-truenas-service-state-phone]'),
+    ).toHaveClass('sr-only');
     const smartNameText = smartNameCell.cloneNode(true) as HTMLElement;
     smartNameText.querySelector('[data-truenas-service-state-phone]')?.remove();
     expect(smartNameText).not.toHaveTextContent('should be running');

@@ -95,7 +95,8 @@ export const DockerResourceNameCell: Component<{
   // Image rows name the resource by its reference, so a narrow cell keeps the
   // repository and tag visible instead of the shared registry prefix.
   imageReference?: boolean;
-  // A second line under the name, for a field the layout has no column for.
+  // Words that join the name on its line, for a field the layout has no
+  // column for. The row stays one line tall; the name truncates first.
   detail?: JSX.Element;
 }> = (props) => {
   const resolvedIndicator = (): StatusIndicator =>
@@ -124,7 +125,7 @@ export const DockerResourceNameCell: Component<{
         />
         <Show when={props.detail} fallback={nameLink()}>
           {(detail) => (
-            <div class="flex min-w-0 flex-col">
+            <div class="flex min-w-0 flex-1 items-center gap-1.5">
               {nameLink()}
               {detail()}
             </div>

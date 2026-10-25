@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "019545785cc559ef9aed2181654d4aa6e9ffa9e0",
+  "verified_at": "2026-10-25T14:58:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx",
+    "frontend-modern/src/features/platformPage/platformStatusTone.ts",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/SummaryRowActionButton.tsx": "dcad32ea8012b4f67aa9f105fad5c7515e0adcfcd5ceffc60a1052188cad3d91",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "7b9a94ddd7085193947e33db885443427b09b9bfbae7d2c0b5f85b99ff0dab14",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "98f880f23e37681aace438276955dd0342173ece69a89c5294379d32a87cc336",
+    "frontend-modern/src/features/docker/DockerServicesTable.tsx": "c312f7a6620a3f07fc608fabc81370b138b73a53d1c5700286c650ca6d2d1eec",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx": "3090bfe5cf4f125afcfdfe24d987be13d5c08958f74bdbbaf864d32adb9caba9",
+    "frontend-modern/src/features/platformPage/platformStatusTone.ts": "a0fba5f5a7b1bd8e0b1e446e2d172d27391f9daf63eb342a63d2314d78e353c7",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "6adf2594aceb97f18affd95128a5c604992a440b1463134f4966a9f619c76ddf",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx": "f1874bd497ec1990686d311e860ace43c8f561d92a4505e4793472bcd9f093ac",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx": "0c57cf2f9d0e824beb7fe3f6163aa539e3d727cd810b31f74f6f9fefb1893506",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "f1e23c4cf9e0294ddf528ff83834e18def646c8ba857fc352924f740cac0bc9a",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "49d792507fa168cd3433809860fb3c1da5facefc90868b479db3c13208c02993"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/docker/swarm",
+    "/kubernetes/workloads",
+    "/truenas/services",
+    "/truenas/apps",
+    "/truenas/vms",
+    "/truenas/shares",
+    "/vmware/overview",
+    "/vmware/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 430,
+      "height": 932
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree in mock mode on pulse-dev, headless Chromium, dark theme, touch phone emulation below 768px. A sweep visited every Proxmox, Docker, Kubernetes, TrueNAS, vSphere and Standalone tab at 375 and 430px (92 page loads, 144 tables) and measured each data row for height and for cell content stacked on more than one line.",
+    "Before (same rig, main at 7cdf408449 plus the merged guest-row fix of PR 3256): host tables with a visible chevron (Proxmox nodes, Docker hosts, vSphere hosts) had 37px rows; Docker containers (375px), Kubernetes pods, TrueNAS services/apps/VMs/shares and vSphere activity stacked the state under the name; Swarm Update wrapped \"Rollback started\". After: every one of the 144 tables measures at most 32px per row, with no stacked cells except a pre-existing guest memory \"Cache?\" caveat in one Proxmox guest row, which this change does not touch.",
+    "Attention states keep their words on the name line at 375px: \"Stopped \u00b7 should be running\" (TrueNAS SMART, red), \"Exited (137)\" and \"Starting\" (Docker containers), CrashLoopBackOff/ImagePullBackOff/Pending (Kubernetes pods, earlier run). Healthy and chosen-stop rows show only the dot; their words remain in sr-only text.",
+    "Desktop 1280px: changed tables keep their State columns and render as before; TrueNAS apps rows 33px with no state line, Swarm Update truncates on one line with the full words in the title."
+  ],
+  "interactions": [
+    "Captured each changed table at 375px and 1280px and inspected the screenshots: names truncate first only when name plus attention words overflow, short names show the full note, chevrons keep their 36px target (h-9 w-9) while rows stay 32px.",
+    "Row disclosure and drawer behaviour unchanged; affected component tests (151 files under docker, kubernetes, truenas, vmware, platformPage, proxmox, Storage, Workloads and shared) pass under Node 24."
+  ],
+  "proof_scope": "Platform table row presentation at phone and desktop widths in mock mode; state semantics, drawers and sorting are unchanged."
+}

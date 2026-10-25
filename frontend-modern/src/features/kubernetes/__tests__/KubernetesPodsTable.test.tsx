@@ -137,10 +137,14 @@ describe('KubernetesPodsTable', () => {
     const status = document.querySelector('[data-kubernetes-pod-status]');
     expect(status).toHaveTextContent('Not ready');
     expect(status).toHaveClass('text-amber-700');
-    // A phone hides Status, so the same words read under the pod name there.
+    // A phone hides Status, so the amber words join the pod name on its line.
     const phoneStatus = document.querySelector('[data-kubernetes-pod-status-phone]');
     expect(phoneStatus).toHaveTextContent('Not ready');
     expect(phoneStatus).toHaveClass('platform-table-phone-only-inline', 'text-amber-700');
+    expect(phoneStatus).toHaveClass('min-w-0', 'truncate');
+    expect(phoneStatus).not.toHaveClass('sr-only');
+    expect(phoneStatus?.parentElement).toHaveClass('items-center');
+    expect(phoneStatus?.parentElement).not.toHaveClass('flex-col');
     expect(screen.getByText('1/2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();

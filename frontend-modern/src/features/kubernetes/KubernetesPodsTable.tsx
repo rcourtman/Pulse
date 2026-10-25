@@ -18,7 +18,11 @@ import {
   type PlatformTableSortValue,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
+import {
+  getPlatformInlineStateClass,
+  getPlatformStatusTextToneClass,
+  isPlatformAttentionVariant,
+} from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -327,7 +331,7 @@ export const KubernetesPodsTable: Component<{
                                 title={indicator().label}
                                 ariaHidden
                               />
-                              <div class="flex min-w-0 flex-col">
+                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
                                 <ResourceNameWithWebInterfaceLink
                                   name={name()}
                                   url={resource.customUrl}
@@ -337,10 +341,11 @@ export const KubernetesPodsTable: Component<{
                                   <KubernetesNameText name={name()} />
                                 </ResourceNameWithWebInterfaceLink>
                                 {/* A phone hides the Status column, and its dot can be
-                                    neither hovered nor read aloud, so the reason
-                                    ("CrashLoopBackOff") reads under the name there. */}
+                                    neither hovered nor read aloud, so a reason that
+                                    needs attention ("CrashLoopBackOff") joins the name
+                                    on its line; screen readers always get the words. */}
                                 <span
-                                  class={`platform-table-phone-only-inline min-w-0 max-w-full ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                                  class={`platform-table-phone-only-inline ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
                                   data-kubernetes-pod-status-phone={indicator().variant}
                                 >
                                   <span class="min-w-0 truncate">{indicator().label}</span>

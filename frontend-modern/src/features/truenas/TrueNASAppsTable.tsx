@@ -26,7 +26,11 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
+import {
+  getPlatformInlineStateClass,
+  getPlatformStatusTextToneClass,
+  isPlatformAttentionVariant,
+} from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -371,9 +375,9 @@ export const TrueNASAppsTable: Component<{
                                 variant={indicator().variant}
                                 title={indicator().label}
                               />
-                              <div class="min-w-0">
+                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
                                 <div
-                                  class="truenas-app-name-value truncate font-medium text-base-content"
+                                  class="truenas-app-name-value min-w-0 truncate font-medium text-base-content"
                                   title={[
                                     name(),
                                     `${formatPlatformTableTitleCaseValue(app()?.state)} on ${
@@ -385,10 +389,11 @@ export const TrueNASAppsTable: Component<{
                                 >
                                   {name()}
                                 </div>
-                                {/* The app has no State column: its state reads under the name,
-                                    in its dot's colour, so a crashed app says so without a hover. */}
+                                {/* The app has no State column: a state that needs attention joins
+                                    the name on its line, in its dot's colour, so a crashed app
+                                    says so without a hover. */}
                                 <div
-                                  class={`truncate text-[11px] ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                                  class={`text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
                                   data-truenas-app-state={indicator().variant}
                                 >
                                   {formatPlatformTableTitleCaseValue(app()?.state, '') ||

@@ -26,8 +26,11 @@ type SummaryRowActionButtonProps =
       onPreviewClear?: () => void;
     };
 
+// A phone keeps the 36px touch target, but negative margins let it overhang
+// the 14px chevron: a visible disclosure had set every such row to 37px
+// instead of the single-line 32px the rows beside it use.
 const DISCLOSURE_BUTTON_CLASS = [
-  'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted transition-colors sm:h-6 sm:w-6',
+  'inline-flex h-9 w-9 -mx-1 -my-2.5 shrink-0 items-center justify-center rounded-md text-muted transition-colors sm:m-0 sm:h-6 sm:w-6',
   'hover:bg-surface hover:text-base-content',
   SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS,
 ].join(' ');

@@ -1,4 +1,8 @@
 import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
+import {
+  getPlatformInlineStateClass,
+  isPlatformAttentionVariant,
+} from '@/features/platformPage/platformStatusTone';
 import { For, Show, Suspense, createMemo, lazy, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import { type FilterDef } from '@/components/shared/FilterBar';
@@ -511,6 +515,17 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         {state().label}
       </span>
     );
+    // Without a State column the words join the name only when the state
+    // needs attention; a running or stopped container reads in its dot.
+    const stateBesideName = () => (
+      <span
+        class={`${getPlatformInlineStateClass(isPlatformAttentionVariant(state().tone))} ${dockerStateTextToneClass(state().tone)}`}
+        title={state().title}
+        data-docker-container-state={state().tone ?? 'ok'}
+      >
+        {state().label}
+      </span>
+    );
     const runtime = () => runtimeSummary(resource);
     const host = () => dockerHostName(resource);
     const running = () => isContainerRunning(resource);
@@ -553,7 +568,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <DockerResourceNameCell
               resource={resource}
               indicator={indicator}
-              detail={stateUnderName() ? stateWords() : undefined}
+              detail={stateUnderName() ? stateBesideName() : undefined}
               detailToggle={
                 <PlatformResourceDetailToggleButton
                   expanded={isExpanded()}

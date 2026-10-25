@@ -19,7 +19,11 @@ import {
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
+import {
+  getPlatformInlineStateClass,
+  getPlatformStatusTextToneClass,
+  isPlatformAttentionVariant,
+} from '@/features/platformPage/platformStatusTone';
 import {
   PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
@@ -278,9 +282,9 @@ export const TrueNASNetworkSharesTable: Component<{
                                 variant={indicator().variant}
                                 title={indicator().label}
                               />
-                              <div class="min-w-0">
+                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
                                 <div
-                                  class="truncate font-medium text-base-content"
+                                  class="min-w-0 truncate font-medium text-base-content"
                                   title={[
                                     name(),
                                     share()?.dataset ||
@@ -293,9 +297,10 @@ export const TrueNASNetworkSharesTable: Component<{
                                 >
                                   {name()}
                                 </div>
-                                {/* A phone hides State; the same words read under the name. */}
+                                {/* A phone hides State; a state that needs attention joins the
+                                    name on its line. */}
                                 <span
-                                  class={`platform-table-phone-only-inline max-w-full text-[11px] ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
                                   data-truenas-share-state-phone={indicator().variant}
                                 >
                                   <span class="min-w-0 truncate">{stateLabel()}</span>
