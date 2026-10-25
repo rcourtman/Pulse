@@ -4668,6 +4668,7 @@
         "pulse-pro:scripts/tests/test_validate_paid_runtime_distribution.py",
         "pulse-pro:scripts/validate_paid_runtime_distribution.py",
         "scripts/backfill-release-assets.sh",
+        "scripts/browser_os_packages.py",
         "scripts/build-release-binaries.sh",
         "scripts/build-release.sh",
         "scripts/build-secure-runtime-qualification.sh",
@@ -4697,6 +4698,7 @@
         "scripts/installtests/testdata/secure_runtime_docker_fixture.go",
         "scripts/lib/hot-dev-auth.sh",
         "scripts/lib/hot-dev-runtime.sh",
+        "scripts/playwright-apt.conf",
         "scripts/prepare-release-container-context.sh",
         "scripts/pulse-auto-update.sh",
         "scripts/release-preflight-worker.sh",
@@ -4745,6 +4747,7 @@
         "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
+        "tests/integration/scripts/managed-local-backend.mjs",
         "tests/integration/scripts/relay-mobile-token-helper.go",
         "tests/integration/scripts/settings-scroll-audit.mjs",
         "tests/integration/tests/helpers.ts",
@@ -5267,6 +5270,7 @@
             "test_prefixes": [],
             "exact_files": [
               "tests/integration/scripts/fixture-auth.test.mjs",
+              "tests/integration/scripts/organization-fixtures.test.mjs",
               "tests/integration/tests/62-runtime-home-onboarding-contract.spec.ts"
             ]
           },
@@ -5353,6 +5357,21 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/tests/test_go_mod_download.py"
+            ]
+          },
+          {
+            "id": "browser-os-acquisition",
+            "label": "signed Ubuntu browser dependency acquisition proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/browser_os_packages.py",
+              "scripts/playwright-apt.conf"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test_browser_os_packages.py",
+              "scripts/tests/test_playwright_acquisition.py"
             ]
           },
           {
@@ -6840,6 +6859,7 @@
               "internal/monitoring/issue1638_dns_cache_test.go",
               "internal/monitoring/issue1913_host_continuity_test.go",
               "internal/monitoring/metric_window_provider_test.go",
+              "internal/monitoring/mock_chart_history_test.go",
               "internal/monitoring/monitor_additional_test.go",
               "internal/monitoring/monitor_alert_handling_test.go",
               "internal/monitoring/monitor_alert_intent_test.go",

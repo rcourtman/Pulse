@@ -1997,6 +1997,9 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 104. `.github/workflows/dependency-advisory-watch.yml`
 105. `scripts/dependency_advisory_watch.py`
 106. `tests/integration/scripts/settings-scroll-audit.mjs`
+107. `tests/integration/scripts/managed-local-backend.mjs`
+108. `scripts/browser_os_packages.py`
+109. `scripts/playwright-apt.conf`
 
 `scripts/installtests/run_unix_contracts.py` is the canonical exhaustive native Unix installer execution runner. Its dedicated verification files are `scripts/installtests/native_unix_contract_runner_test.go` and `scripts/tests/test_native_installer_contract_runner.py`. Script-smoke discovery and the native Go wrapper execute that same Python control suite, so phase inventory, failure propagation and real compiled-Go exit behavior retain one verification source.
 
@@ -3057,6 +3060,23 @@ artifact-selection behaviour.
    overflow assertions. Infrastructure onboarding uses this same content-owner
    audit, including its bottom-position assertion. Its SPA route assertions
    observe the requested URL rather than wait for the document's load event.
+   Organization audits use the worker's authenticated cookie context to create
+   and activate their API fixtures before entering the workspace. The initial
+   load observes the complete organization list without an intervening reload.
+   The audit owns created organization IDs before preparation starts, so a
+   preparation failure still reaches the same explicit cleanup boundary.
+   License activation has a 15-second server request deadline and tenant
+   deletion permits 30 seconds of graceful shutdown. Their fixture requests
+   use explicit 20-second and 35-second bounds so the default 10-second browser
+   action timeout cannot discard the server verdict. The overall journey
+   deadlines and ordinary API request timeout remain unchanged. Shared creation
+   cleans up an ID when activation fails before returning it, and batch cleanup
+   attempts every owned ID while retaining failures. The controlled organization
+   fixture tests preserve rejection, timeout and incomplete-shutdown failures.
+   Managed native backend teardown copies its final server log to the existing
+   test-results directory before removing its runtime root. Missing pre-launch
+   logs still permit cleanup; a failed diagnostic copy cannot silently discard
+   the runtime containing that evidence.
    Bottom position and horizontal width are judged from the same browser snapshot.
    If content reflows after traversal, the audit finishes the changed extent before
    accepting that snapshot. A scroll reset with an unchanged extent remains an
@@ -8305,9 +8325,15 @@ packages for Chromium and WebKit from the runner's Azure mirror. From
 minute ran past their 10 and 30 minute budgets before any test started. The
 jobs now restore the newest saved package set with `actions/cache/restore`
 (v6.1.0, pinned by SHA) and admit it through `scripts/browser_os_packages.py`:
-after a bounded `apt-get update`, a cached `.deb` reaches apt's archive
+after a bounded `apt-get update` scoped to the runner's existing Ubuntu
+Deb822 source definition, a cached `.deb` reaches apt's archive
 directory only when the SHA256 of the private copy it installs equals a signed
 index value for the package, version, and architecture named by its filename.
+The original Ubuntu mirror and `Signed-By` settings remain authoritative.
+An absent, unreadable or empty distribution definition fails acquisition.
+Unrelated vendor feeds do not participate in browser OS acquisition. Failed
+Ubuntu index updates still fail, and TLS, signature and archive-hash validation
+remain enforced. This policy changes no host repository definition files.
 That check is ours, because apt reuses an archive-directory file after
 checking only its size.
 After a successful install, and before any journey runs, the helper rebuilds

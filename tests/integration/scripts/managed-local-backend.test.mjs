@@ -13,10 +13,42 @@ import {
   buildManagedLocalBackendState,
   shouldBuildManagedLocalBackendFrontend,
   shouldBuildManagedLocalBackendBinary,
+  stopManagedLocalBackend,
 } from './managed-local-backend.mjs';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const integrationRoot = path.resolve(scriptsDir, '..');
+
+test('native teardown retains backend diagnostics before removing its runtime root', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-backend-log-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const root = path.join(directory, 'owned-runtime');
+  const results = path.join(directory, 'results');
+  await fs.mkdir(path.join(root, 'data'), { recursive: true });
+  await fs.writeFile(path.join(root, 'pulse.log'), 'started\nfinal shutdown diagnostic\n');
+  await stopManagedLocalBackend({
+    env: { PULSE_E2E_RESULTS_DIR: results },
+    state: { managedLocalBackend: true, pid: null, dataDir: path.join(root, 'data'), logPath: path.join(root, 'pulse.log') },
+    preserveRuntimeState: true,
+    logger: { log() {} },
+  });
+  assert.equal(await fs.readFile(path.join(results, 'managed-backend.log'), 'utf8'), 'started\nfinal shutdown diagnostic\n');
+  await assert.rejects(fs.stat(root), { code: 'ENOENT' });
+});
+
+test('native teardown still removes a runtime that never produced a backend log', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-backend-no-log-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const root = path.join(directory, 'owned-runtime');
+  await fs.mkdir(path.join(root, 'data'), { recursive: true });
+  await stopManagedLocalBackend({
+    env: { PULSE_E2E_RESULTS_DIR: path.join(directory, 'results') },
+    state: { managedLocalBackend: true, pid: null, dataDir: path.join(root, 'data'), logPath: path.join(root, 'pulse.log') },
+    preserveRuntimeState: true,
+    logger: { log() {} },
+  });
+  await assert.rejects(fs.stat(root), { code: 'ENOENT' });
+});
 
 test('integration setup pins the governed Node.js major', async () => {
   const [quickStart, setupScript] = await Promise.all([

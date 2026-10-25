@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1645,6 +1646,7 @@ type retainedQueryShape struct {
 	tiers                  [4]Tier
 	aggregate, groupSeries bool
 	valuesOnly, clustered  bool
+	packedSeries           bool
 }
 
 func retainedQueryParameters(resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier) []interface{} {
@@ -1677,6 +1679,7 @@ func (s *Store) retainedQuerySQL(resourceType string, resourceIDs, metricTypes [
 
 func (s *Store) retainedQuerySQLForIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
 	shape := retainedQueryShape{resources: len(resourceIDs), metrics: len(metricTypes), aggregate: stepSecs > 1, groupSeries: groupSeries, valuesOnly: valuesOnly, clustered: index == clusteredMetricsIndex}
+	shape.packedSeries = retainedQueryUsesPackedSeries(len(resourceIDs), len(metricTypes), start, end, stepSecs, groupSeries, valuesOnly)
 	cacheable := len(tiers) <= len(shape.tiers)
 	copy(shape.tiers[:], tiers)
 	if cacheable {
@@ -1719,10 +1722,29 @@ func retainedQueryUsesResourceOrdinals(resources int, stepSecs int64, groupSerie
 	return resources > 1 && stepSecs <= 1 && !groupSeries
 }
 
+// A raw value read needs two integers identifying each observation: its
+// statement-local series and timestamp. Carry them in one integer while the
+// requested bounds prove multiplication and addition cannot overflow SQLite's
+// signed integer. This is only row transport, never storage or API encoding.
+// Extreme windows use the ordinary separate columns in the same reader.
+func retainedQueryUsesPackedSeries(resources, metrics int, start, end time.Time, stepSecs int64, groupSeries, valuesOnly bool) bool {
+	if !valuesOnly || metrics < 2 || !retainedQueryUsesResourceOrdinals(resources, stepSecs, groupSeries) {
+		return false
+	}
+	if int64(metrics) > math.MaxInt64/int64(resources) {
+		return false
+	}
+	series := int64(resources) * int64(metrics)
+	return end.Unix() >= start.Unix() && start.Unix() >= math.MinInt64/series &&
+		end.Unix() <= (math.MaxInt64-series+1)/series
+}
+
 func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, metricTypes []string, start, end time.Time, stepSecs int64, tiers []Tier, groupSeries, valuesOnly bool) (string, []interface{}) {
 	params := retainedQueryParameters(resourceType, resourceIDs, metricTypes, start, end, stepSecs, tiers)
 	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), stepSecs, groupSeries)
 	seriesOrdinals := resourceOrdinals && len(metricTypes) > 1
+	packedSeries := retainedQueryUsesPackedSeries(len(resourceIDs), len(metricTypes), start, end, stepSecs, groupSeries, valuesOnly)
+	var seriesExpression string
 	identityColumns := ""
 	if len(resourceIDs) != 1 {
 		if seriesOrdinals {
@@ -1733,7 +1755,8 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 			for i := range metricTypes {
 				metricCases[i] = fmt.Sprintf("WHEN :p%d THEN %d", 2+len(resourceIDs)+i, i)
 			}
-			identityColumns = fmt.Sprintf("(r.resource_number * %d + CASE m.metric_type %s END) AS series_number, ", len(metricTypes), strings.Join(metricCases, " "))
+			seriesExpression = fmt.Sprintf("(r.resource_number * %d + CASE m.metric_type %s END)", len(metricTypes), strings.Join(metricCases, " "))
+			identityColumns = seriesExpression + " AS series_number, "
 		} else if resourceOrdinals {
 			identityColumns += "r.resource_number, "
 		} else {
@@ -1772,6 +1795,9 @@ func retainedQuerySQLWithIndex(index string, resourceType string, resourceIDs, m
 	// value again for each missing bound makes SQLite and its driver decode
 	// three floats for an observation that stores only one.
 	projection := identityColumns + `m.timestamp, m.value`
+	if packedSeries {
+		projection = fmt.Sprintf("(m.timestamp * %d + %s) AS series_sample, m.value", len(resourceIDs)*len(metricTypes), seriesExpression)
+	}
 	if !valuesOnly {
 		projection += `, m.min_value, m.max_value`
 	}
@@ -1970,6 +1996,8 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	sqlQuery, params := s.retainedQuerySQLForIndex(index, resourceType, resourceIDs, metricTypes, start, end, queryStep, tiers, streamBuckets, projection.valuesOnly)
 	resourceOrdinals := retainedQueryUsesResourceOrdinals(len(resourceIDs), queryStep, streamBuckets)
 	seriesOrdinals := resourceOrdinals && len(metricTypes) > 1
+	packedSeries := retainedQueryUsesPackedSeries(len(resourceIDs), len(metricTypes), start, end, queryStep, streamBuckets, projection.valuesOnly)
+	seriesWidth := int64(len(resourceIDs)) * int64(len(metricTypes))
 
 	queryRows := func() (*sql.Rows, error) { return tx.Query(sqlQuery, params...) }
 	if tx == nil {
@@ -2075,7 +2103,10 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 	} else if !seriesOrdinals {
 		destinations = append(destinations, &metricType)
 	}
-	destinations = append(destinations, &ts, &value)
+	if !packedSeries {
+		destinations = append(destinations, &ts)
+	}
+	destinations = append(destinations, &value)
 	if !projection.valuesOnly {
 		destinations = append(destinations, &low, &high)
 	}
@@ -2083,6 +2114,17 @@ func queryRetainedChunkAttempt[T any](s *Store, resourceType string, resourceIDs
 		if err := rows.Scan(destinations...); err != nil {
 			log.Warn().Err(err).Msg("Failed to scan batch metric row")
 			continue
+		}
+		if packedSeries {
+			encoded := int64(resourceNumber)
+			ts = retainedInt64(encoded / seriesWidth)
+			resourceNumber = retainedInt64(encoded % seriesWidth)
+			// Go division truncates toward zero. Restore floor division for
+			// observations before the Unix epoch so the ordinal stays positive.
+			if resourceNumber < 0 {
+				resourceNumber += retainedInt64(seriesWidth)
+				ts--
+			}
 		}
 		if resourceOrdinals {
 			resourceIndex := resourceNumber

@@ -100,7 +100,6 @@ class DevRuntimeGovernanceTest(unittest.TestCase):
                 "tests/integration/README.md",
                 "tests/integration/QUICK_START.md",
                 "tests/integration/playwright.config.ts",
-                "tests/integration/tests/helpers.ts",
                 "tests/integration/tests/runtime-defaults.ts",
             ]
         )
@@ -127,6 +126,34 @@ class DevRuntimeGovernanceTest(unittest.TestCase):
                 "scripts/tests/test-hot-dev-bg.sh",
                 match["verification_requirement"]["exact_files"],
             )
+
+    def test_lookup_maps_browser_helpers_to_scoped_fixture_proof(self) -> None:
+        result = lookup_paths(["tests/integration/tests/helpers.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        match = result["files"][0]["matches"][0]
+        self.assertEqual(match["subsystem"], "deployment-installability")
+        proof = match["verification_requirement"]
+        self.assertEqual(proof["id"], "browser-fixture-helpers")
+        self.assertIn("tests/integration/scripts/fixture-auth.test.mjs", proof["exact_files"])
+        self.assertIn("tests/integration/scripts/organization-fixtures.test.mjs", proof["exact_files"])
+        self.assertFalse(proof["allow_same_subsystem_tests"])
+
+    def test_lookup_maps_browser_acquisition_to_signed_package_proof(self) -> None:
+        result = lookup_paths(["scripts/playwright-apt.conf", "scripts/browser_os_packages.py"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        for entry in result["files"]:
+            self.assertEqual(entry["classification"], "runtime")
+            self.assertEqual(len(entry["matches"]), 1)
+            match = entry["matches"][0]
+            self.assertEqual(match["subsystem"], "deployment-installability")
+            proof = match["verification_requirement"]
+            self.assertEqual(proof["id"], "browser-os-acquisition")
+            self.assertEqual(proof["exact_files"], [
+                "scripts/tests/test_browser_os_packages.py",
+                "scripts/tests/test_playwright_acquisition.py",
+            ])
+            self.assertFalse(proof["allow_same_subsystem_tests"])
+            self.assertEqual(proof["test_prefixes"], [])
 
     def test_lookup_maps_release_promotion_workflows_to_installability(self) -> None:
         result = lookup_paths(

@@ -21,6 +21,7 @@ INSTALL_POLICY = (
 # successful install is cached even when later journeys fail.
 CACHE_PIN = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
 CACHE_DIR = '"$HOME/.cache/pulse-browser-os-packages"'
+UBUNTU_SOURCES = "/etc/apt/sources.list.d/ubuntu.sources"
 
 
 def job_block(workflow, job):
@@ -158,7 +159,7 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                 self.assertTrue(result.failures)
                 self.assertFalse(result.errors)
 
-    def test_real_apt_parser_loads_only_the_four_expected_controls(self):
+    def test_real_apt_parser_loads_only_the_expected_controls(self):
         with tempfile.TemporaryDirectory() as temp:
             config = Path(temp) / "apt.conf"
             config.write_text(
@@ -169,6 +170,9 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                 capture_output=True, text=True, timeout=10, check=True,
             ).stdout
         expected = {
+            "Dir::Etc::sourcelist": UBUNTU_SOURCES,
+            "Dir::Etc::sourceparts": "-",
+            "APT::Update::Pre-Invoke::": f"test -r {UBUNTU_SOURCES} && test -s {UBUNTU_SOURCES}",
             "Acquire::http::Timeout": "30",
             "Acquire::https::Timeout": "30",
             "Acquire::Retries": "2",
@@ -180,6 +184,72 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
             self.assertIn(f'{key} "{value}";', parsed)
         self.assertNotIn("AllowUnauthenticated", parsed)
         self.assertNotIn("Verify-Peer", parsed)
+
+    def test_real_apt_preserves_ubuntu_sources_and_excludes_unrelated_feeds(self):
+        # Print acquisition URIs without contacting a repository or touching
+        # host state. Both configurations retain the same signed Ubuntu source;
+        # the adverse control also admits an unrelated, unreachable vendor feed.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            parts = root / "sources.list.d"
+            parts.mkdir()
+            ubuntu = parts / "ubuntu.sources"
+            definition = (
+                "Types: deb\nURIs: http://127.0.0.1:1/ubuntu/\n"
+                "Suites: noble\nComponents: main\nArchitectures: amd64\n"
+                "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n"
+            )
+            ubuntu.write_text(definition)
+            (parts / "unrelated-vendor.list").write_text(
+                "deb http://127.0.0.1:1/vendor/ stable main\n"
+            )
+            (root / "lists/partial").mkdir(parents=True)
+            (root / "cache/archives/partial").mkdir(parents=True)
+            prefix = (
+                'Dir::Etc::parts "-";\nDir::Etc::main "-";\n'
+                f'Dir::Etc::sourcelist "-";\nDir::Etc::sourceparts "{parts}";\n'
+                f'Dir::State::lists "{root / "lists"}";\n'
+                f'Dir::Cache "{root / "cache"}";\n'
+                'Dir::State::status "/dev/null";\nDebug::NoLocking "true";\n'
+            )
+            policy = POLICY.read_text().replace(UBUNTU_SOURCES, str(ubuntu))
+            config = root / "apt.conf"
+            for scoped in (True, False):
+                selected = policy
+                if not scoped:
+                    selected = re.sub(r'^Dir::Etc::source(?:list|parts) .*;\n', '', selected, flags=re.M)
+                config.write_text(prefix + selected)
+                result = subprocess.run(
+                    ["apt-get", "update", "--print-uris"],
+                    env={**os.environ, "APT_CONFIG": str(config), "LC_ALL": "C"},
+                    capture_output=True, text=True, timeout=10, check=True,
+                )
+                with self.subTest(scoped=scoped):
+                    self.assertIn("http://127.0.0.1:1/ubuntu/", result.stdout)
+                    self.assertEqual("http://127.0.0.1:1/vendor/" in result.stdout, not scoped)
+                    self.assertEqual(ubuntu.read_text(), definition)
+
+    def test_missing_ubuntu_definition_fails_before_acquisition(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "lists/partial").mkdir(parents=True)
+            (root / "cache/archives/partial").mkdir(parents=True)
+            missing = root / "missing.sources"
+            config = root / "apt.conf"
+            config.write_text(
+                'Dir::Etc::parts "-";\nDir::Etc::main "-";\n'
+                f'Dir::State::lists "{root / "lists"}";\n'
+                f'Dir::Cache "{root / "cache"}";\n'
+                'Dir::State::status "/dev/null";\nDebug::NoLocking "true";\n'
+                + POLICY.read_text().replace(UBUNTU_SOURCES, str(missing))
+            )
+            result = subprocess.run(
+                ["apt-get", "update"],
+                env={**os.environ, "APT_CONFIG": str(config), "LC_ALL": "C"},
+                capture_output=True, text=True, timeout=10,
+            )
+            self.assertEqual(result.returncode, 100, result.stdout + result.stderr)
+            self.assertIn("Pre-Invoke", result.stderr)
 
     def test_incomplete_index_is_a_real_apt_failure_not_a_warning_pass(self):
         # An unlistening reserved loopback port gives a definite transport
@@ -201,10 +271,12 @@ class PlaywrightAcquisitionTest(unittest.TestCase):
                 'Dir::State::status "/dev/null";\nDebug::NoLocking "true";\n'
             )
             for strict, expected_exit in ((True, 100), (False, 0)):
-                policy = POLICY.read_text()
+                policy = POLICY.read_text().replace(UBUNTU_SOURCES, str(sources))
                 if not strict:
                     policy = policy.replace('APT::Update::Error-Mode "any";', "")
-                config.write_text(prefix + policy)
+                # The controlled source overrides only the distribution path.
+                # Keep this a private loopback failure after policy is loaded.
+                config.write_text(policy + prefix)
                 result = subprocess.run(
                     ["apt-get", "update"],
                     env={**os.environ, "APT_CONFIG": str(config), "LC_ALL": "C"},

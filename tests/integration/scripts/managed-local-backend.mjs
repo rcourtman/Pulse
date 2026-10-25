@@ -789,6 +789,20 @@ export async function stopManagedLocalBackend({
     }
   }
 
+  // Keep the final server diagnostics with the existing browser results.
+  // Native/offline teardown removes the runtime root, including pulse.log.
+  if (trim(runtimeState.logPath) !== '') {
+    const resultsDir = path.resolve(
+      getRepoRoot(), 'tests/integration', trim(env.PULSE_E2E_RESULTS_DIR) || 'test-results',
+    );
+    try {
+      await fs.mkdir(resultsDir, { recursive: true, mode: 0o700 });
+      await fs.copyFile(runtimeState.logPath, path.join(resultsDir, 'managed-backend.log'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+
   if (!preserveData && trim(runtimeState.dataDir) !== '') {
     await fs.rm(path.dirname(runtimeState.dataDir), {
       recursive: true,

@@ -708,7 +708,9 @@ func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
 					}
 					rows.Close()
 					want := []string{"series_number", "timestamp", "value"}
-					if !valuesOnly {
+					if valuesOnly {
+						want = []string{"series_sample", "value"}
+					} else {
 						want = append(want, "min_value", "max_value")
 					}
 					if !reflect.DeepEqual(columns, want) {
@@ -734,6 +736,67 @@ func TestRetainedRawFleetSeriesNumbersBindCurrentMetrics(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestRetainedPackedSeriesKeepsNegativeTimestampsAndOverflowFallback(t *testing.T) {
+	db := newPlanTestDB(t)
+	store := &Store{db: pdb.Wrap(db, "packed-series-boundary")}
+	ids, names := []string{"second", "first"}, []string{"memory", "cpu", "disk"}
+	const width int64 = 6
+	const maximum = int64(^uint64(0) >> 1)
+	const minimum = -maximum - 1
+	for _, tc := range []struct {
+		name   string
+		start  int64
+		packed bool
+	}{
+		{"negative epoch", -100, true},
+		{"ordinary epoch", 1_800_000_000, true},
+		{"near positive bound", (maximum-width+1)/width - 2, true},
+		{"positive overflow", (maximum - width + 1) / width, false},
+		{"near negative bound", minimum / width, true},
+		{"negative overflow", minimum/width - 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			start, end := time.Unix(tc.start, 0), time.Unix(tc.start+2, 0)
+			if got := retainedQueryUsesPackedSeries(len(ids), len(names), start, end, 0, false, true); got != tc.packed {
+				t.Fatalf("packed=%t want %t", got, tc.packed)
+			}
+			for i, id := range ids {
+				for j, metric := range names {
+					for offset := int64(0); offset <= 2; offset++ {
+						if _, err := db.Exec(`INSERT OR REPLACE INTO metrics(resource_type,resource_id,metric_type,tier,timestamp,value) VALUES ('node',?,?,'raw',?,?)`, id, metric, tc.start+offset, float64(i*100+j*10)+float64(offset)/3); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+			// Reuse one Store and equal parameter counts across packed and
+			// overflow windows. Cached SQL must still choose the correct shape.
+			full, err := store.QueryMetricTypesBatch("node", ids, names, start, end, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			values, err := store.QueryMetricValuesBatch("node", ids, names, start, end, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertMetricValueProjection(t, full, values)
+			for _, id := range ids {
+				for _, name := range names {
+					points := values[id][name]
+					if len(points) != 3 {
+						t.Fatalf("lost observations for %s/%s: %+v", id, name, points)
+					}
+					for i, point := range points {
+						if point.Timestamp.Unix() != tc.start+int64(i) {
+							t.Fatalf("moved timestamp: %v", point.Timestamp.Unix())
+						}
+					}
+				}
+			}
+		})
 	}
 }
 

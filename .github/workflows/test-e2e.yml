@@ -143,9 +143,12 @@ jobs:
         working-directory: tests/integration
         run: node --test scripts/report-stable-e2e-failures.test.mjs
 
-      - name: Validate fixture authentication and credential lifetime
+      - name: Validate fixture authentication and organization lifecycle
         working-directory: tests/integration
-        run: node scripts/fixture-auth.test.mjs
+        run: >-
+          node --test scripts/fixture-auth.test.mjs
+          scripts/organization-fixtures.test.mjs
+          scripts/managed-local-backend.test.mjs
 
   offline-org-provisioning:
     name: Offline Organization provisioning
