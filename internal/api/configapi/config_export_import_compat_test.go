@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -34,6 +35,7 @@ func TestHandleImportConfigAcceptsLegacyVersion40Bundle(t *testing.T) {
 		ConfigPath: targetDir,
 	}
 	handler := newTestConfigHandlers(t, cfg)
+	setUnexportedField(t, handler.defaultMonitor, "notificationMgr", &notifications.NotificationManager{})
 	handler.reloadFunc = func() error { return nil }
 
 	// Build source export payload with distinct node data.
