@@ -28,7 +28,9 @@ interface SettingsDialogsProps {
   transferOrgID: Accessor<string>;
   isTransferring: Accessor<boolean>;
   transferError: Accessor<string>;
+  transferNotice: Accessor<string>;
   apiTokenInput: Accessor<string>;
+  apiTokenError: Accessor<string>;
   setApiTokenInput: (value: string) => void;
   handleExport: () => void;
   handleImport: () => void;
@@ -78,7 +80,9 @@ export const SettingsDialogs: Component<SettingsDialogsProps> = (props) => {
         transferOrgID={props.transferOrgID}
         isTransferring={props.isTransferring}
         transferError={props.transferError}
+        transferNotice={props.transferNotice}
         apiTokenInput={props.apiTokenInput}
+        apiTokenError={props.apiTokenError}
         setApiTokenInput={props.setApiTokenInput}
         handleExport={props.handleExport}
         handleImport={props.handleImport}

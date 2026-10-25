@@ -116,8 +116,14 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
-  it('carries transfer target, pending and error state through the Settings dialog shell', () => {
-    for (const name of ['transferOrgID', 'isTransferring', 'transferError']) {
+  it('carries transfer target, pending and dialog-owned feedback through the Settings shell', () => {
+    for (const name of [
+      'transferOrgID',
+      'isTransferring',
+      'transferError',
+      'transferNotice',
+      'apiTokenError',
+    ]) {
       expect(settingsSource).toContain(`${name}={backupTransferFlow.${name}}`);
       expect(settingsDialogsSource).toContain(`${name}={props.${name}}`);
     }

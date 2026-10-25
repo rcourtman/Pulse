@@ -10032,6 +10032,14 @@ Token entry saves a credential without submitting either transfer. The operator
 must review the target and submit explicitly, including after a server refusal.
 A failed/unknown import response is not proof that nothing applied: persistent
 in-dialog guidance requires checking the destination before another attempt.
+Transfer errors and token-saved status belong to the active dialog, never a
+duplicate foreground toast on the inert notification portal. Token validation
+appears in the nested token prompt; closing it returns the retained import
+warning and explicit-resubmission status to the transfer dialog. Dialog content
+scrolls independently so feedback, fields and actions remain reachable on a
+short phone screen. An import completed for a workspace that is no longer
+selected keeps its original destination and no-reload outcome visible until
+the operator dismisses it, with the submitted credentials and file cleared.
 Exports discard late data after a workspace change; successful imports identify
 the original workspace and never reload a different one. Leaving Settings aborts
 the client's wait and suppresses late downloads, notices and reload timers; it

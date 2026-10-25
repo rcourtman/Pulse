@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "7cdf408449adb5fc4ecea4c1558c48d26545c78e",
+  "verified_at": "2026-10-25T11:29:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "026ce6da0d1804f8f475c1fe028536b6c237cca4308b30997c37e7b1d3da405c",
+    "frontend-modern/src/components/Settings/Settings.tsx": "b9cf1e667ef41ae707d3b9ac2365164a31bcb7ede604a9776947f8d182c359d9",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx": "49625353f0cec1102a3bbc6cb2cc544ac6a972d48f9363b58c539cf0ec4dba70",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "67820073de2e275bf0097beadbd4fcc72d0b8f22dc3e3dd026dcbf860f4d23b6"
+  },
+  "routes": [
+    "/settings/system/recovery (offline consuming fixture: production RecoverySettingsPanel, transfer flow, SettingsDialogs, BackupTransferDialogs, API client, Dialog, Toast and CSS; not full-app authentication)"
+  ],
+  "states": [
+    "Transfer failures remain in one persistent active-dialog alert without a foreground transfer toast. Exact current server 409/503 messages and uncertain-import guidance are retained.",
+    "Nested token validation is inline and cleared on successful token entry. The original uncertain warning survives beside a persistent token-saved status, without automatic resubmission.",
+    "Phone dialog content scrolls to fields, warnings and actions; desktop light and 320px dark captures reviewed natively.",
+    "A synthetic import response after workspace selection changes retains the original destination and no-reload outcome in the open dialog, clearing submitted inputs."
+  ],
+  "interactions": [
+    "129 checks: explicit repeated refusals, pending/dismissal lock, keyboard and touch actions, Cancel/reopen focus and secret cleanup, token prompt/validation/save, dropped response, scope switch, and deliberate export download.",
+    "22 synthetic HTTP arrivals; dropped-response control records one application fetch and two HTTP arrivals per viewport, without claiming transport-level at-most-once behaviour. No page runtime errors.",
+    "All ten final captures and two adverse current-base captures opened with native view_image. Playwright 1.56.1 / Chromium 141.0.7390.37."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 760,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": true,
+      "theme": "dark"
+    }
+  ],
+  "evidence": "Lane RECEIPTS.md, BROWSER-BINDING.json, PIXEL-REVIEW.md, browser/final-result.json and browser captures; fixture and drivers retained as evidence only.",
+  "limitations": [
+    "Synthetic HTTP reuses exact current handler refusal bodies; no handler execution, authentication/cryptography/import application, native recovery or full-app shell acceptance. No Back/reload operation requested."
+  ]
+}

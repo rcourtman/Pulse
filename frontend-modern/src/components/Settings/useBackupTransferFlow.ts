@@ -24,9 +24,11 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
   const [showImportDialog, showImport] = createSignal(false);
   const [showApiTokenModal, setShowApiTokenModal] = createSignal(false);
   const [apiTokenInput, setApiTokenInput] = createSignal('');
+  const [apiTokenError, setApiTokenError] = createSignal('');
   const [transferOrgID, setTransferOrgID] = createSignal('default');
   const [isTransferring, setIsTransferring] = createSignal(false);
   const [transferError, setTransferError] = createSignal('');
+  const [transferNotice, setTransferNotice] = createSignal('');
   let active = true;
   let controller: AbortController | undefined;
   let reloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -39,8 +41,8 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
 
   const currentOrgID = () => getOrgID() || 'default';
   const fail = (message: string) => {
+    setTransferNotice('');
     setTransferError(message);
-    notificationStore.error(message);
   };
   const checkWorkspace = () => {
     if (currentOrgID() === transferOrgID()) return true;
@@ -51,6 +53,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
   const closeApiTokenModal = () => {
     setShowApiTokenModal(false);
     setApiTokenInput('');
+    setApiTokenError('');
   };
   const closeExportDialog = () => {
     if (isTransferring()) return;
@@ -72,6 +75,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     closeExportDialog();
     closeImportDialog();
     setTransferError('');
+    setTransferNotice('');
     setTransferOrgID(currentOrgID());
     if (kind === 'export') showExport(true);
     else showImport(true);
@@ -96,6 +100,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
   const handleExport = async () => {
     if (!active || !showExportDialog() || isTransferring() || !checkWorkspace()) return;
     setTransferError('');
+    setTransferNotice('');
     const passphrase = exportPassphrase();
     if (!passphrase) {
       fail(
@@ -154,6 +159,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
   const handleImport = async () => {
     if (!active || !showImportDialog() || isTransferring() || !checkWorkspace()) return;
     setTransferError('');
+    setTransferNotice('');
     const passphrase = importPassphrase();
     const file = importFile();
     if (!passphrase) {
@@ -207,7 +213,7 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
         fail(
           `Import completed for workspace ${orgID}. The selected workspace changed. No reload was performed.`,
         );
-        showImport(false);
+        // Keep the original destination and outcome readable in the dialog.
         setImportPassphrase('');
         setImportFile(null);
         return;
@@ -241,17 +247,17 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       return;
     }
     if (!apiTokenInput().trim()) {
-      fail('Please enter the API token');
+      setApiTokenError('Please enter the API token');
       return;
     }
     setApiClientToken(apiTokenInput());
     if (!getApiClientToken()) {
-      fail('Please enter a valid API token');
+      setApiTokenError('Please enter a valid API token');
       return;
     }
     closeApiTokenModal();
     // Saving a credential is not consent to replay a possibly applied import.
-    notificationStore.info('API token saved. Review the workspace and submit the transfer again.');
+    setTransferNotice('API token saved. Review the workspace and submit the transfer again.');
   };
 
   return {
@@ -269,10 +275,12 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
     setShowImportDialog,
     showApiTokenModal,
     apiTokenInput,
+    apiTokenError,
     setApiTokenInput,
     transferOrgID,
     isTransferring,
     transferError,
+    transferNotice,
     handleExport,
     handleImport,
     closeExportDialog,
