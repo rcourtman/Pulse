@@ -750,6 +750,82 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertFalse(qualifies(replaced(new_shape, "backend_tests", "failure")))
         self.assertFalse(qualifies(replaced(old_shape, "backend_tests", "failure")))
 
+    def test_activation_recovery_admits_snapshot_runs_only_with_merged_provenance(self) -> None:
+        # Execute the recovery's source-run admission. Release-train runs are
+        # dispatched on release-candidate/ or release-dispatch/ snapshot refs,
+        # and must prove, with main's snapshot check rather than their own
+        # prepare job, that they ran at the merged head of their release PR.
+        workflow = read(".github/workflows/recover-release-activation.yml")
+        job = workflow_job_block(workflow, "recover_activation")
+        # The provenance check is only main's if recovery itself runs on main.
+        self.assertIn('if [[ "${GITHUB_REF}" != refs/heads/main ]]; then', job)
+        self.assertIn("  pull-requests: read\n", workflow)
+        self.assertIn("fetch-depth: 0", job)
+        start = job.index('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RELEASE_RUN_ID}" > "${source_run}"')
+        start = job.index("\n", start) + 1
+        end = job.index("gh api --paginate --slurp")
+        script = "set -euo pipefail\n" + job[start:end] + "echo QUALIFIED\n"
+        sha, merge = "a" * 40, "b" * 40
+
+        def pull(number: int, ref: str, head_sha: str = sha, merged: bool = True) -> dict:
+            return {"number": number, "state": "closed", "merged": merged,
+                    "merged_at": "2026-10-25T00:00:00Z" if merged else None,
+                    "merge_commit_sha": merge if merged else None,
+                    "head": {"ref": ref, "sha": head_sha, "repo": {"full_name": "rcourtman/Pulse"}},
+                    "base": {"ref": "main", "repo": {"full_name": "rcourtman/Pulse"}}}
+
+        def qualifies(branch: str, pulls: list[dict], *, git_result: int = 0) -> bool:
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                (root / "run.json").write_text(json.dumps({
+                    "event": "workflow_dispatch", "path": ".github/workflows/create-release.yml",
+                    "head_branch": branch, "head_sha": sha, "status": "completed", "conclusion": "failure",
+                    "head_repository": {"full_name": "rcourtman/Pulse"}}))
+                (root / "pulls.json").write_text(json.dumps(pulls))
+                stubs = root / "bin"
+                stubs.mkdir()
+                (stubs / "gh").write_text(
+                    "#!/bin/bash\n"
+                    "case \"$*\" in\n"
+                    f"  *pulls\\?state=closed*) cat {root}/pulls.json ;;\n"
+                    "  *pulls/*) python3 -c 'import json,sys; n=int(sys.argv[2].rsplit(\"/\",1)[1]);"
+                    " print(json.dumps(next(p for p in json.load(open(sys.argv[1])) if p[\"number\"]==n)))'"
+                    f" {root}/pulls.json \"${{@: -1}}\" ;;\n"
+                    "  *) exit 1 ;;\n"
+                    "esac\n")
+                (stubs / "git").write_text(f"#!/bin/bash\nexit {git_result}\n")
+                for stub in stubs.iterdir():
+                    stub.chmod(0o755)
+                result = subprocess.run(
+                    ["bash", "-c", script], cwd=REPO_ROOT, text=True, capture_output=True,
+                    env=os.environ | {"PATH": f"{stubs}:{os.environ['PATH']}", "source_run": str(root / "run.json"),
+                                      "SOURCE_RELEASE_RUN_ID": "1", "GITHUB_REPOSITORY": "rcourtman/Pulse",
+                                      "GITHUB_REPOSITORY_OWNER": "rcourtman"},
+                )
+            self.assertEqual(result.returncode == 0, "QUALIFIED" in result.stdout, result.stderr)
+            return result.returncode == 0
+
+        candidate = "release-candidate/v6.7.0-rc.1-20261101T000000Z"
+        dispatch = "release-dispatch/v6.7.0-rc.1-20261101T000000Z"
+        self.assertTrue(qualifies("main", []))
+        self.assertTrue(qualifies(candidate, [pull(7, candidate)]))
+        self.assertTrue(qualifies(dispatch, [pull(7, candidate)]))
+        rejected = {
+            "lane branch": ("maintainer/run-1", [pull(7, "maintainer/run-1")]),
+            "no release PR": (dispatch, []),
+            "another candidate": (dispatch, [pull(7, "release-candidate/v6.7.0-rc.2-20261102T000000Z")]),
+            "dispatch-named PR head": (dispatch, [pull(7, dispatch)]),
+            "unmerged PR": (candidate, [pull(7, candidate, merged=False)]),
+            "different head commit": (dispatch, [pull(7, candidate, head_sha="c" * 40)]),
+            "two matching PRs": (dispatch, [pull(7, candidate), pull(8, candidate)]),
+            "malformed snapshot ref": ("release-dispatch/a/b", [pull(7, "release-candidate/a/b")]),
+        }
+        for name, (branch, pulls) in rejected.items():
+            with self.subTest(rejected=name):
+                self.assertFalse(qualifies(branch, pulls))
+        with self.subTest(rejected="merge missing from main"):
+            self.assertFalse(qualifies(dispatch, [pull(7, candidate)], git_result=1))
+
     def test_commit_verdict_restates_the_candidate_predicate(self) -> None:
         # The verdict no longer reads a readiness join, so it must reject every
         # candidate failure itself. Run its result checks with each outcome.
