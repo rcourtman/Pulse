@@ -67,6 +67,9 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 	beforeDefault := cfg.DeepCopy()
 	beforeOther := monitors["tenant-b"].GetConfig().DeepCopy()
 	filesBefore := configImportFileDigests(t, persistences["default"], persistences["tenant-b"])
+	for _, orgID := range []string{"default", "tenant-a", "tenant-b"} {
+		logConfigImportSettings(t, router, orgID, "before")
+	}
 
 	source := config.NewConfigPersistence(t.TempDir())
 	seedConfigImportRuntime(t, source, "restored", "tenant-a", 137)
@@ -126,6 +129,31 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 	if err != nil || len(persistedNodes.PVEInstances) != 1 || persistedNodes.PVEInstances[0].Name != "restored" {
 		t.Error("selected tenant archive was not persisted")
 	}
+	// Imported credentials must be immediately usable in the selected scope,
+	// not only present in a struct or saved for the next process restart.
+	for _, check := range []struct {
+		orgID, token string
+		allowed      bool
+	}{
+		{"tenant-a", "synthetic-restored-api-token.12345678", true},
+		{"tenant-a", "synthetic-tenant-a-api-token.12345678", false},
+		{"tenant-b", "synthetic-restored-api-token.12345678", false},
+		{"default", "synthetic-restored-api-token.12345678", false},
+		{"tenant-b", "synthetic-tenant-b-api-token.12345678", true},
+		{"default", "synthetic-default-api-token.12345678", true},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/api/system/settings", nil)
+		r.Header.Set("X-Pulse-Org-ID", check.orgID)
+		r.Header.Set("X-API-Token", check.token)
+		response := httptest.NewRecorder()
+		router.Handler().ServeHTTP(response, r)
+		if (response.Code == http.StatusOK) != check.allowed {
+			t.Errorf("post-import token access for %s = %d; allowed=%v", check.orgID, response.Code, check.allowed)
+		}
+	}
+	for _, orgID := range []string{"default", "tenant-a", "tenant-b"} {
+		logConfigImportSettings(t, router, orgID, "after")
+	}
 	// These are the same producers the existing settings page consumes.
 	ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, "tenant-a")
 	settingsRec := httptest.NewRecorder()
@@ -173,4 +201,17 @@ func configImportFileDigests(t *testing.T, persistences ...*config.ConfigPersist
 		}
 	}
 	return digests
+}
+
+// These readbacks contain only synthetic public settings, never archive/token
+// material. Verbose regression logs make runtime-versus-persistence drift clear.
+func logConfigImportSettings(t *testing.T, router *Router, orgID, phase string) {
+	t.Helper()
+	ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)
+	rec := httptest.NewRecorder()
+	router.configHandlers.HandleGetSystemSettings(rec, httptest.NewRequest(http.MethodGet, "/api/system/settings", nil).WithContext(ctx))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s settings readback failed: %d", orgID, rec.Code)
+	}
+	t.Logf("SYNTHETIC_SETTINGS_READBACK %s %s %s", phase, orgID, bytes.TrimSpace(rec.Body.Bytes()))
 }
