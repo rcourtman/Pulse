@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -66,6 +67,8 @@ func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
 			req.Header.Set("X-Pulse-Org-ID", tenantID)
 			req.Header.Set("X-API-Token", tc.provided)
 			req = extractAndStoreAuthContext(baseCfg, mtm, req)
+			// TenantMiddleware resolves this context before route authentication.
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, tenantID))
 
 			user := internalauth.GetUser(req.Context())
 			token := internalauth.GetAPIToken(req.Context())
@@ -106,6 +109,7 @@ func TestCheckAuthRejectsUnvalidatedTenantTokenContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	req = req.WithContext(internalauth.WithAPIToken(req.Context(), record))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
 	if checkAuth(cfg, httptest.NewRecorder(), req, false) {
 		t.Fatal("caller-supplied token context authenticated without a live validated inventory")
 	}
@@ -132,14 +136,17 @@ func TestCheckAuthTenantSourceCannotChangeOrganisation(t *testing.T) {
 	req.Header.Set("X-Pulse-Org-ID", "tenant-a")
 	req.Header.Set("X-API-Token", raw)
 	req = extractAndStoreAuthContext(base, mtm, req)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
 	if !checkAuth(base, httptest.NewRecorder(), req, false) {
 		t.Fatal("valid tenant credential was not usable")
 	}
 	req.Header.Set("X-Pulse-Org-ID", "tenant-b")
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-b"))
 	if checkAuth(base, httptest.NewRecorder(), req, false) {
 		t.Fatal("validated tenant source followed a changed organisation")
 	}
 	req.Header.Set("X-Pulse-Org-ID", "tenant-a")
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
 	// Replace the cached owner without changing the old config: revalidation
 	// must consult the replacement, not the earlier authenticated pointer.
 	replacement := &monitoring.Monitor{}
@@ -180,6 +187,7 @@ func TestAuthContextMiddlewareUsesCurrentTenantManager(t *testing.T) {
 		if replaceBetweenChecks {
 			current = newManager
 		}
+		r = r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, orgID))
 		if !checkAuth(base, w, r, false) {
 			return
 		}
