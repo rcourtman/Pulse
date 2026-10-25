@@ -565,6 +565,11 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 		}
 	}()
 	defer m.mu.Unlock()
+	// Healthy and intentionally stopped observations end the shadow's run as
+	// well, even when the live alert is only pending (and the lookup below
+	// returns early). Otherwise a later stopped run can inherit old grace or
+	// confirmation evidence and falsely disagree with the live manager.
+	defer m.shadowObserveRecoveryNoLock(guestID, canonicalPoweredStateSpecID(guestID), alertID, 1)
 
 	// Reset confirmation count when guest comes back online
 	if decision := m.evaluateIntentNoLock(guestID, "", string(AlertIntentSignalOffline), alertID, m.policyNow().UTC(), false, BackupIntentContext{}); decision.StateChanged {
