@@ -142,4 +142,44 @@ describe('shipped TrueNAS error diagnosis', () => {
       expect(text).toContain(boundary);
     }
   });
+
+  it('distinguishes CORE request rejection from credentials, inventory and measured zero', () => {
+    const section = sectionAt(renderGuide('TRUENAS'), '#core-13-rejects-the-reporting-request');
+    const text = prose(section);
+    for (const fact of [
+      'TrueNAS CORE 13',
+      'POST /reporting/get_data',
+      '400',
+      'The following attributes are not expected: query',
+      'not an invalid API key',
+      'observed.collectedAt',
+      'not a measured idle value',
+      "Use TrueNAS's own Reporting graphs",
+      'Do not rotate the key, recreate the connection, install an agent, switch transport or weaken TLS verification',
+      'do not collect them again',
+      'contains the relevant correction',
+      'does not diagnose every CORE or SCALE problem',
+    ]) {
+      expect(text).toContain(fact);
+    }
+    expect(section.querySelector('pre, form, input, button')).toBeNull();
+    expect(section.querySelector('a')?.getAttribute('href')).toBe(
+      'https://github.com/rcourtman/Pulse/issues/2964',
+    );
+  });
+
+  it('routes missing-telemetry readers to the specific rejection before new graph collection', () => {
+    const article = renderGuide('TRUENAS');
+    const missing = sectionAt(article, '#inventory-works-but-cpu-memory-or-history-is-missing');
+    const link = missing.querySelector<HTMLAnchorElement>(
+      'a[href="#core-13-rejects-the-reporting-request"]',
+    );
+    expect(link?.textContent).toBe('CORE 13 request-format rejection');
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    expect(article.querySelector(link!.getAttribute('href')!)?.tagName).toBe('H3');
+    expect(prose(missing)).toContain('rather than collecting another graph response');
+    expect(readFileSync(path.join(repoRoot, 'docs/TRUENAS.md'), 'utf8')).toBe(
+      readFileSync(path.join(repoRoot, 'frontend-modern/public/docs/TRUENAS.md'), 'utf8'),
+    );
+  });
 });
