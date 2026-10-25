@@ -35,7 +35,12 @@ describe('public issue follow-through guidance', () => {
     expect(paragraphs).toHaveLength(4);
     expect(prose(paragraphs[0])).toContain('no reported symptom left unresolved');
     expect(prose(paragraphs[1])).toContain('start with that stable-release retest reply');
-    expect(prose(paragraphs[1])).toContain('not the fix commit, a beta or a release candidate');
+    expect(prose(paragraphs[1])).toContain('carrying the same fix');
+    expect(prose(paragraphs[1])).toContain('limit on repeated unanswered contact prevents another reply');
+    expect(prose(paragraphs[1])).toContain("later of that request and the stable release's publication");
+    expect(prose(paragraphs[1])).toContain(
+      'A beta or release candidate alone never starts the timeout, nor does a fix commit',
+    );
     const emphasis = paragraphs[2].querySelector('strong');
     expect(emphasis).not.toBeNull();
     expect(prose(emphasis!)).toBe('not confirmed resolution');
@@ -68,5 +73,24 @@ describe('public issue follow-through guidance', () => {
     const article = renderGuide('AI_TRANSPARENCY', source);
     expect(article.querySelector('#how-changes-land-and-ship')).not.toBeNull();
     expect(article.querySelector('#authority-and-responsibility')).not.toBeNull();
+  });
+
+  it('keeps the disclosure and its linked release guide on the weekly, no-early-cut policy', () => {
+    const article = renderGuide('AI_TRANSPARENCY', source);
+    const text = prose(article);
+    expect(text).toContain('Stable publication is targeted seven days after the last stable release');
+    expect(text).toContain('one day earlier, reserving its full 24-hour soak');
+    expect(text).toContain('An important fix ships in the next beta, not through an early candidate or stable release');
+    expect(text).toContain('unless a release-blocker requires a fresh candidate');
+    expect(text).not.toContain('Every 14 days');
+    expect(text).not.toContain('An early cut can bring');
+    expect(article.querySelector('a[href="/docs/RELEASE_PROCESS"]')?.hasAttribute('data-doc-link')).toBe(true);
+    const releaseSource = readFileSync(path.join(shippedDocs, 'RELEASE_PROCESS.md'), 'utf8');
+    expect(releaseSource).toBe(readFileSync(path.join(repoRoot, 'docs/RELEASE_PROCESS.md'), 'utf8'));
+    const release = renderGuide('RELEASE_PROCESS', releaseSource);
+    expect(prose(release)).toContain('Nothing brings that cut forward');
+    expect(prose(release)).toContain('an important fix ships in the next daily beta');
+    expect(prose(release)).toContain('Only a release-blocker requires a fresh candidate');
+    expect(prose(release)).not.toContain('can bring');
   });
 });
