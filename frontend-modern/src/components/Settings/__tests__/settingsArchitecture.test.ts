@@ -116,6 +116,13 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('carries transfer target, pending and error state through the Settings dialog shell', () => {
+    for (const name of ['transferOrgID', 'isTransferring', 'transferError']) {
+      expect(settingsSource).toContain(`${name}={backupTransferFlow.${name}}`);
+      expect(settingsDialogsSource).toContain(`${name}={props.${name}}`);
+    }
+  });
+
   it('keeps the retired Assistant chat controls and protected guests list out of AI settings', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain('Chat action mode');
     expect(aiRuntimeControlsSectionSource).not.toContain('controlLevel');

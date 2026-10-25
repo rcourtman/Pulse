@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "d051c39bca60ba8cfbda0d07a07b74c228bc7eae",
+  "verified_at": "2026-10-25T06:19:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx": "48021e33b8243aa08e964bfa8d00dd458d862542290717bb1819cada34fb8bc1",
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx": "5326391538b6dd5abdb795753e645c32483a24947f91c2edaf03cdbfd28dd9db",
+    "frontend-modern/src/components/Settings/Settings.tsx": "fc11be5e7072f7c6e2c3e1004ead39aeb760aa9df689dc9f818dad1fdd0f4fcf",
+    "frontend-modern/src/components/Settings/SettingsDialogs.tsx": "3369aaaef68ef2fb84c448674a5b93dd8058994d4c35db44b09033123a4b2582",
+    "frontend-modern/src/components/Settings/useBackupTransferFlow.ts": "e114bdad70b09349aee656b36a0abd1ad9b80ce1a4343fb9333f6d664ed9b76d"
+  },
+  "routes": [
+    "/settings/system/recovery (offline fixture mounting production RecoverySettingsPanel, useBackupTransferFlow and SettingsDialogs/BackupTransferDialogs with real apiClient, Dialog, ToastContainer and CSS; not full app/auth)"
+  ],
+  "states": [
+    "Workspace target retained from dialog open; changed scope before submit and during file read refuses dispatch; late export discarded; successful old-workspace import cannot reload the new selection.",
+    "One pending operation disables inputs, actions and dismissal; immutable file/passphrase sent to captured workspace.",
+    "HTTP invalid_org, CSRF and rate-limit responses make one application fetch and one server request, no default fallback or false success.",
+    "Token preflight and server-token-error prompts save a credential without submitting; deliberate manual submission remains usable.",
+    "Transport reset: one application fetch produces three same-workspace wire requests in each viewport; import remains unconfirmed and may have applied. This is not single-application protection.",
+    "Unmount during file read suppresses dispatch; populated export yields one byte-exact synthetic encrypted-envelope download at each viewport."
+  ],
+  "interactions": [
+    "Desktop keyboard focus/Enter and narrow touch open the existing recovery dialogs; select file, enter masked passphrase and submit.",
+    "Delay original server responses and file reads; switch selected organisation via the real apiClient setter; assert captured scope and late-response suppression.",
+    "Inspect visible target, pending and persistent uncertain guidance; save a synthetic API token and explicitly submit, never auto-submit.",
+    "85 browser checks, 24 server request observations, two byte-exact downloads; all ten settled desktop/narrow captures inspected with native view_image."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 940,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37",
+      "touch": true
+    }
+  ],
+  "evidence": "Current lane OUTCOME/RECEIPTS.md, browser-result.json, PIXEL-REVIEW.md and BROWSER-BINDING.json; Playwright 1.56.1",
+  "limitations": [
+    "Safe synthetic responses exercise the real frontend producer/consumer, not backend auth, archive cryptography, full app shell, private runtime, native recovery or release delivery.",
+    "Application retry opt-out is not server-side idempotency; Core assessment/repair retains the observed transport replay gap."
+  ]
+}

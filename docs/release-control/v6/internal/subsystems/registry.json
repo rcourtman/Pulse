@@ -5575,7 +5575,9 @@
         "frontend-modern/src/utils/updatesPresentation.ts",
         "frontend-modern/src/utils/upgradeNavigation.ts",
         "frontend-modern/src/utils/workloadEmptyStatePresentation.ts",
-        "frontend-modern/src/utils/workloadGuestPresentation.ts"
+        "frontend-modern/src/utils/workloadGuestPresentation.ts",
+        "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+        "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -5583,6 +5585,21 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "settings-configuration-transfer",
+            "label": "configuration transfer target and dispatch proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/BackupTransferDialogs.tsx",
+              "frontend-modern/src/components/Settings/useBackupTransferFlow.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/BackupTransferDialogs.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/useBackupTransferFlow.test.ts"
+            ]
+          },
           {
             "id": "settings-update-install-guide",
             "label": "settings update install guide proof",

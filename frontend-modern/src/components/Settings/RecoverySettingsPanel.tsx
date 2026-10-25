@@ -23,9 +23,9 @@ export interface RecoverySettingsPanelProps {
 
   // Export/Import handlers
   showExportDialog: Accessor<boolean>;
-  setShowExportDialog: Setter<boolean>;
+  setShowExportDialog: (open: boolean) => void;
   showImportDialog: Accessor<boolean>;
-  setShowImportDialog: Setter<boolean>;
+  setShowImportDialog: (open: boolean) => void;
   setUseCustomPassphrase: Setter<boolean>;
   securityStatus: Accessor<{ hasAuthentication: boolean } | null>;
 }
