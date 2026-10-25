@@ -6379,6 +6379,11 @@ partial-download timeouts, both allocation failures, invalid signatures and a
 successful signed bootstrap. They require the deadline/config-isolation options,
 no request replay, temporary-input cleanup and saved-configuration preservation.
 They do not measure live network deadlines or establish installed/native recovery.
+The native systemd proof's closed transport adapter separately admits this exact
+manual-helper envelope alongside the existing unattended envelope. Its registered
+portable control runs the actual emitted helper and real verifier through that
+adapter, and rejects altered deadlines, retries or TLS options without online
+fallback. This preserves the hosted manual-recovery consumer, not native acceptance.
 
 `TestManualUpdateChannelAdmission` generates and executes the actual helper
 against local transport fixtures and genuinely signed installer/sidecar bytes.

@@ -33,6 +33,7 @@ func TestAutoUpdateNativeSystemdHarnessContracts(t *testing.T) {
 	for _, name := range []string{
 		"test_prepare_owns_generated_signer_mode_before_first_real_signature",
 		"test_signer_creation_refuses_adoption_wrong_type_owner_or_failed_mode",
+		"test_transport_accepts_emitted_manual_helper_and_rejects_option_drift",
 		"test_real_verifier_accepts_fixture_and_refuses_tampering",
 		"test_phase_cannot_accept_wrong_bytes_state_mask_persistence_or_backup",
 		"test_managed_process_identity_follows_served_readiness_and_rejects_residuals",
