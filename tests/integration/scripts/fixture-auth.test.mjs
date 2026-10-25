@@ -96,6 +96,11 @@ function fixture(t, options = {}) {
         navigations.push(target);
         url = new URL(target, 'http://127.0.0.1:7655').href;
         bootstrapState = options.delayedBootstrap ? 'loading' : 'ready';
+        if (bootstrapState === 'ready' && !options.holdWorkspaceRedirect &&
+            !options.browserRejectSession && !options.bootstrapFailure && validSession(cookies) &&
+            new URL(url).pathname === '/infrastructure') {
+          url = 'http://127.0.0.1:7655/proxmox/overview';
+        }
       },
       url: () => url,
       navigations,
@@ -103,6 +108,13 @@ function fixture(t, options = {}) {
       rememberLoginHint: () => { hasLoginHint = true; },
       completeBootstrap: () => {
         bootstrapState = 'ready';
+        if (!options.holdWorkspaceRedirect) {
+          url = 'http://127.0.0.1:7655/proxmox/overview';
+          pendingBootstrap?.();
+        }
+      },
+      completeWorkspaceRedirect: () => {
+        url = 'http://127.0.0.1:7655/proxmox/overview';
         pendingBootstrap?.();
       },
       waitForFunction: async (predicate, arg, settings) => {
@@ -113,6 +125,7 @@ function fixture(t, options = {}) {
         // Run the shipped predicate against a DOM-shaped boundary. Rejection
         // leaves the requested URL unchanged, just as the real app does.
         const evaluate = () => runInNewContext(`(${predicate.toString()})()`, {
+          window: { location: new URL(url) },
           document: { querySelector: selector => {
             if (bootstrapState !== 'ready' || options.bootstrapFailure) return null;
             const present = selector === '.app-scroll-shell' ? admitted() : !admitted();
@@ -120,9 +133,12 @@ function fixture(t, options = {}) {
           } },
           getComputedStyle: () => ({ visibility: 'visible' }),
         });
-        bootstrapChecks.push(evaluate());
+        const initial = evaluate();
+        bootstrapChecks.push(initial);
         resolveWaitStarted();
-        if (bootstrapState === 'loading') await new Promise(resolve => { pendingBootstrap = resolve; });
+        if (!initial && (bootstrapState === 'loading' || options.holdWorkspaceRedirect)) {
+          await new Promise(resolve => { pendingBootstrap = resolve; });
+        }
         const value = evaluate();
         if (!value) throw new Error('browser bootstrap timed out');
         return { jsonValue: async () => value, dispose: async () => {} };
@@ -203,7 +219,7 @@ test('cookie-only reuse enters the protected workspace without manufacturing a l
   const page = f.createPage();
   await f.ensureAuthenticated(page);
   assert.deepEqual(page.navigations, ['/infrastructure']);
-  assert.equal(page.url(), 'http://127.0.0.1:7655/infrastructure');
+  assert.equal(page.url(), 'http://127.0.0.1:7655/proxmox/overview');
   assert.deepEqual(f.bootstrapChecks, ['authenticated']);
   assert.deepEqual(f.counts(), { loginCalls: 0, probeCalls: 1, disposed: 1, primaryRevoked: false });
 });
@@ -224,6 +240,24 @@ test('a protected URL and mounted loading root cannot complete delayed cookie bo
   assert.equal(completed, true);
   assert.equal(f.counts().disposed, 1);
   assert.equal(f.counts().loginCalls, 0);
+});
+
+test('a mounted cookie shell waits for its pending workspace redirect before admitting a deep link', async t => {
+  const f = fixture(t, { holdWorkspaceRedirect: true });
+  f.save([cookie('pulse_session', 'saved-live')]);
+  const page = f.createPage();
+  let completed = false;
+  const authentication = f.ensureAuthenticated(page).then(() => { completed = true; });
+  await page.waitStarted;
+  assert.equal(page.url(), 'http://127.0.0.1:7655/infrastructure');
+  assert.deepEqual(f.bootstrapChecks, [false], 'a mounted shell on the entry route is still pending');
+  assert.equal(completed, false);
+  page.completeWorkspaceRedirect();
+  await authentication;
+  assert.equal(completed, true);
+  assert.equal(f.counts().loginCalls, 0);
+  await page.goto('/settings/infrastructure?add=agent');
+  assert.equal(page.url(), 'http://127.0.0.1:7655/settings/infrastructure?add=agent');
 });
 
 test('API admission cannot hide browser rejection at the unchanged protected URL', async t => {
@@ -320,6 +354,7 @@ function primaryBootstrapFixture({ rejected = false, passwordLogin = false } = {
     waitForResponse: async () => response(200),
     waitForFunction: async predicate => {
       const evaluate = () => runInNewContext(`(${predicate.toString()})()`, {
+        window: { location: new URL(currentURL) },
         document: { querySelector: selector => {
           if (!ready) return null;
           const present = selector === '.app-scroll-shell' ? !rejected : rejected;

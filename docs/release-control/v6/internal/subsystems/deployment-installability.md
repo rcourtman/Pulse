@@ -3017,13 +3017,18 @@ artifact-selection behaviour.
    API as a fallback only when the UI wizard fails to complete cleanly under the
    managed hot-dev runtime.
    A successful token probe and a protected workspace URL do not establish
-   completed browser bootstrap. Token, cookie reuse and password login wait for the mounted
-   authenticated app shell before returning control to a journey, so a pending
-   workspace redirect cannot overwrite its next deep link. Browser rejection
+   completed browser bootstrap. Token, cookie reuse and password login wait for
+   the mounted authenticated app shell on its resolved workspace destination
+   before returning control to a journey. A mounted shell at `/`, `/login` or
+   `/infrastructure` still has a default redirect pending and cannot admit the
+   next deep link. Browser rejection
    remains an authentication failure rather than a reason to accept the URL or
    retry login. `tests/integration/scripts/fixture-auth.test.mjs` exercises the
    actual token helper with delayed and rejected bootstrap; the runtime-home
    onboarding browser contract also holds a real protected-state request.
+   Its cookie control withholds the admission facet and resource snapshot,
+   proves a mounted entry still fails admission, then releases the snapshot
+   and follows the requested install handoff without being redirected away.
    That regression creates and revokes its own token through the admitted
    session and shared browser-token helper. It must work with cookie-only and
    primary-token fixtures without replacing their remembered credential.
@@ -3049,7 +3054,9 @@ artifact-selection behaviour.
    `tests/integration/scripts/settings-scroll-audit.test.mjs` retains native
    Chromium/WebKit traversal of short and 30,000px content plus the positive
    horizontal-overflow control; the live mobile audit keeps its bottom and
-   overflow assertions.
+   overflow assertions. Infrastructure onboarding uses this same content-owner
+   audit, including its bottom-position assertion. Its SPA route assertions
+   observe the requested URL rather than wait for the document's load event.
    Bottom position and horizontal width are judged from the same browser snapshot.
    If content reflows after traversal, the audit finishes the changed extent before
    accepting that snapshot. A scroll reset with an unchanged extent remains an

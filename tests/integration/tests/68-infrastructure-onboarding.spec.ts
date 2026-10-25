@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test as base, type Page } from "@playwright/test";
+import { auditSettingsAtBottom } from "../scripts/settings-scroll-audit.mjs";
 import {
   createAuthenticatedStorageState,
   ensureAuthenticated,
@@ -11,13 +12,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type WorkerFixtures = {
   authStorageStatePath: string;
-};
-
-type OverflowAudit = {
-  viewportWidth: number;
-  pageWidth: number;
-  overflowPx: number;
-  offenders: Array<{ tag: string; className: string; overflow: number }>;
 };
 
 const test = base.extend<{}, WorkerFixtures>({
@@ -70,71 +64,6 @@ async function prepareOnboardingPage(page: Page): Promise<void> {
   await ensureAuthenticated(page);
 }
 
-async function scrollToBottom(page: Page): Promise<void> {
-  const viewportHeight = await page.evaluate(() => window.innerHeight || 800);
-  const step = Math.max(240, Math.floor(viewportHeight * 0.75));
-  let wheelSupported = true;
-
-  for (let i = 0; i < 20; i += 1) {
-    if (wheelSupported) {
-      try {
-        await page.mouse.wheel(0, step);
-      } catch {
-        wheelSupported = false;
-        await page.evaluate((deltaY) => window.scrollBy(0, deltaY), step);
-      }
-    } else {
-      await page.evaluate((deltaY) => window.scrollBy(0, deltaY), step);
-    }
-    await page.waitForTimeout(60);
-  }
-}
-
-async function auditHorizontalOverflow(page: Page): Promise<OverflowAudit> {
-  return page.evaluate(() => {
-    const viewportWidth = Math.max(
-      document.documentElement.clientWidth,
-      window.innerWidth || 0,
-    );
-    const pageWidth = Math.max(
-      document.body.scrollWidth,
-      document.documentElement.scrollWidth,
-      document.body.offsetWidth,
-      document.documentElement.offsetWidth,
-    );
-
-    const offenders = Array.from(document.querySelectorAll("body *"))
-      .map((el) => {
-        const rect = el.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) return null;
-        const style = window.getComputedStyle(el);
-        if (style.position === "fixed" || style.position === "absolute")
-          return null;
-        const overflow = rect.right - viewportWidth;
-        if (overflow <= 1) return null;
-        return {
-          tag: el.tagName.toLowerCase(),
-          className: (el.getAttribute("class") || "").trim().slice(0, 120),
-          overflow: Number(overflow.toFixed(1)),
-        };
-      })
-      .filter(
-        (
-          entry,
-        ): entry is { tag: string; className: string; overflow: number } =>
-          Boolean(entry),
-      )
-      .slice(0, 8);
-
-    return {
-      viewportWidth,
-      pageWidth,
-      overflowPx: Number((pageWidth - viewportWidth).toFixed(1)),
-      offenders,
-    };
-  });
-}
-
 test.describe("Infrastructure onboarding", () => {
   test.setTimeout(180_000);
 
@@ -180,7 +109,7 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
 
@@ -236,7 +165,7 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
 
@@ -277,7 +206,7 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
 
@@ -321,7 +250,7 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
 
@@ -329,14 +258,14 @@ test.describe("Infrastructure onboarding", () => {
       .getByRole("button", { name: "Add infrastructure", exact: true })
       .first()
       .click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pick$/, {
       timeout: 15_000,
     });
     await page
       .getByRole("dialog")
       .getByRole("button", { name: /TrueNAS SCALE/i })
       .click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=truenas$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=truenas$/, {
       timeout: 15_000,
     });
 
@@ -432,7 +361,7 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
 
@@ -444,7 +373,7 @@ test.describe("Infrastructure onboarding", () => {
     await expect(page.getByRole("button", { name: /^Review$/i })).toBeVisible();
 
     await page.getByRole("button", { name: /^Review$/i }).click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=pve$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pve$/, {
       timeout: 15_000,
     });
 
@@ -532,7 +461,7 @@ test.describe("Infrastructure onboarding", () => {
       await page.goto("/settings/infrastructure", {
         waitUntil: "domcontentloaded",
       });
-      await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+      await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
         timeout: 15_000,
       });
 
@@ -546,7 +475,7 @@ test.describe("Infrastructure onboarding", () => {
       ).toBeVisible();
 
       await page.getByRole("button", { name: /^Review$/i }).click();
-      await page.waitForURL(/\/settings\/infrastructure\?add=pve$/, {
+      await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pve$/, {
         timeout: 15_000,
       });
 
@@ -673,18 +602,18 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
     await page
       .getByRole("button", { name: "Add infrastructure", exact: true })
       .first()
       .click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=pick$/, {
       timeout: 15_000,
     });
     await page.getByRole("button", { name: /Detect API platform/i }).click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=detect$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=detect$/, {
       timeout: 15_000,
     });
 
@@ -702,7 +631,7 @@ test.describe("Infrastructure onboarding", () => {
     await page
       .getByRole("button", { name: "install Pulse Agent instead", exact: true })
       .click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=linux-host$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure\?add=linux-host$/, {
       timeout: 15_000,
     });
     await expect(
@@ -726,7 +655,7 @@ test.describe("Infrastructure onboarding", () => {
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, {
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/, {
       timeout: 15_000,
     });
     await expect(
@@ -739,8 +668,10 @@ test.describe("Infrastructure onboarding", () => {
       page.getByText(/Supported source types include .*Pulse Agent hosts\./),
     ).toBeVisible();
 
-    await scrollToBottom(page);
-    const audit = await auditHorizontalOverflow(page);
+    const audit = await auditSettingsAtBottom(page);
+    expect(audit.scrollPosition.scrollTop).toBeGreaterThanOrEqual(
+      audit.scrollPosition.maxScrollTop - 3,
+    );
 
     expect(
       audit.pageWidth,

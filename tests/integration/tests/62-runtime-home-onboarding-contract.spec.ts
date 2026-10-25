@@ -7,6 +7,7 @@ import {
   apiRequest,
   authenticateWithAPIToken,
   ensureAuthenticated,
+  waitForAuthenticatedAppShell,
 } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -153,6 +154,60 @@ test.describe("runtime-home onboarding contract", () => {
         method: "DELETE",
       });
       expect(revoked.ok(), "the test-owned bootstrap token must be revoked").toBeTruthy();
+    }
+  });
+
+  test("waits for a mounted cookie workspace to finish its default redirect", async ({ page }) => {
+    await ensureAuthenticated(page);
+    const workspacePage = await page.context().newPage();
+    let released = false;
+    const frames: Array<{
+      socket: import("@playwright/test").WebSocketRoute;
+      message: string | Buffer;
+    }> = [];
+    try {
+      // A missing first admission facet leaves navigation dependent on the
+      // resource snapshot. Hold that snapshot after the shell has mounted.
+      await workspacePage.route("**/api/resources?**", async route => {
+        const url = new URL(route.request().url());
+        if (url.searchParams.get("limit") !== "1" || url.searchParams.get("page") !== "1") {
+          await route.continue();
+          return;
+        }
+        const response = await route.fetch();
+        expect(response.ok()).toBeTruthy();
+        const payload = await response.json();
+        expect(payload.aggregations?.platformAdmission).toBeTruthy();
+        delete payload.aggregations.platformAdmission;
+        await route.fulfill({ response, json: payload });
+      });
+      await workspacePage.routeWebSocket("**/ws*", socket => {
+        const server = socket.connectToServer();
+        server.onMessage(message => {
+          if (released) socket.send(message);
+          else frames.push({ socket, message });
+        });
+      });
+      await workspacePage.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+      await expect(workspacePage.locator(".app-scroll-shell")).toBeVisible();
+      await expect(workspacePage).toHaveURL(/\/infrastructure$/);
+      // This is a bounded negative control, not a larger authentication
+      // deadline. A mounted entry must still fail admission while unresolved.
+      await expect(waitForAuthenticatedAppShell(workspacePage, 250)).rejects.toThrow(/Timeout/);
+      await expect.poll(() => frames.length).toBeGreaterThan(0);
+      released = true;
+      for (const { socket, message } of frames.splice(0)) socket.send(message);
+      await waitForAuthenticatedAppShell(workspacePage);
+      expect(["/", "/login", "/infrastructure"]).not.toContain(new URL(workspacePage.url()).pathname);
+      await workspacePage.goto("/settings/infrastructure?add=agent", { waitUntil: "domcontentloaded" });
+      await expect(workspacePage).toHaveURL(/\/settings\/infrastructure\?add=agent$/);
+      await expect(workspacePage.getByRole("dialog").getByRole("heading", {
+        name: "Add Pulse Agent", exact: true,
+      })).toBeVisible();
+    } finally {
+      released = true;
+      frames.length = 0;
+      await workspacePage.close();
     }
   });
 

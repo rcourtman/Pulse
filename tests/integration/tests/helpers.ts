@@ -175,7 +175,12 @@ export async function waitForAuthenticatedAppShell(page: Page, timeoutMs = 20_00
           getComputedStyle(element).visibility !== "hidden";
       };
       if (visible('input[name="username"]')) return "login";
-      return visible(".app-scroll-shell") ? "authenticated" : false;
+      // The shell can mount on a workspace entry while platform admission or
+      // its default-route transition is still pending. Let that transition
+      // finish before another document navigation can race it in WebKit.
+      const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+      const workspaceEntry = ["/", "/login", "/infrastructure"].includes(pathname);
+      return visible(".app-scroll-shell") && !workspaceEntry ? "authenticated" : false;
     },
     undefined,
     { timeout: timeoutMs },
