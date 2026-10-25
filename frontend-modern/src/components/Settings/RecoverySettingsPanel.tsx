@@ -2,6 +2,8 @@ import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
+import { getShippedDocUrl } from '@/utils/docsLinks';
 import {
   BACKUP_INTERVAL_MAX_MINUTES,
   BACKUP_INTERVAL_OPTIONS,
@@ -209,11 +211,19 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
       {/* Backup & Restore Section */}
       <div class="p-4 sm:p-6">
         <SectionHeader
-          title="Backup & restore"
-          description="Backup your node configurations and credentials or restore from a previous backup."
+          title="Configuration backup & restore"
+          description="Create an encrypted configuration export for the selected workspace, not a full-server backup."
           size="md"
           class="mb-4"
         />
+        <p class="mb-4 text-sm text-muted">
+          History, TrueNAS/vSphere connections, local login credentials and agent enrolment state
+          are not included. Check the{' '}
+          <ExternalTextLink href={getShippedDocUrl('MIGRATION.md')}>
+            migration guide
+          </ExternalTextLink>{' '}
+          for the full scope and full-state recovery.
+        </p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Export Section */}
@@ -253,7 +263,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                         clip-rule="evenodd"
                       />
                     </svg>
-                    <span>All node connections & credentials</span>
+                    <span>Proxmox connections & credentials</span>
                   </li>
                   <li class="flex items-center gap-2 text-xs text-muted">
                     <svg
@@ -331,7 +341,9 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                 <h4 class="text-base font-semibold text-base-content mb-1">
                   Restore Configuration
                 </h4>
-                <p class="text-sm text-muted mb-3">Import from an encrypted backup file</p>
+                <p class="text-sm text-muted mb-3">
+                  Import from an encrypted configuration file. Back up the destination first.
+                </p>
 
                 {/* Feature list */}
                 <ul class="space-y-1 mb-4">
@@ -343,7 +355,7 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
                         clip-rule="evenodd"
                       />
                     </svg>
-                    <span>Merge or replace existing config</span>
+                    <span>Replaces included settings and API-token records</span>
                   </li>
                   <li class="flex items-center gap-2 text-xs text-muted">
                     <svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">

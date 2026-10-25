@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "5a0549a65dff152d75b77bb4a35d6a7ebda48493",
+  "verified_at": "2026-10-25T09:02:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx": "d958e3255357bed6e0f99481695c1d805b2143076f5678d0b37a97483bd83227"
+  },
+  "routes": [
+    "/settings/system/recovery (offline fixture mounting production RecoverySettingsPanel, useBackupTransferFlow, BackupTransferDialogs, API client and CSS; not full-app auth)",
+    "/docs/MIGRATION (production Docs viewer fetching exact shipped markdown in a separate tab)"
+  ],
+  "states": [
+    "Configuration-only selected-workspace scope and exclusions visible before opening either dialog. Proxmox-specific connection wording; replacement of included settings/API-token records, no merge promise.",
+    "Overview wraps at desktop/320px in light and dark themes. Existing export/import dialogues keep captured workspace, masked inputs and scope guidance."
+  ],
+  "interactions": [
+    "Desktop keyboard and narrow touch open the existing migration guide in a separate tab without losing Recovery.",
+    "Open existing export through real flow; enter masked synthetic passphrase and explicitly download the synthetic server response with original scoped API headers.",
+    "Open existing restore, select synthetic file and passphrase, inspect replacement warning, cancel without POST, and return focus to Restore Backup.",
+    "44 checks pass; all ten captures opened using native view_image. Playwright 1.56.1 and Chromium 141.0.7390.37."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 940,
+      "touch": true,
+      "browser": "Chromium",
+      "browser_version": "141.0.7390.37"
+    }
+  ],
+  "evidence": "Current lane RECEIPTS.md, browser/browser-result.json, PIXEL-REVIEW.md and BROWSER-BINDING.json. Build/fixture/driver and synthetic downloads retained as evidence only.",
+  "limitations": [
+    "Safe synthetic HTTP uses real frontend producer/consumer, not server auth, cryptography, import application/idempotency, full app shell, private/native recovery or release delivery.",
+    "Full-document narrow guide capture is overview evidence, not exhaustive typography acceptance. No Back/reload or excluded reader/renderer/native scenario was attempted."
+  ]
+}
