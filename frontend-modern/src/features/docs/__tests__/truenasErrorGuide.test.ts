@@ -175,7 +175,8 @@ describe('shipped TrueNAS error diagnosis', () => {
       'a[href="#core-13-rejects-the-reporting-request"]',
     );
     expect(link?.textContent).toBe('CORE 13 request-format rejection');
-    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    // Fragment-only links use the browser's native anchor navigation.
+    expect(link?.hasAttribute('data-doc-link')).toBe(false);
     expect(article.querySelector(link!.getAttribute('href')!)?.tagName).toBe('H3');
     expect(prose(missing)).toContain('rather than collecting another graph response');
     expect(readFileSync(path.join(repoRoot, 'docs/TRUENAS.md'), 'utf8')).toBe(
