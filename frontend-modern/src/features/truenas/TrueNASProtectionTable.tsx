@@ -1,4 +1,6 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Button } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -425,6 +427,26 @@ export const TrueNASProtectionTable: Component<{
           }
         >
           <div class="space-y-3">
+            <Show when={props.error}>
+              <InlineNotice role="alert" tone="warning" aria-label="Protection refresh failed">
+                <p class="font-medium">Could not refresh TrueNAS protection.</p>
+                <p>
+                  Showing previously loaded events. Outcomes and counts may be out of date;
+                  newer activity may be missing.
+                </p>
+                <Show when={props.onRefresh}>
+                  <Button
+                    size="sm"
+                    class="mt-2"
+                    disabled={props.loading}
+                    aria-label="Refresh TrueNAS protection"
+                    onClick={() => props.onRefresh?.()}
+                  >
+                    {props.loading ? 'Refreshing...' : 'Refresh'}
+                  </Button>
+                </Show>
+              </InlineNotice>
+            </Show>
             <Show when={props.showToolbar !== false}>
               <PlatformTableToolbar
                 search={tableState.search}

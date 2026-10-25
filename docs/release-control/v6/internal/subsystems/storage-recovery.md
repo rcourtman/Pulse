@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Failed TrueNAS Protection reads cannot look current
+
+A failed recovery-points refresh must remain visible even when the query retains
+previously loaded TrueNAS events. Those dated events, their recorded outcomes,
+filters and details stay inspectable, but an accessible notice labels them as
+previously loaded and warns that counts/outcomes may be out of date and newer
+activity missing. The notice persists through a pending retry and an empty
+filtered result; only a successful read clears it. Refresh reuses the existing
+bounded read, not a snapshot, replication or recovery operation. Raw failure
+text is not rendered. Initial loading, initial failure and successful empty
+responses remain distinct, and access denials still withdraw retained data
+through the shared query's existing boundary.
+
+`TrueNASProtectionTable.refresh.test.tsx` exercises the real hook/normalizer/table
+journey, including failed and pending refreshes, filtering, recovery, empty and
+access-denied results. This is truthful source presentation, not native appliance
+or guest recovery. Existing limits and pagination, identifiers, outcomes, dates,
+API/auth and policy are unchanged.
+
 ### Saved configuration is not successful live recovery
 
 Configuration import returns an explicit saved-but-incomplete error and failed
