@@ -186,6 +186,32 @@ describe('useReportingPanelState', () => {
     return { dispose, hookState: hookState! };
   };
 
+  it('shows unavailable inventory guidance without downloading an empty fleet', async () => {
+    const message =
+      "VM inventory is unavailable. Check this organization's infrastructure connections before running again.";
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/admin/reports/inventory/vms/export?')) {
+        return Promise.resolve(jsonResponse({ code: 'inventory_unavailable', error: message }, 503));
+      }
+      return Promise.resolve(
+        jsonResponse(url.endsWith('/schedules') ? schedulesPayload : catalogPayload),
+      );
+    });
+    const { hookState, dispose } = mountHook();
+    await settleMountLoads(hookState);
+    const createElement = vi.spyOn(document, 'createElement');
+    try {
+      await hookState.handleExportVMInventory();
+      expect(showWarningMock).toHaveBeenCalledExactlyOnceWith(message);
+      expect(showSuccessMock).not.toHaveBeenCalled();
+      expect(createElement).not.toHaveBeenCalledWith('a');
+      expect(hookState.exportingInventory()).toBe(false);
+    } finally {
+      createElement.mockRestore();
+      dispose();
+    }
+  });
+
   it('seeds reporting selections from the backend catalog defaults', async () => {
     const { hookState, dispose } = mountHook();
 

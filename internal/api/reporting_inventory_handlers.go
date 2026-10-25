@@ -10,6 +10,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
+const vmInventoryUnavailableMessage = "VM inventory is unavailable. Check this organization's infrastructure connections before running again."
+
 // HandleExportVMInventory exports the current VM inventory as spreadsheet-friendly CSV.
 func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -27,11 +29,13 @@ func (h *ReportingHandlers) HandleExportVMInventory(w http.ResponseWriter, r *ht
 		return
 	}
 
-	snapshot := emptyReportingEnrichmentSnapshot()
-	if h != nil {
-		if liveSnapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), GetOrgID(r.Context())); ok {
-			snapshot = liveSnapshot
-		}
+	snapshot, ok := h.getReportingEnrichmentSnapshot(r.Context(), GetOrgID(r.Context()))
+	if !ok {
+		// Match scheduled inventory reports: missing source data is not an
+		// observed empty fleet, and must not become a successful download.
+		w.Header().Set("Cache-Control", "no-store")
+		writeErrorResponse(w, http.StatusServiceUnavailable, "inventory_unavailable", vmInventoryUnavailableMessage, nil)
+		return
 	}
 
 	generatedAt := time.Now().UTC()

@@ -885,8 +885,8 @@ func TestReportingHandlers_GenerateMultiReport_RejectsOversizedBody(t *testing.T
 	}
 }
 
-func TestReportingHandlers_ExportVMInventory_EmptySnapshotStillReturnsCSVHeader(t *testing.T) {
-	handler := NewReportingHandlers(nil, nil)
+func TestReportingHandlers_ExportVMInventory_EmptyFleetStillReturnsCSVHeader(t *testing.T) {
+	handler := newReportingHandlersWithInventoryForTest(t, "default")
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export", nil)
 	rr := httptest.NewRecorder()
 
