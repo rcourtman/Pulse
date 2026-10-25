@@ -28074,7 +28074,7 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 	cleanupTestRouter(t, router)
 
 	source := config.NewConfigPersistence(t.TempDir())
-	if err := source.SaveNodesConfig([]config.PVEInstance{{Name: "runtime-fixture", Host: "https://runtime.invalid:8006", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
+	if err := source.SaveNodesConfig([]config.PVEInstance{{Name: "runtime-fixture", Host: "https://runtime.invalid:8006", TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-runtime-token", Disabled: true, VerifySSL: true}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := source.SaveAPITokens([]config.APITokenRecord{record}); err != nil {

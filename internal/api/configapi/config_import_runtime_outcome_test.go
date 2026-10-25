@@ -95,7 +95,7 @@ func TestHandleImportConfigRuntimeOutcome(t *testing.T) {
 			importedAlerts.GuestDefaults.CPU = &alerts.HysteresisThreshold{Trigger: 73, Clear: 68}
 			archive := config.ExportData{
 				Version: "4.4", System: *config.DefaultSystemSettings(), Alerts: importedAlerts,
-				Nodes:         config.NodesConfig{PVEInstances: []config.PVEInstance{{Name: "runtime-fixture", Host: "https://runtime.invalid:8006", Disabled: true, VerifySSL: true}}},
+				Nodes:         config.NodesConfig{PVEInstances: []config.PVEInstance{{Name: "runtime-fixture", Host: "https://runtime.invalid:8006", TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-runtime-token", Disabled: true, VerifySSL: true}}},
 				Email:         notifications.EmailConfig{Enabled: false, SMTPHost: "after.invalid", Password: "synthetic-email-secret"},
 				Webhooks:      []notifications.WebhookConfig{{ID: "after", URL: "https://after.invalid", Enabled: false}},
 				GuestMetadata: map[string]*config.GuestMetadata{"synthetic:101": {Description: "imported metadata"}},
