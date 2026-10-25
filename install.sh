@@ -4495,8 +4495,14 @@ configure_auto_update_script_repo() {
         return 1
     fi
 
+    # Both callers suppress errexit with `if !`: every preparation and
+    # publication failure must be returned explicitly. Keep the rewrite beside
+    # the supplied staging file so its final rename cannot become a cross-
+    # filesystem copy, and do not chmod or replace the input before it is ready.
     local tmp
-    tmp=$(mktemp /tmp/pulse-auto-update-script.XXXXXX)
+    if ! tmp=$(mktemp "${dest}.repo.XXXXXX"); then
+        return 1
+    fi
     if ! awk -v repo="$GITHUB_REPO" '
         BEGIN { inserted = 0 }
         /^#!/ {
@@ -4525,8 +4531,11 @@ configure_auto_update_script_repo() {
         return 1
     fi
 
-    mv "$tmp" "$dest"
-    chmod +x "$dest"
+    if ! bash -n "$tmp" || ! chmod 0755 "$tmp" || ! mv -Tf -- "$tmp" "$dest"; then
+        rm -f -- "$tmp"
+        return 1
+    fi
+    return 0
 }
 
 # Probes whether new entries can be created in a directory. This is exactly
