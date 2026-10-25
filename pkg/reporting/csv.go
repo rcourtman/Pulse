@@ -48,9 +48,9 @@ func (g *CSVGenerator) Generate(data *ReportData) ([]byte, error) {
 func (g *CSVGenerator) writeHeader(w *csv.Writer, data *ReportData) error {
 	headers := [][]string{
 		{"# Pulse Metrics Report"},
-		{"# Title:", data.Title},
-		{"# Resource Type:", GetResourceTypeDisplayName(data.ResourceType)},
-		{"# Resource ID:", data.ResourceID},
+		{"# Title:", spreadsheetText(data.Title)},
+		{"# Resource Type:", spreadsheetText(GetResourceTypeDisplayName(data.ResourceType))},
+		{"# Resource ID:", spreadsheetText(data.ResourceID)},
 		{"# Period:", fmt.Sprintf("%s to %s", data.Start.Format(time.RFC3339), data.End.Format(time.RFC3339))},
 		{"# Generated:", data.GeneratedAt.Format(time.RFC3339)},
 		{"# Total Data Points:", fmt.Sprintf("%d", data.TotalPoints)},
@@ -98,7 +98,7 @@ func (g *CSVGenerator) writeSummary(w *csv.Writer, data *ReportData) error {
 		stats := data.Summary.ByMetric[metricType]
 		unit := GetMetricUnit(metricType)
 		row := []string{
-			GetMetricTypeDisplayName(metricType),
+			spreadsheetText(GetMetricTypeDisplayName(metricType)),
 			fmt.Sprintf("%d", stats.Count),
 			formatValue(stats.Min, unit),
 			formatValue(stats.Max, unit),
@@ -138,9 +138,9 @@ func (g *CSVGenerator) writeData(w *csv.Writer, data *ReportData) error {
 	for _, name := range metricNames {
 		unit := GetMetricUnit(name)
 		if unit != "" {
-			headerRow = append(headerRow, fmt.Sprintf("%s (%s)", GetMetricTypeDisplayName(name), unit))
+			headerRow = append(headerRow, spreadsheetText(fmt.Sprintf("%s (%s)", GetMetricTypeDisplayName(name), unit)))
 		} else {
-			headerRow = append(headerRow, GetMetricTypeDisplayName(name))
+			headerRow = append(headerRow, spreadsheetText(GetMetricTypeDisplayName(name)))
 		}
 	}
 	if err := w.Write(headerRow); err != nil {
@@ -196,7 +196,7 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	// Write header comment rows
 	headers := [][]string{
 		{"# Pulse Multi-Resource Metrics Report"},
-		{"# Title:", data.Title},
+		{"# Title:", spreadsheetText(data.Title)},
 		{"# Resources:", fmt.Sprintf("%d", len(data.Resources))},
 		{"# Period:", fmt.Sprintf("%s to %s", data.Start.Format(time.RFC3339), data.End.Format(time.RFC3339))},
 		{"# Generated:", data.GeneratedAt.Format(time.RFC3339)},
@@ -238,10 +238,10 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 			stats := rd.Summary.ByMetric[metricType]
 			unit := GetMetricUnit(metricType)
 			row := []string{
-				resourceName,
-				resourceTypeDisplay,
-				rd.ResourceID,
-				GetMetricTypeDisplayName(metricType),
+				spreadsheetText(resourceName),
+				spreadsheetText(resourceTypeDisplay),
+				spreadsheetText(rd.ResourceID),
+				spreadsheetText(GetMetricTypeDisplayName(metricType)),
 				fmt.Sprintf("%d", stats.Count),
 				formatValue(stats.Min, unit),
 				formatValue(stats.Max, unit),
@@ -283,9 +283,9 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	for _, name := range metricNames {
 		unit := GetMetricUnit(name)
 		if unit != "" {
-			headerRow = append(headerRow, fmt.Sprintf("%s (%s)", GetMetricTypeDisplayName(name), unit))
+			headerRow = append(headerRow, spreadsheetText(fmt.Sprintf("%s (%s)", GetMetricTypeDisplayName(name), unit)))
 		} else {
-			headerRow = append(headerRow, GetMetricTypeDisplayName(name))
+			headerRow = append(headerRow, spreadsheetText(GetMetricTypeDisplayName(name)))
 		}
 	}
 	if err := w.Write(headerRow); err != nil {
@@ -343,7 +343,7 @@ func (g *CSVGenerator) GenerateMulti(data *MultiReportData) ([]byte, error) {
 	// Write data rows
 	for _, row := range allRows {
 		t := time.Unix(row.timestamp, 0)
-		csvRow := []string{t.Format(time.RFC3339), row.resourceName, row.resourceType, row.resourceID}
+		csvRow := []string{t.Format(time.RFC3339), spreadsheetText(row.resourceName), spreadsheetText(row.resourceType), spreadsheetText(row.resourceID)}
 		for _, metricName := range metricNames {
 			if val, ok := row.values[metricName]; ok {
 				csvRow = append(csvRow, fmt.Sprintf("%.2f", val))

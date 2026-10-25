@@ -137,18 +137,18 @@ func GenerateVMInventoryCSV(data VMInventoryData) ([]byte, error) {
 
 	for _, row := range rows {
 		record := []string{
-			row.ResourceID,
-			row.Instance,
-			row.Node,
-			row.Pool,
+			spreadsheetText(row.ResourceID),
+			spreadsheetText(row.Instance),
+			spreadsheetText(row.Node),
+			spreadsheetText(row.Pool),
 			strconv.Itoa(row.VMID),
-			row.Name,
-			row.Status,
+			spreadsheetText(row.Name),
+			spreadsheetText(row.Status),
 			strconv.Itoa(row.CPUCores),
 			strconv.FormatInt(row.MemoryAllocatedBytes, 10),
 			strconv.FormatInt(row.DiskAllocatedBytes, 10),
 			strconv.FormatInt(row.DiskUsedBytes, 10),
-			row.DiskStatusReason,
+			spreadsheetText(row.DiskStatusReason),
 		}
 		if err := w.Write(record); err != nil {
 			return nil, fmt.Errorf("write VM inventory CSV row for %q: %w", row.ResourceID, err)
