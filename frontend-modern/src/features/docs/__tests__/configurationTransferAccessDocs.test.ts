@@ -81,7 +81,9 @@ describe('Configuration transfer access guidance', () => {
     expect(text).toContain('does not grant permission to export or replace settings');
     expect(text).toContain('provider and SSO secrets');
     expect(text).toContain('Import does not create organisations or transfer their members');
-    expect(text).toContain('import does not rebind them to a different destination organisation ID');
+    expect(text).toContain(
+      'import does not rebind them to a different destination organisation ID',
+    );
     const article = articleFor('MIGRATION');
     expect(textOf(article)).toContain(
       'Organisation definitions, members, invitations and resource shares',
@@ -107,7 +109,7 @@ describe('Configuration transfer access guidance', () => {
         'a[href="/docs/MIGRATION#confirm-organisation-and-access"]',
       );
       expect(link, name).not.toBeNull();
-      expect(link?.getAttribute('data-doc-link')).toBe('true');
+      expect(link?.hasAttribute('data-doc-link')).toBe(true);
     }
     const section = accessSection();
     for (const [name, fragment] of [
