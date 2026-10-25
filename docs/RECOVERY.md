@@ -67,7 +67,7 @@ answer different questions:
   point without contributing volume. These are recorded artifact sizes, not
   PBS datastore usage or deduplicated physical space.
 - Guest **snapshots** can contribute to completed-point and chart totals.
-  They are not independent backups and do not fill Coverage's **Latest backup**.
+  They are not independent backups and do not fill Coverage's **Last backup**.
   If a completed backup's date is unavailable or in the future, the latest
   backup age stays unknown rather than choosing an older dated backup.
 
@@ -185,7 +185,55 @@ point separately rather than treating current activity as protection.
 For PBS artifacts that disagree with the health strip, use the
 [backup health checks](PBS.md#backups-are-visible-but-coverage-says-unprotected)
 to compare one workload's explanation and provider evidence without running a
-new backup or changing stored history.
+new backup or changing stored history. For local `vzdump` archives, use the
+[PVE comparison below](#local-pve-backups-are-newer-than-coverage); PBS is not
+required.
+
+### Local PVE backups are newer than Coverage
+
+A recent archive in PVE and an old or **Unprotected** Coverage row are
+different observations, not proof that the archive failed or the workload is
+protected. Compare one existing archive with the same workload in Pulse:
+
+1. Open **Proxmox → Backups → By date**. Clear search and the selected chart
+   day, start with **All nodes** and **All backup locations**, then select
+   **PVE backup files** (**PVE files** on narrow screens). A chart range or
+   list filter is not the protection policy; widening it does not refresh
+   collection or change a backup's age.
+2. Expand the archive to read **Source**, **Location**, **Created**, **State**
+   and **Identifier** under **Details**, including on a phone. Compare these
+   with the existing record in the owning PVE installation: connection,
+   native node, guest type/ID, storage, volume identifier and archive time.
+   Keep the native task's completion result separate from the archive's
+   creation time. The PVE source names the inventory reader, not necessarily
+   local storage: a PBS-backed storage target can also appear as a PVE file.
+3. Open **Coverage**, clear its posture filter and expand that same workload.
+   Read the posture explanation and **Provider evidence**: provider,
+   **Scope**, **Job**, **History** and **Access**. Keep **All backup locations**
+   for a whole-workload comparison. Selecting a location limits the listed
+   artifacts and backup age, but does not recalculate the workload's posture.
+   A visible archive and a green connection do not establish that the posture
+   assessment received the same complete, correctly linked evidence.
+4. Compare **Last backup** (**Backup** or **Age** at narrower widths) with the
+   archive's timestamp. **Restore evidence** can show only a selection of the
+   workload's points; use **By date** to locate an omitted archive. **Unknown**
+   is not **None**: unavailable or future dates, or incomplete readable
+   history, can prevent a reliable latest age. Do not substitute an older
+   dated point for an unknown latest backup.
+
+Use consistent private aliases when comparing installations: names, VMIDs and
+storage names can repeat. If the readings still disagree, report the running
+Pulse version, affected view, one archive's time/state and that workload's
+posture explanation and Provider evidence. Keep the full volume identifier,
+private paths, hostnames, credentials and full inventories out of public
+reports; retain the exact originals privately.
+
+**Do not run another backup, verification or restore, restart or re-enrol a
+node, clear History, change retention or widen permissions to change the
+badge.** If a guest is unresponsive or freeze/thaw is uncertain, stop this
+display comparison and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
+An OK task or a corrected posture does not establish guest thaw, successful
+writes to every covered filesystem or workload liveness.
 
 ## Missing or inconsistent evidence
 

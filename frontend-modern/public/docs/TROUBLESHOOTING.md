@@ -740,6 +740,11 @@ to compare one affected row's explanation, Job, History and Access with the
 matching native PBS record. Do not run a new backup, restart or clear history
 just to diagnose the disagreement.
 
+For a fresh local PVE `vzdump` archive beside an old or Unprotected Coverage
+row, use the [PVE Coverage comparison](RECOVERY.md#local-pve-backups-are-newer-than-coverage).
+Compare the owning installation and archive without adding PBS, re-enrolling
+nodes or changing stored history.
+
 #### Replication jobs are Pending, stale or missing
 
 **Proxmox → Replication** monitors storage replication between PVE nodes,
