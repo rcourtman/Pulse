@@ -186,6 +186,16 @@ function normalizeVersion(value) {
   return match ? match[1] : null;
 }
 
+function declaredVersionIsTransition(value) {
+  const first = normalizeVersion(value);
+  if (!first) return false;
+  const remaining = value.slice(value.indexOf(first) + first.length);
+  // A source -> target sequence is not a declaration of the failing runtime.
+  // Neither endpoint proves that the upgrade completed or which version was
+  // observed after recovery. Do not infer either one, or mine another field.
+  return /^[ \t]*(?:[-=]>|[→←↔]|&(?:rarr|larr|harr|#8594|#x2192);|to\b)[ \t]*(?:v?\d|(?:pulse(?:[ \t]+pro)?|server)[ \t]+v?\d|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?[:_-]v?\d|unknown\b|latest\b)/i.test(remaining);
+}
+
 function inlineDeclarationText(tokens) {
   return (tokens || []).map((token) => {
     // A link's visible label is evidence; its destination and title are not.
@@ -206,6 +216,7 @@ function normalizeLegacyVersionValue(value, body) {
   const text = blocks.length === 1 && blocks[0].type === "paragraph"
     ? inlineDeclarationText(blocks[0].tokens) : raw;
   const visible = text.trim().replace(/^[`*_]+/, "");
+  if (declaredVersionIsTransition(visible)) return null;
   // Failed-install forms explicitly accept an attempted server archive. Its
   // packaging suffix is not part of the release version. Recognise only the
   // Community and Pro server archive names; companion binaries and signatures
@@ -236,13 +247,14 @@ function extractTitlePulseVersion(title) {
   const declared = text.match(new RegExp(
     String.raw`\bpulse(?:[ \t]+pro)?[ \t]+(?:version[ \t]*[:=]?[ \t]*)?(${version})`, "i"
   )) || text.match(new RegExp(String.raw`\bpulse(?:-pro)?:(${version})`, "i"));
-  if (declared) return normalizeVersion(declared[1]);
+  if (declared) return declaredVersionIsTransition(text.slice(declared.index))
+    ? null : normalizeVersion(declared[1]);
 
   // Retain legacy version-first titles and the neutral "Bug on v..." form.
   // Do not search through another product's name to reach its version.
   const neutral = text.replace(/^\[(?:bug|v6 pre-release)\][ \t]*:?[ \t]*/i, "");
   const leading = neutral.match(new RegExp(String.raw`^(?:bug[ \t]+on[ \t]+)?(${version})`, "i"));
-  return leading ? normalizeVersion(leading[1]) : null;
+  return leading && !declaredVersionIsTransition(neutral) ? normalizeVersion(leading[1]) : null;
 }
 
 function extractPulseVersion(title, body) {
