@@ -29,6 +29,11 @@ func TestReportingInventoryDownloadAndSavedScheduleEscapeSpreadsheetText(t *test
 	setUnexportedField(t, monitor, "configPersist", p)
 	h := NewReportingHandlers(newReportingMTMForTest(t, monitor), nil)
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	before, ok := h.getReportingEnrichmentSnapshot(ctx, "default")
+	require.True(t, ok)
+	require.Len(t, before.Resources, 1)
+	canonicalID := before.Resources[0].ID
+	require.NotEmpty(t, canonicalID)
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/reports/inventory/vms/export?format=csv", nil).WithContext(ctx)
 	download := httptest.NewRecorder()
 	h.HandleExportVMInventory(download, request)
@@ -39,7 +44,7 @@ func TestReportingInventoryDownloadAndSavedScheduleEscapeSpreadsheetText(t *test
 	require.NoError(t, err)
 	require.Len(t, records, 2)
 	require.Equal(t, []string{
-		"vm-formula", "'+1+1", "'\t@node", "'@SUM(1,1)", "101", "'=1+1", "online", "2", "0", "0", "0", "'\rreason",
+		canonicalID, "'+1+1", "'@node", "'@SUM(1,1)", "101", "'=1+1", "online", "2", "0", "0", "0", "'\rreason",
 	}, records[1])
 
 	s := validReportSchedulePayload()
@@ -58,5 +63,6 @@ func TestReportingInventoryDownloadAndSavedScheduleEscapeSpreadsheetText(t *test
 	snapshot, ok := h.getReportingEnrichmentSnapshot(ctx, "default")
 	require.True(t, ok)
 	require.Len(t, snapshot.Resources, 1)
+	require.Equal(t, canonicalID, snapshot.Resources[0].ID)
 	require.Equal(t, "=1+1", snapshot.Resources[0].Name, "escape only the exported cell, never the monitored name")
 }
