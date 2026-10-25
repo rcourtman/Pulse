@@ -179,11 +179,14 @@ class NativeContracts(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual((root / "executed").read_text(), "--version\nv0.0.1\n")
             self.assertEqual(list((root / "tmp").iterdir()), [])
-            flags = ["-q", "-fsSL", "--connect-timeout", "10", "--max-time", "60"]
+            flags = ["-q", "-fsSL", "--connect-timeout", "10", "--max-time", "60",
+                     "--proto", "=https", "--proto-redir", "=https"]
             url = "https://github.com/rcourtman/Pulse/releases/latest/download/install.sh"
             for changed in (flags[1:], [*flags, "--insecure"], [*flags, "--retry", "3"],
                             [arg if arg != "60" else "61" for arg in flags],
-                            [arg if arg != "10" else "11" for arg in flags]):
+                            [arg if arg != "10" else "11" for arg in flags],
+                            flags[:-4], flags[:-2],
+                            [arg if arg != "=https" else "=all" for arg in flags]):
                 with self.subTest(flags=changed):
                     target = root / "refused"
                     result = subprocess.run([str(root / "tools/curl"), *changed, url, "-o", str(target)],

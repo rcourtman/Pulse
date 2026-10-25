@@ -4368,11 +4368,13 @@ tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX)
 tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
 # Do not let ambient curl retries or a stalled bootstrap hold update forever.
 # No installer/service change is allowed until both bounded downloads verify.
-if ! curl -q -fsSL --connect-timeout 10 --max-time 60 "\$INSTALLER_URL" -o "\$tmp_installer"; then
+# Keep both the initial request and GitHub's asset redirects on authenticated
+# HTTPS. A signature check is not permission to downgrade the transport.
+if ! curl -q -fsSL --connect-timeout 10 --max-time 60 --proto '=https' --proto-redir '=https' "\$INSTALLER_URL" -o "\$tmp_installer"; then
     echo "Failed to download Pulse installer from \$INSTALLER_URL" >&2
     exit 1
 fi
-if ! curl -q -fsSL --connect-timeout 10 --max-time 60 "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
+if ! curl -q -fsSL --connect-timeout 10 --max-time 60 --proto '=https' --proto-redir '=https' "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
     echo "Failed to download Pulse installer signature from \$INSTALLER_SIG_URL" >&2
     exit 1
 fi

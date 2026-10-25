@@ -15,6 +15,25 @@
 ```
 
 ## Purpose
+### Manual bootstrap transport remains HTTPS-only
+
+The generated manual update helper restricts curl's initial protocol and every
+redirect to HTTPS for both the installer and its detached signature. The
+existing disabled ambient curl configuration, connection/total deadlines,
+private temporary files and pinned SSH signature verification remain required.
+A download or protocol refusal stops before installer execution, removes owned
+bootstrap inputs and cannot report a completed update. HTTPS asset redirects
+remain supported; transport authentication does not replace signature checks.
+
+`TestRootManualUpdateHTTPSOnly` executes the emitted helper with real curl,
+locally authenticated TLS and a real fixture SSH signature. Its initial-HTTP
+and installer/signature downgrade controls require zero plaintext requests,
+while direct and redirected HTTPS deliver the signed installer and exact
+arguments. Existing deadline, invalid-signature, allocation and cleanup controls
+remain mandatory. The native systemd recipe's closed transport adapter admits
+only the new exact envelope. These offline transport controls are not signed
+published-artifact, native systemd or original LXC recovery acceptance.
+
 ### Manual update helpers retain the running reader
 
 `install.sh setup_update_command` stages the manual update helper beside its
