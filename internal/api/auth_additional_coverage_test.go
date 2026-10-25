@@ -171,6 +171,9 @@ func TestCheckAuth_AcceptsBearerToken(t *testing.T) {
 }
 
 func TestCheckAuth_InvalidBearerDoesNotFallBackToSession(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	t.Cleanup(GetSessionStore().Shutdown)
+
 	record, err := config.NewAPITokenRecord("token-valid-123.12345678", "api", []string{config.ScopeMonitoringRead})
 	if err != nil {
 		t.Fatalf("NewAPITokenRecord: %v", err)

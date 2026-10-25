@@ -691,17 +691,50 @@ func TestMetricsStoreRuntimeOverridesStayOnMonitorBoundary(t *testing.T) {
 		}
 	}
 
-	// The override names one file, so non-default tenants must not inherit it.
+	// Non-default tenants use the same scoped loader on startup and import.
+	// Check that wiring before New, then exercise the loader's storage boundary
+	// rather than requiring its implementation to remain inline in GetMonitor.
 	data, err = os.ReadFile("multi_tenant_monitor.go")
 	if err != nil {
 		t.Fatalf("failed to read multi_tenant_monitor.go: %v", err)
 	}
 	tenantSource := string(data)
-	dataPathIdx := strings.Index(tenantSource, "tenantConfig.DataPath = tenantPersistence.GetConfigDir()")
-	clearIdx := strings.Index(tenantSource, "tenantConfig.MetricsDBPath = \"\"")
+	loadIdx := strings.Index(tenantSource, "if orgID != \"default\" {\n\t\ttenantConfig, err = loadTenantRuntimeConfig(mtm.baseConfig, tenantPersistence)")
 	newIdx := strings.Index(tenantSource, "monitor, err = New(tenantConfig)")
-	if dataPathIdx < 0 || clearIdx < 0 || newIdx < 0 || !(dataPathIdx < clearIdx && clearIdx < newIdx) {
-		t.Fatal("multi_tenant_monitor.go must clear MetricsDBPath for non-default tenants after setting DataPath and before New")
+	if loadIdx < 0 || newIdx < 0 || loadIdx >= newIdx {
+		t.Fatal("multi_tenant_monitor.go must load non-default tenant configuration before New")
+	}
+
+	for _, override := range []string{"", filepath.Join(t.TempDir(), "default-metrics.db")} {
+		name := "without_override"
+		if override != "" {
+			name = "with_override"
+		}
+		t.Run(name, func(t *testing.T) {
+			base := &config.Config{
+				DataPath: t.TempDir(), ConfigPath: t.TempDir(),
+				MetricsDBPath: override, MetricsRollupInterval: 17 * time.Second,
+			}
+			defaultDataPath, defaultConfigPath := base.DataPath, base.ConfigPath
+			for _, orgID := range []string{"org-a", "org-b"} {
+				t.Run(orgID, func(t *testing.T) {
+					persistence := config.NewConfigPersistence(t.TempDir())
+					tenant, err := loadTenantRuntimeConfig(base, persistence)
+					if err != nil {
+						t.Fatalf("load tenant configuration: %v", err)
+					}
+					if tenant == base || tenant.DataPath != persistence.GetConfigDir() || tenant.ConfigPath != persistence.GetConfigDir() || tenant.MetricsDBPath != "" {
+						t.Fatal("non-default tenant must use its own paths without the process metrics override")
+					}
+					if tenant.MetricsRollupInterval != base.MetricsRollupInterval {
+						t.Fatal("tenant lost the instance-wide metrics rollup interval")
+					}
+					if base.DataPath != defaultDataPath || base.ConfigPath != defaultConfigPath || base.MetricsDBPath != override {
+						t.Fatal("loading tenant configuration changed default-org storage paths")
+					}
+				})
+			}
+		})
 	}
 }
 
