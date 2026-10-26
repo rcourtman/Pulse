@@ -69,7 +69,7 @@ func TestAuditExportRejectsOversizedSelection(t *testing.T) {
 				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 					t.Fatal(err)
 				}
-				if body.Code != "export_too_large" || !strings.Contains(body.Message, "10000") || !strings.Contains(body.Message, "Narrow") {
+				if body.Code != "export_too_large" || body.StatusCode != http.StatusBadRequest || body.Details["maxEvents"] != "10000" || !strings.Contains(body.ErrorMessage, "10000") || !strings.Contains(body.ErrorMessage, "Narrow") {
 					t.Fatalf("missing bounded recovery error: %+v", body)
 				}
 				if strings.Contains(rec.Body.String(), "synthetic-event") || rec.Header().Get("Content-Disposition") != "" || rec.Header().Get("X-Event-Count") != "" {
