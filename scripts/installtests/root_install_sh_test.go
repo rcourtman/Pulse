@@ -2588,13 +2588,26 @@ fi
 }
 
 func TestRootInstallSensorProxyCleanupCannotHideKeyReadFailure(t *testing.T) {
-	dir := t.TempDir()
-	keys := filepath.Join(dir, "authorized_keys")
-	const original = "ssh-ed25519 AAAAold # pulse-managed-key\n" + sensorProxyRecoveryKeys
-	if err := os.WriteFile(keys, []byte(original), 0600); err != nil {
-		t.Fatal(err)
-	}
-	body := `source "$1"
+	for _, pathKind := range []string{"direct", "directory_alias"} {
+		t.Run(pathKind, func(t *testing.T) {
+			dir := t.TempDir()
+			fixtureDir := dir
+			if pathKind == "directory_alias" {
+				fixtureDir = filepath.Join(t.TempDir(), "fixture alias")
+				if err := os.Symlink(dir, fixtureDir); err != nil {
+					t.Fatal(err)
+				}
+			}
+			keys := filepath.Join(dir, "authorized_keys")
+			const original = "ssh-ed25519 AAAAold # pulse-managed-key\n" + sensorProxyRecoveryKeys
+			if err := os.WriteFile(keys, []byte(original), 0600); err != nil {
+				t.Fatal(err)
+			}
+			body := `# The writer resolves its target physically. Match that identity in the
+# confinement guard too (including macOS /var -> /private/var temp paths).
+# Keep the guard limited to this fixture's owned staging files.
+FIXTURE_DIR=$(cd "$FIXTURE_DIR" && pwd -P) || exit 1
+source "$1"
 SENSOR_PROXY_AUTHORIZED_KEYS_PATH="$FIXTURE_DIR/authorized_keys"
 local_sensor_proxy_present() { :; }
 stop_pulse_unit_for_removal() { :; }
@@ -2607,18 +2620,20 @@ userdel() { echo unexpected-user-removal >>"$FIXTURE_DIR/actions"; }
 groupdel() { echo unexpected-group-removal >>"$FIXTURE_DIR/actions"; }
 if cleanup_local_sensor_proxy; then exit 0; else exit $?; fi
 `
-	out, code := runSensorProxySafetyShell(t, repoFile("install.sh"), dir, "grep", body)
-	if code == 0 || strings.Contains(out, "Removed legacy") {
-		t.Fatalf("installer cleanup hid failed key read: exit %d: %s", code, out)
-	}
-	if got, err := os.ReadFile(keys); err != nil || string(got) != original {
-		t.Fatalf("installer failure lost recovery keys: %q, %v", got, err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "actions")); !os.IsNotExist(err) {
-		t.Fatalf("service-user removal followed unconfirmed key cleanup: %v", err)
-	}
-	if leftovers, err := filepath.Glob(keys + ".pulse-cleanup.*"); err != nil || len(leftovers) != 0 {
-		t.Fatalf("failed installer cleanup left staging: %v, %v", leftovers, err)
+			out, code := runSensorProxySafetyShell(t, repoFile("install.sh"), fixtureDir, "grep", body)
+			if code == 0 || strings.Contains(out, "Removed legacy") {
+				t.Fatalf("installer cleanup hid failed key read: exit %d: %s", code, out)
+			}
+			if got, err := os.ReadFile(keys); err != nil || string(got) != original {
+				t.Fatalf("installer failure lost recovery keys: %q, %v", got, err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "actions")); !os.IsNotExist(err) {
+				t.Fatalf("service-user removal followed unconfirmed key cleanup: %v", err)
+			}
+			if leftovers, err := filepath.Glob(keys + ".pulse-cleanup.*"); err != nil || len(leftovers) != 0 {
+				t.Fatalf("failed installer cleanup left staging: %v, %v", leftovers, err)
+			}
+		})
 	}
 }
 
