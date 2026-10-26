@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createUniqueId, For, Show } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 
 import type {
@@ -77,6 +77,7 @@ const outcomeBadgeClasses: Record<NotificationDeliveryLogEntry['outcome'], strin
 };
 
 export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
+  const titleId = createUniqueId();
   // Log rows stay mounted between refreshes and their times never change, so
   // the age in each row's tooltip reads the shared clock.
   const now = useRelativeTimeNow();
@@ -145,7 +146,7 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
       <div class="flex flex-col gap-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <h3 id={titleId} class="text-sm font-semibold text-gray-900 dark:text-gray-100">
               {getAlertDestinationsDeliveryLogTitle()}
             </h3>
             <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
@@ -196,7 +197,11 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
             </Show>
           }
         >
-          <ul class="max-h-80 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
+          <ul
+            tabIndex={0}
+            aria-labelledby={titleId}
+            class="max-h-80 divide-y divide-gray-200 overflow-y-auto rounded-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:divide-gray-700"
+          >
             <For each={rows()}>
               {(row) =>
                 row.kind === 'attempt' ? (
