@@ -34,7 +34,7 @@ function lexFieldValue(value, report) {
   return fieldLexer.lex(value);
 }
 
-function inlineProjection(tokens, maskCode = false) {
+function inlineProjection(tokens) {
   return (tokens || []).map((token) => {
     const raw = token.raw || "";
     // Keep line positions when removing hidden comments. A comment inside a
@@ -42,13 +42,10 @@ function inlineProjection(tokens, maskCode = false) {
     if (token.type === "html" && /^<!--/.test(raw)) {
       return raw.replace(/[^\r\n]/g, "");
     }
-    if (maskCode && token.type === "codespan") {
-      return raw.replace(/[^\r\n]/g, " ");
-    }
     if (token.tokens && typeof token.text === "string") {
       const offset = raw.indexOf(token.text);
       if (offset !== -1) {
-        return raw.slice(0, offset) + inlineProjection(token.tokens, maskCode) +
+        return raw.slice(0, offset) + inlineProjection(token.tokens) +
           raw.slice(offset + token.text.length);
       }
     }
@@ -79,7 +76,9 @@ function projectDeclarationLines(tokens) {
         // literal code, images, struck-out text and raw HTML non-declarative.
         heading: inlineDeclarationText(token.tokens, true).trim(), headingDepth: token.depth });
     } else if (token.type === "paragraph") {
-      append(inlineProjection(token.tokens), true, inlineProjection(token.tokens, true));
+      // Legacy field labels follow their visible emphasis/link text too.
+      // Keep code delimiters so literal field examples cannot declare one.
+      append(inlineProjection(token.tokens), true, inlineDeclarationText(token.tokens, true));
     } else if (token.type === "code") {
       // A real version field may have a fenced or indented value. Its contents
       // remain a value, never new metadata or a section boundary.
@@ -91,7 +90,7 @@ function projectDeclarationLines(tokens) {
         const first = item.tokens[0];
         if (first && first.type === "text" && first.tokens) {
           const text = inlineProjection(first.tokens);
-          const metadata = inlineProjection(first.tokens, true);
+          const metadata = inlineDeclarationText(first.tokens, true);
           append(text.split(/\r?\n/)[0], true, metadata.split(/\r?\n/)[0]);
           append(text.split(/\r?\n/).slice(1).join("\n"));
           for (const nested of item.tokens.slice(1)) append(nested.raw || "");
@@ -330,12 +329,7 @@ function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
       // Legacy inline/standalone fields have the same authority as the form.
       // Unknown or incomplete must not borrow an agent/platform version or
       // an upgrade's starting version from the title.
-      const visibleLine = (lines[i].heading ?? lines[i].text).replace(/\*\*|__/g, "")
-        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
-      const visibleField = visibleLine.match(
-        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
-      );
-      const inlineValue = visibleField ? visibleField[1].trim() : "";
+      const inlineValue = field[1].trim();
       if (inlineValue) return normalizeLegacyVersionValue(inlineValue, report);
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
