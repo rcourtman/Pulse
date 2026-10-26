@@ -1,6 +1,7 @@
 import type { BackupTask, GuestSnapshot, PBSBackup, StorageBackup } from '@/types/api';
 import type { ProtectionPosture, ProtectionState } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { backupLocationScope, type BackupLocationScope } from './proxmoxBackupLocation';
 
 import {
   getProxmoxArchiveSourceTitle,
@@ -31,7 +32,7 @@ export interface WorkloadReference {
   instance?: string;
 }
 
-export interface RecoverableArtifact {
+export interface RecoverableArtifact extends BackupLocationScope {
   id: string;
   nativeId: string;
   sourceKind: RecoverableSourceKind;
@@ -42,10 +43,6 @@ export interface RecoverableArtifact {
   createdMs?: number;
   size?: number;
   location: string;
-  /** Stable source/repository identity used by the backup-location filter. */
-  locationKey?: string;
-  /** Operator-facing source/repository label used by the backup-location filter. */
-  locationLabel?: string;
   detail: string;
   /** Full provider identifier behind a shortened `detail`, shown on hover. */
   detailTitle?: string;
@@ -185,25 +182,6 @@ function normalizeKey(value: string | number | undefined | null): string {
   return String(value ?? '')
     .trim()
     .toLowerCase();
-}
-
-function artifactLocationScope(
-  sourceKind: RecoverableSourceKind,
-  instance: string | undefined,
-  repository: string | undefined,
-): Pick<RecoverableArtifact, 'locationKey' | 'locationLabel'> {
-  const parts = [instance?.trim(), repository?.trim()].filter((part): part is string =>
-    Boolean(part),
-  );
-  const distinctParts = parts.filter(
-    (part, index) =>
-      parts.findIndex((candidate) => normalizeKey(candidate) === normalizeKey(part)) === index,
-  );
-  if (distinctParts.length === 0) return {};
-  return {
-    locationKey: [sourceKind, ...distinctParts.map(normalizeKey)].join(':'),
-    locationLabel: distinctParts.join(' / '),
-  };
 }
 
 function isZeroWorkloadId(vmid: string): boolean {
@@ -666,7 +644,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdMs,
       size: backup.size,
       location: `${backup.datastore || '—'} / ${backup.namespace?.trim() || '(root)'}`,
-      ...artifactLocationScope('pbs', backup.instance, backup.datastore),
+      ...backupLocationScope('pbs', backup.instance, backup.datastore),
       detail: pbsBackupFileDetailLabel(backup.files.length),
       protected: backup.protected,
       verified: backup.inProgress ? undefined : backup.verified,
@@ -699,7 +677,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdMs,
       size: archive.size,
       location: archive.storage || archive.node || '—',
-      ...artifactLocationScope('archive', archive.instance, archive.storage || archive.node),
+      ...backupLocationScope('archive', archive.instance, archive.storage || archive.node),
       // The volid repeats the storage, guest type, VMID, and timestamp the row
       // already shows in their own columns and clips at every width; the
       // archive format is the one fact it adds, so that is the cell and the
@@ -735,7 +713,7 @@ export function buildProxmoxBackupRecoveryModel(
       createdMs,
       size: snapshot.sizeBytes,
       location: snapshot.node || snapshot.instance || '—',
-      ...artifactLocationScope('snapshot', snapshot.instance, snapshot.node),
+      ...backupLocationScope('snapshot', snapshot.instance, snapshot.node),
       detail: snapshot.description || snapshot.name || snapshotSource.detailFallbackLabel,
       protected: false,
     });

@@ -39,6 +39,27 @@ and HTTP transport at desktop and narrow widths. This stops unnecessary stale
 reads; it does not establish native guest recovery or change posture policy,
 batch size, cadence, API, identity or access grants.
 
+### Backup-location filters keep exact repository identity
+
+A backup-location filter uses a case-preserving, position-preserving tuple of
+source kind, connection and repository. Display labels, case folding, empty
+field removal and delimiter concatenation cannot establish identity. Both
+By date and Coverage use the same exact key, including the selected restore
+points, per-source counts and latest-backup selection in expanded Coverage.
+New URL/saved-view values use that key. A legacy key is read-compatible only
+when it maps to one exact location in the current inventory; an ambiguous or
+missing match shows no filtered restore points and explains how to choose again
+or clear the filter. It never silently widens to all matching repositories.
+
+`proxmoxBackupLocation.test.ts`, the recovery-model tests and the consuming
+`ProxmoxBackupsTable.test.tsx` cover case/delimiter/position collisions, source
+kinds, old saved views, exact filtering across views, details, clearing and
+remount. A mounted inventory refresh that introduces a collision withdraws the
+legacy interpretation, while an exact choice stays isolated. Desktop/narrow
+browser proof exercises the compiled producer through
+those surfaces. This changes a presentation filter, not workload matching,
+server-owned aggregate posture, access, API reads or native recovery operations.
+
 ### Protection posture reads validate the whole response
 
 Backups accepts a batched protection assessment only when every returned row,

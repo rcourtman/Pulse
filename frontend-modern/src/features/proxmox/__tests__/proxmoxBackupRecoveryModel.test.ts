@@ -136,9 +136,9 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(
       model.recoverableArtifacts.map((artifact) => [artifact.locationKey, artifact.locationLabel]),
     ).toEqual([
-      ['pbs:pbs-main:main', 'pbs-main / main'],
-      ['archive:homelab:local', 'homelab / local'],
-      ['snapshot:homelab:minipc', 'homelab / minipc'],
+      ['["pbs","pbs-main","main"]', 'PBS · pbs-main / main'],
+      ['["archive","homelab","local"]', 'PVE file · homelab / local'],
+      ['["snapshot","homelab","minipc"]', 'Snapshot · homelab / minipc'],
     ]);
     expect(model.recoverableArtifacts[0].detail).toBe('2 PBS files');
     expect(coverageRowMatchesSearch(row, 'pbs-docker')).toBe(true);
