@@ -30,6 +30,8 @@ export interface PlatformWindowedItemsOptions<Item> {
   windowSize?: number;
   /** Native table items may include a variable-height inline detail row. */
   measureTableRows?: boolean;
+  /** Reserve the natural table extent while retiring variable-height rows. */
+  reserveScrollExtent?: boolean;
 }
 
 /**
@@ -99,10 +101,40 @@ export function usePlatformWindowedItems<Item>(options: PlatformWindowedItemsOpt
       : 0,
   );
 
+  const [tableChromeHeight, setTableChromeHeight] = createSignal(0);
+  createEffect(() => {
+    const anchor = anchorRef();
+    if (!options.reserveScrollExtent || !anchor || !windowing.isWindowed()) return;
+    const shell = anchor.closest<HTMLElement>('.table-scroll-shell');
+    if (!shell) return;
+    const previousMinHeight = shell.style.minHeight;
+    // Reserving the outer shell, not the table itself, leaves natural table
+    // layout free to shrink on disclosure close, filtering and width changes.
+    createEffect(() => {
+      const offsets = measuredLayout()?.offsets;
+      const bodyHeight = offsets?.[offsets.length - 1] ?? 0;
+      shell.style.minHeight = `${bodyHeight + tableChromeHeight()}px`;
+    });
+    onCleanup(() => {
+      shell.style.minHeight = previousMinHeight;
+    });
+  });
+
   const measureTableRows = () => {
     if (!options.measureTableRows) return;
     const anchor = anchorRef();
     if (!anchor || isWindowedSurfaceHidden(anchor)) return;
+    if (options.reserveScrollExtent) {
+      const table = anchor.closest('table');
+      if (table) {
+        setTableChromeHeight(
+          [table.tHead, table.tFoot, table.caption].reduce(
+            (height, section) => height + (section?.getBoundingClientRect().height ?? 0),
+            0,
+          ),
+        );
+      }
+    }
     const items = visibleItems();
     const measurements = new Map<Item, number>();
     let index = -1;

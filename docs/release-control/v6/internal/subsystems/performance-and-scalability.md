@@ -3122,7 +3122,7 @@ the mounted-row threshold while retaining the hook's 140-row desktop and
 curation integration proof must assert both the 800-plus guest total and the
 bounded mounted-row count. That same default estate produces more than 500
 backup coverage targets and recoverable artifacts; the coverage and By date
-tables must route through `useProxmoxBackupTableWindowing.ts`, retain full-set
+tables must route through `PlatformWindowedRows`, retain full-set
 filter/sort/count semantics, and mount at most 140 desktop or 36 phone row or day-header items
 without pagination chrome. `internal/mock/demo_scenarios_benchmark_test.go`
 records the corresponding graph-build, recurring sampler-update, and unified
@@ -4541,3 +4541,36 @@ The registered API CLI and installtest workflow controls execute synthetic
 children/telemetry and the actual evidence/writer shells, not a latency
 workload. See `workload-chart-reporting-completion-2026-10-21.md` in `../records/`
 for the source proposal, adverse governance result and available hosted sample.
+
+### Measured backup evidence windows
+
+The Coverage and By date tables now share the canonical measured row renderer.
+Their stable workload and artifact/day keys preserve an open evidence panel
+through live inventory replacements. A tall inline panel contributes to its
+summary item's extent, both in the scroll-to-index mapping and in offscreen
+spacers, so reading its lower sections does not replace it with unrelated rows.
+The existing 140 desktop / 36 phone item budgets and full-result counts, filters
+and sorts remain unchanged. `ProxmoxCoverageTable.test.tsx` exercises both
+consumers' measurement, poll identity, departure/return and column spans;
+consuming desktop/narrow browser proof must check real geometry and native scroll.
+
+### Backup table extent survives measured-detail retirement
+
+Coverage and By date opt into `PlatformWindowedRows.reserveScrollExtent`. The
+shared measurement owner reserves the natural table height on its outer scroll
+shell before a tall inline panel leaves the row window. This prevents a
+transient shrink from clamping native page or app-container scrolling. It does
+not set the table's own height or move the native scroll position. Natural
+remeasurement releases the reserve on disclosure close or responsive layout;
+leaving windowed mode and unmount restore the shell's previous minimum height.
+Other table consumers keep their existing lifecycle by default.
+
+`PlatformWindowedRows.test.tsx` checks opt-in extent retention, bounded rows,
+return, close and small-result filtering; consuming backup proof must exercise
+real desktop/narrow app scrolling and inventory polling, including the last
+visible workload. Posture, keys, authority and native recovery are unchanged.
+
+The reserve derives from the full keyed measured-height map plus table chrome,
+not a DOM height sampled while a window retires. Offscreen detail measurements
+remain in that map until the owning item is remeasured or removed, so a transient
+DOM extent cannot lower the reserve before its compensating spacer settles.

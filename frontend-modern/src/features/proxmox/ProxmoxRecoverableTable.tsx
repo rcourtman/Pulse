@@ -51,7 +51,7 @@ import {
 } from './proxmoxBackupsTablePresentation';
 import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresentation';
 import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
-import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
+import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 
 // Flat recoverable-artifact table. Parent state owns filtering, sorting, and
 // date/source facets; optional day grouping is presentation only.
@@ -218,7 +218,6 @@ export function ProxmoxRecoverableTable(props: {
       })),
     ]);
   });
-  const tableWindow = useProxmoxBackupTableWindowing(tableItems);
   const drawer = createPlatformResourceDetailState({ idPrefix: 'proxmox-recoverable-detail' });
 
   const renderRow = (artifact: RecoverableArtifact): JSX.Element => (
@@ -353,13 +352,9 @@ export function ProxmoxRecoverableTable(props: {
       }
     >
       <div
-        ref={(element) => {
-          observedWidth.setElement(element);
-          tableWindow.setRootRef(element);
-        }}
+        ref={observedWidth.setElement}
         data-proxmox-backups-table="recoverable"
         data-proxmox-backups-layout={layoutMode()}
-        data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
           tableClass="min-w-0 table-fixed text-xs"
@@ -452,16 +447,13 @@ export function ProxmoxRecoverableTable(props: {
           }
           body={
             <>
-              <Show when={tableWindow.topSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell
-                    colspan={visibleColumns().length}
-                    class="border-0 p-0"
-                    height={tableWindow.topSpacerHeight()}
-                  />
-                </TableRow>
-              </Show>
-              <For each={tableWindow.visibleItems()}>
+              <PlatformWindowedRows
+                items={tableItems}
+                keyExtractor={(item) => `${item.kind}:${item.key}`}
+                colSpan={visibleColumns().length}
+                estimatedRowHeight={32}
+                reserveScrollExtent
+              >
                 {(item) => (
                   <Show
                     when={item.kind === 'artifact' ? item.artifact : undefined}
@@ -484,16 +476,7 @@ export function ProxmoxRecoverableTable(props: {
                     {(artifact) => renderRow(artifact())}
                   </Show>
                 )}
-              </For>
-              <Show when={tableWindow.bottomSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell
-                    colspan={visibleColumns().length}
-                    class="border-0 p-0"
-                    height={tableWindow.bottomSpacerHeight()}
-                  />
-                </TableRow>
-              </Show>
+              </PlatformWindowedRows>
             </>
           }
         />

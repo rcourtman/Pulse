@@ -26,6 +26,8 @@ export interface PlatformWindowedRowsProps<Row> {
   estimatedRowHeight?: number;
   enableThreshold?: number;
   windowSize?: number;
+  /** Keep the table's outer native extent stable during tall-row retirement. */
+  reserveScrollExtent?: boolean;
 }
 
 type StablePlatformRow<Row> = {
@@ -130,6 +132,7 @@ export function PlatformWindowedRows<Row>(props: PlatformWindowedRowsProps<Row>)
   const windowing = usePlatformWindowedItems({
     items: renderItems,
     measureTableRows: true,
+    reserveScrollExtent: props.reserveScrollExtent,
     estimatedItemHeight: props.estimatedRowHeight,
     enableThreshold: props.enableThreshold,
     windowSize: props.windowSize,

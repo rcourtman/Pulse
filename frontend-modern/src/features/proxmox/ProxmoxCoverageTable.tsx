@@ -1,6 +1,4 @@
-import { For, Show, createEffect, createMemo, type Accessor, type JSX } from 'solid-js';
-
-import { createStore, reconcile } from 'solid-js/store';
+import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
 
 import {
   InlineDetailPanel,
@@ -55,7 +53,7 @@ import {
   selectCoverageRestoreEvidence,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
-import { useProxmoxBackupTableWindowing } from './useProxmoxBackupTableWindowing';
+import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
 
 // Each evidence column is already named by its header, so an empty cell says
 // "None" instead of restating the source ("No PVE backup file"). The long form
@@ -274,11 +272,6 @@ export function ProxmoxCoverageTable(props: {
   // ages were short enough for the usual gutters; compact ages use that space.
   const ageCellClass = (kind: 'text' | 'numeric-value') =>
     `${layoutMode() === 'compact' ? `px-0.5 py-1 ${kind === 'numeric-value' ? 'text-right' : ''}` : getPlatformTableCellClassForKind(kind)} text-base-content`;
-  // Polling rebuilds recovery-model objects. Preserve logical row identity so
-  // Solid does not replace the focused toggle (or the browser's scroll anchor).
-  const [stableRows, setStableRows] = createStore<WorkloadCoverageRow[]>([]);
-  createEffect(() => setStableRows(reconcile([...props.rows], { key: 'key' })));
-  const tableWindow = useProxmoxBackupTableWindowing(() => [...stableRows]);
 
   return (
     <Show
@@ -298,13 +291,9 @@ export function ProxmoxCoverageTable(props: {
       }
     >
       <div
-        ref={(element) => {
-          observedWidth.setElement(element);
-          tableWindow.setRootRef(element);
-        }}
+        ref={observedWidth.setElement}
         data-proxmox-backups-table="coverage"
         data-proxmox-backups-layout={layoutMode()}
-        data-proxmox-backups-windowed={tableWindow.isWindowed()}
       >
         <PlatformTableShell
           tableClass="min-w-0 table-fixed text-xs"
@@ -381,16 +370,13 @@ export function ProxmoxCoverageTable(props: {
           }
           body={
             <>
-              <Show when={tableWindow.topSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell
-                    colspan={columnCount()}
-                    class="border-0 p-0"
-                    height={tableWindow.topSpacerHeight()}
-                  />
-                </TableRow>
-              </Show>
-              <For each={tableWindow.visibleItems()}>
+              <PlatformWindowedRows
+                items={() => props.rows}
+                keyExtractor={(row) => row.key}
+                colSpan={columnCount()}
+                estimatedRowHeight={32}
+                reserveScrollExtent
+              >
                 {(row) => {
                   const isExpanded = () => props.expandedKey === row.key;
                   const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
@@ -742,16 +728,7 @@ export function ProxmoxCoverageTable(props: {
                     </>
                   );
                 }}
-              </For>
-              <Show when={tableWindow.bottomSpacerHeight() > 0}>
-                <TableRow aria-hidden="true">
-                  <TableCell
-                    colspan={columnCount()}
-                    class="border-0 p-0"
-                    height={tableWindow.bottomSpacerHeight()}
-                  />
-                </TableRow>
-              </Show>
+              </PlatformWindowedRows>
             </>
           }
         />

@@ -178,10 +178,11 @@ describe('ProxmoxRecoverableTable responsive columns', () => {
       />
     ));
 
-    expect(document.querySelector('[data-proxmox-backups-table="recoverable"]')).toHaveAttribute(
-      'data-proxmox-backups-windowed',
-      'true',
-    );
+    expect(
+      document.querySelectorAll(
+        '[data-proxmox-backups-table="recoverable"] [data-platform-window-spacer]',
+      ),
+    ).toHaveLength(2);
     expect(document.querySelectorAll('[data-proxmox-backup-row]')).toHaveLength(140);
     expect(document.body.textContent).toContain('workload-0');
     expect(document.body.textContent).not.toContain('workload-599');
