@@ -459,6 +459,75 @@ test("a revised topic cannot override a newer Community disposition", async () =
   }
 });
 
+test("a review cleared since the queued event stays cleared within the same timestamp second", async () => {
+  const previousBody = "### Additional actionable topics\nAn earlier topic.\n";
+  const body = "### Additional actionable topics\nAlso retain per-host alert identity.\n";
+  for (const action of ["opened", "edited"]) {
+    for (const reviewedInEvent of [false, true]) {
+      for (const pendingNow of [false, true]) {
+        const community = ["enhancement", "needs-human", "needs-retest-on-latest", "operator-reviewed"];
+        const issue = { number: 2937, title: "Monitoring workflow", body, comments: 0,
+          updated_at: "2026-10-26T19:00:00Z",
+          labels: [...community, ...(reviewedInEvent ? ["needs-decomposition"] : [])]
+            .map(name => ({ name })) };
+        const { github, calls } = createGithub({ currentIssue: { ...issue, state: "open",
+          labels: [...community, ...(pendingNow ? ["needs-decomposition"] : [])]
+            .map(name => ({ name })) } });
+        await syncLabels({ github, core: createCore(),
+          context: createContext({ action, issue, previousBody }) });
+        assert.deepEqual(calls.addLabels.map(call => call.labels),
+          !reviewedInEvent && !pendingNow ? [["needs-decomposition"]] : [],
+          `${action}: event review=${reviewedInEvent}, current review=${pendingNow}`);
+        assert.deepEqual(calls.removeLabel, []);
+        assert.deepEqual(calls.createComment, []);
+        assert.deepEqual(calls.getEvents, []);
+        assert.deepEqual(calls.getLatestRelease, []);
+        assert.deepEqual(calls.paginate, []);
+      }
+    }
+  }
+});
+
+test("respecting a cleared review does not discard independent current version metadata", async () => {
+  const community = ["bug", "needs-human", "needs-retest-on-latest", "operator-reviewed"];
+  const issue = { number: 2938, title: "Monitoring workflow", comments: 0,
+    updated_at: "2026-10-26T19:00:00Z",
+    body: "### Pulse version\n6.6.0\n### Additional actionable topics\nA revised backup topic.\n",
+    labels: [...community, "affects-6.5.0", "needs-decomposition"].map(name => ({ name })) };
+  const { github, calls } = createGithub({ currentIssue: { ...issue, state: "open",
+    labels: [...community, "affects-6.5.0"].map(name => ({ name })) } });
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Pulse version\n6.6.0\n### Additional actionable topics\nAn earlier topic.\n",
+  }) });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0"]);
+  assert.deepEqual(calls.createLabel.map(call => call.name), ["affects-6.6.0"]);
+  assert.deepEqual(calls.getEvents, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
+test("an observed cleared review needs no delayed-comment history to remain cleared", async () => {
+  const issue = { number: 2939, title: "Monitoring workflow", comments: 0,
+    updated_at: "2026-10-26T19:00:00Z",
+    body: "### Additional actionable topics\nRetain per-host alert identity.\n",
+    labels: ["enhancement", "needs-decomposition"].map(name => ({ name })) };
+  const { github, calls } = createGithub({ currentIssue: { ...issue, state: "open", comments: 1,
+    updated_at: "2026-10-26T19:01:00Z", labels: [{ name: "enhancement" }] } });
+  github.rest.issues.listEvents = async () => {
+    throw new Error("A known removed review must not require speculative history");
+  };
+  await syncLabels({ github, core: createCore(), context: createContext({ action: "edited", issue,
+    previousBody: "### Additional actionable topics\nNone\n",
+  }) });
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.createLabel, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getEvents, []);
+});
+
 test("additional topic classification is explicit and fail-quiet for legacy forms", () => {
   const { classifyAdditionalActionableTopics } = triage.internals;
 
