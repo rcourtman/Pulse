@@ -3178,3 +3178,42 @@ test("further activity during recovery history stops without another reconciliat
     assert.deepEqual(calls.createComment, []);
   }
 });
+
+for (const labelLength of [50, 51, 512]) {
+  test(`a ${labelLength}-character version label cannot lose independent topic review`, async () => {
+    const version = `6.6.0-${"x".repeat(labelLength - "affects-6.6.0-".length)}`;
+    const versionLabel = `affects-${version}`;
+    assert.equal(versionLabel.length, labelLength);
+    const preserved = ["bug", "needs-human", "release-blocker", "needs-retest-on-latest", "operator-reviewed"];
+    const issue = { number: 2930, title: "Current report", comments: 0,
+      body: `### Pulse version\n${version}\n\n### Additional actionable topics\nThe saved connection also loses its label.`,
+      labels: [...preserved, "affects-6.5.0", "needs-version-info"].map(name => ({ name })) };
+    const { github, calls } = createGithub();
+    const createLabel = github.rest.issues.createLabel;
+    github.rest.issues.createLabel = async (payload) => {
+      if (payload.name.length > 50) {
+        throw Object.assign(new Error("Label name exceeds 50 characters"), {
+          status: 422,
+          response: { data: { errors: [{ resource: "Label", field: "name", code: "invalid" }] } },
+        });
+      }
+      return createLabel(payload);
+    };
+
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+
+    // A representation limit neither changes the declared version nor makes
+    // it missing. No truncated label or reporter request can substitute for it.
+    assert.equal(triage.internals.extractPulseVersion(issue.title, issue.body), version);
+    const expected = labelLength <= 50 ? [versionLabel, "needs-decomposition"] : ["needs-decomposition"];
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [expected.sort()]);
+    assert.deepEqual(calls.createLabel.map(call => call.name).sort(), expected.sort());
+    assert.deepEqual(calls.getLabel.sort(), expected.sort(), "never send an oversized version label to GitHub");
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0", "needs-version-info"]);
+    assert.ok(!calls.removeLabel.some(call => preserved.includes(call.name)));
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2, "keep the final live-read guard");
+  });
+}

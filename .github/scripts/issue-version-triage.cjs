@@ -612,14 +612,23 @@ async function syncLabels({ github, context, core }) {
   }
 
   if (reportedVersion) {
-    await ensureLabel(
-      github,
-      context,
-      `${VERSION_LABEL_PREFIX}${reportedVersion}`,
-      "0e8a16",
-      `Bug reported against Pulse ${reportedVersion}`
-    );
-    nextLabels.add(`${VERSION_LABEL_PREFIX}${reportedVersion}`);
+    const versionLabel = `${VERSION_LABEL_PREFIX}${reportedVersion}`;
+    // GitHub label names stop at 50 characters. A longer declared version
+    // still supplies evidence, but cannot be represented as an exact label.
+    // Do not truncate it into a different version, or let that API validation
+    // failure prevent independent topic review and stale-metadata removal.
+    if (versionLabel.length <= 50) {
+      await ensureLabel(
+        github,
+        context,
+        versionLabel,
+        "0e8a16",
+        `Bug reported against Pulse ${reportedVersion}`
+      );
+      nextLabels.add(versionLabel);
+    } else {
+      core.info("Declared version exceeds the exact-version label limit; retaining its evidence without a version label.");
+    }
     nextLabels.delete(NEEDS_VERSION_LABEL);
   } else {
     await ensureLabel(
