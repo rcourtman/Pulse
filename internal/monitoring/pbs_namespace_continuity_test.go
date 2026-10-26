@@ -263,8 +263,10 @@ func TestPBSNamespaceMixedFailuresDoNotResurrectDeniedScope(t *testing.T) {
 						t.Error("other instance inventory disappeared or denied row was resurrected")
 					}
 					for _, p := range f.postures(t) {
-						if p.State == recovery.ProtectionStateProtected {
-							t.Errorf("wholly unread collection claimed protection: %+v", p)
+						if p.State == recovery.ProtectionStateProtected || len(p.ProviderStates) != 1 ||
+							p.ProviderStates[0].Permissions != operationaltrust.EvidencePermissionsUnknown ||
+							p.ProviderStates[0].HistoryCompleteness != recovery.ProtectionHistoryUnavailable {
+							t.Errorf("mixed rejected/unread scopes invented protection or universal denial: %+v", p)
 						}
 					}
 				}

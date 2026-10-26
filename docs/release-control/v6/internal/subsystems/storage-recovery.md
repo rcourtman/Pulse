@@ -33,7 +33,9 @@ the observed-group batch or renew recovery-point evidence. Provider history
 stays partial/unavailable rather than claiming protection.
 
 An actual access rejection still withdraws that namespace's raw rows, including
-when every namespace failed and another failure was transient. Failed discovery
+when every namespace failed and another failure was transient. Wholly unread
+mixed failures keep access Unknown rather than inventing universal denial;
+uniformly rejected collection still reports Denied. Failed discovery
 cannot override a namespace request actually made: neither a rejection nor an
 accepted empty listing can be undone by carry-forward. Durable historical facts
 remain qualified by collection/access evidence until a complete accepted scan
