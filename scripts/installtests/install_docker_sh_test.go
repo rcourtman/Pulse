@@ -468,6 +468,14 @@ func TestInstallDockerProofTracksStableMinorContract(t *testing.T) {
 
 func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	t.Helper()
+	out, err := runInstallDockerScriptResult(t, workDir, envVars...)
+	if err != nil {
+		t.Fatalf("run install-docker.sh: %v\n%s", err, out)
+	}
+}
+
+func runInstallDockerScriptResult(t *testing.T, workDir string, envVars ...string) (string, error) {
+	t.Helper()
 
 	scriptPath := repoFile("scripts", "install-docker.sh")
 	content, err := os.ReadFile(scriptPath)
@@ -476,6 +484,11 @@ func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	}
 
 	script := string(content)
+	// Only the two fixed host-admission checks are replaced. The generator,
+	// path admission, writes and messages execute unchanged in a private fixture.
+	if strings.Count(script, rootCheckBlock) != 1 || strings.Count(script, containerCheckBlock) != 1 {
+		t.Fatal("installer host-admission boundaries changed; update the explicit test fixture")
+	}
 	script = strings.Replace(script, rootCheckBlock, ":", 1)
 	script = strings.Replace(script, containerCheckBlock, ":", 1)
 
@@ -488,7 +501,14 @@ func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir bin: %v", err)
 	}
-	writeTestStub(t, filepath.Join(binDir, "docker"), "#!/bin/sh\nif [ \"$1\" = \"compose\" ] && [ \"$2\" = \"version\" ]; then exit 0; fi\nexit 0\n")
+	writeTestStub(t, filepath.Join(binDir, "docker"), `#!/bin/sh
+printf '%s\n' "$*" >> docker-calls
+if [ "$*" != 'compose version' ]; then exit 91; fi
+if [ "${TEST_RACE_COMPOSE:-}" = true ]; then
+    printf '%s\n' 'racing owner configuration' > docker-compose.yml
+fi
+exit 0
+`)
 	writeTestStub(t, filepath.Join(binDir, "timedatectl"), "#!/bin/sh\necho Europe/London\n")
 	writeTestStub(t, filepath.Join(binDir, "hostname"), "#!/bin/sh\nif [ \"$1\" = \"-I\" ]; then echo 192.0.2.10; else echo pulse-host; fi\n")
 
@@ -498,9 +518,7 @@ func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 		"PATH=" + binDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 	}, envVars...)...)
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("run install-docker.sh: %v\n%s", err, out)
-	}
+	return string(out), err
 }
 
 func writeTestStub(t *testing.T, path, content string) {
@@ -527,3 +545,203 @@ if [ -f /.dockerenv ] || [ -f /run/.containerenv ]; then
     exit 1
 fi
 `
+
+func assertDockerSetupBytes(t *testing.T, path, want string, mode os.FileMode) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != want {
+		t.Fatalf("configuration bytes changed at %s (read error: %v)", filepath.Base(path), err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != mode {
+		t.Fatalf("configuration mode changed at %s (stat error: %v)", filepath.Base(path), err)
+	}
+}
+
+func TestInstallDockerScriptKeepsExistingDeployment(t *testing.T) {
+	workDir := t.TempDir()
+	runInstallDockerScript(t, workDir)
+	compose := filepath.Join(workDir, "docker-compose.yml")
+	env := filepath.Join(workDir, ".env")
+	backup := compose + ".backup"
+	// Model a real operator's bind mounts, image pin, port and private settings.
+	custom := "services:\n  pulse:\n    image: example/pulse:fixed\n    ports: ['127.0.0.1:8765:7655']\n    volumes: ['./existing-state:/data']\n"
+	private := "PULSE_IMAGE=example/pulse:fixed\nPULSE_PORT=8765\nSYNTHETIC_SECRET=fixture-only\n"
+	for path, value := range map[string]string{compose: custom, env: private, backup: "older recovery copy\n"} {
+		if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := os.Stat(compose)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(workDir, "docker-calls")); err != nil {
+		t.Fatal(err)
+	}
+	out, resultErr := runInstallDockerScriptResult(t, workDir)
+	assertDockerSetupBytes(t, compose, custom, 0o600)
+	assertDockerSetupBytes(t, env, private, 0o600)
+	assertDockerSetupBytes(t, backup, "older recovery copy\n", 0o600)
+	after, err := os.Stat(compose)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatal("existing Compose inode was replaced")
+	}
+	if resultErr == nil {
+		t.Fatal("repeated setup accepted an existing deployment")
+	}
+	for _, message := range []string{"only prepares a new deployment", "existing Compose configuration", "left unchanged"} {
+		if !strings.Contains(out, message) {
+			t.Errorf("missing actionable preservation message %q", message)
+		}
+	}
+	if strings.Contains(out, "SYNTHETIC_SECRET") || strings.Contains(out, "fixture-only") || strings.Contains(out, "Installation Complete") {
+		t.Fatal("refusal leaked configuration or claimed installation")
+	}
+	if _, err := os.Stat(filepath.Join(workDir, "docker-calls")); !os.IsNotExist(err) {
+		t.Fatal("refused setup called Docker")
+	}
+}
+
+func TestInstallDockerScriptRefusesAllExistingComposeNames(t *testing.T) {
+	for _, name := range []string{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"} {
+		t.Run(name, func(t *testing.T) {
+			workDir := t.TempDir()
+			path := filepath.Join(workDir, name)
+			if err := os.WriteFile(path, []byte("existing operator configuration\n"), 0o640); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := runInstallDockerScriptResult(t, workDir); err == nil {
+				t.Fatal("setup accepted an existing Compose file")
+			}
+			assertDockerSetupBytes(t, path, "existing operator configuration\n", 0o640)
+			for _, output := range []string{".env", "docker-calls", "docker-compose.yml.backup"} {
+				if _, err := os.Lstat(filepath.Join(workDir, output)); !os.IsNotExist(err) {
+					t.Fatalf("refused setup created %s", output)
+				}
+			}
+			if name != "docker-compose.yml" {
+				if _, err := os.Lstat(filepath.Join(workDir, "docker-compose.yml")); !os.IsNotExist(err) {
+					t.Fatal("setup created a competing Compose file")
+				}
+			}
+		})
+	}
+}
+
+func TestInstallDockerScriptRefusesUnsafeOutputPaths(t *testing.T) {
+	for _, output := range []string{"docker-compose.yml", ".env"} {
+		for _, shape := range []string{"symlink", "dangling-symlink", "directory", "fifo"} {
+			t.Run(output+"/"+shape, func(t *testing.T) {
+				workDir := t.TempDir()
+				target := filepath.Join(workDir, "untouched-target")
+				path := filepath.Join(workDir, output)
+				if shape != "dangling-symlink" {
+					if err := os.WriteFile(target, []byte("unrelated private bytes\n"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				switch shape {
+				case "symlink", "dangling-symlink":
+					if err := os.Symlink(target, path); err != nil {
+						t.Skipf("symlink fixture unavailable: %v", err)
+					}
+				case "directory":
+					if err := os.Mkdir(path, 0o700); err != nil {
+						t.Fatal(err)
+					}
+				case "fifo":
+					if _, err := exec.LookPath("mkfifo"); err != nil {
+						t.Skip("mkfifo fixture unavailable")
+					}
+					if err := exec.Command("mkfifo", path).Run(); err != nil {
+						t.Fatal(err)
+					}
+				}
+				before, err := os.Lstat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := runInstallDockerScriptResult(t, workDir); err == nil {
+					t.Fatal("setup accepted an unsafe output path")
+				}
+				after, err := os.Lstat(path)
+				if err != nil || !os.SameFile(before, after) || after.Mode() != before.Mode() {
+					t.Fatal("unsafe output path changed")
+				}
+				if shape == "dangling-symlink" {
+					if _, err := os.Lstat(target); !os.IsNotExist(err) {
+						t.Fatal("setup wrote through a dangling symlink")
+					}
+				} else {
+					assertDockerSetupBytes(t, target, "unrelated private bytes\n", 0o600)
+				}
+				for _, absent := range []string{"docker-calls", "docker-compose.yml.backup"} {
+					if _, err := os.Lstat(filepath.Join(workDir, absent)); !os.IsNotExist(err) {
+						t.Fatalf("refused setup created %s", absent)
+					}
+				}
+				other := ".env"
+				if output == ".env" {
+					other = "docker-compose.yml"
+				}
+				if _, err := os.Lstat(filepath.Join(workDir, other)); !os.IsNotExist(err) {
+					t.Fatal("unsafe path admission partially generated configuration")
+				}
+			})
+		}
+	}
+}
+
+func TestInstallDockerScriptPreservesRegularEnvironment(t *testing.T) {
+	workDir := t.TempDir()
+	env := filepath.Join(workDir, ".env")
+	if err := os.WriteFile(env, []byte("PULSE_IMAGE=example/pulse:operator-pin\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runInstallDockerScript(t, workDir)
+	assertDockerSetupBytes(t, env, "PULSE_IMAGE=example/pulse:operator-pin\n", 0o600)
+	info, err := os.Stat(filepath.Join(workDir, "docker-compose.yml"))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatal("new Compose output is not private")
+	}
+}
+
+func TestInstallDockerScriptDoesNotClobberRacingCompose(t *testing.T) {
+	workDir := t.TempDir()
+	out, err := runInstallDockerScriptResult(t, workDir, "TEST_RACE_COMPOSE=true")
+	if err == nil || strings.Contains(out, "Configuration prepared") {
+		t.Fatal("setup claimed success over a competing output")
+	}
+	assertDockerSetupBytes(t, filepath.Join(workDir, "docker-compose.yml"), "racing owner configuration\n", 0o600)
+	if _, err := os.Lstat(filepath.Join(workDir, "docker-compose.yml.backup")); !os.IsNotExist(err) {
+		t.Fatal("racing setup replaced a backup")
+	}
+	if _, err := os.Lstat(filepath.Join(workDir, ".env")); !os.IsNotExist(err) {
+		t.Fatal("racing setup continued after the Compose collision")
+	}
+}
+
+func TestInstallDockerScriptReportsPreparationNotInstallation(t *testing.T) {
+	workDir := t.TempDir()
+	out, err := runInstallDockerScriptResult(t, workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Configuration prepared; Pulse has not been started") || strings.Contains(out, "Installation Complete") {
+		t.Fatal("generator claimed an unexecuted installation")
+	}
+	for _, output := range []string{"docker-compose.yml", ".env"} {
+		info, err := os.Stat(filepath.Join(workDir, output))
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("new %s output is not private", output)
+		}
+	}
+	calls, err := os.ReadFile(filepath.Join(workDir, "docker-calls"))
+	if err != nil || string(calls) != "compose version\n" {
+		t.Fatal("generator called a Docker operation other than compose version")
+	}
+}
