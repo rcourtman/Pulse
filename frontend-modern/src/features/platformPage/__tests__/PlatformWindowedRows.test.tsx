@@ -6,6 +6,11 @@ import { PlatformWindowedRows } from '../PlatformWindowedRows';
 import { PlatformWindowedList } from '../PlatformWindowedList';
 import platformWindowedItemsSource from '../usePlatformWindowedItems.ts?raw';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
+import {
+  PlatformSortableTableHead,
+  PlatformTableShell,
+  createPlatformTableSortState,
+} from '../sharedPlatformPage';
 
 describe('PlatformWindowedRows', () => {
   afterEach(cleanup);
@@ -45,6 +50,54 @@ describe('PlatformWindowedRows', () => {
 
     expect(container.querySelectorAll('[data-row-id]')).toHaveLength(140);
     expect(container.querySelectorAll('[data-platform-window-spacer]')).toHaveLength(2);
+  });
+
+  it('keeps the native sort heading focused while reordering a bounded estate-sized table', async () => {
+    const { container } = render(() => {
+      const items = Array.from({ length: 1_000 }, (_, id) => ({ id }));
+      const sort = createPlatformTableSortState({
+        storageKey: 'windowedHeader',
+        sortKeys: ['id'] as const,
+      });
+      return (
+        <PlatformTableShell
+          header={
+            <PlatformSortableTableHead kind="numeric-value" sort={sort} sortKey="id">
+              ID
+            </PlatformSortableTableHead>
+          }
+          body={
+            <PlatformWindowedRows items={() => sort.sortRows(items, (item) => item.id)}>
+              {(item) => (
+                <tr data-row-id={item.id}>
+                  <td>{item.id}</td>
+                </tr>
+              )}
+            </PlatformWindowedRows>
+          }
+        />
+      );
+    });
+    try {
+      const button = screen.getByRole('button', { name: 'ID' });
+      button.focus();
+      await fireEvent.click(button);
+      await fireEvent.click(button);
+      expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveAttribute('scope', 'col');
+      expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveAttribute(
+        'aria-sort',
+        'descending',
+      );
+      expect(button).toHaveFocus();
+      expect(container.querySelector('[data-row-id]')).toHaveAttribute('data-row-id', '999');
+      expect(container.querySelectorAll('[data-row-id]')).toHaveLength(140);
+      const spacers = container.querySelectorAll('[data-platform-window-spacer] > td');
+      expect(spacers).toHaveLength(2);
+      for (const spacer of spacers) expect(spacer).toHaveAttribute('colspan', '1');
+    } finally {
+      localStorage.removeItem('windowedHeaderSortKey');
+      localStorage.removeItem('windowedHeaderSortDirection');
+    }
   });
 
   it('spans spacer rows over the visible header cells only', () => {

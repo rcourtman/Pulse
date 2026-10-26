@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 import { renderDocMarkdown } from '@/features/docs/docMarkdown';
 
@@ -16,41 +16,53 @@ function documentPaths(directory: string): string[] {
   });
 }
 
-function renderedDocuments(): Map<string, HTMLElement> {
-  return new Map(
-    documentPaths(docsRoot).map((filename) => {
-      const slug = path.relative(docsRoot, filename).replaceAll(path.sep, '/').slice(0, -3);
-      const article = document.createElement('article');
-      article.innerHTML = renderDocMarkdown(readFileSync(filename, 'utf8'), slug);
-      return [slug, article];
-    }),
-  );
-}
-
 // A source-level heading scan accepts headings swallowed by an unclosed code
 // fence. Check the HTML users receive, including nested shipped documents and
 // their cross-document links, rather than maintaining a second slug algorithm.
-describe('shipped document fragment destinations', () => {
-  let documents: Map<string, HTMLElement>;
-  // Render the 62-file corpus once, including the long security-review guide.
-  // This is a bounded content audit, not a per-document rendering benchmark.
-  beforeAll(() => {
-    documents = renderedDocuments();
-  }, 15_000);
+describe.sequential('shipped document fragment destinations', () => {
+  const filenames = new Map(
+    documentPaths(docsRoot)
+      .sort()
+      .map((filename) => [
+        path.relative(docsRoot, filename).replaceAll(path.sep, '/').slice(0, -3),
+        filename,
+      ]),
+  );
+  const documents = new Map<string, { article: HTMLElement; ids: Map<string, number> }>();
+  let checked = 0;
 
-  it('resolves every internal section link to exactly one rendered destination', () => {
-    const broken: Array<{ source: string; link: string; target: string; matches: number }> = [];
-    let checked = 0;
-    for (const [slug, article] of documents) {
+  const renderedDocument = (slug: string) => {
+    const cached = documents.get(slug);
+    if (cached) return cached;
+    const filename = filenames.get(slug);
+    if (!filename) return undefined;
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(readFileSync(filename, 'utf8'), slug);
+    const ids = new Map<string, number>();
+    for (const element of article.querySelectorAll('[id]')) {
+      ids.set(element.id, (ids.get(element.id) ?? 0) + 1);
+    }
+    const rendered = { article, ids };
+    documents.set(slug, rendered);
+    return rendered;
+  };
+
+  afterAll(() => documents.clear());
+
+  // Bound each source document, not the aggregate cost of the entire corpus.
+  // Targets still use the real renderer and are cached once, including their
+  // duplicate-ID counts. No content, sanitizer or fragment check is skipped.
+  it.each([...filenames.keys()])(
+    'resolves every internal section link in %s to exactly one rendered destination',
+    (slug) => {
+      const { article } = renderedDocument(slug)!;
+      const broken: Array<{ source: string; link: string; target: string; matches: number }> = [];
       for (const anchor of article.querySelectorAll<HTMLAnchorElement>('a[href]')) {
         const url = new URL(anchor.getAttribute('href')!, `${origin}/docs/${slug}`);
         if (url.origin !== origin || !url.pathname.startsWith('/docs/') || !url.hash) continue;
         const targetSlug = decodeURIComponent(url.pathname.slice('/docs/'.length));
         const fragment = decodeURIComponent(url.hash.slice(1));
-        const target = documents.get(targetSlug);
-        const matches = target
-          ? [...target.querySelectorAll('[id]')].filter((element) => element.id === fragment).length
-          : 0;
+        const matches = renderedDocument(targetSlug)?.ids.get(fragment) ?? 0;
         checked++;
         if (matches !== 1) {
           broken.push({
@@ -61,13 +73,18 @@ describe('shipped document fragment destinations', () => {
           });
         }
       }
-    }
+      expect(broken).toEqual([]);
+    },
+    15_000,
+  );
+
+  it('covers the complete shipped corpus and checks real internal section links', () => {
+    expect(documents.size).toBe(filenames.size);
     expect(checked).toBeGreaterThan(0);
-    expect(broken).toEqual([]);
   });
 
   it('keeps the audit section and its response separate from the token regeneration example', () => {
-    const api = documents.get('API')!;
+    const { article: api } = renderedDocument('API')!;
     expect(api.querySelector('#-audit-log-pro')?.textContent).toBe('🧾 Audit Log (Pro)');
     expect(api.querySelector('#list-audit-events')?.textContent).toBe('List Audit Events');
     const examples = [...api.querySelectorAll('pre code')].map((code) => code.textContent ?? '');

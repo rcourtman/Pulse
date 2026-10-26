@@ -8,6 +8,7 @@ import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import {
   For,
   Show,
+  children,
   createEffect,
   createMemo,
   createSignal,
@@ -643,13 +644,19 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
   bandWidth?: number;
   children: JSX.Element;
 }) {
+  // Resolve once: sort changes must not recreate a responsive label's DOM
+  // while Solid is updating the direction marker beside it.
+  const label = children(() => props.children);
   const isSorted = () => props.sortKey !== undefined && props.sort.sortKey() === props.sortKey;
+  // Keep the whole cell clickable. Native button activation (including Enter
+  // and Space) bubbles here once; do not add a second button/key handler.
   const handleClick = () => {
     const key = props.sortKey;
     if (key !== undefined) props.sort.handleSort(key);
   };
   return (
     <TableHead
+      scope="col"
       class={`${getPlatformTableHeadClassForKind(props.kind)} ${
         props.sortKey !== undefined ? 'cursor-pointer select-none hover:bg-surface-hover' : ''
       } ${props.class ?? ''}`
@@ -659,8 +666,17 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
       style={platformTableBandWidthStyle(props.bandWidth)}
       onClick={handleClick}
     >
-      {props.children}
-      {isSorted() ? ` ${getTableSortIndicator(true, props.sort.sortDirection())}` : null}
+      <Show when={props.sortKey !== undefined} fallback={label()}>
+        <button
+          type="button"
+          class="min-h-6 w-full min-w-0 cursor-pointer rounded-sm text-inherit [text-align:inherit] [text-transform:inherit] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/70"
+        >
+          {label()}
+          <span aria-hidden="true">
+            {isSorted() ? ` ${getTableSortIndicator(true, props.sort.sortDirection())}` : null}
+          </span>
+        </button>
+      </Show>
     </TableHead>
   );
 }
