@@ -469,8 +469,14 @@ func DeriveProtectionPostureAt(
 		case operationaltrust.EvidencePermissionsSufficient:
 		case operationaltrust.EvidencePermissionsPartial:
 			hasPartial = true
-		case operationaltrust.EvidencePermissionsDenied,
-			operationaltrust.EvidencePermissionsUnknown:
+		case operationaltrust.EvidencePermissionsUnknown:
+			// Partial history already says part of the scope went unread;
+			// unknown access describes that unread part, not the history
+			// this source did return.
+			if summary.HistoryCompleteness != ProtectionHistoryPartial {
+				hasUnknownBlock = true
+			}
+		case operationaltrust.EvidencePermissionsDenied:
 			hasUnknownBlock = true
 		}
 

@@ -148,6 +148,49 @@ func TestDeriveProtectionPostureTruthTable(t *testing.T) {
 			wantText:     "cannot confirm a backup",
 		},
 		{
+			name: "partial history with unknown access is attention when a backup exists",
+			summaries: func() []ProtectionProviderSummary {
+				summary := protectionTestSummary(now, &recent)
+				summary.HistoryCompleteness = ProtectionHistoryPartial
+				summary.Permissions = operationaltrust.EvidencePermissionsUnknown
+				return []ProtectionProviderSummary{summary}
+			}(),
+			wantState:    ProtectionStateAttention,
+			wantFresh:    ProtectionFreshnessCurrent,
+			wantVerify:   ProtectionVerificationVerified,
+			wantCoverage: ProtectionCoveragePartial,
+			wantText:     "only part of the backup history",
+		},
+		{
+			name: "partial history with unknown access and no backup does not claim one exists",
+			summaries: func() []ProtectionProviderSummary {
+				summary := protectionTestSummary(now, nil)
+				summary.HistoryCompleteness = ProtectionHistoryPartial
+				summary.Permissions = operationaltrust.EvidencePermissionsUnknown
+				summary.BackupPointCount = 0
+				return []ProtectionProviderSummary{summary}
+			}(),
+			wantState:    ProtectionStateAttention,
+			wantFresh:    ProtectionFreshnessUnknown,
+			wantVerify:   ProtectionVerificationUnknown,
+			wantCoverage: ProtectionCoveragePartial,
+			wantText:     "cannot confirm a backup",
+		},
+		{
+			name: "unavailable history with unknown access is unknown",
+			summaries: func() []ProtectionProviderSummary {
+				summary := protectionTestSummary(now, &recent)
+				summary.HistoryCompleteness = ProtectionHistoryUnavailable
+				summary.Permissions = operationaltrust.EvidencePermissionsUnknown
+				return []ProtectionProviderSummary{summary}
+			}(),
+			wantState:    ProtectionStateUnknown,
+			wantFresh:    ProtectionFreshnessCurrent,
+			wantVerify:   ProtectionVerificationVerified,
+			wantCoverage: ProtectionCoverageUnknown,
+			wantText:     "cannot read the backup history",
+		},
+		{
 			name: "permission denied is unknown",
 			summaries: func() []ProtectionProviderSummary {
 				summary := protectionTestSummary(now, &recent)

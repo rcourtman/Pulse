@@ -4493,6 +4493,10 @@ authorized provider history, plus verification when the provider declares it
 expected. Stale, failed, partial, or unverified evidence is attention;
 unprotected requires complete evidence of no qualifying backup; unavailable
 identity, history, collection, or permission evidence fails to unknown.
+Partial history whose access is unknown is partial, not unavailable: PVE and
+PBS report an ordinary failed read of one storage or datastore that way, and
+the unknown access describes only the unread part. It stays attention, so one
+unreadable target cannot turn every subject with a readable backup unknown.
 Snapshots remain distinct and never prove independent recovery by themselves.
 The posture `explanation` is user-facing copy (the Coverage row tooltip and
 expansion render it verbatim), so it is written in plain words rather than the

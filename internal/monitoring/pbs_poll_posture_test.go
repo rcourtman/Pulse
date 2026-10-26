@@ -261,7 +261,7 @@ func TestPBSOrdinaryPollSnapshotFailuresDoNotClaimCompleteHistory(t *testing.T) 
 		permissions operationaltrust.EvidencePermissions
 		state       recovery.ProtectionState
 	}{
-		{"transient", 2, operationaltrust.EvidencePermissionsUnknown, recovery.ProtectionStateUnknown},
+		{"transient", 2, operationaltrust.EvidencePermissionsUnknown, recovery.ProtectionStateAttention},
 		{"denied", 3, operationaltrust.EvidencePermissionsPartial, recovery.ProtectionStateAttention},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
