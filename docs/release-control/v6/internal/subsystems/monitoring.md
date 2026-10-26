@@ -5575,7 +5575,21 @@ snapshot enumeration. `internal/monitoring/monitor_backups.go` must query VM
 and LXC snapshot endpoints through one capped worker pool and preserve
 previously-known snapshots only for guests that were not successfully polled in
 the current cycle, so large or slow clusters do not starve later guests while
-transient misses still avoid destructive state churn.
+transient misses still avoid destructive state churn. Durable snapshot recovery
+points also outlive that live cache: an incomplete, cancelled or unobserved guest
+inventory must not reconcile missing durable points, including after a monitor
+replacement. Only snapshots returned by an accepted listing may renew point-level
+evidence; carried-forward rows remain live continuity, not fresh observations.
+Instance-wide deletion waits for a nonempty target inventory whose listings all
+succeeded, without cancellation or carried-forward rows. An accepted complete
+empty snapshot listing still clears that instance's snapshot scope, preserving
+other instances and backup/task classes. `TestPVESnapshotIncompletePollRetainsRecoveryHistory`,
+`TestPVESnapshotUnobservedInventoryPreservesRecoveryHistory` and
+`TestPVESnapshotCancelledAfterListingsCannotReconcile` in
+`internal/monitoring/recovery_ingest_test.go` exercise the actual poll, queue and
+retained reader across warm/cold VM and LXC inventories, rejected partial data,
+accepted peer updates and complete-empty recovery. These are synthetic reads,
+not native guest recovery, backup/restore or filesystem/thaw acceptance.
 That same guest-monitoring boundary also owns linked host-agent precedence for
 Proxmox VMs. When a VM has a live linked Pulse host agent, the canonical disk
 inventory and aggregate disk summary must prefer that linked host-agent disk

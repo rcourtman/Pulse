@@ -2,13 +2,18 @@ package monitoring
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	recoverystore "github.com/rcourtman/pulse-go-rewrite/internal/recovery/store"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func recoveryIngestTestMonitor(t *testing.T) (*Monitor, *recoverymanager.Manager) {
@@ -350,5 +355,240 @@ func TestRecoveryIngestCompletePollCannotOvertakePartialBatch(t *testing.T) {
 	}
 	if ids := listRecoveryPointIDs(t, manager); len(ids) != 0 {
 		t.Fatalf("partial history resurrected after authoritative empty recovery: %v", ids)
+	}
+}
+
+// Snapshot inventory in memory can be empty after an ordinary monitor
+// replacement while its durable recovery points still exist. Exercise the
+// actual poll, ingest queue and public store reader, not database internals.
+type snapshotRecoveryClient struct {
+	*snapshotCollectionClient
+	afterStorage func()
+}
+
+func (c *snapshotRecoveryClient) GetStorage(context.Context, string) ([]proxmox.Storage, error) {
+	if c.afterStorage != nil {
+		c.afterStorage()
+	}
+	return nil, nil
+}
+
+type snapshotRecoveryFixture struct {
+	m      *Monitor
+	store  *recoverystore.Store
+	client *snapshotRecoveryClient
+	kind   string
+}
+
+func newSnapshotRecoveryFixture(t *testing.T, kind string) *snapshotRecoveryFixture {
+	t.Helper()
+	m, manager := recoveryIngestTestMonitor(t)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &snapshotRecoveryFixture{m: m, store: store, kind: kind,
+		client: &snapshotRecoveryClient{snapshotCollectionClient: &snapshotCollectionClient{replies: map[string]snapshotCollectionReply{}}}}
+	f.coldState(true)
+	at := time.Now().UTC().Add(-16 * 24 * time.Hour).Truncate(time.Second)
+	for _, guest := range []string{"node-a/101", "node-b/202"} {
+		f.client.replies[kind+"/"+guest] = snapshotCollectionReply{snapshots: []proxmox.Snapshot{{Name: "weekly", SnapTime: at.Unix(), Description: "accepted listing"}}}
+	}
+	t.Cleanup(func() { f.wait(t); _ = store.Close() })
+	return f
+}
+
+func (f *snapshotRecoveryFixture) coldState(withInventory bool) {
+	f.m.state = models.NewState()
+	if !withInventory {
+		return
+	}
+	for _, site := range []string{"site", "other-site"} {
+		var vms []models.VM
+		var containers []models.Container
+		for _, guest := range []struct {
+			node string
+			id   int
+		}{{"node-a", 101}, {"node-b", 202}} {
+			if site == "other-site" && guest.id != 101 {
+				continue
+			}
+			id := makeGuestID(site, guest.node, guest.id)
+			if f.kind == "qemu" {
+				vms = append(vms, models.VM{ID: id, Instance: site, Node: guest.node, VMID: guest.id, Name: "database", Type: f.kind})
+			} else {
+				containers = append(containers, models.Container{ID: id, Instance: site, Node: guest.node, VMID: guest.id, Name: "database", Type: f.kind})
+			}
+		}
+		f.m.state.UpdateGuestsForInstance(site, vms, containers)
+	}
+}
+
+func (f *snapshotRecoveryFixture) wait(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		f.m.recoveryIngestMu.Lock()
+		running := f.m.recoveryIngestRunning
+		f.m.recoveryIngestMu.Unlock()
+		if !running {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("snapshot recovery ingest did not finish")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func (f *snapshotRecoveryFixture) poll(t *testing.T, site string) {
+	t.Helper()
+	f.m.pollGuestSnapshots(context.Background(), site, f.client)
+	f.wait(t)
+}
+
+func (f *snapshotRecoveryFixture) points(t *testing.T) map[string]recovery.RecoveryPoint {
+	t.Helper()
+	points, _, err := f.store.ListPoints(context.Background(), recovery.ListPointsOptions{Limit: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(map[string]recovery.RecoveryPoint, len(points))
+	for _, point := range points {
+		out[point.ID] = point
+	}
+	return out
+}
+
+func TestPVESnapshotIncompletePollRetainsRecoveryHistory(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		for _, cold := range []bool{false, true} {
+			for _, failure := range []string{"503 unavailable", "403 forbidden", "596 node unavailable", "invalid snapshot response"} {
+				t.Run(fmt.Sprintf("%s/cold=%t/%s", kind, cold, failure), func(t *testing.T) {
+					f := newSnapshotRecoveryFixture(t, kind)
+					f.poll(t, "site")
+					f.poll(t, "other-site")
+					before := f.points(t)
+					if len(before) != 3 {
+						t.Fatalf("control has %d points, want three", len(before))
+					}
+					if cold {
+						f.coldState(true)
+					}
+					// A rejected response may contain data, but neither its rows
+					// nor its absence can replace the last accepted observation.
+					f.client.replies[kind+"/node-a/101"] = snapshotCollectionReply{
+						snapshots: []proxmox.Snapshot{{Name: "unaccepted", SnapTime: time.Now().Unix()}}, err: fmt.Errorf("%s", failure)}
+					f.client.replies[kind+"/node-b/202"] = snapshotCollectionReply{snapshots: []proxmox.Snapshot{{Name: "fresh-peer", SnapTime: time.Now().Add(-time.Hour).Unix()}}}
+					for range 3 {
+						f.poll(t, "site")
+					}
+					after := f.points(t)
+					failedID, otherID := "pve-snapshot:site-node-a-101-weekly", "pve-snapshot:other-site-node-a-101-weekly"
+					if !reflect.DeepEqual(before[failedID], after[failedID]) {
+						t.Fatalf("failed guest lost or renewed its durable point: before=%+v after=%+v", before[failedID], after[failedID])
+					}
+					if !reflect.DeepEqual(before[otherID], after[otherID]) || len(after) != 4 || after["pve-snapshot:site-node-b-202-fresh-peer"].ID == "" {
+						t.Fatalf("partial poll changed other scope or failed to ingest accepted peer: %+v", after)
+					}
+					// Deletion waits for a complete pass, not for another guest
+					// to happen to succeed. Accepted empty lists still remove
+					// this instance's snapshots once the full scope is readable.
+					f.client.replies[kind+"/node-a/101"] = snapshotCollectionReply{}
+					f.client.replies[kind+"/node-b/202"] = snapshotCollectionReply{}
+					f.poll(t, "site")
+					after = f.points(t)
+					if len(after) != 1 || !reflect.DeepEqual(before[otherID], after[otherID]) {
+						t.Fatalf("complete empty listing failed to clear only its own scope: %+v", after)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestPVESnapshotUnobservedInventoryPreservesRecoveryHistory(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		for _, noInventory := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/no-inventory=%t", kind, noInventory), func(t *testing.T) {
+				f := newSnapshotRecoveryFixture(t, kind)
+				f.poll(t, "site")
+				before := f.points(t)
+				f.coldState(!noInventory)
+				for key := range f.client.replies {
+					f.client.replies[key] = snapshotCollectionReply{err: fmt.Errorf("503 unavailable")}
+				}
+				f.poll(t, "site")
+				if !reflect.DeepEqual(before, f.points(t)) {
+					t.Fatal("unobserved scope deleted or renewed durable snapshots")
+				}
+			})
+		}
+	}
+}
+
+func TestPVESnapshotCancelledAfterListingsCannotReconcile(t *testing.T) {
+	f := newSnapshotRecoveryFixture(t, "qemu")
+	f.poll(t, "site")
+	before := f.points(t)
+	f.coldState(true)
+	for key := range f.client.replies {
+		f.client.replies[key] = snapshotCollectionReply{snapshots: []proxmox.Snapshot{{Name: "new", SnapTime: time.Now().Unix()}}}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Sizing runs after every successful listing, before durable ingestion.
+	f.client.afterStorage = cancel
+	f.m.pollGuestSnapshots(ctx, "site", f.client)
+	f.wait(t)
+	if ctx.Err() == nil {
+		t.Fatal("control did not cancel the poll after the listings")
+	}
+	after := f.points(t)
+	for id, point := range before {
+		if !reflect.DeepEqual(point, after[id]) {
+			t.Fatalf("cancelled poll reconciled away accepted history %s", id)
+		}
+	}
+	if len(after) != 4 {
+		t.Fatalf("accepted pre-cancellation listings should remain useful, points=%d", len(after))
+	}
+}
+
+func TestPVESnapshotCompleteRecoveryKeepsOtherClassesAndUnpolledRows(t *testing.T) {
+	f := newSnapshotRecoveryFixture(t, "lxc")
+	f.poll(t, "site")
+	at := time.Now().UTC().Add(-time.Hour)
+	unrelated := []recovery.RecoveryPoint{
+		recoveryIngestTestPoint("pve-backup:site-archive", "site", at),
+		recoveryIngestTestPoint("pve-task:site-job", "site", at),
+	}
+	if err := f.store.UpsertPoints(context.Background(), unrelated); err != nil {
+		t.Fatal(err)
+	}
+	before := f.points(t)
+	// Even if every current target succeeds, a carried-forward row belongs to
+	// a guest that was not read and cannot authorise instance-wide deletion.
+	f.m.state.UpdateGuestsForInstance("site", nil, []models.Container{{ID: makeGuestID("site", "node-a", 101), Instance: "site", Node: "node-a", VMID: 101, Type: "lxc"}})
+	f.client.replies["lxc/node-a/101"] = snapshotCollectionReply{}
+	f.poll(t, "site")
+	if !reflect.DeepEqual(before, f.points(t)) {
+		t.Fatal("unpolled carried-forward guest permitted durable reconciliation")
+	}
+	// Restoring the same inventory and accepting new listings replaces old
+	// snapshots without deleting independent archive or execution records.
+	f.coldState(true)
+	for key := range f.client.replies {
+		f.client.replies[key] = snapshotCollectionReply{snapshots: []proxmox.Snapshot{{Name: "recovered", SnapTime: at.Unix()}}}
+	}
+	f.poll(t, "site")
+	after := f.points(t)
+	for _, point := range unrelated {
+		if !reflect.DeepEqual(before[point.ID], after[point.ID]) {
+			t.Fatalf("snapshot recovery changed another class: %s", point.ID)
+		}
+	}
+	if len(after) != 4 || after["pve-snapshot:site-node-a-101-recovered"].ID == "" || after["pve-snapshot:site-node-b-202-recovered"].ID == "" {
+		t.Fatalf("ordinary complete recovery failed to replace snapshot identities: %+v", after)
 	}
 }

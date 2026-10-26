@@ -1248,6 +1248,10 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		}
 	}
 
+	// Retained live rows are continuity, not newly accepted provider evidence.
+	// Keep their count separate before merging so a failed listing cannot renew
+	// durable point evidence merely because the raw row survived in memory.
+	observedSnapshotCount := len(allSnapshots)
 	carriedForward := 0
 	for _, prev := range previousSnapshots {
 		if _, polled := polledGuestKeys[guestKey(instanceName, prev.Node, prev.VMID)]; polled {
@@ -1287,7 +1291,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	points, evidenceErr := proxmoxrecoverymapper.FromPVEGuestSnapshotsWithEvidence(
-		allSnapshots,
+		allSnapshots[:observedSnapshotCount],
 		guestInfo,
 		time.Now().UTC(),
 	)
@@ -1296,7 +1300,12 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			Err(evidenceErr).
 			Str("instance", instanceName).
 			Msg("Failed to attach PVE snapshot recovery evidence; preserving existing points")
-	} else {
+	} else if len(targets) > 0 && len(polledGuestKeys) == len(targets) &&
+		carriedForward == 0 && snapshotCtx.Err() == nil {
+		// Only an accepted complete listing can establish instance-wide
+		// absence. In particular, after a monitor replacement the live cache
+		// can be empty while durable snapshots still exist for a failed guest.
+		// No observed guest inventory is not a successful empty enumeration.
 		m.ingestAndReconcileRecoveryPointsAsync(
 			points,
 			recoveryReconcileScope{
@@ -1305,6 +1314,8 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 				instance: instanceName,
 			},
 		)
+	} else {
+		m.ingestRecoveryPointsAsync(points)
 	}
 
 	if m.alertManager != nil {
