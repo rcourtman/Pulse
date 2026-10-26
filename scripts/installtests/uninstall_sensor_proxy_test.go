@@ -760,6 +760,7 @@ getent() {
     [[ "$1" == ahostsv4 ]] || return 90
     case "$2" in pve-local) echo '127.0.0.1 STREAM pve-local';; pve-remote) echo '192.0.2.11 STREAM pve-remote';; *) return 90;; esac
 }
+
 disable_legacy_units() { :; }
 cleanup_stale_sensor_proxy_mounts() { :; }
 remove_legacy_files() { echo files >>"$FIXTURE_DIR/actions"; }
@@ -776,5 +777,203 @@ if main; then exit 0; else exit $?; fi
 	}
 	if got, err := os.ReadFile(auth); err != nil || string(got) != original {
 		t.Fatalf("failed remote replacement changed recovery keys: %q, %v", got, err)
+	}
+}
+
+// Both shipped entrypoints must preserve unrelated access keys. All filesystem
+// operations below are real private-user operations; only faults are injected.
+func TestUninstallSensorProxyLocalKeyWritersPreserveRecovery(t *testing.T) {
+	for _, entry := range []struct{ name, script, function string }{
+		{"standalone", repoFile("scripts", "uninstall-sensor-proxy.sh"), "cleanup_local_authorized_keys"},
+		{"installer", repoFile("install.sh"), "remove_local_sensor_proxy_managed_keys"},
+	} {
+		for _, kind := range []string{"regular", "shared_link"} {
+			for _, phase := range []string{"success", "unchanged", "all_managed", "missing", "directory", "readlink", "mktemp", "output_open", "grep", "cmp", "chmod", "chown", "mv", "cleanup"} {
+				t.Run(entry.name+"/"+kind+"/"+phase, func(t *testing.T) {
+					if phase == "output_open" && os.Geteuid() == 0 {
+						t.Skip("real mode-0400 write denial requires an ordinary user")
+					}
+					dir := t.TempDir()
+					auth := filepath.Join(dir, "local", "authorized_keys")
+					target := auth
+					if kind == "shared_link" {
+						target = filepath.Join(dir, "cluster keys", "authorized_keys")
+					}
+					for _, parent := range []string{filepath.Dir(auth), filepath.Dir(target), filepath.Join(dir, "peer")} {
+						if err := os.MkdirAll(parent, 0700); err != nil {
+							t.Fatal(err)
+						}
+					}
+					original := "ssh-ed25519 AAAAold pulse # pulse-managed-key\n" + sensorProxyRecoveryKeys + "ssh-ed25519 AAAAold2 pulse # pulse-proxy-key\n"
+					if phase == "unchanged" || phase == "cleanup" {
+						original = sensorProxyRecoveryKeys
+					} else if phase == "all_managed" {
+						original = "ssh-ed25519 AAAAold pulse # pulse-managed-key\n"
+					}
+					if phase == "directory" {
+						if err := os.Mkdir(target, 0700); err != nil {
+							t.Fatal(err)
+						}
+					} else if phase != "missing" {
+						if err := os.WriteFile(target, []byte(original), 0640); err != nil {
+							t.Fatal(err)
+						}
+					}
+					peer := filepath.Join(dir, "peer", "authorized_keys")
+					const linkTarget = "../cluster keys/authorized_keys"
+					if kind == "shared_link" {
+						for _, link := range []string{auth, peer} {
+							if err := os.Symlink(linkTarget, link); err != nil {
+								t.Fatal(err)
+							}
+						}
+					}
+					before, _ := os.Stat(target)
+					linkBefore, _ := os.Lstat(auth)
+					body := `source "$1"
+AUTHORIZED_KEYS_PATH="$FIXTURE_DIR/local/authorized_keys"
+SENSOR_PROXY_AUTHORIZED_KEYS_PATH="$AUTHORIZED_KEYS_PATH"
+readlink() { [[ "$SCENARIO" != readlink ]] || return 9; command readlink "$@"; }
+mktemp() {
+    [[ "$SCENARIO" != mktemp ]] || return 9
+    local path
+    path=$(command mktemp "$@") || return 1
+    [[ "$SCENARIO" != output_open ]] || command chmod 0400 "$path" || return 1
+    printf '%s\n' "$path"
+}
+grep() {
+    if [[ "$SCENARIO" == grep ]]; then printf 'partial read\n'; return 2; fi
+    command grep "$@"
+}
+cmp() { [[ "$SCENARIO" != cmp ]] || return 2; command cmp "$@"; }
+chmod() { case "$SCENARIO" in chmod|unchanged|cleanup) return 9;; esac; command chmod "$@"; }
+chown() { case "$SCENARIO" in chown|unchanged|cleanup) return 9;; esac; command chown "$@"; }
+mv() { case "$SCENARIO" in mv|unchanged|cleanup) return 9;; esac; command mv "$@"; }
+rm() { [[ "$SCENARIO" != cleanup ]] || return 9; command rm "$@"; }
+# Conditional invocation disables errexit in the complete helper call tree.
+if ` + entry.function + `; then exit 0; else exit $?; fi
+`
+					out, code := runSensorProxySafetyShell(t, entry.script, dir, phase, body)
+					success := phase == "success" || phase == "unchanged" || phase == "all_managed" || (phase == "missing" && kind == "regular")
+					if (code == 0) != success || (!success && (strings.Contains(out, "[ OK ]") || strings.Contains(out, "Removed legacy"))) {
+						t.Fatalf("local status mismatch: exit %d: %s", code, out)
+					}
+					if kind == "shared_link" {
+						afterLink, err := os.Lstat(auth)
+						if err != nil || !os.SameFile(linkBefore, afterLink) {
+							t.Fatalf("local cleanup replaced shared-key link: %v", err)
+						}
+						for _, link := range []string{auth, peer} {
+							if got, err := os.Readlink(link); err != nil || got != linkTarget {
+								t.Fatalf("shared-key relationship changed: %q, %v", got, err)
+							}
+						}
+					}
+					if phase == "missing" {
+						if _, err := os.Stat(target); !os.IsNotExist(err) {
+							t.Fatalf("missing key target created: %v", err)
+						}
+						return
+					}
+					after, err := os.Stat(target)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if phase == "directory" {
+						if !after.IsDir() || !os.SameFile(before, after) {
+							t.Fatal("non-file target was replaced")
+						}
+						return
+					}
+					want := original
+					if phase == "success" {
+						want = sensorProxyRecoveryKeys
+					} else if phase == "all_managed" {
+						want = ""
+					}
+					for _, path := range []string{auth, target} {
+						if got, err := os.ReadFile(path); err != nil || string(got) != want {
+							t.Fatalf("local recovery keys corrupted: %q, %v; want %q", got, err, want)
+						}
+					}
+					if kind == "shared_link" {
+						if got, err := os.ReadFile(peer); err != nil || string(got) != want {
+							t.Fatalf("peer sees different shared keys: %q, %v", got, err)
+						}
+					}
+					if after.Mode().Perm() != before.Mode().Perm() {
+						t.Fatal("local key permissions changed")
+					}
+					if phase != "success" && phase != "all_managed" && !os.SameFile(before, after) {
+						t.Fatal("failed or unchanged key target was replaced")
+					}
+					leftovers, err := filepath.Glob(target + ".pulse-cleanup.*")
+					if err != nil || (phase != "cleanup" && len(leftovers) != 0) || (phase == "cleanup" && len(leftovers) != 1) {
+						t.Fatalf("unexpected staging cleanup result: %v, %v", leftovers, err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestUninstallSensorProxyLocalKeyWriterKeepsCallerResources(t *testing.T) {
+	for _, entry := range []struct{ name, script, function string }{
+		{"standalone", repoFile("scripts", "uninstall-sensor-proxy.sh"), "cleanup_local_authorized_keys"},
+		{"installer", repoFile("install.sh"), "remove_local_sensor_proxy_managed_keys"},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			dir := t.TempDir()
+			body := `source "$1"
+AUTHORIZED_KEYS_PATH="$FIXTURE_DIR/authorized_keys"
+SENSOR_PROXY_AUTHORIZED_KEYS_PATH="$AUTHORIZED_KEYS_PATH"
+printf 'ssh-ed25519 AAAAold # pulse-managed-key\n' >"$AUTHORIZED_KEYS_PATH"
+trap 'printf caller-exit >"$FIXTURE_DIR/trap"' EXIT
+exec 3>"$FIXTURE_DIR/descriptor"
+if ` + entry.function + `; then
+    printf caller-still-open >&3
+else
+    exit 1
+fi
+`
+			out, code := runSensorProxySafetyShell(t, entry.script, dir, "success", body)
+			if code != 0 {
+				t.Fatalf("caller did not survive cleanup: exit %d: %s", code, out)
+			}
+			for file, want := range map[string]string{"trap": "caller-exit", "descriptor": "caller-still-open"} {
+				if got, err := os.ReadFile(filepath.Join(dir, file)); err != nil || string(got) != want {
+					t.Fatalf("caller's %s changed: %q, %v", file, got, err)
+				}
+			}
+		})
+	}
+}
+
+func TestUninstallSensorProxyLocalKeyFailureReachesMain(t *testing.T) {
+	dir := t.TempDir()
+	keys := filepath.Join(dir, "authorized_keys")
+	const original = "ssh-ed25519 AAAAold # pulse-managed-key\n" + sensorProxyRecoveryKeys
+	if err := os.WriteFile(keys, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	body := `source "$1"
+AUTHORIZED_KEYS_PATH="$FIXTURE_DIR/authorized_keys"
+disable_legacy_units() { :; }
+cleanup_stale_sensor_proxy_mounts() { :; }
+remove_legacy_files() { echo files >>"$FIXTURE_DIR/actions"; }
+remove_proxmox_access() { :; }
+systemctl_if_available() { :; }
+grep() { printf 'partial key read\n'; return 2; }
+if main --local-only; then exit 0; else exit $?; fi
+`
+	out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, "grep", body)
+	if code == 0 || strings.Contains(out, "[ OK ]") || !strings.Contains(out, "cluster SSH key cleanup is incomplete") {
+		t.Fatalf("main hid local key failure: exit %d: %s", code, out)
+	}
+	if got, err := os.ReadFile(keys); err != nil || string(got) != original {
+		t.Fatalf("main lost recovery keys after read failure: %q, %v", got, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "actions")); err != nil || string(got) != "files\n" {
+		t.Fatalf("local failure did not reach the final main result: %q, %v", got, err)
 	}
 }

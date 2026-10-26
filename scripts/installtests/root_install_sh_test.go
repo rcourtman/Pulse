@@ -2587,6 +2587,41 @@ fi
 	}
 }
 
+func TestRootInstallSensorProxyCleanupCannotHideKeyReadFailure(t *testing.T) {
+	dir := t.TempDir()
+	keys := filepath.Join(dir, "authorized_keys")
+	const original = "ssh-ed25519 AAAAold # pulse-managed-key\n" + sensorProxyRecoveryKeys
+	if err := os.WriteFile(keys, []byte(original), 0600); err != nil {
+		t.Fatal(err)
+	}
+	body := `source "$1"
+SENSOR_PROXY_AUTHORIZED_KEYS_PATH="$FIXTURE_DIR/authorized_keys"
+local_sensor_proxy_present() { :; }
+stop_pulse_unit_for_removal() { :; }
+# Filesystem/service/user removal outside the key fixture is never executed.
+rm() {
+    case "${!#}" in "$FIXTURE_DIR/authorized_keys.pulse-cleanup."*) command rm "$@";; *) :;; esac
+}
+grep() { printf 'partial key read\n'; return 2; }
+userdel() { echo unexpected-user-removal >>"$FIXTURE_DIR/actions"; }
+groupdel() { echo unexpected-group-removal >>"$FIXTURE_DIR/actions"; }
+if cleanup_local_sensor_proxy; then exit 0; else exit $?; fi
+`
+	out, code := runSensorProxySafetyShell(t, repoFile("install.sh"), dir, "grep", body)
+	if code == 0 || strings.Contains(out, "Removed legacy") {
+		t.Fatalf("installer cleanup hid failed key read: exit %d: %s", code, out)
+	}
+	if got, err := os.ReadFile(keys); err != nil || string(got) != original {
+		t.Fatalf("installer failure lost recovery keys: %q, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "actions")); !os.IsNotExist(err) {
+		t.Fatalf("service-user removal followed unconfirmed key cleanup: %v", err)
+	}
+	if leftovers, err := filepath.Glob(keys + ".pulse-cleanup.*"); err != nil || len(leftovers) != 0 {
+		t.Fatalf("failed installer cleanup left staging: %v, %v", leftovers, err)
+	}
+}
+
 func TestRootInstallResetBoundsEverySystemdObservationAndMutation(t *testing.T) {
 	for _, name := range []string{"reset_pulse", "read_pulse_reset_unit_state", "confirm_pulse_reset_unit_stopped"} {
 		body := extractRootInstallShellFunction(t, name)

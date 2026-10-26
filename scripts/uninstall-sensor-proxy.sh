@@ -135,43 +135,52 @@ disable_legacy_units() {
     return "$result"
 }
 
-remove_managed_keys_from_authorized_keys_file() {
+remove_managed_keys_from_authorized_keys_file() (
     local file="$1"
     local tmp_file=""
     local status=0
 
-    if [[ ! -f "$file" ]]; then
+    if [[ ! -e "$file" && ! -L "$file" ]]; then
         return 0
     fi
+    [[ -f "$file" && ! -L "$file" ]] || return 1
 
     # Keep replacement on the same filesystem. A failed read, metadata copy or
     # rename must leave the original keys intact, even under conditional calls.
+    # Isolate the descriptor and traps from the caller. Open separately: a
+    # failed shell redirection returns 1 too, but is not grep's valid no-match.
     tmp_file=$(mktemp "${file}.pulse-cleanup.XXXXXX") || return 1
-    grep -v -E '# pulse-(managed|proxy)-key$' "$file" >"$tmp_file" 2>/dev/null || status=$?
-    if (( status > 1 )); then
-        rm -f -- "$tmp_file"
-        return 1
-    fi
+    trap 'status=$?; rm -f -- "$tmp_file" || status=1; exit "$status"' EXIT
+    trap 'exit 1' HUP INT TERM
+    exec 3>"$tmp_file" || return 1
+    grep -v -E '# pulse-(managed|proxy)-key$' "$file" >&3 2>/dev/null || status=$?
+    exec 3>&- || return 1
+    (( status <= 1 )) || return 1
     status=0
     cmp -s "$tmp_file" "$file" || status=$?
     if (( status == 0 )); then
-        rm -f -- "$tmp_file" || return 1
         return 0
     fi
     if (( status > 1 )) ||
         ! chmod --reference="$file" "$tmp_file" ||
         ! chown --reference="$file" "$tmp_file" ||
         ! mv -- "$tmp_file" "$file"; then
-        rm -f -- "$tmp_file"
         return 1
     fi
-}
+)
 
 cleanup_local_authorized_keys() {
-    local auth_file=""
-    auth_file=$(resolve_path "$AUTHORIZED_KEYS_PATH") || return 1
+    local auth_file="$AUTHORIZED_KEYS_PATH"
+    # An absent file is an idempotent no-op, but a dangling/shared link or a
+    # non-file target is not confirmed clean. Never replace an unresolved link.
+    if [[ -e "$auth_file" || -L "$auth_file" ]]; then
+        if ! auth_file=$(readlink -f -- "$auth_file") || [[ ! -f "$auth_file" || -L "$auth_file" ]]; then
+            print_warn "Local legacy SSH key path is unresolved or not a regular file; cleanup is incomplete"
+            return 1
+        fi
+    fi
     if ! remove_managed_keys_from_authorized_keys_file "$auth_file"; then
-        print_warn "Local legacy SSH key cleanup failed; original keys were preserved"
+        print_warn "Local legacy SSH key cleanup is incomplete; check the key file and any retained staging locally"
         return 1
     fi
     print_success "Removed legacy Pulse SSH key entries from ${auth_file}"
