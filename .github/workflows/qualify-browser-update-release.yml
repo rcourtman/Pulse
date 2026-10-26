@@ -21,6 +21,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   journey:
+    environment: infra
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:

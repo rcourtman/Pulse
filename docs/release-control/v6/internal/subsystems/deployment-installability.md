@@ -1283,7 +1283,10 @@ dispatched commit, so release secrets can be confined to refs that exist only
 after merge while unmerged `release-candidate/*` heads stay outside them. The
 snapshot check validates identity only; restricting who can create or move
 `release-dispatch/*` refs belongs to a repository ruleset, and until that
-ruleset is active the namespace carries no extra trust. Qualification, workflow execution, compiler dispatch
+ruleset is active the namespace carries no extra trust. Every job that reads a
+release, signing or registry credential declares `environment: release`, whose
+deployment branch policy admits only `main` and `release-dispatch/*`;
+`scripts/check_workflow_trust.py` enforces the declaration. Qualification, workflow execution, compiler dispatch
 and published artifacts bind to that head, not a later merge or branch tip.
 The source workflow must implement the snapshot input and provenance contract
 before the release train spends an exact qualification run on it. Later

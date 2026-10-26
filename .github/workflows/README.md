@@ -22,6 +22,19 @@ That exception can only run the protected default-branch helper, has no shell,
 cache, artifact, container, secret, or pull-request checkout ingress, and is
 machine-checked down to its permissions, dependencies, and generated program.
 
+Release, signing and registry credentials (update signing, Apple, SignPath,
+Windows signing, Docker Hub and `WORKFLOW_PAT`) may be read only by a job that
+declares the literal `environment: release`. That environment admits `main`
+and post-merge `release-dispatch/*` branches, which only the release
+dispatcher App can create, so a run on an unmerged branch never receives them.
+Demo-host and CI-tailnet credentials likewise need a deployment environment
+(`demo-stable`, `demo-preview-v6`, `infra`, or the demo workflow's resolved
+choice). The audit matches secret expressions across lines and comments,
+rejects dynamic `secrets[...]` access and workflow-level secret env, and
+requires any push workflow that reads a secret to admit exactly
+`branches: [main]`, because a pushed branch runs before any review. The public
+license verification key is not a credential and stays repository-wide.
+
 JavaScript action pins that previously selected Node 20 also belong to a
 reviewed Node 24 allowlist. Release-candidate artifact downloads use
 `actions/download-artifact` v8.0.1 and issue automation uses
