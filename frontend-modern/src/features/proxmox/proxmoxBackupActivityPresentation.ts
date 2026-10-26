@@ -113,15 +113,15 @@ export function buildBackupActivityTimeline<T>(
     if (ts === undefined || !Number.isFinite(ts)) continue;
     // A future time on today's date is still not observed past activity.
     if (ts > now.getTime()) continue;
-    const kind = classify(item);
-    if (!kind) continue;
-    const value = getValue(item);
-    if (!Number.isFinite(value) || value <= 0) continue;
     const key = recoveryDateKeyFromTimestamp(ts);
     // Membership in the calendar window includes the entire first local day
     // and today's observed hours even when a day lasts 23, 25 or 24.5 hours.
     const bucket = buckets.get(key);
     if (!bucket) continue;
+    const kind = classify(item);
+    if (!kind) continue;
+    const value = getValue(item);
+    if (!Number.isFinite(value) || value <= 0) continue;
     bucket.counts[kind] += value;
     bucket.total += value;
   }

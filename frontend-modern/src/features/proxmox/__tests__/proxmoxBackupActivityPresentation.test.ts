@@ -215,14 +215,19 @@ describe('proxmoxBackupActivityPresentation', () => {
 
     it('skips in-window items classified as null without classifying out-of-window items', () => {
       const classifySpy = vi.fn((item: ActivityItem) => item.kind);
+      const getValueSpy = vi.fn(() => 1);
       const items: ActivityItem[] = [
         { ts: localMs(2026, 1, 6, 12, 0), kind: 'ok' },
         { ts: localMs(2026, 1, 13, 9, 0), kind: null },
         { ts: localMs(2026, 1, 13, 10, 0), kind: 'ok' },
       ];
-      const timeline = buildBackupActivityTimeline(7, items, itemMs, classifySpy, { now: NOW });
+      const timeline = buildBackupActivityTimeline(7, items, itemMs, classifySpy, {
+        now: NOW,
+        getValue: getValueSpy,
+      });
 
       expect(classifySpy).toHaveBeenCalledTimes(2);
+      expect(getValueSpy).toHaveBeenCalledExactlyOnceWith(items[2]);
       expect(timeline.points.at(-1)!.total).toBe(1);
     });
 
