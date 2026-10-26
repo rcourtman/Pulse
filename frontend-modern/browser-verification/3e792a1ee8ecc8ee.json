@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "888542cca1ee7ee04362bb1a745a23e1d6fdc892",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/DetailSectionTable.tsx": "76b9226705d905a55b83721dad47d82baba1129e8d6456ba90c319038baee870",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "fac41b91c86c7d2fb349b048a0ef80557a1011e3b1dcecdf8923d87f98429e75"
+  },
+  "routes": [
+    "/truenas/protection"
+  ],
+  "states": [
+    "TrueNAS Protection mixed recorded outcomes and actual completion timestamps; running, unknown and start-only points have no invented completion.",
+    "Container-led phone summaries retain Dataset, Finished and labelled Outcome with readable dates and outcomes; Artifact/Target remain in wrapping inline details.",
+    "Shared detail cards activate only in their own named 64rem container; a 500px desktop pane keeps a compact table with nonzero readable values, while the wide view retains balanced cards.",
+    "Failed GET refresh labels retained evidence; a disabled pending retry retains the warning and open running details; accepted finished evidence updates the same open record without remounting."
+  ],
+  "interactions": [
+    "Actual production query/API client, transport normalizer, table, shared controls, inline details and CSS over synthetic safe same-origin GET fixtures; no full-app authentication, appliance, guest or backup/recovery execution.",
+    "Chromium keyboard Enter/Space completion sorting and disclosure; touch WebKit sorting, row expansion and collapse; normal pointer activation at the visual chevron in the narrow desktop pane.",
+    "Status and search filtering, empty-filter restoration, retained-error notice, pending retry and running-to-completed read.",
+    "123 browser checks pass at 1365px, 640px, 390px touch and 320px touch, plus a 500px desktop pane. All twelve final captures were opened natively and reviewed."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 950
+    },
+    {
+      "width": 640,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-26T09:42:49Z"
+}
