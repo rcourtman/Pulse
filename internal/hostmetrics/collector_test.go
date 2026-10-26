@@ -198,6 +198,59 @@ func TestCollectDisksExcludesFreeBSDFdescfsBeforeUsage(t *testing.T) {
 	}
 }
 
+// A Mac backing up to a network Time Machine destination mounts the backup
+// disk image plus one read-only snapshot per retained backup. macOS marks all
+// of them nobrowse; reporting them buried the real disks under rows whose
+// capacity is the sparse bundle's ceiling, not the destination's space.
+func TestCollectDisksSkipsMacOSHiddenMountsBeforeUsage(t *testing.T) {
+	origPartitions := diskPartitions
+	origUsage := diskUsage
+	t.Cleanup(func() {
+		diskPartitions = origPartitions
+		diskUsage = origUsage
+	})
+
+	const backupImage = "/Volumes/Backups of RICHARD-MAC-MINI"
+	diskPartitions = func(context.Context, bool) ([]godisk.PartitionStat, error) {
+		return []godisk.PartitionStat{
+			{Device: "/dev/disk3s1s1", Mountpoint: "/", Fstype: "apfs", Opts: []string{"ro", "journaled", "local"}},
+			{Device: "/dev/disk7s1", Mountpoint: "/Volumes/Development", Fstype: "apfs", Opts: []string{"rw", "nodev", "nosuid", "journaled", "local", "noowners"}},
+			{Device: "/dev/disk11s1", Mountpoint: backupImage, Fstype: "apfs", Opts: []string{"rw", "nodev", "nosuid", "nobrowse", "journaled", "local"}},
+			{Device: "com.apple.TimeMachine.2026-10-25-122503.backup@/dev/disk11s1", Mountpoint: "/Volumes/.timemachine/5D0A488B/2026-10-25-122503.backup", Fstype: "apfs", Opts: []string{"ro", "nodev", "nosuid", "nobrowse", "journaled", "local"}},
+		}, nil
+	}
+
+	usageCalls := make([]string, 0, 2)
+	diskUsage = func(_ context.Context, path string) (*godisk.UsageStat, error) {
+		usageCalls = append(usageCalls, path)
+		return &godisk.UsageStat{Path: path, Total: 1000, Used: 400, Free: 600, UsedPercent: 40}, nil
+	}
+
+	disks := collectDisks(context.Background(), nil)
+	got := make([]string, 0, len(disks))
+	for _, disk := range disks {
+		got = append(got, disk.Mountpoint)
+	}
+	want := []string{"/", "/Volumes/Development"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("reported mounts = %v, want %v", got, want)
+	}
+	if !reflect.DeepEqual(usageCalls, want) {
+		t.Fatalf("disk usage queried for %v, want only %v", usageCalls, want)
+	}
+
+	disks = collectDisksWithIncludes(context.Background(), nil, []string{backupImage})
+	found := false
+	for _, disk := range disks {
+		if disk.Mountpoint == backupImage {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("explicitly included hidden mount was dropped: %+v", disks)
+	}
+}
+
 func TestCollectDisksIncludesExplicitTmpfsMount(t *testing.T) {
 	origPartitions := diskPartitions
 	origUsage := diskUsage

@@ -4186,6 +4186,13 @@ explicitly mapped administrator reaches the lifecycle handlers.
    `TestGuardedDiskUsagePublishesAfterRetiringProbe` controls the retirement
    lock to prove publication cannot get ahead of removal. The adjacent stuck
    mount tests retain sharing, recovery, timeout and cancellation coverage.
+   Mounts whose options carry macOS `nobrowse` (APFS companion volumes,
+   simulator runtimes, the Time Machine backup image and its per-backup
+   snapshots) are platform plumbing and are skipped before the usage syscall
+   unless the operator explicitly includes them; `/Volumes/.timemachine/`
+   is also a shared special mountpoint so the server hides snapshot rows that
+   older agents still report. `TestCollectDisksSkipsMacOSHiddenMountsBeforeUsage`
+   pins both the skip and the explicit-include override.
 4. Keep host-agent test hooks, command-client factories, and timing overrides
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test

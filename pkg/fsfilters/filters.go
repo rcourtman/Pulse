@@ -101,6 +101,7 @@ var specialMountPrefixes = []string{
 	"/snap",
 	"/System/Volumes/", // macOS APFS system/data/preboot/update companion volumes
 	"/Library/Developer/CoreSimulator/Volumes/", // Xcode simulator runtime disk images
+	"/Volumes/.timemachine/",                    // macOS Time Machine snapshot and destination mounts
 }
 
 // specialMountpoints are exact mountpoints that represent platform plumbing
@@ -225,6 +226,20 @@ func ShouldSkipFilesystem(fsType, mountpoint string, totalBytes, usedBytes uint6
 	}
 
 	return len(reasons) > 0, reasons
+}
+
+// IsHiddenSystemMount reports whether the mount options mark the filesystem
+// as not a path to user data. macOS sets nobrowse (MNT_DONTBROWSE) on APFS
+// companion volumes, simulator runtimes and every Time Machine mount,
+// including the backup disk image whose advertised capacity is the sparse
+// bundle's ceiling rather than the destination's real space.
+func IsHiddenSystemMount(opts []string) bool {
+	for _, opt := range opts {
+		if opt == "nobrowse" {
+			return true
+		}
+	}
+	return false
 }
 
 // MatchesUserExclude checks if a mountpoint matches any user-defined exclusion patterns.
