@@ -44,8 +44,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Registry and attestation reads are idempotent and cross the public internet, where a
 # Docker Hub or GHCR 5xx is routine: one 502 during a blob copy failed the first beta's
-# release. Retry a bounded number of times. A moved tag or an invalid attestation fails
-# identically on every attempt, so a real failure is delayed by the backoff, never masked.
+# release. Retry a bounded number of times. A moved tag or an invalid attestation
+# still fails closed. Explicit access refusals are not transient faults and must
+# never trigger another attempt.
 # This script's stdout is the step output, so each attempt's stdout is captured and only
 # the successful attempt's is emitted; a half-printed failed attempt cannot leak into it.
 REGISTRY_ATTEMPTS="${VERIFY_REGISTRY_ATTEMPTS:-4}"
@@ -55,33 +56,48 @@ if [[ ! "$REGISTRY_ATTEMPTS" =~ ^[1-9][0-9]?$ || ! "$REGISTRY_WAIT_SECONDS" =~ ^
     exit 2
 fi
 
-with_registry_retry() {
+with_registry_retry() (
+    local reference="$1"
+    shift
     local attempt=1
     local wait_seconds="$REGISTRY_WAIT_SECONDS"
-    local output
+    local output status error_file
+    error_file="$(mktemp)" || return
+    trap 'rm -- "$error_file"' EXIT
 
     while true; do
-        if output="$("$@")"; then
+        if output="$("$@" 2>"$error_file")"; then
+            cat "$error_file" >&2
             printf '%s\n' "$output"
             return 0
+        else
+            status=$?
+        fi
+        cat "$error_file" >&2
+
+        if LC_ALL=C grep -Eiq \
+            'pull access denied|requested access to the resource is denied|insufficient_scope|authorization failed|authentication required|unauthorized|forbidden|unexpected status[^[:cntrl:]]*(401|403)' \
+            "$error_file"; then
+            echo "registry access refused for ${reference}; not retrying." >&2
+            return "$status"
         fi
 
         if [ "$attempt" -ge "$REGISTRY_ATTEMPTS" ]; then
-            echo "registry read failed after ${REGISTRY_ATTEMPTS} attempts: $1 $2 $3" >&2
-            return 1
+            echo "registry read failed after ${REGISTRY_ATTEMPTS} attempts: ${reference}" >&2
+            return "$status"
         fi
 
-        echo "registry read failed on attempt ${attempt}/${REGISTRY_ATTEMPTS}; retrying in ${wait_seconds}s: $1 $2 $3" >&2
+        echo "registry read failed on attempt ${attempt}/${REGISTRY_ATTEMPTS}; retrying in ${wait_seconds}s: ${reference}" >&2
         sleep "$wait_seconds"
         attempt=$((attempt + 1))
         wait_seconds=$((wait_seconds * 2))
     done
-}
+)
 
 resolve_digest() {
     local reference="$1"
     local manifest
-    manifest="$(with_registry_retry docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')"
+    manifest="$(with_registry_retry "$reference" docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')" || return "$?"
     jq -er '.digest | select(type == "string" and test("^sha256:[0-9a-f]{64}$"))' <<<"$manifest"
 }
 
@@ -109,7 +125,7 @@ verify_image() {
     fi
 
     for subject in "$docker_name" "$ghcr_name"; do
-        with_registry_retry gh attestation verify "oci://${subject}@${docker_tag_digest}" \
+        with_registry_retry "oci://${subject}@${docker_tag_digest}" gh attestation verify "oci://${subject}@${docker_tag_digest}" \
             --repo "$REPOSITORY" \
             --bundle-from-oci \
             --signer-workflow "$SIGNER_WORKFLOW" \

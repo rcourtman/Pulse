@@ -389,6 +389,14 @@ func TestSecurityScanRevalidatesLatestStableDelivery(t *testing.T) {
 			}
 		}
 	}
+	aliases := workflowStepBlock(t, workflowJobBlock(t, workflow, "release-continuity"), "Verify stable container discovery aliases")
+	if !strings.Contains(aliases, `steps.containers.outcome == 'success'`) {
+		t.Fatal("alias reads must not follow a failed or refused exact-container read")
+	}
+	helm := workflowStepBlock(t, workflowJobBlock(t, workflow, "release-continuity"), "Verify exact-version Helm identity")
+	if strings.Contains(helm, "steps.containers.outcome") {
+		t.Fatal("an unrelated Helm check must remain independent of container failures")
+	}
 }
 
 func TestProPackagingBuildsFrontendEmbedWithoutTransferringBundle(t *testing.T) {
