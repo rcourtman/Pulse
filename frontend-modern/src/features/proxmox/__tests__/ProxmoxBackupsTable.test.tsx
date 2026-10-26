@@ -519,7 +519,7 @@ describe('ProxmoxBackupsTable', () => {
     );
     expect(screen.getByRole('button', { name: /clear date filter/i })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Backup location: pbs-main / main' }),
+      screen.getByRole('button', { name: 'Backup location: PBS · pbs-main / main' }),
     ).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('button', { name: /clear filters/i }));
@@ -562,25 +562,25 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findByText('offsite / minipc');
     const filterSelect = screen.getByRole('combobox', { name: 'Filter' });
     const offsiteOption = screen.getByRole('option', {
-      name: 'Backup location: pbs-offsite / offsite',
+      name: 'Backup location: PBS · pbs-offsite / offsite',
     }) as HTMLOptionElement;
     await fireEvent.change(filterSelect, { target: { value: offsiteOption.value } });
 
     await waitFor(() =>
       expect(new URLSearchParams(window.location.search).get('location')).toBe(
-        'pbs:pbs-offsite:offsite',
+        '["pbs","pbs-offsite","offsite"]',
       ),
     );
     expect(screen.getByText('offsite / minipc')).toBeInTheDocument();
     expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Backup location: pbs-offsite / offsite' }),
+      screen.getByRole('button', { name: 'Backup location: PBS · pbs-offsite / offsite' }),
     ).toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
     await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
     expect(new URLSearchParams(window.location.search).get('location')).toBe(
-      'pbs:pbs-offsite:offsite',
+      '["pbs","pbs-offsite","offsite"]',
     );
     expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(0);
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
@@ -1348,7 +1348,7 @@ describe('backup-date-evidence connected inventory', () => {
     const calls = apiFetchMock.mock.calls.length;
     const filter = screen.getByRole('combobox', { name: 'Filter' });
     const option = screen.getByRole('option', {
-      name: 'Backup location: pve-a / local',
+      name: 'Backup location: PVE file · pve-a / local',
     }) as HTMLOptionElement;
     await fireEvent.change(filter, { target: { value: option.value } });
     await waitFor(() => expect(lastBackupCell()).not.toHaveTextContent('Unknown'));
@@ -1918,5 +1918,156 @@ describe('mounted Proxmox backup inventory refresh', () => {
     pending.resolve(jsonResponse(emptyPBS));
     await vi.advanceTimersByTimeAsync(30_000);
     expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+  });
+});
+
+describe('backup location identity in the consuming views', () => {
+  const supplyLocations = () => {
+    mockBackupAPIs('protected', {
+      ...pbsPayload,
+      data: {
+        backups: [
+          { ...pbsPayload.data.backups[0], id: 'lower-case', datastore: 'main' },
+          {
+            ...pbsPayload.data.backups[0],
+            id: 'upper-case',
+            datastore: 'Main',
+            backupTime: '2026-05-24T01:34:25Z',
+          },
+        ],
+      },
+    });
+  };
+  const points = () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
+
+  it('keeps case-sensitive repositories separate through date filtering, Coverage, details and reload', async () => {
+    supplyLocations();
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    const mounted = renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    await screen.findByText('Main / minipc');
+    const calls = apiFetchMock.mock.calls.length;
+    const option = screen.getByRole('option', {
+      name: 'Backup location: PBS · pbs-main / Main',
+    }) as HTMLOptionElement;
+    await fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), {
+      target: { value: option.value },
+    });
+    await waitFor(() => expect(points()).toHaveLength(1));
+    expect(screen.getByText('Main / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+    const key = '["pbs","pbs-main","Main"]';
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('location')).toBe(key),
+    );
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
+    await fireEvent.click(
+      await screen.findByRole('button', { name: /expand details for pbs-docker/i }),
+    );
+    const detail = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(detail).getByText('Main / minipc')).toBeInTheDocument();
+    expect(within(detail).queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('location')).toBe(key);
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+    mounted.unmount();
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    expect(
+      await screen.findByRole('button', { name: 'Backup location: PBS · pbs-main / Main' }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+    expect(screen.getByTestId('proxmox-coverage-detail')).not.toHaveTextContent('main / minipc');
+  });
+
+  it('does not interpret an ambiguous old saved location as both repositories, and lets the operator choose again', async () => {
+    supplyLocations();
+    window.history.replaceState({}, '', '/proxmox/backups/date?location=pbs%3Apbs-main%3Amain');
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    expect(
+      await screen.findByText(/saved backup location cannot be identified uniquely/),
+    ).toHaveAttribute('role', 'status');
+    expect(points()).toHaveLength(0);
+    expect(
+      screen.getByRole('button', { name: 'Backup location: Choose location' }),
+    ).toBeInTheDocument();
+    const calls = apiFetchMock.mock.calls.length;
+    await fireEvent.click(screen.getByRole('button', { name: 'Backup location: Choose location' }));
+    const menu = screen.getByRole('listbox', { name: 'Backup location' });
+    await fireEvent.click(within(menu).getByRole('option', { name: 'PBS · pbs-main / Main' }));
+    await waitFor(() => expect(points()).toHaveLength(1));
+    expect(
+      screen.queryByText(/saved backup location cannot be identified uniquely/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Main / minipc')).toBeInTheDocument();
+    expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
+    await waitFor(() => expect(points()).toHaveLength(4));
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).has('location')).toBe(false),
+    );
+  });
+
+  it('keeps an absent saved location explicit without showing a raw URL value or another location', async () => {
+    mockBackupAPIs();
+    window.history.replaceState(
+      {},
+      '',
+      '/proxmox/backups/coverage?location=SYNTHETIC_UNKNOWN_LOCATION',
+    );
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+    ));
+    expect(
+      await screen.findByText(/saved backup location cannot be identified uniquely/),
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(0);
+    expect(document.body).not.toHaveTextContent('SYNTHETIC_UNKNOWN_LOCATION');
+  });
+
+  it('withdraws a legacy selection when refreshed inventory makes it ambiguous, without broadening an exact choice', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      mockBackupAPIs();
+      const lower = { ...pbsPayload.data.backups[0], id: 'lower-case', datastore: 'main' };
+      const upper = { ...lower, id: 'upper-case', datastore: 'Main' };
+      let nextPBS = { data: { backups: [lower] } };
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(jsonResponse(url.endsWith('/pbs') ? nextPBS : emptyPVE)),
+      );
+      window.history.replaceState({}, '', '/proxmox/backups/date?location=pbs%3Apbs-main%3Amain');
+      renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      ));
+      await screen.findByRole('button', { name: 'Backup location: PBS · pbs-main / main' });
+      expect(points()).toHaveLength(1);
+
+      nextPBS = { data: { backups: [lower, upper] } };
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(
+        await screen.findByText(/saved backup location cannot be identified uniquely/),
+      ).toBeInTheDocument();
+      expect(points()).toHaveLength(0);
+      const option = screen.getByRole('option', {
+        name: 'Backup location: PBS · pbs-main / Main',
+      }) as HTMLOptionElement;
+      await fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), {
+        target: { value: option.value },
+      });
+      await waitFor(() => expect(points()).toHaveLength(1));
+      expect(screen.getByText('Main / minipc')).toBeInTheDocument();
+      expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(points()).toHaveLength(1);
+      expect(new URLSearchParams(window.location.search).get('location')).toBe(
+        '["pbs","pbs-main","Main"]',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

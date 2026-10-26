@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Backup-location choices preserve domain identity
+
+The existing shared filter rail renders source-qualified backup-location
+labels while its feature-owned values preserve the exact source/connection/
+repository tuple. Labels are not identifiers. The value persists between
+By date and Coverage and across reloads; new choices never write the old
+lossy colon-delimited value. An unambiguous legacy saved value displays the
+resolved current option. An ambiguous or missing saved value keeps a removable
+"Choose location" chip and an accessible notice, not a raw URL value, another
+repository or a silently broadened list. The existing chip menu can select a
+specific current location or clear the filter without another API read.
+
+The registered location/model/consuming tests cover identity, compatibility,
+empty scoped results, navigation, details and recovery through the shared rail.
+Source-bound desktop keyboard and narrow touch proof checks actual fit and
+interactions. No shared-filter implementation, route, access or backup operation
+changes; server-owned health remains an aggregate assessment, not a per-location
+recalculation.
+
 ### Drawer History readout keeps its size while scrubbing (26 October 2026)
 
 Scrubbing a drawer History chart changes the readout's text, never its size.

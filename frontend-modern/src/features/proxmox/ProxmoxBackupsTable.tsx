@@ -69,6 +69,7 @@ import { getProxmoxBackupSourcePresentation } from './proxmoxBackupSourcePresent
 import { ProxmoxBackupsCoverageStrip } from './ProxmoxBackupsCoverageStrip';
 import { ProxmoxBackupServersTable } from './ProxmoxBackupServersTable';
 import { ProxmoxCoverageTable } from './ProxmoxCoverageTable';
+import { resolveBackupLocationFilter } from './proxmoxBackupLocation';
 import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 import {
   BackupInventoryFormatError,
@@ -232,7 +233,10 @@ export const ProxmoxBackupsTable: Component<{
     setSearchParams({ [PROXMOX_BACKUPS_QUERY_PARAMS.location]: value || null }, { replace: true });
   const locationMatches = (artifact: RecoverableArtifact): boolean => {
     const selected = locationFilter();
-    return !selected || artifact.locationKey === selected;
+    return (
+      !selected ||
+      Boolean(locationSelection().key && artifact.locationKey === locationSelection().key)
+    );
   };
 
   // Type scope normalizes vm/qemu and ct/lxc to a canonical token before
@@ -331,6 +335,10 @@ export const ProxmoxBackupsTable: Component<{
       protectionPostures: protectionPostures.postureByResourceID(),
       protectionPosturesResolved: protectionPostures.resolvedOnce(),
     }),
+  );
+
+  const locationSelection = createMemo(() =>
+    resolveBackupLocationFilter(locationFilter(), recoveryModel().recoverableArtifacts),
   );
 
   // Node options for the scope filter: the distinct nodes across the workload
@@ -602,7 +610,9 @@ export const ProxmoxBackupsTable: Component<{
         label: 'Backup location',
         group: 'scope',
         options: locationOptions,
-        value: locationFilter,
+        value: () => locationSelection().key ?? locationFilter(),
+        formatChipValue: (value, options) =>
+          options.find((option) => option.value === value)?.label ?? 'Choose location',
         setValue: setLocationFilter,
         defaultValue: '',
       },
@@ -751,6 +761,14 @@ export const ProxmoxBackupsTable: Component<{
                 >
                   {protectionPostures.response.loading ? 'Retrying…' : 'Retry protection posture'}
                 </button>
+              </div>
+            </Show>
+
+            <Show when={locationSelection().unresolved}>
+              <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
+                The saved backup location cannot be identified uniquely in the current inventory.
+                Choose a backup location again or clear the filter. No restore points are shown for
+                this filter.
               </div>
             </Show>
 
