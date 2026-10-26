@@ -8,6 +8,8 @@ import {
   useProtectionPostures,
 } from '@/hooks/useProtectionPostures';
 import type { ProtectionPosturesResponse, ProtectionState } from '@/types/recovery';
+import { protectionPolicy, protectionPosture } from '@/utils/__fixtures__/protectionPosture';
+import { ProtectionPostureFormatError } from '@/utils/protectionPostureResponse';
 
 const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/apiClient', () => ({ apiFetchJSON: apiFetchJSONMock }));
@@ -59,7 +61,7 @@ describe('useProtectionPostures transport', () => {
         data: requested
           .slice()
           .reverse()
-          .map((subjectResourceId) => ({ subjectResourceId, state: 'protected' })),
+          .map((subjectResourceId) => protectionPosture(subjectResourceId)),
         policy,
         meta: { page: 1, limit: 200, total: requested.length, totalPages: 1 },
       };
@@ -173,8 +175,8 @@ describe('useProtectionPostures transport', () => {
 
   it('does not restore a failed cached assessment when Coverage remounts', async () => {
     apiFetchJSONMock.mockResolvedValue({
-      data: [{ subjectResourceId: 'vm:1', state: 'protected' }],
-      policy: { freshnessWindowSeconds: 604800 },
+      data: [protectionPosture('vm:1')],
+      policy: protectionPolicy,
     });
     let dispose = () => {};
     const mount = () =>
@@ -199,4 +201,48 @@ describe('useProtectionPostures transport', () => {
       dispose();
     }
   });
+
+  it.each(['row', 'policy', 'duplicate', 'mixed policies'])(
+    'withdraws the whole 201-subject read after a malformed %s in the last batch',
+    async (invalid) => {
+      const ids = Array.from({ length: 201 }, (_, index) => `vm:${index}`);
+      const validResponse = (url: string) => ({
+        data: new URL(url, 'https://pulse.invalid').searchParams
+          .getAll('resourceId')
+          .map(protectionPosture),
+        policy: { ...protectionPolicy },
+      });
+      apiFetchJSONMock.mockImplementation(async (url: string) => validResponse(url));
+      let dispose = () => {};
+      const hook = createRoot((rootDispose) => {
+        dispose = rootDispose;
+        return useProtectionPostures(() => ids);
+      });
+      try {
+        await vi.waitFor(() => expect(hook.postures()).toHaveLength(201));
+        apiFetchJSONMock.mockImplementation(async (url: string) => {
+          const response = validResponse(url);
+          if (response.data.length > 1) return response;
+          if (invalid === 'row') return { ...response, data: [null] };
+          if (invalid === 'policy')
+            return { ...response, policy: { requireVerification: 'false' } };
+          if (invalid === 'duplicate') return { ...response, data: [protectionPosture('vm:0')] };
+          return { ...response, policy: { ...protectionPolicy, requireVerification: false } };
+        });
+        await hook.refetch();
+        expect(hook.response.error).toBeInstanceOf(ProtectionPostureFormatError);
+        expect(hook.postures()).toEqual([]);
+        expect(hook.postureByResourceID().size).toBe(0);
+        expect(hook.policy().freshnessWindowSeconds).toBe(0);
+
+        apiFetchJSONMock.mockImplementation(async (url: string) => validResponse(url));
+        await hook.refetch();
+        expect(hook.response.error).toBeNull();
+        expect(hook.postures()).toHaveLength(201);
+        expect(hook.policy()).toEqual(protectionPolicy);
+      } finally {
+        dispose();
+      }
+    },
+  );
 });

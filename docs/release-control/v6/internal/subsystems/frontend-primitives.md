@@ -111,6 +111,16 @@ primitives, access boundaries and routes are unchanged.
 
 ### Backup posture failure and retry stay source-local (24 October 2026)
 
+The same unavailable notice and Unknown projection apply when HTTP-success
+posture JSON has invalid rows, provider evidence or policy, duplicate subject
+IDs, or mixed policies across batches. Validation completes before publishing
+any batch. The existing retry remains disabled while pending and restores health
+only after an accepted complete read; independently readable restore points and
+open details stay usable. The parser, hook and consuming Backups tests pin this
+boundary; source-bound desktop/narrow pixels and keyboard/touch interactions
+establish the rendered result. No new control, route or shared query behaviour
+is introduced.
+
 The Backups posture notice offers a keyboard-operable retry with the existing
 inventory-notice styling, wrapping action and disabled pending state. It
 refreshes only posture, not independently readable PVE/PBS inventories. Rows,
