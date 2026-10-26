@@ -85,7 +85,7 @@ func TestClusterClient_GetVMSnapshots(t *testing.T) {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
 			return
 		}
-		fmt.Fprint(w, `{"data":[{"name":"snap1","description":"first"}]}`)
+		fmt.Fprint(w, `{"data":[{"name":"snap1","description":"first","snaptime":1700000000}]}`)
 	}))
 	defer server.Close()
 
@@ -133,7 +133,7 @@ func TestClusterClient_ConfiguredAuthorityDoesNotWaitForMemberRecovery(t *testin
 		switch r.URL.Path {
 		case "/api2/json/nodes/node1/qemu/100/snapshot":
 			authorityDataCalls.Add(1)
-			fmt.Fprint(w, `{"data":[{"name":"snap-authority","description":"cluster snapshot"}]}`)
+			fmt.Fprint(w, `{"data":[{"name":"snap-authority","description":"cluster snapshot","snaptime":1700000000}]}`)
 		case "/api2/json/nodes/node1/storage/local/content":
 			authorityDataCalls.Add(1)
 			fmt.Fprint(w, `{"data":[{"volid":"local:backup/vzdump-qemu-100.vma.zst","format":"vma.zst","size":1000,"content":"backup"}]}`)
@@ -495,7 +495,7 @@ func TestClusterClient_GetContainerSnapshots(t *testing.T) {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
 			return
 		}
-		fmt.Fprint(w, `{"data":[{"name":"snap1","description":"desc"}]}`)
+		fmt.Fprint(w, `{"data":[{"name":"snap1","description":"desc","snaptime":1700000000}]}`)
 	}))
 	defer server.Close()
 
