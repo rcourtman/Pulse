@@ -7057,6 +7057,18 @@ denied access. Retained backup points survive failed enumeration, but the new
 provider observation immediately prevents those cached points from being
 presented as current protection truth.
 
+Failed snapshot or datastore reads may retain raw PBS artifacts, but those
+fallback rows do not re-enter point ingestion or the PBS source-identity
+learner. Their last accepted point, verification, identity and evidence envelope
+remain unchanged. Successfully refreshed groups still advance independently;
+readable unchanged groups retain the existing bounded TTL reuse. Partial or
+denied provider evidence remains authoritative, and only a complete successful
+enumeration can reconcile absence. The ordinary HTTP/poll/async-ingest controls
+in `TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence` cover transient and
+denied snapshot/datastore failures, repetition, VM/LXC identity, another PBS
+connection, fresh verification changes, TTL reuse, recovery and confirmed empty
+scope. These synthetic results do not establish native backup or guest recovery.
+
 Datastore discovery itself is part of that backup-scope result, including
 the connectivity fallback. An admitted failed or malformed listing records
 unavailable history while retaining existing raw artifacts, durable points and

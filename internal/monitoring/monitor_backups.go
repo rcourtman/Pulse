@@ -1593,6 +1593,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	existingGroups := m.buildPBSBackupCache(instanceName)
 
 	var allBackups []models.PBSBackup
+	observedGroups := make(map[pbsBackupGroupKey]struct{})
 	retainedGroups := make(map[pbsBackupGroupKey]struct{}, len(existingGroups))
 	refreshedGroups := make(map[pbsBackupGroupKey]time.Time)
 	datastoreCount := len(datastores) // Number of datastores to query
@@ -1722,6 +1723,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					lastBackupTime.Equal(cached.latest) {
 
 					allBackups = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
+					observedGroups[key] = struct{}{}
 					groupsReused++
 					projectedBackups = len(allBackups)
 					continue
@@ -1751,6 +1753,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			// when this poll's refreshed payload never reaches state.
 			fetchedAt := time.Now()
 			for _, key := range fetched.refreshed {
+				observedGroups[key] = struct{}{}
 				refreshedGroups[key] = fetchedAt
 			}
 		}
@@ -1881,10 +1884,24 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		m.setPBSBackupCacheTime(instanceName, key, fetchedAt)
 	}
 
+	// Failed reads may retain raw artifacts for continuity, but cannot renew
+	// their point evidence or use them to infer another backup's guest identity.
+	// Successful, unchanged group listings retain the existing bounded TTL reuse.
+	observedBackups := make([]models.PBSBackup, 0, len(allBackups))
+	for _, backup := range allBackups {
+		key := pbsBackupGroupKey{
+			datastore: backup.Datastore, namespace: normalizePBSNamespacePath(backup.Namespace),
+			backupType: backup.BackupType, backupID: backup.VMID,
+		}
+		if _, observed := observedGroups[key]; observed {
+			observedBackups = append(observedBackups, backup)
+		}
+	}
+
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
 	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
-		allBackups,
+		observedBackups,
 		candidates,
 		protectionObservedAt,
 	)
