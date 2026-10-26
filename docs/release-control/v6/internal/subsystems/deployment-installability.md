@@ -769,12 +769,21 @@ must not silently select local-only cleanup. An explicit `--local-only` remains
 available on each node without cluster discovery or SSH. Local keys are cleaned
 once and duplicate remote addresses once, with strict SSH host verification intact.
 
-Local key replacement uses an adjacent temporary file and preserves the original
-on read/comparison/metadata/rename failure. A no-match grep result is distinct
-from a read failure; removing an all-managed file may legitimately produce an
-empty file. Only the two existing Pulse comment suffixes are eligible, and
-unrelated keys and file metadata remain intact. Conditional helper invocation
-must propagate failure rather than print a successful key-removal claim.
+Both the standalone helper and `install.sh`'s presence-gated local legacy cleanup
+resolve existing key paths to regular targets before replacement; dangling
+links, non-file targets and failed resolution are not confirmed clean. Shared
+links and peer access to their target remain intact. Local key replacement uses
+an adjacent temporary file and preserves the original on allocation, output-open,
+read, comparison, metadata or rename failure. Opening the output descriptor is
+a separate checked operation: shell redirection failure can return 1 but is not
+grep's valid no-match result. Removing an all-managed file may legitimately
+produce an empty file. Only the two existing Pulse comment suffixes are eligible;
+unrelated keys and file metadata remain intact. Already-clean targets are not
+replaced. Owned staging cleanup failure is nonzero, including after otherwise
+successful work; diagnostic wording must not promise unchanged original bytes
+in that case. Private subshell traps/descriptors must not replace the caller's.
+Conditional helper invocation must propagate failure, not successful removal.
+No cluster/API action is added to the root installer.
 
 Remote cleanup resolves the fixed `authorized_keys` pathname before replacing
 its target; it must never replace a cluster-shared symlink with a private copy.
@@ -813,6 +822,19 @@ key bytes, symlink/inode continuity, modes, staging cleanup and truthful status.
 inventory through the real cluster/remote helpers into main's incomplete result,
 without live SSH, Proxmox or customer operations. These checks do not establish
 native cluster-filesystem semantics or any original installed recovery.
+
+`TestUninstallSensorProxyLocalKeyWritersPreserveRecovery` applies real private
+filesystem controls to both shipped local entrypoints, including regular/shared
+targets, peer readback, dangling/non-file paths, every writer failure and an
+actual ordinary-user mode-0400 output-open denial. Root test invocations explicitly
+skip only that permission-specific case, not the other controls.
+`TestUninstallSensorProxyLocalKeyWriterKeepsCallerResources` proves the caller's
+EXIT trap and descriptor survive. `TestUninstallSensorProxyLocalKeyFailureReachesMain`
+and `TestRootInstallSensorProxyCleanupCannotHideKeyReadFailure` execute the actual
+caller paths with closed service/file/API doubles and a partial failed key read;
+they require preserved recovery keys, nonzero status and no completion claim.
+These source checks do not establish native privileged filesystem semantics,
+installed uninstall/recovery, credential revocation or reporter acceptance.
 
 ### Legacy sensor cleanup requires observed stopped targets
 

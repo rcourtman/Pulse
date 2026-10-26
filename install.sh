@@ -5754,17 +5754,37 @@ local_sensor_proxy_present() {
 remove_local_sensor_proxy_managed_keys() {
     local auth_file="$SENSOR_PROXY_AUTHORIZED_KEYS_PATH"
     local tmp_file=""
-    [[ -f "$auth_file" ]] || return 0
-    tmp_file=$(mktemp) || return 0
-    grep -v -E '# pulse-(managed|proxy)-key$' "$auth_file" >"$tmp_file" 2>/dev/null || true
-    if cmp -s "$tmp_file" "$auth_file"; then
-        rm -f "$tmp_file"
+    local status=0
+    if [[ ! -e "$auth_file" && ! -L "$auth_file" ]]; then
         return 0
     fi
-    chmod --reference="$auth_file" "$tmp_file" 2>/dev/null || chmod 600 "$tmp_file" 2>/dev/null || true
-    chown --reference="$auth_file" "$tmp_file" 2>/dev/null || true
-    if ! mv "$tmp_file" "$auth_file"; then
-        rm -f "$tmp_file"
+    # Proxmox can link this file into the shared cluster filesystem. Resolve
+    # before replacing it; broken/non-file targets are not confirmed absence.
+    if ! auth_file=$(readlink -f -- "$auth_file") || [[ ! -f "$auth_file" || -L "$auth_file" ]]; then
+        return 1
+    fi
+    # Keep traps/descriptors private and replacement on the same filesystem.
+    # A failed output open must never masquerade as grep's valid no-match (1).
+    if ! (
+        tmp_file=$(mktemp "${auth_file}.pulse-cleanup.XXXXXX") || exit 1
+        trap 'status=$?; rm -f -- "$tmp_file" || status=1; exit "$status"' EXIT
+        trap 'exit 1' HUP INT TERM
+        exec 3>"$tmp_file" || exit 1
+        grep -v -E '# pulse-(managed|proxy)-key$' "$auth_file" >&3 2>/dev/null || status=$?
+        exec 3>&- || exit 1
+        (( status <= 1 )) || exit 1
+        status=0
+        cmp -s "$tmp_file" "$auth_file" || status=$?
+        case "$status" in
+            0) ;;
+            1)
+                chmod --reference="$auth_file" "$tmp_file" &&
+                    chown --reference="$auth_file" "$tmp_file" &&
+                    mv -- "$tmp_file" "$auth_file" || exit 1
+                ;;
+            *) exit 1 ;;
+        esac
+    ); then
         return 1
     fi
     echo "Removed legacy pulse-sensor-proxy SSH key entries from $auth_file"
