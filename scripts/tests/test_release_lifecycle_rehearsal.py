@@ -4,14 +4,18 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -116,6 +120,176 @@ class ResolvePairTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("from_tag=v6.4.0\n", result.stdout)
         self.assertIn("to_tag=v6.4.1\n", result.stdout)
+
+
+class DiscoveryTest(unittest.TestCase):
+    stream_error = "stream error: stream ID 1; CANCEL; received from peer\n"
+    inventory_command = ["gh", "api", "--method", "GET", "--paginate", "--slurp",
+                         "repos/rcourtman/Pulse/releases?per_page=100"]
+    latest_command = ["gh", "api", "--method", "GET", "repos/rcourtman/Pulse/releases/latest"]
+    pages = [[release("v6.5.0"), release("v6.6.0")], [release("v6.7.0-beta.1")]]
+
+    @staticmethod
+    def result(status=0, stdout="", stderr=""):
+        return subprocess.CompletedProcess([], status, stdout=stdout, stderr=stderr)
+
+    def test_recovered_inventory_uses_only_complete_fresh_pages(self):
+        results = [
+            self.result(1, json.dumps([[release("v99.0.0")]]), self.stream_error),
+            self.result(stdout=json.dumps(self.pages)),
+            self.result(stdout=json.dumps(release("v6.6.0"))),
+        ]
+        errors = io.StringIO()
+        with patch.object(versions.subprocess, "run", side_effect=results) as command, \
+                patch.object(versions.time, "sleep") as sleep, contextlib.redirect_stderr(errors):
+            releases, latest = versions.discover("rcourtman/Pulse")
+        self.assertEqual([self.inventory_command, self.inventory_command, self.latest_command],
+                         [call.args[0] for call in command.call_args_list])
+        self.assertTrue(all(call.kwargs["timeout"] == 60 for call in command.call_args_list))
+        sleep.assert_called_once_with(2)
+        self.assertIn(self.stream_error, errors.getvalue())
+        self.assertEqual(versions.resolve(releases, latest).to_tag, "v6.7.0-beta.1")
+
+    def test_latest_read_retries_without_reloading_inventory(self):
+        results = [self.result(stdout=json.dumps(self.pages)),
+                   self.result(1, "partial latest", self.stream_error),
+                   self.result(stdout=json.dumps(release("v6.6.0")))]
+        with patch.object(versions.subprocess, "run", side_effect=results) as command, \
+                patch.object(versions.time, "sleep") as sleep, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(versions.discover("rcourtman/Pulse")[1], "v6.6.0")
+        self.assertEqual([self.inventory_command, self.latest_command, self.latest_command],
+                         [call.args[0] for call in command.call_args_list])
+        sleep.assert_called_once_with(2)
+
+    def test_retry_budget_exhaustion_emits_no_pair(self):
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(versions.subprocess, "run", return_value=self.result(1, "[]", self.stream_error)) as command, \
+                patch.object(versions.time, "sleep") as sleep, \
+                contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            self.assertEqual(versions.main(["--repository", "rcourtman/Pulse"]), 1)
+        self.assertEqual(command.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4])
+        self.assertEqual(errors.getvalue().count(self.stream_error), 3)
+        self.assertIn("attempt 3/3", errors.getvalue())
+        self.assertEqual(output.getvalue(), "")
+
+    def test_access_unknown_and_mixed_errors_never_retry(self):
+        for detail in ("HTTP 401", "HTTP 403", "HTTP 404", "HTTP 429", "HTTP 503",
+                       "capability refused", "connection refused", "", "unavailable",
+                       self.stream_error.replace("CANCEL", "REFUSED_STREAM")):
+            for error in (detail, self.stream_error + detail + "\n"):
+                with self.subTest(error=error), \
+                        patch.object(versions.subprocess, "run", return_value=self.result(1, "[]", error)) as command, \
+                        patch.object(versions.time, "sleep") as sleep, contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(versions.ResolutionError):
+                        versions.discover("rcourtman/Pulse")
+                    self.assertEqual(command.call_count, 1)
+                    sleep.assert_not_called()
+
+    def test_signal_cancellation_and_other_exits_never_retry(self):
+        for status in (-15, -2, 2, 124, 130, 137, 143):
+            with self.subTest(status=status), \
+                    patch.object(versions.subprocess, "run", return_value=self.result(status, "[]", self.stream_error)) as command, \
+                    patch.object(versions.time, "sleep") as sleep, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaisesRegex(versions.ResolutionError, f"exit {status}"):
+                    versions.discover("rcourtman/Pulse")
+                self.assertEqual(command.call_count, 1)
+                sleep.assert_not_called()
+
+    def test_timeout_never_retries(self):
+        with patch.object(versions.subprocess, "run", side_effect=subprocess.TimeoutExpired("gh", 60)) as command, \
+                patch.object(versions.time, "sleep") as sleep:
+            with self.assertRaisesRegex(versions.ResolutionError, "timed out; not retrying"):
+                versions.discover("rcourtman/Pulse")
+        self.assertEqual(command.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_malformed_inventory_stops_before_latest_read(self):
+        for payload in ("not json", "{}", "[]", '[{"tag_name":"v6.6.0"}]', '[[],{}]', '[[null]]'):
+            with self.subTest(payload=payload), \
+                    patch.object(versions.subprocess, "run", return_value=self.result(stdout=payload)) as command, \
+                    patch.object(versions.time, "sleep") as sleep:
+                with self.assertRaises((versions.ResolutionError, json.JSONDecodeError)):
+                    versions.discover("rcourtman/Pulse")
+                self.assertEqual(command.call_count, 1)
+                sleep.assert_not_called()
+
+    def test_malformed_latest_stops_without_retry(self):
+        for payload in ("not json", "[]", "{}", '{"tag_name":null}'):
+            with self.subTest(payload=payload), \
+                    patch.object(versions.subprocess, "run", side_effect=[
+                        self.result(stdout=json.dumps(self.pages)), self.result(stdout=payload)]) as command, \
+                    patch.object(versions.time, "sleep") as sleep:
+                with self.assertRaises((versions.ResolutionError, json.JSONDecodeError)):
+                    versions.discover("rcourtman/Pulse")
+                self.assertEqual(command.call_count, 2)
+                sleep.assert_not_called()
+
+    def test_invalid_repository_and_live_latest_override_do_not_start_reads(self):
+        with patch.object(versions.subprocess, "run") as command, \
+                contextlib.redirect_stderr(io.StringIO()):
+            for repository in ("../Pulse", "rcourtman/Pulse/other", "https://example.com", "-H", "rcourtman/Pulse\n"):
+                with self.subTest(repository=repository), self.assertRaises(versions.ResolutionError):
+                    versions.discover(repository)
+            with self.assertRaises(SystemExit) as error:
+                versions.main(["--repository", "rcourtman/Pulse", "--latest-tag", "v6.5.0"])
+            self.assertEqual(error.exception.code, 2)
+        command.assert_not_called()
+
+    def workflow_resolution(self, outcomes, workflow=None):
+        # Execute the actual workflow shell and Python CLI, replacing only gh
+        # with a process fixture. No installation, network or token is used.
+        if workflow is None:
+            workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        step = workflow.split("      - name: Resolve published release pair\n", 1)[1].split("\n      - name:", 1)[0]
+        body = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "outcomes.json").write_text(json.dumps(outcomes))
+            gh = root / "gh"
+            gh.write_text(f"#!{sys.executable}\n" + '''import json, os, pathlib, sys
+root = pathlib.Path(os.environ['DISCOVERY_FIXTURE'])
+with (root / 'calls.jsonl').open('a') as out:
+    out.write(json.dumps(sys.argv[1:]) + '\\n')
+count = len((root / 'calls.jsonl').read_text().splitlines())
+outcomes = json.loads((root / 'outcomes.json').read_text())
+status, output, error = outcomes[min(count - 1, len(outcomes) - 1)]
+print(output, end='', file=sys.stdout)
+print(error, end='', file=sys.stderr)
+sys.exit(status)
+''')
+            gh.chmod(0o755)
+            output, summary = root / "outputs", root / "summary"
+            result = subprocess.run(["bash", "-c", body], cwd=REPO_ROOT, capture_output=True,
+                                    text=True, timeout=15, env={**os.environ,
+                                        "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                                        "DISCOVERY_FIXTURE": str(root), "GH_TOKEN": "synthetic",
+                                        "REPOSITORY": "rcourtman/Pulse", "FROM_INPUT": "", "TO_INPUT": "",
+                                        "GITHUB_OUTPUT": str(output), "GITHUB_STEP_SUMMARY": str(summary)})
+            calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
+            return (result, calls, output.read_text() if output.exists() else "",
+                    summary.read_text() if summary.exists() else "")
+
+    def test_workflow_recovers_only_metadata_and_writes_real_pair_outputs(self):
+        result, calls, output, summary = self.workflow_resolution([
+            (1, json.dumps([[release("v99.0.0")]]), self.stream_error),
+            (0, json.dumps(self.pages), ""), (0, json.dumps(release("v6.6.0")), ""),
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([self.inventory_command[1:], self.inventory_command[1:], self.latest_command[1:]], calls)
+        self.assertRegex(output, r"from_tag<<[^\n]+\nv6\.6\.0\n")
+        self.assertRegex(output, r"to_tag<<[^\n]+\nv6\.7\.0-beta\.1\n")
+        self.assertNotIn("v99.0.0", output + summary)
+        self.assertIn("v6.7.0-beta.1", summary)
+        self.assertIn(self.stream_error, result.stderr)
+
+    def test_workflow_refusal_and_malformed_metadata_emit_no_outputs(self):
+        for outcome in ((1, "[]", "gh: Forbidden (HTTP 403)\n"), (0, "not json", "")):
+            with self.subTest(outcome=outcome):
+                result, calls, output, summary = self.workflow_resolution([outcome])
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(calls, [self.inventory_command[1:]])
+                self.assertEqual(output + summary, "")
 
 
 class HarnessContractTest(unittest.TestCase):
