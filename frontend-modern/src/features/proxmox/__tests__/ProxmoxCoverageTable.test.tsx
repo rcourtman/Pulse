@@ -346,7 +346,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(onToggleExpand).toHaveBeenCalledWith('w1');
   });
 
-  it('states a workload without restore points in a shared notice', () => {
+  it('states an empty restore-point list in a shared notice', () => {
     renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[{ ...row, posture: 'unprotected' } as WorkloadCoverageRow]}
@@ -366,7 +366,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     const notice = screen.getByRole('status');
     expect(notice).toHaveTextContent(
-      'No restore points reported for this workload in the readable history.',
+      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
     );
     expect(notice.className).toContain('border-amber-300');
     // No registry match, so nothing to link to.
@@ -583,7 +583,7 @@ describe('Coverage absence requires readable, complete history', () => {
     });
     expect(screen.getByTitle(unknownTitle)).toHaveTextContent(/^Unknown$/);
     expect(screen.getByRole('status')).toHaveTextContent(
-      'No restore points are visible in the current list. Missing entries do not mean no backups exist.',
+      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
     );
     expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
   });
@@ -596,8 +596,38 @@ describe('Coverage absence requires readable, complete history', () => {
     });
     expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(/^None$/);
     expect(screen.getByRole('status')).toHaveTextContent(
-      'No restore points reported for this workload in the readable history.',
+      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
     );
     expect(screen.queryByTitle(unknownTitle)).not.toBeInTheDocument();
   });
+
+  it.each(['pve-backup-enumeration', 'pbs-backup-enumeration'])(
+    'does not broaden complete %s into absence of retained snapshots',
+    (source) => {
+      const explanation =
+        'Only snapshots were found. A snapshot is not a separate backup, so it does not count.';
+      mount({
+        ...row,
+        posture: 'unprotected',
+        protectionPosture: {
+          ...completePosture,
+          state: 'unprotected',
+          coverage: 'none',
+          explanation,
+          providerStates: [{ ...provider, source }],
+        },
+      });
+
+      expect(screen.getByText(explanation)).toBeInTheDocument();
+      expect(screen.getByText('History Complete')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+      );
+      expect(screen.getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent('None');
+      // No lastSuccessfulPointAt is expected for a guest snapshot. Nor may the
+      // notice synthesize a raw snapshot, date or completed backup from prose.
+      expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toContain('No restore points reported');
+    },
+  );
 });

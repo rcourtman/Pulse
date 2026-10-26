@@ -703,6 +703,77 @@ describe('ProxmoxBackupsTable', () => {
     expect(detailCell?.firstElementChild?.className).toContain('max-w-[100cqi]');
   });
 
+  it('keeps retained snapshot posture distinct from the raw list and a readable peer', async () => {
+    const retainedGuest = {
+      ...workloadResource,
+      id: 'ct-111',
+      name: 'database-a',
+      displayName: 'database-a',
+      proxmox: { ...workloadResource.proxmox!, vmid: 111 },
+    } as Resource;
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse(
+          url === '/api/backups/pve'
+            ? { data: { ...pvePayload.data, storageBackups: [], backupTasks: [] } }
+            : { data: { backups: [] } },
+        ),
+      ),
+    );
+    const explanation =
+      'Only snapshots were found. A snapshot is not a separate backup, so it does not count.';
+    apiFetchJSONMock.mockResolvedValue({
+      data: [retainedGuest, workloadResource].map((guest) => ({
+        subjectResourceId: guest.id,
+        state: 'unprotected',
+        coverage: 'none',
+        freshness: 'unknown',
+        verification: 'unknown',
+        providerStates: [
+          {
+            provider: 'proxmox-pve',
+            source: 'pve-backup-enumeration',
+            scope: 'pve-a',
+            jobState: 'success',
+            historyCompleteness: 'complete',
+            permissions: 'sufficient',
+            evidenceIds: [],
+          },
+        ],
+        repositoryResourceIds: [],
+        evidenceIds: [],
+        explanation,
+        evaluatedAt: '2026-05-25T02:05:00Z',
+      })),
+      policy: { freshnessWindowSeconds: 604800, verificationWindowSeconds: 604800 },
+    });
+    renderInRouter(() => (
+      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[retainedGuest, workloadResource]} />
+    ));
+
+    await screen.findAllByText('pbs-docker');
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for database-a/i }));
+    const detail = screen.getByTestId('proxmox-coverage-detail');
+    await within(detail).findByText(explanation);
+    expect(within(detail).getByText('History Complete')).toBeInTheDocument();
+    expect(within(detail).getByRole('status')).toHaveTextContent(
+      'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
+    );
+    expect(within(detail).queryByText('Restore evidence')).not.toBeInTheDocument();
+    expect(within(detail).queryByText('pre-upgrade')).not.toBeInTheDocument();
+    expect(detail).not.toHaveTextContent('No restore points reported');
+
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+    const peer = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(peer).getByText('Restore evidence')).toBeInTheDocument();
+    expect(within(peer).getByText('pre-upgrade')).toBeInTheDocument();
+    expect(within(peer).queryByRole('status')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('previously recorded evidence', { exact: false }),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps coverage evidence expanded across repeated workload snapshots', async () => {
     mockBackupAPIs();
     const [workloads, setWorkloads] = createSignal<readonly Resource[]>([workloadResource]);
@@ -1495,7 +1566,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     fireEvent.click(retry);
     await waitFor(() =>
       expect(detail).toHaveTextContent(
-        'No restore points reported for this workload in the readable history.',
+        'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
       ),
     );
     expect(within(rowElement()).getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(
