@@ -452,17 +452,44 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
   // Label lookup/creation can take time after the initial report read. Do not
   // apply that prepared decision to a report since edited, closed or reviewed.
   // This narrows the race; GitHub's separate label APIs are not a transaction.
-  const { data: current } = await github.rest.issues.get(target);
-  if (!current || current.number !== issue.number) {
-    throw new Error("Current issue identity did not match the triage event");
-  }
-  const currentLabels = new Set((current.labels || []).map((label) => label.name));
-  if (current.state !== "open" || current.pull_request ||
-      ["title", "body", "updated_at"].some((field) => current[field] !== issue[field]) ||
-      currentLabels.size !== before.size ||
-      [...before].some((name) => !currentLabels.has(name))) {
-    core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
+  const readCurrent = async () => {
+    const { data: current } = await github.rest.issues.get(target);
+    if (!current || current.number !== issue.number) {
+      throw new Error("Current issue identity did not match the triage event");
+    }
+    return current;
+  };
+  const decisionInputsMatch = (current) => {
+    const labels = new Set((current.labels || []).map((label) => label.name));
+    return current.state === "open" && !current.pull_request &&
+      ["title", "body"].every((field) => current[field] === issue[field]) &&
+      labels.size === before.size && [...before].every((name) => labels.has(name));
+  };
+  const changed = () => core.info("Issue changed during metadata preparation. Skipping outdated label delta.");
+  const current = await readCurrent();
+  if (!decisionInputsMatch(current)) {
+    changed();
     return;
+  }
+  if (["updated_at", "comments"].some((field) => current[field] !== issue[field])) {
+    // A comment can arrive during label lookup or the first history read,
+    // not just before the job. Preserve only an already eligible declaration,
+    // after checking review/lifecycle history from its original event again.
+    // Version-only decisions and all changed content/labels stay conservative.
+    if (!additions.includes(NEEDS_DECOMPOSITION_LABEL) ||
+        !Number.isInteger(issue.comments) || current.comments <= issue.comments ||
+        !await declarationSurvivesLaterComments(github, context, current, context.payload.issue)) {
+      changed();
+      return;
+    }
+    // History is not a transaction with issue reads. Bind its result to the
+    // snapshot it checked; further activity stops here without a write/retry.
+    const final = await readCurrent();
+    if (!decisionInputsMatch(final) ||
+        ["updated_at", "comments"].some((field) => final[field] !== current[field])) {
+      changed();
+      return;
+    }
   }
 
   if (additions.length) {

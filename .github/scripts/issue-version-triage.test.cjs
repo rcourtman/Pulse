@@ -3031,3 +3031,150 @@ test("the final report guard still rejects changes during history collection", a
   assert.deepEqual(calls.removeLabel, []);
   assert.deepEqual(calls.createComment, []);
 });
+
+function topicPreparationRace({ action = "opened", initialComments = 0, events = [], changes = {}, eventChanges = {} } = {}) {
+  const fixture = delayedTopicFixture({ action, events, eventChanges, currentChanges: {
+    comments: initialComments,
+    updated_at: initialComments ? "2026-10-26T06:01:00Z" : "2026-10-26T06:00:00Z",
+  } });
+  const { github, calls } = fixture;
+  github.rest.issues.get = async payload => {
+    calls.getIssue.push(payload);
+    if (calls.getIssue.length === 2) {
+      github.currentIssue = { ...github.currentIssue, comments: initialComments + 1,
+        updated_at: "2026-10-26T06:02:00Z", ...changes };
+    }
+    return { data: github.currentIssue };
+  };
+  return fixture;
+}
+
+for (const [action, initialComments] of [["opened", 0], ["opened", 1], ["edited", 0], ["edited", 1]]) {
+  test(`a comment during ${action} metadata preparation preserves the declared review after ${initialComments} earlier comments`, async () => {
+    const { args, calls } = topicPreparationRace({ action, initialComments });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+    assert.equal(calls.getEvents.length, initialComments ? 2 : 1);
+    assert.equal(calls.getIssue.length, 3, "history must have a final snapshot guard");
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  });
+}
+
+test("comment-race recovery keeps companion version metadata and Community labels scoped", async () => {
+  const { args, calls } = topicPreparationRace({ eventChanges: {
+    body: "### Additional actionable topics\nRetain per-host identity.\n### Pulse version\n6.7.0\n",
+    labels: ["bug", "affects-6.5.0", "needs-version-info", "needs-human", "release-blocker",
+      "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+  } });
+  await triage.syncLabels(args);
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.7.0", "needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0", "needs-version-info"]);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+});
+
+test("a review cleared during preparation cannot be restored even when its label set matches", async () => {
+  for (const initialComments of [0, 1]) {
+    const { args, github, calls } = topicPreparationRace({ initialComments });
+    github.rest.issues.listEvents = async payload => {
+      calls.getEvents.push(payload);
+      return { data: calls.getIssue.length === 1 ? [] : [{
+        event: "unlabeled", label: { name: "Needs-Decomposition" }, created_at: "2026-10-26T06:01:30Z",
+      }] };
+    };
+    await triage.syncLabels(args);
+    assert.equal(calls.getEvents.length, initialComments ? 2 : 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
+
+test("preparation-race history is bounded, paginated and preserves lifecycle decisions", async () => {
+  const unrelated = { event: "labeled", created_at: "2026-10-26T05:00:00Z" };
+  for (const event of [null, "closed", "reopened", "transferred", "converted_to_discussion"]) {
+    const { args, calls } = topicPreparationRace({ events: [
+      ...Array(100).fill(unrelated),
+      ...(event ? [{ event, created_at: "2026-10-26T06:01:30Z" }] : []),
+    ] });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents.map(call => call.page), [1, 2]);
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels), event ? [] : ["needs-decomposition"]);
+    assert.deepEqual(calls.removeLabel, []);
+  }
+  const { args, calls } = topicPreparationRace({ events: Array(1000).fill(unrelated) });
+  await assert.rejects(triage.syncLabels(args), /exceeded the bounded event read/);
+  assert.equal(calls.getEvents.length, 10);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+});
+
+test("changed report, labels or unreadable comment clocks still stop before recovery history", async () => {
+  for (const changes of [
+    { body: "### Additional actionable topics\nA different topic.\n" },
+    { title: "A different title" }, { state: "closed" }, { pull_request: {} },
+    { labels: [{ name: "enhancement" }, { name: "needs-human" }] },
+    { comments: 0 }, { comments: undefined }, { comments: -1 }, { comments: 0.5 },
+    { updated_at: "unknown" }, { updated_at: "2026-10-26T06:00:00Z" },
+  ]) {
+    const { args, calls } = topicPreparationRace({ changes });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents, [], JSON.stringify(changes));
+    assert.deepEqual(calls.addLabels, [], JSON.stringify(changes));
+    assert.deepEqual(calls.removeLabel, []);
+  }
+});
+
+test("comment-only version decisions do not acquire declaration-recovery authority", async () => {
+  const { args, calls } = topicPreparationRace({ eventChanges: {
+    body: "### Pulse version\n6.7.0\n", labels: [{ name: "bug" }, { name: "affects-6.5.0" }],
+  } });
+  await triage.syncLabels(args);
+  assert.deepEqual(calls.getEvents, []);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+});
+
+test("a preparation-race history failure is not retried or replaced by a mutation", async () => {
+  for (const result of [403, 404, 500, null, {}, [{ event: "unlabeled", created_at: "2026-10-26T06:01:30Z" }]]) {
+    const { args, github, calls } = topicPreparationRace();
+    github.rest.issues.listEvents = async payload => {
+      calls.getEvents.push(payload);
+      if (typeof result === "number") throw Object.assign(new Error("history unavailable"), { status: result });
+      return { data: result };
+    };
+    await assert.rejects(triage.syncLabels(args));
+    assert.equal(calls.getEvents.length, 1);
+    assert.equal(calls.getIssue.length, 2);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
+
+test("further activity during recovery history stops without another reconciliation or write", async () => {
+  for (const changes of [
+    { comments: 2, updated_at: "2026-10-26T06:03:00Z" },
+    { comments: 2 },
+    { body: "### Additional actionable topics\nRevised again.\n" },
+    { title: "Another report" }, { state: "closed" }, { pull_request: {} },
+    { labels: [{ name: "enhancement" }, { name: "needs-human" }] },
+    { labels: [{ name: "enhancement" }, { name: "needs-decomposition" }] },
+  ]) {
+    const { args, github, calls } = topicPreparationRace();
+    github.rest.issues.listEvents = async payload => {
+      calls.getEvents.push(payload);
+      github.currentIssue = { ...github.currentIssue, ...changes };
+      return { data: [] };
+    };
+    await triage.syncLabels(args);
+    assert.equal(calls.getEvents.length, 1);
+    assert.equal(calls.getIssue.length, 3);
+    assert.deepEqual(calls.addLabels, [], JSON.stringify(changes));
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
