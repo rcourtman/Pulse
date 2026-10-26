@@ -162,6 +162,22 @@ authority.
 
 ### SSO editor feedback and exact group names (24 October 2026)
 
+SSO save failures use the API client's human `message`/legacy `error` field,
+not the JSON envelope, code, timestamp or diagnostic details. Short plain-text
+validation errors remain useful; malformed, markup, control-bearing, oversized
+or unavailable guidance falls back to bounded recovery text. Raw response data
+and thrown network errors are not logged by this save path. A lost response
+must not claim that nothing was saved. Create and edit each make one write per
+explicit submission, including CSRF and rate-limit failures; the form, access
+restrictions and omitted saved secrets survive until deliberate correction or
+retry. The bounded, scrollable feedback area allows the complete ordinary
+initialisation/no-save guidance above the recovery controls on phones.
+`SSOProviderSaveErrors.test.tsx` covers both provider types and create/edit through
+the real state hook and API client. Presentation tests bind unsafe-input fallback;
+source-bound desktop/narrow browser proof uses captured producer envelopes and
+synthetic non-JSON gateway/validation responses. This is not installed sign-in,
+issuer compatibility, server persistence or original #3038/#61 recovery proof.
+
 The provider editor scrolls its fields independently of its header and recovery
 footer. Save refusals, metadata-preview errors and clipboard outcomes stay in
 that active dialog, with live alert/status semantics; connection tests use the

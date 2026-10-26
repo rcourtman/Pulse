@@ -21,12 +21,26 @@ const json = (body: unknown, status = 200) =>
 const scenarios = [
   {
     name: 'structured error envelope',
-    response: () => json({ error: guidance, code: 'initialization_error', details: { private: canary }, status_code: 400, timestamp: 1793050000 }, 400),
+    response: () =>
+      json(
+        {
+          error: guidance,
+          code: 'initialization_error',
+          details: { private: canary },
+          status_code: 400,
+          timestamp: 1793050000,
+        },
+        400,
+      ),
     expected: `Unable to save the SSO provider: ${guidance}`,
   },
   {
     name: 'structured message before legacy error',
-    response: () => json({ message: 'Check the provider settings.', error: canary, details: { private: canary } }, 400),
+    response: () =>
+      json(
+        { message: 'Check the provider settings.', error: canary, details: { private: canary } },
+        400,
+      ),
     expected: 'Unable to save the SSO provider: Check the provider settings.',
   },
   {
@@ -51,7 +65,9 @@ const scenarios = [
   },
   {
     name: 'lost network response',
-    response: () => { throw new Error(canary); },
+    response: () => {
+      throw new Error(canary);
+    },
     expected: fallback,
   },
   {
@@ -61,7 +77,11 @@ const scenarios = [
   },
   {
     name: 'rate limit without hidden replay',
-    response: () => new Response(JSON.stringify({ error: 'Wait before saving again.' }), { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '0.001' } }),
+    response: () =>
+      new Response(JSON.stringify({ error: 'Wait before saving again.' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '0.001' },
+      }),
     expected: 'Unable to save the SSO provider: Wait before saving again.',
   },
 ];
@@ -72,39 +92,65 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
     vi.stubGlobal('fetch', fetchMock);
     document.cookie = 'pulse_csrf=synthetic-csrf';
   });
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   for (const editing of [false, true]) {
     it.each(scenarios)(`${editing ? 'edit' : 'create'}: $name`, async ({ response, expected }) => {
       const provider = {
-        id: 'recovery', name: 'Original provider', type, enabled: true, priority: 0,
-        allowedGroups: ['Server Access'], allowedDomains: ['example.test'],
+        id: 'recovery',
+        name: 'Original provider',
+        type,
+        enabled: true,
+        priority: 0,
+        allowedGroups: ['Server Access'],
+        allowedDomains: ['example.test'],
         groupRoleMappings: { 'Server Access': 'viewer' },
-        oidc: { issuerUrl: 'https://issuer.example.test', clientId: 'pulse', clientSecretSet: true },
+        oidc: {
+          issuerUrl: 'https://issuer.example.test',
+          clientId: 'pulse',
+          clientSecretSet: true,
+        },
         saml: { idpEntityId: 'original', idpSsoUrl: 'https://issuer.example.test/sso' },
       };
       let reject = true;
       fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
-        if (options?.method === 'POST' || options?.method === 'PUT') return reject ? response() : json({});
-        if (url === '/api/security/status') return json({ publicUrl: 'https://pulse.example.test' });
+        if (options?.method === 'POST' || options?.method === 'PUT')
+          return reject ? response() : json({});
+        if (url === '/api/security/status')
+          return json({ publicUrl: 'https://pulse.example.test' });
         if (url.endsWith('/recovery')) return json(provider);
         return json({ providers: editing ? [provider] : [] });
       });
       render(() => <SSOProvidersPanel />);
-      fireEvent.click(await screen.findByRole('button', { name: editing ? 'Edit provider' : `Add ${type.toUpperCase()}` }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: editing ? 'Edit provider' : `Add ${type.toUpperCase()}`,
+        }),
+      );
       const dialog = within(await screen.findByRole('dialog'));
       const name = dialog.getByLabelText('Provider Name') as HTMLInputElement;
       fireEvent.input(name, { target: { value: 'Retained draft' } });
       if (!editing) {
         if (type === 'oidc') {
-          fireEvent.input(dialog.getByLabelText('Issuer URL'), { target: { value: 'https://issuer.example.test' } });
+          fireEvent.input(dialog.getByLabelText('Issuer URL'), {
+            target: { value: 'https://issuer.example.test' },
+          });
           fireEvent.input(dialog.getByLabelText('Client ID'), { target: { value: 'pulse' } });
         } else {
-          fireEvent.input(dialog.getByLabelText('IdP Entity ID'), { target: { value: 'attempted' } });
-          fireEvent.input(dialog.getByLabelText('IdP SSO URL'), { target: { value: 'https://issuer.example.test/sso' } });
+          fireEvent.input(dialog.getByLabelText('IdP Entity ID'), {
+            target: { value: 'attempted' },
+          });
+          fireEvent.input(dialog.getByLabelText('IdP SSO URL'), {
+            target: { value: 'https://issuer.example.test/sso' },
+          });
         }
       }
-      const save = dialog.getByRole('button', { name: editing ? 'Save Changes' : 'Create Provider' });
+      const save = dialog.getByRole('button', {
+        name: editing ? 'Save Changes' : 'Create Provider',
+      });
       const form = save.closest('form')!;
       fireEvent.submit(form);
       expect(await dialog.findByRole('alert')).toHaveTextContent(expected);
@@ -114,7 +160,8 @@ describe.each(['oidc', 'saml'] as const)('SSO %s save error recovery', (type) =>
       expect(save).toBeEnabled();
       expect(dialog.getByRole('button', { name: 'Cancel' })).toBeEnabled();
       expect(successMock).not.toHaveBeenCalled();
-      const writes = () => fetchMock.mock.calls.filter(([, options]) => ['POST', 'PUT'].includes(options?.method));
+      const writes = () =>
+        fetchMock.mock.calls.filter(([, options]) => ['POST', 'PUT'].includes(options?.method));
       expect(writes()).toHaveLength(1);
       expect(JSON.stringify(loggerErrorMock.mock.calls)).not.toContain(canary);
       expect(JSON.stringify(loggerErrorMock.mock.calls)).not.toContain('initialization_error');
