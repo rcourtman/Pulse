@@ -155,6 +155,7 @@ func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []mo
 			Node:         alert.Node,
 			Instance:     alert.Instance,
 			Message:      alert.Message,
+			Summary:      alert.Summary,
 			Value:        alert.Value,
 			Threshold:    alert.Threshold,
 			StartTime:    alert.StartTime,

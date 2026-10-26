@@ -603,8 +603,10 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 		}
 
 		message := fmt.Sprintf("Docker service '%s' update state: %s", serviceName, service.UpdateStatus.State)
+		summary := fmt.Sprintf("Update state: %s", service.UpdateStatus.State)
 		if updateMessage != "" {
 			message = fmt.Sprintf("%s (%s)", message, updateMessage)
+			summary = fmt.Sprintf("%s (%s)", summary, updateMessage)
 		}
 
 		_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
@@ -617,6 +619,7 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 			Node:                         nodeName,
 			Instance:                     instanceName,
 			Message:                      message,
+			Summary:                      summary,
 			Value:                        percentMissing,
 			Threshold:                    0,
 			Metadata:                     metadata,
@@ -647,6 +650,7 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 	}
 
 	message := fmt.Sprintf("Docker service '%s' is running %d of %d desired tasks", serviceName, service.RunningTasks, service.DesiredTasks)
+	summary := fmt.Sprintf("Running %d of %d desired tasks", service.RunningTasks, service.DesiredTasks)
 	_, _ = m.evaluateCanonicalStatefulAlert(canonicalStatefulAlertParams{
 		Spec: spec,
 		Evidence: alertspecs.AlertEvidence{
@@ -664,6 +668,7 @@ func (m *Manager) evaluateDockerService(host models.DockerHost, service models.D
 		Node:                         nodeName,
 		Instance:                     instanceName,
 		Message:                      message,
+		Summary:                      summary,
 		Value:                        percentMissing,
 		Threshold:                    thresholdValue,
 		Metadata:                     metadata,
@@ -774,6 +779,7 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 		Node:         nodeName,
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("Docker host '%s' is offline", host.DisplayName),
+		Summary:      "Offline",
 		Metadata: map[string]interface{}{
 			"resourceType": "docker-host",
 			"hostId":       host.ID,
@@ -878,6 +884,7 @@ func (m *Manager) checkDockerContainerState(host models.DockerHost, container mo
 		Node:          nodeName,
 		Instance:      instanceName,
 		Message:       fmt.Sprintf("Docker container '%s' is %s", containerName, strings.TrimSpace(container.Status)),
+		Summary:       capitalizeFirst(strings.TrimSpace(container.Status)),
 		Metadata:      dockerContainerAlertMetadata(host, container, containerName),
 		AddToRecent:   true,
 		AddToHistory:  true,
@@ -981,6 +988,7 @@ func (m *Manager) checkDockerContainerHealth(host models.DockerHost, container m
 		Node:                         nodeName,
 		Instance:                     instanceName,
 		Message:                      fmt.Sprintf("Docker container '%s' health is %s", containerName, container.Health),
+		Summary:                      fmt.Sprintf("Health is %s", container.Health),
 		Metadata:                     metadata,
 		AddToRecent:                  true,
 		AddToHistory:                 true,
@@ -1087,6 +1095,7 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 			Node:         nodeName,
 			Instance:     instanceName,
 			Message:      fmt.Sprintf("Docker container '%s' has restarted %d times in the last %d minutes (restart loop detected)", containerName, recentCount, timeWindow/60),
+			Summary:      fmt.Sprintf("Restarted %d times in the last %d minutes (restart loop detected)", recentCount, timeWindow/60),
 			Metadata:     metadata,
 			AddToRecent:  true,
 			AddToHistory: true,
@@ -1143,6 +1152,7 @@ func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container 
 			Node:         nodeName,
 			Instance:     instanceName,
 			Message:      fmt.Sprintf("Docker container '%s' was killed due to out of memory (OOM)", containerName),
+			Summary:      "Killed due to out of memory (OOM)",
 			Metadata:     metadata,
 			AddToRecent:  true,
 			AddToHistory: true,
@@ -1223,6 +1233,7 @@ func (m *Manager) checkDockerContainerMemoryLimit(host models.DockerHost, contai
 		Node:         nodeName,
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("Docker container '%s' is using %.1f%% of its memory limit (%d MB / %d MB)", containerName, limitPercent, container.MemoryUsage/(1024*1024), container.MemoryLimit/(1024*1024)),
+		Summary:      fmt.Sprintf("Using %.1f%% of its memory limit (%d MB / %d MB)", limitPercent, container.MemoryUsage/(1024*1024), container.MemoryLimit/(1024*1024)),
 		Metadata:     metadata,
 		AddToRecent:  true,
 		AddToHistory: true,
@@ -1515,6 +1526,7 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 		Node:              nodeName,
 		Instance:          instanceName,
 		Message:           fmt.Sprintf("Docker container '%s' has an image update available for %d hours", containerName, pendingHours),
+		Summary:           fmt.Sprintf("Image update available for %d hours", pendingHours),
 		StartTimeOverride: firstSeen,
 		Metadata:          metadata,
 		AddToRecent:       true,

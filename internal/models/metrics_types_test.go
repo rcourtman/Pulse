@@ -594,3 +594,22 @@ func TestMetricAlertStatusBreachTimeWireAndClone(t *testing.T) {
 		})
 	}
 }
+
+// Summary is optional presentation copy: present when the alert's message has
+// a separate subject, omitted otherwise so older clients keep reading message.
+func TestAlertSummaryIsOptionalJSON(t *testing.T) {
+	withSummary, err := json.Marshal(Alert{ID: "a", Message: "Node 'pve1' is offline", Summary: "Offline"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(withSummary), `"summary":"Offline"`) {
+		t.Fatalf("summary missing from %s", withSummary)
+	}
+	without, err := json.Marshal(Alert{ID: "b", Message: "CPU at 95%"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(without), `"summary"`) {
+		t.Fatalf("empty summary serialized in %s", without)
+	}
+}

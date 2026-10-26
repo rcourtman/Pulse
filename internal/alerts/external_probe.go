@@ -162,6 +162,7 @@ func (m *Manager) checkExternalProbe(snapshot ExternalProbeSnapshot) {
 		ResourceName: name,
 		Instance:     name,
 		Message:      message,
+		Summary:      "Stopped reporting availability results",
 		Metadata: map[string]interface{}{
 			"resourceType":      string(unifiedresources.ResourceTypeAgent),
 			"hostId":            snapshot.AgentID,

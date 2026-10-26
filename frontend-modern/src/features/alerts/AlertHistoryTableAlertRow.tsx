@@ -42,7 +42,7 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
   // An open threshold alert's live reading turns stale when evaluations stop,
   // so it rechecks on the shared clock; the last breach moves to the hover.
   const now = useRelativeTimeNow();
-  const descriptionCopy = () => getAlertHistoryRowCopy(props.alert, now);
+  const descriptionCopy = () => getAlertHistoryRowCopy(props.alert, now, { subjectFree: true });
 
   return (
     <>

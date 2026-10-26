@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "af5b66dad87727b21e27d5d1bd6842b4c9fe9448",
+  "verified_at": "2026-10-25T23:44:31Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertHistoryTableAlertRow.tsx": "55f2851bb35b84307c757c3ff25d5677d74c707205ca1e1b3572a2e4dc58bfa1",
+    "frontend-modern/src/features/alerts/alertHistoryModel.ts": "fe7d4de436f7b65bd806a25f45fa676b90d6d53ecbd0129b0360a894f0b5876e",
+    "frontend-modern/src/types/api.ts": "4c1fe0c17b19bfc5e03e4a23f82bff7a36c329cc8532e1beba51eda17ba60ecb"
+  },
+  "routes": [
+    "/alerts/history"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "height": 900
+    },
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Embedded production build of this tree (Go engine and frontend) in mock mode on pulse-dev, headless Chromium, dark theme, Alert History on All time (~133 rows). Active and resolved alerts come through the real alert engine, the resolved read model and the monitoring state sync.",
+    "Before (main with single-line history): Docker service rows read \"Docker service 'ops-postgres' i...\" at 1280px; Message cut 54-62 of ~132 rows at 1280px and 24-32 at 1440px across runs. After: 17 rows lead with their summary (\"Paused\", \"Health is unhealthy\", \"Running 1 of 4 desired tasks\", \"Offline\", \"Unavailable on node pve22\"), none of them cut, and no row still restates its resource; Message cut 37 of 133 at 1280px and 17 at 1440px. Every row stays 33px.",
+    "The message cell title keeps the full sentence (\"Docker service 'ops-radarr' is running 1 of 2 desired tasks\"). Rows still cut: the PMG queue message (MessageBuilder, no summary), ZFS error counts, and \"Disk health check failed: FAILED\" with the Linux fallback font.",
+    "Phone 390px card list is unchanged and keeps the full message."
+  ],
+  "interactions": [
+    "Inspected the 1280px screenshot; counted cells whose text differs from the title (summaries) and measured text against the cell width with the rendered font.",
+    "go build ./..., go vet and go test for internal/alerts, internal/models, internal/mock and the monitoring alert tests pass; the full frontend suite passed except one source-pinned guardrail, updated for the subject-free call, and the alerts and pages suites (88 files) then pass."
+  ],
+  "proof_scope": "Alert Summary presentation in Alert History rows; alert evaluation, messages, notifications, cards and stored history are unchanged."
+}

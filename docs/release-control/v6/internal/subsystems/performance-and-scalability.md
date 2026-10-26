@@ -4032,7 +4032,9 @@ under the same graph lock and advance the fixture data version without
 rebuilding the estate. `internal/mock/alert_incidents_test.go` proves bounded
 resource results and defensive-copy isolation, while
 `internal/api/alerting/alerts_test.go` proves that mock transport does not need
-the production incident store.
+the production incident store. Converting the graph's active alerts to
+`models.Alert` copies `Summary` beside `Message` as one more string field; it
+adds no lookup, allocation per row beyond that string, or transport request.
 
 Synthetic linked-host machine identities and Docker machine/agent identities
 are derived from stable fixture host identity when constructing the graph.

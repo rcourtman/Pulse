@@ -3,6 +3,8 @@ package alerts
 import (
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
@@ -117,18 +119,23 @@ func cloneAlertCorrelation(correlation *AlertCorrelation) *AlertCorrelation {
 
 // Alert represents an active alert
 type Alert struct {
-	ID                string                                 `json:"id"`
-	Type              string                                 `json:"type"` // cpu, memory, disk, etc.
-	Level             AlertLevel                             `json:"level"`
-	ResourceID        string                                 `json:"resourceId"` // guest or node ID
-	CanonicalSpecID   string                                 `json:"canonicalSpecId,omitempty"`
-	CanonicalKind     string                                 `json:"canonicalKind,omitempty"`
-	CanonicalState    string                                 `json:"canonicalState,omitempty"`
-	ResourceName      string                                 `json:"resourceName"`
-	Node              string                                 `json:"node"`
-	NodeDisplayName   string                                 `json:"nodeDisplayName,omitempty"`
-	Instance          string                                 `json:"instance"`
-	Message           string                                 `json:"message"`
+	ID              string     `json:"id"`
+	Type            string     `json:"type"` // cpu, memory, disk, etc.
+	Level           AlertLevel `json:"level"`
+	ResourceID      string     `json:"resourceId"` // guest or node ID
+	CanonicalSpecID string     `json:"canonicalSpecId,omitempty"`
+	CanonicalKind   string     `json:"canonicalKind,omitempty"`
+	CanonicalState  string     `json:"canonicalState,omitempty"`
+	ResourceName    string     `json:"resourceName"`
+	Node            string     `json:"node"`
+	NodeDisplayName string     `json:"nodeDisplayName,omitempty"`
+	Instance        string     `json:"instance"`
+	Message         string     `json:"message"`
+	// Summary is the condition without its subject ("Running 1 of 3 desired
+	// tasks", "Offline") for rows that already name the resource. Empty when
+	// the message has no separate subject; Message stays the full sentence for
+	// notifications and detail views.
+	Summary           string                                 `json:"summary,omitempty"`
 	Value             float64                                `json:"value"`
 	Threshold         float64                                `json:"threshold"`
 	StartTime         time.Time                              `json:"startTime"`
@@ -275,4 +282,14 @@ func cloneMetadataValue(val interface{}) interface{} {
 type ResolvedAlert struct {
 	*Alert
 	ResolvedTime time.Time `json:"resolvedTime"`
+}
+
+// capitalizeFirst upper-cases a condition's first letter so it can stand alone
+// as an alert Summary ("paused" reads "Paused"; "Exited (137)" is unchanged).
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[size:]
 }

@@ -1095,6 +1095,11 @@ websocket) may also carry an optional `resolution` (`reason`,
 `successorResourceId`, `successorName`, and on state payloads the alert
 engine's `summary`), typed once as `AlertResolution` in
 `frontend-modern/src/types/api.ts`. Its absence means an ordinary recovery.
+Separately, an alert payload may carry a top-level optional `summary`: the
+message without the subject its resource name already gives ("Offline").
+It is presentation copy for rows that show the resource, not a resolution
+account; `message` stays the full sentence, and clients without a summary
+show `message`.
 
 ## Shared Boundaries
 

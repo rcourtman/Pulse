@@ -985,6 +985,7 @@ func (m *Manager) HandleHostOfflineWithCorrelation(host models.Host, correlation
 		// be up (a linked Proxmox node keeps reporting through its API), so
 		// the message names the missing reports, not a host outage.
 		Message:     fmt.Sprintf("Pulse agent on '%s' stopped reporting", hostBaseName(host)),
+		Summary:     "Pulse agent stopped reporting",
 		Correlation: correlation,
 		Metadata: map[string]interface{}{
 			"resourceType":       "agent",

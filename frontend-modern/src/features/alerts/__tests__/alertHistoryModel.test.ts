@@ -244,6 +244,33 @@ describe('alert history rows for held threshold alerts', () => {
     });
   });
 
+  // A table row already names the resource, so it leads with the alert's
+  // summary and keeps the full sentence as the title; cards keep the sentence.
+  it('leads a table row with the subject-free summary and keeps the message on hover', () => {
+    const closed = {
+      ...heldAlert(),
+      id: 'docker-service-health-svc-web',
+      type: 'docker-service-health',
+      resourceName: 'web',
+      message: "Docker service 'web' is running 2 of 4 desired tasks",
+      summary: 'Running 2 of 4 desired tasks',
+    } as Alert;
+    const [item] = build({}, [closed]);
+    expect(item.summary).toBe('Running 2 of 4 desired tasks');
+    expect(getAlertHistoryRowCopy(item, () => NOW, { subjectFree: true })).toEqual({
+      text: 'Running 2 of 4 desired tasks',
+      title: "Docker service 'web' is running 2 of 4 desired tasks",
+    });
+    expect(getAlertHistoryRowCopy(item, () => NOW).text).toBe(
+      "Docker service 'web' is running 2 of 4 desired tasks",
+    );
+    // History recorded before alerts carried a summary keeps its message.
+    const [legacy] = build({}, [{ ...closed, summary: undefined } as Alert]);
+    expect(getAlertHistoryRowCopy(legacy, () => NOW, { subjectFree: true }).text).toBe(
+      "Docker service 'web' is running 2 of 4 desired tasks",
+    );
+  });
+
   it('gives Pulse system alerts no live reading', () => {
     const alert = {
       ...heldAlert({ phase: 'latched', value: 78 }),

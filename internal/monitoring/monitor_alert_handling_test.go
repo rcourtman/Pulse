@@ -1922,3 +1922,31 @@ func TestProxmoxDiskAlertTimelineFollowsRecordedHardware(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, page.Incidents)
 }
+
+// The state snapshot the frontend reads carries the alert's subject-free
+// summary beside its full message.
+func TestActiveAlertsSnapshotCarriesSubjectFreeSummary(t *testing.T) {
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	config := manager.GetConfig()
+	config.Enabled = true
+	config.ActivationState = alerts.ActivationPending
+	config.TimeThresholds = map[string]int{}
+	config.SuppressionWindow = 0
+	manager.UpdateConfig(config)
+	host := models.DockerHost{ID: "summary-host", Hostname: "summary-host", LastSeen: time.Now(), Containers: []models.DockerContainer{
+		{ID: strings.Repeat("b", 64), Name: "worker", State: "running", Health: "unhealthy"},
+	}}
+	manager.CheckDockerHost(host)
+	monitor := &Monitor{alertManager: manager}
+	found := false
+	for _, alert := range monitor.activeAlertsSnapshot() {
+		if alert.Type != "docker-container-health" {
+			continue
+		}
+		found = true
+		require.Equal(t, "Docker container 'worker' health is unhealthy", alert.Message)
+		require.Equal(t, "Health is unhealthy", alert.Summary)
+	}
+	require.True(t, found, "expected the container health alert in the state snapshot")
+}

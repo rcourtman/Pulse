@@ -459,6 +459,7 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 			Node:         "node-a",
 			Instance:     "pve-a",
 			Message:      "CPU critical",
+			Summary:      "Critical",
 			Value:        97,
 			Threshold:    90,
 			StartTime:    start,
@@ -484,6 +485,10 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 	if snapshot.Level != "critical" {
 		dataMu.RUnlock()
 		t.Fatalf("expected level conversion to string, got %q", snapshot.Level)
+	}
+	if snapshot.Summary != "Critical" {
+		dataMu.RUnlock()
+		t.Fatalf("active alert summary = %q, want the engine summary", snapshot.Summary)
 	}
 	if snapshot.ResourceID != "vm-100" || snapshot.Instance != "pve-a" || !snapshot.Acknowledged {
 		dataMu.RUnlock()

@@ -471,6 +471,7 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 		Node:         storage.Node,
 		Instance:     storage.Instance,
 		Message:      fmt.Sprintf("Storage %s on node %s is unavailable", storage.Name, storage.Node),
+		Summary:      fmt.Sprintf("Unavailable on node %s", storage.Node),
 		Metadata: map[string]interface{}{
 			"resourceType": "storage",
 			"status":       storage.Status,

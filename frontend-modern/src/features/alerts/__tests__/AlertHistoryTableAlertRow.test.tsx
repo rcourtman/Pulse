@@ -166,6 +166,22 @@ describe('AlertHistoryTableAlertRow', () => {
   // Worded Timeline and Resource buttons took 177px with Investigate; as 24px
   // icons beside it the actions need about 100px, which Message and Resource
   // take so a row reads on one line. Names and titles still say what each opens.
+  it('leads the message cell with the summary and keeps the sentence in its title', () => {
+    renderRow(
+      historyItem({
+        resourceName: 'web',
+        description: "Docker service 'web' is running 2 of 4 desired tasks",
+        summary: 'Running 2 of 4 desired tasks',
+      }),
+    );
+    const message = screen.getByText('Running 2 of 4 desired tasks');
+    expect(message.dataset.alertHistoryCell).toBe('message');
+    expect(message).toHaveAttribute(
+      'title',
+      "Docker service 'web' is running 2 of 4 desired tasks",
+    );
+  });
+
   it('shows the row actions as named icon buttons on one line', () => {
     const { container } = renderRow(historyItem({}));
     const timeline = container.querySelector('[data-alert-history-action="timeline"]');

@@ -164,6 +164,7 @@ func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
 		Node:         pmg.Host,
 		Instance:     pmg.Name,
 		Message:      fmt.Sprintf("PMG instance %s is offline", pmg.Name),
+		Summary:      "Offline",
 		Metadata: map[string]interface{}{
 			"resourceType":     "pmg",
 			"status":           pmg.Status,

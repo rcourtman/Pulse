@@ -30,6 +30,9 @@ export interface HistoryItem {
   title: string;
   rawAlertType?: string;
   description?: string;
+  // The description without its subject ("Running 1 of 3 desired tasks"), for
+  // a table row whose Resource cell already names it.
+  summary?: string;
   // Set when the alert closed without recovering: what happened instead.
   closeDetail?: string;
   acknowledged?: boolean;
@@ -243,6 +246,7 @@ export function buildAlertHistoryItems({
       title: alertTypeDisplayLabel(alert.type),
       rawAlertType: alert.type,
       description: alert.message,
+      ...(alert.summary ? { summary: alert.summary } : {}),
       acknowledged: false,
       ...(systemScoped ? {} : { liveAlert: alert }),
     });
@@ -283,6 +287,7 @@ export function buildAlertHistoryItems({
       title: alertTypeDisplayLabel(alert.type),
       rawAlertType: alert.type,
       description: alert.message,
+      ...(alert.summary ? { summary: alert.summary } : {}),
       ...(closeDetail ? { closeDetail } : {}),
       acknowledged: alert.acknowledged,
     });
@@ -297,13 +302,20 @@ export function buildAlertHistoryItems({
 // Closed rows, and open ones without a live status, keep the recorded message,
 // which search also reads. The clock is read only for open rows, so closed rows
 // do not re-render on every tick.
+// A table row passes `subjectFree` because its Resource cell already names the
+// resource: it leads with the alert's summary ("Offline") when the message has
+// one, and keeps the full message as the title. Cards keep the full message.
 export function getAlertHistoryRowCopy(
-  item: Pick<HistoryItem, 'description' | 'liveAlert'>,
+  item: Pick<HistoryItem, 'description' | 'liveAlert' | 'summary'>,
   now: () => number = Date.now,
+  options: { subjectFree?: boolean } = {},
 ): AlertHistoryRowCopy {
   const recorded = item.description ?? '';
   const presentation = item.liveAlert ? getMetricAlertPresentation(item.liveAlert, now()) : null;
-  if (!presentation) return { text: recorded, title: recorded };
+  if (!presentation) {
+    const summary = options.subjectFree ? item.summary?.trim() : undefined;
+    return { text: summary || recorded, title: recorded };
+  }
   return {
     text: presentation.summary,
     detail: presentation.detail,
