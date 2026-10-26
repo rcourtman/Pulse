@@ -26,6 +26,11 @@ class SmokeRunnerTest(unittest.TestCase):
         self.runner = self.tests / "run.sh"
         shutil.copyfile(RUNNER, self.runner)
         self.runner.chmod(0o700)
+        self.selector = self.root / "scripts/select-smoke-test-shard.py"
+        shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py", self.selector)
+        self.weights = self.root / ".github/scripts/smoke-test-seconds.txt"
+        self.weights.parent.mkdir(parents=True)
+        self.weights.write_text("DEFAULT_WEIGHT 1\n", encoding="utf-8")
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.calls = self.root / "calls"
@@ -296,6 +301,123 @@ class SmokeRunnerTest(unittest.TestCase):
         self.assertNotEqual(empty.returncode, 0)
         self.assertIn("No tests found", empty.stderr)
         self.assertEqual(self.observed_calls(), [])
+
+
+    def test_measured_weights_separate_slow_suites_without_changing_commands(self):
+        names = [f"test_{index}.py" for index in range(8)]
+        seconds = {name: 100 if index % 2 else 1 for index, name in enumerate(names)}
+        for name in names:
+            self.python_fixture(name)
+        self.weights.write_text("DEFAULT_WEIGHT 1\n" + "".join(
+            f"{name} {value}\n" for name, value in seconds.items()))
+        seen = []
+        for shard in range(2):
+            before = len(seen)
+            result = self.run_runner("--smoke-shard", shard)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            calls = self.observed_calls()[before:]
+            seen.extend(calls)
+            self.assertEqual(calls, sorted(calls))
+            self.assertEqual(sum(seconds[name] for name in calls), 202)
+        self.assertEqual(sorted(seen), names)
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_unknown_renamed_and_stale_hints_never_change_discovered_coverage(self):
+        names = ["test_a.py", "test_new.py", "test_renamed.py", "test-z.sh"]
+        for name in names[:-1]:
+            self.python_fixture(name)
+        self.shell_fixture(names[-1])
+        self.weights.write_text("DEFAULT_WEIGHT 2.5\ntest_a.py 20\ntest_removed.py 9999\n")
+        for shard in range(2):
+            result = self.run_runner("--smoke-shard", shard)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.observed_calls()
+        self.assertEqual(sorted(calls), sorted(names))
+        self.assertEqual(len(calls), len(set(calls)))
+
+    def test_weighted_shards_still_collect_every_failure_and_later_suite(self):
+        names = [f"test_{index}.py" for index in range(8)]
+        for index, name in enumerate(names):
+            self.python_fixture(name, 7 if index in (1, 3) else 0)
+        self.weights.write_text("DEFAULT_WEIGHT 1\n" + "".join(
+            f"{name} {100 if index % 2 else 1}\n" for index, name in enumerate(names)))
+        for shard in range(2):
+            result = self.run_runner("--smoke-shard", shard)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Summary: 3/4 passed", result.stdout)
+            self.assertIn("Failures: 1", result.stdout)
+        self.assertEqual(sorted(self.observed_calls()), names)
+
+    def test_failed_selector_cannot_admit_a_partial_passing_shard(self):
+        passing = self.python_fixture("test_a.py")
+        self.python_fixture("test_b.py", 7)
+        self.selector.write_text(f"print({str(passing)!r})\nraise SystemExit(23)\n")
+        result = self.run_runner("--smoke-shard", 0)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Failed to partition the complete smoke test inventory", result.stderr)
+        self.assertNotIn("Summary:", result.stdout)
+        self.assertEqual(self.observed_calls(), [])
+
+    def test_missing_or_invalid_weights_reject_before_any_execution(self):
+        self.python_fixture("test_first.py")
+        cases = [None, "", "test_first.py 1\n", "DEFAULT_WEIGHT 1\nDEFAULT_WEIGHT 2\n",
+                 "DEFAULT_WEIGHT 1\ntest_first.py 1\ntest_first.py 2\n",
+                 "DEFAULT_WEIGHT 1\n../test_first.py 1\n", "DEFAULT_WEIGHT 1\ninvalid row extra\n"]
+        cases.extend(f"DEFAULT_WEIGHT {value}\n" for value in ("nan", "Infinity", "0", "-1", "bad"))
+        cases.extend(f"DEFAULT_WEIGHT 1\ntest_first.py {value}\n"
+                     for value in ("nan", "Infinity", "0", "-1", "bad"))
+        for contents in cases:
+            with self.subTest(contents=contents):
+                if contents is None:
+                    self.weights.unlink()
+                else:
+                    self.weights.write_text(contents)
+                result = self.run_runner("--smoke-shard", 0)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Failed to partition the complete smoke test inventory", result.stderr)
+                self.assertNotIn("Summary:", result.stdout)
+                self.assertEqual(self.observed_calls(), [])
+
+    def test_unsharded_explicit_and_docs_modes_do_not_consume_smoke_weights(self):
+        self.python_fixture("test_first_docs.py")
+        self.weights.unlink()
+        self.selector.unlink()
+        for arguments in ((), ("test_first_docs.py",), ("--docs-shard", "0")):
+            with self.subTest(arguments=arguments):
+                result = self.run_runner(*arguments)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("Summary: 1/1 passed", result.stdout)
+
+    def test_checked_in_hints_partition_complete_real_inventory_once(self):
+        tests = sorted(str(path) for path in (ROOT / "scripts/tests").iterdir()
+                       if path.is_file() and (path.match("test-*.sh") or path.match("test_*.py")))
+        seen = []
+        for shard in range(2):
+            result = subprocess.run(
+                ["python3", str(ROOT / "scripts/select-smoke-test-shard.py"),
+                 str(ROOT / ".github/scripts/smoke-test-seconds.txt"), "2", str(shard)],
+                input="\n".join(tests) + "\n", capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            selected = result.stdout.splitlines()
+            self.assertTrue(selected)
+            self.assertEqual(selected, sorted(selected))
+            seen.extend(selected)
+        self.assertEqual(sorted(seen), tests)
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_selector_rejects_invalid_or_duplicate_inventory_and_shard_numbers(self):
+        for count, index, inventory in [(2, 0, "test_a.py\ntest_a.py\n"),
+                                        (2, 0, "not_a_test.py\n"),
+                                        (2, 0, "test_a.py\n\ntest_b.py\n"),
+                                        (0, 0, "test_a.py\n"),
+                                        (2, 2, "test_a.py\n"),
+                                        (2, -1, "test_a.py\n")]:
+            with self.subTest(count=count, index=index, inventory=inventory):
+                result = subprocess.run(
+                    ["python3", str(self.selector), str(self.weights), str(count), str(index)],
+                    input=inventory, capture_output=True, text=True, timeout=15)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":
