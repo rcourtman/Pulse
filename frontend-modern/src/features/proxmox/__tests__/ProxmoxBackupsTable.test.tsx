@@ -2052,12 +2052,14 @@ describe('backup location identity in the consuming views', () => {
         await screen.findByText(/saved backup location cannot be identified uniquely/),
       ).toBeInTheDocument();
       expect(points()).toHaveLength(0);
-      const option = screen.getByRole('option', {
-        name: 'Backup location: PBS · pbs-main / Main',
-      }) as HTMLOptionElement;
-      await fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), {
-        target: { value: option.value },
-      });
+      await fireEvent.click(
+        screen.getByRole('button', { name: 'Backup location: Choose location' }),
+      );
+      await fireEvent.click(
+        within(screen.getByRole('listbox', { name: 'Backup location' })).getByRole('option', {
+          name: 'PBS · pbs-main / Main',
+        }),
+      );
       await waitFor(() => expect(points()).toHaveLength(1));
       expect(screen.getByText('Main / minipc')).toBeInTheDocument();
       expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
