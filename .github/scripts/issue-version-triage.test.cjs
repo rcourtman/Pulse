@@ -3310,6 +3310,95 @@ function topicPreparationRace({ action = "opened", initialComments = 0, events =
   return fixture;
 }
 
+function sameSecondTopicFixture({ action = "opened", stage = "initial", events = [],
+  eventChanges = {}, currentChanges = {} } = {}) {
+  const at = "2026-10-26T06:00:00Z";
+  return stage === "initial"
+    ? delayedTopicFixture({ action, events, eventChanges,
+      currentChanges: { updated_at: at, ...currentChanges } })
+    : topicPreparationRace({ action, events, eventChanges,
+      changes: { updated_at: at, ...currentChanges } });
+}
+
+for (const stage of ["initial", "preparation"]) {
+  test(`same-second comments ${stage === "initial" ? "before processing" : "during preparation"} preserve pending reviews and later dispositions`, async () => {
+    for (const action of ["opened", "edited"]) {
+      for (const disposition of [null, "unlabeled", "closed", "reopened", "transferred", "converted_to_discussion"]) {
+        const { args, calls } = sameSecondTopicFixture({ action, stage, events: disposition ? [{
+          event: disposition, label: { name: "Needs-Decomposition" },
+          created_at: "2026-10-26T06:00:00Z",
+        }] : [] });
+        await triage.syncLabels(args);
+        assert.deepEqual(calls.getEvents.map(call => call.page), [1], `${action}: ${disposition}`);
+        assert.deepEqual(calls.addLabels.flatMap(call => call.labels),
+          disposition ? [] : ["needs-decomposition"], `${action}: ${disposition}`);
+        assert.deepEqual(calls.removeLabel, []);
+        assert.deepEqual(calls.createComment, []);
+        assert.deepEqual(calls.getLatestRelease, []);
+        assert.deepEqual(calls.paginate, []);
+      }
+    }
+  });
+
+  test(`same-second ${stage} history failures stop without writes or a fallback read`, async () => {
+    for (const failure of [403, 500, null, [{ event: "unlabeled", created_at: "2026-10-26T06:00:00Z" }]]) {
+      const { args, github, calls } = sameSecondTopicFixture({ stage });
+      github.rest.issues.listEvents = async payload => {
+        calls.getEvents.push(payload);
+        if (typeof failure === "number") throw Object.assign(new Error("history unavailable"), { status: failure });
+        return { data: failure };
+      };
+      await assert.rejects(triage.syncLabels(args));
+      assert.equal(calls.getEvents.length, 1);
+      assert.deepEqual(calls.addLabels, []);
+      assert.deepEqual(calls.removeLabel, []);
+      assert.deepEqual(calls.createComment, []);
+    }
+  });
+}
+
+test("same-second activity needs readable increasing comment counts before history or mutation", async () => {
+  for (const [before, after] of [[0, undefined], [undefined, 1], [0, -1], [0, 0.5], [2, 1]]) {
+    const { args, calls } = sameSecondTopicFixture({ eventChanges: { comments: before },
+      currentChanges: { comments: after } });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents, []);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+  }
+});
+
+test("same-second comment reconciliation keeps version deltas and Community labels scoped", async () => {
+  for (const stage of ["initial", "preparation"]) {
+    const { args, calls } = sameSecondTopicFixture({ stage, eventChanges: {
+      body: "### Additional actionable topics\nRetain per-host identity.\n### Pulse version\n6.7.0\n",
+      labels: ["bug", "affects-6.5.0", "needs-version-info", "needs-human", "release-blocker",
+        "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+    } });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents.map(call => call.page), [1]);
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.7.0", "needs-decomposition"]]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.5.0", "needs-version-info"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+  }
+});
+
+test("further same-second activity after preparation history stops the prepared delta", async () => {
+  const { args, github, calls } = sameSecondTopicFixture({ stage: "preparation" });
+  const get = github.rest.issues.get;
+  github.rest.issues.get = async payload => {
+    const result = await get(payload);
+    return { data: { ...result.data, comments: calls.getIssue.length >= 3 ? 2 : result.data.comments } };
+  };
+  await triage.syncLabels(args);
+  assert.equal(calls.getEvents.length, 1);
+  assert.equal(calls.getIssue.length, 3);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
 for (const [action, initialComments] of [["opened", 0], ["opened", 1], ["edited", 0], ["edited", 1]]) {
   test(`a comment during ${action} metadata preparation preserves the declared review after ${initialComments} earlier comments`, async () => {
     const { args, calls } = topicPreparationRace({ action, initialComments });
@@ -3379,7 +3468,7 @@ test("changed report, labels or unreadable comment clocks still stop before reco
     { title: "A different title" }, { state: "closed" }, { pull_request: {} },
     { labels: [{ name: "enhancement" }, { name: "needs-human" }] },
     { comments: 0 }, { comments: undefined }, { comments: -1 }, { comments: 0.5 },
-    { updated_at: "unknown" }, { updated_at: "2026-10-26T06:00:00Z" },
+    { updated_at: "unknown" }, { updated_at: "2026-10-26T05:59:59Z" },
   ]) {
     const { args, calls } = topicPreparationRace({ changes });
     await triage.syncLabels(args);

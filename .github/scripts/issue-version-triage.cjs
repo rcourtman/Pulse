@@ -535,13 +535,16 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
 }
 
 async function declarationSurvivesLaterComments(github, context, issue, eventIssue) {
-  // A comment advances updated_at without changing the declaration. The clock
-  // alone must not lose its review task, but identical text cannot prove that
+  // A comment can advance the activity count without changing the declaration.
+  // The clock alone must not lose its review task, but identical text cannot prove that
   // Community has not already cleared it. Consult complete, bounded history
   // only for this delayed-comment case; never infer a disposition from silence.
   const eventTime = typeof eventIssue.updated_at === "string" ? Date.parse(eventIssue.updated_at) : NaN;
   const currentTime = typeof issue.updated_at === "string" ? Date.parse(issue.updated_at) : NaN;
-  if (!Number.isFinite(eventTime) || !Number.isFinite(currentTime) || currentTime <= eventTime ||
+  // GitHub's clock has second precision. A larger comment count proves later
+  // activity even when both timestamps match; its review history still needs
+  // checking before either restoring or discarding this declaration.
+  if (!Number.isFinite(eventTime) || !Number.isFinite(currentTime) || currentTime < eventTime ||
       !Number.isInteger(eventIssue.comments) || eventIssue.comments < 0 ||
       !Number.isInteger(issue.comments) || issue.comments <= eventIssue.comments ||
       issue.title !== eventIssue.title || issue.body !== eventIssue.body) {
@@ -612,7 +615,8 @@ async function syncLabels({ github, context, core }) {
   const previousBody = context.payload.changes?.body?.from;
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
-    issue.updated_at === eventIssue.updated_at;
+    issue.updated_at === eventIssue.updated_at &&
+    issue.comments === eventIssue.comments;
   const declarationChanged = hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
