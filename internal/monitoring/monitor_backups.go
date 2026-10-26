@@ -195,6 +195,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	storageSuccess := map[string]struct{}{}
 	sharedStorageSuccess := map[string]struct{}{}
 	unqueryableStorages := map[string]struct{}{}
+	skippedLocalStorages := map[pveLocalBackupStorage]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
 	// Build guest lookup map to find actual node for each VMID
@@ -285,25 +286,23 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				continue
 			}
 			storagesWithBackup++
-			if !storageContentQueryable(storage) {
-				// Configured but unreadable is not an empty content listing.
-				// Preserve the no-query boundary (notably disabled storage)
-				// without letting this skipped scope delete known history or
-				// qualify the provider-wide observation as complete. PVE also
-				// reports storage restricted to other nodes as disabled here,
-				// so whether it went unread is decided after every node.
-				unqueryableStorages[storage.Storage] = struct{}{}
-				if _, ok := storageSuccess[storage.Storage]; !ok {
-					storagePreserveNeeded[storage.Storage] = struct{}{}
-				}
-				continue
-			}
-
-			// A shared listing can cover several nodes. A same-named local
-			// disk cannot: keep its read origin separate from guest location.
+			// Establish repository scope before admission: a disabled local
+			// disk is no more covered by a peer than a failed content read.
 			storageNode := ""
 			if storage.Shared == 0 && !isInherentlySharedStorageType(storage.Type) {
 				storageNode = node.Node
+			}
+			if !storageContentQueryable(storage) {
+				// Do not query disabled content to resolve its membership. A
+				// shared read may cover a skipped peer, but local assignment
+				// needs independent evidence after every node has been read.
+				if storageNode != "" {
+					skippedLocalStorages[pveLocalBackupStorage{node: storageNode, storage: storage.Storage}] = struct{}{}
+				} else {
+					unqueryableStorages[storage.Storage] = struct{}{}
+					storagePreserveNeeded[storage.Storage] = struct{}{}
+				}
+				continue
 			}
 
 			// Get storage content
@@ -466,12 +465,40 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	}
 
 	if ctx.Err() != nil {
+		return
+	}
+
+	// PVE also lists node-restricted local storage as disabled on excluded
+	// nodes. A peer's matching name alone cannot distinguish that from an
+	// unread local disk. Resolve only that ambiguity with the ordinary bounded
+	// datacenter catalogue, once per poll; failed/missing config is not absence.
+	storageAssignments := make(map[string]string)
+	for scope := range skippedLocalStorages {
+		if _, readElsewhere := storageSuccess[scope.storage]; !readElsewhere {
+			continue
+		}
+		if configured, err := client.GetAllStorage(ctx); err == nil {
+			for _, storage := range configured {
+				storageAssignments[storage.Storage] = storage.Nodes
+			}
+		}
+		break
+	}
+	if ctx.Err() != nil {
 		// A cancelled enumeration cannot publish a successful empty inventory
 		// or renew provider evidence for a payload we did not accept.
 		return
 	}
+	for scope := range skippedLocalStorages {
+		if assignment, known := storageAssignments[scope.storage]; known &&
+			clusterStorageRestrictedToOtherNodes(assignment, scope.node) {
+			continue
+		}
+		failedLocalStorages[scope] = struct{}{}
+		contentFailures++
+	}
 
-	// A storage skipped on one node is unread only if no node listed it.
+	// A shared storage skipped on one node is unread only if no node listed it.
 	for storageName := range unqueryableStorages {
 		if _, ok := storageSuccess[storageName]; !ok {
 			contentFailures++
@@ -785,8 +812,8 @@ type pveLocalBackupStorage struct {
 	storage string
 }
 
-// Name-wide failures cover unread/disabled targets and shared storage. Actual
-// local content failures and unread nodes must survive another node's success.
+// Name-wide failures cover shared storage. Local failed/skipped content reads
+// and unread nodes must survive another node's success.
 // Legacy rows without provenance are retained conservatively until a complete
 // read replaces them; guest location is not evidence of storage read origin.
 type pveBackupReadFailures struct {

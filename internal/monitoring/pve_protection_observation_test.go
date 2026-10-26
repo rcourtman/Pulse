@@ -331,6 +331,17 @@ func TestPVEProtectionDisabledStorageIsNotAnEmptyRead(t *testing.T) {
 type nodeRestrictedBackupStorageClient struct {
 	*pveReconciliationClient
 	contentQueries map[string]int
+	configQueries  int
+}
+
+// Matching names alone do not prove membership: the datacenter catalogue
+// explicitly excludes each node from the other node's local storage.
+func (c *nodeRestrictedBackupStorageClient) GetAllStorage(context.Context) ([]proxmox.Storage, error) {
+	c.configQueries++
+	return []proxmox.Storage{
+		{Storage: "archive-node-a", Type: "dir", Content: "backup", Nodes: "node-a"},
+		{Storage: "archive-node-b", Type: "dir", Content: "backup", Nodes: "node-b"},
+	}, nil
 }
 
 func (c *nodeRestrictedBackupStorageClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
@@ -363,6 +374,9 @@ func TestPVEProtectionNodeRestrictedStorageReadElsewhereIsComplete(t *testing.T)
 			}
 			if client.contentQueries["node-a/archive-node-b"] != 0 || client.contentQueries["node-b/archive-node-a"] != 0 {
 				t.Fatalf("storage was queried on a node it is not available on: %+v", client.contentQueries)
+			}
+			if client.configQueries != 1 {
+				t.Fatalf("ambiguous local scopes need one shared catalogue read, got %d", client.configQueries)
 			}
 			f.assertHistory(t, recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient)
 		})
