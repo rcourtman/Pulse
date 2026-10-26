@@ -68,6 +68,7 @@ function createGithub({
   existingComments = [],
   issues = [],
   currentIssue = null,
+  events = [],
 } = {}) {
   const calls = {
     createComment: [],
@@ -78,6 +79,7 @@ function createGithub({
     addLabels: [],
     removeLabel: [],
     getIssue: [],
+    getEvents: [],
   };
 
   const github = {
@@ -87,6 +89,11 @@ function createGithub({
         async get(payload) {
           calls.getIssue.push(payload);
           return { data: github.currentIssue };
+        },
+        async listEvents(payload) {
+          calls.getEvents.push(payload);
+          const start = (payload.page - 1) * payload.per_page;
+          return { data: events.slice(start, start + payload.per_page) };
         },
         async getLabel({ name }) {
           calls.getLabel.push(name);
@@ -2832,6 +2839,194 @@ test("label-creation reconciliation still respects a newer Community decision", 
   assert.equal(calls.getLabel.length, 2);
   assert.equal(calls.createLabel.length, 1);
   assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
+function delayedTopicFixture({ action = "opened", events = [], currentChanges = {}, eventChanges = {} } = {}) {
+  const issue = {
+    number: 2900,
+    title: "Notification delivery",
+    body: "### Additional actionable topics\nAlso retain per-host notification identity.\n",
+    labels: [{ name: "enhancement" }],
+    updated_at: "2026-10-26T06:00:00Z",
+    comments: 0,
+    ...eventChanges,
+  };
+  const { github, calls } = createGithub({ events, currentIssue: {
+    ...issue, state: "open", comments: 1, updated_at: "2026-10-26T06:01:00Z", ...currentChanges,
+  } });
+  return { github, calls, args: { github, core: createCore(), context: createContext({
+    issue, action, previousBody: "### Additional actionable topics\nNone.\n",
+  }) } };
+}
+
+for (const action of ["opened", "edited"]) {
+  test(`a comment before ${action} processing cannot lose a declared topic review`, async () => {
+    const { args, calls } = delayedTopicFixture({ action });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents, [{ owner: "rcourtman", repo: "Pulse", issue_number: 2900,
+      per_page: 100, page: 1 }]);
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+    assert.equal(calls.getIssue.length, 2, "the final current-report guard still runs");
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+  });
+}
+
+test("a revised topic after an earlier review survives a later comment", async () => {
+  const { args, calls } = delayedTopicFixture({ action: "edited", events: [{
+    event: "unlabeled", label: { name: "needs-decomposition" }, created_at: "2026-10-26T05:59:59Z",
+  }] });
+  args.context.payload.changes.body.from = "### Additional actionable topics\nRetain one host name.\n";
+  await triage.syncLabels(args);
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+});
+
+for (const created_at of ["2026-10-26T06:00:00Z", "2026-10-26T06:00:01Z"]) {
+  test(`a completed review at ${created_at} cannot be restored by a comment-delayed event`, async () => {
+    const { args, calls } = delayedTopicFixture({ events: [{
+      event: "unlabeled", label: { name: "Needs-Decomposition" }, created_at,
+    }] });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("review history is paginated before allowing a delayed declaration", async () => {
+  const unrelated = { event: "labeled", label: { name: "unrelated" }, created_at: "2026-10-26T05:00:00Z" };
+  for (const cleared of [false, true]) {
+    const events = [...Array(100).fill(unrelated), ...(cleared ? [{
+      event: "unlabeled", label: { name: "needs-decomposition" }, created_at: "2026-10-26T06:00:30Z",
+    }] : [])];
+    const { args, calls } = delayedTopicFixture({ events });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents.map(call => call.page), [1, 2]);
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels), cleared ? [] : ["needs-decomposition"]);
+  }
+});
+
+test("a comment and unrelated label changes do not dispose of a declared topic", async () => {
+  const { args, calls } = delayedTopicFixture({
+    currentChanges: { labels: [{ name: "enhancement" }, { name: "operator-reviewed" }, { name: "needs-human" }] },
+    events: [{ event: "unlabeled", label: { name: "unrelated" }, created_at: "2026-10-26T06:00:20Z" }],
+  });
+  await triage.syncLabels(args);
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+});
+
+for (const event of ["closed", "reopened", "transferred", "converted_to_discussion"]) {
+  test(`an intervening ${event} event prevents comment-delayed restoration`, async () => {
+    const { args, calls } = delayedTopicFixture({ events: [{ event, created_at: "2026-10-26T06:00:30Z" }] });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+  });
+}
+
+test("history newer than the current report snapshot is not permission to restore a task", async () => {
+  const { args, calls } = delayedTopicFixture({ events: [{
+    event: "labeled", created_at: "2026-10-26T06:01:01Z", label: { name: "unrelated" },
+  }] });
+  await triage.syncLabels(args);
+  assert.deepEqual(calls.addLabels, []);
+});
+
+test("only a readable, unchanged declaration with a later comment needs review history", async () => {
+  for (const options of [
+    { currentChanges: { body: "### Additional actionable topics\nA different topic.\n" } },
+    { currentChanges: { title: "A different report title" } },
+    { currentChanges: { comments: 0 } },
+    { currentChanges: { comments: undefined } },
+    { eventChanges: { comments: undefined } },
+    { eventChanges: { comments: -1 } },
+    { currentChanges: { updated_at: "unknown" } },
+    { currentChanges: { updated_at: 1792994460000 } },
+    { eventChanges: { updated_at: null } },
+    { currentChanges: { updated_at: "2026-10-26T05:59:59Z" } },
+    { action: "reopened" },
+    { action: "edited", eventChanges: { body: "### Additional actionable topics\nNone.\n" } },
+  ]) {
+    const { args, calls } = delayedTopicFixture(options);
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents, [], JSON.stringify(options));
+    assert.deepEqual(calls.addLabels, [], JSON.stringify(options));
+  }
+  const { args, calls } = delayedTopicFixture({ action: "edited" });
+  args.context.payload.changes.body.from = args.context.payload.issue.body;
+  await triage.syncLabels(args);
+  assert.deepEqual(calls.getEvents, []);
+  assert.deepEqual(calls.addLabels, []);
+});
+
+test("current or already queued declarations do not add a history read", async () => {
+  for (const currentChanges of [
+    { comments: 0, updated_at: "2026-10-26T06:00:00Z" },
+    { labels: [{ name: "enhancement" }, { name: "needs-decomposition" }] },
+  ]) {
+    const { args, calls } = delayedTopicFixture({ currentChanges });
+    await triage.syncLabels(args);
+    assert.deepEqual(calls.getEvents, []);
+    assert.deepEqual(calls.addLabels.flatMap(call => call.labels),
+      currentChanges.labels ? [] : ["needs-decomposition"]);
+  }
+});
+
+for (const status of [403, 404, 500]) {
+  test(`a review-history ${status} fails without mutation or an alternate read`, async () => {
+    const { args, github, calls } = delayedTopicFixture();
+    github.rest.issues.listEvents = async payload => {
+      calls.getEvents.push(payload);
+      const error = new Error("history unavailable");
+      error.status = status;
+      throw error;
+    };
+    await assert.rejects(triage.syncLabels(args), error => error.status === status);
+    assert.equal(calls.getEvents.length, 1);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  });
+}
+
+test("malformed or incomplete review history never becomes an empty successful read", async () => {
+  for (const data of [null, {}, [null], [{ event: "unlabeled", created_at: "2026-10-26T06:00:30Z" }],
+    [{ event: "labeled", created_at: "unknown" }], [{ event: "labeled", created_at: 1792994430000 }],
+    Array(101).fill({ event: "labeled", created_at: "2026-10-26T06:00:30Z" })]) {
+    const { args, github, calls } = delayedTopicFixture();
+    github.rest.issues.listEvents = async () => ({ data });
+    await assert.rejects(triage.syncLabels(args), /Issue review history/);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+  }
+});
+
+test("the bounded review-history limit stops without writes or another route", async () => {
+  const event = { event: "labeled", created_at: "2026-10-26T05:00:00Z", label: { name: "unrelated" } };
+  const { args, calls } = delayedTopicFixture({ events: Array(1000).fill(event) });
+  await assert.rejects(triage.syncLabels(args), /exceeded the bounded event read/);
+  assert.equal(calls.getEvents.length, 10);
+  assert.deepEqual(calls.createLabel, []);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+});
+
+test("the final report guard still rejects changes during history collection", async () => {
+  const { args, github, calls } = delayedTopicFixture();
+  github.rest.issues.listEvents = async payload => {
+    calls.getEvents.push(payload);
+    github.currentIssue = { ...github.currentIssue, updated_at: "2026-10-26T06:02:00Z",
+      labels: [...github.currentIssue.labels, { name: "needs-human" }] };
+    return { data: [] };
+  };
+  await triage.syncLabels(args);
   assert.deepEqual(calls.addLabels, []);
   assert.deepEqual(calls.removeLabel, []);
   assert.deepEqual(calls.createComment, []);
