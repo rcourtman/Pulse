@@ -4186,6 +4186,108 @@ func TestInstallSHLeastPrivilegeLifecycleStateIsRootBoundarySeparated(t *testing
 	}
 }
 
+func TestInstallSHFreshPreflightIgnoresUnsearchableSavedLifecycle(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("requires real non-root directory traversal checks")
+	}
+	root := t.TempDir()
+	lifecycleDir := filepath.Join(root, "saved-lifecycle")
+	if err := os.Mkdir(lifecycleDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	saved := map[string]string{
+		"install.sh":        "saved installer must not be opened or changed\n",
+		"install.sh.sha256": "saved checksum must not be opened or changed\n",
+		"connection.env":    "saved connection state must not be opened or changed\n",
+	}
+	for name, body := range saved {
+		if err := os.WriteFile(filepath.Join(lifecycleDir, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Recreate the regular sudo user's inability to search root:pulse-agent's
+	// lifecycle directory, without needing root or touching /etc/pulse-agent.
+	t.Cleanup(func() { _ = os.Chmod(lifecycleDir, 0700) })
+	if err := os.Chmod(lifecycleDir, 0); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("bash", "-c", `[[ -d "$1" ]] && ! (cd "$1" 2>/dev/null)`, "check", lifecycleDir).CombinedOutput(); err != nil {
+		t.Fatalf("fixture must exist but be unsearchable: %v\n%s", err, out)
+	}
+
+	source, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const config = `INSTALLER_LIFECYCLE_DIR="/etc/pulse-agent"`
+	if strings.Count(string(source), config) != 1 {
+		t.Fatal("expected one fixed lifecycle directory configuration")
+	}
+	// Execute the whole preflight entry point. Only relocate the protected
+	// directory into the fixture; do not replace trust, curl or preflight code.
+	fixture := strings.Replace(string(source), config, "INSTALLER_LIFECYCLE_DIR="+strconv.Quote(lifecycleDir), 1)
+	installer := filepath.Join(root, "install.sh")
+	if err := os.WriteFile(installer, []byte(fixture), 0700); err != nil {
+		t.Fatal(err)
+	}
+	tokenPath := filepath.Join(root, "bootstrap.token")
+	token := strings.Repeat("b", 64) + "\n"
+	if err := os.WriteFile(tokenPath, []byte(token), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var downloads atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/health":
+			w.WriteHeader(http.StatusOK)
+		case "/download/pulse-agent":
+			if r.Method != http.MethodHead || r.URL.Query().Get("arch") == "" {
+				http.Error(w, "expected bounded artifact metadata check", http.StatusBadRequest)
+				return
+			}
+			downloads.Add(1)
+			w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", installer, "--url", server.URL, "--token-file", tokenPath,
+		"--preflight-only", "--output", "json", "--non-interactive")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("fresh non-root preflight failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `"code":"agent_download_available"`) ||
+		!strings.Contains(string(out), `"phase":"preflight_complete","code":"ok"`) || downloads.Load() != 1 {
+		t.Fatalf("preflight did not complete its actual artifact check:\n%s", out)
+	}
+	if strings.Contains(string(out), strings.TrimSpace(token)) {
+		t.Fatal("preflight exposed the private bootstrap token")
+	}
+	if info, err := os.Stat(lifecycleDir); err != nil || info.Mode().Perm() != 0 {
+		t.Fatalf("preflight changed the protected directory's permissions: %v %v", info, err)
+	}
+	if err := os.Chmod(lifecycleDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range saved {
+		got, err := os.ReadFile(filepath.Join(lifecycleDir, name))
+		if err != nil || string(got) != want {
+			t.Fatalf("preflight changed saved lifecycle file %s: %v", name, err)
+		}
+	}
+	for path, want := range map[string]string{installer: fixture, tokenPath: token} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("preflight changed caller-owned bootstrap input: %v", err)
+		}
+	}
+}
+
 func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) {
 	root := t.TempDir()
 	lifecycleDir := filepath.Join(root, "lifecycle")
@@ -4211,16 +4313,25 @@ func TestInstallSHSavedInstallerTamperAndUntrustedStateFailClosed(t *testing.T) 
 ` + extractLifecycleTrustShellFunctions(t) + `
 ` + extractInstallShellFunction(t, "installer_file_sha256") + `
 ` + extractInstallShellFunction(t, "verify_saved_installer_self_integrity") + `
-		verify_saved_installer_self_integrity "` + installerPath + `"
+		verify_saved_installer_self_integrity "$1"
 	`
-	if out, err := exec.Command("bash", "-c", verifyScript).CombinedOutput(); err != nil {
-		t.Fatalf("untampered installer failed verification: %v\n%s", err, out)
+	aliasParent := filepath.Join(t.TempDir(), "parent-alias")
+	if err := os.Symlink(root, aliasParent); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{installerPath, filepath.Join(aliasParent, "lifecycle", "install.sh")}
+	for _, path := range paths {
+		if out, err := exec.Command("bash", "-c", verifyScript, "verify-saved", path).CombinedOutput(); err != nil {
+			t.Fatalf("untampered installer failed verification through %s: %v\n%s", path, err, out)
+		}
 	}
 	if err := os.WriteFile(installerPath, []byte("#!/usr/bin/env bash\necho replaced\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command("bash", "-c", verifyScript).CombinedOutput(); err == nil {
-		t.Fatalf("tampered installer passed verification:\n%s", out)
+	for _, path := range paths {
+		if out, err := exec.Command("bash", "-c", verifyScript, "verify-saved", path).CombinedOutput(); err == nil {
+			t.Fatalf("tampered installer passed verification through %s:\n%s", path, out)
+		}
 	}
 
 	attackerDir := filepath.Join(root, "collector-writable")

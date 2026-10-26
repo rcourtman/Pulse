@@ -3754,7 +3754,6 @@ install_lifecycle_file_atomically() {
 verify_saved_installer_self_integrity() {
     local script_path="${1:-$0}"
     local script_dir=""
-    local lifecycle_dir=""
     local expected=""
     local actual=""
     local checksum_path=""
@@ -3762,8 +3761,9 @@ verify_saved_installer_self_integrity() {
     [[ -f "$script_path" && ! -L "$script_path" ]] || return 0
     [[ -d "$INSTALLER_LIFECYCLE_DIR" && ! -L "$INSTALLER_LIFECYCLE_DIR" ]] || return 0
     script_dir=$(cd "$(dirname "$script_path")" 2>/dev/null && pwd -P) || return 1
-    lifecycle_dir=$(cd "$INSTALLER_LIFECYCLE_DIR" 2>/dev/null && pwd -P) || return 1
-    if [[ "$script_dir" != "$lifecycle_dir" || "$(basename "$script_path")" != "install.sh" ]]; then
+    # Compare directory identity without entering the saved root-only boundary.
+    # A freshly authenticated installer must still support non-root preflight.
+    if [[ ! "$script_dir" -ef "$INSTALLER_LIFECYCLE_DIR" || "$(basename "$script_path")" != "install.sh" ]]; then
         return 0
     fi
     checksum_path="${script_dir}/install.sh.sha256"
