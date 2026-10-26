@@ -1357,17 +1357,7 @@ func (c *Client) GetStorage(ctx context.Context, node string) ([]Storage, error)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Storage `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readStorageCatalog(resp, true)
 }
 
 // GetAllStorage returns storage information across all nodes
@@ -1387,17 +1377,7 @@ func (c *Client) GetAllStorage(ctx context.Context) ([]Storage, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Storage `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return result.Data, nil
+	return readStorageCatalog(resp, false)
 }
 
 // Task represents a Proxmox task
@@ -1561,19 +1541,14 @@ func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []StorageContent `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	contents, err := readStorageContentInventory(resp)
+	if err != nil {
 		return nil, err
 	}
 
 	// Filter for backup content only
 	var backups []StorageContent
-	for _, content := range result.Data {
+	for _, content := range contents {
 		if content.Content == "backup" || content.Content == "vztmpl" {
 			backups = append(backups, content)
 		}

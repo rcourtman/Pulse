@@ -449,7 +449,7 @@ func TestClusterClient_GetStorage(t *testing.T) {
 			fmt.Fprint(w, `{"data":[{"node":"node1","status":"online"}]}`)
 			return
 		}
-		fmt.Fprint(w, `{"data":[{"storage":"local","type":"dir"}]}`)
+		fmt.Fprint(w, `{"data":[{"storage":"local","type":"dir","content":"images,backup"}]}`)
 	}))
 	defer server.Close()
 

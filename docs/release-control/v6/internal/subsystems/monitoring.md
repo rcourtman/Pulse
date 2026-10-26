@@ -8389,3 +8389,26 @@ complete recovery and confirmed scoped removal. `TestPVESnapshotHTTPBrowserProdu
 feeds the actual consuming proof. These are synthetic HTTP/provider fixtures,
 not native guest safety, backup execution, installed recovery or a diagnosis of
 #3248. The separate prior lifecycle-suite failure remains unexplained.
+
+### Storage HTTP success must be a complete inventory
+
+PVE node storage, cluster storage configuration and storage content readers admit
+only a fully read, bounded HTTP-200 response with one unambiguous JSON object and
+an explicit `data` array. Missing/null inventories, error-bearing or conflicting
+envelopes, trailing bytes, invalid rows and duplicate identities are unread
+history, not successful empty or partial enumerations. Every content row is
+validated before filtering backup/template kinds. Node catalogs require their
+storage identity, type and supported-content discriminators; configuration-only
+`/storage` rows retain optional/default fields. Optional metadata, host backups,
+zero-byte/in-progress entries and explicit empty arrays remain supported. No
+schema, transport, auth, failover, query admission or polling budget changes.
+
+`TestStorageInventoryResponseAdmission`, accepted-field/filter controls and
+completed-response tests exercise all three HTTP readers. The registered
+`TestPVEStorageHTTP*` regressions connect real HTTP reads to storage backup
+polling, asynchronous ingest and canonical protection: warm/cold history,
+independently accepted peers, all-unread state, repeated failures, ordinary
+recovery and confirmed scoped absence. Their opt-in producer feeds the existing
+production Backups consumer for browser proof. Retained evidence is not a fresh
+read, available archive, installed recovery or a diagnosis of #3248; no guest or
+backup operation, thaw or filesystem-liveness assertion follows.
