@@ -48,8 +48,8 @@ export function buildProtectionPostureBatchURL(resourceIDs: readonly string[]): 
   return `${PROTECTION_POSTURES_URL}?${params.toString()}`;
 }
 
-async function fetchProtectionPostures(resourceIDs: readonly string[]) {
-  return apiFetchJSON<unknown>(buildProtectionPostureBatchURL(resourceIDs));
+async function fetchProtectionPostures(resourceIDs: readonly string[], signal: AbortSignal) {
+  return apiFetchJSON<unknown>(buildProtectionPostureBatchURL(resourceIDs), { signal });
 }
 
 /**
@@ -58,13 +58,31 @@ async function fetchProtectionPostures(resourceIDs: readonly string[]) {
  */
 async function fetchAllProtectionPostures(
   resourceIDs: readonly string[],
+  signal: AbortSignal,
 ): Promise<ProtectionPosturesResponse> {
+  signal.throwIfAborted();
   const batches: string[][] = [];
   for (let offset = 0; offset < resourceIDs.length; offset += MAX_PROTECTION_POSTURE_BATCH_SIZE) {
     batches.push(resourceIDs.slice(offset, offset + MAX_PROTECTION_POSTURE_BATCH_SIZE));
   }
-  const responses = await Promise.all(batches.map(fetchProtectionPostures));
-  return parseProtectionPostureBatches(responses);
+  // Every batch belongs to this one query read. Scope changes, replacement
+  // reads and disposal cancel the transport too, not just its late result.
+  // If one batch fails, the joined assessment is unusable: stop its siblings
+  // rather than leaving them running after the query has already settled.
+  const controller = new AbortController();
+  const cancel = () => controller.abort(signal.reason);
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    const responses = await Promise.all(
+      batches.map((batch) => fetchProtectionPostures(batch, controller.signal)),
+    );
+    return parseProtectionPostureBatches(responses);
+  } catch (error) {
+    controller.abort();
+    throw error;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+  }
 }
 
 export function useProtectionPostures(resourceIDs: Accessor<readonly string[] | null | undefined>) {
@@ -76,7 +94,7 @@ export function useProtectionPostures(resourceIDs: Accessor<readonly string[] | 
   const state = createNonSuspendingQuery<ProtectionPosturesResponse, string>({
     source,
     cacheKey: (key) => `protection-postures:${key}`,
-    fetcher: (key) => fetchAllProtectionPostures(JSON.parse(key) as string[]),
+    fetcher: (key, signal) => fetchAllProtectionPostures(JSON.parse(key) as string[], signal),
     initialValue: EMPTY_RESPONSE,
     pollMs: REFRESH_MS,
   });

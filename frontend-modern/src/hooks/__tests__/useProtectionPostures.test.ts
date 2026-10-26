@@ -77,6 +77,12 @@ describe('useProtectionPostures transport', () => {
         ([url]) => new URL(url, 'https://pulse.invalid').searchParams.getAll('resourceId').length,
       );
       expect(batchSizes).toEqual([MAX_PROTECTION_POSTURE_BATCH_SIZE, 1]);
+      // Fan-out stays inside the query owner's cancellable read; successful
+      // batches share a live signal rather than inventing separate lifetimes.
+      const signals = apiFetchJSONMock.mock.calls.map(([, options]) => options?.signal);
+      expect(signals[0]).toBeInstanceOf(AbortSignal);
+      expect(signals[0].aborted).toBe(false);
+      expect(signals[1]).toBe(signals[0]);
       // Each batch keeps the order the backend sent; the batches join in request order.
       expect(hook.postures().map((posture) => posture.subjectResourceId)).toEqual([
         ...resourceIDs.slice(0, MAX_PROTECTION_POSTURE_BATCH_SIZE).reverse(),
