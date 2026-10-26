@@ -4,8 +4,12 @@
 # Supports: Linux (systemd, OpenRC, SysV init), macOS (launchd), FreeBSD (rc.d), Synology DSM (6.x/7+), Unraid, QNAP QTS/QuTS hero, TrueNAS
 #
 # Usage:
-#   curl -fsSL http://pulse/install.sh | bash -s -- --url http://pulse --token <token> [options]
-#   curl -fsSL http://pulse/install.sh | bash -s -- --update --url http://pulse [options]
+#   Download over verified HTTPS to a private file and inspect it first. See:
+#   docs/UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas
+#   bash "$HOME/.config/pulse/agent-install.sh" --url https://pulse.example.com --token-file "$HOME/.config/pulse/agent-token" [options]
+#   bash "$HOME/.config/pulse/agent-install.sh" --update
+#   Use the target host's root/admin shell where required. Never put a token
+#   in command history or process arguments; the caller owns input-file cleanup.
 #
 # Options:
 #   --enable-host       Enable host metrics (default: true)
@@ -540,15 +544,23 @@ verify_download_signature() {
 }
 
 show_help() {
-    cat <<EOF
+    cat <<'EOF'
 Pulse Unified Agent Installer
 
 Usage:
-  install.sh [options]
+  bash "$HOME/.config/pulse/agent-install.sh" --url https://pulse.example.com --token-file "$HOME/.config/pulse/agent-token" [options]
+  bash "$HOME/.config/pulse/agent-install.sh" --update
+
+Download over verified HTTPS to a private file and inspect it before running.
+Keep API tokens out of command history and process arguments. Prefer --token-file;
+the caller owns input-file cleanup. Use the target host's root/admin shell where
+required. For private-file preparation and platform requirements, see:
+  https://github.com/rcourtman/Pulse/blob/fe65bc4c4760dfe82f758dc926fb2cc456f49080/docs/UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas
 
 Options:
-  --url <url>             Pulse server URL (e.g. http://pulse:7655)
-  --token <token>         Pulse API token
+  --url <url>             Pulse server URL (e.g. https://pulse.example.com)
+  --token-file <path>     Read token from a private file; the caller owns its cleanup
+  --token <token>         Compatibility option; exposes the token in process arguments (prefer --token-file)
   --interval <duration>   Reporting interval (default: 30s)
   --enable-host           Enable host metrics (default: true)
   --disable-host          Disable host metrics
@@ -588,7 +600,6 @@ Options:
   --retarget              Point an existing agent at --url using saved identity and token
   --uninstall             Remove the agent
   --non-interactive       Skip TTY prompts (for automated/scripted installs)
-  --token-file <path>     Read token from a private file; the caller owns its cleanup
   --pulse-url <url>       Alias for --url
   --preflight-only        Run preflight checks and exit (no install)
   --output <format>       Output format: text (default) or json
