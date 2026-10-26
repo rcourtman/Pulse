@@ -28,13 +28,18 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
         source_sha: str = SOURCE_SHA,
         gh_fail_first: int = 0,
         docker_fail_first: int = 0,
+        docker_refusal: str = "",
+        refusal_message: str = "insufficient_scope: authorization failed",
         attempts: str = "4",
-    ) -> tuple[subprocess.CompletedProcess[str], str]:
+    ) -> tuple[subprocess.CompletedProcess[str], str, list[str]]:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
             bin_path = temp_path / "bin"
             bin_path.mkdir()
             gh_log = temp_path / "gh.log"
+            docker_log = temp_path / "docker.log"
+            scratch = temp_path / "scratch"
+            scratch.mkdir()
             digest_file = temp_path / "digests"
             values = {
                 "docker.io/rcourtman/pulse:v6.4.1": DIGEST,
@@ -56,6 +61,13 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                 textwrap.dedent(
                     """\
                     #!/bin/sh
+                    reference="$4"
+                    printf '%s\n' "$reference" >> "$DOCKER_LOG"
+                    if [ "$reference" = "$DOCKER_REFUSAL" ]; then
+                      printf '{"digest":"partial-refused-output'
+                      printf '%s\n' "$REFUSAL_MESSAGE" >&2
+                      exit 29
+                    fi
                     # A transient registry fault prints a half answer and fails, as a dropped
                     # connection does; the first DOCKER_FAIL_FIRST calls behave that way.
                     n=$(cat "$DOCKER_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$DOCKER_COUNT"
@@ -64,7 +76,6 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                       echo "ERROR: failed to copy: unexpected status 502 Bad Gateway" >&2
                       exit 1
                     fi
-                    reference="$4"
                     digest=$(awk -v ref="$reference" '$1 == ref { print $2 }' "$DIGEST_FILE")
                     [ -n "$digest" ] || exit 1
                     printf '{"digest":"%s"}\n' "$digest"
@@ -86,6 +97,10 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                       echo "ERROR: failed to copy: unexpected status 502 Bad Gateway" >&2
                       exit 1
                     fi
+                    if [ "$GH_EXIT" -eq 29 ]; then
+                      printf 'partial-refused-output'
+                      printf '%s\n' "$REFUSAL_MESSAGE" >&2
+                    fi
                     exit "$GH_EXIT"
                     """
                 ),
@@ -105,6 +120,10 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                     "GH_FAIL_FIRST": str(gh_fail_first),
                     "DOCKER_FAIL_FIRST": str(docker_fail_first),
                     "DOCKER_COUNT": str(temp_path / "docker.count"),
+                    "DOCKER_LOG": str(docker_log),
+                    "DOCKER_REFUSAL": docker_refusal,
+                    "REFUSAL_MESSAGE": refusal_message,
+                    "TMPDIR": str(scratch),
                     "VERIFY_REGISTRY_ATTEMPTS": attempts,
                     "VERIFY_REGISTRY_WAIT_SECONDS": "0",
                 }
@@ -117,16 +136,23 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
-            return result, gh_log.read_text(encoding="utf-8") if gh_log.exists() else ""
+            self.assertEqual(list(scratch.iterdir()), [], "registry stderr must be cleaned up")
+            return (
+                result,
+                gh_log.read_text(encoding="utf-8") if gh_log.exists() else "",
+                docker_log.read_text(encoding="utf-8").splitlines() if docker_log.exists() else [],
+            )
 
     def test_emits_digest_proof_after_verifying_both_registries(self) -> None:
-        result, calls = self.run_verifier()
+        result, calls, docker_calls = self.run_verifier()
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.splitlines(),
             [f"server_digest={DIGEST}", f"control_plane_digest={DIGEST}"],
         )
+        self.assertEqual(len(docker_calls), 8)
+        self.assertEqual(len(set(docker_calls)), 8)
         subjects = {
             f"oci://docker.io/rcourtman/pulse@{DIGEST}",
             f"oci://ghcr.io/rcourtman/pulse@{DIGEST}",
@@ -159,7 +185,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
 
     def test_rejects_a_moved_exact_version_tag_before_attestation(self) -> None:
         changed = "sha256:" + "c" * 64
-        result, calls = self.run_verifier(
+        result, calls, _ = self.run_verifier(
             overrides={"ghcr.io/rcourtman/pulse:6.4.1": changed}
         )
 
@@ -169,7 +195,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
 
     def test_rejects_an_unverifiable_attestation(self) -> None:
         # A real failure is identical on every attempt: it is retried, then it still fails.
-        result, calls = self.run_verifier(gh_exit=1)
+        result, calls, _ = self.run_verifier(gh_exit=1)
 
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(len(calls.splitlines()), 4)
@@ -177,7 +203,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_retries_transient_attestation_reads_and_emits_only_the_proof(self) -> None:
-        result, calls = self.run_verifier(gh_fail_first=2)
+        result, calls, _ = self.run_verifier(gh_fail_first=2)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -189,7 +215,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
         self.assertEqual(result.stderr.count("retrying in 0s"), 2)
 
     def test_a_failed_digest_read_cannot_leak_partial_output_into_the_proof(self) -> None:
-        result, _ = self.run_verifier(docker_fail_first=3)
+        result, _, _ = self.run_verifier(docker_fail_first=3)
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -200,7 +226,7 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
         self.assertEqual(result.stderr.count("registry read failed on attempt"), 3)
 
     def test_gives_up_after_the_bounded_number_of_digest_attempts(self) -> None:
-        result, calls = self.run_verifier(docker_fail_first=99, attempts="3")
+        result, calls, _ = self.run_verifier(docker_fail_first=99, attempts="3")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("registry read failed after 3 attempts", result.stderr)
@@ -210,23 +236,63 @@ class VerifyReleaseContainerImagesTests(unittest.TestCase):
     def test_rejects_unbounded_retry_settings(self) -> None:
         for attempts in ("0", "100", "x", "-1", "2.5"):
             with self.subTest(attempts=attempts):
-                result, calls = self.run_verifier(attempts=attempts)
+                result, calls, _ = self.run_verifier(attempts=attempts)
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(calls, "")
 
     def test_rejects_an_unsafe_github_cli_before_registry_calls(self) -> None:
-        result, calls = self.run_verifier(gh_version="2.96.1")
+        result, calls, _ = self.run_verifier(gh_version="2.96.1")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("too old for release attestation policy enforcement", result.stderr)
         self.assertEqual(calls, "")
 
     def test_rejects_invalid_release_identity_without_registry_calls(self) -> None:
-        result, calls = self.run_verifier(source_sha="main")
+        result, calls, _ = self.run_verifier(source_sha="main")
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Invalid release source SHA", result.stderr)
         self.assertEqual(calls, "")
+
+    def test_stops_at_first_refused_digest_without_another_registry_or_image(self) -> None:
+        # The control-plane denial is the observed scheduled failure: success
+        # for the server must not turn its refusal into a whole-image pass.
+        for message in (
+            "ERROR: pull access denied, repository does not exist or may require authorization",
+            "insufficient_scope: authorization failed",
+            "denied: requested access to the resource is denied",
+            "unauthorized: authentication required",
+            "FORBIDDEN",
+            "unexpected status from HEAD request: 403 Forbidden",
+            "unexpected status from GET request: 401",
+        ):
+            for image, expected_reads in (("pulse", 1), ("pulse-control-plane", 5)):
+                with self.subTest(message=message, image=image):
+                    reference = f"docker.io/rcourtman/{image}:v6.4.1"
+                    result, calls, docker_calls = self.run_verifier(
+                        docker_refusal=reference, refusal_message=message
+                    )
+                    self.assertEqual(result.returncode, 29, result.stderr)
+                    self.assertEqual(len(docker_calls), expected_reads)
+                    self.assertEqual(docker_calls[-1], reference)
+                    self.assertIn(f"registry access refused for {reference}; not retrying", result.stderr)
+                    self.assertNotIn("retrying in", result.stderr)
+                    self.assertNotIn("partial-refused-output", result.stdout)
+                    self.assertNotIn("control_plane_digest=", result.stdout)
+                    self.assertEqual(len(calls.splitlines()), 0 if image == "pulse" else 2)
+
+    def test_stops_at_first_refused_attestation_without_retry_or_next_subject(self) -> None:
+        result, calls, docker_calls = self.run_verifier(gh_exit=29)
+
+        self.assertEqual(result.returncode, 29, result.stderr)
+        self.assertEqual(len(docker_calls), 4)
+        self.assertEqual(len(calls.splitlines()), 1)
+        self.assertIn(
+            f"registry access refused for oci://docker.io/rcourtman/pulse@{DIGEST}; not retrying",
+            result.stderr,
+        )
+        self.assertNotIn("retrying in", result.stderr)
+        self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

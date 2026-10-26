@@ -23,6 +23,7 @@ class VerifyStableContainerAliasesTests(unittest.TestCase):
         overrides: dict[str, str] | None = None,
         tag: str = "v6.4.1",
         owner: str = "rcourtman",
+        refused_reference: str = "",
     ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
         with tempfile.TemporaryDirectory() as temp:
             temp_path = Path(temp)
@@ -50,6 +51,11 @@ class VerifyStableContainerAliasesTests(unittest.TestCase):
                     #!/bin/sh
                     reference="$4"
                     printf '%s\n' "$reference" >> "$CALL_LOG"
+                    if [ "$reference" = "$REFUSED_REFERENCE" ]; then
+                      printf '{"digest":"partial-refused-output'
+                      echo 'insufficient_scope: authorization failed' >&2
+                      exit 29
+                    fi
                     digest=$(awk -v ref="$reference" '$1 == ref { print $2 }' "$DIGEST_FILE")
                     [ -n "$digest" ] || exit 1
                     printf '{"digest":"%s"}\n' "$digest"
@@ -65,6 +71,7 @@ class VerifyStableContainerAliasesTests(unittest.TestCase):
                     "PATH": f"{bin_path}:{env['PATH']}",
                     "DIGEST_FILE": str(digest_file),
                     "CALL_LOG": str(call_log),
+                    "REFUSED_REFERENCE": refused_reference,
                 }
             )
             result = subprocess.run(
@@ -107,6 +114,17 @@ class VerifyStableContainerAliasesTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Invalid stable release tag", result.stderr)
         self.assertEqual(calls, [])
+
+    def test_refused_alias_names_exact_target_and_stops_without_fallback(self) -> None:
+        reference = "docker.io/rcourtman/pulse-control-plane:6.4"
+        result, calls = self.run_verifier(refused_reference=reference)
+
+        self.assertEqual(result.returncode, 29, result.stderr)
+        self.assertEqual(len(calls), 7)
+        self.assertEqual(calls[-1], reference)
+        self.assertIn(f"Registry read failed for {reference}; not retrying", result.stderr)
+        self.assertNotIn("partial-refused-output", result.stdout)
+        self.assertEqual(result.stdout, "")
 
     def test_rejects_invalid_digest_without_registry_calls(self) -> None:
         result = subprocess.run(

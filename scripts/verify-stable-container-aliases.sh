@@ -48,7 +48,13 @@ ALIASES=("${MAJOR}.${MINOR}" "${MAJOR}" latest)
 resolve_digest() {
     local reference="$1"
     local manifest
-    manifest="$(docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')"
+    if manifest="$(docker buildx imagetools inspect "$reference" --format '{{json .Manifest}}')"; then
+        :
+    else
+        local status=$?
+        echo "Registry read failed for ${reference}; not retrying." >&2
+        return "$status"
+    fi
     jq -er '.digest | select(type == "string" and test("^sha256:[0-9a-f]{64}$"))' <<<"$manifest"
 }
 

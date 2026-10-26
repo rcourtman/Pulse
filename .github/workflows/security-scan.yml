@@ -214,7 +214,9 @@ jobs:
 
       - name: Verify stable container discovery aliases
         id: aliases
-        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
+        # Do not follow a refused exact-image read with another registry path.
+        # A failed exact check remains failed; aliases are recorded as skipped.
+        if: ${{ always() && steps.release.outcome == 'success' && steps.frontier.outcome == 'success' && steps.activation.outcome == 'success' && steps.containers.outcome == 'success' && github.event.schedule != '17 */6 * * *' }}
         env:
           TAG: ${{ steps.release.outputs.tag }}
           EXPECTED_SERVER_DIGEST: ${{ steps.activation.outputs.server_image_digest }}
