@@ -32,6 +32,30 @@ DEFAULT_PULSE_IMAGE="${DOCKER_IMAGE_REPO}:$(resolve_default_pulse_version)"
 PULSE_IMAGE="${PULSE_IMAGE:-${DEFAULT_PULSE_IMAGE}}"
 PULSE_PORT="${PULSE_PORT:-7655}"
 
+# This helper creates a new deployment; it is not an updater. Do not replace
+# an operator's ports, mounts, image pins or credentials on a repeated run.
+# Check every Compose filename that Docker recognises, including dangling links
+# and non-regular paths, before creating either output or calling Docker.
+COMPOSE_FILE="./docker-compose.yml"
+ENV_FILE="./.env"
+for existing in compose.yaml compose.yml docker-compose.yaml docker-compose.yml; do
+    if [ -e "$existing" ] || [ -L "$existing" ]; then
+        echo "ERROR: A Compose path already exists: $existing" >&2
+        echo "This helper only prepares a new deployment. Update using your existing Compose configuration." >&2
+        echo "Existing files and backups were left unchanged." >&2
+        exit 1
+    fi
+done
+if [ -L "$ENV_FILE" ] || { [ -e "$ENV_FILE" ] && [ ! -f "$ENV_FILE" ]; }; then
+    echo "ERROR: .env must be a regular, non-symlink file or absent. Existing paths were left unchanged." >&2
+    exit 1
+fi
+
+# New configuration is private, and an output created after the checks above
+# must never be truncated. Noclobber also refuses dangling output symlinks.
+umask 077
+set -o noclobber
+
 # ============================================
 # Pre-flight Checks
 # ============================================
@@ -77,15 +101,6 @@ fi
 # Generate Docker Compose Configuration
 # ============================================
 
-COMPOSE_FILE="./docker-compose.yml"
-
-# Check if docker-compose.yml already exists (idempotency)
-if [ -f "$COMPOSE_FILE" ]; then
-    echo "⚠️  docker-compose.yml already exists"
-    echo "   Backing up to docker-compose.yml.backup"
-    cp "$COMPOSE_FILE" "${COMPOSE_FILE}.backup"
-fi
-
 cat > "$COMPOSE_FILE" << COMPOSE_EOF
 version: '3.8'
 
@@ -119,7 +134,6 @@ echo "✓ Generated docker-compose.yml"
 echo ""
 
 # Create .env file with defaults
-ENV_FILE=".env"
 if [ -f "$ENV_FILE" ]; then
     echo "⚠️  .env file already exists - not overwriting"
     echo ""
@@ -134,11 +148,11 @@ EOF
 fi
 
 # ============================================
-# Installation Complete
+# Configuration Prepared
 # ============================================
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ Installation Complete!"
+echo "✓ Configuration prepared; Pulse has not been started."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Start Pulse with:"
