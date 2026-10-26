@@ -138,27 +138,42 @@ disable_legacy_units() {
 remove_managed_keys_from_authorized_keys_file() {
     local file="$1"
     local tmp_file=""
+    local status=0
 
     if [[ ! -f "$file" ]]; then
         return 0
     fi
 
-    tmp_file=$(mktemp)
-    grep -v -E '# pulse-(managed|proxy)-key$' "$file" >"$tmp_file" 2>/dev/null || true
-    if cmp -s "$tmp_file" "$file"; then
-        rm -f "$tmp_file"
+    # Keep replacement on the same filesystem. A failed read, metadata copy or
+    # rename must leave the original keys intact, even under conditional calls.
+    tmp_file=$(mktemp "${file}.pulse-cleanup.XXXXXX") || return 1
+    grep -v -E '# pulse-(managed|proxy)-key$' "$file" >"$tmp_file" 2>/dev/null || status=$?
+    if (( status > 1 )); then
+        rm -f -- "$tmp_file"
+        return 1
+    fi
+    status=0
+    cmp -s "$tmp_file" "$file" || status=$?
+    if (( status == 0 )); then
+        rm -f -- "$tmp_file" || return 1
         return 0
     fi
-
-    chmod --reference="$file" "$tmp_file" 2>/dev/null || chmod 600 "$tmp_file" 2>/dev/null || true
-    chown --reference="$file" "$tmp_file" 2>/dev/null || true
-    mv "$tmp_file" "$file"
+    if (( status > 1 )) ||
+        ! chmod --reference="$file" "$tmp_file" ||
+        ! chown --reference="$file" "$tmp_file" ||
+        ! mv -- "$tmp_file" "$file"; then
+        rm -f -- "$tmp_file"
+        return 1
+    fi
 }
 
 cleanup_local_authorized_keys() {
     local auth_file=""
-    auth_file=$(resolve_path "$AUTHORIZED_KEYS_PATH")
-    remove_managed_keys_from_authorized_keys_file "$auth_file"
+    auth_file=$(resolve_path "$AUTHORIZED_KEYS_PATH") || return 1
+    if ! remove_managed_keys_from_authorized_keys_file "$auth_file"; then
+        print_warn "Local legacy SSH key cleanup failed; original keys were preserved"
+        return 1
+    fi
     print_success "Removed legacy Pulse SSH key entries from ${auth_file}"
 }
 
@@ -183,45 +198,61 @@ is_local_host() {
     [[ "$target" == "127.0.0.1" || "$target" == "localhost" ]]
 }
 
+# The program is passed with -c so stdin remains the complete API response.
+# Validate every row before emitting any identities; a partial list is unsafe.
+sensor_proxy_inventory() {
+    python3 -c '
+import json, re, sys
+field = sys.argv[1]
+try:
+    rows = json.load(sys.stdin)
+    if not isinstance(rows, list) or (field == "node" and not rows):
+        raise ValueError()
+    values = []
+    for row in rows:
+        value = row.get(field) if isinstance(row, dict) else None
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,252}", value):
+            raise ValueError()
+        values.append(value)
+except (ValueError, TypeError):
+    sys.exit(1)
+for value in values:
+    print(value)
+' "$1"
+}
+
 discover_cluster_node_addresses() {
+    local nodes=""
     local node=""
     local node_ip=""
+    local addresses=""
 
-    if command -v pvesh >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-        while IFS= read -r node; do
-            [[ -z "$node" ]] && continue
-            node_ip=$(getent ahostsv4 "$node" 2>/dev/null | awk 'NR==1 {print $1}') || true
-            if [[ -z "$node_ip" ]]; then
-                node_ip=$(getent hosts "$node" 2>/dev/null | awk 'NR==1 {print $1}') || true
-            fi
-            [[ -n "$node_ip" ]] && printf '%s\n' "$node_ip"
-        done < <(
-            pvesh get /nodes --output-format json 2>/dev/null | python3 - <<'PY'
-import json
-import sys
+    if ! command -v pvesh >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+        print_warn "Cluster inventory requires pvesh and python3; use --local-only once on each node for local cleanup"
+        return 1
+    fi
+    if ! nodes=$(pvesh get /nodes --output-format json 2>/dev/null | sensor_proxy_inventory node); then
+        print_warn "Cluster inventory is unavailable or invalid; no SSH key cleanup attempted"
+        return 1
+    fi
+    while IFS= read -r node; do
+        node_ip=$(getent ahostsv4 "$node" 2>/dev/null | awk 'NR==1 {print $1}') || node_ip=""
+        if [[ -z "$node_ip" ]]; then
+            node_ip=$(getent hosts "$node" 2>/dev/null | awk 'NR==1 {print $1}') || node_ip=""
+        fi
+        if [[ -z "$node_ip" ]] || ! node_ip=$(python3 -c '
+import ipaddress, sys
 try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if isinstance(data, list):
-    for item in data:
-        node = item.get("node")
-        if node:
-            print(node)
-PY
-        )
-        return 0
-    fi
-
-    if command -v pvecm >/dev/null 2>&1; then
-        pvecm status 2>/dev/null | awk '
-            /0x[0-9a-f]+/ {
-                for (i = 1; i <= NF; i++) {
-                    if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) print $i
-                }
-            }
-        '
-    fi
+    print(ipaddress.ip_address(sys.argv[1]))
+except ValueError:
+    sys.exit(1)
+' "$node_ip"); then
+            print_warn "A cluster node has no valid resolved address; no SSH key cleanup attempted"
+            return 1
+        fi
+        addresses+="${node_ip}"$'\n'
+    done <<<"$nodes"
+    printf '%s' "$addresses"
 }
 
 cleanup_remote_authorized_keys() {
@@ -261,27 +292,27 @@ fi'
 
 cleanup_cluster_authorized_keys() {
     local host=""
-    local saw_nodes=false
+    local hosts=""
     local status=0
 
     if [[ "$LOCAL_ONLY" == "true" ]]; then
         cleanup_local_authorized_keys
-        return 0
+        return $?
     fi
 
+    # Capture the discovery status, not a process substitution whose failure
+    # would otherwise look like an empty, successful single-host installation.
+    if ! hosts=$(discover_cluster_node_addresses) || [[ -z "$hosts" ]]; then
+        return 1
+    fi
+    hosts=$(printf '%s\n' "$hosts" | sort -u) || return 1
+    cleanup_local_authorized_keys || status=1
     while IFS= read -r host; do
         [[ -z "$host" ]] && continue
-        saw_nodes=true
-        if is_local_host "$host"; then
-            cleanup_local_authorized_keys
-        else
+        if ! is_local_host "$host"; then
             cleanup_remote_authorized_keys "$host" || status=1
         fi
-    done < <(discover_cluster_node_addresses | sort -u)
-
-    if [[ "$saw_nodes" != "true" ]]; then
-        cleanup_local_authorized_keys
-    fi
+    done <<<"$hosts"
     return "$status"
 }
 
@@ -469,58 +500,37 @@ remove_legacy_files() {
 remove_proxmox_access() {
     local token_ids=""
     local token_id=""
+    local status=0
 
     if [[ "$REMOVE_PROXMOX_ACCESS" != "true" ]]; then
         return 0
     fi
-    if ! command -v pveum >/dev/null 2>&1; then
-        print_warn "pveum is not available; skipping pulse-monitor@pam cleanup"
-        return 0
+    if ! command -v pveum >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+        print_warn "API access cleanup requires pveum and python3; cleanup is incomplete"
+        return 1
     fi
-
-    if command -v python3 >/dev/null 2>&1; then
-        token_ids=$(pveum user token list pulse-monitor@pam --output-format json 2>/dev/null | python3 - <<'PY'
-import json
-import sys
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if isinstance(data, list):
-    for item in data:
-        token_id = item.get("tokenid")
-        if token_id:
-            print(token_id)
-PY
-        ) || true
+    if ! token_ids=$(pveum user token list pulse-monitor@pam --output-format json 2>/dev/null | sensor_proxy_inventory tokenid); then
+        print_warn "API token inventory is unavailable or invalid; API access was left unchanged"
+        return 1
     fi
-
-    if [[ -z "$token_ids" ]]; then
-        token_ids=$(pveum user token list pulse-monitor@pam 2>/dev/null | awk '
-            {
-                line=$0
-                gsub(/\r/, "", line)
-                gsub(/│/, "|", line)
-                if (index(line, "|") == 0) next
-                n = split(line, parts, "|")
-                if (n < 3) next
-                name = parts[2]
-                gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
-                if (name != "" && name != "tokenid") print name
-            }') || true
-    fi
-
     while IFS= read -r token_id; do
         [[ -z "$token_id" ]] && continue
-        pveum user token remove pulse-monitor@pam "$token_id" >/dev/null 2>&1 || print_warn "Failed to remove pulse-monitor@pam token ${token_id}"
+        if ! pveum user token remove pulse-monitor@pam "$token_id" >/dev/null 2>&1; then
+            print_warn "A legacy API token could not be removed; API user deletion will not be attempted"
+            status=1
+        fi
     done <<<"$token_ids"
-
-    pveum user delete pulse-monitor@pam >/dev/null 2>&1 || print_warn "pulse-monitor@pam was not removed; it may already be absent or still in use"
+    (( status == 0 )) || return "$status"
+    if ! pveum user delete pulse-monitor@pam >/dev/null 2>&1; then
+        print_warn "Legacy API user removal is unconfirmed; cleanup is incomplete"
+        return 1
+    fi
 }
 
 main() {
     local cluster_key_cleanup_status=0
     local container_cleanup_status=0
+    local api_cleanup_status=0
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -585,15 +595,16 @@ main() {
         return "$container_cleanup_status"
     fi
     remove_legacy_files
-    remove_proxmox_access
+    remove_proxmox_access || api_cleanup_status=$?
     if ! systemctl_if_available daemon-reload; then
         print_warn "Cannot reload service configuration; cleanup is incomplete"
         return 1
     fi
     if (( cluster_key_cleanup_status != 0 )); then
-        print_warn "Local cleanup completed, but one or more remote cluster nodes still require trusted, local cleanup"
+        print_warn "Local file cleanup completed, but cluster SSH key cleanup is incomplete; use --local-only on each node or repair trusted cluster inventory"
         return "$cluster_key_cleanup_status"
     fi
+    (( api_cleanup_status == 0 )) || return "$api_cleanup_status"
     print_success "Legacy pulse-sensor-proxy cleanup complete"
 }
 

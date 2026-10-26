@@ -252,7 +252,7 @@ main --quiet
 	if !ok || exitErr.ExitCode() != 23 {
 		t.Fatalf("main returned %v, want remote cleanup status 23:\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "Local cleanup completed") {
+	if !strings.Contains(string(out), "Local file cleanup completed") {
 		t.Fatalf("remote trust failure did not explain local cleanup state:\n%s", out)
 	}
 	content, readErr := os.ReadFile(marker)
@@ -309,7 +309,7 @@ func TestUninstallSensorProxyScriptRemovesTempFootprintAndManagedKeys(t *testing
 		t.Fatalf("write authorized_keys: %v", err)
 	}
 
-	cmd := exec.Command("bash", repoFile("scripts", "uninstall-sensor-proxy.sh"), "--uninstall", "--purge", "--quiet")
+	cmd := exec.Command("bash", repoFile("scripts", "uninstall-sensor-proxy.sh"), "--uninstall", "--purge", "--quiet", "--local-only")
 	cmd.Env = append(os.Environ(),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"PULSE_SENSOR_PROXY_BINARY_PATH="+binaryPath,
@@ -343,5 +343,248 @@ func TestUninstallSensorProxyScriptRemovesTempFootprintAndManagedKeys(t *testing
 	}
 	if !strings.Contains(got, "AAAAkeep") {
 		t.Fatalf("non-Pulse SSH key was not preserved:\n%s", got)
+	}
+}
+
+// Only closed API/resolver/key-writer doubles are used. No live pvesh, pveum,
+// SSH connection, privileged path or container lifecycle is reached here.
+const proxyInventoryFixture = `source "$1"
+pvesh() {
+    [[ "$*" == 'get /nodes --output-format json' ]] || return 90
+    cat "$FIXTURE_DIR/inventory"
+    [[ "$SCENARIO" != read_failure ]]
+}
+getent() {
+    [[ "$1" == ahostsv4 || "$1" == hosts ]] || return 90
+    case "$2" in
+        pve-a) echo '192.0.2.10 STREAM pve-a' ;;
+        pve-b)
+            [[ "$SCENARIO" != unresolved ]] || return 2
+            if [[ "$SCENARIO" == resolver_failure ]]; then echo '192.0.2.11 STREAM pve-b'; return 2; fi
+            if [[ "$SCENARIO" == invalid_address ]]; then echo 'not-an-address pve-b'; else echo '192.0.2.11 STREAM pve-b'; fi ;;
+        pve-v6) [[ "$1" == hosts ]] || return 2; echo '2001:db8::12 pve-v6' ;;
+        *) return 2 ;;
+    esac
+}
+is_local_host() { [[ "$1" == 192.0.2.10 ]]; }
+cleanup_local_authorized_keys() { printf 'local\n' >>"$FIXTURE_DIR/actions"; }
+cleanup_remote_authorized_keys() { printf 'remote %s\n' "$1" >>"$FIXTURE_DIR/actions"; }
+if cleanup_cluster_authorized_keys; then exit 0; else exit $?; fi
+`
+
+func TestUninstallSensorProxyClusterInventoryUsesEveryValidatedNode(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "inventory"), []byte(`[{"node":"pve-b"},{"node":"pve-a"},{"node":"pve-b"},{"node":"pve-v6"}]`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, "success", proxyInventoryFixture)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "actions"))
+	if err != nil || string(got) != "local\nremote 192.0.2.11\nremote 2001:db8::12\n" {
+		t.Fatalf("incomplete or duplicated cleanup: %q, %v", got, err)
+	}
+}
+
+func TestUninstallSensorProxyIncompleteInventoryNeverStartsKeyCleanup(t *testing.T) {
+	for _, tc := range []struct{ name, inventory string }{
+		{"empty", `[]`}, {"object", `{}`}, {"null", `null`}, {"malformed", `[{`},
+		{"missing", `[{"node":"pve-a"},{}]`}, {"wrong_type", `[{"node":7}]`},
+		{"unsafe", `[{"node":"pve-a"},{"node":"-oProxyCommand=bad"}]`},
+		{"multiline", `[{"node":"pve-a\npve-b"}]`}, {"non_object", `["pve-a"]`},
+		{"read_failure", `[{"node":"pve-a"}]`},
+		{"unresolved", `[{"node":"pve-a"},{"node":"pve-b"}]`},
+		{"invalid_address", `[{"node":"pve-a"},{"node":"pve-b"}]`},
+		{"resolver_failure", `[{"node":"pve-a"},{"node":"pve-b"}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "inventory"), []byte(tc.inventory), 0600); err != nil {
+				t.Fatal(err)
+			}
+			out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, tc.name, proxyInventoryFixture)
+			if code == 0 || !strings.Contains(out, "[WARN]") {
+				t.Fatalf("incomplete inventory accepted: exit %d: %s", code, out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "actions")); !os.IsNotExist(err) {
+				t.Fatalf("keys changed before inventory validation: %v", err)
+			}
+		})
+	}
+}
+
+func TestUninstallSensorProxyMissingInventoryToolRequiresExplicitLocalOnly(t *testing.T) {
+	for _, tool := range []string{"pvesh", "python3"} {
+		t.Run(tool, func(t *testing.T) {
+			dir := t.TempDir()
+			body := `source "$1"
+command() {
+    if [[ "$1" == -v && "$2" == "$SCENARIO" ]]; then return 1; fi
+    builtin command "$@"
+}
+cleanup_local_authorized_keys() { echo local >>"$FIXTURE_DIR/actions"; }
+cleanup_remote_authorized_keys() { echo remote >>"$FIXTURE_DIR/actions"; }
+if cleanup_cluster_authorized_keys; then exit 0; else exit $?; fi
+`
+			out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, tool, body)
+			if code == 0 || !strings.Contains(out, "--local-only") {
+				t.Fatalf("missing tool accepted: exit %d: %s", code, out)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "actions")); !os.IsNotExist(err) {
+				t.Fatalf("implicit local fallback changed keys: %v", err)
+			}
+		})
+	}
+}
+
+func TestUninstallSensorProxyKeyReplacementPreservesOriginalOnEveryFailure(t *testing.T) {
+	const original = "ssh-ed25519 AAAAlegacy pulse # pulse-managed-key\nssh-ed25519 AAAAkeep user-key\n"
+	for _, phase := range []string{"mktemp", "grep", "cmp", "chmod", "chown", "mv", "success", "all_managed", "unchanged", "missing"} {
+		t.Run(phase, func(t *testing.T) {
+			dir := t.TempDir()
+			keys := original
+			if phase == "all_managed" {
+				keys = "ssh-ed25519 AAAAlegacy pulse # pulse-proxy-key\n"
+			} else if phase == "unchanged" {
+				keys = "ssh-ed25519 AAAAkeep user-key\n"
+			}
+			path := filepath.Join(dir, "authorized_keys")
+			if phase != "missing" {
+				if err := os.WriteFile(path, []byte(keys), 0640); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body := `source "$1"
+AUTHORIZED_KEYS_PATH="$FIXTURE_DIR/authorized_keys"
+mktemp() { [[ "$SCENARIO" != mktemp ]] || return 9; command mktemp "$@"; }
+grep() { command grep "$@"; local code=$?; [[ "$SCENARIO" != grep ]] || return 2; return "$code"; }
+cmp() { [[ "$SCENARIO" != cmp ]] || return 2; command cmp "$@"; }
+chmod() { [[ "$SCENARIO" != chmod ]] || return 9; command chmod "$@"; }
+chown() { [[ "$SCENARIO" != chown ]] || return 9; command chown "$@"; }
+mv() { [[ "$SCENARIO" != mv ]] || return 9; command mv "$@"; }
+# Conditional invocation deliberately disables bash errexit in the helpers.
+if cleanup_local_authorized_keys; then exit 0; else exit $?; fi
+`
+			out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, phase, body)
+			success := phase == "success" || phase == "all_managed" || phase == "unchanged" || phase == "missing"
+			if (code == 0) != success || strings.Contains(out, "[ OK ]") != success {
+				t.Fatalf("replacement status mismatch: exit %d: %s", code, out)
+			}
+			got, err := os.ReadFile(path)
+			if phase == "missing" {
+				if !os.IsNotExist(err) {
+					t.Fatalf("missing keys created: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := keys
+			if phase == "success" {
+				want = "ssh-ed25519 AAAAkeep user-key\n"
+			} else if phase == "all_managed" {
+				want = ""
+			}
+			if string(got) != want {
+				t.Fatalf("keys corrupted: %q, want %q", got, want)
+			}
+			info, err := os.Stat(path)
+			if err != nil || info.Mode().Perm() != 0640 {
+				t.Fatalf("key permissions changed: %v, %v", info, err)
+			}
+			leftovers, err := filepath.Glob(path + ".pulse-cleanup.*")
+			if err != nil || len(leftovers) != 0 {
+				t.Fatalf("replacement temp files remain: %v, %v", leftovers, err)
+			}
+		})
+	}
+}
+
+func TestUninstallSensorProxyLocalOnlyPropagatesKeyFailure(t *testing.T) {
+	body := `source "$1"
+LOCAL_ONLY=true
+cleanup_local_authorized_keys() { return 23; }
+if cleanup_cluster_authorized_keys; then exit 0; else exit $?; fi
+`
+	out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), t.TempDir(), "failure", body)
+	if code != 23 {
+		t.Fatalf("local-only failure hidden: exit %d: %s", code, out)
+	}
+}
+
+func TestUninstallSensorProxyAPICleanupRequiresCompleteInventoryAndRemovals(t *testing.T) {
+	for _, tc := range []struct {
+		name, inventory, actions string
+		success                  bool
+	}{
+		{"success", `[{"tokenid":"alpha"},{"tokenid":"beta"}]`, "list\nremove alpha\nremove beta\ndelete\n", true},
+		{"empty", `[]`, "list\ndelete\n", true},
+		{"opt_out", `[]`, "", true},
+		{"malformed", `{`, "list\n", false},
+		{"missing_id", `[{"tokenid":"alpha"},{}]`, "list\n", false},
+		{"unsafe_id", `[{"tokenid":"alpha"},{"tokenid":"--other"}]`, "list\n", false},
+		{"read_failure", `[{"tokenid":"alpha"}]`, "list\n", false},
+		{"remove_failure", `[{"tokenid":"alpha"},{"tokenid":"beta"}]`, "list\nremove alpha\nremove beta\n", false},
+		{"delete_failure", `[]`, "list\ndelete\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "inventory"), []byte(tc.inventory), 0600); err != nil {
+				t.Fatal(err)
+			}
+			body := `source "$1"
+REMOVE_PROXMOX_ACCESS=true
+[[ "$SCENARIO" != opt_out ]] || REMOVE_PROXMOX_ACCESS=false
+pveum() {
+    case "$*" in
+        'user token list pulse-monitor@pam --output-format json')
+            echo list >>"$FIXTURE_DIR/actions"
+            cat "$FIXTURE_DIR/inventory"
+            [[ "$SCENARIO" != read_failure ]] ;;
+        'user token remove pulse-monitor@pam alpha'|'user token remove pulse-monitor@pam beta')
+            echo "remove $5" >>"$FIXTURE_DIR/actions"
+            [[ "$SCENARIO" != remove_failure || "$5" != alpha ]] ;;
+        'user delete pulse-monitor@pam')
+            echo delete >>"$FIXTURE_DIR/actions"
+            [[ "$SCENARIO" != delete_failure ]] ;;
+        *) return 90 ;;
+    esac
+}
+if remove_proxmox_access; then exit 0; else exit $?; fi
+`
+			out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, tc.name, body)
+			if (code == 0) != tc.success {
+				t.Fatalf("API status mismatch: exit %d: %s", code, out)
+			}
+			got, err := os.ReadFile(filepath.Join(dir, "actions"))
+			if tc.name == "opt_out" && os.IsNotExist(err) {
+				return
+			}
+			if err != nil || string(got) != tc.actions {
+				t.Fatalf("unexpected API mutation: %q, %v; want %q", got, err, tc.actions)
+			}
+		})
+	}
+}
+
+func TestUninstallSensorProxyMainCannotHideAPIRemovalFailure(t *testing.T) {
+	body := `source "$1"
+disable_legacy_units() { :; }
+cleanup_cluster_authorized_keys() { :; }
+cleanup_stale_sensor_proxy_mounts() { :; }
+remove_legacy_files() { :; }
+remove_proxmox_access() { return 23; }
+systemctl_if_available() { echo reload >"$FIXTURE_DIR/actions"; }
+if main --remove-proxmox-access; then exit 0; else exit $?; fi
+`
+	dir := t.TempDir()
+	out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, "failure", body)
+	if code != 23 || strings.Contains(out, "cleanup complete") {
+		t.Fatalf("main hid API failure: exit %d: %s", code, out)
+	}
+	if got, err := os.ReadFile(filepath.Join(dir, "actions")); err != nil || string(got) != "reload\n" {
+		t.Fatalf("file cleanup reload skipped: %q, %v", got, err)
 	}
 }
