@@ -16,7 +16,8 @@ Usage: scripts/tests/run.sh [test-script ...]
 Run all scripts/tests/test-*.sh and scripts/tests/test_*.py tests or a subset
 when specified. Documentation CI discovers every documentation suite and runs
 one of four disjoint, sorted shards; it does not maintain a second suite list.
-Smoke CI partitions the complete inventory into two isolated, sorted shards.
+Smoke CI balances the complete inventory across two isolated, sorted shards
+using measured suite durations. New suites receive a default scheduling weight.
 EOF
 }
 
@@ -134,10 +135,23 @@ main() {
     if ! discover_tests smoke_tests; then
       return 1
     fi
-    local index
-    for ((index = $2; index < ${#smoke_tests[@]}; index += 2)); do
-      tests+=("${smoke_tests[index]}")
-    done
+    local selection
+    if (( ${#smoke_tests[@]} > 0 )); then
+      # Capture the entire successful selector before admitting any suite. A
+      # partial output from a failed selector is not a complete shard. Timing
+      # hints only place discovered suites; they cannot add or omit coverage.
+      if ! selection="$(
+        printf '%s\n' "${smoke_tests[@]}" | python3 \
+          "${ROOT_DIR}/scripts/select-smoke-test-shard.py" \
+          "${ROOT_DIR}/.github/scripts/smoke-test-seconds.txt" 2 "$2"
+      )"; then
+        echo "Failed to partition the complete smoke test inventory" >&2
+        return 1
+      fi
+      if [[ -n "${selection}" ]]; then
+        mapfile -t tests <<< "${selection}"
+      fi
+    fi
     printf 'Smoke shard %s/2: %s of %s suites\n' "$2" "${#tests[@]}" "${#smoke_tests[@]}"
   elif [[ $# -gt 0 ]]; then
     local arg resolved

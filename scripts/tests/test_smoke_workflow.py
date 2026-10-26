@@ -110,6 +110,11 @@ class SmokeWorkflowTest(unittest.TestCase):
             tests = root / "scripts/tests"
             tests.mkdir(parents=True)
             shutil.copyfile(ROOT / "scripts/tests/run.sh", tests / "run.sh")
+            shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py",
+                            root / "scripts/select-smoke-test-shard.py")
+            hints = root / ".github/scripts/smoke-test-seconds.txt"
+            hints.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / ".github/scripts/smoke-test-seconds.txt", hints)
             for name in smoke_suites():
                 status = 7 if name == failing else 0
                 if name.endswith(".sh"):
@@ -139,7 +144,8 @@ class SmokeWorkflowTest(unittest.TestCase):
         for shard in range(2):
             result, calls = self.run_adapters(shard)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertEqual(calls, suites[shard::2])
+            self.assertTrue(calls)
+            self.assertEqual(calls, sorted(calls))
             self.assertIn(f"Summary: {len(calls)}/{len(calls)} passed", result.stdout)
             seen.extend(calls)
         self.assertEqual(sorted(seen), suites)
@@ -147,7 +153,11 @@ class SmokeWorkflowTest(unittest.TestCase):
 
     def test_failure_in_either_shard_keeps_remaining_suites_and_required_gate(self):
         for shard in range(2):
-            names = smoke_suites()[shard::2]
+            # Observe the actual source-bound selection, not the old filename
+            # parity. The failing adapter must not hide any later selected suite.
+            selected, names = self.run_adapters(shard)
+            self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+            self.assertTrue(names)
             result, calls = self.run_adapters(shard, names[0])
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(calls, names)

@@ -1,0 +1,22 @@
+# Script smoke suite seconds in ordinary PR CI, 2026-10-26.
+# Complete successful run 40313223658 at a5659362bf4b7466d2f308444bdd21849aeceb4c;
+# jobs 121540828495 / 121540828581, measured between suite headers.
+# These are scheduling hints, never the suite inventory or deadlines.
+# The current discovered tree supplies every suite; stale hints cannot add one.
+# Suites below 15 seconds use their measured mean, as do new/unmeasured suites.
+# Refresh from complete passing shard logs if imbalance returns.
+DEFAULT_WEIGHT 1.881
+test_admin_docs.py 25.874
+test_agent_log_docs.py 16.473
+test_api_failure_index.py 15.110
+test_authentication_diagnostic_docs.py 21.495
+test_auto_update_service_state.py 28.879
+test_docker_troubleshooting_docs.py 15.349
+test_memory_troubleshooting_docs.py 43.941
+test_notification_troubleshooting_docs.py 24.617
+test_npm_audit_retry.py 30.170
+test_performance_troubleshooting_docs.py 248.554
+test_server_installer_stop.py 38.558
+test_troubleshooting_logs.py 59.703
+test_truenas_docs.py 27.603
+test_vm_disk_diagnostics.py 80.059
