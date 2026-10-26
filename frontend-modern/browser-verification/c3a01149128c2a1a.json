@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "494c4079bfa4e531dbdc8dc088e0d713b216d205",
+  "verified_at": "2026-10-26T16:25:37Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useProtectionPostures.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "317d756e3838e68e1ed93a196b3c33c8be40ecce66ca3d0ce5c860971b0b8b0d"
+  },
+  "routes": [
+    "/proxmox/backups/coverage (real ProxmoxBackupsTable in an evidence-only, synthetic HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "401 subjects use three 200/200/1 posture batches through the real API client; all old-scope HTTP reads close with browser ERR_ABORTED",
+    "Organisation replacement closes old requests and sends only the current fixture organisation header on its replacements; unmount closes all pending reads",
+    "A 422 batch failure closes its two siblings, withdraws protection and exposes the existing unavailable notice and Retry action",
+    "Partial successful retry leaves assessments unavailable; all three accepted batches restore the joined health without an error",
+    "Accepted server explanations remain readable in desktop disclosure and narrow whole-row touch details; ten captures opened through native view_image"
+  ],
+  "interactions": [
+    "Changed workload props using the safe fixture scope control; observed actual HTTP cancellation, not just ignored results",
+    "Switched synthetic organisation via the existing API-client setter/event; unmounted and remounted the real Backups consumer",
+    "Clicked the real Retry protection posture button and completed responses in parts before accepting the whole read",
+    "Clicked the desktop disclosure; tapped the supported narrow workload row to open and close details"
+  ],
+  "evidence": {
+    "source_commit": "494c4079bfa4e531dbdc8dc088e0d713b216d205",
+    "source_proof": "source-v5ym5tvt: 190 tests, type-check, lint, full production build and bundle budgets passed",
+    "details_completion": "Separate narrow-only remaining-details command passed; completed lifecycle sequences were not replayed",
+    "desktop_runner": "Exited 1 after all desktop lifecycle/detail/overflow checks on a fixture assertion omitting the existing runtime-capability GET (404/free fallback). Exact failed output retained.",
+    "narrow_runner": "Exited 1 after all narrow lifecycle checks while trying to tap the intentionally sr-only keyboard disclosure. The remaining-details check uses the source-defined whole-row touch target; no product source changed.",
+    "pixel_review": "Native view_image displayed all ten captures. Counts, warning/retry, rows and explanations fit and remain readable at both viewports.",
+    "limits": "Safe synthetic browser acceptance only; no native guest, backup, appliance or prior stopped WebKit/location-filter acceptance."
+  }
+}
