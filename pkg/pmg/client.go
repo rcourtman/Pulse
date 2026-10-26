@@ -143,12 +143,50 @@ type QuarantineStatus struct {
 	Megabytes flexibleFloat `json:"mbytes"`
 }
 
+// QueueStatusEntry summarises one node's Postfix queues. PMG has no single
+// queue-summary endpoint, so GetQueueStatus assembles it from qshape.
 type QueueStatusEntry struct {
 	Active    flexibleInt `json:"active"`
 	Deferred  flexibleInt `json:"deferred"`
 	Hold      flexibleInt `json:"hold"`
 	Incoming  flexibleInt `json:"incoming"`
-	OldestAge flexibleInt `json:"oldest_age,omitempty"` // Age of oldest message in seconds
+	OldestAge flexibleInt `json:"oldest_age,omitempty"` // Lower bound, in seconds, on the oldest active, deferred or incoming message
+}
+
+// queueShapeRow is one row of PMG's qshape output. Counts are recipients, and
+// each bucket holds entries older than the previous bucket's limit and younger
+// than its own, in minutes; 1280m+ has no upper limit.
+type queueShapeRow struct {
+	Domain  string      `json:"domain"`
+	Total   flexibleInt `json:"total"`
+	B5      flexibleInt `json:"5m"`
+	B10     flexibleInt `json:"10m"`
+	B20     flexibleInt `json:"20m"`
+	B40     flexibleInt `json:"40m"`
+	B80     flexibleInt `json:"80m"`
+	B160    flexibleInt `json:"160m"`
+	B320    flexibleInt `json:"320m"`
+	B640    flexibleInt `json:"640m"`
+	B1280   flexibleInt `json:"1280m"`
+	B1280Up flexibleInt `json:"1280m+"`
+}
+
+// minAgeSeconds returns the lower limit of the oldest non-empty bucket, which
+// is the most qshape proves about the oldest entry's age.
+func (r queueShapeRow) minAgeSeconds() int64 {
+	buckets := []struct {
+		count      flexibleInt
+		minMinutes int64
+	}{
+		{r.B1280Up, 1280}, {r.B1280, 640}, {r.B640, 320}, {r.B320, 160}, {r.B160, 80},
+		{r.B80, 40}, {r.B40, 20}, {r.B20, 10}, {r.B10, 5},
+	}
+	for _, b := range buckets {
+		if b.count.Int64() > 0 {
+			return b.minMinutes * 60
+		}
+	}
+	return 0
 }
 
 // DomainStatisticsEntry represents aggregated statistics for a single domain.
@@ -554,16 +592,46 @@ func (c *Client) GetQuarantineStatus(ctx context.Context, category string) (*Qua
 	return resp.Data, nil
 }
 
+// GetQueueStatus reads each Postfix queue's TOTAL row from qshape. The
+// /postfix/queue path is only a directory index of queue names (#2960).
 func (c *Client) GetQueueStatus(ctx context.Context, node string) (*QueueStatusEntry, error) {
-	path := fmt.Sprintf("/nodes/%s/postfix/queue", node)
-	var resp apiResponse[*QueueStatusEntry]
-	if err := c.getJSON(ctx, path, nil, &resp); err != nil {
-		return nil, err
+	status := &QueueStatusEntry{}
+	queues := []struct {
+		name    string
+		count   *flexibleInt
+		ageless bool
+	}{
+		{name: "active", count: &status.Active},
+		{name: "deferred", count: &status.Deferred},
+		// Held mail waits for an operator by design, so its age is not a delivery delay.
+		{name: "hold", count: &status.Hold, ageless: true},
+		{name: "incoming", count: &status.Incoming},
 	}
-	if resp.Data == nil {
-		return nil, fmt.Errorf("PMG GetQueueStatus response missing data")
+	path := fmt.Sprintf("/nodes/%s/postfix/qshape", url.PathEscape(node))
+	for _, queue := range queues {
+		var resp apiResponse[[]queueShapeRow]
+		if err := c.getJSON(ctx, path, url.Values{"queue": {queue.name}}, &resp); err != nil {
+			return nil, fmt.Errorf("%s queue: %w", queue.name, err)
+		}
+		total, ok := queueShapeTotal(resp.Data)
+		if !ok {
+			return nil, fmt.Errorf("PMG GetQueueStatus %s queue response missing TOTAL row", queue.name)
+		}
+		*queue.count = total.Total
+		if age := total.minAgeSeconds(); !queue.ageless && age > status.OldestAge.Int64() {
+			status.OldestAge = flexibleInt(age)
+		}
 	}
-	return resp.Data, nil
+	return status, nil
+}
+
+func queueShapeTotal(rows []queueShapeRow) (queueShapeRow, bool) {
+	for _, row := range rows {
+		if row.Domain == "TOTAL" {
+			return row, true
+		}
+	}
+	return queueShapeRow{}, false
 }
 
 // ListBackups returns configuration backup archives available on a PMG node.

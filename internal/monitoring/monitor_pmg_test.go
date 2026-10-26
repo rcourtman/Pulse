@@ -64,9 +64,18 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"data":{"count":2,"avgbytes":0,"mbytes":0}}`)
 
-		case "/api2/json/nodes/mail-gateway/postfix/queue":
+		case "/api2/json/nodes/mail-gateway/postfix/qshape":
+			totals := map[string]string{"active": "5", "deferred": "2", "hold": "0", "incoming": "0"}
+			total, ok := totals[r.URL.Query().Get("queue")]
+			if !ok {
+				t.Fatalf("unexpected qshape queue: %s", r.URL.RawQuery)
+			}
+			oldest := "0"
+			if r.URL.Query().Get("queue") == "deferred" {
+				oldest = total
+			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"data":{"active":5,"deferred":2,"hold":0,"maildrop":0}}`)
+			fmt.Fprintf(w, `{"data":[{"domain":"TOTAL","total":"%s","5m":"0","10m":"0","20m":"0","40m":"0","80m":"0","160m":"0","320m":"0","640m":"0","1280m":"%s","1280m+":"0"}]}`, total, oldest)
 
 		case "/api2/json/nodes/mail-gateway/backup":
 			w.Header().Set("Content-Type", "application/json")
@@ -152,6 +161,13 @@ func TestPollPMGInstancePopulatesState(t *testing.T) {
 
 	if instance.Quarantine == nil || instance.Quarantine.Spam != 5 || instance.Quarantine.Virus != 2 {
 		t.Fatalf("expected quarantine counts, got %+v", instance.Quarantine)
+	}
+
+	if len(instance.Nodes) != 1 || instance.Nodes[0].QueueStatus == nil {
+		t.Fatalf("expected node queue status, got %+v", instance.Nodes)
+	}
+	if queue := instance.Nodes[0].QueueStatus; queue.Active != 5 || queue.Deferred != 2 || queue.Total != 7 || queue.OldestAge != 640*60 {
+		t.Fatalf("unexpected queue status: %+v", queue)
 	}
 
 	if health := snapshot.ConnectionHealth["pmg-primary"]; !health {

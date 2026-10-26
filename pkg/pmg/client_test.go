@@ -401,9 +401,20 @@ func TestMailEndpointsHandleNullAndStringValues(t *testing.T) {
 		case "/api2/json/quarantine/virusstatus":
 			w.Header().Set("Content-Type", "application/json")
 			fmt.Fprint(w, `{"data":{"count":"4","avgbytes":"256","mbytes":"0.25"}}`)
-		case "/api2/json/nodes/mail/postfix/queue":
+		case "/api2/json/nodes/mail/postfix/qshape":
+			// PMG emits qshape counts as strings, with the TOTAL row first.
+			rows := map[string]string{
+				"active":   `{"domain":"TOTAL","total":"3","5m":"1","10m":"2","20m":"0","40m":"0","80m":"0","160m":"0","320m":"0","640m":"0","1280m":"0","1280m+":"0"},{"domain":"example.com","total":"3","5m":"1","10m":"2","20m":"0","40m":"0","80m":"0","160m":"0","320m":"0","640m":"0","1280m":"0","1280m+":"0"}`,
+				"deferred": `{"domain":"TOTAL","total":"0","5m":"0","10m":"0","20m":"0","40m":"0","80m":"0","160m":"0","320m":"0","640m":"0","1280m":"0","1280m+":"0"}`,
+				"hold":     `{"domain":"TOTAL","total":"1","5m":"0","10m":"0","20m":"0","40m":"0","80m":"0","160m":"0","320m":"0","640m":"0","1280m":"0","1280m+":"1"}`,
+				"incoming": `{"domain":"TOTAL","total":"2","5m":"2","10m":"0","20m":"0","40m":"0","80m":"0","160m":"0","320m":"0","640m":"0","1280m":"0","1280m+":"0"}`,
+			}
+			row, ok := rows[r.URL.Query().Get("queue")]
+			if !ok {
+				t.Fatalf("unexpected qshape queue: %s", r.URL.RawQuery)
+			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"data":{"active":"3","deferred":null,"hold":"1","incoming":"2","oldest_age":"600"}}`)
+			fmt.Fprintf(w, `{"data":[%s]}`, row)
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -475,8 +486,10 @@ func TestMailEndpointsHandleNullAndStringValues(t *testing.T) {
 	if queue.Active.Int() != 3 || queue.Deferred.Int() != 0 || queue.Hold.Int() != 1 || queue.Incoming.Int() != 2 {
 		t.Fatalf("unexpected queue values: %+v", queue)
 	}
-	if queue.OldestAge.Int64() != 600 {
-		t.Fatalf("expected oldest age 600, got %d", queue.OldestAge.Int64())
+	// Active mail in the 5-10 minute bucket is the oldest delivery delay; the
+	// held message is older but waits for an operator.
+	if queue.OldestAge.Int64() != 300 {
+		t.Fatalf("expected oldest age 300, got %d", queue.OldestAge.Int64())
 	}
 }
 
@@ -836,7 +849,9 @@ type pmgCollectionTransport func(*http.Request) (*http.Response, error)
 func (f pmgCollectionTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestPMGCollectionMissingObjectData(t *testing.T) {
-	for _, body := range []string{`{}`, `{"data":null}`, `{"data":0}`, `{"data":[]}`, `invalid`} {
+	// The last body is PMG's /postfix/queue directory index, which Pulse once
+	// decoded as queue counts (#2960).
+	for _, body := range []string{`{}`, `{"data":null}`, `{"data":0}`, `{"data":[]}`, `invalid`, `{"data":[{"name":"deferred"},{"name":"active"},{"name":"incoming"},{"name":"hold"}]}`} {
 		t.Run(body, func(t *testing.T) {
 			client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
 				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
@@ -858,7 +873,11 @@ func TestPMGCollectionMissingObjectData(t *testing.T) {
 }
 func TestPMGCollectionObservedZeroData(t *testing.T) {
 	client := &Client{baseURL: "https://example.invalid", auth: auth{tokenName: "synthetic", tokenValue: "synthetic", user: "fixture", realm: "pmg"}, httpClient: &http.Client{Transport: pmgCollectionTransport(func(r *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":{"count":0,"active":0,"deferred":0,"hold":0,"incoming":0}}`)), Request: r}, nil
+		body := `{"data":{"count":0}}`
+		if strings.HasSuffix(r.URL.Path, "/postfix/qshape") {
+			body = `{"data":[{"domain":"TOTAL","total":0,"5m":0,"10m":0,"20m":0,"40m":0,"80m":0,"160m":0,"320m":0,"640m":0,"1280m":0,"1280m+":0}]}`
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
 	})}}
 	if v, err := client.GetMailStatistics(context.Background(), ""); err != nil || v == nil || v.Count.Float64() != 0 {
 		t.Fatalf("mail=%+v err=%v", v, err)
