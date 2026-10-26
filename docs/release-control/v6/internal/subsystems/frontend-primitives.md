@@ -20,6 +20,17 @@
 
 ## Purpose
 
+### Backup activity uses calendar-day chart slots
+
+The Proxmox backup activity producer supplies one slot per consecutive local
+date, including across daylight-saving and half-hour clock changes. The chart's
+labels and selectable day keys share that local-date basis; elapsed 24-hour
+steps cannot establish a calendar boundary. Count and volume retain identical
+slots, while future instants and unknown dates remain excluded. The registered
+activity presentation tests and source-bound desktop/narrow consuming browser
+journey cover date selection, metric changes and the matching backup details.
+No shared table, scrolling, query, policy or recovery operation changes.
+
 ### Backup-location choices preserve domain identity
 
 The existing shared filter rail renders source-qualified backup-location

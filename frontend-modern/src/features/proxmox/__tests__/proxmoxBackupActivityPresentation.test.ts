@@ -542,3 +542,83 @@ describe('backup-date-evidence timeline', () => {
     expect(timeline.points.reduce((total, point) => total + point.total, 0)).toBe(1);
   });
 });
+
+// These dates deliberately cross clock changes, unlike the stable February
+// fixtures above. Each test restores TZ before the next one and runs under the
+// repository's ordinary test command, not a separately maintained proof script.
+describe('backup activity uses local calendar days across clock changes', () => {
+  const cases = [
+    ['Europe/London', '2026-03-30T23:45:00'],
+    ['Europe/London', '2026-10-25T23:45:00'],
+    ['Europe/London', '2026-10-26T23:45:00'],
+    ['America/New_York', '2026-03-09T23:45:00'],
+    ['America/New_York', '2026-11-01T23:45:00'],
+    ['America/New_York', '2026-11-02T23:45:00'],
+    ['Australia/Lord_Howe', '2026-04-05T23:45:00'],
+    ['Australia/Lord_Howe', '2026-04-06T23:45:00'],
+    ['Australia/Lord_Howe', '2026-10-05T23:45:00'],
+    ['UTC', '2026-10-26T23:45:00'],
+    ['Asia/Kolkata', '2026-10-26T23:45:00'],
+  ] as const;
+
+  for (const [zone, localNow] of cases) {
+    it.each([...BACKUP_ACTIVITY_RANGE_DAYS])(
+      `${zone} at ${localNow} has exactly %s local days and includes both boundaries`,
+      (days) => {
+        vi.stubEnv('TZ', zone);
+        try {
+          const now = new Date(localNow);
+          // Use UTC only as an independent calendar-date oracle. The product
+          // must still classify actual instants in the operator's local zone.
+          const calendarDay = (offset: number) =>
+            new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + offset))
+              .toISOString()
+              .slice(0, 10);
+          const expectedKeys = Array.from({ length: days }, (_, i) => calendarDay(i - days + 1));
+          const dayMs = (offset: number, hours: number, minutes = 0) =>
+            new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate() + offset,
+              hours,
+              minutes,
+            ).getTime();
+          const items: ActivityItem[] = [
+            ...Array.from({ length: days }, (_, i) => ({
+              ts: dayMs(i - days + 1, 12),
+              kind: 'archive' as const,
+              bytes: 1024,
+            })),
+            // The first quarter hour of the oldest day must not disappear
+            // after a backward clock change (including a half-hour change).
+            { ts: dayMs(1 - days, 0, 15), kind: 'pbs', bytes: 2048 },
+            { ts: now.getTime(), kind: 'snapshot', bytes: 4096 },
+            { ts: dayMs(-days, 23, 59), kind: 'pbs', bytes: 8192 },
+            { ts: now.getTime() + 1, kind: 'snapshot', bytes: 8192 },
+            { kind: 'archive', bytes: 8192 },
+          ];
+          for (const mode of ['count', 'volume'] as const) {
+            const timeline = buildBackupActivityTimeline(days, items, itemMs, classify, {
+              now,
+              getValue: mode === 'volume' ? (item) => item.bytes ?? 0 : undefined,
+            });
+            expect(timeline.points.map((point) => point.key)).toEqual(expectedKeys);
+            expect(new Set(timeline.points.map((point) => point.key)).size).toBe(days);
+            expect(
+              timeline.points.every(
+                (point) => point.counts.archive === (mode === 'volume' ? 1024 : 1),
+              ),
+            ).toBe(true);
+            expect(timeline.points[0].counts.pbs).toBe(mode === 'volume' ? 2048 : 1);
+            expect(timeline.points.at(-1)!.counts.snapshot).toBe(mode === 'volume' ? 4096 : 1);
+            expect(timeline.points.reduce((total, point) => total + point.total, 0)).toBe(
+              mode === 'volume' ? days * 1024 + 2048 + 4096 : days + 2,
+            );
+          }
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
+  }
+});
