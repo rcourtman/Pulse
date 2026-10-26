@@ -2222,6 +2222,82 @@ test("declared versions use visible release-link text, including nested inline f
   }
 });
 
+test("formatted field headings retain visible declarations and field boundaries", () => {
+  const { classifyAdditionalActionableTopics, classifyV6FeedbackType, extractPulseVersion } = triage.internals;
+  for (const format of [
+    value => `**${value}**`,
+    value => `_${value}_`,
+    value => `***${value}***`,
+    value => `[${value}](https://example.invalid/ignored "Not a field name")`,
+    value => `**[${value}][field]**`,
+    value => `${value} <!-- optional hint -->`,
+  ]) {
+    const definitions = '\n\n[field]: https://example.invalid/ignored "Not a field name"';
+    for (const newline of ["\n", "\r\n"]) {
+      const body = [
+        `### ${format("Feedback type")}`, "Documentation issue", "",
+        `### ${format("Additional actionable topics")}`, "None", "",
+        `### ${format("Logs, screenshots, or diagnostics")}`, "A primary-topic screenshot is supplied here.", "",
+        `### ${format("Pulse version")}`, "unknown", "",
+        "### Agent version", "6.5.0", definitions,
+      ].join("\n").replaceAll("\n", newline);
+      assert.equal(classifyV6FeedbackType(body), "documentation", body);
+      assert.equal(classifyAdditionalActionableTopics(body), false, body);
+      assert.equal(extractPulseVersion("v6.4.5 upgrade fails", body), null, body);
+      assert.equal(classifyAdditionalActionableTopics(body.replace("\nNone", "\nA second target loses its identity.")), true, body);
+      assert.equal(extractPulseVersion("v6.4.5 upgrade fails", body.replace("unknown", "6.6.0")), "6.6.0", body);
+    }
+  }
+});
+
+test("heading destinations, literal examples and withdrawn text cannot declare fields", () => {
+  for (const format of [
+    value => `\`${value}\``,
+    value => `**\`${value}\`**`,
+    value => `~~${value}~~`,
+    value => `![${value}](https://example.invalid/ignored)`,
+    value => `[Context](https://example.invalid/ignored "${value}")`,
+    value => `<span>${value}</span>`,
+    value => `<!-- ${value} -->Context`,
+  ]) {
+    const body = `### ${format("Additional actionable topics")}\nAnother target fails.\n\n` +
+      `### ${format("Pulse version")}\n6.5.0\n\n` +
+      `### ${format("Feedback type")}\nBug / regression\n`;
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), null, body);
+    assert.equal(triage.internals.classifyV6FeedbackType(body), null, body);
+    assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), null, body);
+  }
+  for (const wrap of [body => `\`\`\`markdown\n${body}\n\`\`\``,
+    body => body.split("\n").map(line => `> ${line}`).join("\n"),
+    body => `<!--\n${body}\n-->`]) {
+    const body = wrap("### **Additional actionable topics**\nAnother target fails.\n\n### _Pulse version_\n6.5.0");
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(body), null, body);
+    assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), null, body);
+  }
+});
+
+test("silent metadata consumes formatted headings without losing topics or inventing missing evidence", async () => {
+  for (const [topic, expected] of [
+    ["Another target loses its backup identity.", ["affects-6.6.0", "needs-decomposition"]],
+    ["None", ["affects-6.6.0"]],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 42, title: "v6.4.5 upgrade fails",
+      body: `### **Additional actionable topics**\n${topic}\n\n` +
+        "### _Logs, screenshots, or diagnostics_\nPrimary-topic evidence.\n\n" +
+        "### [Pulse version](https://example.invalid/6.4.5)\n6.6.0\n\n### Agent version\n6.4.5",
+      labels: ["bug", "affects-6.4.5", "needs-version-info", "needs-human", "release-blocker",
+        "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [expected]);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), ["affects-6.4.5", "needs-version-info"]);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
+
 test("link targets, titles, images and literal Markdown cannot invent a declared version", () => {
   const { extractPulseVersion } = triage.internals;
   for (const value of [
