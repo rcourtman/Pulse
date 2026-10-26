@@ -59,6 +59,17 @@ afterEach(() => {
 });
 
 describe('PlatformSortableTableHead', () => {
+  it('does not recreate or erase responsive heading text when the pointer sort marker changes', async () => {
+    mountTable();
+    const heading = screen.getByRole('columnheader', { name: /Completed/ });
+    const label = heading.querySelector('.platform-table-label-full');
+    for (let i = 0; i < 3; i++) {
+      await fireEvent.click(heading);
+      expect(heading.querySelector('.platform-table-label-full')).toBe(label);
+      expect(heading).toHaveTextContent('Completed');
+    }
+  });
+
   it('uses scoped column headings and native, non-submitting sort controls only for sortable columns', () => {
     mountTable();
     const headings = screen.getAllByRole('columnheader');
@@ -97,13 +108,21 @@ describe('PlatformSortableTableHead', () => {
       expect(control).toHaveAccessibleName(/Completed/);
       expect(control).not.toHaveAccessibleName(/[▲▼]/);
     }
-    await fireEvent.click(within(screen.getByRole('columnheader', { name: 'Name' })).getByRole('button'));
+    await fireEvent.click(
+      within(screen.getByRole('columnheader', { name: 'Name' })).getByRole('button'),
+    );
     expect(heading).not.toHaveAttribute('aria-sort');
-    expect(screen.getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getByRole('columnheader', { name: /Name/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
     expect(localStorage.getItem('accessibleHeadersSortKey')).toBe('name');
     unmount();
     mountTable();
-    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'ascending');
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
     expect(names()).toEqual(['alpha', 'bravo', 'unknown']);
   });
 });

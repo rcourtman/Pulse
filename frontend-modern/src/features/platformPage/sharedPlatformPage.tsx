@@ -669,8 +669,7 @@ export function PlatformSortableTableHead<SortKey extends string>(props: {
       <Show when={props.sortKey !== undefined} fallback={label()}>
         <button
           type="button"
-          class="min-h-6 w-full min-w-0 cursor-pointer rounded-sm text-inherit focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/70"
-          style={{ 'text-align': 'inherit' }}
+          class="min-h-6 w-full min-w-0 cursor-pointer rounded-sm text-inherit [text-align:inherit] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-400/70"
         >
           {label()}
           <span aria-hidden="true">

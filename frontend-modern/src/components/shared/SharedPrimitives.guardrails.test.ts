@@ -1561,7 +1561,8 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps platform sort activation native and responsive labels stable at the shared boundary', () => {
-    const heading = sharedPlatformPageSource.split('export function PlatformSortableTableHead')[1]!
+    const heading = sharedPlatformPageSource
+      .split('export function PlatformSortableTableHead')[1]!
       .split('export const formatPlatformTableTextValue')[0]!;
     expect(heading).toContain('scope="col"');
     expect(heading).toContain('children(() => props.children)');

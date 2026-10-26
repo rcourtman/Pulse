@@ -68,7 +68,11 @@ describe('PlatformWindowedRows', () => {
           }
           body={
             <PlatformWindowedRows items={() => sort.sortRows(items, (item) => item.id)}>
-              {(item) => <tr data-row-id={item.id}><td>{item.id}</td></tr>}
+              {(item) => (
+                <tr data-row-id={item.id}>
+                  <td>{item.id}</td>
+                </tr>
+              )}
             </PlatformWindowedRows>
           }
         />
@@ -80,7 +84,10 @@ describe('PlatformWindowedRows', () => {
       await fireEvent.click(button);
       await fireEvent.click(button);
       expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveAttribute('scope', 'col');
-      expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveAttribute('aria-sort', 'descending');
+      expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveAttribute(
+        'aria-sort',
+        'descending',
+      );
       expect(button).toHaveFocus();
       expect(container.querySelector('[data-row-id]')).toHaveAttribute('data-row-id', '999');
       expect(container.querySelectorAll('[data-row-id]')).toHaveLength(140);
