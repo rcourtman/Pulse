@@ -1047,7 +1047,6 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 29. `frontend-modern/src/hooks/useProtectionPostures.ts`
 30. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
 31. `internal/mock/recovery_points.go`
-32. `frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts`
 33. `frontend-modern/src/components/Storage/useStoragePoolsTableWindowing.ts`
 
 ## Shared Boundaries
@@ -1619,8 +1618,8 @@ into PVE archive or snapshot semantics. Workload coverage posture must be
 derived from real recovery evidence and recent task outcomes, including
 explicit uncovered and failed-latest-task states, rather than from source-detail
 row counts alone. Large-estate rendering must preserve that same full result
-set without mounting every row. `useProxmoxBackupTableWindowing.ts` routes both
-the coverage table and dated artifact feed through the shared table-window math
+set without mounting every row. `PlatformWindowedRows` routes both
+the coverage table and dated artifact feed through measured shared table-window math
 once the result set exceeds the mounted budget, keeps at most 140 desktop or 36
 phone row/header items mounted, and preserves continuous scroll height with
 table spacers. Filtering,
@@ -7592,3 +7591,42 @@ minute and requires exact development mode plus a valid bounded override.
 admission. This changes no storage history, backup, restore, migration or
 recovery contract. Request admission does not qualify stored-data preservation
 or a successful upgrade/recovery operation.
+
+### Backup evidence retains its measured native scroll extent
+
+Proxmox Coverage and By date use the shared `PlatformWindowedRows` renderer,
+not a fixed-height backup-specific runway. An expanded evidence panel belongs
+to its keyed summary item: scrolling inside it must not unmount that item or
+replace the panel with unrelated workload rows. Group headings count as their
+own items; measured offscreen panels retain their scroll extent. Live
+inventory replacements retain the mounted row, its disclosure focus and its
+expanded state. Spacer cells span only the currently visible columns, while
+the shared desktop/phone mounted-item budgets remain bounded.
+
+`ProxmoxCoverageTable.test.tsx` exercises both consuming tables, grouped
+dates, desktop/phone budgets, tall panels, snapshot replacement, scroll-away
+and return, and spacer spans. Browser proof must scroll actual production
+evidence panels at desktop and narrow widths and inspect pixels. This changes
+only presentation: posture, identity matching, history, permissions and native
+backup/guest/recovery operations remain unchanged.
+
+### Backup table extent survives measured-detail retirement
+
+Coverage and By date opt into `PlatformWindowedRows.reserveScrollExtent`. The
+shared measurement owner reserves the natural table height on its outer scroll
+shell before a tall inline panel leaves the row window. This prevents a
+transient shrink from clamping native page or app-container scrolling. It does
+not set the table's own height or move the native scroll position. Natural
+remeasurement releases the reserve on disclosure close or responsive layout;
+leaving windowed mode and unmount restore the shell's previous minimum height.
+Other table consumers keep their existing lifecycle by default.
+
+`PlatformWindowedRows.test.tsx` checks opt-in extent retention, bounded rows,
+return, close and small-result filtering; consuming backup proof must exercise
+real desktop/narrow app scrolling and inventory polling, including the last
+visible workload. Posture, keys, authority and native recovery are unchanged.
+
+The reserve derives from the full keyed measured-height map plus table chrome,
+not a DOM height sampled while a window retires. Offscreen detail measurements
+remain in that map until the owning item is remeasured or removed, so a transient
+DOM extent cannot lower the reserve before its compensating spacer settles.

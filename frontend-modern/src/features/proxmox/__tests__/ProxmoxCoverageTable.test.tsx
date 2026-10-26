@@ -1,9 +1,16 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Accessor, JSX } from 'solid-js';
+import { createSignal, type Accessor, type JSX } from 'solid-js';
 
 import { ProxmoxCoverageTable } from '../ProxmoxCoverageTable';
+import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
+import { buildProxmoxBackupRecoveryModel } from '../proxmoxBackupRecoveryModel';
+import {
+  BACKUP_IDENTITY_NOW,
+  identityArchive,
+  identityGuest,
+} from '../__fixtures__/backupIdentity';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from '../proxmoxBackupsTableModel';
 
@@ -403,10 +410,11 @@ describe('ProxmoxCoverageTable column visibility', () => {
       />
     ));
 
-    expect(document.querySelector('[data-proxmox-backups-table="coverage"]')).toHaveAttribute(
-      'data-proxmox-backups-windowed',
-      'true',
-    );
+    expect(
+      document.querySelectorAll(
+        '[data-proxmox-backups-table="coverage"] [data-platform-window-spacer]',
+      ),
+    ).toHaveLength(2);
     expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(140);
     expect(document.body.textContent).toContain('workload-0');
     expect(document.body.textContent).not.toContain('workload-599');
@@ -628,6 +636,166 @@ describe('Coverage absence requires readable, complete history', () => {
       // notice synthesize a raw snapshot, date or completed backup from prose.
       expect(screen.queryByText('Restore evidence')).not.toBeInTheDocument();
       expect(document.body.textContent).not.toContain('No restore points reported');
+    },
+  );
+});
+
+const scrollingModel = () =>
+  buildProxmoxBackupRecoveryModel({
+    workloads: Array.from({ length: 170 }, (_, i) =>
+      identityGuest(`guest-${i}`, 'east', 'pve-1', { vmid: 100 + i }),
+    ),
+    archives: Array.from({ length: 170 }, (_, i) =>
+      identityArchive({
+        id: `archive-${i}`,
+        vmid: 100 + i,
+        ctime: BACKUP_IDENTITY_NOW / 1000 - i * 60,
+      }),
+    ),
+    snapshots: [],
+    pbsBackups: [],
+    tasks: [],
+    nowMs: BACKUP_IDENTITY_NOW,
+  });
+
+describe('backup evidence native scrolling', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  it.each([
+    ['coverage', 390],
+    ['coverage', 1365],
+    ['date', 390],
+    ['date', 1365],
+  ] as const)(
+    'keeps a tall %s drawer and its scroll extent at %ipx, including after a live snapshot',
+    async (view, width) => {
+      let scrollTop = 0;
+      const drawerHeight = 4800;
+      vi.stubGlobal('innerWidth', width);
+      vi.stubGlobal('innerHeight', 120);
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: Element,
+      ) {
+        const top =
+          this.getAttribute('data-platform-window-spacer') === 'top' ||
+          this.hasAttribute('data-proxmox-backups-table')
+            ? -scrollTop
+            : 0;
+        const height = this.hasAttribute('data-inline-detail-row') ? drawerHeight : 32;
+        return {
+          x: 0,
+          y: top,
+          top,
+          left: 0,
+          right: width,
+          bottom: top + height,
+          width,
+          height,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+      const initial = scrollingModel();
+      const [rows, setRows] = createSignal(initial.coverageRows);
+      const [artifacts, setArtifacts] = createSignal(initial.recoverableArtifacts);
+      const [expanded, setExpanded] = createSignal<string | null>(null);
+      const { container } = renderInRouter(() =>
+        view === 'coverage' ? (
+          <ProxmoxCoverageTable
+            rows={rows()}
+            hasAnyRows
+            emptyIcon={<span />}
+            emptyTitle="No guests"
+            emptyDescription="No guests"
+            sortKey={() => 'workload'}
+            sortDirection={() => 'asc'}
+            onSort={() => {}}
+            expandedKey={expanded()}
+            onToggleExpand={(key) => setExpanded((current) => (current === key ? null : key))}
+            showTaskColumn={false}
+            layoutWidth={() => width}
+          />
+        ) : (
+          <ProxmoxRecoverableTable
+            artifacts={artifacts()}
+            hasAnyArtifacts
+            emptyIcon={<span />}
+            emptyTitle="No backups"
+            emptyDescription="No backups"
+            sortKey={() => 'created'}
+            sortDirection={() => 'desc'}
+            onSort={() => {}}
+            sizeMaxBytes={1024}
+            groupByDay
+            layoutWidth={() => width}
+          />
+        ),
+      );
+      const rowSelector = `[data-proxmox-backup-row="${view === 'coverage' ? 'coverage' : 'recoverable'}"]`;
+      const mountedCount = () => container.querySelectorAll(rowSelector).length;
+      const budget = width < 640 ? 36 : 140;
+      expect(mountedCount()).toBeLessThanOrEqual(budget);
+      expect(mountedCount()).toBeGreaterThan(0);
+      const first = container.querySelector(rowSelector)!;
+      const disclosure = first.querySelector<HTMLButtonElement>('button[aria-controls]')!;
+      await fireEvent.click(disclosure);
+      const detail = await screen.findByTestId(
+        view === 'coverage' ? 'proxmox-coverage-detail' : 'proxmox-recoverable-detail',
+      );
+      disclosure.focus();
+      // The whole logical row includes the expanded panel. Scrolling inside
+      // it must not advance the runway as if its pixels were 118 summary rows.
+      scrollTop = 3800;
+      await fireEvent.scroll(window);
+      expect(detail).toBeInTheDocument();
+      expect(disclosure).toHaveFocus();
+
+      const refreshed = scrollingModel();
+      refreshed.coverageRows[0]!.workload.name = 'refreshed-guest';
+      refreshed.recoverableArtifacts[0]!.workload.name = 'refreshed-guest';
+      setRows(refreshed.coverageRows);
+      setArtifacts(refreshed.recoverableArtifacts);
+      await waitFor(() => {
+        expect(container.querySelector(rowSelector)?.querySelector('button')).toBe(disclosure);
+        expect(disclosure).toHaveFocus();
+        expect(detail).toBeInTheDocument();
+        expect(first).toHaveTextContent('refreshed-guest');
+      });
+
+      scrollTop = drawerHeight + 3200;
+      await fireEvent.scroll(window);
+      await waitFor(() => expect(first).not.toBeInTheDocument());
+      const spacer = container.querySelector<HTMLElement>('[data-platform-window-spacer="top"]')!;
+      expect(parseFloat(spacer.style.height)).toBeGreaterThan(drawerHeight);
+      expect(mountedCount()).toBeLessThanOrEqual(budget);
+
+      scrollTop = 0;
+      await fireEvent.scroll(window);
+      await waitFor(() =>
+        expect(
+          screen.getByTestId(
+            view === 'coverage' ? 'proxmox-coverage-detail' : 'proxmox-recoverable-detail',
+          ),
+        ).toBeInTheDocument(),
+      );
+      const table = container.querySelector('table')!;
+      const columns = table.querySelectorAll(':scope > thead th').length;
+      for (const cell of table.querySelectorAll<HTMLTableCellElement>(
+        '[data-platform-window-spacer] > td',
+      )) {
+        expect(cell.colSpan).toBe(columns);
+      }
+
+      // Full-result filtering can shrink a previously scrolled estate below
+      // the mounted budget. No old spacers or stale selected panel survive.
+      setRows(refreshed.coverageRows.slice(-1));
+      setArtifacts(refreshed.recoverableArtifacts.slice(-1));
+      await waitFor(() => {
+        expect(mountedCount()).toBe(1);
+        expect(container.querySelector('[data-platform-window-spacer]')).toBeNull();
+        expect(detail).not.toBeInTheDocument();
+      });
     },
   );
 });

@@ -437,3 +437,104 @@ describe('PlatformWindowedRows', () => {
     }
   });
 });
+
+describe('opt-in measured table extent reservation', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+  it.each([true, false])(
+    'keeps native extent through retirement and releases it on close/filter (enabled: %s)',
+    async (reserve) => {
+      let scrollTop = 0;
+      let reportedTableTruncated = false;
+      const rowHeight = (element: Element): number =>
+        element.hasAttribute('data-platform-window-spacer')
+          ? parseFloat((element as HTMLElement).style.height) || 0
+          : element.hasAttribute('data-inline-detail-row')
+            ? 4_800
+            : 32;
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: Element,
+      ) {
+        const height =
+          this.tagName === 'TABLE' && reportedTableTruncated
+            ? 6_432
+            : this.tagName === 'TABLE'
+              ? 32 +
+                [...this.querySelectorAll('tbody > tr')].reduce(
+                  (sum, row) => sum + rowHeight(row),
+                  0,
+                )
+              : rowHeight(this);
+        const top = this.getAttribute('data-platform-window-spacer') === 'top' ? -scrollTop : 0;
+        return {
+          x: 0,
+          y: top,
+          top,
+          left: 0,
+          right: 390,
+          bottom: top + height,
+          width: 390,
+          height,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+      const [items, setItems] = createSignal(Array.from({ length: 200 }, (_, id) => ({ id })));
+      const [expanded, setExpanded] = createSignal(true);
+      const { container } = render(() => (
+        <div class="table-scroll-shell" style={{ 'min-height': '12px' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+              </tr>
+            </thead>
+            <tbody>
+              <PlatformWindowedRows
+                items={items}
+                windowSize={8}
+                enableThreshold={8}
+                estimatedRowHeight={32}
+                reserveScrollExtent={reserve}
+              >
+                {(item) => (
+                  <>
+                    <tr data-row={item.id}>
+                      <td>Row {item.id}</td>
+                    </tr>
+                    <Show when={item.id === 0 && expanded()}>
+                      <InlineDetailTableRow>
+                        <span>Tall evidence</span>
+                      </InlineDetailTableRow>
+                    </Show>
+                  </>
+                )}
+              </PlatformWindowedRows>
+            </tbody>
+          </table>
+        </div>
+      ));
+      const shell = container.querySelector<HTMLElement>('.table-scroll-shell')!;
+      await waitFor(() => expect(shell.style.minHeight).toBe(reserve ? '11232px' : '12px'));
+      scrollTop = 8_000;
+      reportedTableTruncated = true;
+      await fireEvent.scroll(window);
+      await waitFor(() => expect(container.querySelector('[data-row="0"]')).toBeNull());
+      expect(shell.style.minHeight).toBe(reserve ? '11232px' : '12px');
+      expect(container.querySelectorAll('[data-row]')).toHaveLength(8);
+      scrollTop = 0;
+      reportedTableTruncated = false;
+      await fireEvent.scroll(window);
+      await waitFor(() =>
+        expect(container.querySelector('[data-inline-detail-row]')).toBeInTheDocument(),
+      );
+      setExpanded(false);
+      await waitFor(() => expect(shell.style.minHeight).toBe(reserve ? '6432px' : '12px'));
+      setItems(items().slice(0, 3));
+      await waitFor(() => expect(container.querySelectorAll('[data-row]')).toHaveLength(3));
+      expect(container.querySelector('[data-platform-window-spacer]')).toBeNull();
+      expect(shell.style.minHeight).toBe('12px');
+    },
+  );
+});

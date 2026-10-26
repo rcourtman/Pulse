@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "bc3599f18937e3e728447022b531d7150d96b713",
+  "verified_at": "2026-10-26T20:20:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx",
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/platformPage/PlatformWindowedRows.tsx": "691fd32ef3ae54da21631d0a2c42af6376333b8a5d5fdd4efbe8559ff8e3b69d",
+    "frontend-modern/src/features/platformPage/usePlatformWindowedItems.ts": "c71364e4a806e500397b8843683a4d85ef8b2b70844ede0a94abf170ba36f052",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "c1f041705dd43ba3db28ac3c6c7ee0a73c7500f61f56d36812b20ba1d3953330",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "83b85fa2a7e1bebd7aa239bbee806161327eb88eb726d271abdab618960471cf",
+    "frontend-modern/src/features/proxmox/useProxmoxBackupTableWindowing.ts": "deleted"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled production ProxmoxBackupsTable, real inventory HTTP parser/model, production row/detail components and CSS in the native app scroll-shell layout; safe synthetic 420-workload/archive fixture only.",
+    "Final consuming journeys: 44 desktop Chromium and 39 narrow WebKit checks pass. Twenty captures received native image inspection, showing selected headers, lower provider/identifier evidence, fully visible final workloads and selected-panel return.",
+    "The measured keyed window retains tall evidence through ordinary real-time 30-second inventory polls. Both views remain bounded to 140 desktop / 36 phone logical items, including date headings.",
+    "The outer extent reserve survives row retirement without losing the panel height from the native scroll position. It shrinks on disclosure close and restores the original minimum height for small filtered results. Other table consumers retain the default lifecycle."
+  ],
+  "interactions": [
+    "Desktop keyboard disclosure and phone row tapping open Coverage and By date evidence; native scrolling reaches the lower selected provider scopes or long archive identifier without substituting unrelated rows.",
+    "Real HTTP polling replaces inventory while preserving panel and disclosure DOM identity and native position; desktop keyboard focus persists and changed backup size reaches visible evidence.",
+    "Native estate-end scrolling retires the selected panel, retains measured offscreen extent and reaches the wholly visible last workload; return restores the selected Workload 000 evidence.",
+    "Close the panel, filter to the last workload, verify one artifact plus its day heading where grouped, no stale spacers or reserve, then clear the filter and restore the bounded estate. No page exceptions or page-wide horizontal overflow."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  }
+}

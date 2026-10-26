@@ -10185,3 +10185,42 @@ unmount, archive compatibility and cleanup. `BackupTransferDialogs.test.tsx`
 checks target/error disclosure and pending input/action states. Browser evidence
 must exercise the production flow and consuming dialogs at desktop and narrow
 widths with safe responses, not a replacement transfer implementation.
+
+### Backup evidence retains its measured native scroll extent
+
+Proxmox Coverage and By date use the shared `PlatformWindowedRows` renderer,
+not a fixed-height backup-specific runway. An expanded evidence panel belongs
+to its keyed summary item: scrolling inside it must not unmount that item or
+replace the panel with unrelated workload rows. Group headings count as their
+own items; measured offscreen panels retain their scroll extent. Live
+inventory replacements retain the mounted row, its disclosure focus and its
+expanded state. Spacer cells span only the currently visible columns, while
+the shared desktop/phone mounted-item budgets remain bounded.
+
+`ProxmoxCoverageTable.test.tsx` exercises both consuming tables, grouped
+dates, desktop/phone budgets, tall panels, snapshot replacement, scroll-away
+and return, and spacer spans. Browser proof must scroll actual production
+evidence panels at desktop and narrow widths and inspect pixels. This changes
+only presentation: posture, identity matching, history, permissions and native
+backup/guest/recovery operations remain unchanged.
+
+### Backup table extent survives measured-detail retirement
+
+Coverage and By date opt into `PlatformWindowedRows.reserveScrollExtent`. The
+shared measurement owner reserves the natural table height on its outer scroll
+shell before a tall inline panel leaves the row window. This prevents a
+transient shrink from clamping native page or app-container scrolling. It does
+not set the table's own height or move the native scroll position. Natural
+remeasurement releases the reserve on disclosure close or responsive layout;
+leaving windowed mode and unmount restore the shell's previous minimum height.
+Other table consumers keep their existing lifecycle by default.
+
+`PlatformWindowedRows.test.tsx` checks opt-in extent retention, bounded rows,
+return, close and small-result filtering; consuming backup proof must exercise
+real desktop/narrow app scrolling and inventory polling, including the last
+visible workload. Posture, keys, authority and native recovery are unchanged.
+
+The reserve derives from the full keyed measured-height map plus table chrome,
+not a DOM height sampled while a window retires. Offscreen detail measurements
+remain in that map until the owning item is remeasured or removed, so a transient
+DOM extent cannot lower the reserve before its compensating spacer settles.

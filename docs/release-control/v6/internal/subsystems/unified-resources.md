@@ -8772,3 +8772,37 @@ Assistant context models are gone, the operator lock copy in
 `frontend-modern/src/stores/aiAvailability.ts`. The external-agent setup hash
 in `frontend-modern/src/routing/resourceLinks.ts` moved to the Agents route.
 Resource identity, policy, and drawer focus state are unchanged.
+
+### Backup evidence panels retain their owning rows
+
+Proxmox Coverage and By date consume `PlatformWindowedRows` with stable workload
+and artifact/group keys. The shared renderer measures inline detail rows as
+part of their summary item; it preserves a mounted disclosure through live
+resource snapshots and accounts for measured panels when they leave the
+runway. Native scrolling inside evidence must not substitute a different
+resource. `ProxmoxCoverageTable.test.tsx` exercises both consumers at desktop
+and phone budgets, with grouped dates, live snapshots, scroll-away/return
+and exact visible-column spacer spans. Browser proof covers actual production
+panels at both widths. This changes no unified identity, matching, provider
+evidence or recovery authority.
+
+### Backup table extent survives measured-detail retirement
+
+Coverage and By date opt into `PlatformWindowedRows.reserveScrollExtent`. The
+shared measurement owner reserves the natural table height on its outer scroll
+shell before a tall inline panel leaves the row window. This prevents a
+transient shrink from clamping native page or app-container scrolling. It does
+not set the table's own height or move the native scroll position. Natural
+remeasurement releases the reserve on disclosure close or responsive layout;
+leaving windowed mode and unmount restore the shell's previous minimum height.
+Other table consumers keep their existing lifecycle by default.
+
+`PlatformWindowedRows.test.tsx` checks opt-in extent retention, bounded rows,
+return, close and small-result filtering; consuming backup proof must exercise
+real desktop/narrow app scrolling and inventory polling, including the last
+visible workload. Posture, keys, authority and native recovery are unchanged.
+
+The reserve derives from the full keyed measured-height map plus table chrome,
+not a DOM height sampled while a window retires. Offscreen detail measurements
+remain in that map until the owning item is remeasured or removed, so a transient
+DOM extent cannot lower the reserve before its compensating spacer settles.
