@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "dee4051afe61dee69375fe54f98c99e75a3209b2",
+  "verified_at": "2026-10-26T17:21:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupLocation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "fb365fe7a7457b88cee720bc42926011f4142cc8572e048420d6ed41714c7f28",
+    "frontend-modern/src/features/proxmox/proxmoxBackupLocation.ts": "169ccb8d56b53b1a271b2377ad4f568e7f068fb3acc73b0594a8fbfe723664da",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "23ac6c2e9467408dc3855db314a8afa887529366400a373aa653e83879957b92"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage (real production component, API client, recovery model and CSS in an evidence-only synthetic HTTP fixture)"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "A unique old case-folded saved location resolves; a mounted inventory refresh introducing a case collision withdraws its interpretation and shows an accessible Choose location notice without broadening restore evidence.",
+    "New choices keep source, connection and repository as an exact case-preserving tuple in the URL; PBS vault, PBS Vault and the PVE archive remain separate.",
+    "By date and expanded restore details show only the chosen repository; Coverage navigation and real reload keep the same exact scope.",
+    "Compact phone Coverage intentionally omits Location. Its selected chip, one PBS evidence row and unique creation timestamp retain the scoped evidence; By date details show the full location.",
+    "Clearing the location restores all three fixture artifacts without changing aggregate server-owned posture."
+  ],
+  "interactions": [
+    "Desktop keyboard opened the active location chip, selected Vault, inspected details, navigated to Coverage, reloaded and cleared the location.",
+    "Narrow WebKit opened the existing Filters panel, used touch choices and row details, retained scope through view navigation and reload, then used the remaining stored-URL Coverage/clear interactions.",
+    "Thirteen retained captures were opened with native view_image. The warning and source-qualified choices fit; selected evidence and controls remain readable at both widths."
+  ],
+  "evidence": {
+    "source_commit": "dee4051afe61dee69375fe54f98c99e75a3209b2",
+    "source_proof": "source-62u0ypme: 765 tests in 33 files, pinned format, types, lint/headers, production build and budgets; exit 0 and guest stop complete.",
+    "desktop": "Original fixture runner exited 1 after eight passing checks at an absent PVE option; invalid companion fixture and wrong recovery endpoint retained. Corrected evidence-only fixtures; remaining desktop command passed 25 checks without replaying its completed legacy/refresh sequence.",
+    "narrow": "First runner timed out before product assertions because mobile Filters was not expanded. Corrected runner passed 19 checks then used a desktop-only Location assertion against the compact Coverage projection. Remaining stored-URL compact evidence and clearing command passed 15 checks; completed phone refresh/choice/date/detail/navigation sequences were not repeated.",
+    "pixel_review": "All 13 captures presented via native view_image, including degraded initial desktop states.",
+    "binding": "Detailed source/output/script identities, actual failures, command exits and captures retained in the lane RECEIPTS.md and BROWSER-ACCEPTANCE.json.",
+    "limits": "Safe fixture acceptance only. Does not clear the earlier c085ca43 WebKit Page crashed result, diagnose renderer/host cleanup, prove native guest recovery or establish release availability."
+  }
+}
