@@ -1937,6 +1937,13 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		Int("count", len(allBackups)).
 		Msg("PBS backups fetched")
 
+	// With no accepted group listing, a mixture of rejected and transiently
+	// unread namespaces does not establish that every datastore was denied.
+	// Partial successful collection still reports any actual access rejection.
+	observationTerminalFailures := collectionTerminalFailures
+	if datastoreFetches == 0 {
+		observationTerminalFailures = datastoreTerminalFailures
+	}
 	protectionObservedAt := time.Now().UTC()
 	protectionObservation, protectionObservationErr :=
 		buildPBSProtectionProviderObservation(
@@ -1944,7 +1951,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			datastoreCount,
 			datastoreFetches,
 			datastoreErrors,
-			collectionTerminalFailures,
+			observationTerminalFailures,
 			protectionObservedAt,
 		)
 	if protectionObservationErr != nil {
