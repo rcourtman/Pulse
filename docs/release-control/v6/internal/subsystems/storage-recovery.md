@@ -21,6 +21,21 @@
 
 ## Purpose
 
+### TrueNAS start and active-run dates are not completion evidence
+
+The Protection table's Completed column, its explicit completion sort and its
+inline details require a completion timestamp. A start is never substituted
+for a missing finish. Running replication does not present a last-run timestamp
+as completion of the active run, even when the source supplies it in completedAt.
+Started evidence and the recorded outcome remain available, and an accepted
+finished read updates rows and already-open details without a remount. Missing
+completions sort last in both directions; dated terminal failures remain dated
+failures, not successful backups. The registered
+`TrueNASProtectionTable.completion.test.tsx` drives the real query and transport
+normalizer through mixed timestamps, sorting and running-to-finished reads.
+This changes presentation only: stored timestamps, outcome, identity, API,
+policy, backup execution and native recovery are unchanged.
+
 ### Failed TrueNAS Protection reads cannot look current
 
 A failed recovery-points refresh must remain visible even when the query retains

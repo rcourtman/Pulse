@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "c1e25e61c477a92c0bbe3deb819156ea6c4cd4bd",
+  "verified_at": "2026-10-26T03:22:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "6d940207d48fd62cea616f82f3b6cf01a86f04187f80d9eaf8d7ff51795daa99"
+  },
+  "routes": [
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Mixed completed, failed, start-only and running replication with last-run timestamp",
+    "Absent completion in active/start-only rows and active inline details, with Started and outcomes retained",
+    "Dated terminal failures and successful snapshots retain reported completion",
+    "Explicit completion sort in both directions with absent finishes last",
+    "Running outcome filter and native search",
+    "Accepted polled finished response updates the row and already-open details without a remount"
+  ],
+  "interactions": [
+    "Visible completion heading pointer/touch sorting",
+    "Desktop keyboard status selection and detail disclosure/close",
+    "Phone native Filters rail, row-tap disclosure and detail close",
+    "Search, normal bounded recovery-points poll and search clearing"
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "channel": "chromium"
+  },
+  "client": {
+    "name": "Playwright",
+    "version": "1.56.1",
+    "matches_integration_lock": true
+  },
+  "proof_source_sha": "c1e25e61c477a92c0bbe3deb819156ea6c4cd4bd",
+  "notes": [
+    "Real API client, useRecoveryPoints, transport normalization, Protection component and product styles compiled from exact committed source. Safe local HTTP fixtures only.",
+    "Completed desktop journey retained from a partial run; focused phone supplement uses the actual row-tap control. Seven consuming captures and two diagnostic captures were opened natively.",
+    "Existing native header-as-cell semantics and narrow cell truncation remain explicit limitations. No keyboard sorting, native recovery or publication is claimed."
+  ]
+}

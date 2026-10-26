@@ -177,6 +177,11 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
 const sizeLabel = (point: RecoveryPoint): string =>
   formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '-');
 
+// A start is not a finish. Running replication can also retain a last-run
+// timestamp in completedAt, which is not completion of the active run.
+const completionTimestamp = (point: RecoveryPoint): string | undefined =>
+  normalizeRecoveryOutcome(point.outcome) === 'running' ? '' : asTrimmedString(point.completedAt);
+
 // Columns a user can sort by. Every protection column carries a scalar:
 // Completed orders chronologically and Size on raw bytes, both newest/biggest
 // first on the first click.
@@ -205,9 +210,7 @@ const getTrueNASProtectionSortValue = (
       return target === '-' ? null : target;
     }
     case 'completed':
-      return getPlatformTableDateTimeSortValue(
-        asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt),
-      );
+      return getPlatformTableDateTimeSortValue(completionTimestamp(point));
     case 'size':
       return typeof point.sizeBytes === 'number' && Number.isFinite(point.sizeBytes)
         ? point.sizeBytes
@@ -270,7 +273,7 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
     detailRow('Dataset', datasetLabel(point)),
     detailRow('Host', hostLabel(point)),
     detailRow('Started', detailDateTime(point.startedAt)),
-    detailRow('Completed', detailDateTime(point.completedAt)),
+    detailRow('Completed', detailDateTime(completionTimestamp(point))),
     detailRow('Size', sizeLabel(point)),
     detailRow('Verified', detailBool(point.verified)),
     detailRow('Encrypted', detailBool(point.encrypted)),
@@ -587,10 +590,7 @@ export const TrueNASProtectionTable: Component<{
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
                                 <PlatformTableDateTimeValue
-                                  value={
-                                    asTrimmedString(point.completedAt) ||
-                                    asTrimmedString(point.startedAt)
-                                  }
+                                  value={completionTimestamp(point)}
                                   emptyText="-"
                                 />
                               </TableCell>
