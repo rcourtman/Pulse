@@ -49,18 +49,18 @@ const detailSectionDesktopSpan = (sectionCount: number, sectionIndex: number): n
 const detailSectionDesktopBasisClass = (sectionCount: number, sectionIndex: number): string => {
   const columnCount = detailSectionDesktopColumnCount(sectionCount);
   const span = detailSectionDesktopSpan(sectionCount, sectionIndex);
-  if (span >= columnCount) return 'lg:basis-full';
+  if (span >= columnCount) return '@min-[64rem]/detail-sections:basis-full';
 
   if (columnCount === 4) {
-    if (span === 3) return 'lg:basis-[calc(75%-0.125rem)]';
-    if (span === 2) return 'lg:basis-[calc(50%-0.25rem)]';
-    return 'lg:basis-[calc(25%-0.375rem)]';
+    if (span === 3) return '@min-[64rem]/detail-sections:basis-[calc(75%-0.125rem)]';
+    if (span === 2) return '@min-[64rem]/detail-sections:basis-[calc(50%-0.25rem)]';
+    return '@min-[64rem]/detail-sections:basis-[calc(25%-0.375rem)]';
   }
   if (columnCount === 3) {
-    if (span === 2) return 'lg:basis-[calc(66.667%-0.167rem)]';
-    return 'lg:basis-[calc(33.333%-0.333rem)]';
+    if (span === 2) return '@min-[64rem]/detail-sections:basis-[calc(66.667%-0.167rem)]';
+    return '@min-[64rem]/detail-sections:basis-[calc(33.333%-0.333rem)]';
   }
-  return 'lg:basis-[calc(50%-0.25rem)]';
+  return '@min-[64rem]/detail-sections:basis-[calc(50%-0.25rem)]';
 };
 
 export const DetailSectionTable: Component<{
@@ -70,85 +70,92 @@ export const DetailSectionTable: Component<{
   /** Wrap every value instead of truncating it (record drawers: no hover on phones). */
   wrapValues?: boolean;
 }> = (props) => (
-  <div
-    data-testid={props.dataTestId}
-    class={`${props.class ?? 'overflow-hidden rounded-sm border border-border bg-surface'} lg:overflow-visible lg:border-0 lg:bg-transparent`}
-  >
-    <Table
-      class="w-full table-fixed text-[11px] lg:flex lg:flex-wrap lg:items-stretch lg:gap-2"
-      wrapperClass="lg:overflow-visible"
+  // A wide viewport can still contain a narrow drawer or split pane. Name the
+  // local container so the nested scroll shell cannot become the query owner.
+  <div class="@container/detail-sections min-w-0" data-detail-section-container>
+    <div
+      data-testid={props.dataTestId}
+      class={`${props.class ?? 'overflow-hidden rounded-sm border border-border bg-surface'} @min-[64rem]/detail-sections:overflow-visible @min-[64rem]/detail-sections:border-0 @min-[64rem]/detail-sections:bg-transparent`}
     >
-      <For each={props.sections}>
-        {(section, sectionIndex) => (
-          <TableBody
-            data-testid={section.testId}
-            class={`divide-y divide-border lg:flex lg:min-w-0 lg:flex-none lg:flex-col lg:overflow-hidden lg:rounded-sm lg:border lg:border-border lg:bg-surface lg:p-3 lg:shadow-xs lg:divide-y-0 ${detailSectionDesktopBasisClass(props.sections.length, sectionIndex())}`}
-          >
-            <TableRow class="bg-surface-alt lg:mb-1 lg:block lg:bg-transparent lg:hover:bg-transparent">
-              <TableHead
-                colspan={2}
-                class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted lg:block lg:px-0 lg:pb-1 lg:pt-0 lg:text-base-content"
-              >
-                {section.label}
-              </TableHead>
-            </TableRow>
-            <For each={section.rows}>
-              {(row) => (
-                <TableRow
-                  class={`lg:grid lg:min-w-0 lg:items-start lg:gap-3 lg:py-0.5 lg:hover:bg-transparent ${row.layout === 'stacked' ? 'lg:grid-cols-[minmax(0,1fr)]' : 'lg:grid-cols-[7rem_minmax(0,1fr)]'}`}
+      <Table
+        class="w-full table-fixed text-[11px] @min-[64rem]/detail-sections:flex @min-[64rem]/detail-sections:flex-wrap @min-[64rem]/detail-sections:items-stretch @min-[64rem]/detail-sections:gap-2"
+        wrapperClass="@min-[64rem]/detail-sections:overflow-visible"
+      >
+        <For each={props.sections}>
+          {(section, sectionIndex) => (
+            <TableBody
+              data-testid={section.testId}
+              class={`divide-y divide-border @min-[64rem]/detail-sections:flex @min-[64rem]/detail-sections:min-w-0 @min-[64rem]/detail-sections:flex-none @min-[64rem]/detail-sections:flex-col @min-[64rem]/detail-sections:overflow-hidden @min-[64rem]/detail-sections:rounded-sm @min-[64rem]/detail-sections:border @min-[64rem]/detail-sections:border-border @min-[64rem]/detail-sections:bg-surface @min-[64rem]/detail-sections:p-3 @min-[64rem]/detail-sections:shadow-xs @min-[64rem]/detail-sections:divide-y-0 ${detailSectionDesktopBasisClass(props.sections.length, sectionIndex())}`}
+            >
+              <TableRow class="bg-surface-alt @min-[64rem]/detail-sections:mb-1 @min-[64rem]/detail-sections:block @min-[64rem]/detail-sections:bg-transparent @min-[64rem]/detail-sections:hover:bg-transparent">
+                <TableHead
+                  colspan={2}
+                  class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted @min-[64rem]/detail-sections:block @min-[64rem]/detail-sections:px-0 @min-[64rem]/detail-sections:pb-1 @min-[64rem]/detail-sections:pt-0 @min-[64rem]/detail-sections:text-base-content"
                 >
-                  {row.layout !== 'stacked' ? (
-                    <TableCell class="w-[38%] px-2 py-1 text-muted lg:w-auto lg:px-0 lg:py-0">
-                      {row.label}
-                    </TableCell>
-                  ) : null}
-                  <TableCell
-                    colspan={row.layout === 'stacked' ? 2 : undefined}
-                    class={`px-2 py-1 text-right font-medium lg:min-w-0 lg:px-0 lg:py-0 lg:text-left ${detailValueToneClass(
-                      row.tone,
-                    )} ${row.valueClass ?? ''}`}
-                    title={row.title ?? row.value}
+                  {section.label}
+                </TableHead>
+              </TableRow>
+              <For each={section.rows}>
+                {(row) => (
+                  <TableRow
+                    class={`@min-[64rem]/detail-sections:grid @min-[64rem]/detail-sections:min-w-0 @min-[64rem]/detail-sections:items-start @min-[64rem]/detail-sections:gap-3 @min-[64rem]/detail-sections:py-0.5 @min-[64rem]/detail-sections:hover:bg-transparent ${row.layout === 'stacked' ? '@min-[64rem]/detail-sections:grid-cols-[minmax(0,1fr)]' : '@min-[64rem]/detail-sections:grid-cols-[7rem_minmax(0,1fr)]'}`}
                   >
-                    {row.layout === 'stacked' ? (
-                      <span class="mb-1 block whitespace-normal text-left font-normal leading-snug text-muted wrap-anywhere">
+                    {row.layout !== 'stacked' ? (
+                      <TableCell class="w-[38%] px-2 py-1 text-muted @min-[64rem]/detail-sections:w-auto @min-[64rem]/detail-sections:px-0 @min-[64rem]/detail-sections:py-0">
                         {row.label}
-                      </span>
+                      </TableCell>
                     ) : null}
-                    {row.valueContent ?? (
-                      <span
-                        title={row.title ?? row.value}
-                        class={
-                          row.wrap || props.wrapValues
-                            ? 'block whitespace-normal wrap-break-word text-left leading-snug'
-                            : 'block truncate'
-                        }
-                      >
-                        {row.value}
-                      </span>
-                    )}
-                    {row.progress ? (
-                      <ProgressBar
-                        value={row.progress.value}
-                        fillClass={row.progress.fillClass}
-                        ariaLabel={row.progress.ariaLabel}
-                        class="mt-1 h-1.5"
-                      />
-                    ) : null}
+                    <TableCell
+                      colspan={row.layout === 'stacked' ? 2 : undefined}
+                      class={`px-2 py-1 text-right font-medium @min-[64rem]/detail-sections:min-w-0 @min-[64rem]/detail-sections:px-0 @min-[64rem]/detail-sections:py-0 @min-[64rem]/detail-sections:text-left ${detailValueToneClass(
+                        row.tone,
+                      )} ${row.valueClass ?? ''}`}
+                      title={row.title ?? row.value}
+                    >
+                      {row.layout === 'stacked' ? (
+                        <span class="mb-1 block whitespace-normal text-left font-normal leading-snug text-muted wrap-anywhere">
+                          {row.label}
+                        </span>
+                      ) : null}
+                      {row.valueContent ?? (
+                        <span
+                          title={row.title ?? row.value}
+                          class={
+                            row.wrap || props.wrapValues
+                              ? 'block whitespace-normal wrap-break-word text-left leading-snug'
+                              : 'block truncate'
+                          }
+                        >
+                          {row.value}
+                        </span>
+                      )}
+                      {row.progress ? (
+                        <ProgressBar
+                          value={row.progress.value}
+                          fillClass={row.progress.fillClass}
+                          ariaLabel={row.progress.ariaLabel}
+                          class="mt-1 h-1.5"
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+              {section.footerContent ? (
+                <TableRow class="@min-[64rem]/detail-sections:mt-2 @min-[64rem]/detail-sections:block @min-[64rem]/detail-sections:min-w-0 @min-[64rem]/detail-sections:border-t @min-[64rem]/detail-sections:border-border @min-[64rem]/detail-sections:pt-2 @min-[64rem]/detail-sections:hover:bg-transparent">
+                  <TableCell
+                    colspan={2}
+                    class="px-2 py-2 @min-[64rem]/detail-sections:block @min-[64rem]/detail-sections:px-0 @min-[64rem]/detail-sections:py-0"
+                  >
+                    {section.footerContent}
                   </TableCell>
                 </TableRow>
-              )}
-            </For>
-            {section.footerContent ? (
-              <TableRow class="lg:mt-2 lg:block lg:min-w-0 lg:border-t lg:border-border lg:pt-2 lg:hover:bg-transparent">
-                <TableCell colspan={2} class="px-2 py-2 lg:block lg:px-0 lg:py-0">
-                  {section.footerContent}
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        )}
-      </For>
-    </Table>
+              ) : null}
+            </TableBody>
+          )}
+        </For>
+      </Table>
+    </div>
   </div>
 );
 

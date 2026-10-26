@@ -515,7 +515,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="numeric-value"
                       sort={sort}
                       sortKey="completed"
-                      class="md:w-[12%]"
+                      class="platform-table-mobile-w-30 md:w-[12%]"
                     >
                       <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
                     </PlatformSortableTableHead>
@@ -531,7 +531,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="badge"
                       sort={sort}
                       sortKey="outcome"
-                      class="platform-table-mobile-w-25 md:w-[9%]"
+                      class="platform-table-mobile-w-30 md:w-[9%]"
                     >
                       Outcome
                     </PlatformSortableTableHead>

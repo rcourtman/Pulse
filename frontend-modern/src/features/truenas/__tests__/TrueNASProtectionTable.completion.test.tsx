@@ -103,11 +103,11 @@ describe('TrueNAS protection completion evidence', () => {
       );
       expect(cells[index]).not.toHaveClass('platform-table-phone-hidden');
     }
-    expect(screen.getByRole('columnheader', { name: /Completed/ })).not.toHaveClass(
-      'platform-table-mobile-w-15',
+    expect(screen.getByRole('columnheader', { name: /Completed/ })).toHaveClass(
+      'platform-table-mobile-w-30',
     );
     expect(screen.getByRole('columnheader', { name: 'Outcome' })).toHaveClass(
-      'platform-table-mobile-w-25',
+      'platform-table-mobile-w-30',
     );
     await fireEvent.click(
       within(row('phone')).getByRole('button', { name: /details.*tank\/departmental-archives/i }),

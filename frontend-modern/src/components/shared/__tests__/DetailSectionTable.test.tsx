@@ -57,7 +57,7 @@ describe('DetailSectionTable', () => {
     expect(formatDetailCountValue(undefined, 'disk')).toBeNull();
   });
 
-  it('keeps compact table rows on narrow screens and bounded section cards on desktop', () => {
+  it('keeps compact rows in narrow panels and bounded cards only in a wide local container', () => {
     const { container } = render(() => (
       <DetailSectionTable
         sections={[
@@ -82,23 +82,34 @@ describe('DetailSectionTable', () => {
     expect(screen.getByText('tower').closest('td')).toHaveAttribute('title', 'tower.example.test');
 
     const table = container.querySelector('table');
-    expect(table).toHaveClass('table-fixed', 'lg:flex', 'lg:flex-wrap', 'lg:items-stretch');
+    expect(table?.closest('[data-detail-section-container]')).toHaveClass(
+      '@container/detail-sections',
+    );
+    expect(table).not.toHaveClass('lg:flex');
+    expect(table).toHaveClass(
+      'table-fixed',
+      '@min-[64rem]/detail-sections:flex',
+      '@min-[64rem]/detail-sections:flex-wrap',
+      '@min-[64rem]/detail-sections:items-stretch',
+    );
     const sections = container.querySelectorAll('tbody');
     expect(sections).toHaveLength(2);
     expect(sections[0]).toHaveClass(
-      'lg:flex',
-      'lg:flex-none',
-      'lg:basis-[calc(50%-0.25rem)]',
-      'lg:rounded-sm',
-      'lg:border',
-      'lg:p-3',
+      '@min-[64rem]/detail-sections:flex',
+      '@min-[64rem]/detail-sections:flex-none',
+      '@min-[64rem]/detail-sections:basis-[calc(50%-0.25rem)]',
+      '@min-[64rem]/detail-sections:rounded-sm',
+      '@min-[64rem]/detail-sections:border',
+      '@min-[64rem]/detail-sections:p-3',
     );
     expect(screen.getByText('Severity').closest('tr')).toHaveClass(
-      'lg:grid',
-      'lg:grid-cols-[7rem_minmax(0,1fr)]',
-      'lg:gap-3',
+      '@min-[64rem]/detail-sections:grid',
+      '@min-[64rem]/detail-sections:grid-cols-[7rem_minmax(0,1fr)]',
+      '@min-[64rem]/detail-sections:gap-3',
     );
-    expect(screen.getByText('Warning').closest('td')).toHaveClass('lg:text-left');
+    expect(screen.getByText('Warning').closest('td')).toHaveClass(
+      '@min-[64rem]/detail-sections:text-left',
+    );
   });
 
   it('preserves section test hooks and rich value content inside the shared layout', () => {
@@ -149,7 +160,10 @@ describe('DetailSectionTable', () => {
     const footer = screen.getByTestId('analysis-footer');
     expect(footer).toBeInTheDocument();
     expect(footer.closest('td')).toHaveAttribute('colspan', '2');
-    expect(footer.closest('tr')).toHaveClass('lg:border-t', 'lg:pt-2');
+    expect(footer.closest('tr')).toHaveClass(
+      '@min-[64rem]/detail-sections:border-t',
+      '@min-[64rem]/detail-sections:pt-2',
+    );
   });
 
   it('renders optional row progress without replacing its compact text value', () => {
@@ -205,10 +219,12 @@ describe('DetailSectionTable', () => {
     expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere', 'text-left');
     expect(label.closest('td')).toHaveAttribute('colspan', '2');
     expect(label.closest('tr')?.querySelectorAll('td')).toHaveLength(1);
-    expect(label.closest('tr')).toHaveClass('lg:grid-cols-[minmax(0,1fr)]');
+    expect(label.closest('tr')).toHaveClass(
+      '@min-[64rem]/detail-sections:grid-cols-[minmax(0,1fr)]',
+    );
     expect(screen.getByText('50% · 5 GB/10 GB').closest('td')).toBe(label.closest('td'));
     expect(screen.getByText('Status').closest('tr')).toHaveClass(
-      'lg:grid-cols-[7rem_minmax(0,1fr)]',
+      '@min-[64rem]/detail-sections:grid-cols-[7rem_minmax(0,1fr)]',
     );
     expect(screen.getByText('Status').closest('tr')?.querySelectorAll('td')).toHaveLength(2);
   });
@@ -227,9 +243,11 @@ describe('DetailSectionTable', () => {
     expect(sections).toHaveLength(5);
     Array.from(sections)
       .slice(0, 3)
-      .forEach((section) => expect(section).toHaveClass('lg:basis-[calc(33.333%-0.333rem)]'));
-    expect(sections[3]).toHaveClass('lg:basis-[calc(66.667%-0.167rem)]');
-    expect(sections[4]).toHaveClass('lg:basis-[calc(33.333%-0.333rem)]');
+      .forEach((section) =>
+        expect(section).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(33.333%-0.333rem)]'),
+      );
+    expect(sections[3]).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(66.667%-0.167rem)]');
+    expect(sections[4]).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(33.333%-0.333rem)]');
   });
 
   it('fills seven desktop sections on the same four-column tracks', () => {
@@ -246,10 +264,12 @@ describe('DetailSectionTable', () => {
     expect(sections).toHaveLength(7);
     Array.from(sections)
       .slice(0, 4)
-      .forEach((section) => expect(section).toHaveClass('lg:basis-[calc(25%-0.375rem)]'));
-    expect(sections[4]).toHaveClass('lg:basis-[calc(50%-0.25rem)]');
-    expect(sections[5]).toHaveClass('lg:basis-[calc(25%-0.375rem)]');
-    expect(sections[6]).toHaveClass('lg:basis-[calc(25%-0.375rem)]');
+      .forEach((section) =>
+        expect(section).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(25%-0.375rem)]'),
+      );
+    expect(sections[4]).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(50%-0.25rem)]');
+    expect(sections[5]).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(25%-0.375rem)]');
+    expect(sections[6]).toHaveClass('@min-[64rem]/detail-sections:basis-[calc(25%-0.375rem)]');
   });
 
   it('lazily renders technical details with the same compact section rows', () => {
