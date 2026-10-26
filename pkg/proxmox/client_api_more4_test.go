@@ -132,7 +132,7 @@ func TestClient_GetContainers(t *testing.T) {
 func TestClient_GetStorage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":[{"storage":"local","type":"dir","total":1000,"used":500}]}`)
+		fmt.Fprint(w, `{"data":[{"storage":"local","type":"dir","content":"images,backup","total":1000,"used":500}]}`)
 	}))
 	defer server.Close()
 
