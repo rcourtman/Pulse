@@ -512,15 +512,20 @@ func TestPMGCollectionFailureEvidence(t *testing.T) {
 			f.fail = op
 			m.pollPMGInstance(context.Background(), "gateway", f)
 			status := m.pollStatusMap["pmg::gateway"]
-			if status.ConsecutiveFailures != 1 || status.LastErrorMessage == "" || !status.LastSuccess.Equal(before) {
-				t.Fatalf("failed read recorded as complete: %+v", status)
-			}
 			v := m.state.GetSnapshot().PMGInstances[0]
 			if op == "version" {
+				if status.ConsecutiveFailures != 1 || status.LastErrorMessage == "" || !status.LastSuccess.Equal(before) {
+					t.Fatalf("failed connection recorded as complete: %+v", status)
+				}
 				if v.Status != "offline" || v.ConnectionHealth != "unhealthy" {
 					t.Fatal("failed connection not offline")
 				}
 				return
+			}
+			// A downstream read failure stays visible on the connection but
+			// is not a scheduler failure (#2960).
+			if status.ConsecutiveFailures != 0 || status.LastErrorMessage == "" || status.LastErrorCategory != pollReadErrorCategory || status.LastSuccess.Before(before) {
+				t.Fatalf("failed read recorded as complete or as a connection failure: %+v", status)
 			}
 			if v.Status != "online" || v.ConnectionHealth != "healthy" || !m.state.GetSnapshot().ConnectionHealth["pmg-gateway"] {
 				t.Fatal("downstream failure mislabeled as version connection failure")
@@ -714,11 +719,11 @@ func pollPMGBackupRetention(t *testing.T, m *Monitor, f *pmgBackupRetentionFixtu
 	m.pollPMGInstance(context.Background(), "gateway", f)
 }
 
-func assertPMGPollFailed(t *testing.T, m *Monitor) {
+func assertPMGReadFailed(t *testing.T, m *Monitor) {
 	t.Helper()
 	status := m.pollStatusMap["pmg::gateway"]
-	if status == nil || status.ConsecutiveFailures == 0 || status.LastErrorMessage == "" {
-		t.Fatalf("failed backup enumeration not recorded as a poll failure: %+v", status)
+	if status == nil || status.LastErrorMessage == "" || status.LastErrorCategory != pollReadErrorCategory {
+		t.Fatalf("failed backup enumeration not recorded as a failed read: %+v", status)
 	}
 }
 
@@ -742,7 +747,7 @@ func TestPMGBackupsSurviveFailedClusterRead(t *testing.T) {
 	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
 		t.Fatalf("failed cluster read replaced backups: got=%v want=%v", got, want)
 	}
-	assertPMGPollFailed(t, m)
+	assertPMGReadFailed(t, m)
 }
 
 // When every per-node backup read fails, nothing was observed this poll and
@@ -759,7 +764,7 @@ func TestPMGBackupsSurviveEveryNodeBackupReadFailing(t *testing.T) {
 	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
 		t.Fatalf("failed backup reads replaced backups: got=%v want=%v", got, want)
 	}
-	assertPMGPollFailed(t, m)
+	assertPMGReadFailed(t, m)
 }
 
 // A failed read on one node keeps that node's last-known backups while the
@@ -776,7 +781,7 @@ func TestPMGBackupsKeepFailedNodeOnPartialRead(t *testing.T) {
 	if got := pmgBackupFilesByNode(t, m); !reflect.DeepEqual(got, want) {
 		t.Fatalf("partial read backups=%v want=%v", got, want)
 	}
-	assertPMGPollFailed(t, m)
+	assertPMGReadFailed(t, m)
 }
 
 // A complete enumeration is authoritative: nodes that answered with no

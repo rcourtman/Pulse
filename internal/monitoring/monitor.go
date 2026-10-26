@@ -3043,7 +3043,22 @@ func (m *Monitor) ensureBreaker(key string) *circuitBreaker {
 	return breaker
 }
 
+// pollReadErrorCategory marks a poll status error left by a downstream read
+// that failed after the connection itself succeeded.
+const pollReadErrorCategory = "partial"
+
 func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, pollErr error) {
+	m.recordTaskOutcome(instanceType, instance, pollErr, nil)
+}
+
+// recordTaskOutcome records one poll for the scheduler. pollErr is a
+// connection, authentication, version or whole-poll failure: it counts toward
+// backoff, the circuit breaker and the dead-letter queue. readErr is a
+// downstream read that failed after the connection succeeded. It schedules the
+// poll as a success, so one broken optional endpoint cannot throttle every
+// other reading of the connection (#2960), but stays the connection's
+// outstanding poll error until a poll completes every read.
+func (m *Monitor) recordTaskOutcome(instanceType InstanceType, instance string, pollErr, readErr error) {
 	if m == nil {
 		return
 	}
@@ -3083,6 +3098,11 @@ func (m *Monitor) recordTaskResult(instanceType InstanceType, instance string, p
 		status.LastErrorAt = time.Time{}
 		status.LastErrorMessage = ""
 		status.LastErrorCategory = ""
+		if readErr != nil {
+			status.LastErrorAt = now
+			status.LastErrorMessage = readErr.Error()
+			status.LastErrorCategory = pollReadErrorCategory
+		}
 		m.mu.Unlock()
 		if breaker != nil {
 			breaker.recordSuccess()

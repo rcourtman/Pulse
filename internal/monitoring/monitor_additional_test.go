@@ -1882,6 +1882,45 @@ func TestMonitorPersistentFailureBackoffAndRecovery(t *testing.T) {
 	}
 }
 
+// A downstream read failure after a successful connection is a scheduler
+// success that keeps the read error outstanding in one update (#2960).
+func TestRecordTaskOutcomeReadErrorSchedulesAsSuccess(t *testing.T) {
+	m := &Monitor{
+		config:          &config.Config{},
+		circuitBreakers: make(map[string]*circuitBreaker),
+		pollStatusMap:   make(map[string]*pollStatus),
+		failureCounts:   make(map[string]int),
+		lastOutcome:     make(map[string]taskOutcome),
+	}
+	task := ScheduledTask{InstanceType: InstanceTypePMG, InstanceName: "gateway"}
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	for i := 0; i < 3; i++ {
+		m.recordTaskResult(task.InstanceType, task.InstanceName, errors.New("connection timeout"))
+	}
+	if m.allowExecution(task) {
+		t.Fatal("connection failures did not open the breaker")
+	}
+
+	m.recordTaskOutcome(task.InstanceType, task.InstanceName, nil, errors.New("pmg_queue_status: decode failed"))
+	if outcome := m.lastOutcome[key]; !outcome.success || outcome.err != nil || m.failureCounts[key] != 0 {
+		t.Fatalf("read error scheduled as a failure: outcome=%+v failures=%d", outcome, m.failureCounts[key])
+	}
+	if !m.allowExecution(task) || len(m.SchedulerHealth().Breakers) != 0 {
+		t.Fatal("read error kept the breaker open")
+	}
+	status := m.pollStatusMap[key]
+	if status.ConsecutiveFailures != 0 || status.LastSuccess.IsZero() || !status.FirstFailureAt.IsZero() ||
+		status.LastErrorCategory != pollReadErrorCategory || !strings.Contains(status.LastErrorMessage, "pmg_queue_status") ||
+		!status.LastErrorAt.Equal(status.LastSuccess) {
+		t.Fatalf("read error not kept as the outstanding poll error: %+v", status)
+	}
+
+	m.recordTaskOutcome(task.InstanceType, task.InstanceName, nil, nil)
+	if status.LastErrorMessage != "" || status.LastErrorCategory != "" || !status.LastErrorAt.IsZero() {
+		t.Fatalf("complete poll left the read error outstanding: %+v", status)
+	}
+}
+
 func TestGuestConfigPlacement(t *testing.T) {
 	for _, kind := range []string{"vm", "container", "lxc"} {
 		for _, reverse := range []bool{false, true} {

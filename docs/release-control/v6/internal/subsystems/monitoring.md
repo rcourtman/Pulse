@@ -832,12 +832,31 @@ four switches; pausing the connection prevents every subsequent ordinary poll.
 An edit or pause does not revoke an already running poll's snapshot.
 
 A successful version read still establishes online connection health, not
-complete collection. Downstream read failures are retained as failed poll
+complete collection. Downstream read failures are retained as failed read
 evidence, with missing fields instead of synthetic zero readings. Quarantine
 totals require both category reads. Collector controls in `monitor_pmg_test.go`
 cover sixteen scopes, next-poll edits/pause/resume, in-flight snapshots, each
 read failure, recovery, legacy defaults and cancelled/unknown connections.
 These synthetic controls are not native PMG or installed privacy acceptance.
+
+Only connection, authentication and version failures, and a poll cut short by
+its own deadline or cancellation, are scheduler failures that drive backoff,
+the circuit breaker and the dead-letter queue. A downstream read that fails
+after the connection succeeded goes through `recordTaskOutcome` as a read
+error: the poll keeps its normal interval and freshness, and the error stays
+the connection's outstanding poll error (category `partial`) until a poll
+completes every read. Before this split one broken optional endpoint (the
+queue read in #2960) dead-lettered the whole connection to a 30-minute poll
+and left every other PMG reading stale. PBS already keeps its optional
+datastore and node-status reads out of the scheduler outcome.
+`TestPMGOptionalReadFailureKeepsNormalSchedule`,
+`TestPMGVersionFailureStillBacksOffAndDeadLetters`,
+`TestPMGCancelledPollWithFailedReadsBacksOff` and
+`TestPBSOptionalReadFailureKeepsNormalSchedule` in
+`partial_read_scheduling_test.go` drive the poll and reschedule steps together;
+`TestRecordTaskOutcomeReadErrorSchedulesAsSuccess` in
+`monitor_additional_test.go` pins the scheduler bookkeeping, which records the
+success and the outstanding read error in one update.
 
 The PMG client rejects omitted/null object payloads for version, mail, queue
 and quarantine instead of materialising them as zero structs. Explicit
@@ -854,7 +873,7 @@ the connection name as the backup node only when PMG answered with no
 cluster entries; after a failed cluster read that name is a display label,
 and requesting backups with it produced a misleading hostname-lookup error
 without ever returning backups. The poll still records the cluster read
-failure. It requests no backups, and the connection's last-known backups
+failure as a read error. It requests no backups, and the connection's last-known backups
 are kept rather than replaced by an empty list (see the next section).
 `TestClientClusterStatusIgnoresClusterIDFormat` and the
 `TestPollPMGInstance*` issue tests in `monitor_pmg_test.go` pin all three
@@ -869,7 +888,7 @@ read, a node whose backup read failed, and a node a cancelled poll never
 reached. This is the same per-scope carry that `preserveFailedStorageBackups`
 applies to failed PVE storages. A node that answered with no backups, or that
 a successful cluster read no longer lists, still clears its entries. The
-failed read is still recorded as a poll failure, and the connection-name
+failed read is still recorded as a read error, and the connection-name
 fallback above is unchanged. `TestPMGBackupsSurviveFailedClusterRead`,
 `TestPMGBackupsSurviveEveryNodeBackupReadFailing`,
 `TestPMGBackupsKeepFailedNodeOnPartialRead` and
