@@ -126,7 +126,7 @@ func TestGuestStatusAcceptedCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got.CPU != .25 || got.CPUs != 2 || got.Mem != 512 || got.MaxMem != 1024 || got.Balloon != 768 || got.BalloonMin != 256 || got.FreeMem != 128 || got.MemInfo == nil || !got.MemInfo.AvailabilityKnown || got.MemInfo.Available != 0 || got.BalloonInfo == nil || got.BalloonInfo.TotalMem != 1024 || got.Disk != 50 || got.MaxDisk != 100 || got.NetIn != 32 || got.Uptime != 12 || !got.Agent.IsEnabled() || got.Lock != "backup" {
+		if got.CPU != .25 || got.CPUs != 2 || got.Mem != 512 || got.MaxMem != 1024 || got.Balloon != 768 || got.BalloonMin != 256 || got.FreeMem != 128 || got.MemInfo == nil || !got.MemInfo.HasAvailable() || got.MemInfo.Available != 0 || got.BalloonInfo == nil || got.BalloonInfo.TotalMem != 1024 || got.Disk != 50 || got.MaxDisk != 100 || got.NetIn != 32 || got.Uptime != 12 || !got.Agent.IsEnabled() || got.Lock != "backup" {
 			t.Fatalf("QEMU fields changed: %+v", got)
 		}
 		if got.IOCounters != (IOCounterPresence{Explicit: true, DiskRead: true, NetworkIn: true}) {
