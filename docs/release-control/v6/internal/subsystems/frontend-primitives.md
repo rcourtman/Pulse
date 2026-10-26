@@ -20,6 +20,20 @@
 
 ## Purpose
 
+### Detail sections follow their own available width
+
+`DetailSectionTable` owns a named inline-size container. Its existing card
+presentation activates only when that container has at least 64rem, not when
+the viewport does. Narrow drawers and resizable panes retain the compact
+single bordered table even on desktop, so a 7rem label track cannot consume a
+whole card and collapse its value to zero width. The nested scroll shell must
+not become the owner of the named layout query. Balanced integral card spans,
+rich values, progress, stacked rows, wrapping opt-ins, test hooks and the public
+component interface are unchanged. The registered `DetailSectionTable.test.tsx`
+and shared guardrails cover this owner and existing row/card structures;
+source-bound browser proof must establish nonzero readable values at narrow
+panel and phone widths and the unchanged cards in a genuinely wide container.
+
 ### Platform sort headings are native keyboard controls
 
 The shared platform sort heading declares column scope and contains a native
@@ -5713,7 +5727,7 @@ from a cache-inclusive source says "may include cache" beside its RAM amount
 in the facts strip; the full note (why, and what to do) is the Details row
 "About this reading" and appears once. `DetailSectionTable` keeps the single bordered table at narrow widths
 where density matters, then presents those same canonical rows as bounded
-section cards on desktop. Desktop cards share the available row width, stretch
+section cards when their own container reaches 64rem. Wide-container cards share the available row width, stretch
 to the same row height, and use stable three- or four-column tracks. An
 incomplete final row must fill those same tracks with explicit integral spans;
 it must not independently flex-grow every remaining card into unrelated column

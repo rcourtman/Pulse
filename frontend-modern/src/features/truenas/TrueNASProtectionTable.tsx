@@ -485,6 +485,8 @@ export const TrueNASProtectionTable: Component<{
                 tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
                 header={
                   <>
+                    {/* On phones, keep identity, completion and outcome readable.
+                        Artifact and target remain in the existing wrapping details. */}
                     <PlatformSortableTableHead
                       kind="name"
                       sort={sort}
@@ -497,7 +499,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="text"
                       sort={sort}
                       sortKey="artifact"
-                      class="platform-table-mobile-w-25 md:w-[25%]"
+                      class="platform-table-phone-hidden md:w-[25%]"
                     >
                       Artifact
                     </PlatformSortableTableHead>
@@ -505,7 +507,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="text"
                       sort={sort}
                       sortKey="target"
-                      class="platform-table-mobile-w-15 md:w-[23%]"
+                      class="platform-table-phone-hidden md:w-[23%]"
                     >
                       Target
                     </PlatformSortableTableHead>
@@ -513,7 +515,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="numeric-value"
                       sort={sort}
                       sortKey="completed"
-                      class="platform-table-mobile-w-15 md:w-[12%]"
+                      class="platform-table-mobile-w-30 md:w-[12%]"
                     >
                       <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
                     </PlatformSortableTableHead>
@@ -529,7 +531,7 @@ export const TrueNASProtectionTable: Component<{
                       kind="badge"
                       sort={sort}
                       sortKey="outcome"
-                      class="platform-table-mobile-w-15 md:w-[9%]"
+                      class="platform-table-mobile-w-30 md:w-[9%]"
                     >
                       Outcome
                     </PlatformSortableTableHead>
@@ -568,7 +570,9 @@ export const TrueNASProtectionTable: Component<{
                                   }
                                 />
                               </TableCell>
-                              <TableCell class={getPlatformTableCellClassForKind('text')}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                              >
                                 <span
                                   class="block truncate text-base-content"
                                   title={[artifact(), artifactSecondary()]
@@ -578,7 +582,9 @@ export const TrueNASProtectionTable: Component<{
                                   {artifact()}
                                 </span>
                               </TableCell>
-                              <TableCell class={getPlatformTableCellClassForKind('text')}>
+                              <TableCell
+                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                              >
                                 <span
                                   class="block truncate text-base-content"
                                   title={[target(), targetSecondary()].filter(Boolean).join(' · ')}

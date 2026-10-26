@@ -170,6 +170,8 @@ describe('GuestDrawerOverview filesystem labels', () => {
       screen.queryByRole('progressbar', { name: `Filesystem ${paths[1]} utilization` }),
     ).toBeNull();
     expect(screen.getByText(/— · \?\/10.0 GB · MP1/)).toBeInTheDocument();
-    expect(screen.getByText('CPUs').closest('tr')).toHaveClass('lg:grid-cols-[7rem_minmax(0,1fr)]');
+    expect(screen.getByText('CPUs').closest('tr')).toHaveClass(
+      '@min-[64rem]/detail-sections:grid-cols-[7rem_minmax(0,1fr)]',
+    );
   });
 });

@@ -7753,13 +7753,23 @@ describe('shared primitive guardrails', () => {
     expect(detailSectionTableSource).toContain('InlineDetailPanel');
     expect(detailSectionTableSource).toContain('ObjectDrawerHeader');
     expect(detailSectionTableSource).toContain('detailSectionDesktopSpan');
-    expect(detailSectionTableSource).toContain('lg:basis-[calc(25%-0.375rem)]');
-    expect(detailSectionTableSource).toContain('lg:basis-[calc(50%-0.25rem)]');
-    expect(detailSectionTableSource).toContain('lg:basis-[calc(33.333%-0.333rem)]');
-    expect(detailSectionTableSource).toContain('lg:basis-[calc(66.667%-0.167rem)]');
-    expect(detailSectionTableSource).toContain('lg:flex-none');
-    expect(detailSectionTableSource).not.toContain('lg:flex-1');
-    expect(detailSectionTableSource).toContain('lg:grid-cols-[7rem_minmax(0,1fr)]');
+    expect(detailSectionTableSource).toContain(
+      '@min-[64rem]/detail-sections:basis-[calc(25%-0.375rem)]',
+    );
+    expect(detailSectionTableSource).toContain(
+      '@min-[64rem]/detail-sections:basis-[calc(50%-0.25rem)]',
+    );
+    expect(detailSectionTableSource).toContain(
+      '@min-[64rem]/detail-sections:basis-[calc(33.333%-0.333rem)]',
+    );
+    expect(detailSectionTableSource).toContain(
+      '@min-[64rem]/detail-sections:basis-[calc(66.667%-0.167rem)]',
+    );
+    expect(detailSectionTableSource).toContain('@min-[64rem]/detail-sections:flex-none');
+    expect(detailSectionTableSource).not.toContain('@min-[64rem]/detail-sections:flex-1');
+    expect(detailSectionTableSource).toContain(
+      '@min-[64rem]/detail-sections:grid-cols-[7rem_minmax(0,1fr)]',
+    );
     // Long identifiers opt into the shared full-width row; compact rows keep
     // their original track and the table-wide truncation policy is untouched.
     expect(detailSectionModelSource).toContain("layout?: 'stacked'");
@@ -7767,11 +7777,13 @@ describe('shared primitive guardrails', () => {
     expect(detailSectionTableSource).toContain(
       "colspan={row.layout === 'stacked' ? 2 : undefined}",
     );
-    expect(detailSectionTableSource).toContain('lg:grid-cols-[minmax(0,1fr)]');
+    expect(detailSectionTableSource).toContain(
+      '@min-[64rem]/detail-sections:grid-cols-[minmax(0,1fr)]',
+    );
     expect(detailSectionTableSource).toContain('wrap-anywhere');
 
-    expect(detailSectionTableSource).toContain('lg:text-left');
-    expect(detailSectionTableSource).toContain('lg:divide-y-0');
+    expect(detailSectionTableSource).toContain('@min-[64rem]/detail-sections:text-left');
+    expect(detailSectionTableSource).toContain('@min-[64rem]/detail-sections:divide-y-0');
     expect(detailSectionModelSource).toContain('footerContent?: JSX.Element');
     expect(detailSectionTableSource).toContain('section.footerContent');
     expect(resourceDetailSummarySource).toContain("from '@/components/shared/DetailSectionTable'");
