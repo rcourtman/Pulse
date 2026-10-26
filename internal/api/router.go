@@ -5886,7 +5886,11 @@ func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	version := currentAgentTargetVersion()
+	// Installed helpers compare this wire value with the signed executable's
+	// --version output exactly. Use the same identity as the download validator
+	// and make build-agents (including its v prefix), not the server display
+	// version. Fixing only a new helper cannot unblock an old helper's update.
+	version := expectedAgentBinaryVersion(currentAgentTargetVersion())
 	if version == "" {
 		version = "dev"
 	}
