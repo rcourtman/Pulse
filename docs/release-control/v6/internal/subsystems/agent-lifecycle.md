@@ -3063,6 +3063,13 @@ It uses monitoring-read authority and exact published PNG references. It must
 not accept agent-report credentials as image authority or reinterpret release
 screenshots as enrollment, update readiness or lifecycle verification.
 
+Agent report ingestion and Docker acknowledgements use the organization-admin
+session boundary alongside their existing agent-token scopes. Agent config
+reads use the same session boundary and retain token-to-host binding. A viewer
+session must not impersonate a collector or read its assigned execution
+credentials. These checks preserve collector tokens and the existing local
+unauthenticated bootstrap behavior.
+
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
    bootstrap path succeeds, lifecycle clients must complete registration with

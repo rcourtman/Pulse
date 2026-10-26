@@ -52,13 +52,16 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	r.mux.HandleFunc("/api/agents/docker/report", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
-	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireAuth(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
-	r.mux.HandleFunc("/api/agents/agent/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport)))
+	// Agent scopes constrain token callers. Browser and proxy identities do not
+	// have token scopes, so require organization administration for their
+	// telemetry writes and agent command acknowledgements.
+	r.mux.HandleFunc("/api/agents/docker/report", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/kubernetes/report", RequireOrgAdmin(r.config, RequireScope(config.ScopeKubernetesReport, r.kubernetesAgentHandlers.HandleReport)))
+	r.mux.HandleFunc("/api/agents/agent/report", RequireOrgAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport)))
 	r.mux.HandleFunc("/api/agents/action-runner/credential", RequireAuth(r.config, actionRunnerCredentialRoute(r.config, r.handleIssueActionRunnerCredential, r.handleActivateActionRunnerCredential, r.handleSelfRevokeActionRunnerCredential)))
 	r.mux.HandleFunc("/api/agents/action-runner/credential/activation", RequireAuth(r.config, RequireScope(config.ScopeAgentExec, r.handleCancelPendingActionRunnerCredentialActivation)))
 	r.mux.HandleFunc("/api/agents/collector/reduce-authority", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.handleReduceCollectorAuthority)))
-	r.mux.HandleFunc("/api/agents/host/report", wrapLegacyHostAlias("/api/agents/host/report", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport))))
+	r.mux.HandleFunc("/api/agents/host/report", wrapLegacyHostAlias("/api/agents/host/report", RequireOrgAdmin(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleReport))))
 	r.mux.HandleFunc("/api/agents/agent/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup)))
 	r.mux.HandleFunc("/api/agents/host/lookup", wrapLegacyHostAlias("/api/agents/host/lookup", RequireAuth(r.config, RequireScope(config.ScopeAgentReport, r.unifiedAgentHandlers.HandleLookup))))
 	// Uninstall is a collector's self-removal by token. Anything that is not a
@@ -87,7 +90,10 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 				})(w, req)
 				return
 			}
-			r.unifiedAgentHandlers.HandleConfig(w, req)
+			// Agent configuration may contain credentials for assigned probes.
+			// Token ownership and scope are checked by HandleConfig; session and
+			// proxy callers must also have administrative authority.
+			RequireOrgAdmin(r.config, r.unifiedAgentHandlers.HandleConfig)(w, req)
 			return
 		}
 		// Route POST /api/agents/agent/{id}/allow-reenroll to HandleAllowReenroll
@@ -119,7 +125,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	}
 	r.mux.HandleFunc("/api/agents/agent/", RequireAuth(r.config, unifiedAgentManagementCore))
 	r.mux.HandleFunc("/api/agents/host/", wrapLegacyHostAlias("/api/agents/host/", RequireAuth(r.config, unifiedAgentManagementCore)))
-	r.mux.HandleFunc("/api/agents/docker/commands/", RequireAuth(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
+	r.mux.HandleFunc("/api/agents/docker/commands/", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerReport, r.dockerAgentHandlers.HandleCommandAck)))
 	r.mux.HandleFunc("/api/agents/docker/runtimes/", RequireOrgAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleDockerHostActions)))
 	r.mux.HandleFunc("/api/agents/docker/containers/update", RequireAdmin(r.config, RequireScope(config.ScopeDockerManage, r.dockerAgentHandlers.HandleContainerUpdate)))
 	r.mux.HandleFunc("/api/agents/kubernetes/clusters/", RequireOrgAdmin(r.config, RequireScope(config.ScopeKubernetesManage, r.kubernetesAgentHandlers.HandleClusterActions)))
