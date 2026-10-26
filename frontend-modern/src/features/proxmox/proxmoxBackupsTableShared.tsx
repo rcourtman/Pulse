@@ -1,7 +1,7 @@
 import { Show, type Accessor } from 'solid-js';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 import { getTableSortIndicator } from '@/components/shared/tableSortPresentation';
@@ -276,51 +276,25 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
   return getProxmoxBackupSourcePresentation(artifact.sourceKind).stateFallbackLabel;
 }
 
+const artifactStateTone = (artifact: RecoverableArtifact): MetadataBadgeTone => {
+  if (artifact.running) return 'info';
+  if (artifact.failed) return 'danger';
+  if (artifact.sourceKind === 'snapshot') return 'indigo';
+  if (artifact.protected) return 'warning';
+  if (artifact.verified === true) return 'success';
+  if (artifact.verified === false) return 'warning';
+  return 'muted';
+};
+
 export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
-  if (props.artifact.running) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="info">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.failed) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="danger">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.sourceKind === 'snapshot') {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="indigo">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.protected) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.verified === true) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="success">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
-  if (props.artifact.verified === false) {
-    return (
-      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
-        {props.label}
-      </MetadataBadge>
-    );
-  }
+  // Coverage reconciles same-ID points in place. Derive tone inside the
+  // reactive JSX so new verification/activity evidence cannot retain a
+  // mounted badge's old health cue while its wording changes.
   return (
-    <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="muted">
+    <MetadataBadge
+      {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
+      tone={artifactStateTone(props.artifact)}
+    >
       {props.label}
     </MetadataBadge>
   );

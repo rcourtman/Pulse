@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "da2e2a839e457466312979a14dc5f2900a1e181b",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "e6b637d413ccbef59ceb81f5f9d38545b76d13d762af5e802164e9a19fa2d745",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "5935e4a341bbad4391e9af15ee8bb034302afaf7c2c5fba01f073fd2147c6de1"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "Rebuilt candidate on current main: actual production query, API client, inventory parser, recovery model, parent, both consuming tables/details and CSS compile from 2,421 hash-checked committed files; fixture serves only safe synthetic same-origin GETs.",
+    "PVE/PBS inventories refresh independently at the existing 30-second posture cadence while mounted. Same-ID Coverage evidence changes Verified to Failed, Running, Unverified, Protected, unknown verification and back to Verified without replacing the open detail or badge.",
+    "Current tone changes actual painted colour; failed/running entries do not count as completed. Slow PBS polling does not overlap while PVE continues. Pending reads retain accepted evidence; failed reads withdraw old artifacts, show incomplete-inventory notice and offer source-specific retry.",
+    "Existing By date view updates without reopening; leaving Backups stops reads. This is consuming presentation proof, not native collection, backup execution, guest recovery or published availability."
+  ],
+  "interactions": [
+    "75 checks pass with Playwright 1.56.1 (matches integration lock), Chromium 141.0.7390.37 at 1365x1000 and touch WebKit 26.0 at 390x844. Desktop Enter disclosure and retained focus across ordinary polls, Space isolated retry, touch row/retry and existing view navigation work.",
+    "All ten captures from this current-source pass were opened with the native image tool: Verified, Failed, read failure, recovered Coverage and running By date at both widths. Green-to-red state, correct completion totals, readable notices and narrow layout were visually inspected.",
+    "No page errors; fixture HTTP methods remain GET; browser and server close. Earlier baseline and original-component controls remain attributed and were not repeated."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-26T12:27:29Z"
+}

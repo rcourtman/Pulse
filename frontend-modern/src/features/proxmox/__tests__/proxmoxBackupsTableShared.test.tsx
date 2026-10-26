@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { getMetadataBadgeClass } from '@/components/shared/MetadataBadge';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
 import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxCoverageTableSource from '../ProxmoxCoverageTable.tsx?raw';
@@ -8,6 +10,7 @@ import proxmoxBackupsTableSharedSource from '../proxmoxBackupsTableShared.tsx?ra
 import {
   ArtifactSourceBadge,
   ArtifactStateBadge,
+  artifactStateLabel,
   ProxmoxBackupAgeText,
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
@@ -64,6 +67,63 @@ describe('proxmoxBackupsTableShared', () => {
     expect(screen.getByText('PBS').className).toContain('bg-sky-100');
     expect(screen.getByText('Protected').className).toContain('bg-amber-100');
     expect(screen.getByText('Verified').className).toContain('bg-emerald-100');
+  });
+
+  it.each([
+    [
+      'running outranks pruning and verification',
+      { running: true, protected: true, verified: true },
+      'Running',
+      'info',
+    ],
+    [
+      'failure outranks pruning and verification',
+      { failed: true, protected: true, verified: true },
+      'Failed',
+      'danger',
+    ],
+    [
+      'snapshot stays informational',
+      { sourceKind: 'snapshot', protected: true, verified: true },
+      'Snapshot',
+      'indigo',
+    ],
+    [
+      'pruning protection is not verification',
+      { protected: true, verified: true },
+      'Protected',
+      'warning',
+    ],
+    ['verification passed', { verified: true }, 'Verified', 'success'],
+    ['verification absent or failed', { verified: false }, 'Unverified', 'warning'],
+    ['unknown verification stays neutral', {}, 'Backup file', 'muted'],
+  ] as const)('keeps state wording and tone consistent: %s', (_name, fields, label, tone) => {
+    render(() => <ArtifactStateBadge artifact={artifact(fields)} label={label} />);
+    expect(screen.getByText(label).className).toBe(
+      getMetadataBadgeClass({
+        tone,
+        size: 'xs',
+        shape: 'rounded',
+      }),
+    );
+  });
+
+  it('updates the mounted state badge through same-ID verification and activity changes', () => {
+    const [point, setPoint] = createSignal(artifact({ verified: true }));
+    render(() => <ArtifactStateBadge artifact={point()} label={artifactStateLabel(point())} />);
+    const badge = screen.getByText('Verified');
+    for (const [fields, label, tone] of [
+      [{ verified: false }, 'Unverified', 'warning'],
+      [{ running: true, verified: true }, 'Running', 'info'],
+      [{ failed: true, protected: true }, 'Failed', 'danger'],
+      [{ protected: true, verified: true }, 'Protected', 'warning'],
+      [{}, 'Backup file', 'muted'],
+      [{ verified: true }, 'Verified', 'success'],
+    ] as const) {
+      setPoint(artifact(fields));
+      expect(screen.getByText(label)).toBe(badge);
+      expect(badge.className).toBe(getMetadataBadgeClass({ tone, size: 'xs', shape: 'rounded' }));
+    }
   });
 
   it('keeps backup source and state chips on the shared MetadataBadge primitive', () => {

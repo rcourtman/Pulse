@@ -87,6 +87,8 @@ const BACKUP_VIEW_TABS: readonly { id: BackupView; label: string }[] = [
   { id: 'coverage', label: 'Coverage' },
 ];
 
+const BACKUP_INVENTORY_POLL_MS = 30_000;
+
 const EMPTY_PVE_BACKUPS: PVEBackupsPayload = {
   backupTasks: [],
   storageBackups: [],
@@ -122,16 +124,19 @@ export const ProxmoxBackupsTable: Component<{
   servers?: readonly Resource[];
 }> = (props) => {
   // Independent read owners contain source failures and replace pending reads
-  // on org changes/disposal. No new polling or cross-route inventory cache.
+  // on org changes/disposal. Refresh while mounted at the same bounded cadence
+  // as protection posture; no cross-route inventory cache or per-row reads.
   const backups = createNonSuspendingQuery({
     source: () => 'pve',
     fetcher: (_source, signal) => fetchPVEBackups(signal),
     initialValue: EMPTY_PVE_BACKUPS,
+    pollMs: BACKUP_INVENTORY_POLL_MS,
   });
   const pbsBackups = createNonSuspendingQuery({
     source: () => 'pbs',
     fetcher: (_source, signal) => fetchPBSBackups(signal),
     initialValue: EMPTY_PBS_BACKUPS,
+    pollMs: BACKUP_INVENTORY_POLL_MS,
   });
   const inventorySources = [
     { label: 'PVE', query: backups },
