@@ -1358,7 +1358,7 @@ jobs:
         )
         self.assertEqual(trusted_push, [])
 
-    def release_job(self, environment: str, secret: str = "${{ secrets.PULSE_UPDATE_SIGNING_KEY }}",
+    def release_job(self, environment: str, reference: str = "${{ secrets.PULSE_UPDATE_SIGNING_KEY }}",
                     trigger: str = "on: workflow_dispatch", header: str = "") -> list[str]:
         return self.audit(
             f"""{trigger}
@@ -1369,7 +1369,7 @@ permissions: {{}}
     timeout-minutes: 10
     steps:
       - env:
-          KEY: {secret}
+          KEY: {reference}
         run: echo checked
 """
         )
@@ -1386,7 +1386,7 @@ permissions: {{}}
                                     for finding in self.release_job(environment)))
         # Every protected credential is covered, including registry and PAT.
         for name in sorted(workflow_trust.RELEASE_ENVIRONMENT_SECRETS):
-            with self.subTest(secret=name):
+            with self.subTest(credential=name):
                 self.assertTrue(any(name in finding and "environment: release" in finding
                                     for finding in self.release_job("", f"${{{{ secrets.{name} }}}}")))
         # The public license verification key is not a credential.
@@ -1400,10 +1400,10 @@ permissions: {{}}
             "multi-line": "${{\n            secrets.WORKFLOW_PAT }}",
             "quoted hash": "${{ format('#{0}', secrets.WORKFLOW_PAT) }}",
         }
-        for name, secret in hidden.items():
+        for name, reference in hidden.items():
             with self.subTest(hidden=name):
                 self.assertTrue(any("environment: release" in finding or "dynamic secrets" in finding
-                                    for finding in self.release_job("", secret)))
+                                    for finding in self.release_job("", reference)))
         self.assertTrue(any("dynamic secrets" in finding
                             for finding in self.release_job("    environment: release\n",
                                                             "${{ toJSON(secrets) }}")))
@@ -1413,15 +1413,15 @@ permissions: {{}}
         self.assertTrue(any("inside a job" in finding for finding in workflow_env))
 
     def test_deployment_credentials_require_a_deployment_environment(self) -> None:
-        secret = "${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}"
+        reference = "${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}"
         for environment in ("    environment: infra\n", "    environment: demo-stable\n"):
             with self.subTest(environment=environment):
-                self.assertEqual(self.release_job(environment, secret), [])
+                self.assertEqual(self.release_job(environment, reference), [])
         resolved = "    environment: ${{ needs.resolve.outputs.environment_name }}\n"
         for environment in ("", "    environment: release\n", "    environment: ${{ inputs.env }}\n", resolved):
             with self.subTest(environment=environment):
                 self.assertTrue(any("deployment environment" in finding
-                                    for finding in self.release_job(environment, secret)))
+                                    for finding in self.release_job(environment, reference)))
         # Only the demo workflow's own job may choose its demo environment at runtime.
         demo = f"""on: workflow_call
 permissions: {{}}
@@ -1431,7 +1431,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - env:
-          KEY: {secret}
+          KEY: {reference}
         run: echo checked
 """
         self.assertEqual(self.audit(demo, name="update-demo-server.yml"), [])
