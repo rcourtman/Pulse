@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "b8b69a2565d37ef09bb4a5e027409590b4cc195b",
+  "verified_at": "2026-10-26T13:52:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/hooks/useProtectionPostures.ts",
+    "frontend-modern/src/utils/protectionPostureResponse.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/hooks/useProtectionPostures.ts": "7ae6b672bd3cf2d4c610c9e67299e3874d1105732ef378db63597c8ea6a16d91",
+    "frontend-modern/src/utils/protectionPostureResponse.ts": "0a76da52d55ecb404f72df61a289879cdcd0ebfffee793e565466043969d5677"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled production posture query/API client/whole-read validator/model/Backups parent/Coverage/By date/details and CSS, over synthetic read-only same-origin GETs, bound to 2425 exact committed source/manifest hashes.",
+    "Conflicting duplicate guest assessments are unavailable/Unknown, with zero protected count and no retained provider explanation/policy; independently accepted PBS restore evidence remains visible.",
+    "Malformed HTTP200 policy, provider scope, data collection and evaluation time withdraw health on refresh. A valid retry restores health and policy without remounting open details.",
+    "A pending retry keeps Unknown/unavailable and disables Retry; no raw synthetic invalid value is rendered.",
+    "A 201-guest fleet uses two bounded 200/1 reads: a malformed final batch or differing otherwise-valid policies withdraws all assessments; a valid source-local retry restores all 201.",
+    "Both route views keep independent completed restore evidence readable beside unavailable posture. Ten baseline/final captures were opened with native view_image; initial failed automation captures are retained separately, not treated as a pass."
+  ],
+  "interactions": [
+    "Desktop Chromium 141.0.7390.37 keyboard Enter opens details; Space activates the existing posture retry. Narrow touch WebKit 26.0 opens details and taps retry at 390px. Playwright 1.56.1 matches the integration lock.",
+    "Simulated 30-second production polling replaces accepted health with Unknown for invalid responses, retains the same open detail panel and desktop disclosure focus, and recovers only on valid data.",
+    "Existing By date link navigation receives the same invalid posture handling without losing independently accepted restore points. Posture retry does not re-read PVE/PBS inventory; leaving the fixture stops reads.",
+    "62 checks pass, no page errors; both browsers and fixture server close. No native backup, guest, provider, authentication or recovery operation is performed."
+  ]
+}

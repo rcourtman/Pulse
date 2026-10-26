@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Protection posture reads validate the whole response
+
+Backups accepts a batched protection assessment only when every returned row,
+provider state and policy has the existing transport shape. Duplicate subject
+IDs and inconsistent policies across batches are ambiguous reads, not a reason
+to choose the last health state or first policy. Invalid HTTP-success responses
+follow the existing failed-read withdrawal and source-local retry path: no
+retained health, provider explanation or policy is published, while independent
+restore evidence remains inspectable. Explicit null Go collections normalise to
+empty lists; missing collections do not. Extra fields remain compatible.
+
+The registered `protectionPostureResponse.test.ts`, `useProtectionPostures.test.ts`
+and consuming `ProxmoxBackupsTable.test.tsx` cover shape, ambiguity, whole-read
+withdrawal and recovery. The client does not recompute server posture, infer a
+missing subject's protection, or change policy, API, identity, access or native
+backup/recovery operations. Desktop and narrow consuming browser proof checks
+the visible unavailable, pending and recovered states.
+
 ### Phone protection summaries prioritise completion and outcome
 
 TrueNAS Protection uses the existing container-led phone projection to keep

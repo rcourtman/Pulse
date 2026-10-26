@@ -6,6 +6,7 @@ import type {
   ProtectionPosturesResponse,
 } from '@/types/recovery';
 import { apiFetchJSON } from '@/utils/apiClient';
+import { parseProtectionPostureBatches } from '@/utils/protectionPostureResponse';
 
 const PROTECTION_POSTURES_URL = '/api/recovery/postures';
 export const MAX_PROTECTION_POSTURE_BATCH_SIZE = 200;
@@ -48,7 +49,7 @@ export function buildProtectionPostureBatchURL(resourceIDs: readonly string[]): 
 }
 
 async function fetchProtectionPostures(resourceIDs: readonly string[]) {
-  return apiFetchJSON<ProtectionPosturesResponse>(buildProtectionPostureBatchURL(resourceIDs));
+  return apiFetchJSON<unknown>(buildProtectionPostureBatchURL(resourceIDs));
 }
 
 /**
@@ -63,10 +64,7 @@ async function fetchAllProtectionPostures(
     batches.push(resourceIDs.slice(offset, offset + MAX_PROTECTION_POSTURE_BATCH_SIZE));
   }
   const responses = await Promise.all(batches.map(fetchProtectionPostures));
-  return {
-    data: responses.flatMap((response) => response.data ?? []),
-    policy: responses[0]?.policy ?? EMPTY_POLICY,
-  };
+  return parseProtectionPostureBatches(responses);
 }
 
 export function useProtectionPostures(resourceIDs: Accessor<readonly string[] | null | undefined>) {

@@ -23,6 +23,7 @@ import {
 import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import type { ProtectionPosturesResponse } from '@/types/recovery';
+import { protectionPolicy } from '@/utils/__fixtures__/protectionPosture';
 import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
 import { eventBus } from '@/stores/events';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
@@ -745,7 +746,7 @@ describe('ProxmoxBackupsTable', () => {
         explanation,
         evaluatedAt: '2026-05-25T02:05:00Z',
       })),
-      policy: { freshnessWindowSeconds: 604800, verificationWindowSeconds: 604800 },
+      policy: protectionPolicy,
     });
     renderInRouter(() => (
       <ProxmoxBackupsTable emptyIcon={<span />} workloads={[retainedGuest, workloadResource]} />
@@ -964,7 +965,7 @@ const sourceCalls = (source: 'pve' | 'pbs') =>
 describe('independent Proxmox backup inventory reads', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
   });
 
   it.each(['pve', 'pbs'] as const)(
@@ -1412,7 +1413,7 @@ describe('backup-identity: connected Coverage and By date', () => {
         }),
       ),
     );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
     vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
   };
   afterEach(() => vi.restoreAllMocks());
@@ -1522,7 +1523,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     apiFetchMock.mockImplementation((url: string) =>
       Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
     );
-    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: protectionPolicy });
   });
 
   it.each(['partial', 'unavailable'])(
@@ -1537,7 +1538,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
             providerStates: [{ ...posture.providerStates[0], historyCompleteness }],
           },
         ],
-        policy: {},
+        policy: protectionPolicy,
       });
       mount();
       const detail = await open();
@@ -1605,7 +1606,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
           ],
         },
       ],
-      policy: {},
+      policy: protectionPolicy,
     });
     mount();
     const detail = await open();
@@ -1619,6 +1620,59 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
 });
 
 describe('Coverage withdraws failed protection assessments', () => {
+  it.each(['duplicate', 'provider', 'policy'])(
+    'treats HTTP200 malformed %s evidence as unavailable and preserves independent restore points',
+    async (invalid) => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+      try {
+        mockBackupAPIs();
+        window.history.replaceState({}, '', '/proxmox/backups/coverage');
+        renderInRouter(() => (
+          <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+        ));
+        const row = () =>
+          document.querySelector('[data-proxmox-backup-row="coverage"]') as HTMLElement;
+        await waitFor(() => expect(row()).toHaveTextContent('Protected'));
+        fireEvent.click(within(row()).getByRole('button', { name: /expand details/i }));
+        const detail = await screen.findByTestId('proxmox-coverage-detail');
+        const accepted = (await apiFetchJSONMock.mock.results[0]
+          .value) as ProtectionPosturesResponse;
+        const privateValue = { private: 'SYNTHETIC_PRIVATE_VALUE' };
+        const malformed =
+          invalid === 'duplicate'
+            ? {
+                ...accepted,
+                data: [{ ...accepted.data[0], state: 'unprotected' }, accepted.data[0]],
+              }
+            : invalid === 'provider'
+              ? { ...accepted, data: [{ ...accepted.data[0], providerStates: [privateValue] }] }
+              : { ...accepted, policy: { ...accepted.policy, requireVerification: privateValue } };
+        apiFetchJSONMock.mockResolvedValue(malformed);
+        await vi.advanceTimersByTimeAsync(30_000);
+        await screen.findByText(/Protection posture is unavailable/);
+        expect(row()).toHaveTextContent('Unknown');
+        expect(row()).not.toHaveTextContent('Protected');
+        expect(screen.getByRole('button', { name: '1 unknown' })).toBeInTheDocument();
+        expect(detail).not.toHaveTextContent('A current verified backup is available.');
+        expect(detail).toHaveTextContent('Restore evidence');
+        expect(within(detail).getByText('PVE file', { exact: true })).toBeInTheDocument();
+        expect(document.querySelector('[data-coverage-strip-footnote]')).toBeNull();
+        expect(document.body).not.toHaveTextContent('SYNTHETIC_PRIVATE_VALUE');
+
+        const beforePVE = sourceCalls('pve').length;
+        const beforePBS = sourceCalls('pbs').length;
+        apiFetchJSONMock.mockResolvedValue(accepted);
+        fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
+        await waitFor(() => expect(row()).toHaveTextContent('Protected'));
+        expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
+        expect(sourceCalls('pve')).toHaveLength(beforePVE);
+        expect(sourceCalls('pbs')).toHaveLength(beforePBS);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('replaces retained healthy rows, counts and explanations with Unknown, then retries only posture', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     try {
@@ -1708,7 +1762,7 @@ describe('completed restore-point summary and activity', () => {
         }),
       ),
     );
-    apiFetchJSONMock.mockResolvedValue({ data: [], policy: {} });
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
     window.history.replaceState({}, '', '/proxmox/backups/date');
     return renderInRouter(() => (
       <ProxmoxBackupsTable
