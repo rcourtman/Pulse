@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7c455c4d962edd092e29be820b6c23d3305c78f0",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "f068bfe4f36482eb87fd965a9259a65eed658eca390cec9b63303d8335effebf"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "Recorded cold-unread producer frame: retained snapshot-only posture beside complete backup enumeration, no target raw artifact, and a current-list-only detail notice.",
+    "Accepted and recovered snapshot frames retain real restore evidence without treating a guest snapshot as an independent backup.",
+    "Confirmed-empty snapshot frame with no provider history retains Unknown and the stronger not-confirmed-complete warning.",
+    "Readable peer and equal target IDs remain correctly scoped; no artifact is synthesized from durable history."
+  ],
+  "interactions": [
+    "Production Backups consumer and CSS over safe same-origin GET fixtures from recorded actual producer frames; no native collector or authenticated API execution.",
+    "Desktop keyboard Enter and Space and narrow touch expand/collapse the workload and readable peer.",
+    "Navigate Coverage and By date; inspect only raw accepted inventory rows.",
+    "172 browser checks pass; all eight final desktop/narrow captures opened with native view_image."
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-10-26T07:17:13Z"
+}
