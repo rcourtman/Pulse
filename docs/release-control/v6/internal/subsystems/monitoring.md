@@ -17,6 +17,35 @@
 
 ## Purpose
 
+### Disabled local backup targets keep their own unread scope
+
+A skipped local backup-content read cannot be covered by a successful
+same-named disk on another PVE node. Known live files retain their exact read
+origin, identity and dates; durable points retain their prior evidence and an
+incomplete provider observation, including when the live cache is empty.
+Accepted sibling rows still update or disappear on an accepted empty read.
+Disabled content endpoints are never queried to recover membership.
+
+PVE also lists a node-restricted local target as disabled on excluded nodes.
+Only for skipped local targets with an accepted same-name peer, one ordinary
+bounded datacenter storage-catalogue read resolves that ambiguity. An explicit
+`nodes` restriction can establish exclusion; matching names, missing/unrestricted
+configuration and failed config reads cannot. Those unknown scopes stay unread,
+not permission-denied or confirmed absent. Shared/inherently remote storage
+retains its existing accepted-peer semantics. A cancelled catalogue read cannot
+publish new inventory or provider evidence. Normal re-enable and complete reads
+still establish absence and recovery. No public fields, identifiers, freshness
+policy, access grants or guest/backup/recovery operations change.
+
+`pve_disabled_local_storage_test.go` covers VM/LXC subjects, both node orders,
+warm/cold live inventory, repeated skips, empty readable peers, unavailable or
+denied configuration, explicit node restrictions, shared controls, cancellation,
+connection isolation, all-disabled reads and ordinary recovery. Its normal-suite
+lifecycle optionally exports actual poller/ingest/posture frames for production
+Backups/API-hook desktop/narrow browser proof. This is monitoring correctness,
+not archive availability, installed guest/filesystem recovery or a diagnosis of
+#3248's original stale dates.
+
 ### PBS unread namespaces retain only their own last accepted live files
 
 When a PBS group-list request fails transiently, its previous live snapshot
@@ -54,8 +83,8 @@ public `node` remains guest attribution and may differ after migration. Hard
 content failures and unread node catalogues/offline nodes retain only their
 known local rows. Older rows without a read origin are retained conservatively
 until an ordinary complete read replaces them. An accepted shared-storage read
-still covers that shared repository; disabled/node-restricted query admission
-and its cross-node success handling are unchanged.
+still covers that shared repository. Disabled content-query admission is
+unchanged; skipped local membership follows the scoped rule above.
 
 Carried rows keep their exact dates and IDs, do not enter the observed-point
 batch and cannot renew point evidence. Partial scans remain partial and cannot
