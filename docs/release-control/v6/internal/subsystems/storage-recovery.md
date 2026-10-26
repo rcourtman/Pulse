@@ -21,6 +21,36 @@
 
 ## Purpose
 
+### Local archive identities include their independent disk
+
+A PVE volume ID is a path within a repository, not proof that identically named
+local disks share content. Local archive deduplication and opaque public IDs
+use the exact connection, storage read node, storage name and volume ID. The
+`pvelocal1:` ID is a SHA-256 digest of those four length-prefixed UTF-8 byte
+strings in that order. Case, delimiters and field boundaries are significant;
+guest placement, timestamps, size and read order cannot rename a file. Distinct
+local copies reach both live inventory and recovery history with distinct IDs.
+Shared and inherently remote repositories keep their previous deduplication
+and IDs, including direct-PBS attribution/exclusion behaviour.
+
+This intentionally replaces the old connection/volume-only *local* IDs. No
+legacy record is assigned an invented disk: partial scans preserve old points
+and evidence unchanged, so unscoped history can overlap new observations until
+a complete accepted scan. Only that ordinary full scan reconciles obsolete IDs;
+other connections and unread files are not removed. Existing partial-history,
+carry-forward, absence and protection policies stay in force. JSON shape, guest
+attribution, read permissions and guest/backup operations are unchanged. Clients
+must continue treating archive IDs as opaque, not parsing the old delimiter.
+
+`pve_local_archive_identity_test.go` covers VM/LXC, both node orders, warm/cold
+cache, repeated partial reads, guest moves, independent accepted absence,
+legacy-to-scoped reconciliation, connection isolation, tuple boundaries and
+shared controls. The dir-storage/PBS regression also exercises both local
+copies alongside a direct PBS connection. The normal-suite consumer lifecycle
+can export its actual poll/ingest/posture frames for desktop/narrow Backups
+proof. This establishes source identity correctness, not restore availability,
+installed guest recovery or the cause of #3248's original stale dates.
+
 ### Disabled local backup targets keep their own unread scope
 
 A skipped local backup-content read cannot be covered by a successful

@@ -57,16 +57,21 @@ func TestPollStorageBackups_KeepsDirStorageNamedLikePBS(t *testing.T) {
 	}
 
 	client := &dirStorageNamedPBSClient{}
-	nodes := []pveapi.Node{{Node: "node1", Status: "online"}}
+	nodes := []pveapi.Node{{Node: "node1", Status: "online"}, {Node: "node2", Status: "online"}}
 
-	m.pollStorageBackupsWithNodes(context.Background(), "pve1", client, nodes, map[string]string{"node1": "online"})
+	m.pollStorageBackupsWithNodes(context.Background(), "pve1", client, nodes, map[string]string{"node1": "online", "node2": "online"})
 
 	backups := m.state.GetSnapshot().PVEBackups.StorageBackups
-	if len(backups) != 1 {
-		t.Fatalf("expected exactly the dir-storage backup to survive, got %+v", backups)
+	if len(backups) != 2 {
+		t.Fatalf("expected each independent dir-storage copy to survive, got %+v", backups)
 	}
-	if backups[0].Storage != "pbs-backup" || backups[0].VMID != 106 {
-		t.Fatalf("expected vzdump from dir storage named pbs-backup, got %+v", backups[0])
+	if backups[0].ID == backups[1].ID || backups[0].StorageNode == backups[1].StorageNode {
+		t.Fatalf("local disks named like PBS must have independent identities: %+v", backups)
+	}
+	for _, backup := range backups {
+		if backup.Storage != "pbs-backup" || backup.VMID != 106 {
+			t.Fatalf("expected only vzdump from dir storage named pbs-backup, got %+v", backup)
+		}
 	}
 }
 
