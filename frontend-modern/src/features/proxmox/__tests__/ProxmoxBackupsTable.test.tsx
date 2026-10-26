@@ -1673,8 +1673,8 @@ describe('Coverage withdraws failed protection assessments', () => {
       expect(screen.queryByText(/Protection posture is unavailable/)).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: '1 attention' })).toBeInTheDocument();
       expect(document.querySelector('[data-coverage-strip-footnote]')).not.toBeNull();
-      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(1);
-      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pve')).toHaveLength(2);
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(2);
     } finally {
       vi.useRealTimers();
     }
@@ -1766,5 +1766,103 @@ describe('completed restore-point summary and activity', () => {
       'false',
     );
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
+  });
+});
+
+describe('mounted Proxmox backup inventory refresh', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    mockBackupAPIs();
+    window.history.replaceState({}, '', '/proxmox/backups/coverage');
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('refreshes both inventories and the same open evidence badge without losing focus', async () => {
+    const pbs = structuredClone(pbsPayload);
+    pbs.data.backups[0].protected = false;
+    let nextPBS: unknown = pbs;
+    let nextPVE: unknown = emptyPVE;
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pbs') ? nextPBS : nextPVE)),
+    );
+    const { unmount } = mountBackupReadState();
+    const row = () => document.querySelector('[data-proxmox-backup-row="coverage"]') as HTMLElement;
+    await waitFor(() => expect(row()).toHaveTextContent('Protected'));
+    const disclosure = within(row()).getByRole('button', { name: /expand details/i });
+    fireEvent.click(disclosure);
+    disclosure.focus();
+    const detail = await screen.findByTestId('proxmox-coverage-detail');
+    const badge = within(detail).getByText('Verified', { exact: true });
+    expect(badge).toHaveClass('bg-emerald-100');
+
+    // The provider can revise verification of the same native point. New
+    // successful PVE evidence arrives independently on that same bounded tick.
+    nextPBS = { ...pbs, data: { backups: [{ ...pbs.data.backups[0], verified: false }] } };
+    nextPVE = readPvePayload;
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(within(detail).getByText('Unverified')).toBe(badge));
+    expect(badge).toHaveClass('bg-amber-100');
+    expect(detail).toHaveTextContent('PVE file');
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(detail);
+    expect(document.activeElement).toBe(disclosure);
+    expect(document.body).toHaveTextContent('2 completed restore points');
+    expect(sourceCalls('pbs')).toHaveLength(2);
+    expect(sourceCalls('pve')).toHaveLength(2);
+
+    nextPBS = {
+      ...pbs,
+      data: {
+        backups: [
+          {
+            ...pbs.data.backups[0],
+            inProgress: true,
+            writeActivityObserved: true,
+            writeActive: false,
+          },
+        ],
+      },
+    };
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(within(detail).getByText('Failed')).toBe(badge));
+    expect(badge).toHaveClass('bg-red-100');
+    expect(document.body).toHaveTextContent('1 completed restore point');
+    expect(document.body).toHaveTextContent('1 failed');
+    expect(document.activeElement).toBe(disclosure);
+
+    nextPBS = pbs;
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(within(detail).getByText('Verified')).toBe(badge));
+    expect(badge).toHaveClass('bg-emerald-100');
+    expect(document.body).toHaveTextContent('2 completed restore points');
+    expect(document.activeElement).toBe(disclosure);
+    const calls = apiFetchMock.mock.calls.length;
+    unmount();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it('does not overlap a slow poll, keeps the other source refreshing and aborts on disposal', async () => {
+    let nextPBS = Promise.resolve(jsonResponse(pbsPayload));
+    apiFetchMock.mockImplementation((url: string) =>
+      url.endsWith('/pbs') ? nextPBS : Promise.resolve(jsonResponse(readPvePayload)),
+    );
+    const { unmount } = mountBackupReadState();
+    await waitFor(() => expect(sourceCalls('pbs')).toHaveLength(1));
+    const pending = deferred<Response>();
+    nextPBS = pending.promise;
+    await vi.advanceTimersByTimeAsync(30_000);
+    const signal = sourceCalls('pbs')[1][1].signal as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sourceCalls('pbs')).toHaveLength(2);
+    expect(sourceCalls('pve')).toHaveLength(4);
+    expect(signal.aborted).toBe(false);
+    expect(document.body).not.toHaveTextContent('PBS backup inventory is unavailable');
+    const calls = apiFetchMock.mock.calls.length;
+    unmount();
+    expect(signal.aborted).toBe(true);
+    pending.resolve(jsonResponse(emptyPBS));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
   });
 });
