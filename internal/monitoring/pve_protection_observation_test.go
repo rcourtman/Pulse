@@ -325,3 +325,46 @@ func TestPVEProtectionDisabledStorageIsNotAnEmptyRead(t *testing.T) {
 		}
 	}
 }
+
+// nodeRestrictedBackupStorageClient mirrors a cluster whose backup storage is
+// limited to one node: PVE lists it on every other node as disabled.
+type nodeRestrictedBackupStorageClient struct {
+	*pveReconciliationClient
+	contentQueries map[string]int
+}
+
+func (c *nodeRestrictedBackupStorageClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
+	storages, err := c.pveReconciliationClient.GetStorage(ctx, node)
+	for _, other := range []string{"node-a", "node-b"} {
+		if other != node {
+			storages = append(storages, proxmox.Storage{Storage: "archive-" + other, Type: "dir", Content: "backup"})
+		}
+	}
+	return storages, err
+}
+
+func (c *nodeRestrictedBackupStorageClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
+	c.contentQueries[node+"/"+storage]++
+	return c.pveReconciliationClient.GetStorageContent(ctx, node, storage)
+}
+
+func TestPVEProtectionNodeRestrictedStorageReadElsewhereIsComplete(t *testing.T) {
+	for _, reversed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reversed=%t", reversed), func(t *testing.T) {
+			f := newPVEReconciliationFixture(t)
+			if reversed {
+				f.nodes = []proxmox.Node{f.nodes[1], f.nodes[0]}
+			}
+			client := &nodeRestrictedBackupStorageClient{pveReconciliationClient: f.client, contentQueries: make(map[string]int)}
+			f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+			f.wait(t)
+			if len(f.points(t)) != 2 {
+				t.Fatal("node-restricted storage lost its backups")
+			}
+			if client.contentQueries["node-a/archive-node-b"] != 0 || client.contentQueries["node-b/archive-node-a"] != 0 {
+				t.Fatalf("storage was queried on a node it is not available on: %+v", client.contentQueries)
+			}
+			f.assertHistory(t, recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient)
+		})
+	}
+}
