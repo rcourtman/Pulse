@@ -264,11 +264,38 @@ cleanup_remote_authorized_keys() {
         -o BatchMode=yes
         -o ConnectTimeout=5
     )
-    local remote_cmd='set -eu
+    local remote_cmd=""
+    # Proxmox commonly links this file into its shared cluster filesystem.
+    # Replace the resolved target, never the link, and preserve the original
+    # keys if filtering, metadata preservation or replacement fails remotely.
+    remote_cmd=$(cat <<'SH'
+set -eu
 auth="/root/.ssh/authorized_keys"
-if [ -f "$auth" ]; then
-    sed -i -e "/# pulse-managed-key$/d" -e "/# pulse-proxy-key$/d" "$auth"
-fi'
+if [ -e "$auth" ] || [ -L "$auth" ]; then
+    auth=$(readlink -f -- "$auth") || exit 1
+    [ -f "$auth" ] || exit 1
+    tmp_file=$(mktemp "${auth}.pulse-cleanup.XXXXXX") || exit 1
+    trap 'status=$?; rm -f -- "$tmp_file" || status=1; exit "$status"' EXIT
+    trap 'exit 1' HUP INT TERM
+    exec 3>"$tmp_file" || exit 1
+    status=0
+    grep -v -E '# pulse-(managed|proxy)-key$' "$auth" >&3 || status=$?
+    exec 3>&-
+    [ "$status" -le 1 ] || exit 1
+    status=0
+    cmp -s "$tmp_file" "$auth" || status=$?
+    case "$status" in
+        0) ;;
+        1)
+            chmod --reference="$auth" "$tmp_file" &&
+                chown --reference="$auth" "$tmp_file" &&
+                mv -- "$tmp_file" "$auth" || exit 1
+            ;;
+        *) exit 1 ;;
+    esac
+fi
+SH
+    ) || return 1
 
     if [[ -n "$SSH_KNOWN_HOSTS_PATH" ]]; then
         known_hosts_path=$(resolve_path "$SSH_KNOWN_HOSTS_PATH")
