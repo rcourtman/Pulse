@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "4b48b39793cc1d6c19852d1ec191898da6c68f04",
+  "verified_at": "2026-10-26T23:01:40.170559Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeliveryLogCard.tsx": "04e85e4bddb513c9671108740d2812c3a76e05e37e89c6ca2b9d3a92dc6f4b15"
+  },
+  "routes": [
+    "/alerts/notifications (complete production frontend; synthetic bounded API responses)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "200 delivery attempts plus 100 held/deferred events, matching existing request caps. Independently unavailable attempts preserve 100 readable held rows; recovery restores 300 fresh rows. No connected backend or mail/provider acceptance is claimed.",
+    "40 consuming browser checks pass in Chromium 141.0.7390.37 at 1440x1000 and WebKit 26.0 at 390x844; Playwright 1.56.1 matches the integration lock. All eight final captures received native image-tool pixel inspection.",
+    "Activity has its existing visible heading as an accessible name and a clear blue keyboard focus outline. Native arrows/Home/End reach the oldest retained evidence without document-wide horizontal overflow. Existing delivery warnings remain truthful."
+  ],
+  "interactions": [
+    "Tab from the real refresh control enters the list; native ArrowDown/End/Home navigate it; Shift+Tab and forward Tab leave without a focus trap.",
+    "A deliberately pending refresh exposes aria-disabled while preserving keyboard focus. Enter and Space during that request produce no duplicate API reads. After an unavailable response, the next Tab reaches the held-only list; recovery remains keyboard reachable.",
+    "No API mutation, external service, uncaught page exception or old stopped attempt. Both browser contexts, browsers and preview server close normally."
+  ]
+}

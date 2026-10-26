@@ -74,6 +74,107 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.getByText(/HTTP 401 Unauthorized/)).toBeInTheDocument();
   });
 
+  it('makes recent delivery activity a named keyboard scroll target', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+
+    const activity = screen.getByRole('list');
+    expect(activity).toHaveAccessibleName('Recent delivery activity');
+    expect(activity).toHaveAttribute('tabindex', '0');
+    activity.focus();
+    expect(activity).toHaveFocus();
+  });
+
+  it('retains the keyboard scroll target when fresh attempts replace loaded rows', () => {
+    const [currentLog, setCurrentLog] = createSignal<NotificationDeliveryLog>(log);
+    render(() => (
+      <AlertDeliveryLogCard
+        log={currentLog()}
+        unavailable={false}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+      />
+    ));
+    const activity = screen.getByRole('list');
+    activity.focus();
+    expect(activity).toHaveFocus();
+
+    setCurrentLog({ ...log, entries: [log.entries[1]] });
+    expect(screen.getByRole('list')).toBe(activity);
+    expect(activity).toHaveFocus();
+    expect(activity).toHaveAccessibleName('Recent delivery activity');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('keeps independently readable held activity reachable by keyboard', () => {
+    render(() => (
+      <AlertDeliveryLogCard
+        log={null}
+        unavailable={true}
+        refreshing={false}
+        onRefresh={vi.fn()}
+        webhooks={webhooks}
+        heldEvents={[
+          {
+            id: 25,
+            occurredAt: '2026-10-26T10:00:00Z',
+            type: 'notification_suppressed',
+            alertId: 'held-keyboard-evidence',
+            reason: 'flapping',
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not read the delivery log/);
+    const activity = screen.getByRole('list');
+    expect(activity).toHaveAccessibleName('Recent delivery activity');
+    expect(activity).toHaveAttribute('tabindex', '0');
+    activity.focus();
+    expect(activity).toHaveFocus();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByText('held-keyboard-evidence')).toBeInTheDocument();
+  });
+
+  it('keeps refresh keyboard focus while busy without admitting duplicate reads', () => {
+    const [refreshing, setRefreshing] = createSignal(false);
+    const onRefresh = vi.fn(() => setRefreshing(true));
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={refreshing()}
+        onRefresh={onRefresh}
+        webhooks={webhooks}
+      />
+    ));
+    const refresh = screen.getByRole('button', { name: 'Refresh delivery status' });
+    refresh.focus();
+    refresh.click();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveAttribute('aria-disabled', 'true');
+    // Native disabled controls lose keyboard focus in WebKit. Keep the
+    // button mounted and focusable, but reject both mouse and keyboard clicks.
+    expect(refresh).not.toHaveAttribute('disabled');
+    expect(refresh).toHaveFocus();
+    refresh.click();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    setRefreshing(false);
+    expect(refresh).toHaveAttribute('aria-disabled', 'false');
+    expect(refresh).toHaveFocus();
+    refresh.click();
+    expect(onRefresh).toHaveBeenCalledTimes(2);
+  });
+
   it('says test sends are not listed so their absence is not read as failure', () => {
     render(() => (
       <AlertDeliveryLogCard
