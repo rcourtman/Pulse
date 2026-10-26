@@ -697,7 +697,10 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
-	var pollErr error
+	// pollErr is a connection, version or whole-poll failure and drives
+	// scheduler backoff. readErr collects downstream reads that failed after
+	// the connection succeeded; see recordTaskOutcome.
+	var pollErr, readErr error
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pmg")
 		defer m.pollMetrics.DecInFlight("pmg")
@@ -722,7 +725,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		}()
 	}
 	defer func() {
-		m.recordTaskResult(InstanceTypePMG, instanceName, pollErr)
+		m.recordTaskOutcome(InstanceTypePMG, instanceName, pollErr, readErr)
 	}()
 
 	select {
@@ -806,10 +809,11 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	m.resetAuthFailures(instanceName, "pmg")
 
 	// A successful version read establishes connection health, not complete
-	// downstream collection. Preserve missing readings and report failed polls.
+	// downstream collection. Preserve missing readings and report failed reads
+	// without backing off the readings that succeeded.
 	recordReadError := func(operation string, err error) {
 		if err != nil {
-			pollErr = stderrors.Join(pollErr, errors.WrapAPIError(operation, instanceName, err, 0))
+			readErr = stderrors.Join(readErr, errors.WrapAPIError(operation, instanceName, err, 0))
 		}
 	}
 
@@ -922,7 +926,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	// Only a node whose backup list was read is authoritative this cycle. A
 	// failed cluster read, a failed per-node read or a cancelled poll observed
 	// nothing, so those nodes keep their last-known backups instead of being
-	// published as having none; the failed read is already in pollErr.
+	// published as having none; the failed read is already in readErr.
 	if clusterErr != nil || len(readBackupNodes) < len(backupNodes) {
 		var preservedBackupNodes []string
 		pmgBackups, preservedBackupNodes = preserveUnreadPMGNodeBackups(
@@ -1076,6 +1080,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 			pmgInst.DomainStats = domainStats
 			pmgInst.DomainStatsAsOf = end
 		}
+	}
+
+	// Reads cut short by the poll's own deadline or cancellation are a
+	// whole-poll failure, not one broken endpoint, and keep their backoff.
+	if ctxErr := ctx.Err(); ctxErr != nil && readErr != nil {
+		pollErr = stderrors.Join(ctxErr, readErr)
 	}
 
 	m.state.UpdatePMGBackups(instanceName, pmgBackups)
