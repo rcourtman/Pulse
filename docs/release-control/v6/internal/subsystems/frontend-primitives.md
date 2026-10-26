@@ -6728,7 +6728,9 @@ windowing hook's single measured row assumes, and from a 50rem card both
 cells return to a one-line clamp (`@min-[50rem]:line-clamp-1`): icon-only
 Timeline/Resource row actions (100px instead of 177px) and a compact Status
 badge (108px instead of 119px) give Resource and Message the width that one
-line needs.
+line needs. A table row asks `getAlertHistoryRowCopy` for the subject-free
+copy, so Message leads with the alert's `summary` ("Offline") when it has
+one and keeps the full sentence as its title; cards keep the sentence.
 Alert History investigation detail is also responsive by interaction model,
 not only by CSS. Desktop may keep Timeline and Resource incident detail inline
 with its table row, while the virtualized phone card list must open the shared

@@ -545,6 +545,7 @@ func (m *Manager) checkGuestPoweredOffWithThresholdsAndIntentAndTags(guestID, na
 		Node:          node,
 		Instance:      instanceName,
 		Message:       fmt.Sprintf("%s '%s' is powered off", guestType, name),
+		Summary:       "Powered off",
 		Metadata:      metadata,
 		AddToRecent:   true,
 		AddToHistory:  true,

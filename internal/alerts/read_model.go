@@ -314,6 +314,7 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 				NodeDisplayName: nodeDisplayName,
 				Instance:        exported.Instance,
 				Message:         exported.Message,
+				Summary:         exported.Summary,
 				Value:           exported.Value,
 				Threshold:       exported.Threshold,
 				StartTime:       exported.StartTime,

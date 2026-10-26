@@ -179,6 +179,7 @@ func (m *Manager) checkPBSOfflineWithThresholds(pbs models.PBSInstance, threshol
 		Node:         pbs.Host,
 		Instance:     pbs.Name,
 		Message:      fmt.Sprintf("PBS instance %s is offline", pbs.Name),
+		Summary:      "Offline",
 		Metadata: map[string]interface{}{
 			"resourceType":     "pbs",
 			"status":           pbs.Status,
