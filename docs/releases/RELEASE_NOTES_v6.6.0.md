@@ -72,7 +72,7 @@ Pulse v6.6.0 puts alerts, charts and useful next steps together so you can see w
 ## TrueNAS, vSphere and Docker
 
 - **TrueNAS CORE keeps usable inventory.** Unknown or string-valued disk rotation rates no longer abort collection. Pool capacity can use top-level vdev statistics when flat fields are absent, while missing or conflicting readings remain unknown.
-- **TrueNAS readings recover.** Native disk-temperature history works again, with a limited fallback for empty reporting results. Fractional SCALE app CPU readings keep reporting connected, and native aggregate CPU readings include idle zero.
+- **TrueNAS disk history and SCALE CPU improve.** Native disk-temperature history works again, with a limited fallback for empty reporting results. Fractional SCALE app CPU readings keep reporting connected, and native aggregate CPU readings include idle zero.
 - **TrueNAS explains unhealthy states.** Pools and topology give concrete reasons for attention. Services and VMs distinguish intentionally stopped items from those expected to run, with status text matching its indicator.
 - **vSphere leads with health.** The overview highlights vCenter signals and explains datastore and network problems. Host groups use cluster names, events use vCenter descriptions, and VM records retain the correct platform.
 - **Slower vCenter refreshes can get more time.** PULSE_VMWARE_POLL_TIMEOUT sets the whole inventory refresh limit, with a 20-second default. Failed refreshes retain known inventory and its original last-success time.
@@ -161,6 +161,7 @@ Pulse v6.6.0 puts alerts, charts and useful next steps together so you can see w
 
 ## Known issues
 
+- **TrueNAS CORE host readings remain unresolved.** CPU and memory reporting can still fail even when disk and pool inventory works. These disk-temperature and SCALE CPU fixes do not repair that CORE host-reporting request.
 - **Guest safety remains under investigation.** These changes do not confirm a fix for every guest freeze or Windows restart. If monitoring was stopped after a guest froze, do not restart it solely to test this beta or this release.
 - **Affected backups still need precautions.** Stop Pulse monitoring before a freeze-enabled backup and keep it stopped until independent checks confirm thaw, fresh writes on every backed-up filesystem and workload liveness. An OK backup does not prove thaw.
 - **Elevated server memory remains unresolved.** Smaller caches and reduced copying do not confirm a lower long-running baseline. Report higher steady usage as well as continued growth using existing readings at similar uptimes and workloads.
