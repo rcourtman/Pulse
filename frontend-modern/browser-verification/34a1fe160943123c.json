@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "3cdb70a21d2ff2345f759d283d9cbf86beabc2b2",
+  "verified_at": "2026-10-26T10:32:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "c9d22fb1f1f56293624d38fae7286f0b727f668e1377fdd975da58b1f460f335"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 900
+    }
+  ],
+  "states": [
+    "guest drawer Overview with Utilization, Network I/O and Disk I/O History charts from a seeded 24h stored history (mock estate, production vite build)",
+    "history buckets with min-max spread on every third point, so the per-bucket peak shows while inspecting",
+    "resting readout (Latest stored) and inspected readout (Stored) for every chart",
+    "phone width with later chart panels folded behind the show-more toggle",
+    "before/after comparison against the origin/main build of the same estate"
+  ],
+  "interactions": [
+    "mouse scrub left-to-right-to-left across each visible chart in 121 steps, measuring every panel's top and height, the readout height, the plot box and the position of the content below the chart grid at each step: 0 layout changes after (16 to 80 per sweep before, with 20-40 px jumps)",
+    "keyboard inspection through the slider: Home then ArrowRight 40 times per chart, measured at each step: 0 layout changes after (8 to 27 before)",
+    "pointer parked on a spike bucket: peak labels render on the plot beside the cursor, stacked without overlap and flipped leftward past the middle, at 1024, 1440 and 390 px",
+    "no page errors in any run"
+  ]
+}
