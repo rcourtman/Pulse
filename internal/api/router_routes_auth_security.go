@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -213,6 +214,13 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			}
 		case http.MethodPut, http.MethodDelete:
 			if !ensureSettingsWriteScope(r.config, w, req) {
+				return
+			}
+			// Enforce core-owned environment authority before invoking a bound
+			// replacement, which may otherwise initialize or remove live services.
+			providerID := strings.TrimSuffix(strings.TrimPrefix(req.URL.Path, "/api/security/sso/providers/"), "/")
+			if r.isEnvironmentManagedSSOProvider(providerID) {
+				writeErrorResponse(w, http.StatusConflict, "provider_managed_by_environment", "Provider is managed by OIDC environment variables", nil)
 				return
 			}
 		default:
@@ -706,18 +714,20 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 	runtime.PreviewSAMLMetadata = previewSAMLMetadataFromRuntime
 	runtime.IsValidProviderID = validateProviderID
 	runtime.GetSSOConfigSnapshot = func() extensions.SSOConfigSnapshot {
-		return toExtensionSSOConfigSnapshot(router.ensureSSOConfig())
+		return toExtensionSSOConfigSnapshot(router.ensureSSOConfig().Clone())
 	}
 	runtime.SaveSSOConfigSnapshot = func(snapshot extensions.SSOConfigSnapshot) error {
 		if router == nil {
 			return nil
 		}
 		// Publish the replacement only once it is persisted.
-		_, err := router.commitSSOConfig(func(cfg *config.SSOConfig) error {
-			*cfg = *toCoreSSOConfig(snapshot)
-			return nil
+		applyErr, saveErr := router.commitSSOConfig(func(cfg *config.SSOConfig) error {
+			return replaceSSOConfigSnapshot(cfg, snapshot)
 		})
-		return err
+		if applyErr != nil {
+			return applyErr
+		}
+		return saveErr
 	}
 	runtime.GetPublicURL = func() string {
 		if router == nil || router.config == nil {
@@ -726,18 +736,27 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		return router.config.PublicURL
 	}
 	runtime.InitializeSAMLProvider = func(ctx context.Context, id string, samlCfg *extensions.SAMLProviderConfig) error {
+		if router.isEnvironmentManagedSSOProvider(id) {
+			return extensions.ErrSSOProviderManagedByEnvironment
+		}
 		if router == nil || router.samlManager == nil || samlCfg == nil {
 			return nil
 		}
 		return router.samlManager.InitializeProvider(ctx, id, toCoreSAMLProviderConfig(samlCfg))
 	}
 	runtime.RemoveSAMLProvider = func(id string) {
+		if router.isEnvironmentManagedSSOProvider(id) {
+			return
+		}
 		if router == nil || router.samlManager == nil {
 			return
 		}
 		router.samlManager.RemoveProvider(id)
 	}
 	runtime.InitializeOIDCProvider = func(ctx context.Context, id string, provider *extensions.SSOProvider) error {
+		if router.isEnvironmentManagedSSOProvider(id) {
+			return extensions.ErrSSOProviderManagedByEnvironment
+		}
 		if router == nil || router.oidcManager == nil || provider == nil {
 			return nil
 		}
@@ -745,12 +764,67 @@ func newSSOAdminRuntime(router *Router) extensions.SSOAdminRuntime {
 		return router.oidcManager.InitializeProvider(ctx, id, &coreProvider, "")
 	}
 	runtime.RemoveOIDCProvider = func(id string) {
+		if router.isEnvironmentManagedSSOProvider(id) {
+			return
+		}
 		if router == nil || router.oidcManager == nil {
 			return
 		}
 		router.oidcManager.RemoveService(id)
 	}
 	return runtime
+}
+
+func (r *Router) isEnvironmentManagedSSOProvider(id string) bool {
+	provider := r.ensureSSOConfig().GetProvider(id)
+	return provider != nil && provider.RuntimeManaged
+}
+
+// replaceSSOConfigSnapshot runs inside commitSSOConfig's lock, before any
+// persistence or publication. Never trust a snapshot to assign environment
+// authority, or to remove it by losing the runtime-only marker in a conversion.
+func replaceSSOConfigSnapshot(current *config.SSOConfig, snapshot extensions.SSOConfigSnapshot) error {
+	next := toCoreSSOConfig(snapshot).Clone()
+	for _, provider := range next.Providers {
+		existing := current.GetProvider(provider.ID)
+		if provider.RuntimeManaged && (existing == nil || !existing.RuntimeManaged) {
+			return extensions.ErrSSOProviderManagedByEnvironment
+		}
+	}
+	for _, existing := range current.Providers {
+		if !existing.RuntimeManaged {
+			continue
+		}
+		found := false
+		for i := range next.Providers {
+			provider := &next.Providers[i]
+			if provider.ID != existing.ID {
+				continue
+			}
+			// Compare the configuration, not runtime-only bookkeeping. JSON also
+			// treats omitted and empty optional collections alike for old consumers.
+			proposed, err := json.Marshal(provider)
+			if err != nil {
+				return err
+			}
+			authoritative, err := json.Marshal(existing)
+			if err != nil {
+				return err
+			}
+			if found || !bytes.Equal(proposed, authoritative) {
+				return extensions.ErrSSOProviderManagedByEnvironment
+			}
+			found = true
+			// current is already a private clone. Restore the marker and any
+			// environment field locks rather than publishing caller-owned data.
+			*provider = existing
+		}
+		if !found {
+			return extensions.ErrSSOProviderManagedByEnvironment
+		}
+	}
+	*current = *next
+	return nil
 }
 
 func toAPISAMLTestConfig(cfg *extensions.SAMLTestConfig) *SAMLTestConfig {
@@ -851,6 +925,7 @@ func toExtensionSSOProvider(p config.SSOProvider) extensions.SSOProvider {
 		AllowedEmails:     p.AllowedEmails,
 		GroupsClaim:       p.GroupsClaim,
 		GroupRoleMappings: p.GroupRoleMappings,
+		RuntimeManaged:    p.RuntimeManaged,
 	}
 
 	if p.OIDC != nil {
@@ -929,6 +1004,7 @@ func toCoreSSOProvider(p extensions.SSOProvider) config.SSOProvider {
 		AllowedEmails:     p.AllowedEmails,
 		GroupsClaim:       p.GroupsClaim,
 		GroupRoleMappings: p.GroupRoleMappings,
+		RuntimeManaged:    p.RuntimeManaged,
 	}
 
 	if p.OIDC != nil {

@@ -72,6 +72,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	licensetestsupport "github.com/rcourtman/pulse-go-rewrite/pkg/licensing/testsupport"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -28182,5 +28183,88 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 	newer, err := router.persistence.LoadSystemSettings()
 	if err != nil || newer.PublicURL != committed.PublicURL {
 		t.Fatalf("replay replaced a newer legitimate edit: %#v %v", newer, err)
+	}
+}
+
+// TestContractSSOEnvironmentBoundaryConsumer exercises the real authenticated
+// routes and persistence, including a legacy extension's marker-free snapshot.
+// Optional fixture output contains synthetic HTTP responses for browser proof.
+func TestContractSSOEnvironmentBoundaryConsumer(t *testing.T) {
+	fixture := environmentBoundaryRouter(t)
+	const token = "sso-environment-consumer-synthetic-token.12345678"
+	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	cfg.PublicURL = "https://pulse.example.test"
+	var probe *environmentBoundaryEndpointProbe
+	SetSSOAdminEndpointsBinder(func(defaults extensions.SSOAdminEndpoints, _ extensions.SSOAdminRuntime) extensions.SSOAdminEndpoints {
+		probe = &environmentBoundaryEndpointProbe{SSOAdminEndpoints: defaults}
+		return probe
+	})
+	t.Cleanup(func() { SetSSOAdminEndpointsBinder(nil) })
+	r := NewRouter(cfg, nil, nil, nil, nil, "test")
+	r.ssoConfig = fixture.currentSSOConfig().Clone()
+	if err := r.saveSSOConfig(); err != nil {
+		t.Fatal(err)
+	}
+	var responses []map[string]interface{}
+	request := func(name, method, path, body string, status int) {
+		t.Helper()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.RemoteAddr = ssoTestIP()
+		req.Header.Set("X-API-Token", token)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.Handler().ServeHTTP(w, req)
+		if w.Code != status {
+			t.Fatalf("%s: got %d, want %d: %s", name, w.Code, status, w.Body.String())
+		}
+		if strings.Contains(w.Body.String(), "synthetic-environment-secret") || strings.Contains(w.Body.String(), "synthetic-saved-secret") {
+			t.Fatal("provider response exposed a credential")
+		}
+		responses = append(responses, map[string]interface{}{"name": name, "method": method, "path": path, "request": body, "status": w.Code, "body": w.Body.String()})
+	}
+	base := "/api/security/sso/providers"
+	id := config.LegacyOIDCProviderID
+	request("initial", http.MethodGet, base, "", http.StatusOK)
+	request("environment-detail", http.MethodGet, base+"/"+id, "", http.StatusOK)
+	// These request objects match the canonical editor's saved form shape.
+	envDraft := `{"id":"` + id + `","name":"Environment draft","type":"oidc","enabled":true,"displayName":"Single Sign-On","priority":0,"allowedGroups":[],"allowedDomains":[],"allowedEmails":[],"groupRoleMappings":{},"oidc":{"issuerUrl":"https://environment.example.test","clientId":"environment-client","redirectUrl":"https://pulse.example.test/api/oidc/callback","scopes":["openid","profile","email"]}}`
+	request("environment-refused", http.MethodPut, base+"/"+id, envDraft, http.StatusConflict)
+	request("environment-delete-refused", http.MethodDelete, base+"/"+id, "", http.StatusConflict)
+	if probe.writes != 0 {
+		t.Fatal("environment mutation reached the extension")
+	}
+	request("saved-detail", http.MethodGet, base+"/saved", "", http.StatusOK)
+	savedDraft := `{"id":"saved","name":"Edited recovery","type":"oidc","enabled":false,"priority":0,"allowedGroups":["operators"],"allowedDomains":[],"allowedEmails":[],"groupRoleMappings":{"operators":"admin"},"oidc":{"issuerUrl":"https://saved.example.test","clientId":"saved-client","scopes":["openid","email"]}}`
+	request("saved-updated", http.MethodPut, base+"/saved", savedDraft, http.StatusOK)
+	if probe.writes != 1 {
+		t.Fatal("saved-provider update did not reach the extension")
+	}
+	hooks := newSSOAdminRuntime(r)
+	encoded, err := json.Marshal(hooks.GetSSOConfigSnapshot())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacy extensions.SSOConfigSnapshot
+	if err := json.Unmarshal(encoded, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := hooks.SaveSSOConfigSnapshot(legacy); err != nil {
+		t.Fatal(err)
+	}
+	assertEnvironmentNotPersisted(t, r)
+	if r.currentSSOConfig().GetProvider("saved").OIDC.ClientSecret != "synthetic-saved-secret" {
+		t.Fatal("blank edit lost saved-provider credential")
+	}
+	request("after-unrelated-save", http.MethodGet, base, "", http.StatusOK)
+	request("saved-detail-after", http.MethodGet, base+"/saved", "", http.StatusOK)
+	if output := os.Getenv("PULSE_SSO_ENV_FIXTURES"); output != "" {
+		data, err := json.MarshalIndent(map[string]interface{}{"responses": responses, "environment_id": id, "scope": "Real public authenticated routes, bound default-delegating extension, synthetic environment and saved credentials, real temporary persistence. A separate marker-free snapshot save occurs before the final list. Not a real private-handler, issuer sign-in or installed journey."}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(output, data, 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
