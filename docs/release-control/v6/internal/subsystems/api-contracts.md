@@ -12888,3 +12888,28 @@ detail response; `sso_json_admission_test.go`, `rbac_json_admission_test.go` and
 `admin_json_test.go` cover persisted preservation, explicit clears, aliases,
 limits and one-use recovery. These are public source controls, not an observed
 exploit, private runtime acceptance or installed sign-in recovery.
+
+### Environment authority survives SSO extension snapshots (26 October 2026)
+
+`extensions.SSOProvider.RuntimeManaged` carries the core-owned environment
+authority through both provider conversions; it is not a JSON field. Snapshot
+reads and accepted replacements detach all nested authorization collections.
+Before persistence, a replacement must retain each current environment provider
+unchanged and exactly once. An older consumer may omit the internal marker,
+but core restores it and the environment field locks from the authoritative
+configuration. Changed, missing, duplicated or newly asserted environment
+authority returns `ErrSSOProviderManagedByEnvironment` without saving or
+publishing. Environment credentials never become a persisted provider as a
+side effect of an unrelated saved-provider edit.
+
+Authenticated/scoped PUT and DELETE refuse environment providers with the
+existing `409 provider_managed_by_environment` before dispatch to replacement
+handlers. Extension initialization refuses those IDs and removal callbacks
+leave their live services alone. Saved-provider CRUD, blank-secret preservation,
+discovery, local administrator access and Community SSO entitlement remain
+unchanged. `sso_environment_boundary_test.go` covers legacy conversions,
+credential/persistence authority, detached ownership, callbacks and pre-dispatch
+refusal. `TestContractSSOEnvironmentBoundaryConsumer` binds actual authenticated
+responses and temporary persistence to the existing editor's request shapes;
+optional synthetic fixtures support consuming browser proof. These controls
+are not a claim of an installed leak or native identity-provider recovery.

@@ -2,9 +2,14 @@ package extensions
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 )
+
+// ErrSSOProviderManagedByEnvironment refuses an extension's attempt to change
+// a provider whose authoritative configuration comes from the process environment.
+var ErrSSOProviderManagedByEnvironment = errors.New("provider is managed by OIDC environment variables")
 
 // SSOAdminEndpoints defines the enterprise SSO admin endpoint surface.
 type SSOAdminEndpoints interface {
@@ -83,6 +88,9 @@ type SSOProvider struct {
 	GroupRoleMappings map[string]string   `json:"groupRoleMappings,omitempty"`
 	OIDC              *OIDCProviderConfig `json:"oidc,omitempty"`
 	SAML              *SAMLProviderConfig `json:"saml,omitempty"`
+	// RuntimeManaged is core-owned authority, not an API-editable setting.
+	// Such providers remain discoverable but cannot be changed or persisted.
+	RuntimeManaged bool `json:"-"`
 }
 
 // SSOConfigSnapshot is the runtime snapshot used by enterprise handlers.
@@ -205,12 +213,14 @@ type LogSSOAuditEventFunc func(ctx context.Context, event, path string, success 
 
 // SSOAdminRuntime exposes runtime capabilities needed by SSO admin endpoints.
 type SSOAdminRuntime struct {
-	GetClientIP            func(*http.Request) string
-	AllowAuthRequest       func(clientIP string) bool
-	TestSAMLConnection     func(context.Context, *SAMLTestConfig) SSOTestResponse
-	TestOIDCConnection     func(context.Context, *OIDCTestConfig) SSOTestResponse
-	PreviewSAMLMetadata    func(context.Context, MetadataPreviewRequest) (MetadataPreviewResponse, error)
-	IsValidProviderID      func(string) bool
+	GetClientIP         func(*http.Request) string
+	AllowAuthRequest    func(clientIP string) bool
+	TestSAMLConnection  func(context.Context, *SAMLTestConfig) SSOTestResponse
+	TestOIDCConnection  func(context.Context, *OIDCTestConfig) SSOTestResponse
+	PreviewSAMLMetadata func(context.Context, MetadataPreviewRequest) (MetadataPreviewResponse, error)
+	IsValidProviderID   func(string) bool
+	// Get returns a detached snapshot. Save rejects environment-provider changes
+	// and restores core-owned authority when an older consumer omits the marker.
 	GetSSOConfigSnapshot   func() SSOConfigSnapshot
 	SaveSSOConfigSnapshot  func(SSOConfigSnapshot) error
 	GetPublicURL           func() string
