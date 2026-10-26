@@ -40,6 +40,17 @@ has an explicit result and the existing contiguous, bounded terminal-log checks
 pass. An ordinary later complete read repairs the result under the same task
 identity; only then may a finished log be cached as final.
 
+A non-final cached log follows the same rule when a read fails, is cancelled,
+or is deferred by the per-poll request bound. The current parent end withdraws
+cached running state without inventing a guest verdict. Explicit cached results
+remain intact; the cache stays incomplete and retryable. These fallback rows
+retain the last accepted log observation time instead of renewing backup-intent
+freshness on an unread log. Successful reads record that time in the cache;
+complete immutable logs retain their existing final-cache behaviour.
+`TestVzdumpCachedGuest*` checks live intent expiry, ended-parent fallback,
+connection isolation, mixed results, durable history, request/cancellation
+bounds and ordinary complete-read recovery.
+
 `TestVzdumpGuestResult*` covers ended/running jobs, truncated/gapped/capped logs,
 explicit mixed results, retries and cache finalisation through the real poller,
 state JSON and recovery mapper. These are offline log fixtures, not native backup
