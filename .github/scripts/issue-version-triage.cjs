@@ -118,29 +118,40 @@ function firstFieldValue(lines) {
   return value ? value.text.trim() : "";
 }
 
-function extractSectionValue(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
-  if (!body) return null;
+function extractSectionValues(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
+  if (!body) return [];
   const lines = report.lines;
   const pattern = new RegExp(`^${escapeRegExp(heading)}$`, "i");
-  const start = lines.findIndex((line) => line.heading !== null && pattern.test(line.heading));
-  if (start === -1) return null;
   const boundary = followingHeadings.length
-    ? new RegExp(`^(?:${followingHeadings.map(escapeRegExp).join("|")})$`, "i") : null;
-  let end = start + 1;
-  while (end < lines.length && !(lines[end].heading !== null &&
-      (!boundary || (lines[end].headingDepth <= lines[start].headingDepth &&
-        boundary.test(lines[end].heading))))) {
-    end += 1;
+    ? new RegExp(`^(?:${[heading, ...followingHeadings].map(escapeRegExp).join("|")})$`, "i") : null;
+  const values = [];
+  for (let start = 0; start < lines.length; start += 1) {
+    if (lines[start].heading === null || !pattern.test(lines[start].heading)) continue;
+    let end = start + 1;
+    while (end < lines.length && !(lines[end].heading !== null &&
+        (!boundary || (lines[end].headingDepth <= lines[start].headingDepth &&
+          boundary.test(lines[end].heading))))) {
+      end += 1;
+    }
+    values.push(lines.slice(start + 1, end).map((line) => line.text).join("\n").trim());
+    // A deeper, form-named subheading is part of this value, not another
+    // declaration. Only resume at the boundary that ended the field.
+    start = end - 1;
   }
-  // An empty declared field differs from a legacy report with no field.
-  return lines.slice(start + 1, end).map((line) => line.text).join("\n").trim();
+  return values;
 }
 
-function additionalActionableTopicsValue(body, report = parseReportMarkdown(body)) {
+function extractSectionValue(body, heading, followingHeadings = [], report = parseReportMarkdown(body)) {
+  const values = extractSectionValues(body, heading, followingHeadings, report);
+  // An empty declared field differs from a legacy report with no field.
+  return values.length ? values[0] : null;
+}
+
+function additionalActionableTopicDeclarations(body, report = parseReportMarkdown(body)) {
   // Edited reports can move this field beside any other form field. Context
   // from those fields must not invent a topic or reopen a completed review.
   // Deeper subheadings still belong to the topic, even with a familiar name.
-  return extractSectionValue(body, "Additional actionable topics", [
+  const values = extractSectionValues(body, "Additional actionable topics", [
     "Describe the bug",
     "Steps or original sequence",
     "Expected behavior",
@@ -167,12 +178,21 @@ function additionalActionableTopicsValue(body, report = parseReportMarkdown(body
     "Desired outcome",
     "Alternatives considered",
   ], report);
+  if (!values.length) return null;
+  // A reporter may append a second field rather than replace the first.
+  // Assess each independently: neither an earlier None nor a later empty
+  // field can erase a task. Empty/identical copies and field order alone do
+  // not create a new task after Community has completed its review.
+  return [...new Set(values.filter((value) => isActionableTopicValue(value, report))
+    .map((value) => value.replace(/\s+/g, " ").trim()))].sort();
 }
 
 function classifyAdditionalActionableTopics(body, report = parseReportMarkdown(body)) {
-  const value = additionalActionableTopicsValue(body, report);
-  if (value === null) return null;
+  const declarations = additionalActionableTopicDeclarations(body, report);
+  return declarations === null ? null : declarations.length > 0;
+}
 
+function isActionableTopicValue(value, report) {
   // Ordinary inline formatting does not turn "None" into a second topic.
   // Keep block evidence, images and any qualifying text intact for review;
   // only a single paragraph can supply an explicit no-topic response.
@@ -413,8 +433,9 @@ function buildTriageState(issue, core, latestVersion) {
     nextLabels.add(v6FeedbackClass);
   }
 
-  const additionalTopicsValue = additionalActionableTopicsValue(issue.body, report);
-  const hasAdditionalActionableTopics = classifyAdditionalActionableTopics(issue.body, report);
+  const additionalTopicDeclarations = additionalActionableTopicDeclarations(issue.body, report);
+  const hasAdditionalActionableTopics = additionalTopicDeclarations === null
+    ? null : additionalTopicDeclarations.length > 0;
 
   const reportedVersion = extractPulseVersion(issue.title, issue.body, report);
   core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
@@ -426,7 +447,7 @@ function buildTriageState(issue, core, latestVersion) {
     reportedVersion,
     v6FeedbackClass,
     hasAdditionalActionableTopics,
-    additionalTopicsValue,
+    additionalTopicDeclarations,
     isBugLike: nextLabels.has(BUG_LABEL),
     comparison:
       reportedVersion && latestVersion ? compareCore(reportedVersion, latestVersion) : null,
@@ -581,7 +602,7 @@ async function syncLabels({ github, context, core }) {
     nextLabels,
     reportedVersion,
     hasAdditionalActionableTopics,
-    additionalTopicsValue,
+    additionalTopicDeclarations,
     isBugLike,
   } = buildTriageState(issue, core, null);
 
@@ -589,14 +610,14 @@ async function syncLabels({ github, context, core }) {
   // empty field cannot prove that comment topics were dispositioned, and an
   // unrelated or superseded event must not restore a label Community cleared.
   const previousBody = context.payload.changes?.body?.from;
-  const topicText = (value) => (value || "").replace(/\s+/g, " ").trim();
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
     issue.updated_at === eventIssue.updated_at;
   const declarationChanged = hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
-      topicText(additionalActionableTopicsValue(previousBody)) !== topicText(additionalTopicsValue))
+      JSON.stringify(additionalActionableTopicDeclarations(previousBody) || []) !==
+        JSON.stringify(additionalTopicDeclarations))
   );
   const newlyDeclared = declarationChanged && !nextLabels.has(NEEDS_DECOMPOSITION_LABEL) && (
     eventIsCurrent || await declarationSurvivesLaterComments(github, context, issue, eventIssue)

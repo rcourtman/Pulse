@@ -710,6 +710,122 @@ test("topic classification stops at form fields but retains topic subheadings", 
   }
 });
 
+test("every repeated topic field is assessed without inventing topics from empty copies", () => {
+  const { classifyAdditionalActionableTopics } = triage.internals;
+  for (const newline of ["\n", "\r\n"]) {
+    for (const separator of ["", "### Pulse version\n6.6.0\n\n",
+      "## Logs, screenshots, or diagnostics\nExisting context only.\n\n"]) {
+      for (const [first, second, expected] of [
+        ["None", "A separate backup identity problem.", true],
+        ["A separate backup identity problem.", "None", true],
+        ["None", "_No response_", false],
+        ["<!-- hidden hint -->", "[None][empty]", false],
+        ["", "", false],
+      ]) {
+        const body = `### Additional actionable topics\n${first}\n\n${separator}` +
+          `### **[Additional actionable topics][field]**\n${second}\n\n` +
+          "### Confirmations\nExisting context only.\n\n" +
+          "[empty]: https://example.invalid/another-problem\n" +
+          "[field]: https://example.invalid/another-problem\n";
+        assert.equal(classifyAdditionalActionableTopics(body.replaceAll("\n", newline)), expected, body);
+      }
+    }
+  }
+});
+
+test("opened intake retains a later topic field and preserves unrelated Community labels", async () => {
+  const { github, calls } = createGithub();
+  const issue = { number: 2933, title: "Backup posture", labels: ["bug", "needs-human",
+    "needs-retest-on-latest", "operator-reviewed"].map(name => ({ name })),
+    body: "### Additional actionable topics\nNone\n\n### Pulse version\n6.6.0\n\n" +
+      "### Additional actionable topics\nBackup destination identity is also wrong.\n" };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0", "needs-decomposition"]]);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+  assert.deepEqual(calls.getLatestRelease, []);
+  assert.deepEqual(calls.paginate, []);
+});
+
+test("a revised later topic field creates a new review after the earlier disposition", async () => {
+  const first = "### Additional actionable topics\nAn earlier storage topic.\n\n" +
+    "### Pulse version\n6.6.0\n\n";
+  for (const previous of ["", "### Additional actionable topics\nNone\n",
+    "### Additional actionable topics\nA previously reviewed second topic.\n"]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2934, title: "Reviewed feedback", labels: [{ name: "enhancement" }],
+      body: first + "### Additional actionable topics\nAnother independent workflow problem.\n" };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: first + previous,
+    }) });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["needs-decomposition"]], previous);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.paginate, []);
+  }
+});
+
+test("empty duplicates, identical copies and reordered fields cannot restore a completed review", async () => {
+  const field = value => `### Additional actionable topics\n${value}\n\n`;
+  const boundary = "### Pulse version\n6.6.0\n\n";
+  const prior = field("A storage problem.") + boundary + field("A navigation problem.");
+  const candidates = [
+    prior + boundary + field("None"),
+    prior + field("<!-- hidden hint -->"),
+    field("None") + boundary + prior,
+    prior + boundary + field("A storage problem."),
+    field("A navigation problem.") + boundary + field("A storage problem."),
+    field("A   storage\nproblem.") + boundary + field("A navigation problem."),
+  ];
+  for (const body of candidates) {
+    const { github, calls } = createGithub();
+    const issue = { number: 2935, title: "Reviewed feedback", body,
+      labels: ["enhancement", "needs-human", "operator-reviewed"].map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(), context: createContext({
+      action: "edited", issue, previousBody: prior,
+    }) });
+    assert.deepEqual(calls.addLabels, [], body);
+    assert.deepEqual(calls.removeLabel, [], body);
+    assert.deepEqual(calls.createLabel, [], body);
+    assert.deepEqual(calls.createComment, [], body);
+    assert.deepEqual(calls.getLatestRelease, [], body);
+    assert.deepEqual(calls.paginate, [], body);
+  }
+});
+
+test("repeated empty topic fields cannot close an existing comment-topic review", async () => {
+  for (const action of ["opened", "edited", "reopened"]) {
+    const { github, calls } = createGithub();
+    const body = "### Additional actionable topics\nNone\n\n" +
+      "### Pulse version\n6.6.0\n\n### Additional actionable topics\n_No response_\n";
+    const issue = { number: 2936, title: "Existing feedback", body,
+      labels: ["enhancement", "needs-decomposition"].map(name => ({ name })) };
+    await syncLabels({ github, core: createCore(), context: createContext({ action, issue,
+      previousBody: "### Additional actionable topics\nAn existing topic.\n",
+    }) });
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
+
+test("copied topic headings outside genuine fields cannot become later declarations", () => {
+  for (const copy of [
+    "```markdown\n### Additional actionable topics\nAnother problem.\n```",
+    "> ### Additional actionable topics\n> Another problem.",
+    "<pre>\n### Additional actionable topics\nAnother problem.\n</pre>",
+    "<!--\n### Additional actionable topics\nAnother problem.\n-->",
+    "- Copied template\n\n  ### Additional actionable topics\n  Another problem.",
+  ]) {
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(copy), null, copy);
+    assert.equal(triage.internals.classifyAdditionalActionableTopics(
+      "### Additional actionable topics\nNone\n\n### Additional context\n" + copy
+    ), false, copy);
+  }
+});
+
 function topicBoundaryFields() {
   const fields = new Set(["Additional context"]);
   const directory = path.resolve(__dirname, "../ISSUE_TEMPLATE");
