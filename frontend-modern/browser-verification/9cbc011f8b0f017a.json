@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "7c5ad1d9234aef8510c73862baeff663e40de8bb",
+  "verified_at": "2026-10-26T00:45:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "efc2307d6bc1dcc7cfa3bc3b797a1e44312f699a32689314e102b589767e962c"
+  },
+  "routes": [
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Initially loaded dated success, failed and running events",
+    "Failed background poll with retained events and explicit warning",
+    "Filtered-empty retained events with warning, including settled empty-state pixels",
+    "Pending manual retry, repeated failure and preserved warning",
+    "Successful replacement read, successful empty read and cleared warning",
+    "Initial loading and failed initial read without fabricated retained events",
+    "HTTP 403 withdraws retained events"
+  ],
+  "interactions": [
+    "Automatic bounded recovery-points polling",
+    "Desktop keyboard refresh and inline-detail disclosure/close",
+    "Phone touch refresh and row-detail disclosure/close",
+    "Native status filters, search, empty search and clear",
+    "One disabled pending refresh; no duplicate request",
+    "Read-only retry and accepted replacement response"
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "channel": "chromium"
+  },
+  "client": {
+    "name": "Playwright",
+    "version": "1.56.1"
+  },
+  "proof_source_sha": "7c5ad1d9234aef8510c73862baeff663e40de8bb",
+  "notes": [
+    "Real hook, API client, transport normalization, table and product styles, compiled by exact-source offline proof. Safe local HTTP fixtures, not a native appliance or production backend.",
+    "Primary journey: 22 bounded GETs, no mutations or external requests, eight native-viewed captures. Narrow supplement: four bounded GETs, two native-viewed settled captures and actual engine-version observation.",
+    "Existing compact table-cell truncation is unchanged. No original incident or native recovery is claimed."
+  ]
+}
