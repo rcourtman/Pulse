@@ -21,6 +21,21 @@
 
 ## Purpose
 
+### Phone protection summaries prioritise completion and outcome
+
+TrueNAS Protection uses the existing container-led phone projection to keep
+Dataset, Finished and the labelled Outcome readable in single-line summary
+rows. Artifact and Target columns return at the shared wider-table breakpoint;
+both remain available in the existing wrapping inline details on phones. Header
+and body priorities match. The completion sort remains available, and the same
+actual-finish requirement applies to summary, sort and details: running and
+start-only events still have no completion evidence. The registered
+`TrueNASProtectionTable.completion.test.tsx` pairs those priorities and exercises
+the real query/normalizer through details and completion transitions. Source-bound
+desktop and narrow browser proof establishes actual fit and interaction; a DOM
+class assertion alone does not establish readability. No date, outcome, query,
+API, identity, policy or recovery operation changes.
+
 ### TrueNAS start and active-run dates are not completion evidence
 
 The Protection table's Completed column, its explicit completion sort and its

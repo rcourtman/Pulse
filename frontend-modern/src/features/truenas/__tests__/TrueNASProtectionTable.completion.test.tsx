@@ -64,6 +64,66 @@ afterEach(() => {
 });
 
 describe('TrueNAS protection completion evidence', () => {
+  it('pairs phone column priorities with their cells and preserves the hidden fields in details', async () => {
+    apiFetchJSON.mockResolvedValueOnce({
+      data: [
+        point('phone', {
+          completedAt,
+          display: {
+            subjectLabel: 'tank/departmental-archives',
+            subjectType: 'dataset',
+            nodeHostLabel: 'nas-east',
+          },
+          details: {
+            taskName: 'replicate-departmental-archives-to-offsite',
+            targetDataset: 'vault/offsite/departmental-archives',
+          },
+        }),
+      ],
+    });
+    mountProtection();
+    await vi.waitFor(() => expect(row('phone')).not.toBeNull());
+    const cells = row('phone').querySelectorAll('td');
+    for (const [label, index] of [
+      ['Artifact', 1],
+      ['Target', 2],
+    ] as const) {
+      expect(screen.getByRole('columnheader', { name: label })).toHaveClass(
+        'platform-table-phone-hidden',
+      );
+      expect(cells[index]).toHaveClass('platform-table-phone-hidden');
+    }
+    for (const [label, index] of [
+      ['Dataset', 0],
+      ['Completed', 3],
+      ['Outcome', 5],
+    ] as const) {
+      expect(screen.getByRole('columnheader', { name: new RegExp(label) })).not.toHaveClass(
+        'platform-table-phone-hidden',
+      );
+      expect(cells[index]).not.toHaveClass('platform-table-phone-hidden');
+    }
+    expect(screen.getByRole('columnheader', { name: /Completed/ })).not.toHaveClass(
+      'platform-table-mobile-w-15',
+    );
+    expect(screen.getByRole('columnheader', { name: 'Outcome' })).toHaveClass(
+      'platform-table-mobile-w-25',
+    );
+    await fireEvent.click(
+      within(row('phone')).getByRole('button', { name: /details.*tank\/departmental-archives/i }),
+    );
+    const detail = within(screen.getByTestId('truenas-protection-detail'));
+    expect(detail.getByText('Artifact', { exact: true }).closest('tr')).toHaveTextContent(
+      'replicate-departmental-archives-to-offsite',
+    );
+    expect(detail.getByText('Target', { selector: 'td', exact: true }).closest('tr')).toHaveTextContent(
+      'vault/offsite/departmental-archives',
+    );
+    expect(detail.getByText('Host', { exact: true }).closest('tr')).toHaveTextContent('nas-east');
+    expect(detail.getByText('Completed', { exact: true }).closest('tr')).toHaveTextContent('2026');
+    expect(detail.getByText('Outcome', { exact: true }).closest('tr')).toHaveTextContent('Healthy');
+  });
+
   it('never substitutes a start or a running last-run date for completion in rows or details', async () => {
     apiFetchJSON.mockResolvedValueOnce({
       data: [
