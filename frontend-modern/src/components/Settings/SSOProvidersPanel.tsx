@@ -797,7 +797,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   <p
                     role={feedback.tone === 'error' ? 'alert' : 'status'}
                     tabindex="0"
-                    class={`max-h-28 overflow-y-auto text-sm [overflow-wrap:anywhere] ${
+                    class={`max-h-48 overflow-y-auto text-sm [overflow-wrap:anywhere] ${
                       feedback.tone === 'error'
                         ? 'text-red-700 dark:text-red-300'
                         : 'text-base-content'

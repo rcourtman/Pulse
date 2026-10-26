@@ -60,7 +60,20 @@ export function getSSOProviderSaveSuccessMessage(isEdit: boolean): string {
 }
 
 export function getSSOProviderSaveErrorMessage(error?: unknown): string {
-  return `Unable to save the SSO provider: ${String(error)}`;
+  const message = (
+    error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  ).trim();
+  // Only short human guidance belongs in the editor, never markup, malformed
+  // envelopes, object coercions or an unbounded upstream response.
+  if (
+    !message ||
+    message.length > 500 ||
+    /^[{["]/.test(message) ||
+    /[<>\u0000-\u001F\u007F]/.test(message) // eslint-disable-line no-control-regex -- intentional sanitization
+  ) {
+    return 'Unable to save the SSO provider. Check the connection and try saving again.';
+  }
+  return `Unable to save the SSO provider: ${message}`;
 }
 
 export function getSSOProviderDeleteSuccessMessage(): string {

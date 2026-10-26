@@ -36,7 +36,7 @@ import {
 // `getSSOProviderModalTitle`, the falsy `oidcIssuerUrl || ''` arm, and both
 // falsy arms of the nested `samlIdpEntityId || samlMetadataUrl || ''` chain in
 // `getSSOProviderSummary`. It also pins the full concrete return values and
-// `String(error)` coercion behaviour that the sibling suite only spot-checks.
+// bounded save-error presentation that the sibling suite only spot-checks.
 
 describe('ssoProviderPresentation branch coverage (supplemental)', () => {
   describe('getSSOProviderTypeLabel', () => {
@@ -122,30 +122,38 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
   });
 
   describe('getSSOProviderSaveErrorMessage', () => {
-    it('coerces an undefined error to the literal string "undefined" via String()', () => {
-      // `String(undefined)` => 'undefined' — documents the runtime behaviour of
-      // the optional `error` parameter when callers omit it.
-      expect(getSSOProviderSaveErrorMessage()).toBe('Unable to save the SSO provider: undefined');
-    });
-
-    it('coerces null to "null"', () => {
-      expect(getSSOProviderSaveErrorMessage(null)).toBe('Unable to save the SSO provider: null');
-    });
-
-    it('coerces a plain object to "[object Object]"', () => {
-      expect(getSSOProviderSaveErrorMessage({ status: 500 })).toBe(
-        'Unable to save the SSO provider: [object Object]',
+    it('uses an Error message without the JavaScript Error prefix', () => {
+      expect(getSSOProviderSaveErrorMessage(new Error('Check the provider settings.'))).toBe(
+        'Unable to save the SSO provider: Check the provider settings.',
+      );
+      expect(getSSOProviderSaveErrorMessage('  Invalid role mapping  ')).toBe(
+        'Unable to save the SSO provider: Invalid role mapping',
       );
     });
 
-    it('coerces an Error instance to "Error: <message>"', () => {
-      expect(getSSOProviderSaveErrorMessage(new Error('boom'))).toBe(
-        'Unable to save the SSO provider: Error: boom',
+    it.each([
+      undefined,
+      null,
+      { status: 500 },
+      42,
+      '',
+      '  ',
+      '{"error":',
+      '[object Object]',
+      '"json string"',
+      '<html>Bad Gateway</html>',
+      'bad\nmessage',
+      'x'.repeat(501),
+    ])('uses bounded recovery guidance for unsuitable input %j', (error) => {
+      expect(getSSOProviderSaveErrorMessage(error)).toBe(
+        'Unable to save the SSO provider. Check the connection and try saving again.',
       );
     });
 
-    it('coerces a number to its decimal string form', () => {
-      expect(getSSOProviderSaveErrorMessage(42)).toBe('Unable to save the SSO provider: 42');
+    it('accepts exactly the bounded human-message length', () => {
+      expect(getSSOProviderSaveErrorMessage('x'.repeat(500))).toBe(
+        `Unable to save the SSO provider: ${'x'.repeat(500)}`,
+      );
     });
   });
 

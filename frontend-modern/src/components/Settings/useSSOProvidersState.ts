@@ -133,7 +133,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     setSaving(true);
 
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
+      const { apiFetch, apiErrorFromResponse } = await import('@/utils/apiClient');
       const isEdit = Boolean(editingProvider());
       const response = await apiFetch(
         isEdit
@@ -141,23 +141,29 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
           : '/api/security/sso/providers',
         {
           method: isEdit ? 'PUT' : 'POST',
+          // Keep failed configuration writes in this draft until an explicit retry.
+          retry: false,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(buildProviderPayload(form)),
         },
       );
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || `Failed to save provider (${response.status})`);
+        const error = await apiErrorFromResponse(response);
+        setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage(error) });
+        // Envelope details and upstream bodies can contain private provider data.
+        logger.error('[SSOProvidersPanel] Failed to save provider.', { status: response.status });
+        return;
       }
 
       notificationStore.success(getSSOProviderSaveSuccessMessage(isEdit));
       setShowModal(false);
       await loadProviders();
       props.onConfigUpdated?.();
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Failed to save provider:', error);
-      setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage(error) });
+    } catch {
+      // A lost response cannot establish whether the server saved the change.
+      logger.error('[SSOProvidersPanel] Failed to save provider.');
+      setEditorFeedback({ tone: 'error', message: getSSOProviderSaveErrorMessage() });
     } finally {
       setSaving(false);
     }
