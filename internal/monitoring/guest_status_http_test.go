@@ -184,7 +184,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 		vm := vms[0]
 		m.recordGuestMetrics(vms, nil, cycleStart)
 		m.state.UpdateVMs(vms)
-		registry.IngestSnapshot(models.StateSnapshot{VMs: vms})
+		m.updateResourceStore(m.currentStateWithScope())
 		views := registry.VMs()
 		if len(views) != 1 {
 			t.Fatal("canonical projection lost guest")
@@ -226,7 +226,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 		}
 		served := front.Resources[0].Memory
 		if served.Current != vm.Memory.Usage || served.Used == nil || *served.Used != vm.Memory.Used || served.Total == nil || *served.Total != vm.Memory.Total || served.Observation.State != vm.Memory.Observation.State || served.Observation.Source != vm.Memory.Observation.Source || !served.Observation.ObservedAt.Equal(vm.Memory.Observation.ObservedAt) {
-			t.Error("served resource projection changed accepted or retained memory evidence")
+			t.Errorf("served %s projection changed memory evidence: got=%+v want=%+v", name, served, vm.Memory)
 		}
 		wire, err := json.Marshal(front.Resources)
 		if err != nil {
