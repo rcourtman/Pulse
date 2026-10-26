@@ -142,15 +142,24 @@ The new owner-only response file is created in the helper's private directory.
 It does not reuse filters selected in the UI. Export accepts `event`, `user`,
 `success`, `startTime` and `endTime`, but **not list pagination**: adding `limit`
 or `offset` does not bound an export. With no filters it requests the full
-available history. List, export and summary reject malformed or empty supplied
-`startTime`/`endTime` values and ranges whose end is not after their start with
-HTTP 400, before reading events. List and export also reject a supplied `success`
+available history, subject to the selection limit below. List, export and summary
+reject malformed or empty supplied `startTime`/`endTime` values and ranges whose
+end is not after their start with HTTP 400, before reading events. List and
+export also reject a supplied `success`
 other than exactly `true` or `false`, including an empty value. Omit a filter to
 leave it unset; HTTP 200 alone does not establish complete archival coverage.
 
 Summary accepts `event`, `user`, `startTime` and `endTime`, not `success` or list
 pagination. These unsupported parameters do not narrow a summary; omit them
 rather than relying on them to bound the read.
+
+Exports and summaries accept at most **10,000 matching events**. A larger
+selection returns HTTP 400 with code `export_too_large`, not a partial download
+or a truncated summary. Narrow `startTime`/`endTime`, `event` or `user` to the
+relevant incident and request that selection; changing list pagination cannot
+bypass this limit. Valid selections keep every matching event and the requested
+signature verification. This is an event-count limit, not a byte-size or
+query-duration guarantee.
 
 Keep the export outside shared repositories and issue attachments. A failed or
 incomplete download is not a valid archive. Do not widen or repeat a failed

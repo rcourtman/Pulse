@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -15,6 +16,14 @@ const (
 	ExportFormatCSV  ExportFormat = "csv"
 	ExportFormatJSON ExportFormat = "json"
 )
+
+// MaxExportEvents bounds synchronous exports and summaries. Larger selections
+// are refused, never returned as apparently complete, truncated results.
+const MaxExportEvents = 10000
+
+// ErrExportTooLarge means the selection must be narrowed before exporting or
+// summarising. Callers can identify it with errors.Is through wrapped errors.
+var ErrExportTooLarge = errors.New("audit export event limit exceeded")
 
 // ExportResult contains export data and metadata.
 type ExportResult struct {
@@ -54,13 +63,25 @@ func NewExporter(logger PersistentLogger) *Exporter {
 	return &Exporter{logger: logger}
 }
 
+func (e *Exporter) queryExportEvents(filter QueryFilter) ([]Event, error) {
+	// Bound the actual read, not a preliminary count that arrivals could make
+	// stale. One extra row distinguishes a complete selection from truncation.
+	// Caller pagination must neither hide overflow nor omit selected events.
+	filter.Limit = MaxExportEvents + 1
+	filter.Offset = 0
+	events, err := e.logger.Query(filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(events) > MaxExportEvents {
+		return nil, ErrExportTooLarge
+	}
+	return events, nil
+}
+
 // Export generates an export in the specified format.
 func (e *Exporter) Export(filter QueryFilter, format ExportFormat, includeVerification bool) (*ExportResult, error) {
-	// Remove limit for export (get all matching events)
-	filter.Limit = 0
-	filter.Offset = 0
-
-	events, err := e.logger.Query(filter)
+	events, err := e.queryExportEvents(filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query events for export: %w", err)
 	}
@@ -202,11 +223,7 @@ type ExportSummary struct {
 
 // GenerateSummary creates a summary of audit events matching the filter.
 func (e *Exporter) GenerateSummary(filter QueryFilter, verifySignatures bool) (*ExportSummary, error) {
-	// Remove limit for summary
-	filter.Limit = 0
-	filter.Offset = 0
-
-	events, err := e.logger.Query(filter)
+	events, err := e.queryExportEvents(filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query events for summary: %w", err)
 	}

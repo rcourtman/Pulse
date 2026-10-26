@@ -1405,6 +1405,20 @@ database grew past it. `TestSQLiteLoggerUsesSharedPageCacheBound` and
 
 ## Current State
 
+### Synchronous audit recovery reads have an actual row ceiling
+
+The canonical audit exporter and summary reader request at most 10,001 matching
+events and refuse more than 10,000 before signature verification or encoding.
+No count/read race or caller pagination can turn overflow into a partial success.
+The fallback HTTP routes return `400 export_too_large` without an attachment or
+event payload, directing the operator to narrow the incident selection. Complete
+accepted exports, original signature verdicts, tenant logger selection and the
+existing role/admin-session/licence/audit:read gates remain unchanged. The ceiling
+does not establish a byte-size limit, query deadline or installed recovery.
+`pkg/audit/export_bounds_test.go`, `pkg/audit/export_test.go` and
+`internal/api/audit_handlers_test.go` cover the producer and consuming HTTP seam;
+the API contract owns the exact rejection and selection semantics.
+
 ### Tenant agent install tokens are org-bound instance credentials
 
 Agent install tokens minted for a tenant organization, from its Settings or

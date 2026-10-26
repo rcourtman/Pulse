@@ -3,10 +3,31 @@ package audit
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestExporterOverflowErrorIdentity(t *testing.T) {
+	if MaxExportEvents != exportTestMaxEvents {
+		t.Fatalf("event ceiling = %d, want %d", MaxExportEvents, exportTestMaxEvents)
+	}
+	for _, mode := range []string{"json", "csv", "summary"} {
+		t.Run(mode, func(t *testing.T) {
+			exporter := NewExporter(&exportBoundsLogger{events: exportBoundsEvents(MaxExportEvents + 1)})
+			var err error
+			if mode == "summary" {
+				_, err = exporter.GenerateSummary(QueryFilter{}, true)
+			} else {
+				_, err = exporter.Export(QueryFilter{}, ExportFormat(mode), true)
+			}
+			if !errors.Is(err, ErrExportTooLarge) {
+				t.Fatalf("overflow error = %v, want wrapped ErrExportTooLarge", err)
+			}
+		})
+	}
+}
 
 func TestExporterExportAndSummary(t *testing.T) {
 	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{DataDir: t.TempDir()})

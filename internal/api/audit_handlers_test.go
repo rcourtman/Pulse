@@ -935,7 +935,7 @@ func TestHandleExportAuditEvents(t *testing.T) {
 		assert.Equal(t, "admin", logger.lastQuery.User)
 		assert.NotNil(t, logger.lastQuery.StartTime)
 		assert.NotNil(t, logger.lastQuery.EndTime)
-		assert.Equal(t, 0, logger.lastQuery.Limit)
+		assert.Equal(t, audit.MaxExportEvents+1, logger.lastQuery.Limit)
 		assert.Equal(t, 0, logger.lastQuery.Offset)
 		assert.NotNil(t, logger.lastQuery.Success)
 		if logger.lastQuery.Success != nil {
@@ -1001,7 +1001,7 @@ func TestHandleAuditSummary(t *testing.T) {
 		assert.Equal(t, "admin", logger.lastQuery.User)
 		assert.NotNil(t, logger.lastQuery.StartTime)
 		assert.NotNil(t, logger.lastQuery.EndTime)
-		assert.Equal(t, 0, logger.lastQuery.Limit)
+		assert.Equal(t, audit.MaxExportEvents+1, logger.lastQuery.Limit)
 		assert.Equal(t, 0, logger.lastQuery.Offset)
 	})
 
