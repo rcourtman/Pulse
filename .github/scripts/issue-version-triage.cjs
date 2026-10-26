@@ -478,6 +478,52 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
   }
 }
 
+async function declarationSurvivesLaterComments(github, context, issue, eventIssue) {
+  // A comment advances updated_at without changing the declaration. The clock
+  // alone must not lose its review task, but identical text cannot prove that
+  // Community has not already cleared it. Consult complete, bounded history
+  // only for this delayed-comment case; never infer a disposition from silence.
+  const eventTime = typeof eventIssue.updated_at === "string" ? Date.parse(eventIssue.updated_at) : NaN;
+  const currentTime = typeof issue.updated_at === "string" ? Date.parse(issue.updated_at) : NaN;
+  if (!Number.isFinite(eventTime) || !Number.isFinite(currentTime) || currentTime <= eventTime ||
+      !Number.isInteger(eventIssue.comments) || eventIssue.comments < 0 ||
+      !Number.isInteger(issue.comments) || issue.comments <= eventIssue.comments ||
+      issue.title !== eventIssue.title || issue.body !== eventIssue.body) {
+    return false;
+  }
+
+  const perPage = 100;
+  for (let page = 1; page <= 10; page += 1) {
+    const { data: events } = await github.rest.issues.listEvents({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      issue_number: issue.number,
+      per_page: perPage,
+      page,
+    });
+    if (!Array.isArray(events) || events.length > perPage) {
+      throw new Error("Issue review history was not a complete event page");
+    }
+    for (const event of events) {
+      const time = typeof event?.created_at === "string" ? Date.parse(event.created_at) : NaN;
+      if (typeof event?.event !== "string" || !Number.isFinite(time) ||
+          (event.event === "unlabeled" && typeof event.label?.name !== "string")) {
+        throw new Error("Issue review history contained an unreadable event");
+      }
+      // Treat same-second dispositions conservatively. A history newer than
+      // our issue snapshot, or an intervening lifecycle change, is not proof
+      // that this queued declaration is still eligible.
+      if (time > currentTime || (time >= eventTime && (
+        (event.event === "unlabeled" &&
+          event.label.name.toLowerCase() === NEEDS_DECOMPOSITION_LABEL) ||
+        ["closed", "reopened", "transferred", "converted_to_discussion"].includes(event.event)
+      ))) return false;
+    }
+    if (events.length < perPage) return true;
+  }
+  throw new Error("Issue review history exceeded the bounded event read");
+}
+
 async function syncLabels({ github, context, core }) {
   const eventIssue = context.payload.issue;
   // Jobs can start after another edit, comment or Community disposition.
@@ -512,10 +558,13 @@ async function syncLabels({ github, context, core }) {
   const eventIsCurrent = typeof issue.updated_at === "string" &&
     issue.body === eventIssue.body &&
     issue.updated_at === eventIssue.updated_at;
-  const newlyDeclared = eventIsCurrent && hasAdditionalActionableTopics === true && (
+  const declarationChanged = hasAdditionalActionableTopics === true && (
     context.payload.action === "opened" ||
     (context.payload.action === "edited" && previousBody !== undefined &&
       topicText(additionalActionableTopicsValue(previousBody)) !== topicText(additionalTopicsValue))
+  );
+  const newlyDeclared = declarationChanged && !nextLabels.has(NEEDS_DECOMPOSITION_LABEL) && (
+    eventIsCurrent || await declarationSurvivesLaterComments(github, context, issue, eventIssue)
   );
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");
