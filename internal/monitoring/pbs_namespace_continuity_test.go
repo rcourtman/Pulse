@@ -360,3 +360,35 @@ func TestPBSNamespaceContinuityLifecycle(t *testing.T) {
 	}
 	t.Log("PBS_NAMESPACE_FRAMES=" + string(data))
 }
+
+func TestPBSNamespaceCarryForwardCannotDisplaceAcceptedRowsAtLimit(t *testing.T) {
+	f := newPBSNamespaceContinuityFixture(t, "vm")
+	f.collect(t, true, nil)
+	root, child := f.live()["100"], f.live()["101"]
+	previous := []models.PBSBackup{root}
+	for i := range pbsBackupLiveStateLimit {
+		row := child
+		row.ID = fmt.Sprintf("carried-%d", i)
+		row.VMID = fmt.Sprintf("%d", 200+i)
+		row.BackupTime = child.BackupTime.Add(time.Duration(i) * time.Second)
+		previous = append(previous, row)
+	}
+	f.m.state.UpdatePBSBackups("pbs-main", previous)
+	f.tenantStatus.Store(http.StatusServiceUnavailable)
+	f.collect(t, true, nil)
+	rows := f.m.state.GetSnapshot().PBSBackups
+	if len(rows) != pbsBackupLiveStateLimit {
+		t.Fatalf("live bound=%d want=%d", len(rows), pbsBackupLiveStateLimit)
+	}
+	foundAccepted, foundNewest := false, false
+	for _, row := range rows {
+		foundAccepted = foundAccepted || row.ID == root.ID
+		foundNewest = foundNewest || row.ID == fmt.Sprintf("carried-%d", pbsBackupLiveStateLimit-1)
+		if row.ID == "carried-0" {
+			t.Error("oldest carry-forward displaced a newer retained file")
+		}
+	}
+	if !foundAccepted || !foundNewest {
+		t.Error("carry-forward displaced accepted or newest retained inventory")
+	}
+}
