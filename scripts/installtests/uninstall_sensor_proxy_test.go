@@ -768,7 +768,7 @@ systemctl_if_available() { :; }
 if main; then exit 0; else exit $?; fi
 `
 	out, code := runSensorProxySafetyShell(t, sensorProxyRemoteKeyScript(t, dir), dir, "mv", body)
-	if code == 0 || strings.Contains(out, "[ OK ] Removed legacy Pulse SSH key entries from 192.0.2.11") || strings.Contains(out, "cleanup complete") || !strings.Contains(out, "cluster SSH key cleanup is incomplete") {
+	if code == 0 || strings.Contains(out, "[ OK ] Removed legacy Pulse SSH key entries from 192.0.2.11") || strings.Contains(out, "[ OK ] Legacy pulse-sensor-proxy cleanup complete") || !strings.Contains(out, "cluster SSH key cleanup is incomplete") {
 		t.Fatalf("main concealed the executed remote failure: exit %d: %s", code, out)
 	}
 	if got, err := os.ReadFile(filepath.Join(dir, "actions")); err != nil || string(got) != "ssh\nfiles\n" {
