@@ -769,7 +769,9 @@ describe('ProxmoxBackupsTable', () => {
     expect(within(peer).getByText('Restore evidence')).toBeInTheDocument();
     expect(within(peer).getByText('pre-upgrade')).toBeInTheDocument();
     expect(within(peer).queryByRole('status')).not.toBeInTheDocument();
-    expect(screen.queryByText('previously recorded evidence', { exact: false })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('previously recorded evidence', { exact: false }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps coverage evidence expanded across repeated workload snapshots', async () => {
