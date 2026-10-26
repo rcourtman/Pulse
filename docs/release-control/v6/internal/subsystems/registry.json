@@ -3249,7 +3249,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/api/route_inventory_test.go"
+              "internal/api/route_inventory_test.go",
+              "internal/api/security_advisory_agent_authority_test.go"
             ]
           },
           {

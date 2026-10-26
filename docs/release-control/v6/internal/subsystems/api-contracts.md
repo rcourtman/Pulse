@@ -11302,7 +11302,11 @@ The canonical host lifecycle routes are
 `POST /api/agent-install-command`; the `/api/agents/host/` forms remain legacy
 aliases only. Deletion and manual allowance require an authenticated admin
 credential with `settings:write`. Report and config reads retain their
-agent-report/config scope gates and exact token-to-agent binding.
+agent-report/config scope gates and exact token-to-agent binding. Host, Docker
+and Kubernetes telemetry writes, Docker command acknowledgements, and agent
+configuration reads also require organization-admin authority for browser or
+proxy identities. Scoped agent tokens retain their existing admission and
+binding rules; a token scope check alone does not authorize a browser session.
 
 A successful delete means the durable removal tombstone exists before the API
 returns. Journal persistence failure returns `500 agent_removal_failed` and

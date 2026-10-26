@@ -147,11 +147,13 @@ class AgentAuthDocsTest(unittest.TestCase):
     def test_docker_only_record_is_not_host_authority_or_a_401_diagnosis(self):
         text = " ".join(section().split())
         routes = (ROOT / "internal/api/router_routes_registration.go").read_text()
-        for endpoint, required in (("docker/report", "ScopeDockerReport"),
-                                   ("agent/report", "ScopeAgentReport"),
-                                   ("agent/lookup", "ScopeAgentReport")):
+        for endpoint, required, authority in (
+            ("docker/report", "ScopeDockerReport", "RequireOrgAdmin"),
+            ("agent/report", "ScopeAgentReport", "RequireOrgAdmin"),
+            ("agent/lookup", "ScopeAgentReport", "RequireAuth"),
+        ):
             self.assertIn(
-                f'"/api/agents/{endpoint}", RequireAuth(r.config, '
+                f'"/api/agents/{endpoint}", {authority}(r.config, '
                 f'RequireScope(config.{required},', routes,
             )
         labels = (ROOT / "frontend-modern/src/constants/apiScopes.ts").read_text()
