@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "104ca7e025209509e7d1897daea9d193e4851d6a",
+  "verified_at": "2026-10-26T04:44:03.008Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/Table.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/Table.tsx": "cc75afb5ee68c358b0d6a2dddf9a2718afb2df43a912abcddb9d943c699d533a",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "437b2d84c13bfbe150c5baefbf458043071ce6e9f19aaa348bd6b143bbe5404b"
+  },
+  "routes": [
+    "/truenas/protection",
+    "/docker/containers"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Native scoped sortable headings with visible keyboard focus and active-only aria-sort",
+    "Text and completion sorting with missing dates last and preserved outcomes",
+    "Desktop and phone projections with inherited uppercase typography, column alignment and unchanged overflow limits"
+  ],
+  "interactions": [
+    "Native Tab to sort controls",
+    "Enter and Space each advance the existing sort cycle once",
+    "Native phone touch advances the same control once",
+    "Real recovery query/normalizer and real Docker consuming table reordering"
+  ],
+  "browsers": [
+    {
+      "name": "chromium",
+      "version": "141.0.7390.37"
+    },
+    {
+      "name": "webkit",
+      "version": "26.0"
+    }
+  ],
+  "client": {
+    "name": "Playwright",
+    "version": "1.56.1"
+  },
+  "proof_source_sha": "104ca7e025209509e7d1897daea9d193e4851d6a",
+  "notes": [
+    "Final containing-source style/control supplement: 115 checks, four bounded GETs, eight native-opened captures; no writes, external requests or browser errors.",
+    "Earlier 829c31fc14 functional journey separately proves filtering, empty-result restoration and truthful inline details: 141 checks and twelve native-opened captures. It is not relabelled as the final-source pass; unchanged filters are not replayed.",
+    "Safe local consuming fixture uses actual query, API transport normalizer, components and product CSS, compiled in the exact-source offline VM. Not a native appliance, original incident recovery, full screen-reader audit or release claim.",
+    "Existing phone date/outcome clipping remains; narrow completion marker readability is not claimed. No held-path, API, state, identity, policy or sort-persistence change."
+  ]
+}
