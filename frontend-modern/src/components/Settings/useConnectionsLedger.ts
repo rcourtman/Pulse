@@ -1,6 +1,9 @@
 import { createMemo } from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
+import {
+  formatConnectionErrorMessage,
+  formatPartialReadErrorMessage,
+} from '@/utils/connectionErrorPresentation';
 import { AGENT_WAITING_FOR_FIRST_REPORT_LABEL } from '@/utils/agentResources';
 import {
   ConnectionsAPI,
@@ -64,6 +67,10 @@ const STATE_PRESENTATION: Record<ConnectionState, { label: string; badgeClass: s
     label: 'Stale',
     badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/25 dark:text-yellow-200',
   },
+  degraded: {
+    label: 'Degraded',
+    badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/25 dark:text-yellow-200',
+  },
   pending: {
     label: 'Pending',
     badgeClass: 'bg-surface-alt text-base-content',
@@ -91,9 +98,10 @@ const CONNECTION_STATE_SEVERITY: Record<ConnectionState, number> = {
   active: 0,
   paused: 1,
   pending: 2,
-  stale: 3,
-  unauthorized: 4,
-  unreachable: 5,
+  degraded: 3,
+  stale: 4,
+  unauthorized: 5,
+  unreachable: 6,
 };
 
 const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
@@ -140,9 +148,10 @@ const subtitleFor = (connections: readonly Connection[], primaryConnection: Conn
 // A connection is "contributing" if it is currently delivering data — not
 // merely configured. Otherwise the source badge claims "API + Agent" when
 // the agent has been silent for hours, which directly contradicts the
-// "Agent offline" chip on the same row.
+// "Agent offline" chip on the same row. A degraded connection still
+// delivers every reading except the one that failed.
 const isContributing = (connection: Connection): boolean =>
-  connection.state === 'active' || connection.state === 'paused';
+  connection.state === 'active' || connection.state === 'paused' || connection.state === 'degraded';
 
 const sourceFor = (connections: readonly Connection[]): InfrastructureSourceKind => {
   const contributors = connections.filter(isContributing);
@@ -364,10 +373,19 @@ const buildRow = (
   // Run raw backend error chains through the user-facing presenter so the
   // connection table doesn't surface implementation strings like 'context
   // deadline exceeded' or 'Client.Timeout exceeded while awaiting headers'.
-  const rawLastErrorMessage =
-    primaryConnection.lastError?.message ??
-    attachedConnections.find((connection) => connection.lastError?.message)?.lastError?.message;
-  const lastErrorMessage = formatConnectionErrorMessage(rawLastErrorMessage) ?? undefined;
+  const lastError = primaryConnection.lastError?.message
+    ? primaryConnection.lastError
+    : attachedConnections.find((connection) => connection.lastError?.message)?.lastError;
+  const partialRead = lastError?.category === 'partial';
+  const lastErrorMessage =
+    (partialRead
+      ? formatPartialReadErrorMessage(lastError?.message)
+      : formatConnectionErrorMessage(lastError?.message)) ?? undefined;
+  const lastErrorTone: InfrastructureSystemRow['lastErrorTone'] = lastErrorMessage
+    ? partialRead
+      ? 'warning'
+      : 'critical'
+    : undefined;
   const hostTelemetryLabel = surfaceLabel('host');
   const coverageLabels = isCluster
     ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
@@ -426,6 +444,7 @@ const buildRow = (
       ? lastActivityTextFromLastSeen(rollup.lastSeen)
       : connectionLastActivityText(primaryConnection),
     lastErrorMessage,
+    lastErrorTone,
     fleetSignals,
     fleetHighlights,
     problem:

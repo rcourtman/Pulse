@@ -64,6 +64,38 @@ describe('ConnectionsAPI', () => {
     expect(result).toEqual({ connections, systems });
   });
 
+  it('list() keeps a degraded partial-read row and its error category', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'pmg:mail',
+        type: 'pmg',
+        name: 'mail',
+        address: 'https://pmg.lan:8006',
+        state: 'degraded',
+        stateReason: 'pmg_queue_status failed on mail: API error 500',
+        enabled: true,
+        surfaces: ['queues'],
+        scope: { queues: true },
+        lastSeen: '2026-10-26T12:00:00Z',
+        lastError: {
+          at: '2026-10-26T12:00:00Z',
+          message: 'pmg_queue_status failed on mail: API error 500',
+          category: 'partial',
+        },
+        source: 'manual',
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections, systems: [] });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0]).toMatchObject({
+      state: 'degraded',
+      lastError: { category: 'partial' },
+    });
+  });
+
   it('list() normalizes missing fields to empty collections', async () => {
     mockedApiFetchJSON.mockResolvedValueOnce({} as { connections?: Connection[] });
 

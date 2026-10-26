@@ -5,7 +5,7 @@ export type ConnectionType =
   'pve' | 'pbs' | 'pmg' | 'vmware' | 'truenas' | 'availability' | 'agent' | 'docker' | 'kubernetes';
 
 export type ConnectionState =
-  'active' | 'paused' | 'unauthorized' | 'unreachable' | 'stale' | 'pending';
+  'active' | 'paused' | 'unauthorized' | 'unreachable' | 'stale' | 'pending' | 'degraded';
 
 export type ConnectionSource = 'manual' | 'agent' | 'script';
 
@@ -86,6 +86,9 @@ export interface ConnectionCapabilities {
 export interface ConnectionError {
   message: string;
   at: string;
+  // "partial" marks a downstream read that failed after the connection
+  // itself answered; the connection state is then "degraded".
+  category?: string;
 }
 
 export interface ConnectionFleetGovernance {

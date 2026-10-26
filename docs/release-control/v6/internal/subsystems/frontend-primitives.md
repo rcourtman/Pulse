@@ -10081,6 +10081,17 @@ transcript block moved to `frontend-modern/src/components/patrol/` with its
 at `/settings/pulse-intelligence/agents`; the old `/assistant` path redirects
 there.
 
+### Source-row error banners follow the row's severity
+
+`InfrastructureSourceManager.tsx` renders a row's error banner, in both the
+table and the narrow card layout, from one `rowErrorBannerClass` helper keyed
+on `row.lastErrorTone`. `useConnectionsLedger.ts` sets that tone to `warning`
+for a partial-read error on a `degraded` connection and to `critical` for every
+other error, so a reachable source with one failed reading gets an amber
+banner beside its amber "Degraded" badge, while outages keep the rose banner.
+No new component, primitive or badge vocabulary is added. The rendered tones are
+pinned in `InfrastructureWorkspace.test.tsx`.
+
 ### Configuration transfers retain their confirmed workspace
 
 Recovery's overview identifies the selected-workspace configuration export as

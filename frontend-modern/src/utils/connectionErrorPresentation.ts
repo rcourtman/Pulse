@@ -160,3 +160,38 @@ export const formatConnectionErrorMessage = (raw?: string | null): string | null
   if (!humanized) return null;
   return humanized.hint ? `${humanized.headline}. ${humanized.hint}` : humanized.headline;
 };
+
+// `pmg_queue_status failed on mail-gw: ...`: the monitor's read operation,
+// the instance, then the cause.
+const READ_OPERATION_PATTERN = /^([a-z]+(?:_[a-z]+)+)\s+failed\s+on\s+[^:]+:\s*/i;
+
+const readOperationLabel = (operation: string): string => {
+  const words = operation
+    .toLowerCase()
+    .replace(/^(?:pmg|pbs|pve)_/, '')
+    .replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/**
+ * Render a partial-read error: the connection answered, but some readings
+ * failed (one per line). The generic cause alone ('Server error') hides which
+ * data is missing, so name the failed reading first.
+ */
+export const formatPartialReadErrorMessage = (raw?: string | null): string | null => {
+  const failures = (raw ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const first = failures[0];
+  if (!first) return null;
+  const match = first.match(READ_OPERATION_PATTERN);
+  const label = match ? readOperationLabel(match[1]) : 'Some readings';
+  const cause = formatConnectionErrorMessage(match ? first.slice(match[0].length) : first);
+  const others = failures.length - 1;
+  const subject =
+    match && others > 0
+      ? `${label} and ${others} other ${others === 1 ? 'reading' : 'readings'}`
+      : label;
+  return cause ? `${subject} could not be read: ${cause}` : `${subject} could not be read.`;
+};

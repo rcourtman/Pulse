@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "0d7f2b7997dad75977d84ae35590f41d10374bd4",
+  "verified_at": "2026-10-26T11:50:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/connections.ts",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
+    "frontend-modern/src/utils/connectionErrorPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/connections.ts": "ca3393144dc7949b40dafe2562105a1b99d613923c057a8a3be35aac11bdc182",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "7a9e0aa7b43febf84287dbd3b15d61aa859bc7f85655674f5301fa6f2caf3b44",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "dacc4a4fa8c29483f03d036111d4d0583f3d5b4033362e184f6c359ccecfac6e",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "19ca6b9c1c98c90a83856f6526546e647d1eb4f390dbb42f34f02a38ee0f745c",
+    "frontend-modern/src/utils/connectionErrorPresentation.ts": "c75d8dabf06db81f194c223b6b7e6bb44a3baf625ae20d930aeab14942b623b1"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 375,
+      "height": 812
+    }
+  ],
+  "states": [
+    "Before (pre-change binary, same fake PMG whose qshape read returns HTTP 500): mail-gw row shows a red Unreachable badge and a red 'Server error' banner; a critical connection-degraded alert fires",
+    "After: the same row shows an amber Degraded badge, coverage Mail stats, Quarantine, Queues, and an amber banner 'Queue status could not be read: Server error. ...'",
+    "After: /api/connections reports state degraded, adapterHealth degraded, lastError.category partial",
+    "After: Alerts overview lists one connection-degraded alert at WARNING naming the pmg_queue_status read",
+    "After at 375px: the card layout shows the Degraded badge and the amber banner without clipping"
+  ],
+  "interactions": [
+    "Added the fake PMG through POST /api/config/nodes on each stack and waited for polls",
+    "Opened the mail-gw Manage drawer (editor only, no health readout) and closed it",
+    "Opened the Alerts overview and read the active alert",
+    "Resized to phone width and reloaded Settings > Infrastructure"
+  ]
+}

@@ -415,12 +415,14 @@ func connectionSystemMemberStateSeverity(state ConnectionState) int {
 		return 1
 	case ConnectionStatePending:
 		return 2
-	case ConnectionStateStale:
+	case ConnectionStateDegraded:
 		return 3
-	case ConnectionStateUnauthorized:
+	case ConnectionStateStale:
 		return 4
-	case ConnectionStateUnreachable:
+	case ConnectionStateUnauthorized:
 		return 5
+	case ConnectionStateUnreachable:
+		return 6
 	default:
 		return 2
 	}

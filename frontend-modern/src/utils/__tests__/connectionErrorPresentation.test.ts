@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatConnectionErrorMessage,
+  formatPartialReadErrorMessage,
   humanizeConnectionError,
 } from '../connectionErrorPresentation';
 
@@ -168,5 +169,37 @@ describe('humanizeConnectionError', () => {
   it('formats unknown errors as headline only', () => {
     const formatted = formatConnectionErrorMessage('a totally unknown failure mode');
     expect(formatted).toBe('a totally unknown failure mode');
+  });
+});
+
+describe('formatPartialReadErrorMessage', () => {
+  it('names the failed reading before the cause', () => {
+    expect(
+      formatPartialReadErrorMessage(
+        'pmg_queue_status failed on mail-gw: active queue: API error 500: {"errors":"qshape failed"}',
+      ),
+    ).toBe(
+      'Queue status could not be read: Server error. The platform returned a server error. Check the platform logs for the underlying cause.',
+    );
+  });
+
+  it('counts the other failed readings', () => {
+    expect(
+      formatPartialReadErrorMessage(
+        [
+          'pmg_spam_quarantine failed on mail-gw: API error 403: Permission check failed',
+          'pmg_virus_quarantine failed on mail-gw: API error 403: Permission check failed',
+          'pmg_queue_status failed on mail-gw: API error 500',
+        ].join('\n'),
+      ),
+    ).toMatch(/^Spam quarantine and 2 other readings could not be read: Permission denied\./);
+  });
+
+  it('falls back to a generic subject without an operation prefix', () => {
+    expect(formatPartialReadErrorMessage('context deadline exceeded')).toMatch(
+      /^Some readings could not be read: Connection timed out\./,
+    );
+    expect(formatPartialReadErrorMessage('')).toBeNull();
+    expect(formatPartialReadErrorMessage(undefined)).toBeNull();
   });
 });
