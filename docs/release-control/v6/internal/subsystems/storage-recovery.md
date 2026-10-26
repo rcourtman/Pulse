@@ -2811,7 +2811,7 @@ recovery scope, or a storage/recovery-owned secret source.
     `internal/api/configapi/config_handlers.go` and `internal/api/configapi/config_node_handlers.go`
     may carry the new per-instance `Enabled`/`Disabled` round-trip, but
     storage and recovery consumers must not reinterpret the derived
-    connection `state` (active/paused/unauthorized/unreachable/stale/pending)
+    connection `state` (active/paused/unauthorized/unreachable/stale/pending/degraded)
     as storage health, backup-job posture, or recovery verification state;
     they also must not repurpose the shared probe route as a generic internal
     reachability scanner. Metadata, link-local, multicast, and unspecified

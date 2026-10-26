@@ -14,6 +14,9 @@ const (
 	ConnectionStateUnreachable  ConnectionState = "unreachable"
 	ConnectionStateStale        ConnectionState = "stale"
 	ConnectionStatePending      ConnectionState = "pending"
+	// ConnectionStateDegraded is a reachable connection whose latest poll
+	// left some readings unread (a poll error with category "partial").
+	ConnectionStateDegraded ConnectionState = "degraded"
 )
 
 // ConnectionType is the product family that owns the connection. The value is

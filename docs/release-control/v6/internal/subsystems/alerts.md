@@ -253,6 +253,20 @@ and exactly-once callbacks with shadow parity. `TestInterruptDiscreteRun` in
 acknowledgement, no fabricated resolution and idempotent interruption. These
 synthetic source checks do not establish native outage or destination delivery.
 
+### Partial platform reads alert as degraded warnings
+
+A platform connection whose poll answered but left one reading unread (poll
+error category `partial`) reaches `CheckConnection` as state `degraded`. It is
+a degraded observation of the same `connection-degraded` discrete state, at
+warning severity, never critical: it activates after the usual three
+observations, keeps an open outage open (a missing reading is not recovery
+evidence), and moves an already-firing critical outage down to warning once the
+connection answers again. Only `active` runs the recovery confirmation. The
+alert message and metadata keep the failed read (`stateReason`, `lastError`,
+`lastErrorCategory: partial`). No new alert family, threshold, policy or route
+is added. `TestConnectionDegradedPartialReadAlertsAtWarning` in
+`operational_contract_test.go` pins this.
+
 ### Metric timing requires continuous observed evidence
 
 Unknown metric evidence interrupts timing, not the occurrence. Missing or

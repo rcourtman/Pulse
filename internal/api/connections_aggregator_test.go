@@ -107,6 +107,78 @@ func TestDeriveConnectionState_Stale(t *testing.T) {
 	}
 }
 
+// A partial poll error (#2960) means the connection answered and only one
+// downstream read failed: degraded, never unreachable or unauthorized.
+func TestDeriveConnectionState_PartialReadIsDegraded(t *testing.T) {
+	now := time.Now()
+	for _, message := range []string{
+		"pmg_queue_status: api error 500: queue status unavailable",
+		"pmg_quarantine: api error 403: Permission check failed",
+	} {
+		h := healthEntry(ptrTime(now.Add(-10*time.Second)), message, monitoring.PollErrorCategoryPartial, "closed")
+		state, reason, lastSeen, lastError := deriveConnectionState(true, h, now, 0)
+		if state != ConnectionStateDegraded {
+			t.Fatalf("%q: got %q, want %q", message, state, ConnectionStateDegraded)
+		}
+		if reason != message {
+			t.Fatalf("%q: reason = %q, want the failed read", message, reason)
+		}
+		if lastSeen == nil {
+			t.Fatalf("%q: expected lastSeen from the partial poll's success", message)
+		}
+		if lastError == nil || lastError.Category != monitoring.PollErrorCategoryPartial || lastError.Message != message {
+			t.Fatalf("%q: lastError = %+v, want the partial read kept visible", message, lastError)
+		}
+	}
+}
+
+func TestDeriveConnectionState_PartialReadStillGoesStale(t *testing.T) {
+	now := time.Now()
+	h := healthEntry(ptrTime(now.Add(-5*time.Minute)), "pmg_queue_status: api error 500", monitoring.PollErrorCategoryPartial, "closed")
+	state, _, _, lastError := deriveConnectionState(true, h, now, 0)
+	if state != ConnectionStateStale {
+		t.Fatalf("got %q, want %q", state, ConnectionStateStale)
+	}
+	if lastError == nil || lastError.Category != monitoring.PollErrorCategoryPartial {
+		t.Fatalf("lastError = %+v, want the partial read kept visible", lastError)
+	}
+}
+
+func TestBuildConnections_PMGPartialReadIsDegradedNotBlocked(t *testing.T) {
+	now := time.Now()
+	got := buildConnections(aggregatorInputs{
+		pmgInstances: []config.PMGInstance{{Name: "mail-main", Host: "https://pmg.lan:8006", User: "root@pam", Password: "secret"}},
+		instanceHealth: map[string]monitoring.InstanceHealth{
+			"pmg::mail-main": healthEntry(ptrTime(now.Add(-10*time.Second)), "pmg_quarantine: api error 403: Permission check failed", monitoring.PollErrorCategoryPartial, "closed"),
+		},
+		now: now,
+	})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+	conn := got[0]
+	if conn.State != ConnectionStateDegraded {
+		t.Fatalf("state = %q, want %q", conn.State, ConnectionStateDegraded)
+	}
+	if conn.Fleet.AdapterHealth != fleetStateDegraded {
+		t.Fatalf("adapter health = %q, want %q", conn.Fleet.AdapterHealth, fleetStateDegraded)
+	}
+	if conn.Fleet.CredentialStatus != fleetStateVerified {
+		t.Fatalf("credential status = %q, want %q: one endpoint's 403 is not a rejected credential", conn.Fleet.CredentialStatus, fleetStateVerified)
+	}
+	if conn.Fleet.Rollout != nil && conn.Fleet.Rollout.Status == fleetRolloutBlocked {
+		t.Fatalf("rollout = %+v, a reachable connection must not be blocked", conn.Fleet.Rollout)
+	}
+
+	snaps := snapshotConnectionsForAlerts(got)
+	if len(snaps) != 1 || snaps[0].State != alerts.ConnectionStateDegraded {
+		t.Fatalf("alert snapshots = %+v, want one degraded snapshot", snaps)
+	}
+	if snaps[0].LastError == nil || snaps[0].LastError.Category != monitoring.PollErrorCategoryPartial {
+		t.Fatalf("alert snapshot lastError = %+v, want the partial read", snaps[0].LastError)
+	}
+}
+
 func TestDeriveConnectionState_Active(t *testing.T) {
 	now := time.Now()
 	h := healthEntry(ptrTime(now.Add(-10*time.Second)), "", "", "closed")

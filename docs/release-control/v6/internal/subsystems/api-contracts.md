@@ -12586,6 +12586,29 @@ finding's resource reference through `Monitor.GetUnifiedStructureReadState`; in
 mock mode that is the view built for the current fixture structure, outside it
 the read state it used before.
 
+### A partial platform read is degraded, not unreachable (#2960)
+
+`deriveConnectionState` (`internal/api/connections_aggregator.go`) maps an
+outstanding poll error with category `monitoring.PollErrorCategoryPartial` to
+the connection state `degraded`, with the failed read as `stateReason` and
+`lastError` (whose `category` stays `partial` on the wire and in the
+`frontend-modern/src/api/connections.ts` `ConnectionError` type). The poll
+reached the connection, authenticated and read its version, so it is not
+`unreachable`, and a 401/403 text from one optional endpoint does not make the
+credential `unauthorized`. A partial connection whose last success has also
+aged past the stale cutoff is still `stale`. `degraded` rolls up as fleet
+adapter health `degraded`, keeps credential status `verified`, does not block
+rollout or runtime workload inventory, and ranks between `pending` and `stale`
+in the system-member and ledger severity orders. The Connections page shows it
+as an amber "Degraded" badge with a "Degraded" problem line and the failed
+read, and counts it as a contributing source. No route, request field or
+status code changes; `degraded` is a new value of the existing `state` field.
+`TestDeriveConnectionState_PartialReadIsDegraded`,
+`TestDeriveConnectionState_PartialReadStillGoesStale` and
+`TestBuildConnections_PMGPartialReadIsDegradedNotBlocked` in
+`connections_aggregator_test.go`, and the degraded-row case in
+`useConnectionsLedger.test.ts`, pin this.
+
 ### Loaded availability Settings honours evidence expiry (10 October 2026)
 
 The existing availability Settings client passes the shared current time to

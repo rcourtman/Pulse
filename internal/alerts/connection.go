@@ -24,6 +24,7 @@ const (
 	ConnectionStateUnauthorized ConnectionState = "unauthorized"
 	ConnectionStatePaused       ConnectionState = "paused"
 	ConnectionStatePending      ConnectionState = "pending"
+	ConnectionStateDegraded     ConnectionState = "degraded"
 )
 
 // ConnectionType narrows the set of connections that participate in the
@@ -181,8 +182,9 @@ func (m *Manager) clearConnectionDegradedIntentNoLock(resourceID string) {
 }
 
 // CheckConnection raises or clears the connection-degraded alert for one
-// platform connection. Severity scales with observed state: stale → warning,
-// unreachable / unauthorized → critical. State=active runs through the
+// platform connection. Severity scales with observed state: stale and degraded
+// (reachable, but some readings failed) → warning, unreachable / unauthorized
+// → critical. State=active runs through the
 // recovery-confirmation gate before resolving. Paused, disabled, and
 // non-platform connections are skipped.
 func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
@@ -204,7 +206,7 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 	case ConnectionStateActive:
 		m.clearConnectionDegradedAlert(snap)
 		return
-	case ConnectionStateStale, ConnectionStateUnreachable, ConnectionStateUnauthorized:
+	case ConnectionStateStale, ConnectionStateDegraded, ConnectionStateUnreachable, ConnectionStateUnauthorized:
 		// fall through and fire
 	default:
 		// Pending/unknown breaks both confirmation runs without resolving an
@@ -233,6 +235,7 @@ func (m *Manager) CheckConnection(snap ConnectionSnapshot) {
 		connectionDegradedStateKey,
 		[]string{
 			string(ConnectionStateStale),
+			string(ConnectionStateDegraded),
 			string(ConnectionStateUnreachable),
 			string(ConnectionStateUnauthorized),
 		},

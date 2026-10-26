@@ -769,7 +769,7 @@ func connectionFleetAdapterHealth(conn Connection) string {
 	switch conn.State {
 	case ConnectionStateActive:
 		return fleetStateHealthy
-	case ConnectionStateStale, ConnectionStatePending:
+	case ConnectionStateStale, ConnectionStatePending, ConnectionStateDegraded:
 		return fleetStateDegraded
 	case ConnectionStateUnauthorized, ConnectionStateUnreachable:
 		return fleetStateBlocked
@@ -1457,6 +1457,18 @@ func deriveConnectionState(enabled bool, h monitoring.InstanceHealth, now time.T
 
 	if lastSeen == nil && lastError == nil {
 		return ConnectionStatePending, "awaiting first poll", nil, nil
+	}
+
+	// A partial error means the poll reached the connection, authenticated and
+	// read its version; only a downstream read failed (#2960). The connection
+	// is reachable and its other readings are fresh, so it is degraded, not
+	// unreachable, and a 403 from one endpoint does not make the credential
+	// unauthorized. A connection that also stopped polling is still stale.
+	if lastError != nil && lastError.Category == monitoring.PollErrorCategoryPartial {
+		if lastSeen != nil && now.Sub(*lastSeen) > connectionStaleThresholdFor(pollInterval) {
+			return ConnectionStateStale, fmt.Sprintf("no successful poll in %s", now.Sub(*lastSeen).Round(time.Second)), lastSeen, lastError
+		}
+		return ConnectionStateDegraded, lastError.Message, lastSeen, lastError
 	}
 
 	if lastError != nil && connectionAuthErrorPattern.MatchString(lastError.Message) {

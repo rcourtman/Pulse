@@ -46,6 +46,52 @@ describe('useConnectionsLedger', () => {
     expect(result.rows().find((row) => row.ownerType === 'pve')?.statusLabel).toBe('Pending');
   });
 
+  it('shows a partial read as a degraded, still-reporting connection', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'pmg:mail',
+        type: 'pmg',
+        name: 'mail',
+        address: 'https://pmg.lan:8006',
+        state: 'degraded',
+        stateReason: 'pmg_queue_status failed on mail: active queue: API error 500: qshape failed',
+        enabled: true,
+        surfaces: ['mailStats', 'queues'],
+        scope: { mailStats: true, queues: true },
+        lastSeen: '2026-10-26T12:00:00Z',
+        lastError: {
+          at: '2026-10-26T12:00:00Z',
+          message: 'pmg_queue_status failed on mail: active queue: API error 500: qshape failed',
+          category: 'partial',
+        },
+        source: 'manual',
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+        fleet: {
+          enrollmentState: 'configured',
+          livenessState: 'degraded',
+          versionDrift: 'not-applicable',
+          adapterHealth: 'degraded',
+          configRollout: 'configured',
+          credentialStatus: 'verified',
+          updateStatus: 'not-applicable',
+          remoteControl: 'not-applicable',
+        },
+      },
+    ];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems: [] });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    const row = result.rows()[0];
+    expect(row.statusLabel).toBe('Degraded');
+    expect(row.statusClassName).toContain('bg-yellow-100');
+    expect(row.source).toBe('api');
+    // Name the missing reading, in warning tone: the source still answers.
+    expect(row.lastErrorMessage).toMatch(/^Queue status could not be read: Server error\./);
+    expect(row.lastErrorTone).toBe('warning');
+  });
+
   it('renders standalone agent rows with compact host identity and endpoint context', async () => {
     const connections: Connection[] = [
       {

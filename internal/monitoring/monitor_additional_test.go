@@ -1910,7 +1910,7 @@ func TestRecordTaskOutcomeReadErrorSchedulesAsSuccess(t *testing.T) {
 	}
 	status := m.pollStatusMap[key]
 	if status.ConsecutiveFailures != 0 || status.LastSuccess.IsZero() || !status.FirstFailureAt.IsZero() ||
-		status.LastErrorCategory != pollReadErrorCategory || !strings.Contains(status.LastErrorMessage, "pmg_queue_status") ||
+		status.LastErrorCategory != PollErrorCategoryPartial || !strings.Contains(status.LastErrorMessage, "pmg_queue_status") ||
 		!status.LastErrorAt.Equal(status.LastSuccess) {
 		t.Fatalf("read error not kept as the outstanding poll error: %+v", status)
 	}

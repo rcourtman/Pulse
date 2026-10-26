@@ -366,6 +366,79 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /^Manage$/i })).toBeInTheDocument();
   });
 
+  it('shows a partial read as a degraded source with a warning banner naming the reading', async () => {
+    const provider = connectionFixture({ state: 'degraded' });
+    connectionState.rows = [
+      {
+        id: provider.id,
+        ownerType: provider.type,
+        name: provider.name,
+        subtitle: 'via platform API',
+        source: 'api',
+        host: provider.address,
+        coverageLabels: ['VMs'],
+        statusLabel: 'Degraded',
+        statusClassName: 'bg-yellow-100',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        lastErrorMessage: 'Queue status could not be read: Server error.',
+        lastErrorTone: 'warning',
+        ...emptyFleetRow,
+        enabled: true,
+        canEdit: true,
+        canPause: false,
+        canRemove: true,
+        isAgent: false,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: provider,
+      },
+    ];
+    renderWorkspace();
+
+    const banner = await screen.findByText('Queue status could not be read: Server error.');
+    expect(banner.getAttribute('class')).toContain('bg-amber-50');
+    expect(banner.getAttribute('class')).not.toContain('bg-rose-50');
+    expect(screen.getAllByText('Degraded').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Unreachable')).toBeNull();
+  });
+
+  it('keeps an outage error banner critical', async () => {
+    const provider = connectionFixture({ state: 'unreachable' });
+    connectionState.rows = [
+      {
+        id: provider.id,
+        ownerType: provider.type,
+        name: provider.name,
+        subtitle: 'via platform API',
+        source: 'api',
+        host: provider.address,
+        coverageLabels: ['VMs'],
+        statusLabel: 'Unreachable',
+        statusClassName: 'bg-rose-100',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        lastErrorMessage: 'Connection refused.',
+        lastErrorTone: 'critical',
+        ...emptyFleetRow,
+        enabled: true,
+        canEdit: true,
+        canPause: false,
+        canRemove: true,
+        isAgent: false,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: provider,
+      },
+    ];
+    renderWorkspace();
+
+    const banner = await screen.findByText('Connection refused.');
+    expect(banner.getAttribute('class')).toContain('bg-rose-50');
+  });
+
   it('renders the source manager landing without empty platform sections', async () => {
     renderWorkspace();
 

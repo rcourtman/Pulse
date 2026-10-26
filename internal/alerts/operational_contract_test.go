@@ -949,6 +949,66 @@ func TestConnectionDegradedAlertNamesItsPlatform(t *testing.T) {
 	}
 }
 
+// A partial platform read (the connection answered, one reading failed) is a
+// warning-level degraded observation, never an outage (#2960).
+func TestConnectionDegradedPartialReadAlertsAtWarning(t *testing.T) {
+	t.Run("degraded fires a warning, never critical", func(t *testing.T) {
+		m := newTestManager(t)
+		snap := platformConnectionSnapshot("conn-partial", "Mail gateway", ConnectionStateDegraded)
+		snap.Type = ConnectionTypePMG
+		snap.StateReason = "pmg_queue_status: api error 500"
+		snap.LastError = &ConnectionErrorSnapshot{At: time.Now(), Message: snap.StateReason, Category: "partial"}
+		alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("expected no alert before three degraded observations")
+		}
+		m.CheckConnection(snap)
+
+		alert := testRequireActiveAlert(t, m, alertID)
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected warning level for degraded, got %s", alert.Level)
+		}
+		if got, _ := alert.Metadata["state"].(string); got != string(ConnectionStateDegraded) {
+			t.Errorf("expected state=degraded in metadata, got %q", got)
+		}
+		if got, _ := alert.Metadata["lastErrorCategory"].(string); got != "partial" {
+			t.Errorf("expected lastErrorCategory=partial in metadata, got %q", got)
+		}
+	})
+
+	t.Run("degraded keeps an unreachable outage open at warning", func(t *testing.T) {
+		m := newTestManager(t)
+		snap := platformConnectionSnapshot("conn-partial-recover", "Mail gateway", ConnectionStateUnreachable)
+		snap.Type = ConnectionTypePMG
+		alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		if alert := testRequireActiveAlert(t, m, alertID); alert.Level != AlertLevelCritical {
+			t.Fatalf("expected critical outage before the partial poll, got %s", alert.Level)
+		}
+
+		// The connection answers again but one reading still fails: a
+		// missing reading is not recovery evidence.
+		snap.State = ConnectionStateDegraded
+		snap.StateReason = "pmg_queue_status: api error 500"
+		for i := 0; i < 5; i++ {
+			m.CheckConnection(snap)
+		}
+		alert := testRequireActiveAlert(t, m, alertID)
+		if alert.Level != AlertLevelWarning {
+			t.Errorf("expected the open alert to drop to warning, got %s", alert.Level)
+		}
+		if got, _ := alert.Metadata["state"].(string); got != string(ConnectionStateDegraded) {
+			t.Errorf("expected state=degraded in metadata, got %q", got)
+		}
+	})
+}
+
 func TestCapacityForecastAlertNamesItsPlatform(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

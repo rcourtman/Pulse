@@ -857,6 +857,11 @@ datastore and node-status reads out of the scheduler outcome.
 `TestRecordTaskOutcomeReadErrorSchedulesAsSuccess` in
 `monitor_additional_test.go` pins the scheduler bookkeeping, which records the
 success and the outstanding read error in one update.
+`poll_error_category.go` exports the category as `PollErrorCategoryPartial`,
+the one value the connections ledger reads to present such a poll as a
+degraded, still-reachable connection (see the API contract's partial-read
+clause) rather than an outage; `TestRecordTaskOutcomeReadErrorSchedulesAsSuccess`
+pins that the recorded category is that exported value.
 
 The PMG client rejects omitted/null object payloads for version, mail, queue
 and quarantine instead of materialising them as zero structs. Explicit

@@ -9973,6 +9973,21 @@ than by a non-default org's detached config copy. Agent connection rows keep
 their own heartbeat cutoff. Agent registration, enrolment, install, update,
 removal and report identity are unchanged.
 
+### Platform partial reads show as degraded rows
+
+`frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
+`connectionsTableModel.ts` and `InfrastructureSourceManager.tsx` changed only
+so a platform connection in the new `degraded` state (a poll that answered but
+left one reading unread, #2960) renders an amber "Degraded" badge, counts as a
+contributing source, and shows its error banner in warning tone naming the
+failed reading ("Queue status could not be read: ...") through
+`formatPartialReadErrorMessage`. Every other error banner keeps the critical
+treatment. Agent connections never take the `degraded` state, so
+`agentAttachmentProblem`, agent registration, enrolment, install, update,
+removal and report identity are unchanged. The rendered rows are pinned in
+`InfrastructureWorkspace.test.tsx` ("shows a partial read as a degraded
+source..." and "keeps an outage error banner critical").
+
 ### Host snapshots report a linked agent's own heartbeat
 
 `internal/monitoring/monitor.go` changed only so a host produced from the read

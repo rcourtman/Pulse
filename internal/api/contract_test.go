@@ -18327,6 +18327,52 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+// TestContract_ConnectionPartialReadPayloadIsDegraded pins the wire shape of a
+// platform connection whose poll answered but left one reading unread (#2960):
+// state "degraded", the failed read as stateReason, and lastError.category
+// "partial", with credentials still verified.
+func TestContract_ConnectionPartialReadPayloadIsDegraded(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	lastSuccess := now.Add(-10 * time.Second)
+	message := "pmg_queue_status failed on mail: API error 500"
+	conn := buildPMGConnection(config.PMGInstance{Name: "mail", Host: "https://pmg.lan:8006", User: "root@pam", Password: "secret"},
+		map[string]monitoring.InstanceHealth{
+			"pmg::mail": {
+				PollStatus: monitoring.InstancePollStatus{
+					LastSuccess: &lastSuccess,
+					LastError:   &monitoring.ErrorDetail{At: lastSuccess, Message: message, Category: monitoring.PollErrorCategoryPartial},
+				},
+				Breaker: monitoring.InstanceBreaker{State: "closed"},
+			},
+		}, now, 0)
+	body, err := json.Marshal(conn)
+	if err != nil {
+		t.Fatalf("marshal Connection: %v", err)
+	}
+	var got struct {
+		State       string `json:"state"`
+		StateReason string `json:"stateReason"`
+		LastError   struct {
+			Message  string `json:"message"`
+			Category string `json:"category"`
+		} `json:"lastError"`
+		Fleet struct {
+			LivenessState    string `json:"livenessState"`
+			AdapterHealth    string `json:"adapterHealth"`
+			CredentialStatus string `json:"credentialStatus"`
+		} `json:"fleet"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("unmarshal Connection: %v", err)
+	}
+	if got.State != "degraded" || got.StateReason != message || got.LastError.Message != message || got.LastError.Category != "partial" {
+		t.Fatalf("partial read payload = %s", body)
+	}
+	if got.Fleet.LivenessState != "degraded" || got.Fleet.AdapterHealth != "degraded" || got.Fleet.CredentialStatus != "verified" {
+		t.Fatalf("partial read fleet payload = %s", body)
+	}
+}
+
 func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T) {
 	system := ConnectionSystem{
 		ID:          "pve-lab",

@@ -443,6 +443,13 @@ const livenessSignal = (state: ConnectionFleetLivenessState): FleetGovernanceSig
         detail: 'Pulse has not seen recent activity from this source.',
         tone: 'warning',
       };
+    case 'degraded':
+      return {
+        key: 'liveness',
+        label: 'Degraded',
+        detail: 'Pulse reaches this source, but some of its readings failed.',
+        tone: 'warning',
+      };
     case 'pending':
       return {
         key: 'liveness',
@@ -1030,6 +1037,9 @@ export interface InfrastructureSystemRow {
   agentUpdateCount: number;
   lastActivityText: string;
   lastErrorMessage?: string;
+  // A partial read (some readings failed on a reachable source) is a warning,
+  // not an outage.
+  lastErrorTone?: 'warning' | 'critical';
   fleetSignals: FleetGovernanceSignal[];
   fleetHighlights: FleetGovernanceSignal[];
   problem?: InfrastructureRowProblem;
