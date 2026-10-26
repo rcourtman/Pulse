@@ -1671,6 +1671,11 @@ type pbsBackupGroupKey struct {
 	backupID   string
 }
 
+type pbsBackupNamespaceKey struct {
+	datastore string
+	namespace string
+}
+
 type cachedPBSGroup struct {
 	snapshots []models.PBSBackup
 	latest    time.Time
@@ -1694,6 +1699,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	observedGroups := make(map[pbsBackupGroupKey]struct{})
 	retainedGroups := make(map[pbsBackupGroupKey]struct{}, len(existingGroups))
 	refreshedGroups := make(map[pbsBackupGroupKey]time.Time)
+	queriedNamespaces := make(map[pbsBackupNamespaceKey]struct{})
+	transientNamespaces := make(map[pbsBackupNamespaceKey]struct{})
+	transientDiscovery := make(map[string]struct{})
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
 	datastoreErrors := 0              // Datastores with incomplete history
@@ -1728,6 +1736,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			datastoreNamespaceErrors++
 			if !shouldReuseCachedPBSBackups(err) {
 				datastoreTerminalNamespaceErrors++
+			} else {
+				transientDiscovery[ds.Name] = struct{}{}
 			}
 		}
 		groupsReused := 0
@@ -1742,10 +1752,14 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			}
 
 			groups, err := client.ListBackupGroups(ctx, ds.Name, namespace)
+			namespaceKey := pbsBackupNamespaceKey{datastore: ds.Name, namespace: namespace}
+			queriedNamespaces[namespaceKey] = struct{}{}
 			if err != nil {
 				datastoreNamespaceErrors++
 				if !shouldReuseCachedPBSBackups(err) {
 					datastoreTerminalNamespaceErrors++
+				} else {
+					transientNamespaces[namespaceKey] = struct{}{}
 				}
 				log.Error().
 					Err(err).
@@ -1889,13 +1903,6 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					Str("instance", instanceName).
 					Str("datastore", ds.Name).
 					Msg("No namespaces succeeded for PBS datastore; using cached backups")
-				for key, entry := range existingGroups {
-					if key.datastore != ds.Name || len(entry.snapshots) == 0 {
-						continue
-					}
-					allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
-					retainedGroups[key] = struct{}{}
-				}
 			}
 		}
 	}
@@ -1904,6 +1911,26 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		// An interrupted enumeration cannot authoritatively replace history.
 		return
 	}
+
+	// A readable sibling namespace cannot establish absence in an unread one.
+	// Carry only the transiently unread scope, after accepted rows so old
+	// inventory cannot displace fresh results at the existing live-state bound.
+	// Discovery failure may hide old namespaces, but never overrides a request
+	// we actually made (notably an access rejection or a successful empty list).
+	var carriedBackups []models.PBSBackup
+	for key, entry := range existingGroups {
+		namespaceKey := pbsBackupNamespaceKey{datastore: key.datastore, namespace: key.namespace}
+		_, unread := transientNamespaces[namespaceKey]
+		_, undiscovered := transientDiscovery[key.datastore]
+		_, queried := queriedNamespaces[namespaceKey]
+		if !unread && !(undiscovered && !queried) {
+			continue
+		}
+		carriedBackups = append(carriedBackups, entry.snapshots...)
+		retainedGroups[key] = struct{}{}
+	}
+	sortPBSBackupsByLatest(carriedBackups)
+	allBackups = appendPBSBackupsWithinLimit(allBackups, carriedBackups)
 
 	log.Info().
 		Str("instance", instanceName).
@@ -1928,7 +1955,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	}
 
 	// Decide whether to keep existing backups when all queries failed
-	if shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
+	if collectionTerminalFailures == 0 &&
+		shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
 		if protectionObservationErr == nil {
 			m.ingestProtectionProviderObservationsAsync(
 				[]recovery.ProtectionProviderObservation{protectionObservation},
