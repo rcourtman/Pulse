@@ -111,7 +111,7 @@ describe('TrueNASProtectionTable', () => {
     await fireEvent.click(document.querySelector('[data-truenas-protection-row="failed"]')!);
     const detail = within(screen.getByTestId('truenas-protection-detail'));
     expect(detail.getByText('task-failed')).toBeInTheDocument();
-    expect(detail.getByText('FAILED')).toBeInTheDocument();
+    expect(detail.getByText('Last state').closest('tr')).toHaveTextContent('FAILED');
     expect(detail.queryByText('Started', { exact: true })).not.toBeInTheDocument();
     expect(detail.queryByText('Completed', { exact: true })).not.toBeInTheDocument();
     await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
