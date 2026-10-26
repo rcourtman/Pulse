@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Protection assessment batches share the consuming read's lifetime
+
+Every protection-posture batch carries a cancellable transport signal owned by
+the one joined query read. Unmounting, replacing a read, changing the resource
+scope or switching organisations cancels all its pending batches. A failed batch
+cancels its siblings without replacing the original error; only a complete
+successful retry restores assessments. The abort listener is removed when the
+joined read settles. Existing stale-result guards and organisation/cache
+boundaries remain in force even for a transport that ignores cancellation.
+
+The registered `useProtectionPostures.test.ts` and
+`useProtectionPostures.cancellation.test.ts` cover successful shared signals,
+scope/disposal/organisation cancellation, late results, polling, failure and
+full-read recovery. Source-bound browser proof uses the real Backups consumer
+and HTTP transport at desktop and narrow widths. This stops unnecessary stale
+reads; it does not establish native guest recovery or change posture policy,
+batch size, cadence, API, identity or access grants.
+
 ### Same-named local backup disks retain independent read origins
 
 An accepted storage listing on one PVE node cannot erase last-known files on
@@ -48,24 +66,6 @@ producer supplies the production Coverage table's desktop/narrow browser proof.
 Retained rows are not a fresh read, archive-availability or installed recovery
 claim, and this does not establish #3248's original stale-timestamp cause.
 
-
-### Protection assessment batches share the consuming read's lifetime
-
-Every protection-posture batch carries a cancellable transport signal owned by
-the one joined query read. Unmounting, replacing a read, changing the resource
-scope or switching organisations cancels all its pending batches. A failed batch
-cancels its siblings without replacing the original error; only a complete
-successful retry restores assessments. The abort listener is removed when the
-joined read settles. Existing stale-result guards and organisation/cache
-boundaries remain in force even for a transport that ignores cancellation.
-
-The registered `useProtectionPostures.test.ts` and
-`useProtectionPostures.cancellation.test.ts` cover successful shared signals,
-scope/disposal/organisation cancellation, late results, polling, failure and
-full-read recovery. Source-bound browser proof uses the real Backups consumer
-and HTTP transport at desktop and narrow widths. This stops unnecessary stale
-reads; it does not establish native guest recovery or change posture policy,
-batch size, cadence, API, identity or access grants.
 
 ### Backup-location filters keep exact repository identity
 
