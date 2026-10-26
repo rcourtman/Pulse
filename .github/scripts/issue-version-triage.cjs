@@ -365,21 +365,33 @@ function compareCore(a, b) {
 }
 
 async function ensureLabel(github, context, name, color, description) {
+  const label = {
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    name,
+  };
   try {
-    await github.rest.issues.getLabel({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      name,
-    });
+    await github.rest.issues.getLabel(label);
   } catch (error) {
     if (error.status !== 404) throw error;
-    await github.rest.issues.createLabel({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      name,
-      color,
-      description,
-    });
+    try {
+      await github.rest.issues.createLabel({ ...label, color, description });
+    } catch (creationError) {
+      // Concurrent reports can both observe a missing repository-wide label.
+      // Reconcile only GitHub's explicit name conflict, without replaying the
+      // write or treating other validation/access failures as success.
+      const errors = creationError.response?.data?.errors;
+      if (creationError.status !== 422 || !Array.isArray(errors) ||
+          !errors.some((item) => item?.resource === "Label" &&
+            item.field === "name" && item.code === "already_exists")) {
+        throw creationError;
+      }
+      const { data: current } = await github.rest.issues.getLabel(label);
+      if (typeof current?.name !== "string" ||
+          current.name.toLowerCase() !== name.toLowerCase()) {
+        throw creationError;
+      }
+    }
   }
 }
 

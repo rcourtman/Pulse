@@ -262,6 +262,12 @@ Version classification does not need the latest release and cannot establish
 relevant-fix availability. The synchronizer makes no release lookup, public
 comment, retest request or closure.
 
+Labels are shared across reports. If concurrent reports both try to create the
+same missing label, the synchronizer reconciles only an explicit already-exists
+name conflict with one read of that label. It does not repeat the creation,
+ignore access or other validation failures, or apply a prepared label decision
+after the report or its labels have changed.
+
 An explicit **Pulse version** field is authoritative even in a legacy inline
 or standalone report. An unknown or incomplete value must not be replaced by
 an upgrade's starting version in the title, a nearby agent/platform version or

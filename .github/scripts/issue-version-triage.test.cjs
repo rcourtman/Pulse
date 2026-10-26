@@ -2667,3 +2667,170 @@ test("literal reference-definition examples remain visible evidence for topic re
     ), true, example);
   }
 });
+
+function labelNameConflict() {
+  return Object.assign(new Error("Validation Failed"), {
+    status: 422,
+    response: { data: { errors: [{ resource: "Label", field: "name", code: "already_exists" }] } },
+  });
+}
+
+for (const [label, classification, body] of [
+  ["affects-6.7.0", "bug", "### Pulse version\n6.7.0\n"],
+  ["needs-version-info", "bug", "### Pulse version\nunknown\n"],
+  ["needs-decomposition", "enhancement", "### Additional actionable topics\nAlso retain failed attempts.\n"],
+]) {
+  test(`label-creation race preserves both reports' metadata: ${label}`, async () => {
+    const existingLabels = new Set();
+    let missingReads = 0;
+    let releaseReads;
+    const bothMissing = new Promise(resolve => { releaseReads = resolve; });
+    const preserved = [classification, "needs-human", "release-blocker",
+      "needs-retest-on-latest", "operator-reviewed"];
+    const workers = [2933, 2934].map(number => {
+      const { github, calls } = createGithub({ existingLabels });
+      const getLabel = github.rest.issues.getLabel;
+      const createLabel = github.rest.issues.createLabel;
+      github.rest.issues.getLabel = async payload => {
+        if (!existingLabels.has(payload.name)) {
+          // Both jobs must have observed absence before either can create it.
+          calls.getLabel.push(payload.name);
+          missingReads += 1;
+          if (missingReads === 2) releaseReads();
+          await bothMissing;
+          throw Object.assign(new Error("Not Found"), { status: 404 });
+        }
+        return getLabel(payload);
+      };
+      github.rest.issues.createLabel = async payload => {
+        if (existingLabels.has(payload.name)) {
+          calls.createLabel.push(payload);
+          throw labelNameConflict();
+        }
+        return createLabel(payload);
+      };
+      const issue = { number, title: "Monitoring report", body,
+        labels: preserved.map(name => ({ name })) };
+      return { github, calls, issue };
+    });
+    const results = await Promise.allSettled(workers.map(({ github, issue }) =>
+      syncLabels({ github, context: createContext({ issue }), core: createCore() })));
+    assert.deepEqual(results.map(result => result.status), ["fulfilled", "fulfilled"]);
+    assert.equal(missingReads, 2);
+    assert.deepEqual([...existingLabels], [label]);
+    assert.equal(workers.reduce((sum, worker) => sum + worker.calls.getLabel.length, 0), 3);
+    for (const { calls } of workers) {
+      assert.deepEqual(calls.addLabels.map(call => call.labels), [[label]]);
+      assert.equal(calls.createLabel.length, 1, "never replay label creation");
+      assert.deepEqual(calls.removeLabel, []);
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.deepEqual(calls.paginate, []);
+      assert.equal(calls.getIssue.length, 2, "recheck report before applying metadata");
+    }
+  });
+}
+
+test("label-creation reconciliation requires the exact current label", async () => {
+  for (const current of [{ name: "affects-6.7.0" }, { name: "AFFECTS-6.7.0" },
+    { name: "affects-6.6.0" }, {}, null]) {
+    const { github, calls } = createGithub();
+    const conflict = labelNameConflict();
+    github.rest.issues.getLabel = async ({ name }) => {
+      calls.getLabel.push(name);
+      if (calls.getLabel.length === 1) throw Object.assign(new Error("Not Found"), { status: 404 });
+      return { data: current };
+    };
+    github.rest.issues.createLabel = async payload => {
+      calls.createLabel.push(payload);
+      throw conflict;
+    };
+    const issue = { number: 2935, title: "Monitoring report", body: "### Pulse version\n6.7.0\n",
+      labels: [{ name: "bug" }] };
+    const result = syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    const matches = current?.name?.toLowerCase() === "affects-6.7.0";
+    if (matches) await result;
+    else await assert.rejects(result, error => error === conflict);
+    assert.equal(calls.getLabel.length, 2);
+    assert.equal(calls.createLabel.length, 1);
+    assert.deepEqual(calls.addLabels.map(call => call.labels), matches ? [["affects-6.7.0"]] : []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
+
+test("label-creation non-conflict failures are not retried or hidden", async () => {
+  for (const [status, errors] of [
+    [401], [403], [429], [500], [422], [422, "unavailable"],
+    [422, [{ resource: "Label", field: "name", code: "invalid" }]],
+    [422, [{ resource: "Issue", field: "name", code: "already_exists" }]],
+    [422, [{ resource: "Label", field: "description", code: "already_exists" }]],
+  ]) {
+    const { github, calls } = createGithub();
+    const failure = Object.assign(new Error("Creation failed"), {
+      status, response: { data: { errors } },
+    });
+    github.rest.issues.createLabel = async payload => {
+      calls.createLabel.push(payload);
+      throw failure;
+    };
+    const issue = { number: 2936, title: "Monitoring report", body: "### Pulse version\n6.7.0\n",
+      labels: [{ name: "bug" }] };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }),
+      error => error === failure);
+    assert.equal(calls.getLabel.length, 1);
+    assert.equal(calls.createLabel.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
+
+test("label-creation reconciliation read failures stop report mutations", async () => {
+  for (const status of [403, 404, 503]) {
+    const { github, calls } = createGithub();
+    const failure = Object.assign(new Error("Read failed"), { status });
+    github.rest.issues.getLabel = async ({ name }) => {
+      calls.getLabel.push(name);
+      if (calls.getLabel.length === 1) throw Object.assign(new Error("Not Found"), { status: 404 });
+      throw failure;
+    };
+    github.rest.issues.createLabel = async payload => {
+      calls.createLabel.push(payload);
+      throw labelNameConflict();
+    };
+    const issue = { number: 2937, title: "Monitoring report", body: "### Pulse version\n6.7.0\n",
+      labels: [{ name: "bug" }] };
+    await assert.rejects(syncLabels({ github, context: createContext({ issue }), core: createCore() }),
+      error => error === failure);
+    assert.equal(calls.getLabel.length, 2);
+    assert.equal(calls.createLabel.length, 1);
+    assert.deepEqual(calls.addLabels, []);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.createComment, []);
+  }
+});
+
+test("label-creation reconciliation still respects a newer Community decision", async () => {
+  const issue = { number: 2938, title: "Monitoring report", body: "### Pulse version\n6.7.0\n",
+    state: "open", updated_at: "2026-10-08T10:00:00Z", labels: [{ name: "bug" }] };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  github.rest.issues.getLabel = async ({ name }) => {
+    calls.getLabel.push(name);
+    if (calls.getLabel.length === 1) throw Object.assign(new Error("Not Found"), { status: 404 });
+    github.currentIssue = { ...issue, updated_at: "2026-10-08T11:00:00Z",
+      labels: [...issue.labels, { name: "needs-human" }] };
+    return { data: { name } };
+  };
+  github.rest.issues.createLabel = async payload => {
+    calls.createLabel.push(payload);
+    throw labelNameConflict();
+  };
+  await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getLabel.length, 2);
+  assert.equal(calls.createLabel.length, 1);
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
