@@ -619,9 +619,16 @@ async function syncLabels({ github, context, core }) {
       JSON.stringify(additionalActionableTopicDeclarations(previousBody) || []) !==
         JSON.stringify(additionalTopicDeclarations))
   );
-  const newlyDeclared = declarationChanged && !nextLabels.has(NEEDS_DECOMPOSITION_LABEL) && (
-    eventIsCurrent || await declarationSurvivesLaterComments(github, context, issue, eventIssue)
-  );
+  // GitHub's updated_at clock has second precision. A review present in the
+  // queued event can already have been cleared in the current snapshot even
+  // when both clocks (and comment counts) match. That observed removal takes
+  // precedence over the queued declaration; do not restore that review task
+  // or require another history read to recognise the label difference.
+  const reviewClearedAfterEvent = !labelNames.has(NEEDS_DECOMPOSITION_LABEL) &&
+    (eventIssue.labels || []).some((label) => label.name === NEEDS_DECOMPOSITION_LABEL);
+  const newlyDeclared = declarationChanged && !reviewClearedAfterEvent &&
+    !nextLabels.has(NEEDS_DECOMPOSITION_LABEL) &&
+    (eventIsCurrent || await declarationSurvivesLaterComments(github, context, issue, eventIssue));
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");
     nextLabels.add(NEEDS_DECOMPOSITION_LABEL);
