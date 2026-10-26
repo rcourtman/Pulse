@@ -103,7 +103,10 @@ record in TrueNAS:
    releases could show collection time as **Completed**; those undated records
    are corrected on upgrade without deleting snapshot history. To judge backup
    age or retention, confirm the native snapshot's creation time. Replication
-   with no known last-run time is **Unknown**, not a newly completed copy.
+   reporting success with no known last-run time is **Unknown**, not a newly
+   completed copy. **Failed**, **Warning** and **Running** remain visible even
+   without that time; missing dates do not clear a reported problem. Failed
+   and warning events remain in **Attention**, without an invented timestamp.
 3. **Check the destination without starting work.** Use the provider's existing
    received-snapshot and task records. Confirm the same source snapshot, target
    and successful transfer result. Missing **Verified**, **Size** or timestamp

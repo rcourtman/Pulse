@@ -73,6 +73,57 @@ describe('TrueNASProtectionTable', () => {
     expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(3);
   });
 
+  it('keeps undated replication problems in Attention without inventing completion dates', async () => {
+    renderInRouter(() => (
+      <TrueNASProtectionTable
+        points={(['failed', 'warning', 'running', 'unknown'] as const).map((outcome) =>
+          makeRecoveryPoint({
+            id: outcome,
+            kind: 'backup',
+            mode: 'remote',
+            outcome,
+            startedAt: undefined,
+            completedAt: undefined,
+            details: {
+              taskId: `task-${outcome}`,
+              taskName: `replicate-${outcome}`,
+              sourceDatasets: [`tank/${outcome}`],
+              targetDataset: `vault/${outcome}`,
+              lastState: outcome.toUpperCase(),
+            },
+          }),
+        )}
+        emptyIcon={<span />}
+        emptyTitle="No protection"
+        emptyDescription="No protection"
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Attention, 2' }));
+    const rows = document.querySelectorAll('[data-truenas-protection-row]');
+    expect(rows).toHaveLength(2);
+    for (const outcome of ['failed', 'warning']) {
+      const row = document.querySelector(`[data-truenas-protection-row="${outcome}"]`)!;
+      expect(row).toHaveAttribute('data-truenas-protection-outcome', outcome);
+      expect(row.querySelectorAll('td')[3]).toHaveTextContent('-');
+    }
+
+    await fireEvent.click(document.querySelector('[data-truenas-protection-row="failed"]')!);
+    const detail = within(screen.getByTestId('truenas-protection-detail'));
+    expect(detail.getByText('task-failed')).toBeInTheDocument();
+    expect(detail.getByText('Last state').closest('tr')).toHaveTextContent('FAILED');
+    expect(detail.queryByText('Started', { exact: true })).not.toBeInTheDocument();
+    expect(detail.queryByText('Completed', { exact: true })).not.toBeInTheDocument();
+    await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Running, 1' }));
+    expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(1);
+    expect(document.querySelector('[data-truenas-protection-row="running"]')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Unknown, 1' }));
+    expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(1);
+    expect(document.querySelector('[data-truenas-protection-row="unknown"]')).not.toBeNull();
+  });
+
   it('opens inline table details for a TrueNAS replication recovery point', async () => {
     const replication = makeRecoveryPoint({
       id: 'replicate-tank-apps',

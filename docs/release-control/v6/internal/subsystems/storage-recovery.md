@@ -619,10 +619,25 @@ Provider incident nativeSeverity is evidence, not a storage recovery result or i
 
 TrueNAS replication state `FINISHED` is successful completion evidence when a
 last-run timestamp exists, matching the provider success event. Explicit error
-text still takes precedence; a missing last-run timestamp remains unknown.
+text still takes precedence. Missing or zero last-run dates cannot establish a
+successful copy: success becomes unknown, but explicit failed, warning and
+running outcomes survive without start/completion timestamps. Collection time
+must not fill those dates. Undated task IDs remain stable across polls and
+separate across connections; dated native outcomes/times are unchanged. Failed
+and warning events remain in the Protection Attention filter even when their
+time is unavailable. Normal ingest corrects the same undated task row; no
+history is deleted and no native task or restore is run.
 Persisted recovery rollups must retain this outcome and success time rather
 than classify a completed replication as unknown. This does not imply restore
 verification or resolve provider INFO alert lifecycle behaviour.
+
+Verification: `TestFromTrueNASSnapshot_ReplicationTimeAndStateEvidence` covers
+nil/zero/native dates, error precedence and known-state retention;
+`TestFromTrueNASSnapshot_UndatedReplicationIdentity` covers repeated polls,
+connection isolation and non-mutation. `TrueNASProtectionTable.test.tsx` checks
+undated attention/filter/detail behaviour; `truenasProtectionEvidenceDocs.test.ts`
+checks the shipped guidance. Consuming browser proof must use actual mapped
+payloads at desktop and narrow viewports, not a hand-written outcome fixture.
 
 Unraid `StorageMeta.numDisks` is optional source evidence: zero denotes an explicitly empty parity array, not proof that pools are protected or that a recovery point exists. Suppressing the no-parity warning for zero must not erase disk-failure evidence or grant storage/recovery authority.
 

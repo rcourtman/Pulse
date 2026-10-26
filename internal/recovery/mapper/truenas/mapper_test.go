@@ -129,9 +129,99 @@ func TestFromTrueNASSnapshot_ReplicationTaskNilLastRun(t *testing.T) {
 		t.Fatalf("expected 1 point, got %d", len(result))
 	}
 
-	// When LastRun is nil, outcome should be Unknown
+	// Undated success cannot establish a completed copy.
 	if result[0].Outcome != recovery.OutcomeUnknown {
 		t.Errorf("Outcome = %v, want %v (nil LastRun)", result[0].Outcome, recovery.OutcomeUnknown)
+	}
+}
+
+func TestFromTrueNASSnapshot_ReplicationTimeAndStateEvidence(t *testing.T) {
+	zero := time.Time{}
+	native := time.Date(2026, 10, 1, 12, 30, 0, 123000000, time.FixedZone("native", 3600))
+	for _, date := range []struct {
+		name string
+		time *time.Time
+	}{
+		{"missing", nil},
+		{"zero", &zero},
+		{"native", &native},
+	} {
+		for _, state := range []struct {
+			name    string
+			state   string
+			errText string
+			want    recovery.Outcome
+		}{
+			{"success", "SUCCESS", "", recovery.OutcomeSuccess},
+			{"finished", "FINISHED", "", recovery.OutcomeSuccess},
+			{"failed", "FAILED", "", recovery.OutcomeFailed},
+			{"aborted", "ABORTED", "", recovery.OutcomeFailed},
+			{"warning", "WARNING", "", recovery.OutcomeWarning},
+			{"partial", "PARTIAL", "", recovery.OutcomeWarning},
+			{"running", "RUNNING", "", recovery.OutcomeRunning},
+			{"active", "ACTIVE", "", recovery.OutcomeRunning},
+			{"unknown", "UNRECOGNISED", "", recovery.OutcomeUnknown},
+			{"absent", "", "", recovery.OutcomeUnknown},
+			{"error overrides success", "SUCCESS", "fixture target unavailable", recovery.OutcomeFailed},
+			{"error without state", "", "fixture target unavailable", recovery.OutcomeFailed},
+		} {
+			t.Run(date.name+"/"+state.name, func(t *testing.T) {
+				snapshot := &truenas.FixtureSnapshot{ReplicationTasks: []truenas.ReplicationTask{{
+					ID: "7", Name: "offsite", LastRun: date.time, LastState: state.state, LastError: state.errText,
+				}}}
+				point := FromTrueNASSnapshot("nas-a", snapshot)[0]
+				want := state.want
+				if date.time == nil || date.time.IsZero() {
+					if want == recovery.OutcomeSuccess {
+						want = recovery.OutcomeUnknown
+					}
+					if point.StartedAt != nil || point.CompletedAt != nil {
+						t.Errorf("unavailable date gained timestamps: %+v", point)
+					}
+				} else if point.StartedAt == nil || point.CompletedAt == nil ||
+					!point.StartedAt.Equal(native) || !point.CompletedAt.Equal(native) {
+					t.Errorf("native date changed: %+v", point)
+				}
+				if point.Outcome != want {
+					t.Errorf("Outcome = %q, want %q", point.Outcome, want)
+				}
+				if point.Details["lastState"] != state.state || point.Details["lastError"] != state.errText {
+					t.Errorf("provider evidence changed: %+v", point.Details)
+				}
+				wantID := idgen.StableID("truenas", "nas-a", "replication-task", "7", "offsite", idgen.TimeKey(date.time, date.time))
+				if point.ID != wantID {
+					t.Errorf("task identity changed: %s, want %s", point.ID, wantID)
+				}
+			})
+		}
+	}
+}
+
+func TestFromTrueNASSnapshot_UndatedReplicationIdentity(t *testing.T) {
+	zero := time.Time{}
+	snapshot := &truenas.FixtureSnapshot{ReplicationTasks: []truenas.ReplicationTask{{
+		ID: "7", Name: "offsite", SourceDatasets: []string{"tank/apps"}, TargetDataset: "vault/apps",
+	}}}
+	wantID := idgen.StableID("truenas", "nas-a", "replication-task", "7", "offsite", "")
+	for _, date := range []*time.Time{nil, &zero} {
+		for i, state := range []string{"FAILED", "WARNING", "RUNNING", "SUCCESS"} {
+			snapshot.CollectedAt = time.Date(2026, 10, 1, 12+i, 0, 0, 0, time.UTC)
+			snapshot.ReplicationTasks[0].LastRun = date
+			snapshot.ReplicationTasks[0].LastState = state
+			point := FromTrueNASSnapshot("nas-a", snapshot)[0]
+			if point.ID != wantID || point.StartedAt != nil || point.CompletedAt != nil {
+				t.Fatalf("collection/state changed undated identity/time: %+v", point)
+			}
+			if point.SubjectRef.ID != "tank/apps" || point.RepositoryRef.ID != "vault/apps" {
+				t.Fatalf("lost source/target: %+v", point)
+			}
+			if other := FromTrueNASSnapshot("nas-b", snapshot)[0]; other.ID == point.ID {
+				t.Fatal("connections share a task ID")
+			}
+			if snapshot.ReplicationTasks[0].LastRun != date || !zero.IsZero() {
+				t.Fatal("mapping mutated the provider's last-run time")
+			}
+		}
 	}
 }
 
