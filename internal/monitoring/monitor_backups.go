@@ -2472,9 +2472,10 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 
 		if fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
 			// Serve a stale non-final entry if we have one; the next cycle
-			// will catch up.
+			// will catch up. The current parent can end a cached running
+			// guest, but cannot supply its missing verdict or a fresh log read.
 			if cached {
-				synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+				synthesized = append(synthesized, cachedVzdumpGuestTasks(entry.tasks, jobTask)...)
 			}
 			continue
 		}
@@ -2487,12 +2488,12 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 				Str("upid", upid).
 				Msg("failed to fetch vzdump job task log; per-guest status unavailable this cycle")
 			if cached {
-				synthesized = append(synthesized, refreshObservedAt(entry.tasks, now)...)
+				synthesized = append(synthesized, cachedVzdumpGuestTasks(entry.tasks, jobTask)...)
 			}
 			continue
 		}
 
-		guestTasks := parseVzdumpJobLog(jobTask, upid, logLines)
+		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
 		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
 		m.mu.Lock()
 		if m.vzdumpJobTaskCache == nil {
@@ -2504,11 +2505,32 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			historyComplete: historyComplete,
 		}
 		m.mu.Unlock()
-		synthesized = append(synthesized, refreshObservedAt(guestTasks, now)...)
+		synthesized = append(synthesized, guestTasks...)
 	}
 
 	m.pruneVzdumpJobTaskCache(instanceName, seen)
 	return synthesized
+}
+
+// Retain the last successful log observation when a non-final log is unread or
+// unavailable. A freshly ended parent proves the guest is no longer running,
+// not whether it succeeded. Do not mutate the cache: only another accepted log
+// read can complete attribution and make the entry final.
+func cachedVzdumpGuestTasks(tasks []models.BackupTask, job models.BackupTask) []models.BackupTask {
+	out := append([]models.BackupTask(nil), tasks...)
+	if job.EndTime.IsZero() {
+		return out
+	}
+	for i := range out {
+		if out[i].Status == "running" {
+			out[i].Status = "unknown"
+			out[i].Error = "backup job ended without an observed guest result"
+		}
+		if out[i].EndTime.IsZero() {
+			out[i].EndTime = job.EndTime
+		}
+	}
+	return out
 }
 
 // pruneVzdumpJobTaskCache drops cached job entries for this instance whose
