@@ -140,4 +140,50 @@ describe('TrueNASProtectionTable', () => {
       'false',
     );
   });
+
+  it('keeps undated snapshots unknown and dateless without hiding their artifact details', async () => {
+    renderInRouter(() => (
+      <TrueNASProtectionTable
+        points={[
+          makeRecoveryPoint({
+            id: 'undated',
+            kind: 'snapshot',
+            mode: 'snapshot',
+            outcome: 'unknown',
+            startedAt: undefined,
+            completedAt: undefined,
+            details: { dataset: 'tank/undated', fullName: 'tank/undated@daily', snapshot: 'daily' },
+          }),
+          makeRecoveryPoint({ id: 'known', kind: 'snapshot', mode: 'snapshot' }),
+          makeRecoveryPoint({ id: 'running', kind: 'backup', mode: 'remote', outcome: 'running' }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No protection"
+        emptyDescription="No protection"
+      />
+    ));
+    await fireEvent.click(screen.getByRole('button', { name: 'Unknown, 1' }));
+    const rows = document.querySelectorAll('[data-truenas-protection-row]');
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row).toHaveAttribute('data-truenas-protection-outcome', 'unknown');
+    expect(within(row as HTMLElement).getByText('Unknown')).toBeInTheDocument();
+    expect(row.querySelectorAll('td')[3]).toHaveTextContent('-');
+    await fireEvent.click(row);
+    const detail = within(screen.getByTestId('truenas-protection-detail'));
+    expect(detail.getByText('tank/undated@daily')).toBeInTheDocument();
+    expect(detail.queryByText('Started', { exact: true })).not.toBeInTheDocument();
+    expect(detail.queryByText('Completed', { exact: true })).not.toBeInTheDocument();
+    await fireEvent.click(detail.getByRole('button', { name: /^Collapse .* details$/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Healthy, 1' }));
+    expect(document.querySelector('[data-truenas-protection-row]')).toHaveAttribute(
+      'data-truenas-protection-row',
+      'known',
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Running, 1' }));
+    expect(document.querySelector('[data-truenas-protection-row]')).toHaveAttribute(
+      'data-truenas-protection-row',
+      'running',
+    );
+  });
 });

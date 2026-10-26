@@ -1173,3 +1173,230 @@ func TestStore_TrueNASFinishedReplicationRollup(t *testing.T) {
 		})
 	}
 }
+
+func TestStore_TrueNASSnapshotMissingTimeDoesNotAdvanceRecovery(t *testing.T) {
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Second)
+	created := at.Add(-24 * time.Hour)
+	zero := time.Time{}
+	snapshot := &truenas.FixtureSnapshot{
+		System: truenas.SystemInfo{Hostname: "fixture-nas"},
+		ZFSSnapshots: []truenas.ZFSSnapshot{
+			{FullName: "tank/undated@daily"},
+			{FullName: "tank/zero@daily", CreatedAt: &zero},
+			{FullName: "tank/known@daily", CreatedAt: &created},
+		},
+		ReplicationTasks: []truenas.ReplicationTask{
+			{ID: "running", Name: "running", SourceDatasets: []string{"tank/running"}, LastRun: &at, LastState: "RUNNING"},
+			{ID: "no-run", Name: "no-run", SourceDatasets: []string{"tank/no-run"}, LastState: "SUCCESS"},
+		},
+	}
+	path := filepath.Join(t.TempDir(), "recovery.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	var undated recovery.RecoveryPoint
+	for _, collected := range []time.Time{at, at.Add(time.Hour), {}} {
+		snapshot.CollectedAt = collected
+		points := truenasmapper.FromTrueNASSnapshot("nas-a", snapshot)
+		if err := db.UpsertPoints(ctx, points); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range points {
+			if p.Details["fullName"] == "tank/undated@daily" {
+				undated = p
+			}
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	points, total, err := db.ListPoints(ctx, recovery.ListPointsOptions{Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 5 || len(points) != 5 {
+		t.Fatalf("repeated collection added events: total=%d len=%d, want 5", total, len(points))
+	}
+	for _, p := range points {
+		switch p.SubjectRef.ID {
+		case "tank/undated", "tank/zero", "tank/no-run":
+			if p.Outcome != recovery.OutcomeUnknown || p.StartedAt != nil || p.CompletedAt != nil {
+				t.Errorf("undated artifact gained completion: %+v", p)
+			}
+		case "tank/known":
+			if p.Outcome != recovery.OutcomeSuccess || p.CompletedAt == nil || !p.CompletedAt.Equal(created) {
+				t.Errorf("native snapshot lost its date/outcome: %+v", p)
+			}
+		case "tank/running":
+			if p.Outcome != recovery.OutcomeRunning || p.CompletedAt == nil || !p.CompletedAt.Equal(at) {
+				t.Errorf("running replication changed: %+v", p)
+			}
+		default:
+			t.Errorf("unexpected artifact: %+v", p)
+		}
+	}
+	assertUndatedTrueNASRollupAndSeries(t, db, undated)
+	from, to := created.Add(-time.Hour), at.Add(time.Hour)
+	series, err := db.ListPointsSeries(ctx, recovery.ListPointsOptions{From: &from, To: &to}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var events int
+	for _, day := range series {
+		events += day.Total
+	}
+	if events != 2 {
+		t.Errorf("dated activity=%d, want only native snapshot and dated running task", events)
+	}
+}
+
+func TestStore_OpenCorrectsTrueNASSnapshotCollectionTimes(t *testing.T) {
+	ctx := context.Background()
+	at := time.Now().UTC().Truncate(time.Second)
+	created := at.Add(-24 * time.Hour)
+	path := filepath.Join(t.TempDir(), "recovery.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	// Recreate the old mapper's asymmetric dates, retaining all artifact evidence.
+	legacy := truenasmapper.FromTrueNASSnapshot("nas-a", &truenas.FixtureSnapshot{
+		ZFSSnapshots: []truenas.ZFSSnapshot{{FullName: "tank/undated@daily", UsedBytes: ptrInt64Store(1234)}},
+	})[0]
+	legacy.ID, legacy.StartedAt, legacy.CompletedAt, legacy.Outcome = "legacy-poll-1", nil, &at, recovery.OutcomeSuccess
+	legacy.Details["retained"] = "artifact-evidence"
+	second := legacy
+	second.ID = "legacy-poll-2"
+	later := at.Add(time.Minute)
+	second.CompletedAt = &later
+	known := truenasmapper.FromTrueNASSnapshot("nas-a", &truenas.FixtureSnapshot{
+		ZFSSnapshots: []truenas.ZFSSnapshot{{FullName: "tank/known@daily", CreatedAt: &created}},
+	})[0]
+	controls := []recovery.RecoveryPoint{known}
+	for _, tc := range []struct {
+		id       string
+		provider recovery.Provider
+		kind     recovery.Kind
+		mode     recovery.Mode
+		outcome  recovery.Outcome
+	}{
+		{"replication", recovery.ProviderTrueNAS, recovery.KindBackup, recovery.ModeRemote, recovery.OutcomeSuccess},
+		{"other-provider", recovery.ProviderKubernetes, recovery.KindSnapshot, recovery.ModeSnapshot, recovery.OutcomeSuccess},
+		{"other-mode", recovery.ProviderTrueNAS, recovery.KindSnapshot, recovery.ModeRemote, recovery.OutcomeSuccess},
+		{"other-kind", recovery.ProviderTrueNAS, recovery.KindBackup, recovery.ModeSnapshot, recovery.OutcomeSuccess},
+		{"failed-snapshot", recovery.ProviderTrueNAS, recovery.KindSnapshot, recovery.ModeSnapshot, recovery.OutcomeFailed},
+	} {
+		p := legacy
+		p.ID, p.Provider, p.Kind, p.Mode, p.Outcome = tc.id, tc.provider, tc.kind, tc.mode, tc.outcome
+		p.SubjectRef = &recovery.ExternalRef{Type: "fixture-control", ID: tc.id, Name: tc.id}
+		controls = append(controls, p)
+	}
+	legacyZero := legacy
+	legacyZero.ID, legacyZero.CompletedAt = "legacy-zero-date", nil
+	seed := append([]recovery.RecoveryPoint{legacy, second, legacyZero}, controls...)
+	if err := db.UpsertPoints(ctx, seed); err != nil {
+		t.Fatal(err)
+	}
+	// A corrupt details field must not turn this bounded correction into an open failure.
+	broken := legacy
+	broken.ID = "legacy-broken-details"
+	if err := db.UpsertPoints(ctx, []recovery.RecoveryPoint{broken}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.db.Exec(`UPDATE recovery_points SET details_json = '{broken' WHERE id = ?`, broken.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for reopen := 0; reopen < 2; reopen++ {
+		db, err = Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		points, total, err := db.ListPoints(ctx, recovery.ListPointsOptions{Limit: 50})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != len(seed)+1 || len(points) != total {
+			t.Fatalf("correction removed history: total=%d, want %d", total, len(seed)+1)
+		}
+		byID := make(map[string]recovery.RecoveryPoint)
+		for _, p := range points {
+			byID[p.ID] = p
+		}
+		for _, original := range []recovery.RecoveryPoint{legacy, second, legacyZero, broken} {
+			p, ok := byID[original.ID]
+			if !ok || p.Outcome != recovery.OutcomeUnknown || p.CompletedAt != nil || p.StartedAt != nil {
+				t.Errorf("legacy collection still claims completion: %+v", p)
+			}
+			if p.SizeBytes == nil || *p.SizeBytes != 1234 || p.SubjectRef.ID != original.SubjectRef.ID {
+				t.Errorf("correction lost artifact evidence: %+v", p)
+			}
+			if original.ID != broken.ID {
+				if p.Details["retained"] != "artifact-evidence" {
+					t.Errorf("lost artifact evidence: %+v", p.Details)
+				}
+				if original.CompletedAt != nil {
+					if p.Details["legacyCollectedAtMs"] != float64(original.CompletedAt.UnixMilli()) {
+						t.Errorf("lost prior collection evidence: %+v", p.Details)
+					}
+				} else if _, ok := p.Details["legacyCollectedAtMs"]; ok {
+					t.Errorf("invented collection evidence for a legacy zero date: %+v", p.Details)
+				}
+			}
+		}
+		for _, original := range controls {
+			p := byID[original.ID]
+			if p.CompletedAt == nil || !p.CompletedAt.Equal(*original.CompletedAt) || p.Outcome != original.Outcome {
+				t.Errorf("correction changed unrelated/native point %s: %+v", original.ID, p)
+			}
+		}
+		assertUndatedTrueNASRollupAndSeries(t, db, legacy)
+		var raw string
+		if err := db.db.QueryRow(`SELECT details_json FROM recovery_points WHERE id = ?`, broken.ID).Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		if raw != "{broken" {
+			t.Errorf("rewrote corrupt evidence: %q", raw)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func assertUndatedTrueNASRollupAndSeries(t *testing.T, db *Store, point recovery.RecoveryPoint) {
+	t.Helper()
+	opts := recovery.ListPointsOptions{RollupID: recovery.SubjectKeyForPoint(point), Limit: 50}
+	rollups, total, err := db.ListRollups(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(rollups) != 1 {
+		t.Fatalf("undated artifact lost rollup identity: %d/%d", total, len(rollups))
+	}
+	r := rollups[0]
+	if r.LastSuccessAt != nil || r.LastAttemptAt != nil || r.LastVerifiedAt != nil || r.LastOutcome != recovery.OutcomeUnknown {
+		t.Errorf("undated snapshot gained rollup timestamps/success: %+v", r)
+	}
+	series, err := db.ListPointsSeries(context.Background(), opts, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, day := range series {
+		if day.Total != 0 {
+			t.Errorf("undated snapshot created dated activity: %+v", day)
+		}
+	}
+}
+
+func ptrInt64Store(value int64) *int64 { return &value }

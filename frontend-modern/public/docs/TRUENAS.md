@@ -98,11 +98,12 @@ record in TrueNAS:
    **Last snapshot** describe collected evidence, not a restore test.
    **Running** remains incomplete even if a timestamp is present. A successful
    snapshot observation does not establish successful replication.
-   **Current timestamp limitation:** when TrueNAS supplies no snapshot creation
-   time, Pulse can show the collection time as **Completed**. Do not use that
-   displayed time alone to judge backup age or retention; confirm the native
-   snapshot's creation time. Replication with no known last-run time is
-   **Unknown**, not a newly completed copy.
+   **Missing snapshot creation time is Unknown:** the row has no **Completed**
+   timestamp. A new collection cannot make an undated snapshot newer. Earlier
+   releases could show collection time as **Completed**; those undated records
+   are corrected on upgrade without deleting snapshot history. To judge backup
+   age or retention, confirm the native snapshot's creation time. Replication
+   with no known last-run time is **Unknown**, not a newly completed copy.
 3. **Check the destination without starting work.** Use the provider's existing
    received-snapshot and task records. Confirm the same source snapshot, target
    and successful transfer result. Missing **Verified**, **Size** or timestamp
