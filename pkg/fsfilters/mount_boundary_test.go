@@ -11,7 +11,7 @@ func TestSystemMountFiltersRespectDirectoryBoundaries(t *testing.T) {
 	for _, directory := range []string{
 		"/dev", "/proc", "/sys", "/run", "/var/run", "/var/lib/docker",
 		"/var/lib/containers", "/snap", "/System/Volumes",
-		"/Library/Developer/CoreSimulator/Volumes",
+		"/Library/Developer/CoreSimulator/Volumes", "/Volumes/.timemachine",
 	} {
 		t.Run(directory, func(t *testing.T) {
 			for _, path := range []string{directory, directory + "/", directory + "/child/mount"} {

@@ -394,6 +394,7 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 
 		explicitlyIncluded := fsfilters.MatchesDiskInclude(part.Device, part.Mountpoint, diskInclude)
 		isZFS := strings.EqualFold(part.Fstype, "zfs") || strings.EqualFold(part.Fstype, "fuse.zfs")
+		hiddenSystemMount := fsfilters.IsHiddenSystemMount(part.Opts)
 
 		// Type- and mountpoint-based skips need no usage data. Deciding them
 		// before the usage syscall keeps mounts that would be discarded
@@ -401,6 +402,9 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 		// collector inside statfs. ZFS stays after usage collection because
 		// its datasets are aggregated before this filter applies.
 		if !isZFS && !explicitlyIncluded {
+			if hiddenSystemMount {
+				continue
+			}
 			if shouldSkip, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, 0, 0); shouldSkip {
 				continue
 			}
@@ -445,6 +449,7 @@ func collectDisksWithIncludes(ctx context.Context, diskExclude, diskInclude []st
 		// - Container overlay paths (Docker/Podman layers on ZFS, including TrueNAS .ix-apps)
 		// See issues #505, #690, #718, #790.
 		automaticallyFiltered, _ := fsfilters.ShouldSkipFilesystem(part.Fstype, part.Mountpoint, usage.Total, usage.Used)
+		automaticallyFiltered = automaticallyFiltered || hiddenSystemMount
 		if automaticallyFiltered && !explicitlyIncluded {
 			continue
 		}

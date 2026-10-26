@@ -205,6 +205,8 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"macos preboot companion volume", "apfs", "/System/Volumes/Preboot", 245107195904, 213573853184, true},
 		{"macos simulator runtime volume", "apfs", "/Library/Developer/CoreSimulator/Volumes/iOS_23E254a", 18058575872, 17593331712, true},
 		{"macos app translocation volume", "apfs", "/private/var/folders/xy/random/T/AppTranslocation/2A9C/d/Pulse.app", 245107195904, 221809991680, true},
+		{"macos time machine backup snapshot", "apfs", "/Volumes/.timemachine/5D0A488B-87DC-4532-96F4-FA1E0BFDD0F4/2026-10-25-122503.backup", 16090000000000, 352000000000, true},
+		{"macos time machine network destination", "apfs", "/Volumes/.timemachine/tower/6DBDE5B4-8924-4042-B6EE-4A5C68074C46/MacTimeMachine", 1649000000000, 403000000000, true},
 
 		// Regular filesystems that should NOT be skipped
 		{"ext4 root", "ext4", "/", 100 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, false},
@@ -394,6 +396,30 @@ func TestIsNonPhysicalDiskIODevice(t *testing.T) {
 		}
 		if IsNonPhysicalDiskIODevice(device) {
 			t.Errorf("IsNonPhysicalDiskIODevice(%q) = true, want false", device)
+		}
+	}
+}
+
+func TestIsHiddenSystemMount(t *testing.T) {
+	hidden := [][]string{
+		{"local", "nodev", "nosuid", "journaled", "nobrowse"},
+		{"nobrowse"},
+	}
+	for _, opts := range hidden {
+		if !IsHiddenSystemMount(opts) {
+			t.Errorf("IsHiddenSystemMount(%v) = false, want true", opts)
+		}
+	}
+
+	visible := [][]string{
+		nil,
+		{"rw", "relatime"},
+		{"local", "nodev", "nosuid", "journaled", "noowners"},
+		{"nobrowsex"},
+	}
+	for _, opts := range visible {
+		if IsHiddenSystemMount(opts) {
+			t.Errorf("IsHiddenSystemMount(%v) = true, want false", opts)
 		}
 	}
 }
