@@ -179,7 +179,7 @@ const sizeLabel = (point: RecoveryPoint): string =>
 
 // A start is not a finish. Running replication can also retain a last-run
 // timestamp in completedAt, which is not completion of the active run.
-const completionTimestamp = (point: RecoveryPoint): string =>
+const completionTimestamp = (point: RecoveryPoint): string | undefined =>
   normalizeRecoveryOutcome(point.outcome) === 'running' ? '' : asTrimmedString(point.completedAt);
 
 // Columns a user can sort by. Every protection column carries a scalar:
