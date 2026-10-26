@@ -798,7 +798,7 @@ func TestCheckVMDiskMonitoring_Success(t *testing.T) {
 	responses := map[string]proxmoxTestResponse{
 		"/api2/json/nodes":                              {body: `{"data":[{"node":"pve1","status":"online"}]}`},
 		"/api2/json/nodes/pve1/qemu":                    {body: `{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`},
-		"/api2/json/nodes/pve1/qemu/100/status/current": {body: `{"data":{"agent":1}}`},
+		"/api2/json/nodes/pve1/qemu/100/status/current": {body: `{"data":{"vmid":100,"status":"running","agent":1}}`},
 		// Guest admission must independently verify the authoritative config lock.
 		"/api2/json/nodes/pve1/qemu/100/config":           {body: `{"data":{}}`},
 		"/api2/json/nodes/pve1/qemu/100/agent/get-fsinfo": {body: `{"data":{"result":[{"name":"root","type":"ext4","mountpoint":"/","total-bytes":100,"used-bytes":50}]}}`},
@@ -830,6 +830,43 @@ func TestCheckVMDiskMonitoring_NoNodes(t *testing.T) {
 	result := router.checkVMDiskMonitoring(context.Background(), client, "")
 	if result.TestResult != "No nodes found" {
 		t.Fatalf("test result = %q, want No nodes found", result.TestResult)
+	}
+}
+
+// A running inventory row is not a substitute for a complete status read.
+// In particular, rejecting a response must not start a guest-agent diagnostic.
+func TestCheckVMDiskMonitoring_RejectsIncompleteStatus(t *testing.T) {
+	for _, body := range []string{
+		`{"data":{"agent":1}}`,
+		`{"data":null}`,
+		`{"data":{"status":"running","agent":1}} {"errors":"failed tail"}`,
+		`{"data":{"vmid":101,"status":"running","agent":1}}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			var guestCalls atomic.Int32
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api2/json/nodes":
+					_, _ = w.Write([]byte(`{"data":[{"node":"pve1","status":"online"}]}`))
+				case "/api2/json/nodes/pve1/qemu":
+					_, _ = w.Write([]byte(`{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`))
+				case "/api2/json/nodes/pve1/qemu/100/status/current":
+					_, _ = w.Write([]byte(body))
+				default:
+					guestCalls.Add(1)
+					http.Error(w, "must not reach guest or config", http.StatusInternalServerError)
+				}
+			}))
+			defer server.Close()
+			result := (&Router{}).checkVMDiskMonitoring(context.Background(), newProxmoxClient(t, server.URL), "")
+			if guestCalls.Load() != 0 || result.VMsWithAgent != 0 || result.VMsWithDiskData != 0 || strings.Contains(result.TestResult, "SUCCESS") {
+				t.Fatalf("invalid status became guest evidence: calls=%d result=%+v", guestCalls.Load(), result)
+			}
+			if len(result.ProblematicVMs) != 1 || result.ProblematicVMs[0].Issue != "Failed to get VM status" {
+				t.Fatalf("missing status failure: %+v", result)
+			}
+		})
 	}
 }
 
@@ -913,7 +950,7 @@ func TestCheckVMDiskMonitoring_BackupAdmission(t *testing.T) {
 					_, _ = w.Write([]byte(`{"data":[{"vmid":100,"name":"vm-100","node":"pve1","status":"running","template":0}]}`))
 				case "/api2/json/nodes/pve1/qemu/100/status/current":
 					// As on the failed CI fixture, current status alone has no lock field.
-					_, _ = w.Write([]byte(`{"data":{"agent":1}}`))
+					_, _ = w.Write([]byte(`{"data":{"vmid":100,"status":"running","agent":1}}`))
 				case "/api2/json/nodes/pve1/qemu/100/config":
 					if locked.Load() {
 						_, _ = w.Write([]byte(`{"data":{"lock":"backup"}}`))
