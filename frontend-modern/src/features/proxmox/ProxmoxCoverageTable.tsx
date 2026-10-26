@@ -68,10 +68,11 @@ const COVERAGE_SNAPSHOT_ONLY_TITLE =
 const COVERAGE_HISTORY_UNKNOWN_TITLE =
   'No completed backup is visible in the current list. Missing entries do not mean no backups exist. Expand this row to inspect the evidence.';
 
-// A fulfilled raw-inventory request is not proof that every provider scope was
-// readable. Keep absence scoped to the server's history/access evidence, not
-// the posture colour (an independently readable backup can still be Protected).
-const hasCompleteCoverageHistory = (row: WorkloadCoverageRow): boolean => {
+// Provider quality supports the backup-age fallback, not absence of every
+// restore point. In particular, complete PVE backup enumeration says nothing
+// about an unread snapshot list or the posture's retained snapshot evidence.
+// A fulfilled raw request and the posture colour cannot establish that either.
+const hasCompleteBackupHistory = (row: WorkloadCoverageRow): boolean => {
   const posture = row.protectionPosture;
   const providers = posture?.providerStates ?? [];
   return (
@@ -393,8 +394,8 @@ export function ProxmoxCoverageTable(props: {
                 {(row) => {
                   const isExpanded = () => props.expandedKey === row.key;
                   const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
-                  const historyComplete = () =>
-                    !props.historyReadIncomplete && hasCompleteCoverageHistory(row);
+                  const backupHistoryComplete = () =>
+                    !props.historyReadIncomplete && hasCompleteBackupHistory(row);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   return (
                     <>
@@ -485,7 +486,7 @@ export function ProxmoxCoverageTable(props: {
                               <CoverageAgeFallback
                                 unknown={row.ageUnknown?.backup}
                                 historyUnknown={
-                                  !historyComplete() ||
+                                  !backupHistoryComplete() ||
                                   Boolean(row.protectionPosture?.lastSuccessfulPointAt)
                                 }
                                 compact={layoutMode() === 'compact'}
@@ -594,11 +595,9 @@ export function ProxmoxCoverageTable(props: {
                                   role="status"
                                   class="text-xs"
                                 >
-                                  {!historyComplete()
+                                  {!backupHistoryComplete()
                                     ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
-                                    : row.protectionPosture?.lastSuccessfulPointAt
-                                      ? 'No restore points are visible in the current list. Missing entries do not mean no backups exist.'
-                                      : 'No restore points reported for this workload in the readable history.'}
+                                    : 'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.'}
                                 </InlineNotice>
                               }
                             >
