@@ -116,9 +116,9 @@ describe('TrueNAS protection completion evidence', () => {
     expect(detail.getByText('Artifact', { exact: true }).closest('tr')).toHaveTextContent(
       'replicate-departmental-archives-to-offsite',
     );
-    expect(detail.getByText('Target', { selector: 'td', exact: true }).closest('tr')).toHaveTextContent(
-      'vault/offsite/departmental-archives',
-    );
+    expect(
+      detail.getByText('Target', { selector: 'td', exact: true }).closest('tr'),
+    ).toHaveTextContent('vault/offsite/departmental-archives');
     expect(detail.getByText('Host', { exact: true }).closest('tr')).toHaveTextContent('nas-east');
     expect(detail.getByText('Completed', { exact: true }).closest('tr')).toHaveTextContent('2026');
     expect(detail.getByText('Outcome', { exact: true }).closest('tr')).toHaveTextContent('Healthy');
