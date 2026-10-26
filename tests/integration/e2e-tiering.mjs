@@ -35,6 +35,10 @@ export const PROBATION_SPECS = [
   '**/04-mobile.spec.ts',
   '**/05-settings-mobile-audit.spec.ts',
   '**/06-theme-visual.spec.ts',
+  // New (2026-10-26) and red on arrival: it found drawer history chart
+  // headers that change height under the pointer. It earns stable under the
+  // promotion rule once that layout is fixed.
+  '**/100-interaction-stability.spec.ts',
   '**/11-first-session.spec.ts',
   '**/15-settings-shell-consistency.spec.ts',
   '**/20-local-doc-links.spec.ts',
