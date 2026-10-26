@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "5d60aa4f1c8e130cc056a18ee2640d9a92e87c93",
+  "verified_at": "2026-10-26T18:54:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "7fc2a5da5f841be5965499004bf182ff0fa9e51146ba114e4a6aa1787cab06a6"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Compiled production Backups consumer, real inventory HTTP transport, recovery model and activity chart, with safe synthetic nine-entry inventory and fixed Europe/London browser clocks. No native backup or recovery operations.",
+    "Spring: 24\u201330 March 2026 are consecutive, including 29 March. Autumn: the 25 October 23:30 point and 20 October 00:15 point are counted within their local date windows.",
+    "Count and volume retain the same seven date keys; future and older-than-window entries stay out of the chart. The full feed remains inspectable.",
+    "Final candidate: six browser journeys / 72 checks, no page exceptions or page-wide horizontal overflow. Parent reproduction is separate: skipped spring date and omitted autumn boundary points.",
+    "Native view_image inspection of six candidate and six parent captures: desktop full date chip/selected bar/feed/details, and narrow chart/date chip/selected row/detail header fit without page-wide clipping. The narrow captures do not show the whole below-fold detail body."
+  ],
+  "interactions": [
+    "Desktop Chromium keyboard activation and narrow WebKit touch activation select the affected day and filter the real feed to its one matching archive.",
+    "Switch Count to Volume with that date selected; the pressed day retains its correct bytes and matching row.",
+    "Open the actual selected archive details; its identifier and Created field match the fixture. Clear date restores all nine inventory entries.",
+    "Switch to the 365-day view and return to seven days and Count; all slots and counts remain correct. Close browser contexts, browsers and local server."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  }
+}
