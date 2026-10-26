@@ -73,7 +73,11 @@ function projectDeclarationLines(tokens) {
     if (token.type === "heading") {
       const text = inlineProjection(token.tokens).trim();
       lines.push({ text, metadata: text, delimiter: false, declaration: true,
-        heading: text, headingDepth: token.depth });
+        // Field names follow their visible labels, just like field values.
+        // Ordinary emphasis or a release/help link must not hide a declared
+        // topic or let the next form field become part of that topic. Keep
+        // literal code, images, struck-out text and raw HTML non-declarative.
+        heading: inlineDeclarationText(token.tokens, true).trim(), headingDepth: token.depth });
     } else if (token.type === "paragraph") {
       append(inlineProjection(token.tokens), true, inlineProjection(token.tokens, true));
     } else if (token.type === "code") {
@@ -209,15 +213,19 @@ function declaredVersionIsTransition(value) {
   return /^[ \t]*(?:[-=]>|[→←↔]|&(?:rarr|larr|harr|#8594|#x2192);|to\b)[ \t]*(?:v?\d|(?:pulse(?:[ \t]+pro)?|server)[ \t]+v?\d|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?[:_-]v?\d|unknown\b|latest\b)/i.test(remaining);
 }
 
-function inlineDeclarationText(tokens) {
+function inlineDeclarationText(tokens, preserveCode = false) {
   return (tokens || []).map((token) => {
     // A link's visible label is evidence; its destination and title are not.
     // Unwrap only ordinary inline formatting, not images, struck-out values
     // or HTML. Code spans keep their literal text rather than parsing links
     // or comments inside them.
     if (["link", "strong", "em"].includes(token.type)) {
-      return inlineDeclarationText(token.tokens);
+      return inlineDeclarationText(token.tokens, preserveCode);
     }
+    if (token.type === "html" && /^<!--/.test(token.raw || "")) {
+      return token.raw.replace(/[^\r\n]/g, "");
+    }
+    if (preserveCode && token.type === "codespan") return token.raw;
     if (["codespan", "escape"].includes(token.type)) return token.text;
     return token.raw || "";
   }).join("");
