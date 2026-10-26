@@ -2761,10 +2761,12 @@ test("label-creation reconciliation requires the exact current label", async () 
 
 test("label-creation non-conflict failures are not retried or hidden", async () => {
   for (const [status, errors] of [
-    [401], [403], [429], [500], [422], [422, "unavailable"],
+    [401], [403], [429], [500], [422], [422, "unavailable"], [422, []],
     [422, [{ resource: "Label", field: "name", code: "invalid" }]],
     [422, [{ resource: "Issue", field: "name", code: "already_exists" }]],
     [422, [{ resource: "Label", field: "description", code: "already_exists" }]],
+    [422, [{ resource: "Label", field: "name", code: "already_exists" },
+      { resource: "Label", field: "color", code: "invalid" }]],
   ]) {
     const { github, calls } = createGithub();
     const failure = Object.assign(new Error("Creation failed"), {
