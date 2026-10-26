@@ -62,7 +62,10 @@ describe('TrueNAS protection evidence help', () => {
     expect(text).toContain('corrected on upgrade without deleting snapshot history');
     expect(text).toContain("confirm the native snapshot's creation time");
     expect(text).toContain('Running remains incomplete even if a timestamp is present');
-    expect(text).toContain('Replication with no known last-run time is Unknown');
+    expect(text).toContain('Replication reporting success with no known last-run time is Unknown');
+    expect(text).toContain('Failed, Warning and Running remain visible even without that time');
+    expect(text).toContain('missing dates do not clear a reported problem');
+    expect(text).toContain('Failed and warning events remain in Attention, without an invented timestamp');
   });
 
   it('uses current detail labels to compare the same source and destination without active work', () => {

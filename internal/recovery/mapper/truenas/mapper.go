@@ -145,11 +145,15 @@ func FromTrueNASSnapshot(connectionID string, snapshot *truenas.FixtureSnapshot)
 		}
 
 		completedAt := task.LastRun
+		if completedAt != nil && completedAt.IsZero() {
+			completedAt = nil
+		}
 		startedAt := completedAt
 
 		outcome := outcomeFromTrueNASReplication(task.LastState, task.LastError)
-		if completedAt == nil {
-			// If we don't know when it last ran, treat it as unknown rather than "success".
+		if completedAt == nil && outcome == recovery.OutcomeSuccess {
+			// Missing time cannot establish a completed copy. It does not
+			// erase an explicit failure, warning or running state, though.
 			outcome = recovery.OutcomeUnknown
 		}
 

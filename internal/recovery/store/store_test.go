@@ -40,6 +40,81 @@ func TestNormalizeLimitAndPageUseSharedListBounds(t *testing.T) {
 	}
 }
 
+func TestStore_UndatedTrueNASReplicationRetainsState(t *testing.T) {
+	t.Parallel()
+	zero := time.Time{}
+	for _, date := range []struct {
+		name string
+		time *time.Time
+	}{{"missing", nil}, {"zero", &zero}} {
+		t.Run(date.name, func(t *testing.T) {
+			ctx := context.Background()
+			dbPath := filepath.Join(t.TempDir(), "recovery.db")
+			s, err := Open(dbPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = s.Close() })
+			snapshot := &truenas.FixtureSnapshot{ReplicationTasks: []truenas.ReplicationTask{{
+				ID: "7", Name: "offsite", LastRun: date.time, LastState: "FAILED",
+				SourceDatasets: []string{"tank/apps"}, TargetDataset: "vault/apps",
+			}}}
+			mapped := truenasmapper.FromTrueNASSnapshot("nas-a", snapshot)
+			// A former ingest erased the state but retained its source evidence.
+			legacy := mapped[0]
+			legacy.Outcome = recovery.OutcomeUnknown
+			if err := s.UpsertPoints(ctx, []recovery.RecoveryPoint{legacy}); err != nil {
+				t.Fatal(err)
+			}
+			other := truenasmapper.FromTrueNASSnapshot("nas-b", snapshot)[0]
+			other.Outcome = recovery.OutcomeUnknown
+			if err := s.UpsertPoints(ctx, []recovery.RecoveryPoint{other}); err != nil {
+				t.Fatal(err)
+			}
+			for i, state := range []struct {
+				native string
+				want   recovery.Outcome
+			}{{"FAILED", recovery.OutcomeFailed}, {"WARNING", recovery.OutcomeWarning},
+				{"RUNNING", recovery.OutcomeRunning}, {"SUCCESS", recovery.OutcomeUnknown}} {
+				snapshot.ReplicationTasks[0].LastState = state.native
+				snapshot.CollectedAt = time.Date(2026, 10, 1, 12+i, 0, 0, 0, time.UTC)
+				if err := s.UpsertPoints(ctx, truenasmapper.FromTrueNASSnapshot("nas-a", snapshot)); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.Close(); err != nil {
+					t.Fatal(err)
+				}
+				s, err = Open(dbPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				points, total, err := s.ListPoints(ctx, recovery.ListPointsOptions{Provider: recovery.ProviderTrueNAS})
+				if err != nil || total != 2 || len(points) != 2 {
+					t.Fatalf("ListPoints = %d/%d points, %v; want two connection-scoped rows", len(points), total, err)
+				}
+				byID := map[string]recovery.RecoveryPoint{}
+				for _, p := range points {
+					byID[p.ID] = p
+				}
+				p := byID[legacy.ID]
+				if p.Outcome != state.want || p.StartedAt != nil || p.CompletedAt != nil {
+					t.Fatalf("%s lost state or gained dates after reopen: %+v", state.native, p)
+				}
+				if p.SubjectRef.ID != "tank/apps" || p.RepositoryRef.ID != "vault/apps" || p.Details["lastState"] != state.native {
+					t.Fatalf("task source/target/evidence changed: %+v", p)
+				}
+				if byID[other.ID].Outcome != recovery.OutcomeUnknown {
+					t.Fatal("ingest crossed connection scope")
+				}
+				filtered, _, err := s.ListPoints(ctx, recovery.ListPointsOptions{Provider: recovery.ProviderTrueNAS, Outcome: state.want})
+				if err != nil || len(filtered) == 0 {
+					t.Fatalf("outcome filter lost undated %s: %+v, %v", state.want, filtered, err)
+				}
+			}
+		})
+	}
+}
+
 func TestStore_UpsertAndList(t *testing.T) {
 	t.Parallel()
 
