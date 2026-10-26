@@ -185,7 +185,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 		m.recordGuestMetrics(vms, nil, cycleStart)
 		m.state.UpdateVMs(vms)
 		m.updateResourceStore(m.currentStateWithScope())
-		views := registry.VMs()
+		views := m.currentModeReadState().VMs()
 		if len(views) != 1 {
 			t.Fatal("canonical projection lost guest")
 		}
