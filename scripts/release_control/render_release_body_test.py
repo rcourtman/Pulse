@@ -33,6 +33,26 @@ def _discover_rc_draft_packet_paths() -> tuple[str, ...]:
 
 
 class RenderReleaseBodyTest(unittest.TestCase):
+    def test_660_notes_scope_truenas_fixes_without_claiming_core_host_recovery(self) -> None:
+        for version in ("6.6.0", "6.6.0-rc.6"):
+            with self.subTest(version=version):
+                notes = (_REPO_ROOT / f"docs/releases/RELEASE_NOTES_v{version}.md").read_text()
+                render_release_body.validate_release_notes_shape(notes, version)
+                changes = notes.split("## TrueNAS, vSphere and Docker\n", 1)[1].split("\n## ", 1)[0]
+                self.assertIn("**TrueNAS disk history and SCALE CPU improve.**", changes)
+                self.assertNotIn("**TrueNAS readings recover.**", notes)
+                for retained in (
+                    "Native disk-temperature history works again",
+                    "limited fallback for empty reporting results",
+                    "Fractional SCALE app CPU readings keep reporting connected",
+                    "native aggregate CPU readings include idle zero",
+                ):
+                    self.assertIn(retained, changes)
+                known_issues = notes.split("## Known issues\n", 1)[1].split("\n## ", 1)[0]
+                self.assertIn("**TrueNAS CORE host readings remain unresolved.**", known_issues)
+                self.assertIn("CPU and memory reporting can still fail", known_issues)
+                self.assertIn("do not repair that CORE host-reporting request", known_issues)
+
     def test_beta_two_notes_describe_included_outcomes_not_the_fallback(self) -> None:
         notes = (_REPO_ROOT / "docs/releases/RELEASE_NOTES_v6.6.0-beta.2.md").read_text()
         render_release_body.validate_release_notes_shape(notes, "6.6.0-beta.2")
