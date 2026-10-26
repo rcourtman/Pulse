@@ -555,7 +555,7 @@ Download over verified HTTPS to a private file and inspect it before running.
 Keep API tokens out of command history and process arguments. Prefer --token-file;
 the caller owns input-file cleanup. Use the target host's root/admin shell where
 required. For private-file preparation and platform requirements, see:
-  https://github.com/rcourtman/Pulse/blob/main/docs/UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas
+  https://github.com/rcourtman/Pulse/blob/fe65bc4c4760dfe82f758dc926fb2cc456f49080/docs/UNIFIED_AGENT.md#private-file-installation-linux-macos-and-nas
 
 Options:
   --url <url>             Pulse server URL (e.g. https://pulse.example.com)

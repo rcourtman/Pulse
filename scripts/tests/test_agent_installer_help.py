@@ -4,6 +4,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -61,6 +62,17 @@ class AgentInstallerHelpTest(unittest.TestCase):
         usage = "\n".join(examples(text))
         self.assertNotRegex(usage, r"--token(?:\s|=)|http://|\|\s*(?:sudo\s+)?bash")
         self.assertIn('https://pulse.example.com --token-file "$HOME/.config/pulse/agent-token"', usage)
+
+    def test_help_links_to_immutable_private_file_preparation(self):
+        links = re.findall(r"https://github\.com/\S+", help_text())
+        self.assertEqual(len(links), 1)
+        self.assertRegex(
+            links[0],
+            r"^https://github\.com/rcourtman/Pulse/blob/[0-9a-f]{40}/"
+            r"docs/UNIFIED_AGENT\.md#private-file-installation-linux-macos-and-nas$",
+        )
+        self.assertIn("### Private-file installation: Linux, macOS and NAS",
+                      (ROOT / "docs/UNIFIED_AGENT.md").read_text())
 
     def test_source_header_and_shipped_help_recommend_the_same_commands(self):
         header = INSTALLER.read_text().split("# Usage:\n", 1)[1].split("\n# Options:", 1)[0]
