@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -152,7 +153,14 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 	} else {
 		client = proxmox.NewClusterClient("status-integrity", cfg, []string{server.URL}, nil)
 	}
-	m := &Monitor{config: &config.Config{}, state: models.NewState(), rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
+	am := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(am.Stop)
+	acfg := am.GetConfig()
+	acfg.Enabled = true
+	acfg.GuestDefaults.Memory = &alerts.HysteresisThreshold{Trigger: 80, Clear: 75}
+	acfg.MetricTimeThresholds = map[string]map[string]int{"guest": {"memory": 0}}
+	am.UpdateConfig(acfg)
+	m := &Monitor{config: &config.Config{}, alertManager: am, state: models.NewState(), rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
 	registry := unifiedresources.NewRegistry(nil)
 	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
 	id := makeGuestID("status-integrity", "node", 105)
@@ -204,6 +212,13 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 			if vm.Memory.Usage != 25 || vm.Memory.Observation.State != "current" {
 				t.Errorf("valid later status did not recover: %+v", vm.Memory)
 			}
+		}
+		wantAlerts := 1
+		if step == 3 {
+			wantAlerts = 0
+		}
+		if got := len(am.GetActiveAlerts()); got != wantAlerts {
+			t.Errorf("status admission changed established memory incident: alerts=%d want=%d", got, wantAlerts)
 		}
 		front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: vms}, m.mockModeFence.begin())
 		if len(front.Resources) != 1 || front.Resources[0].Memory == nil {
