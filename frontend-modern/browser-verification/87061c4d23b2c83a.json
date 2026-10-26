@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "2f827f1a1e6ad5e426a331c642e46a361d631828",
+  "verified_at": "2026-10-26T22:05:50.749262Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "9d5f30a1f84462d23be2d13346266149e90d102c1db5cbb48d153541e2400c78",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "f599d2697e862242ecf023adfe3397c5b467fdaa3f678ce04e3cf8e207162611",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "4fef93319f3c161d2276081b7724ba7afb26a00eb6355af73b45caa756bb4521"
+  },
+  "routes": [
+    "/settings/security/sso (production panel mounted in offline fixture, not full application)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production SSOProvidersPanel, state/model/API client, Dialog, Toast and CSS compiled from exact committed source with unchanged dependency manifests. Safe synthetic provider records; not native issuer, installed sign-in, server persistence or original recovery proof.",
+    "455 checks across 22 journeys in desktop Chromium and narrow WebKit. OIDC/SAML create and edit use exact captured API error envelopes and retain the attempted draft after failure. All 14 final captures received native image-tool pixel inspection.",
+    "Human guidance, including the entire ordinary no-configuration-saved sentence, is readable above the enabled Cancel and explicit save controls at both widths. JSON envelope metadata, upstream HTML and diagnostic canaries are absent from feedback and browser logs.",
+    "Short plain-text validation remains useful. Synthetic malformed, oversized and non-human JSON failures use bounded fallback; HTML gateways show status without raw markup. No no-save claim is invented for an unavailable response."
+  ],
+  "interactions": [
+    "Submit through the actual provider form and shared API client; browser payloads match the captured producer inputs. Before deliberate retry there is exactly one write, including CSRF and rate-limit refusals. Explicit retry produces exactly the second identical payload and the normal success confirmation, retaining the unrelated provider.",
+    "Focus the feedback and move by Tab/Shift+Tab; inspect full guidance, masked OIDC secret drafts and reachable controls. No document-wide horizontal overflow, uncaught page exception or fixture-server error.",
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 and WebKit 26.0. Browser contexts, browsers and preview server close normally. No external service or stopped diagnostic was exercised."
+  ]
+}
