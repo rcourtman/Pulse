@@ -361,6 +361,43 @@ describe('drawer History min-max band', () => {
       within(bandUtilization()).getByRole('img', { name: 'Utilization history' }),
     ).toBeTruthy();
   });
+
+  // Text that came and went in the readout re-wrapped it while the pointer
+  // moved, so the plot jumped up and down under a scrubbing mouse.
+  it('keeps the readout the same size at every inspected time', async () => {
+    vi.spyOn(ChartsAPI, 'getMetricsHistory').mockResolvedValue(
+      bandResponse({
+        cpu: [bandPoint(0, 5), bandPoint(1, 30, 10, 100), bandPoint(2, 100)],
+        memory: [bandPoint(0, 40), bandPoint(2, 41)],
+      }),
+    );
+    render(() => <GuestDrawerHistory target={bandTarget} range="1h" />);
+    const slider = await screen.findByRole('slider', { name: 'Inspect Utilization history' });
+    const slots = () =>
+      Array.from(bandUtilization().querySelectorAll<HTMLElement>('[data-reserve-a]')).map(
+        (slot) => [slot.textContent, slot.dataset.reserveA, slot.dataset.reserveB],
+      );
+    const resting = slots();
+    // Time, then CPU, Memory and Disk: each slot reserves the widest texts the
+    // range can put in it (digits compare as one shape under tabular-nums).
+    expect(resting.map(([, a, b]) => [a, b])).toEqual([
+      [expect.stringMatching(/^Latest stored · 00:00/), expect.stringMatching(/^Stored · 00:00/)],
+      ['000.0%', '00.0%'],
+      ['no reading', '00.0%'],
+      ['no reading', 'no reading'],
+    ]);
+
+    fireEvent.focus(slider);
+    fireEvent.input(slider, { target: { value: '1' } });
+    const inspected = slots();
+    expect(inspected.map(([text]) => text)).not.toEqual(resting.map(([text]) => text));
+    expect(inspected.map(([, a, b]) => [a, b])).toEqual(resting.map(([, a, b]) => [a, b]));
+
+    // The peak is labelled on the plot, not in the readout above it.
+    const peak = bandUtilization().querySelector('[data-history-peak="cpu"]');
+    expect(peak).toHaveTextContent('peak 100.0%');
+    expect(peak?.parentElement?.querySelector('[data-testid="guest-history-plot"]')).not.toBeNull();
+  });
 });
 
 describe('buildGuestDrawerHistoryBandPath', () => {
