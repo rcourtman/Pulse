@@ -558,3 +558,159 @@ func TestPBSNamespaceDiscoveryRecoveryAndScopedRemoval(t *testing.T) {
 		t.Error("empty scan crossed connection scope")
 	}
 }
+
+// Raw continuity after a failed refresh is not a new observation of its
+// snapshots. Cross the real HTTP client, ordinary poll, mapper and durable
+// asynchronous ingest without changing the store or its evidence semantics.
+func TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence(t *testing.T) {
+	for _, kind := range []string{"vm", "ct"} {
+		for _, scope := range []string{"snapshot", "datastore"} {
+			for _, failure := range []int{http.StatusServiceUnavailable, http.StatusForbidden} {
+				t.Run(fmt.Sprintf("%s/%s/%d", kind, scope, failure), func(t *testing.T) {
+					f := newPBSPosturePollFixture(t, 2, kind)
+					var phase, snapshotReads atomic.Int32
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						mode := phase.Load()
+						unreadable := scope == "datastore" && strings.Contains(r.URL.Path, "/unreadable/")
+						if strings.HasSuffix(r.URL.Path, "/groups") {
+							if mode == 1 && unreadable {
+								http.Error(w, "synthetic unreadable groups", failure)
+								return
+							}
+							groups := []map[string]any{}
+							if mode != 3 {
+								for _, id := range []string{"100", "101"} {
+									groups = append(groups, map[string]any{"backup-type": kind, "backup-id": id, "last-backup": f.backupAt, "backup-count": 1})
+								}
+							}
+							_ = json.NewEncoder(w).Encode(map[string]any{"data": groups})
+						} else if strings.HasSuffix(r.URL.Path, "/snapshots") {
+							snapshotReads.Add(1)
+							id := r.URL.Query().Get("backup-id")
+							if mode == 1 && scope == "snapshot" && id == "100" {
+								http.Error(w, "synthetic unreadable snapshots", failure)
+								return
+							}
+							verification := "ok"
+							if mode != 0 {
+								verification = "failed"
+							}
+							_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+								"backup-type": kind, "backup-id": id, "backup-time": f.backupAt,
+								"size": 1024, "files": []string{"index.json.blob"},
+								"verification": map[string]any{"state": verification}, "comment": "guest-" + id,
+							}}})
+						} else {
+							http.NotFound(w, r)
+						}
+					}))
+					t.Cleanup(server.Close)
+					var err error
+					f.client, err = pbs.NewClient(pbs.ClientConfig{Host: server.URL, TokenName: "fixture@pbs!reader", TokenValue: "fixture-only"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					ds := []models.PBSDatastore{{Name: "archive"}}
+					if scope == "datastore" {
+						ds = append(ds, models.PBSDatastore{Name: "unreadable"})
+					}
+					poll := func(instance string, mode int32, expire bool) {
+						phase.Store(mode)
+						if expire {
+							f.m.mu.Lock()
+							delete(f.m.pbsBackupCacheTime, instance)
+							f.m.mu.Unlock()
+						}
+						f.m.pollPBSBackups(context.Background(), instance, f.client, ds, nil)
+						f.wait(t)
+					}
+					index := func(instance string) map[string]recovery.RecoveryPoint {
+						out := map[string]recovery.RecoveryPoint{}
+						for _, point := range f.points(t, instance) {
+							out[point.ID] = point
+						}
+						return out
+					}
+					poll("pbs-other", 0, false)
+					other := index("pbs-other")
+					poll("pbs-main", 0, false)
+					original := index("pbs-main")
+					if len(original) != 2*len(ds) || len(other) != len(original) {
+						t.Fatal("fixture did not persist each connection's independent snapshots")
+					}
+					for _, point := range original {
+						if point.Evidence == nil || point.Verified == nil || !*point.Verified || point.SubjectResourceID == "" {
+							t.Fatalf("fixture lacks accepted linked/verified point: %+v", point)
+						}
+					}
+					failedPoint := func(point recovery.RecoveryPoint) bool {
+						if scope == "datastore" {
+							return point.RepositoryRef.Name == "unreadable"
+						}
+						return point.Details["vmid"] == "100"
+					}
+					for attempt := 0; attempt < 2; attempt++ {
+						poll("pbs-main", 1, attempt == 0)
+						current := index("pbs-main")
+						if len(current) != len(original) {
+							t.Fatal("incomplete read deleted durable history")
+						}
+						for id, before := range original {
+							after := current[id]
+							if failedPoint(before) {
+								if !reflect.DeepEqual(after, before) {
+									t.Errorf("failed %s read renewed or rewrote retained point %s: evidence %v -> %v", scope, id, before.Evidence.IngestedAt, after.Evidence.IngestedAt)
+								}
+							} else if after.Verified == nil || *after.Verified || after.Evidence == nil || !after.Evidence.IngestedAt.After(before.Evidence.IngestedAt) || after.SubjectResourceID != before.SubjectResourceID || !after.CompletedAt.Equal(*before.CompletedAt) {
+								t.Errorf("successful group lost its independent verification change, time or identity: %+v", after)
+							}
+						}
+						wantRaw := len(original)
+						if failure == http.StatusForbidden {
+							wantRaw -= 1
+							if scope == "datastore" {
+								wantRaw = 2
+							}
+						}
+						raw := 0
+						for _, row := range f.m.state.GetSnapshot().PBSBackups {
+							if row.Instance == "pbs-main" {
+								raw++
+							}
+						}
+						if raw != wantRaw {
+							t.Errorf("raw continuity/access withdrawal=%d, want %d", raw, wantRaw)
+						}
+						for _, posture := range f.postures(t) {
+							for _, provider := range posture.ProviderStates {
+								if provider.Scope == "pbs-main" && provider.HistoryCompleteness != recovery.ProtectionHistoryPartial {
+									t.Errorf("failed read claimed complete history: %+v", provider)
+								}
+							}
+						}
+						if !reflect.DeepEqual(index("pbs-other"), other) {
+							t.Error("failed poll changed another PBS connection")
+						}
+					}
+					poll("pbs-main", 2, true)
+					recovered := index("pbs-main")
+					for id, point := range recovered {
+						if point.Verified == nil || *point.Verified || point.Evidence == nil || !point.Evidence.IngestedAt.After(original[id].Evidence.IngestedAt) {
+							t.Errorf("ordinary recovery failed to accept changed verification: %+v", point)
+						}
+					}
+					reads := snapshotReads.Load()
+					poll("pbs-main", 2, false)
+					if snapshotReads.Load() != reads || len(index("pbs-main")) != len(original) {
+						t.Error("healthy TTL reuse reread snapshots or reconciled retained points away")
+					}
+					poll("pbs-main", 3, false)
+					if len(index("pbs-main")) != 0 || !reflect.DeepEqual(index("pbs-other"), other) {
+						t.Error("confirmed empty enumeration did not reconcile only its own connection")
+					}
+					t.Logf("kind=%s failed-scope=%s status=%d; retained evidence unchanged, accepted groups advanced, scoped recovery/TTL/removal pass", kind, scope, failure)
+				})
+			}
+		}
+	}
+}
