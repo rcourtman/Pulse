@@ -122,8 +122,8 @@ configuration import as proof of a complete multi-organisation migration.
    and enter its passphrase. Import replaces the included configuration and
    API-token records; it does not merge them with the destination's records.
 4. Check the result before changing DNS or agent addresses. A success message
-   establishes neither full recovery nor fresh monitoring. For a reload/apply
-   error, timeout or duplicate-request warning, follow [the failure checks
+   establishes neither full recovery nor fresh monitoring. For a
+   reload/apply failure, timeout or duplicate-request warning, follow [the failure checks
    below](#when-an-import-fails-or-times-out) before retrying or cutting over.
 
 Keep the archive, passphrase, configuration files and credentials out of issue
