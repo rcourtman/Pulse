@@ -122,13 +122,45 @@ configuration import as proof of a complete multi-organisation migration.
    and enter its passphrase. Import replaces the included configuration and
    API-token records; it does not merge them with the destination's records.
 4. Check the result before changing DNS or agent addresses. A success message
-   establishes neither full recovery nor fresh monitoring. If import reports a
-   reload/apply failure, settings may already have been written: preserve both
-   installations and inspect the error before repeating it.
+   establishes neither full recovery nor fresh monitoring. For a
+   reload/apply failure, timeout or duplicate-request warning, follow [the failure checks
+   below](#when-an-import-fails-or-times-out) before retrying or cutting over.
 
 Keep the archive, passphrase, configuration files and credentials out of issue
 threads. Use the authenticated settings form rather than a command containing
 a password, API token or session cookie.
+
+### When an import fails or times out
+
+**A failed response is not a rollback.** Keep both installations and the
+destination's pre-import backup. Distinguish these outcomes:
+
+- **Archive rejected:** check the original file and passphrase against the
+  reported error. Do not delete destination data or regenerate encryption keys.
+- **Saved, but not applied:** `Configuration saved, but live reload failed:`
+  means the imported settings are on disk, but the named live components did
+  not all reload. The list can name alert settings, webhook settings, email
+  settings or guest metadata; other components may already have applied.
+  Older messages `Configuration imported but failed to reload` and
+  `Configuration imported but failed to apply changes` also follow a saved
+  import. **Do not repeat the import.** It can overwrite legitimate changes
+  made since the first attempt; the error does not mean the old settings were
+  restored.
+- **No final response, or HTTP 409:** a timeout, lost connection or recently
+  submitted/still-running warning does not establish whether the original
+  import saved or applied. Do not resubmit it to discover the outcome. The
+  duplicate-request guard is temporary and process-local, not a durable
+  rollback or permission to retry after waiting or restarting.
+
+Keep the destination isolated from providers, agents, notifications and remote
+actions while reconciling a migration trial. Preserve the redacted error and
+check the **same destination and organisation**, using destination-local
+administrator access. Review the saved settings and the reported component's
+failure through normal maintenance before relying on it; a saved email or
+webhook destination does not prove notification delivery. Do not restart Pulse,
+send a test notification or repeat a backup just to clear the error. Resume the
+[single-owner handover](#hand-over-monitoring-once) only after the failed apply
+has been resolved; if its state remains uncertain, do not enable a second poller.
 
 ## Cut over and verify
 
