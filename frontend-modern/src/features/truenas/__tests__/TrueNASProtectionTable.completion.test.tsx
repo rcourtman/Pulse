@@ -149,4 +149,36 @@ describe('TrueNAS protection completion evidence', () => {
       ['/api/recovery/points?page=1&limit=200&platform=truenas'],
     ]);
   });
+
+  it('keeps the completion sort control labelled through direction changes, filters and an empty result', async () => {
+    apiFetchJSON.mockResolvedValueOnce({
+      data: [
+        point('running', { outcome: 'running', completedAt }),
+        point('completed', { completedAt }),
+      ],
+    });
+    mountProtection();
+    await vi.waitFor(() => expect(row('completed')).not.toBeNull());
+    const heading = () => screen.getByRole('columnheader', { name: /Completed/ });
+    const button = () => within(heading()).getByRole('button', { name: /Completed/ });
+    for (let i = 0; i < 3; i++) {
+      button().focus();
+      await fireEvent.click(button());
+      expect(button()).toHaveFocus();
+      expect(heading()).toHaveAttribute('scope', 'col');
+    }
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Running, 1' }));
+    expect(button()).toBeInTheDocument();
+    expect(rowIDs()).toEqual(['running']);
+    expect(completion('running')).toHaveTextContent(/^\s*-\s*$/);
+    const search = screen.getByPlaceholderText('Search snapshots or replication');
+    await fireEvent.input(search, { target: { value: 'not-a-dataset' } });
+    expect(screen.getByText('No protection events match current filters')).toBeInTheDocument();
+    await fireEvent.input(search, { target: { value: '' } });
+    expect(button()).toBeInTheDocument();
+    await fireEvent.click(button());
+    expect(heading()).toHaveAttribute('aria-sort', 'descending');
+    expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+  });
 });

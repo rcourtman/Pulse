@@ -1560,6 +1560,21 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolsTableSource).not.toContain('HEADER_SORT_BUTTON');
   });
 
+  it('keeps platform sort activation native and responsive labels stable at the shared boundary', () => {
+    const heading = sharedPlatformPageSource.split('export function PlatformSortableTableHead')[1]!
+      .split('export const formatPlatformTableTextValue')[0]!;
+    expect(heading).toContain('scope="col"');
+    expect(heading).toContain('children(() => props.children)');
+    expect(heading).toContain('<button');
+    expect(heading).toContain('type="button"');
+    expect(heading).toContain('focus-visible:ring-inset');
+    expect(heading).toContain('<span aria-hidden="true">');
+    // Native keyboard clicks bubble to the one cell handler. A second key
+    // handler would double-advance Enter or Space through the sort cycle.
+    expect(heading).not.toContain('onKeyDown=');
+    expect(heading.match(/onClick=/g)).toHaveLength(1);
+  });
+
   it('keeps the retired summary chart-visibility toggle out of the shared toolbar', () => {
     // The workload summary chart section this toggle controlled is deleted and
     // no other page exposes a chart show/hide control. A returning summary

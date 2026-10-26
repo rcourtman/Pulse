@@ -20,6 +20,24 @@
 
 ## Purpose
 
+### Platform sort headings are native keyboard controls
+
+The shared platform sort heading declares column scope and contains a native
+non-submitting button. Enter, Space and pointer activation use the same existing
+three-step sort cycle; the whole heading remains a pointer target. Only the
+active column has `aria-sort`, and its visual direction marker is hidden from
+the accessible name. Non-sortable headings have no focusable control. Responsive
+labels are resolved once so direction updates cannot replace their DOM or erase
+their text. Column alignment, visibility, missing-value ordering and per-table
+sort persistence are unchanged.
+
+`PlatformSortableTableHead.test.tsx` covers structure, stable responsive labels,
+focus, cycle/reset, active-only announcements and restored sorting. The real
+query/normalizer consuming TrueNAS completion tests retain the labelled control
+through filtering, an empty result and restoration, without inventing a finish
+for a running task. Native desktop keyboard and narrow touch behaviour require
+source-bound browser proof; component event dispatch alone is not that proof.
+
 ### Visible action text remains in accessible names (24 October 2026)
 
 Infrastructure section shortcuts include their visible Add action and group

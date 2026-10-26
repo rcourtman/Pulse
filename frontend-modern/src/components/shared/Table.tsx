@@ -193,7 +193,7 @@ const resolveTablePaddingClass = (vertical: TableAxisPadding, customClass?: stri
     .join(' ');
 };
 
-export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
+export type TableHeadProps = JSX.ThHTMLAttributes<HTMLTableCellElement> & {
   colSpan?: number;
   colspan?: number;
   width?: string | number;
