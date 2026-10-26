@@ -272,8 +272,9 @@ asking only for a consequential remaining distinction. No refile or new
 diagnostics are required by version classification.
 
 Ordinary emphasis and a link's visible label do not change that field's meaning,
-including in a legacy list item. Link destinations and titles, literal code,
-images and withdrawn text cannot declare a field or supply its version.
+including in a legacy list item. Link destinations and titles, images and
+withdrawn text cannot supply a version. Literal examples cannot declare a
+field; a real field may still contain a code-formatted version value.
 
 This boundary is deliberate: preserving an explicit reporter declaration is
 safe to automate, while deciding whether two observations are one root cause is
