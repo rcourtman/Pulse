@@ -94,11 +94,11 @@ func TestClientSnapshotsAndContent(t *testing.T) {
 			})
 		case "/api2/json/nodes/node1/qemu/100/snapshot":
 			writeJSON(t, w, map[string]interface{}{
-				"data": []Snapshot{{Name: "current"}, {Name: "snap1"}},
+				"data": []Snapshot{{Name: "current"}, {Name: "snap1", SnapTime: 1700000000}},
 			})
 		case "/api2/json/nodes/node1/lxc/101/snapshot":
 			writeJSON(t, w, map[string]interface{}{
-				"data": []Snapshot{{Name: "current"}, {Name: "snap2"}},
+				"data": []Snapshot{{Name: "current"}, {Name: "snap2", SnapTime: 1700000001}},
 			})
 		default:
 			http.NotFound(w, r)

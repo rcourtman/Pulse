@@ -1588,26 +1588,7 @@ func (c *Client) GetVMSnapshots(ctx context.Context, node string, vmid int) ([]S
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Snapshot `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter out the 'current' snapshot which is not a real snapshot
-	var snapshots []Snapshot
-	for _, snap := range result.Data {
-		if snap.Name != "current" {
-			snap.VMID = vmid
-			snapshots = append(snapshots, snap)
-		}
-	}
-
-	return snapshots, nil
+	return readSnapshotInventory(resp, vmid)
 }
 
 // GetContainerSnapshots returns snapshots for a specific container
@@ -1616,26 +1597,7 @@ func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid in
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []Snapshot `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	// Filter out the 'current' snapshot which is not a real snapshot
-	var snapshots []Snapshot
-	for _, snap := range result.Data {
-		if snap.Name != "current" {
-			snap.VMID = vmid
-			snapshots = append(snapshots, snap)
-		}
-	}
-
-	return snapshots, nil
+	return readSnapshotInventory(resp, vmid)
 }
 
 // ClusterStatus represents the cluster status response

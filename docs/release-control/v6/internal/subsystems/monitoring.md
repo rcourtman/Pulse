@@ -8368,3 +8368,24 @@ FQDN and IP dial URLs, and the dial URL itself are unchanged.
 `internal/monitoring/monitor_pve_cluster_refresh_test.go` registers the
 unpinned strict-member link, override precedence and the URL builder cases
 (custom port, IPv6, FQDN, IP and missing address).
+
+### Snapshot HTTP success must be a complete inventory
+
+Both QEMU and LXC snapshot readers admit only a fully read, bounded HTTP-200
+response with one unambiguous JSON object and an explicit `data` array. Missing,
+null, error-bearing, duplicate/case-overwritten or trailing envelopes and invalid
+rows return no inventory, rather than an authoritative empty or partial list.
+Named snapshots require a nonblank unique name and a positive creation time;
+Proxmox's `current` marker is filtered without requiring a timestamp. Unique
+provider metadata, valid snapshots, explicit empty arrays and current-only lists
+remain supported. Response bodies do not become admission diagnostics. Existing
+transport, auth, cluster failover, guest command and polling budgets are unchanged.
+
+`TestSnapshotInventoryResponseAdmission` and the accepted/completed-response
+controls exercise both actual HTTP readers. `TestPVESnapshotHTTPInvalidResponseRetainsHistory`
+connects them to snapshot polling, warnings, asynchronous ingest and the public
+recovery-store reader across warm/cold caches, failed responses, accepted peers,
+complete recovery and confirmed scoped removal. `TestPVESnapshotHTTPBrowserProducer`
+feeds the actual consuming proof. These are synthetic HTTP/provider fixtures,
+not native guest safety, backup execution, installed recovery or a diagnosis of
+#3248. The separate prior lifecycle-suite failure remains unexplained.
