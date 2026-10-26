@@ -20,6 +20,22 @@
 
 ## Purpose
 
+### Backup filters also scope activity
+
+The existing Proxmox By date chart and date warning consume the same
+feature-owned filtered inventory as the table, before the selected-day facet.
+Changing source/verification, search, node, type or exact location updates
+both counts and volume without a new read. Selecting a day narrows only the
+list and leaves other scoped days selectable; clearing restores the scope.
+An empty or unresolved scope does not advertise estate-wide activity.
+The page explains this relationship beside the existing chart. Aggregate
+backup-health counts remain server-owned and estate-wide.
+
+The registered `ProxmoxBackupsTable.test.tsx` scope cases and source-bound
+desktop/narrow browser journeys cover the shared filter rail, keyboard/touch
+day selection, metric switching, empty matches and recovery. No shared-filter,
+route, navigation, access or backup operation changes.
+
 ### Backup activity uses calendar-day chart slots
 
 The Proxmox backup activity producer supplies one slot per consecutive local

@@ -510,10 +510,31 @@ export const ProxmoxBackupsTable: Component<{
     'snapshot',
   ];
 
+  // The chart and list share every inventory facet. Day selection narrows
+  // only the list so other days remain available to select in the chart.
+  const scopedRecoverableArtifacts = createMemo(() => {
+    const term = search().trim().toLowerCase();
+    const filter = recoverableFilter();
+    return recoveryModel().recoverableArtifacts.filter((artifact) => {
+      if (!nodeMatches(artifact.workload.node)) return false;
+      if (!typeMatches(artifact.workload.type)) return false;
+      if (!locationMatches(artifact)) return false;
+      if (
+        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
+        artifact.sourceKind !== filter
+      ) {
+        return false;
+      }
+      if (filter === 'verified' && artifact.verified !== true) return false;
+      if (filter === 'unverified' && artifact.verified !== false) return false;
+      return recoverableArtifactMatchesSearch(artifact, term);
+    });
+  });
+
   const recoverableTimeline = createMemo(() =>
     buildBackupActivityTimeline<RecoverableArtifact>(
       chartRange(),
-      recoveryModel().recoverableArtifacts,
+      scopedRecoverableArtifacts(),
       (artifact) => artifact.createdMs,
       (artifact) =>
         !isCompletedRecoveryArtifact(artifact)
@@ -537,30 +558,13 @@ export const ProxmoxBackupsTable: Component<{
   );
 
   const filteredRecoverableArtifacts = createMemo(() => {
-    const term = search().trim().toLowerCase();
-    const filter = recoverableFilter();
     const dateKey = selectedDateKey();
-    const list = recoveryModel().recoverableArtifacts.filter((artifact) => {
-      if (!nodeMatches(artifact.workload.node)) return false;
-      if (!typeMatches(artifact.workload.type)) return false;
-      if (!locationMatches(artifact)) return false;
-      if (
-        (filter === 'pbs' || filter === 'archive' || filter === 'snapshot') &&
-        artifact.sourceKind !== filter
-      ) {
-        return false;
-      }
-      if (filter === 'verified' && artifact.verified !== true) return false;
-      if (filter === 'unverified' && artifact.verified !== false) return false;
-      if (
-        dateKey &&
-        (artifact.createdMs === undefined ||
-          recoveryDateKeyFromTimestamp(artifact.createdMs) !== dateKey)
-      ) {
-        return false;
-      }
-      return recoverableArtifactMatchesSearch(artifact, term);
-    });
+    const list = scopedRecoverableArtifacts().filter(
+      (artifact) =>
+        !dateKey ||
+        (artifact.createdMs !== undefined &&
+          recoveryDateKeyFromTimestamp(artifact.createdMs) === dateKey),
+    );
     const sortKey = recoverableSortKey();
     const direction = recoverableSortDirection();
     list.sort((a, b) => {
@@ -852,7 +856,7 @@ export const ProxmoxBackupsTable: Component<{
 
             <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
               <Show
-                when={recoveryModel().recoverableArtifacts.some(
+                when={scopedRecoverableArtifacts().some(
                   (artifact) => artifact.createdMs === undefined,
                 )}
               >
@@ -889,21 +893,29 @@ export const ProxmoxBackupsTable: Component<{
                   </div>
                 }
               >
-                <BackupActivityChart
-                  title={
-                    recoverableMetricMode() === 'volume'
-                      ? 'Completed restore volume per day'
-                      : 'Completed restore points per day'
-                  }
-                  noun="restore point"
-                  segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-                  range={chartRange}
-                  onRangeChange={setChartRange}
-                  timeline={recoverableTimeline}
-                  selectedDateKey={selectedDateKey}
-                  onToggleDay={toggleDay}
-                  metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
-                />
+                <div class="space-y-1">
+                  <p class="text-xs text-muted">
+                    Activity follows the backup filters. Selecting a day narrows only the list.
+                  </p>
+                  <BackupActivityChart
+                    title={
+                      recoverableMetricMode() === 'volume'
+                        ? 'Completed restore volume per day'
+                        : 'Completed restore points per day'
+                    }
+                    noun="restore point"
+                    segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                    range={chartRange}
+                    onRangeChange={setChartRange}
+                    timeline={recoverableTimeline}
+                    selectedDateKey={selectedDateKey}
+                    onToggleDay={toggleDay}
+                    metricToggle={{
+                      mode: recoverableMetricMode,
+                      onChange: setRecoverableMetricMode,
+                    }}
+                  />
+                </div>
               </Show>
             </Show>
 

@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Backup activity shares the list's inventory scope
+
+By date activity counts and volume use the same search, node, workload type,
+exact backup location and source/verification filters as the restore-point
+list. Unresolved locations and empty matches cannot draw another scope's
+activity. Day selection is applied afterwards only to the list, so the chart
+continues to offer all dates in that inventory scope. Unknown-date notices
+also describe only the matching inventory. Completed-only admission, local
+calendar buckets, aggregate server-owned posture, query cadence and all
+backup/recovery operations are unchanged.
+
+`ProxmoxBackupsTable.test.tsx` exercises every facet, combined filters,
+case-sensitive/ambiguous locations, empty matches, count/volume, and switching
+and clearing days/filters without extra reads. Source-bound desktop/narrow
+browser proof exercises the actual inventory parser/model/chart/list and
+shared filter controls. This corrects inspection, not #3248's original stale
+timestamps or native guest recovery.
+
 ### Backup activity ranges follow local calendar dates
 
 The existing 7/30/90/365-day Proxmox backup activity windows contain exactly
