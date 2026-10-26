@@ -133,6 +133,23 @@ or permissions:
 | Gateway is present but statistics are missing | Clear view filters, check whether the connection is paused, and compare the particular dataset and time window with PMG. A successful test or version read does not establish dataset access. |
 | Cluster nodes or node queues are missing | Compare the gateway's existing cluster inventory and each affected node's native queue view. One reachable node does not prove every node was collected. |
 
+### Response decoding is not a network verdict
+
+An error such as `pmg_queue_status` followed by `failed to decode response` or
+`cannot unmarshal array` means Pulse received a response it could not interpret.
+It does not, by itself, establish that the gateway is unreachable, the password
+is wrong or the queue is empty. A separate transport or permission error still
+needs its own assessment; a successful **Test Connection** does not resolve the
+decoding failure.
+
+Use PMG's own existing queue view for queue status while Pulse cannot read it.
+Keep the affected dataset, original time and short redacted error for the report;
+do not attach the full queue response, which can contain mail details. Do not
+change DNS, disable certificate verification, grant broader permissions, re-add
+the connection or retry, delete or release mail to diagnose a decoder error.
+Turning off queue collection removes coverage; it does not repair decoding or
+establish that an existing alert has recovered.
+
 For a new connection, allow its configured polling interval rather than a fixed
 one- or two-cycle promise. If a previously working reading stops advancing,
 retain that observation and the original bounded error; do not repeatedly test,
