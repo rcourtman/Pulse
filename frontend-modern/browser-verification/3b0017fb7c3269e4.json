@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "5b4eebbb2e41c36b0dfb5d099f691b314b184295",
+  "verified_at": "2026-10-26T02:04:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "141d1521dbcb4000cb66b4f9b869997570a00793d1b70a26f10da7309850e3e7"
+  },
+  "routes": [
+    "/truenas/protection"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Corrected warning rendered after a real recovery-points polling failure, with prior dated success/failed/running events retained",
+    "Settled filtered-empty result with the complete warning still visible",
+    "Pending manual retry, disabled duplicate request, and warning preserved after repeated failure",
+    "Successful replacement read clears the warning and preserves its returned warning outcome"
+  ],
+  "interactions": [
+    "Desktop visible keyboard focus and Enter refresh",
+    "Desktop keyboard and phone touch detail disclosure/close",
+    "Phone touch refresh with at least 44px button height",
+    "Search, filtered-empty state and clearing search",
+    "Disabled pending refresh cannot submit another request"
+  ],
+  "browser": {
+    "name": "Chromium",
+    "version": "141.0.7390.37",
+    "channel": "chromium"
+  },
+  "client": {
+    "name": "Playwright",
+    "version": "1.56.1"
+  },
+  "proof_source_sha": "5b4eebbb2e41c36b0dfb5d099f691b314b184295",
+  "notes": [
+    "New exact-source consuming build uses the real recovery query, transport normalization, table, shared components and product styles, with safe local HTTP fixtures. This is not a full application backend or native appliance acceptance.",
+    "37 checks including source/asset identity groups, eight bounded GETs and four captures. All four desktop/phone captures were opened with native view_image and visually inspected.",
+    "Complete warning sentences remain readable without overflow in dark desktop and light narrow views, including filtered-empty results. Desktop refresh focus is visible.",
+    "Existing narrow table-cell truncation remains unchanged. Wider original initial/error/empty/access-denial browser proof stays attributed, not replayed for this punctuation correction."
+  ]
+}
