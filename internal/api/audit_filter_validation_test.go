@@ -159,7 +159,7 @@ func TestAuditScopePreservesFilters(t *testing.T) {
 					if f.Limit != 1 || f.Offset != 7 || logger.counts != 1 {
 						t.Fatalf("list paging = %+v, counts=%d", f, logger.counts)
 					}
-				} else if f.Limit != 0 || f.Offset != 0 || logger.verifications != 1 {
+				} else if f.Limit != audit.MaxExportEvents+1 || f.Offset != 0 || logger.verifications != 1 {
 					t.Fatalf("export/summary = %+v, verifies=%d", f, logger.verifications)
 				}
 			})
