@@ -174,7 +174,7 @@ describe('TrueNAS protection refresh evidence', () => {
     expect(document.body).not.toHaveTextContent('previously loaded');
     expect(document.body).not.toHaveTextContent('private-provider-detail');
     apiFetchJSON.mockResolvedValueOnce({ data: [] });
-    await fireEvent.click(screen.getByRole('button', { name: 'Refresh', exact: true }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await vi.waitFor(() =>
       expect(screen.getByText('No TrueNAS protection activity')).toBeInTheDocument(),
     );
