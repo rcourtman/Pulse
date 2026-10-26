@@ -191,6 +191,23 @@ class PMGDocsTest(unittest.TestCase):
         self.assertIn("does not guarantee a notification was routed or received", self.guide)
         self.assertIn("TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing", self.text)
 
+    def test_decoder_failure_preserves_native_coverage_without_gateway_changes(self):
+        section = self.guide.split("Response decoding is not a network verdict", 1)[1]
+        section = section.split("For a new connection", 1)[0]
+        for phrase in ("pmg_queue_status", "failed to decode response",
+                       "cannot unmarshal array", "received a response it could not interpret",
+                       "does not, by itself, establish", "queue is empty",
+                       "separate transport or permission error",
+                       "Test Connection does not resolve the decoding failure",
+                       "PMG's own existing queue view", "short redacted error",
+                       "do not attach the full queue response",
+                       "Do not change DNS, disable certificate verification, grant broader permissions",
+                       "retry, delete or release mail",
+                       "Turning off queue collection removes coverage",
+                       "does not repair decoding"):
+            self.assertIn(phrase, section)
+        self.assertNotRegex(section, r"https?://|```|\b(?:curl|wget)\b")
+
 
 if __name__ == "__main__":
     unittest.main()
