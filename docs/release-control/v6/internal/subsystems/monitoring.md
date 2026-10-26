@@ -134,6 +134,13 @@ unknown access rather than claiming a successful empty enumeration. Independent
 readable targets still publish accepted rows. An ordinary re-enable allows the
 existing read path again; a successful empty reply can then establish removal.
 
+Proxmox lists storage restricted to other nodes as disabled on every node it
+is excluded from, so a skip is judged per storage after all nodes are walked: a
+target skipped on one node but listed on another was read, and does not make
+the provider history partial. Only a target no node listed counts as unread.
+`TestPVEProtectionNodeRestrictedStorageReadElsewhereIsComplete` covers both
+node orders and verifies no content read on an excluded node.
+
 `TestPVEProtectionDisabledStorageIsNotAnEmptyRead` drives storage polling,
 asynchronous recovery ingest and posture reads with warm/cold inventory, one/all
 disabled targets, repeated skips, re-enable, confirmed absence and recovery.

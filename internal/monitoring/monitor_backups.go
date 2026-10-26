@@ -190,6 +190,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	permissionFailureCount := 0         // Number of node/storage reads rejected by authorization
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
+	unqueryableStorages := map[string]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
 	// Build guest lookup map to find actual node for each VMID
@@ -282,8 +283,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				// Configured but unreadable is not an empty content listing.
 				// Preserve the no-query boundary (notably disabled storage)
 				// without letting this skipped scope delete known history or
-				// qualify the provider-wide observation as complete.
-				contentFailures++
+				// qualify the provider-wide observation as complete. PVE also
+				// reports storage restricted to other nodes as disabled here,
+				// so whether it went unread is decided after every node.
+				unqueryableStorages[storage.Storage] = struct{}{}
 				if _, ok := storageSuccess[storage.Storage]; !ok {
 					storagePreserveNeeded[storage.Storage] = struct{}{}
 				}
@@ -447,6 +450,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		// A cancelled enumeration cannot publish a successful empty inventory
 		// or renew provider evidence for a payload we did not accept.
 		return
+	}
+
+	// A storage skipped on one node is unread only if no node listed it.
+	for storageName := range unqueryableStorages {
+		if _, ok := storageSuccess[storageName]; !ok {
+			contentFailures++
+		}
 	}
 
 	// Carry-forward serves the live inventory, not a new provider observation.
