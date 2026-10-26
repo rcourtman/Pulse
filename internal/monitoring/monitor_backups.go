@@ -175,6 +175,9 @@ func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
 }
 
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
+	if ctx.Err() != nil {
+		return
+	}
 
 	var allBackups []models.StorageBackup
 	var pbsConfirmations []models.PBSGuestConfirmation
@@ -225,6 +228,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
+		if ctx.Err() != nil {
+			return
+		}
 		if nodeEffectiveStatus[node.Node] != "online" {
 			unreadNodes[node.Node] = struct{}{}
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
@@ -238,7 +244,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		var err error
 
 		for attempt := 1; attempt <= 2; attempt++ {
+			if ctx.Err() != nil {
+				return
+			}
 			storages, err = client.GetStorage(ctx, node.Node)
+			if ctx.Err() != nil {
+				return
+			}
 			if err == nil {
 				break // Success
 			}
@@ -250,9 +262,16 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					log.Warn().
 						Str("node", node.Node).
 						Str("instance", instanceName).
-						Msg("Storage query timed out, retrying with extended timeout...")
-					// Give it a bit more time on retry
-					time.Sleep(2 * time.Second)
+						Msg("Storage query timed out, retrying within the remaining backup poll budget")
+					// Do not add two seconds per remaining node after the
+					// shared budget expires or the monitor is stopped.
+					timer := time.NewTimer(2 * time.Second)
+					select {
+					case <-ctx.Done():
+						timer.Stop()
+						return
+					case <-timer.C:
+					}
 					continue
 				}
 			}
@@ -281,6 +300,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 		// For each storage that can contain backups or templates
 		for _, storage := range storages {
+			if ctx.Err() != nil {
+				return
+			}
 			// Check if storage supports backup content
 			if !strings.Contains(storage.Content, "backup") {
 				continue
@@ -307,6 +329,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
+			if ctx.Err() != nil {
+				return
+			}
 			if err != nil {
 				monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_content", instanceName, err).WithNode(node.Node)
 				// Check if this is a permission error
