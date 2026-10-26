@@ -759,6 +759,61 @@ Unix real-agent controls keep their independent two-second watchdog, with
 process-group cancellation and separate build/probe timings. These source
 fixtures do not establish signed native installation, persistence or recovery.
 
+### Legacy credential cleanup needs complete inventory and preserved keys
+
+Cluster cleanup must read the complete successful `pvesh` JSON response, validate
+all node identities and resolve every address before changing any SSH key file.
+Python receives its program through `-c`, not the response's stdin. Missing tools,
+empty/malformed inventory, failed reads or unresolved nodes return nonzero; they
+must not silently select local-only cleanup. An explicit `--local-only` remains
+available on each node without cluster discovery or SSH. Local keys are cleaned
+once and duplicate remote addresses once, with strict SSH host verification intact.
+
+Local key replacement uses an adjacent temporary file and preserves the original
+on read/comparison/metadata/rename failure. A no-match grep result is distinct
+from a read failure; removing an all-managed file may legitimately produce an
+empty file. Only the two existing Pulse comment suffixes are eligible, and
+unrelated keys and file metadata remain intact. Conditional helper invocation
+must propagate failure rather than print a successful key-removal claim.
+
+Remote cleanup resolves the fixed `authorized_keys` pathname before replacing
+its target; it must never replace a cluster-shared symlink with a private copy.
+A dangling link, non-file target or failed resolution is not confirmed absence.
+Filtering uses a separately opened adjacent staging file, checks grep's no-match
+versus error status and preserves target metadata before atomic replacement.
+Read, staging, comparison, metadata and rename failures preserve the target and
+return failure; an already-clean shared target is not replaced. Staging cleanup
+failure is also nonzero, not a successful remote removal. Strict host trust and
+the existing fixed remote pathname remain unchanged.
+
+Opted-in API cleanup likewise requires a complete valid JSON token inventory.
+It does not reinterpret a failed or malformed response as empty or fall back to
+a guessed table. User deletion follows only successful removal of every listed
+token; unavailable tools and token/user removal failures remain nonzero through
+main, including when the caller disables shell errexit. Normal local service
+reload still runs after file cleanup. No new access is acquired or trust enrolled.
+
+`TestUninstallSensorProxyClusterInventoryUsesEveryValidatedNode`,
+`TestUninstallSensorProxyIncompleteInventoryNeverStartsKeyCleanup`,
+`TestUninstallSensorProxyMissingInventoryToolRequiresExplicitLocalOnly`,
+`TestUninstallSensorProxyKeyReplacementPreservesOriginalOnEveryFailure`,
+`TestUninstallSensorProxyLocalOnlyPropagatesKeyFailure`,
+`TestUninstallSensorProxyAPICleanupRequiresCompleteInventoryAndRemovals` and
+`TestUninstallSensorProxyMainCannotHideAPIRemovalFailure` execute closed shell
+fixtures through the repository's Go suite. Existing SSH trust and container
+state tests remain necessary. These are executable source/producer checks, not
+native Proxmox cleanup, installed recovery or reporter acceptance.
+
+`TestUninstallSensorProxyRemoteKeyPayloadPreservesSharedTarget` substitutes only
+the fixed remote key pathname and executes the actual SSH payload in a separate
+POSIX shell. Regular/shared-link paths, peer readback, already-clean targets,
+all-managed/absent/broken/non-file inputs and injected operation failures check
+key bytes, symlink/inode continuity, modes, staging cleanup and truthful status.
+`TestUninstallSensorProxyRemotePayloadFailureReachesMain` exercises complete
+inventory through the real cluster/remote helpers into main's incomplete result,
+without live SSH, Proxmox or customer operations. These checks do not establish
+native cluster-filesystem semantics or any original installed recovery.
+
 ### Legacy sensor cleanup requires observed stopped targets
 
 The legacy sensor uninstaller must confirm each existing unit has stopped and
