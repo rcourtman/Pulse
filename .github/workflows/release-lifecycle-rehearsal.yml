@@ -51,16 +51,10 @@ jobs:
           TO_INPUT: ${{ inputs.to_version }}
         run: |
           set -euo pipefail
-          releases_json="$(mktemp)"
-          gh api --paginate "repos/${REPOSITORY}/releases?per_page=100" \
-            | jq -s 'add // []' > "${releases_json}"
-          latest_tag="$(gh api "repos/${REPOSITORY}/releases/latest" --jq '.tag_name')"
           resolved="$(python3 scripts/release_lifecycle_rehearsal_versions.py \
-            --releases-json "${releases_json}" \
-            --latest-tag "${latest_tag}" \
+            --repository "${REPOSITORY}" \
             --from "${FROM_INPUT}" \
             --to "${TO_INPUT}")"
-          rm -f "${releases_json}"
           from_tag="$(sed -n 's/^from_tag=//p' <<<"${resolved}")"
           to_tag="$(sed -n 's/^to_tag=//p' <<<"${resolved}")"
           reason="$(sed -n 's/^reason=//p' <<<"${resolved}")"

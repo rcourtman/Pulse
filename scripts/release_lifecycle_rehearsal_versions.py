@@ -20,7 +20,9 @@ import argparse
 import functools
 import json
 import re
+import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +42,66 @@ class Selection:
     from_tag: str
     to_tag: str
     reason: str
+
+
+def _github_release_json(repository: str, *, latest: bool = False) -> object:
+    """Read only release metadata; never retry a refusal or an unknown error."""
+    endpoint = f"repos/{repository}/releases"
+    command = ["gh", "api", "--method", "GET"]
+    if latest:
+        command.append(f"{endpoint}/latest")
+    else:
+        command.extend(["--paginate", "--slurp", f"{endpoint}?per_page=100"])
+    for attempt in range(1, 4):
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=False, timeout=60,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise ResolutionError("GitHub release metadata read timed out; not retrying") from error
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        if result.returncode == 0:
+            # A successful but malformed/incomplete response is not a
+            # transport-only failure and must not select an older fallback.
+            return json.loads(result.stdout)
+        # Require the complete diagnostic to match the observed peer stream
+        # cancellation. Any additional error (including 401/403/429), unknown
+        # failure, timeout or signal is terminal. Discard partial stdout.
+        if (
+            result.returncode != 1
+            or attempt == 3
+            or re.fullmatch(
+                r"stream error: stream ID [0-9]+; CANCEL; received from peer\n?",
+                result.stderr,
+            ) is None
+        ):
+            raise ResolutionError(
+                f"GitHub release metadata read failed (exit {result.returncode}, attempt {attempt}/3)"
+            )
+        print(
+            f"release lifecycle rehearsal: metadata stream cancelled by peer; "
+            f"retrying the same GET ({attempt}/2)", file=sys.stderr,
+        )
+        time.sleep(attempt * 2)
+    raise AssertionError("unreachable")
+
+
+def discover(repository: str) -> tuple[list[dict], str]:
+    # No URL, host, endpoint, method, token or read-filter overrides. The
+    # workflow supplies github.repository, not a dispatch input.
+    if re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*", repository) is None:
+        raise ResolutionError("invalid GitHub repository name")
+    pages = _github_release_json(repository)
+    if not isinstance(pages, list) or not pages or any(not isinstance(page, list) for page in pages):
+        raise ResolutionError("GitHub release inventory must contain complete array pages")
+    releases = [release for page in pages for release in page]
+    if any(not isinstance(release, dict) for release in releases):
+        raise ResolutionError("GitHub release inventory contains a non-object")
+    latest = _github_release_json(repository, latest=True)
+    if not isinstance(latest, dict) or not isinstance(latest.get("tag_name"), str):
+        raise ResolutionError("GitHub latest release must contain a tag_name")
+    return releases, latest["tag_name"]
 
 
 def parse_tag(tag: str) -> tuple[tuple[int, int, int], tuple[str, ...]]:
@@ -152,21 +214,29 @@ def resolve(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--releases-json", required=True, type=Path,
-                        help="JSON array of GitHub release objects (all pages)")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--releases-json", type=Path,
+                        help="offline JSON array of GitHub release objects (all pages)")
+    source.add_argument("--repository", help="read published release metadata from this GitHub repository")
     parser.add_argument("--latest-tag", default="",
-                        help="tag_name of GET /repos/{repo}/releases/latest")
+                        help="tag_name of GET /repos/{repo}/releases/latest (offline mode only)")
     parser.add_argument("--from", dest="from_version", default="")
     parser.add_argument("--to", dest="to_version", default="")
     args = parser.parse_args(argv)
+    if args.repository and args.latest_tag:
+        parser.error("--latest-tag cannot override live --repository discovery")
 
     try:
-        releases = json.loads(args.releases_json.read_text(encoding="utf-8"))
+        if args.repository:
+            releases, latest_tag = discover(args.repository)
+        else:
+            releases = json.loads(args.releases_json.read_text(encoding="utf-8"))
+            latest_tag = args.latest_tag.strip()
         if not isinstance(releases, list):
             raise ResolutionError("releases JSON must be an array")
         selection = resolve(
             releases,
-            args.latest_tag.strip(),
+            latest_tag,
             args.from_version.strip(),
             args.to_version.strip(),
         )

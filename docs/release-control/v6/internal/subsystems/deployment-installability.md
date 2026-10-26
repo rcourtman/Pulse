@@ -8145,6 +8145,17 @@ defaulted and nothing newer is published, the pair is the previous stable to
 the latest stable. An explicit pair must be published and move forward, so a
 same-version or missing-target run fails instead of passing.
 
+Live discovery uses that resolver's `--repository` mode. Each fixed metadata
+GET has a 60-second deadline. Only exit 1 with the complete diagnostic
+`stream error: stream ID <number>; CANCEL; received from peer` permits two
+retries of the identical GET, after two and four seconds. Each failed
+attempt's diagnostic remains visible and its partial output is discarded.
+Paginated inventory must be complete array pages; malformed JSON/shape, access
+refusals, mixed or unknown errors, timeouts and process cancellation stop
+discovery without pair outputs or installation. An advertised latest-tag
+override is unavailable in live mode. No installer, updater, rollback or
+release action is retried by this policy.
+
 `scripts/release_lifecycle_rehearsal.sh` defaults to running every phase inside the same
 digest-pinned `jrei/systemd-debian:12` container as the install smoke.
 
@@ -8199,7 +8210,11 @@ or altered seeded field fails `--check-snapshot`, and a deleted file or a
 rewritten secret store fails `--compare-datadir`), the harness contract (the real updater
 invocation without bypass flags, the signed installer, the shared image digest,
 and per-phase identity, settings and data-dir checks) and the workflow trust
-shape. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
+shape. Discovery tests execute the actual workflow resolution shell and CLI
+against a synthetic `gh`, proving recovered complete-page pair outputs and
+no outputs on refusal or malformed data. Process controls cover exhaustion,
+mixed errors, signals, deadlines and unchanged GET identity; these are not
+installed-recovery or live-provider acceptance. A local podman run (amd64 emulation) of `v6.4.1 -> v6.4.5 -> v6.4.1`
 passed all four phases. An earlier run correctly failed phase 1 on a new failed
 unit (`systemd-hostnamed`), which led to the container-only list above. The
 hosted Docker run is not yet claimed.
