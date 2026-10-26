@@ -8468,6 +8468,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupActivityPresentation.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.branchcov.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",

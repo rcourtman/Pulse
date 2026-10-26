@@ -21,6 +21,24 @@
 
 ## Purpose
 
+### Backup activity ranges follow local calendar dates
+
+The existing 7/30/90/365-day Proxmox backup activity windows contain exactly
+that many consecutive local dates, ending today. Clock changes, including
+half-hour changes, cannot skip or duplicate a date, omit the first hours of
+the oldest date, or cut short a long final day. Count and volume use the same
+date buckets as the existing day filter. Future instants and undated evidence
+remain excluded; source classification, stored timestamps, aggregate posture,
+policy and backup/recovery operations are unchanged.
+
+`proxmoxBackupActivityPresentation.test.ts` exercises both clock-change
+directions in London, New York and Lord Howe, plus UTC and a fixed half-hour
+offset, across all four ranges and both metrics. Desktop/narrow consuming
+browser proof drives the real inventory/model/chart through date selection,
+volume, clearing and details. This is presentation correctness, not #3248's
+stale-posture cause or native recovery.
+
+
 ### Protection assessment batches share the consuming read's lifetime
 
 Every protection-posture batch carries a cancellable transport signal owned by

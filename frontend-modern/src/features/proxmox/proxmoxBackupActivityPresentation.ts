@@ -81,12 +81,6 @@ function emptyCounts(): Record<BackupActivitySegmentKind, number> {
   return { archive: 0, pbs: 0, ok: 0, failed: 0, running: 0, snapshot: 0 };
 }
 
-function startOfLocalDayMs(date: Date): number {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy.getTime();
-}
-
 export function buildBackupActivityTimeline<T>(
   days: BackupActivityRangeDays,
   items: readonly T[],
@@ -100,15 +94,16 @@ export function buildBackupActivityTimeline<T>(
 ): BackupActivityTimeline {
   const now = options?.now ?? new Date();
   const getValue = options?.getValue ?? (() => 1);
-  const todayStart = startOfLocalDayMs(now);
-  const windowStart = todayStart - (days - 1) * 24 * 60 * 60 * 1000;
 
   const buckets = new Map<string, BackupActivityPoint>();
   const orderedKeys: string[] = [];
 
   for (let i = 0; i < days; i += 1) {
-    const dayStart = windowStart + i * 24 * 60 * 60 * 1000;
-    const key = recoveryDateKeyFromTimestamp(dayStart);
+    // Labels and day filters are local calendar dates, not 24-hour intervals.
+    // Construct each date independently so clock changes cannot skip a date,
+    // duplicate a bucket or exclude the oldest day's first hour.
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1 + i);
+    const key = recoveryDateKeyFromTimestamp(day.getTime());
     orderedKeys.push(key);
     buckets.set(key, { key, total: 0, counts: emptyCounts() });
   }
@@ -118,15 +113,15 @@ export function buildBackupActivityTimeline<T>(
     if (ts === undefined || !Number.isFinite(ts)) continue;
     // A future time on today's date is still not observed past activity.
     if (ts > now.getTime()) continue;
-    if (ts < windowStart) continue;
-    if (ts >= todayStart + 24 * 60 * 60 * 1000) continue;
+    const key = recoveryDateKeyFromTimestamp(ts);
+    // Membership in the calendar window includes the entire first local day
+    // and today's observed hours even when a day lasts 23, 25 or 24.5 hours.
+    const bucket = buckets.get(key);
+    if (!bucket) continue;
     const kind = classify(item);
     if (!kind) continue;
     const value = getValue(item);
     if (!Number.isFinite(value) || value <= 0) continue;
-    const key = recoveryDateKeyFromTimestamp(ts);
-    const bucket = buckets.get(key);
-    if (!bucket) continue;
     bucket.counts[kind] += value;
     bucket.total += value;
   }
