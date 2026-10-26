@@ -156,7 +156,10 @@ func TestPVEStorageHTTPInvalidResponseRetainsHistory(t *testing.T) {
 					if len(before) != 3 {
 						t.Fatalf("healthy control points=%d, want 3", len(before))
 					}
-					beforeRows := f.m.state.GetSnapshot().PVEBackups.StorageBackups
+					beforeRows := make(map[string]models.StorageBackup)
+					for _, row := range f.m.state.GetSnapshot().PVEBackups.StorageBackups {
+						beforeRows[row.ID] = row
+					}
 					if cold {
 						f.coldState()
 					}
@@ -191,7 +194,7 @@ func TestPVEStorageHTTPInvalidResponseRetainsHistory(t *testing.T) {
 						}
 						if !cold {
 							for _, row := range rows {
-								if row.VMID == 102 && !reflect.DeepEqual(row, beforeRows[1]) {
+								if row.VMID == 102 && !reflect.DeepEqual(row, beforeRows[row.ID]) {
 									t.Fatal("unread HTTP inventory changed its warm row")
 								}
 							}
