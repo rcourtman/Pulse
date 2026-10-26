@@ -196,6 +196,7 @@ jobs:
           python3 scripts/write_github_output.py secure_runtime_artifact_name "${secure_runtime_artifact_name}"
 
   signing-configuration:
+    environment: release
     name: Verify Native Signing Configuration
     if: ${{ inputs.require_macos_signing || inputs.require_windows_signing }}
     runs-on: ubuntu-24.04
@@ -270,6 +271,7 @@ jobs:
           exit "$missing"
 
   sign-macos-agent:
+    environment: release
     name: Sign and Notarize macOS Agent
     needs: signing-configuration
     if: ${{ inputs.require_macos_signing && needs.signing-configuration.result == 'success' }}
@@ -371,6 +373,7 @@ jobs:
           compression-level: 0
 
   sign-windows-agent:
+    environment: release
     name: Build and Submit Windows Agent Signing
     needs: signing-configuration
     if: ${{ inputs.require_windows_signing && needs.signing-configuration.result == 'success' }}
@@ -512,6 +515,7 @@ jobs:
   # recorded signing request is collected as-is, with no rebuild and no
   # second submission or approval.
   collect-windows-signing:
+    environment: release
     name: Collect and Verify Windows Authenticode
     needs: sign-windows-agent
     if: ${{ inputs.require_windows_signing && needs.sign-windows-agent.result == 'success' }}
@@ -657,6 +661,7 @@ jobs:
           retention-days: 30
 
   build:
+    environment: release
     name: Build and Validate Release Candidate
     needs: [obtain-release-payload, sign-macos-agent, collect-windows-signing]
     if: ${{ always() && needs.obtain-release-payload.result == 'success' && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.collect-windows-signing.result == 'success') }}

@@ -1323,7 +1323,9 @@ jobs:
             6,
         )
 
-        trusted_push = self.audit(
+        # A push to any branch runs before review, so only main may carry
+        # secrets, and release credentials need the release environment.
+        unfiltered_push = self.audit(
             """on: push
 permissions: {}
 jobs:
@@ -1336,7 +1338,172 @@ jobs:
         run: echo checked
 """
         )
+        self.assertTrue(any("branches: [main]" in finding for finding in unfiltered_push))
+        self.assertTrue(any("environment: release" in finding for finding in unfiltered_push))
+        trusted_push = self.audit(
+            """on:
+  push:
+    branches: [main]
+permissions: {}
+jobs:
+  trusted:
+    environment: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+        run: echo checked
+"""
+        )
         self.assertEqual(trusted_push, [])
+
+    def release_job(self, environment: str, reference: str = "${{ secrets.PULSE_UPDATE_SIGNING_KEY }}",
+                    trigger: str = "on: workflow_dispatch", header: str = "") -> list[str]:
+        return self.audit(
+            f"""{trigger}
+permissions: {{}}
+{header}jobs:
+  sign:
+{environment}    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          KEY: {reference}
+        run: echo checked
+"""
+        )
+
+    def test_release_credentials_require_the_release_environment(self) -> None:
+        for environment in ("    environment: release\n", "    environment: 'release'\n",
+                            "    environment:\n      name: release\n      url: https://example.invalid\n"):
+            with self.subTest(environment=environment):
+                self.assertEqual(self.release_job(environment), [])
+        for environment in ("", "    environment: production\n", "    environment: ${{ inputs.env }}\n",
+                            "    environment:\n      url: https://example.invalid\n"):
+            with self.subTest(environment=environment):
+                self.assertTrue(any("environment: release" in finding
+                                    for finding in self.release_job(environment)))
+        # Every protected credential is covered, including registry and PAT.
+        for name in sorted(workflow_trust.RELEASE_ENVIRONMENT_SECRETS):
+            with self.subTest(credential=name):
+                self.assertTrue(any(name in finding and "environment: release" in finding
+                                    for finding in self.release_job("", f"${{{{ secrets.{name} }}}}")))
+        # The public license verification key is not a credential.
+        self.assertEqual(self.release_job("", "${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}"), [])
+
+    def test_release_credentials_cannot_hide_from_the_environment_rule(self) -> None:
+        hidden = {
+            "bracket": "${{ secrets['WORKFLOW_PAT'] }}",
+            "dynamic": "${{ secrets[vars.NAME] }}",
+            "whole context": "${{ toJSON(secrets) }}",
+            "multi-line": "${{\n            secrets.WORKFLOW_PAT }}",
+            "quoted hash": "${{ format('#{0}', secrets.WORKFLOW_PAT) }}",
+        }
+        for name, reference in hidden.items():
+            with self.subTest(hidden=name):
+                self.assertTrue(any("environment: release" in finding or "dynamic secrets" in finding
+                                    for finding in self.release_job("", reference)))
+        self.assertTrue(any("dynamic secrets" in finding
+                            for finding in self.release_job("    environment: release\n",
+                                                            "${{ toJSON(secrets) }}")))
+        workflow_env = self.release_job(
+            "    environment: release\n", "plain",
+            header="env:\n  KEY: ${{ secrets.WORKFLOW_PAT }}\n")
+        self.assertTrue(any("inside a job" in finding for finding in workflow_env))
+
+    def test_deployment_credentials_require_a_deployment_environment(self) -> None:
+        reference = "${{ secrets.TS_CI_DEPLOY_OAUTH_SECRET }}"
+        for environment in ("    environment: infra\n", "    environment: demo-stable\n"):
+            with self.subTest(environment=environment):
+                self.assertEqual(self.release_job(environment, reference), [])
+        resolved = "    environment: ${{ needs.resolve.outputs.environment_name }}\n"
+        for environment in ("", "    environment: release\n", "    environment: ${{ inputs.env }}\n", resolved):
+            with self.subTest(environment=environment):
+                self.assertTrue(any("deployment environment" in finding
+                                    for finding in self.release_job(environment, reference)))
+        # Only the demo workflow's own job may choose its demo environment at runtime.
+        demo = f"""on: workflow_call
+permissions: {{}}
+jobs:
+  update-demo:
+{resolved}    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - env:
+          KEY: {reference}
+        run: echo checked
+"""
+        self.assertEqual(self.audit(demo, name="update-demo-server.yml"), [])
+        self.assertTrue(self.audit(demo, name="other.yml"))
+
+    def test_structural_bypasses_are_rejected(self) -> None:
+        release = "environment: release"
+        cases = {
+            "lower-case secret name": self.release_job("", "${{ secrets.workflow_pat }}"),
+            "closing braces in a string": self.release_job(
+                "", "${{ format('}}{0}', secrets.WORKFLOW_PAT) }}"),
+            "YAML-escaped quote before closing braces": self.release_job(
+                "", "'${{ format(''}}{0}'', secrets.WORKFLOW_PAT) }}'"),
+            "hash glued to the environment name": self.release_job(
+                "    environment: release#unprotected\n"),
+            "duplicate environment key": self.release_job(
+                "    environment: production\n    environment: release\n"),
+        }
+        for name, findings in cases.items():
+            with self.subTest(case=name):
+                self.assertTrue(any(release in finding or "duplicate key" in finding
+                                    for finding in findings), findings)
+        env = "    environment: release\n"
+        pushes = {
+            "quoted tags filter": "on:\n  push:\n    branches: [main]\n    \"tags\": ['**']",
+            "push hidden behind a description": (
+                "on:\n  workflow_dispatch:\n    inputs:\n      note:\n        description: |\n"
+                "          push:\n            branches: [main]\n  push:"),
+        }
+        for name, trigger in pushes.items():
+            with self.subTest(case=name):
+                self.assertTrue(any("branches: [main]" in finding
+                                    for finding in self.release_job(env, trigger=trigger)))
+        quoted_inherit = self.audit("""on: push
+permissions: {}
+jobs:
+  call:
+    uses: ./.github/workflows/reusable.yml
+    secrets: 'inherit'
+""")
+        self.assertTrue(any("branches: [main]" in finding for finding in quoted_inherit))
+
+    def test_push_workflows_with_secrets_admit_only_main(self) -> None:
+        env = "    environment: release\n"
+        main_only = "on:\n  push:\n    branches: [main]"
+        self.assertEqual(self.release_job(env, trigger=main_only), [])
+        self.assertEqual(self.release_job(env, trigger="on:\n  push:\n    branches:\n      - main"), [])
+        for trigger in ("on: push", "on: [push, workflow_dispatch]", "on:\n  push:",
+                        "on:\n  push:\n    branches: [main, 'release/**']",
+                        "on:\n  push:\n    branches: ['**']",
+                        "on:\n  push:\n    branches: [main]\n    tags: ['v*']",
+                        "on:\n  push:\n    branches-ignore: [feature]"):
+            with self.subTest(trigger=trigger):
+                self.assertTrue(any("branches: [main]" in finding
+                                    for finding in self.release_job(env, trigger=trigger)))
+        # GITHUB_TOKEN alone is not a repository secret.
+        self.assertEqual(self.release_job("", "${{ secrets.GITHUB_TOKEN }}", trigger="on: push"), [])
+        inherit = self.audit("""on: push
+permissions: {}
+jobs:
+  call:
+    uses: ./.github/workflows/reusable.yml
+    secrets: inherit
+""")
+        self.assertTrue(any("branches: [main]" in finding for finding in inherit))
+
+    def test_live_release_and_deployment_credentials_are_confined(self) -> None:
+        for path in sorted((REPO_ROOT / ".github/workflows").glob("*.yml")):
+            with self.subTest(workflow=path.name):
+                findings = workflow_trust._audit_secret_environments(
+                    path, path.read_text(encoding="utf-8").splitlines())
+                self.assertEqual([finding.render() for finding in findings], [])
 
     def test_repository_workflows_satisfy_contract(self) -> None:
         findings = workflow_trust.audit_directory(REPO_ROOT / ".github" / "workflows")

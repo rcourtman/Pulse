@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   test-signing-proof:
+    environment: release
     name: SignPath Test Signing Proof (Never Publish)
     runs-on: windows-2025
     timeout-minutes: 50

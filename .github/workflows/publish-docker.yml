@@ -36,6 +36,7 @@ permissions:
 
 jobs:
   publish:
+    environment: release
     name: Publish ${{ matrix.image }} image
     runs-on: ubuntu-24.04
     timeout-minutes: 60  # Increased for multi-arch builds with QEMU
@@ -231,6 +232,7 @@ jobs:
           echo "Floating aliases are promoted separately at the activation barrier."
 
   verify:
+    environment: release
     name: Verify exact image identities and provenance
     needs: publish
     runs-on: ubuntu-24.04

@@ -9,6 +9,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
+
 
 def _yaml_key(name: str) -> str:
     """Return a pattern for equivalent plain, single-, or double-quoted keys."""
@@ -119,6 +121,54 @@ SECRET_CONTEXT_RE = re.compile(
     r")"
 )
 SECRET_CONTEXT_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b")
+# GitHub matches context and secret names case-insensitively.
+SECRET_REFERENCE_RE = re.compile(
+    r"(?<![\w.])secrets(?:"
+    r"\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\b|"
+    r"\s*\[\s*(['\"])([A-Za-z_][A-Za-z0-9_]*)\2\s*\]"
+    r")",
+    re.IGNORECASE,
+)
+SECRET_TOKEN_RE = re.compile(r"(?<![\w.])secrets\b", re.IGNORECASE)
+# Release, signing and registry credentials live only in the protected
+# `release` environment, which admits `main` and post-merge `release-dispatch/*`
+# branches, so no run on an unmerged branch can read them. The public license
+# verification key is not a credential and stays repository-wide.
+RELEASE_ENVIRONMENT = "release"
+RELEASE_ENVIRONMENT_SECRETS = frozenset(
+    {
+        "APPLE_DEVELOPER_ID_APPLICATION_IDENTITY",
+        "APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64",
+        "APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD",
+        "APPLE_NOTARY_ISSUER_ID",
+        "APPLE_NOTARY_KEY_ID",
+        "APPLE_NOTARY_KEY_P8_BASE64",
+        "DOCKER_PASSWORD",
+        "DOCKER_USERNAME",
+        "PULSE_UPDATE_SIGNING_KEY",
+        "SIGNPATH_API_TOKEN",
+        "WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD",
+        "WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64",
+        "WORKFLOW_PAT",
+    }
+)
+# Demo-host and CI-tailnet credentials live in deployment environments.
+# Only update-demo-server.yml may pick its demo environment from a resolved output.
+DEPLOYMENT_ENVIRONMENT_SECRETS = frozenset(
+    {
+        "DEMO_SERVER_HOST",
+        "DEMO_SERVER_SSH_KEY",
+        "DEMO_SERVER_USER",
+        "TS_CI_DEPLOY_OAUTH_CLIENT_ID",
+        "TS_CI_DEPLOY_OAUTH_SECRET",
+    }
+)
+DEPLOYMENT_ENVIRONMENTS = frozenset({"demo-preview-v6", "demo-stable", "infra"})
+DEPLOYMENT_ENVIRONMENT_CHOICES = {
+    ("update-demo-server.yml", "update-demo"): frozenset(
+        {"${{ needs.resolve.outputs.environment_name }}"}
+    ),
+}
 CACHE_ACTION_PREFIXES = ("actions/cache@", "actions/cache/")
 SETUP_CACHE_ACTION_PREFIXES = (
     "actions/setup-go@",
@@ -1393,6 +1443,197 @@ def _audit_privileged_job_caches(path: Path, lines: list[str]) -> list[Finding]:
     return findings
 
 
+def _unquoted(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+class _UniqueKeyLoader(yaml.BaseLoader):
+    """Load every scalar as a string and refuse duplicate keys, as GitHub does."""
+
+
+def _construct_unique_mapping(loader, node, deep=False):
+    mapping = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in mapping:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate key {key!r}", key_node.start_mark
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_UniqueKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
+)
+
+
+def _expressions(text: str) -> list[str]:
+    """Return every ${{ }} expression body in *text*.
+
+    Expressions may span lines and contain `#`, and a `}}` inside a quoted
+    string does not end one. An unterminated expression runs to the end.
+    """
+    found: list[str] = []
+    index = 0
+    while (start := text.find("${{", index)) != -1:
+        cursor = start + 3
+        quote = ""
+        while cursor < len(text):
+            char = text[cursor]
+            if quote:
+                if char == quote:
+                    if text[cursor + 1 : cursor + 2] == quote:
+                        cursor += 2
+                        continue
+                    quote = ""
+            elif char in {"'", '"'}:
+                quote = char
+            elif text.startswith("}}", cursor):
+                break
+            cursor += 1
+        found.append(text[start + 3 : cursor])
+        index = cursor + 2
+    return found
+
+
+def _secret_names(text: str) -> tuple[set[str], bool]:
+    """Return the secrets (upper-cased, as GitHub matches them) that *text* names,
+    and whether any access is dynamic."""
+    names: set[str] = set()
+    dynamic = False
+    for expression in _expressions(text):
+        references = list(SECRET_REFERENCE_RE.finditer(expression))
+        names.update((match.group(1) or match.group(3)).upper() for match in references)
+        if len(SECRET_TOKEN_RE.findall(expression)) != len(references):
+            dynamic = True
+    return names, dynamic
+
+
+def _scalars(node: object) -> list[str]:
+    """Return every decoded string key and value in a parsed YAML node."""
+    if isinstance(node, dict):
+        return [text for key, value in node.items() for text in (*_scalars(key), *_scalars(value))]
+    if isinstance(node, list):
+        return [text for item in node for text in _scalars(item)]
+    return [node] if isinstance(node, str) else []
+
+
+def _node_secret_names(raw: str, node: object) -> tuple[set[str], bool]:
+    """Scan both the raw text and the decoded YAML values GitHub evaluates.
+
+    YAML quoting can change where an expression's strings end (`''` decodes to
+    `'`), so the decoded values are authoritative and the raw text a backstop.
+    """
+    raw_names, raw_dynamic = _secret_names(raw)
+    decoded_names, decoded_dynamic = _secret_names("\n".join(_scalars(node)))
+    return raw_names | decoded_names, raw_dynamic or decoded_dynamic
+
+
+def _environment_name(job: object) -> str | None:
+    environment = job.get("environment") if isinstance(job, dict) else None
+    if isinstance(environment, dict):
+        environment = environment.get("name")
+    return environment if isinstance(environment, str) else None
+
+
+def _push_is_main_only(document: dict) -> bool:
+    """Return whether the push trigger admits exactly the literal branch main."""
+    push = document.get("on", {}).get("push") if isinstance(document.get("on"), dict) else None
+    return (
+        isinstance(push, dict)
+        and set(push) == {"branches"}
+        and push["branches"] == ["main"]
+    )
+
+
+def _has_push_trigger(document: dict) -> bool:
+    on = document.get("on")
+    if isinstance(on, str):
+        return on == "push"
+    return "push" in on if isinstance(on, (list, dict)) else False
+
+
+def _audit_secret_environments(path: Path, lines: list[str]) -> list[Finding]:
+    """Keep protected credentials inside the environments that admit only merged refs."""
+    try:
+        document = yaml.load("\n".join(lines), Loader=_UniqueKeyLoader)
+    except yaml.YAMLError as error:
+        return [Finding(path, 1, f"workflow must be valid YAML without duplicate keys: {error}")]
+    if not isinstance(document, dict):
+        return [Finding(path, 1, "workflow must be a YAML mapping")]
+    jobs = document.get("jobs") if isinstance(document.get("jobs"), dict) else {}
+
+    findings: list[Finding] = []
+    ranges = _runner_job_ranges(lines)
+    texts = {
+        _unquoted(lines[start].split("#", 1)[0].strip().removesuffix(":")): (start, "\n".join(lines[start:end]))
+        for start, end, _ in ranges
+    }
+    if set(texts) != set(jobs):
+        findings.append(Finding(
+            path, 1, "jobs must be a plain block mapping whose keys the trust audit can read",
+        ))
+
+    reads_secrets = False
+    for name, job in jobs.items():
+        start, text = texts.get(name, (0, yaml.safe_dump(job)))
+        names, dynamic = _node_secret_names(text, job)
+        names.discard("GITHUB_TOKEN")
+        inherits = isinstance(job, dict) and job.get("secrets") == "inherit"
+        reads_secrets = reads_secrets or bool(names) or dynamic or inherits
+        environment = _environment_name(job)
+        if dynamic:
+            findings.append(Finding(
+                path, start + 1,
+                "jobs must name secrets statically; dynamic secrets[...] access "
+                "cannot be confined to an environment",
+            ))
+        release = sorted(names & RELEASE_ENVIRONMENT_SECRETS)
+        if release and environment != RELEASE_ENVIRONMENT:
+            findings.append(Finding(
+                path, start + 1,
+                f"job reads release credentials {', '.join(release)} and must "
+                f"declare the literal environment: {RELEASE_ENVIRONMENT}",
+            ))
+        deployment = sorted(names & DEPLOYMENT_ENVIRONMENT_SECRETS)
+        allowed = DEPLOYMENT_ENVIRONMENTS | DEPLOYMENT_ENVIRONMENT_CHOICES.get((path.name, name), frozenset())
+        if deployment and environment not in allowed:
+            findings.append(Finding(
+                path, start + 1,
+                f"job reads deployment credentials {', '.join(deployment)} and must "
+                "declare a deployment environment",
+            ))
+
+    # Workflow-level env and other text outside jobs applies to every job.
+    covered = {index for start, end, _ in ranges for index in range(start, end)}
+    outside = "\n".join(line for index, line in enumerate(lines) if index not in covered)
+    names, dynamic = _node_secret_names(
+        outside, {key: value for key, value in document.items() if key != "jobs"}
+    )
+    protected = sorted(names & (RELEASE_ENVIRONMENT_SECRETS | DEPLOYMENT_ENVIRONMENT_SECRETS))
+    if protected or dynamic:
+        findings.append(Finding(
+            path, 1,
+            "release and deployment credentials may only be read inside a job "
+            "that declares their environment",
+        ))
+    names.discard("GITHUB_TOKEN")
+    reads_secrets = reads_secrets or bool(names) or dynamic
+
+    # A pushed proposal branch runs push workflows before any review or merge.
+    if reads_secrets and _has_push_trigger(document) and not _push_is_main_only(document):
+        findings.append(Finding(
+            path, 1,
+            "push workflows that read secrets must restrict push to exactly "
+            "branches: [main], with no tag or ignore filters",
+        ))
+    return findings
+
+
 def audit_workflow(path: Path) -> list[Finding]:
     lines = path.read_text(encoding="utf-8").splitlines()
     findings = _audit_yaml_trust_shape(path, lines)
@@ -1401,6 +1642,7 @@ def audit_workflow(path: Path) -> list[Finding]:
     findings.extend(_audit_privileged_runner_trust(path, lines))
     findings.extend(_audit_privileged_job_caches(path, lines))
     findings.extend(_audit_workflow_run_trigger(path, lines))
+    findings.extend(_audit_secret_environments(path, lines))
     has_workflow_run_trigger = _has_trigger(lines, "workflow_run")
 
     if (

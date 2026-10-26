@@ -750,6 +750,36 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertFalse(qualifies(replaced(new_shape, "backend_tests", "failure")))
         self.assertFalse(qualifies(replaced(old_shape, "backend_tests", "failure")))
 
+    def test_release_credential_jobs_run_only_in_the_release_environment(self) -> None:
+        # The release environment admits main and post-merge release-dispatch/*
+        # refs, so these jobs, and only runs on those refs, receive signing,
+        # registry and PAT credentials. Every release path that publishes or
+        # signs must keep them there.
+        expected = {
+            ".github/workflows/create-release.yml": (
+                "prepare", "publication_trust_preflight", "backfill_release_assets",
+                "stage_private_pro_runtime", "activate_release",
+            ),
+            ".github/workflows/build-release-candidate.yml": (
+                "signing-configuration", "sign-macos-agent", "sign-windows-agent",
+                "collect-windows-signing", "build",
+            ),
+            ".github/workflows/publish-docker.yml": ("publish", "verify"),
+            ".github/workflows/promote-floating-tags.yml": ("promote-images",),
+            ".github/workflows/promote-private-pro-runtime.yml": ("promote",),
+            ".github/workflows/recover-release-activation.yml": ("recover_activation",),
+            ".github/workflows/backfill-release-assets.yml": ("backfill",),
+            ".github/workflows/retry-release-convergence.yml": ("reconcile_channel_heads",),
+        }
+        for path, jobs in expected.items():
+            jobs_by_name = yaml.safe_load(read(path))["jobs"]
+            for job in jobs:
+                with self.subTest(workflow=path, job=job):
+                    self.assertEqual("release", jobs_by_name[job].get("environment"))
+        # The smoke job reads only the public license key, so it stays outside.
+        create = yaml.safe_load(read(".github/workflows/create-release.yml"))["jobs"]
+        self.assertNotIn("environment", create["release_smoke"])
+
     def test_activation_recovery_admits_snapshot_runs_only_with_merged_provenance(self) -> None:
         # Execute the recovery's source-run admission. Release-train runs are
         # dispatched on release-candidate/ or release-dispatch/ snapshot refs,

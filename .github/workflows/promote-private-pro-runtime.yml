@@ -42,6 +42,7 @@ permissions:
 
 jobs:
   promote:
+    environment: release
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     steps:

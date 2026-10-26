@@ -93,6 +93,7 @@ permissions:
 jobs:
   # Combined version extraction and validation (saves a checkout)
   prepare:
+    environment: release
     permissions:
       actions: read
       contents: read
@@ -371,6 +372,7 @@ jobs:
   # closed. Inert draft-only and historical-backfill runs do not publish and
   # therefore do not require this repository setting.
   publication_trust_preflight:
+    environment: release
     name: Publication Trust Preflight
     needs: prepare
     runs-on: ubuntu-24.04
@@ -1399,6 +1401,7 @@ jobs:
           echo "URL: ${WORKFLOW_OUTPUT_2}"
 
   backfill_release_assets:
+    environment: release
     needs:
       - prepare
       - publication_trust_preflight
@@ -1643,6 +1646,7 @@ jobs:
   # remain inert until public readiness and activation allow the separate
   # convergence workflow to update the live paid-runtime broker manifest.
   stage_private_pro_runtime:
+    environment: release
     needs:
       - prepare
       - publication_trust_preflight
@@ -1848,6 +1852,7 @@ jobs:
   # digests directly: the tag, both Docker images and the Helm chart must all
   # have published before the GitHub release may be activated.
   activate_release:
+    environment: release
     needs:
       - prepare
       - publication_trust_preflight

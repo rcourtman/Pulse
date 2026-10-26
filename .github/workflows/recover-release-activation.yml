@@ -28,6 +28,7 @@ permissions:
 
 jobs:
   recover_activation:
+    environment: release
     name: Revalidate and recover activation
     runs-on: ubuntu-24.04
     timeout-minutes: 30
