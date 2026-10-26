@@ -21,10 +21,12 @@ function documentPaths(directory: string): string[] {
 // their cross-document links, rather than maintaining a second slug algorithm.
 describe.sequential('shipped document fragment destinations', () => {
   const filenames = new Map(
-    documentPaths(docsRoot).sort().map((filename) => [
-      path.relative(docsRoot, filename).replaceAll(path.sep, '/').slice(0, -3),
-      filename,
-    ]),
+    documentPaths(docsRoot)
+      .sort()
+      .map((filename) => [
+        path.relative(docsRoot, filename).replaceAll(path.sep, '/').slice(0, -3),
+        filename,
+      ]),
   );
   const documents = new Map<string, { article: HTMLElement; ids: Map<string, number> }>();
   let checked = 0;
