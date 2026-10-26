@@ -1569,6 +1569,7 @@ describe('shared primitive guardrails', () => {
     expect(heading).toContain('<button');
     expect(heading).toContain('type="button"');
     expect(heading).toContain('focus-visible:ring-inset');
+    expect(heading).toContain('[text-align:inherit] [text-transform:inherit]');
     expect(heading).toContain('<span aria-hidden="true">');
     // Native keyboard clicks bubble to the one cell handler. A second key
     // handler would double-advance Enter or Space through the sort cycle.
