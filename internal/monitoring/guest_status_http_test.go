@@ -162,7 +162,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 		phase.Store(int32(step))
 		ctx, cancel := context.WithTimeout(context.Background(), guestPollFixtureHangGuard)
 		cycleStart := time.Now()
-		res := proxmox.ClusterResource{Type: "qemu", Node: "node", VMID: 105, Name: "status-integrity-guest", Status: "running", CPU: .2 + float64(step)/10, MaxMem: 8 * gib, Mem: 8 * gib, MaxDisk: gib}
+		res := proxmox.ClusterResource{Type: "qemu", Node: "node", VMID: 105, Name: "status-integrity-guest", Status: "running", CPU: .2 + float64(step)/10, MaxMem: 8 * gib, Mem: 4 * gib, MaxDisk: gib}
 		var vms []models.VM
 		if collector == "cluster" {
 			vms = m.collectClusterVMResources(ctx, "status-integrity", []indexedClusterResource{{resource: res, guestID: id}}, client, previous, nil)
