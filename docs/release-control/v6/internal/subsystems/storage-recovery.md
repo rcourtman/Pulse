@@ -985,6 +985,12 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+The shared `internal/api/` audit exporter/summary now refuses synchronous
+selections above 10,000 events before verification or encoding, never returning
+truncated history as a complete recovery record. Storage recovery, retention,
+backup state and unified resource export-history endpoints remain unchanged;
+`api-contracts` owns the exact selection/rejection semantics and proof.
+
 Webhook DELETE's explicit success acknowledges saved/live destination removal,
 not deletion of its retained queue configuration or failed-attempt history.
 Queue records still follow the existing cancellation/retention policy; no

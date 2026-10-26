@@ -4194,10 +4194,25 @@ List and export likewise reject supplied `success` values other than literal
 `true` or `false`. Absence remains unfiltered; event/user filters, tenant,
 licence, role and method boundaries, formats and signature verification remain.
 Export/summary do not inherit list pagination, and summary has no success
-filter. No export quota or new endpoint is introduced. Actual handlers and
+filter. No new endpoint is introduced. Actual handlers and
 exporter are pinned by `internal/api/audit_filter_validation_test.go` with
 fake persistent loggers, including query non-execution and tenant isolation;
 `internal/api/audit_handlers_test.go` pins valid export/summary filter payloads.
+
+Canonical synchronous export and summary now accept at most 10,000 matching
+events. The actual Query receives Limit=10,001 and Offset=0, with every other
+selection unchanged and no preliminary Count. A sentinel row (or an oversized
+response from a logger ignoring Limit) refuses the whole selection before
+signature verification, encoding or attachment headers. Both fallback handlers
+return `400 export_too_large` with a constant `maxEvents` detail and guidance to
+narrow time/event/user selection. No partial success, silent truncation, total
+count claim, byte-size bound or duration guarantee is made. Empty, small and
+exactly 10,000-event selections retain complete JSON/CSV/summary and verification
+semantics. `pkg/audit/export_bounds_test.go` and
+`internal/api/audit_export_bounds_test.go` pin overflow, complete wire contents,
+query-error refusal and narrowing recovery; existing selection, tenant and access
+tests retain those boundaries. The Audit Log UI uses the unchanged list and
+per-event verification endpoints, not these synchronous export/summary routes.
 
 List/export/summary parse the entire raw query with `url.ParseQuery`; damaged
 encoding (including an invalid unknown pair) returns `400 invalid_query`, never

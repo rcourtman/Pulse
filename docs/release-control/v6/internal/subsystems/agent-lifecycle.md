@@ -1720,6 +1720,12 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+The shared `internal/api/` audit exporter/summary now refuses synchronous
+selections above 10,000 events before verification or encoding. This read-only
+boundary does not change agent identity, update/rollback admission, lifecycle
+audit recording or the separate unified action/export-history routes. Exact
+selection/rejection semantics and proof belong to `api-contracts`.
+
 Webhook DELETE acknowledges committed destination removal with `success: true`
 and the retained legacy status. It does not acknowledge agent removal, revoke an
 agent credential or change an already admitted agent/update job. Notification

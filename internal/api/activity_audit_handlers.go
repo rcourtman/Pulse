@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -498,6 +499,16 @@ func writeAuditStoreUnavailableResponse(w http.ResponseWriter) {
 		"Audit log storage is unavailable. Check server logs for audit database initialization or disk errors.", nil)
 }
 
+func writeAuditExportErrorResponse(w http.ResponseWriter, err error, code, message string) {
+	if errors.Is(err, audit.ErrExportTooLarge) {
+		writeErrorResponse(w, http.StatusBadRequest, "export_too_large",
+			fmt.Sprintf("Audit selection exceeds %d events. Narrow the time range, event type or user and try again.", audit.MaxExportEvents),
+			map[string]string{"maxEvents": strconv.Itoa(audit.MaxExportEvents)})
+		return
+	}
+	writeErrorResponse(w, http.StatusInternalServerError, code, message, nil)
+}
+
 // HandleExportAuditEvents handles GET /api/audit/export
 func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -556,8 +567,7 @@ func (h *AuditHandlers) HandleExportAuditEvents(w http.ResponseWriter, r *http.R
 	exporter := audit.NewExporter(persistentLogger)
 	result, err := exporter.Export(filter, format, includeVerification)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "export_failed",
-			"Failed to export audit events", nil)
+		writeAuditExportErrorResponse(w, err, "export_failed", "Failed to export audit events")
 		return
 	}
 
@@ -616,8 +626,7 @@ func (h *AuditHandlers) HandleAuditSummary(w http.ResponseWriter, r *http.Reques
 	exporter := audit.NewExporter(persistentLogger)
 	summary, err := exporter.GenerateSummary(filter, verifySignatures)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "summary_failed",
-			"Failed to generate audit summary", nil)
+		writeAuditExportErrorResponse(w, err, "summary_failed", "Failed to generate audit summary")
 		return
 	}
 

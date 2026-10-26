@@ -104,6 +104,9 @@ class AdminDocsTest(unittest.TestCase):
                          "in the same Bash session", "not an installed Pulse command", "not list pagination",
                          "reject malformed or empty supplied", "before reading events", "not `success` or list", "partial file", "does not follow redirects or retry"):
             self.assertIn(boundary, audit)
+        for boundary in ("10,000 matching events", "export_too_large", "not a partial download",
+                         "truncated summary", "not a byte-size", "query-duration guarantee"):
+            self.assertIn(boundary, audit)
         org = (DOCS / "MULTI_TENANT.md").read_text()
         for boundary in ("session-based user authentication", "403 session_required", "CSRF", "settings:read", "organization binding", "pending invitation", "accept the share", "accessRole"):
             self.assertIn(boundary, org)
