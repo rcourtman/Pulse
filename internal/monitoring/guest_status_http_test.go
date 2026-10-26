@@ -152,8 +152,9 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 	} else {
 		client = proxmox.NewClusterClient("status-integrity", cfg, []string{server.URL}, nil)
 	}
-	m := &Monitor{config: &config.Config{}, rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
+	m := &Monitor{config: &config.Config{}, state: models.NewState(), rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
 	registry := unifiedresources.NewRegistry(nil)
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
 	id := makeGuestID("status-integrity", "node", 105)
 	previous := map[string]models.VM{}
 	var frames []guestStatusHTTPFrame
@@ -174,6 +175,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 		}
 		vm := vms[0]
 		m.recordGuestMetrics(vms, nil, cycleStart)
+		m.state.UpdateVMs(vms)
 		registry.IngestSnapshot(models.StateSnapshot{VMs: vms})
 		views := registry.VMs()
 		if len(views) != 1 {
@@ -204,6 +206,13 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 			}
 		}
 		front := m.buildBroadcastFrontendStateFromSnapshot(models.StateSnapshot{VMs: vms}, m.mockModeFence.begin())
+		if len(front.Resources) != 1 || front.Resources[0].Memory == nil {
+			t.Fatal("served resource projection lost guest memory")
+		}
+		served := front.Resources[0].Memory
+		if served.Current != vm.Memory.Usage || served.Used == nil || *served.Used != vm.Memory.Used || served.Total == nil || *served.Total != vm.Memory.Total || served.Observation.State != vm.Memory.Observation.State || served.Observation.Source != vm.Memory.Observation.Source || !served.Observation.ObservedAt.Equal(vm.Memory.Observation.ObservedAt) {
+			t.Error("served resource projection changed accepted or retained memory evidence")
+		}
 		wire, err := json.Marshal(front.Resources)
 		if err != nil {
 			t.Fatal(err)
