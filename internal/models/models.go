@@ -3486,6 +3486,11 @@ type BackupTask struct {
 
 // StorageBackup represents a backup file in storage
 type StorageBackup struct {
+	// StorageNode is the node whose non-shared disk supplied this row. Node
+	// remains the guest's current location and can change after migration.
+	// This is runtime carry-forward provenance, not part of the public JSON.
+	// Empty means shared storage or an older row with unknown read origin.
+	StorageNode  string    `json:"-"`
 	ID           string    `json:"id"`
 	Storage      string    `json:"storage"`
 	Node         string    `json:"node"`

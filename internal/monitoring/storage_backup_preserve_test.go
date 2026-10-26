@@ -40,7 +40,7 @@ func TestPreserveFailedStorageBackups(t *testing.T) {
 		"nas-share": {},
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: toPreserve}, current)
 
 	if len(merged) != 2 {
 		t.Fatalf("expected 2 backups after merge, got %d", len(merged))
@@ -83,7 +83,7 @@ func TestPreserveFailedStorageBackupsSkipsDuplicates(t *testing.T) {
 		"nas-share": {},
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: toPreserve}, current)
 
 	if len(merged) != 1 {
 		t.Fatalf("expected duplicate backup to be ignored, got %d entries", len(merged))
@@ -106,7 +106,7 @@ func TestPreserveFailedStorageBackupsEmptyPreserveMap(t *testing.T) {
 		},
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, nil, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{}, current)
 
 	if len(merged) != 1 {
 		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged))
@@ -116,7 +116,7 @@ func TestPreserveFailedStorageBackupsEmptyPreserveMap(t *testing.T) {
 	}
 
 	// Also test empty map (not nil)
-	merged2, storages2 := preserveFailedStorageBackups(instance, snapshot, map[string]struct{}{}, current)
+	merged2, storages2 := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: map[string]struct{}{}}, current)
 	if len(merged2) != 1 {
 		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged2))
 	}
@@ -141,7 +141,7 @@ func TestPreserveFailedStorageBackupsNoMatchingBackups(t *testing.T) {
 		"nas-share": {}, // Storage not in snapshot
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: toPreserve}, current)
 
 	if len(merged) != 1 {
 		t.Fatalf("expected current unchanged with 1 backup, got %d", len(merged))
@@ -167,7 +167,7 @@ func TestPreserveFailedStorageBackupsWrongInstance(t *testing.T) {
 		"nas-share": {},
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: toPreserve}, current)
 
 	if len(merged) != 1 {
 		t.Fatalf("expected current unchanged (wrong instance skipped), got %d backups", len(merged))
@@ -194,7 +194,7 @@ func TestPreserveFailedStorageBackupsStorageNotInPreserveMap(t *testing.T) {
 		"nas-share": {}, // Only nas-share should be preserved
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: toPreserve}, current)
 
 	if len(merged) != 2 {
 		t.Fatalf("expected 2 backups (original + nas-share), got %d", len(merged))
@@ -228,7 +228,7 @@ func TestPreserveFailedStorageBackupsSortedStorageNames(t *testing.T) {
 		"middle-storage": {},
 	}
 
-	merged, storages := preserveFailedStorageBackups(instance, snapshot, toPreserve, current)
+	merged, storages := preserveFailedStorageBackups(instance, snapshot, pveBackupReadFailures{storages: toPreserve}, current)
 
 	if len(merged) != 3 {
 		t.Fatalf("expected 3 backups, got %d", len(merged))

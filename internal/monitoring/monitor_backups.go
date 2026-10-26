@@ -189,7 +189,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	hadPermissionError := false         // Track if any permission errors occurred this cycle
 	permissionFailureCount := 0         // Number of node/storage reads rejected by authorization
 	storagePreserveNeeded := map[string]struct{}{}
+	confirmationPreserveNeeded := map[string]struct{}{}
+	unreadNodes := map[string]struct{}{}
+	failedLocalStorages := map[pveLocalBackupStorage]struct{}{}
 	storageSuccess := map[string]struct{}{}
+	sharedStorageSuccess := map[string]struct{}{}
 	unqueryableStorages := map[string]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
@@ -221,8 +225,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// For each node, get storage and check content
 	for _, node := range nodes {
 		if nodeEffectiveStatus[node.Node] != "online" {
+			unreadNodes[node.Node] = struct{}{}
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
-				storagePreserveNeeded[storageName] = struct{}{}
+				confirmationPreserveNeeded[storageName] = struct{}{}
 			}
 			continue
 		}
@@ -263,8 +268,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 			monErr := errors.NewMonitorError(errors.ErrorTypeAPI, "get_storage_for_backups", instanceName, err).WithNode(node.Node)
 			log.Warn().Err(monErr).Str("node", node.Node).Msg("failed to get storage for backups - skipping node")
 			for _, storageName := range storageNamesForNode(readState, instanceName, node.Node) {
-				storagePreserveNeeded[storageName] = struct{}{}
+				confirmationPreserveNeeded[storageName] = struct{}{}
 			}
+			unreadNodes[node.Node] = struct{}{}
 			storageQueryErrors++
 			continue
 		}
@@ -293,6 +299,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				continue
 			}
 
+			// A shared listing can cover several nodes. A same-named local
+			// disk cannot: keep its read origin separate from guest location.
+			storageNode := ""
+			if storage.Shared == 0 && !isInherentlySharedStorageType(storage.Type) {
+				storageNode = node.Node
+			}
+
 			// Get storage content
 			contents, err := client.GetStorageContent(ctx, node.Node, storage.Storage)
 			if err != nil {
@@ -308,7 +321,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 						Str("storage", storage.Storage).
 						Msg("Failed to get storage content")
 				}
-				if _, ok := storageSuccess[storage.Storage]; !ok {
+				if storageNode != "" {
+					failedLocalStorages[pveLocalBackupStorage{node: storageNode, storage: storage.Storage}] = struct{}{}
+				} else {
 					storagePreserveNeeded[storage.Storage] = struct{}{}
 				}
 				contentFailures++
@@ -317,6 +332,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 			contentSuccess++
 			storageSuccess[storage.Storage] = struct{}{}
+			if storageNode == "" {
+				sharedStorageSuccess[storage.Storage] = struct{}{}
+			}
 			delete(storagePreserveNeeded, storage.Storage)
 
 			// Convert to models
@@ -422,6 +440,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				}
 
 				backup := models.StorageBackup{
+					StorageNode:  storageNode,
 					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
 					Storage:      storage.Storage,
 					Node:         backupNode,
@@ -459,10 +478,27 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		}
 	}
 
+	// Resolve name-wide skips/shared failures after every node, regardless of
+	// order. A local disk failure remains scoped to its own node below.
+	for storageName := range storageSuccess {
+		delete(storagePreserveNeeded, storageName)
+	}
+	for storageName := range storagePreserveNeeded {
+		confirmationPreserveNeeded[storageName] = struct{}{}
+	}
+	for storageName := range storageSuccess {
+		delete(confirmationPreserveNeeded, storageName)
+	}
+
 	// Carry-forward serves the live inventory, not a new provider observation.
 	// Only rows actually returned this poll may renew point-level evidence.
 	observedBackups := allBackups
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, storagePreserveNeeded, allBackups)
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, snapshot, pveBackupReadFailures{
+		storages:      storagePreserveNeeded,
+		nodes:         unreadNodes,
+		local:         failedLocalStorages,
+		sharedSuccess: sharedStorageSuccess,
+	}, allBackups)
 	if len(preservedStorages) > 0 {
 		log.Warn().
 			Str("instance", instanceName).
@@ -471,7 +507,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	}
 
 	pbsConfirmations, preservedConfirmationStorages := preserveFailedPBSGuestConfirmations(
-		m.state.PBSGuestConfirmationsForInstance(instanceName), storagePreserveNeeded, pbsConfirmations)
+		m.state.PBSGuestConfirmationsForInstance(instanceName), confirmationPreserveNeeded, pbsConfirmations)
 	if len(preservedConfirmationStorages) > 0 {
 		log.Warn().
 			Str("instance", instanceName).
@@ -744,8 +780,49 @@ func preserveFailedPBSGuestConfirmations(previous []models.PBSGuestConfirmation,
 	return current, storages
 }
 
-func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, storagesToPreserve map[string]struct{}, current []models.StorageBackup) ([]models.StorageBackup, []string) {
-	if len(storagesToPreserve) == 0 {
+type pveLocalBackupStorage struct {
+	node    string
+	storage string
+}
+
+// Name-wide failures cover unread/disabled targets and shared storage. Actual
+// local content failures and unread nodes must survive another node's success.
+// Legacy rows without provenance are retained conservatively until a complete
+// read replaces them; guest location is not evidence of storage read origin.
+type pveBackupReadFailures struct {
+	storages      map[string]struct{}
+	nodes         map[string]struct{}
+	local         map[pveLocalBackupStorage]struct{}
+	sharedSuccess map[string]struct{}
+}
+
+func (f pveBackupReadFailures) preserves(backup models.StorageBackup) bool {
+	if _, ok := f.storages[backup.Storage]; ok {
+		return true
+	}
+	if backup.StorageNode != "" {
+		if _, ok := f.nodes[backup.StorageNode]; ok {
+			return true
+		}
+		_, ok := f.local[pveLocalBackupStorage{node: backup.StorageNode, storage: backup.Storage}]
+		return ok
+	}
+	if _, ok := f.sharedSuccess[backup.Storage]; ok {
+		return false
+	}
+	if len(f.nodes) > 0 {
+		return true
+	}
+	for scope := range f.local {
+		if scope.storage == backup.Storage {
+			return true
+		}
+	}
+	return false
+}
+
+func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnapshot, failures pveBackupReadFailures, current []models.StorageBackup) ([]models.StorageBackup, []string) {
+	if len(failures.storages) == 0 && len(failures.nodes) == 0 && len(failures.local) == 0 {
 		return current, nil
 	}
 
@@ -759,7 +836,7 @@ func preserveFailedStorageBackups(instanceName string, snapshot models.StateSnap
 		if backup.Instance != instanceName {
 			continue
 		}
-		if _, ok := storagesToPreserve[backup.Storage]; !ok {
+		if !failures.preserves(backup) {
 			continue
 		}
 		if _, duplicate := existing[backup.ID]; duplicate {

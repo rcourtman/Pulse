@@ -21,6 +21,34 @@
 
 ## Purpose
 
+### Same-named local backup disks retain independent read origins
+
+An accepted storage listing on one PVE node cannot erase last-known files on
+another node's unread local disk, even when both are named `local`. Each accepted
+non-shared row keeps its storage read node as runtime-only provenance; the
+public `node` remains guest attribution and may differ after migration. Hard
+content failures and unread node catalogues/offline nodes retain only their
+known local rows. Older rows without a read origin are retained conservatively
+until an ordinary complete read replaces them. An accepted shared-storage read
+still covers that shared repository; disabled/node-restricted query admission
+and its cross-node success handling are unchanged.
+
+Carried rows keep their exact dates and IDs, do not enter the observed-point
+batch and cannot renew point evidence. Partial scans remain partial and cannot
+reconcile durable history. Accepted independent rows still update or disappear
+on a successful empty listing. A complete empty scan can still establish
+absence, and ordinary successful reads restore the list. There is no public
+JSON/schema, guest/backup command, credential or policy change.
+
+`pve_local_storage_retention_test.go` drives both node orders, repeated content
+and catalogue failures/offline nodes, migrated guests, accepted empty siblings,
+unknown old origins, connection isolation, shared-storage controls, complete
+absence and recovery through the poller/ingest/posture journey. Its optional
+producer supplies the production Coverage table's desktop/narrow browser proof.
+Retained rows are not a fresh read, archive-availability or installed recovery
+claim, and this does not establish #3248's original stale-timestamp cause.
+
+
 ### Protection assessment batches share the consuming read's lifetime
 
 Every protection-posture batch carries a cancellable transport signal owned by
