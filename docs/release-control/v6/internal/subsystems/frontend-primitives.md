@@ -20,6 +20,21 @@
 
 ## Purpose
 
+### Drawer History readout keeps its size while scrubbing (26 October 2026)
+
+Scrubbing a drawer History chart changes the readout's text, never its size.
+The readout time and each series value reserve, in two invisible
+pseudo-elements, the widest texts the loaded range can put there (compared by
+shape under `tabular-nums`), so the legend wraps by panel width alone and the
+plot no longer jumps up and down under the pointer. A bucket's `peak` moved off
+the legend onto the plot: an `aria-hidden` label beside the cursor at the
+spike's height, spaced from other series' labels and flipped leftward past the
+middle. The slider's value text still states each reading's average and range.
+`GuestDrawerHistory.inspection.test.tsx` pins equal reserves at rest and while
+inspecting, and the label's place on the plot. A scripted mouse scrub of the
+production build at 1024 and 1440 px went from up to 80 layout changes per
+sweep (20 px jumps of the plot and of everything below the chart grid) to none.
+
 ### Detail sections follow their own available width
 
 `DetailSectionTable` owns a named inline-size container. Its existing card

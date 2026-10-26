@@ -151,6 +151,30 @@ const alertToneClass = (severity: GuestDrawerHistoryAlert['severity'] | undefine
 const clampNumber = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
+// Inspecting a time swaps the readout's text, and text that changes width
+// re-wraps the legend, moving the chart up and down under the pointer. Each
+// readout slot therefore reserves the widest text it can show for the loaded
+// range in two invisible pseudo-elements. Under tabular-nums every digit has
+// one width, so texts compare by shape and the two widest by estimated advance
+// are reserved.
+const RESERVED_TEXT_CLASS =
+  'inline-grid whitespace-nowrap tabular-nums before:invisible before:[grid-area:1/1] before:content-[attr(data-reserve-a)] after:invisible after:[grid-area:1/1] after:content-[attr(data-reserve-b)]';
+const NARROW_GLYPHS = new Set('.,:/- ilIjtfr');
+const WIDE_GLYPHS = new Set('%@MWmw');
+
+const estimateTextAdvance = (text: string): number =>
+  [...text].reduce(
+    (sum, glyph) => sum + (NARROW_GLYPHS.has(glyph) ? 0.3 : WIDE_GLYPHS.has(glyph) ? 0.85 : 0.6),
+    0,
+  );
+
+const getReservedTextShapes = (texts: readonly string[]): [string, string] => {
+  const shapes = [...new Set(texts.map((text) => text.replace(/\d/g, '0')))].sort(
+    (a, b) => estimateTextAdvance(b) - estimateTextAdvance(a),
+  );
+  return [shapes[0] ?? '', shapes[1] ?? shapes[0] ?? ''];
+};
+
 const getGuestDrawerHistoryX = (timestamp: number, startTime: number, endTime: number): number => {
   const plotWidth =
     GUEST_DRAWER_HISTORY_CHART_WIDTH -
@@ -418,6 +442,76 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
       .filter((item): item is NonNullable<typeof item> => item !== null);
   });
   const hoverX = createMemo(() => hoveredSeries()[0]?.x ?? null);
+  // While a time is inspected, name a bucket's peak when it rises a visible
+  // distance (a tenth of the plot) above the average the line shows. The label
+  // sits on the plot at the spike, beside the cursor, so it never reflows the
+  // readout. Labels for several series are spaced apart and kept in the plot.
+  const peakLabels = createMemo(() => {
+    const currentScale = scale();
+    const labels = hoveredSeries()
+      .filter(
+        (item) =>
+          (item.point.max ?? item.point.value) - item.point.value >=
+          0.1 * (currentScale.maxValue - currentScale.minValue),
+      )
+      .map((item) => ({
+        metric: item.metric,
+        color: item.color,
+        label: `peak ${formatHistoryChartTooltipValue(item.point.max ?? item.point.value, item.unit)}`,
+        left: (item.x / GUEST_DRAWER_HISTORY_CHART_WIDTH) * 100,
+        top:
+          (getGuestDrawerHistoryY(item.point.max ?? item.point.value, currentScale) /
+            GUEST_DRAWER_HISTORY_CHART_HEIGHT) *
+          100,
+      }))
+      .sort((a, b) => a.top - b.top);
+    const gap = 14;
+    const highest = (GUEST_DRAWER_HISTORY_PLOT_TOP / GUEST_DRAWER_HISTORY_CHART_HEIGHT) * 100;
+    const lowest =
+      ((GUEST_DRAWER_HISTORY_CHART_HEIGHT - GUEST_DRAWER_HISTORY_PLOT_BOTTOM) /
+        GUEST_DRAWER_HISTORY_CHART_HEIGHT) *
+      100;
+    labels.forEach((label, index) => {
+      label.top = Math.max(label.top, highest, index > 0 ? labels[index - 1].top + gap : highest);
+    });
+    const overflow = (labels.at(-1)?.top ?? lowest) - lowest;
+    return labels.map((label) => ({
+      ...label,
+      top: overflow > 0 ? Math.max(highest, label.top - overflow) : label.top,
+      // Past the middle the label reads leftward so it stays inside the panel.
+      flip: label.left > 55,
+    }));
+  });
+  // Every text each series' value slot can show across the loaded range.
+  const valueReserves = createMemo(
+    () =>
+      new Map(
+        series().map((item) => {
+          const labels = new Map(
+            item.points.map((point) => [
+              point.timestamp,
+              getGuestDrawerHistoryValueLabel([point], item.unit),
+            ]),
+          );
+          return [
+            item.metric,
+            getReservedTextShapes(
+              observationTimes().map((timestamp) => labels.get(timestamp) ?? 'no reading'),
+            ),
+          ] as const;
+        }),
+      ),
+  );
+  const timeReserve = createMemo(() =>
+    getReservedTextShapes(
+      observationTimes().flatMap((timestamp) => {
+        const time = formatHistoryChartTimeLabel(timestamp, props.range);
+        return [false, true].map(
+          (inspected) => `${getHistoryReadoutLabel(props.source, inspected)} · ${time}`,
+        );
+      }),
+    ),
+  );
   const displaySeries = createMemo(() =>
     series().map((item, index) => {
       const timestamp = readoutTimestamp();
@@ -428,13 +522,6 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
         : props.currentMetrics?.[item.metric];
       const isFallback =
         timestamp === null && typeof fallbackValue === 'number' && Number.isFinite(fallbackValue);
-      // While a time is inspected, name the bucket's peak when it rises a
-      // visible distance (a tenth of the plot) above the average the line
-      // shows. The default readout stays one number per series.
-      const peakVisible =
-        point !== undefined &&
-        activeTimestamp() !== null &&
-        (point.max ?? point.value) - point.value >= 0.1 * (scale().maxValue - scale().minValue);
       const alert = props.alerts?.[item.metric];
       return {
         ...item,
@@ -443,10 +530,7 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           alert && typeof alert.value === 'number' && Number.isFinite(alert.value)
             ? `alert at ${formatHistoryChartTooltipValue(alert.value, item.unit)}`
             : null,
-        peakLabel:
-          point && peakVisible
-            ? `peak ${formatHistoryChartTooltipValue(point.max ?? point.value, item.unit)}`
-            : null,
+        reserve: valueReserves().get(item.metric) ?? ['', ''],
         deferred,
         descriptionId: `${inspectionId}-deferred-${index}`,
         isCurrent: isFallback && !deferred,
@@ -508,17 +592,23 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
           </h4>
           <Show when={readoutTime()}>
             {(time) => (
-              <time
-                class="text-[10px] tabular-nums text-muted"
-                data-testid="guest-history-hover-time"
-                dateTime={time().dateTime}
-                title={time().fullLabel}
-                aria-label={`${getHistoryReadoutLabel(props.source, true)} observation: ${time().fullLabel}`}
+              <span
+                class={`${RESERVED_TEXT_CLASS} text-[10px] text-muted`}
+                data-reserve-a={timeReserve()[0]}
+                data-reserve-b={timeReserve()[1]}
               >
-                {getHistoryReadoutLabel(props.source, activeTimestamp() !== null)}
-                {' · '}
-                {time().label}
-              </time>
+                <time
+                  class="[grid-area:1/1]"
+                  data-testid="guest-history-hover-time"
+                  dateTime={time().dateTime}
+                  title={time().fullLabel}
+                  aria-label={`${getHistoryReadoutLabel(props.source, true)} observation: ${time().fullLabel}`}
+                >
+                  {getHistoryReadoutLabel(props.source, activeTimestamp() !== null)}
+                  {' · '}
+                  {time().label}
+                </time>
+              </span>
             )}
           </Show>
         </div>
@@ -536,12 +626,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
                   <circle cx="5" cy="5" r="4" fill={item.color} />
                 </svg>
                 <span class="font-medium text-base-content">{item.label}</span>
-                <span class={alertToneClass(props.alerts?.[item.metric]?.severity)}>
-                  {item.valueLabel}
+                <span
+                  class={`${RESERVED_TEXT_CLASS} ${alertToneClass(props.alerts?.[item.metric]?.severity)}`}
+                  data-reserve-a={item.reserve[0]}
+                  data-reserve-b={item.reserve[1]}
+                >
+                  <span class="[grid-area:1/1]">{item.valueLabel}</span>
                 </span>
-                <Show when={item.peakLabel}>
-                  {(label) => <span data-history-peak={item.metric}>{label()}</span>}
-                </Show>
                 <Show when={item.alertLabel}>
                   {(label) => (
                     <span
@@ -735,6 +826,25 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             </For>
           </Show>
         </svg>
+        {/* The slider's value text states each reading's range, so these
+            labels are for sighted pointer readers only. */}
+        <For each={peakLabels()}>
+          {(peak) => (
+            <span
+              aria-hidden="true"
+              data-history-peak={peak.metric}
+              class={`pointer-events-none absolute inline-flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-xs bg-surface/95 px-1 py-0.5 text-[10px] leading-none tabular-nums text-base-content shadow-xs ${
+                peak.flip ? '-translate-x-[calc(100%+6px)]' : 'translate-x-1.5'
+              }`}
+              style={{ left: `${peak.left}%`, top: `${peak.top}%` }}
+            >
+              <svg class="h-2 w-2 shrink-0" viewBox="0 0 10 10">
+                <circle cx="5" cy="5" r="4" fill={peak.color} />
+              </svg>
+              {peak.label}
+            </span>
+          )}
+        </For>
         <Show when={!hasStoredData() && !props.loading}>
           <div class="absolute inset-x-8 inset-y-2 flex items-center justify-center rounded-xs text-xs text-muted">
             No stored history in this range

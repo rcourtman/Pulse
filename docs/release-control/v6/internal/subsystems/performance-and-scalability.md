@@ -15,6 +15,15 @@
 
 ## Purpose
 
+### Drawer History scrubbing does not reflow (26 October 2026)
+
+Reserved readout widths are derived from the points a panel already holds (one
+formatted label per observation per series, recomputed only when the reply,
+range or source changes) and applied through two CSS pseudo-elements per slot.
+Scrubbing then changes text only, so the drawer no longer reflows its chart
+grid on pointer moves. Peak labels are at most one positioned span per
+inspected series. No read, timer or observer is added.
+
 ### History reads follow reporting transitions
 
 The shared drawer history query refreshes once when source reporting authority
