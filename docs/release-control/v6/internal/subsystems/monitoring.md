@@ -17,6 +17,34 @@
 
 ## Purpose
 
+### PBS unread namespaces retain only their own last accepted live files
+
+When a PBS group-list request fails transiently, its previous live snapshot
+rows remain inspectable even if a sibling namespace succeeds. A transient
+namespace-discovery failure similarly retains known but unqueried namespaces,
+without guessing or issuing hidden-namespace requests. Accepted rows take
+priority over carried rows at the existing live-state bound. Carried dates,
+identities and snapshot-cache times are unchanged, and carried rows never enter
+the observed-group batch or renew recovery-point evidence. Provider history
+stays partial/unavailable rather than claiming protection.
+
+An actual access rejection still withdraws that namespace's raw rows, including
+when every namespace failed and another failure was transient. Wholly unread
+mixed failures keep access Unknown rather than inventing universal denial;
+uniformly rejected collection still reports Denied. Failed discovery
+cannot override a namespace request actually made: neither a rejection nor an
+accepted empty listing can be undone by carry-forward. Durable historical facts
+remain qualified by collection/access evidence until a complete accepted scan
+can reconcile absence. Ordinary successful reads restore the inventory. Public
+JSON, identifiers, bounds, policy and native backup/recovery operations are
+unchanged. `pbs_namespace_continuity_test.go` exercises VM/container scopes,
+repeated transient/malformed reads, discovery loss, mixed denial, accepted empty
+siblings, connection isolation and complete recovery/removal. Its optional
+lifecycle frames drive the production Backups consumer and API hooks in
+desktop/narrow browser proof. This is source continuity, not archive availability,
+installed guest recovery or #3248's diagnosed stale-date cause.
+
+
 ### Same-named local backup disks retain independent read origins
 
 An accepted storage listing on one PVE node cannot erase last-known files on
