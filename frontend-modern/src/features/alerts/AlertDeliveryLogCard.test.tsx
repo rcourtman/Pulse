@@ -144,6 +144,37 @@ describe('AlertDeliveryLogCard', () => {
     expect(screen.getByText('held-keyboard-evidence')).toBeInTheDocument();
   });
 
+  it('keeps refresh keyboard focus while busy without admitting duplicate reads', () => {
+    const [refreshing, setRefreshing] = createSignal(false);
+    const onRefresh = vi.fn(() => setRefreshing(true));
+    render(() => (
+      <AlertDeliveryLogCard
+        log={log}
+        unavailable={false}
+        refreshing={refreshing()}
+        onRefresh={onRefresh}
+        webhooks={webhooks}
+      />
+    ));
+    const refresh = screen.getByRole('button', { name: 'Refresh delivery status' });
+    refresh.focus();
+    refresh.click();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveAttribute('aria-disabled', 'true');
+    // Native disabled controls lose keyboard focus in WebKit. Keep the
+    // button mounted and focusable, but reject both mouse and keyboard clicks.
+    expect(refresh).not.toHaveAttribute('disabled');
+    expect(refresh).toHaveFocus();
+    refresh.click();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    setRefreshing(false);
+    expect(refresh).toHaveAttribute('aria-disabled', 'false');
+    expect(refresh).toHaveFocus();
+    refresh.click();
+    expect(onRefresh).toHaveBeenCalledTimes(2);
+  });
+
   it('says test sends are not listed so their absence is not read as failure', () => {
     render(() => (
       <AlertDeliveryLogCard

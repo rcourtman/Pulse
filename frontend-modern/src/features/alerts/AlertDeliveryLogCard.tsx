@@ -158,9 +158,11 @@ export function AlertDeliveryLogCard(props: AlertDeliveryLogCardProps) {
           </div>
           <button
             type="button"
-            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-gray-300 bg-transparent px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/40"
-            disabled={props.refreshing}
-            onClick={props.onRefresh}
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-gray-300 bg-transparent px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/40"
+            aria-disabled={props.refreshing}
+            onClick={() => {
+              if (!props.refreshing) props.onRefresh();
+            }}
           >
             <RefreshCwIcon class={`h-4 w-4 ${props.refreshing ? 'animate-spin' : ''}`} />
             {getAlertDestinationsDeliveryRefreshLabel()}
