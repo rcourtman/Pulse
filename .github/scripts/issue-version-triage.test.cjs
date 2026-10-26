@@ -2446,6 +2446,9 @@ test("legacy version labels use visible formatting without borrowing a title or 
   ]) {
     for (const [value, expected] of [["`6.6.0`", "6.6.0"], ["unknown", null], ["6.6", null]]) {
       for (const field of [`${label}: ${value}`, `- ${label}: ${value}`, `${label}\n\n${value}`]) {
+        // A shortcut followed by a colon is a reference definition, not a
+        // rendered link label. Its standalone visible form remains covered.
+        if (label === "[Pulse version]" && field.includes(":")) continue;
         const body = `${field}\n\n### Agent version\n9.9.9\n\n` +
           "[field]: https://example.invalid/6.4.1\n[Pulse version]: https://example.invalid/6.4.1";
         for (const newline of ["\n", "\r\n"]) {
@@ -2475,6 +2478,8 @@ test("literal or withdrawn legacy labels remain evidence rather than version dec
   for (const body of ["> " + field, "```markdown\n" + field + "\n```", "    " + field]) {
     assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), null, body);
   }
+  assert.equal(triage.internals.extractPulseVersion("Unversioned report",
+    "[Pulse version]: https://example.invalid/6.6.0"), null);
 });
 
 test("the silent consumer respects linked legacy versions while preserving Community decisions", async () => {

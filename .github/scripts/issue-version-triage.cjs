@@ -55,12 +55,14 @@ function inlineProjection(tokens) {
 
 function projectDeclarationLines(tokens) {
   const lines = [];
-  const append = (text, declaration = false, metadata = text) => {
+  const append = (text, declaration = false, metadata = text, fieldText = text) => {
     const visible = text.split(/\r?\n/);
     const declared = metadata.split(/\r?\n/);
+    const field = fieldText.split(/\r?\n/);
     visible.forEach((value, i) => lines.push({
       text: value,
       metadata: declared[i] || "",
+      fieldText: field[i] || "",
       delimiter: false,
       declaration,
       heading: null,
@@ -77,8 +79,10 @@ function projectDeclarationLines(tokens) {
         heading: inlineDeclarationText(token.tokens, true).trim(), headingDepth: token.depth });
     } else if (token.type === "paragraph") {
       // Legacy field labels follow their visible emphasis/link text too.
-      // Keep code delimiters so literal field examples cannot declare one.
-      append(inlineProjection(token.tokens), true, inlineDeclarationText(token.tokens, true));
+      // Mask every code line for declaration detection, but retain literal
+      // code values separately once a real field label has been established.
+      append(inlineProjection(token.tokens), true, inlineDeclarationText(token.tokens, false, true),
+        inlineDeclarationText(token.tokens, true));
     } else if (token.type === "code") {
       // A real version field may have a fenced or indented value. Its contents
       // remain a value, never new metadata or a section boundary.
@@ -90,8 +94,9 @@ function projectDeclarationLines(tokens) {
         const first = item.tokens[0];
         if (first && first.type === "text" && first.tokens) {
           const text = inlineProjection(first.tokens);
-          const metadata = inlineDeclarationText(first.tokens, true);
-          append(text.split(/\r?\n/)[0], true, metadata.split(/\r?\n/)[0]);
+          const metadata = inlineDeclarationText(first.tokens, false, true);
+          const fieldText = inlineDeclarationText(first.tokens, true);
+          append(text.split(/\r?\n/)[0], true, metadata.split(/\r?\n/)[0], fieldText.split(/\r?\n/)[0]);
           append(text.split(/\r?\n/).slice(1).join("\n"));
           for (const nested of item.tokens.slice(1)) append(nested.raw || "");
         } else {
@@ -232,18 +237,19 @@ function declaredVersionIsTransition(value) {
   return /^[ \t]*(?:[-=]>|[→←↔]|&(?:rarr|larr|harr|#8594|#x2192);|to\b)[ \t]*(?:v?\d|(?:pulse(?:[ \t]+pro)?|server)[ \t]+v?\d|(?:[a-z0-9._/-]+\/)?pulse(?:-pro)?[:_-]v?\d|unknown\b|latest\b)/i.test(remaining);
 }
 
-function inlineDeclarationText(tokens, preserveCode = false) {
+function inlineDeclarationText(tokens, preserveCode = false, maskCode = false) {
   return (tokens || []).map((token) => {
     // A link's visible label is evidence; its destination and title are not.
     // Unwrap only ordinary inline formatting, not images, struck-out values
     // or HTML. Code spans keep their literal text rather than parsing links
     // or comments inside them.
     if (["link", "strong", "em"].includes(token.type)) {
-      return inlineDeclarationText(token.tokens, preserveCode);
+      return inlineDeclarationText(token.tokens, preserveCode, maskCode);
     }
     if (token.type === "html" && /^<!--/.test(token.raw || "")) {
       return token.raw.replace(/[^\r\n]/g, "");
     }
+    if (maskCode && token.type === "codespan") return token.raw.replace(/[^\r\n]/g, " ");
     if (preserveCode && token.type === "codespan") return token.raw;
     if (["codespan", "escape"].includes(token.type)) return token.text;
     return token.raw || "";
@@ -329,7 +335,12 @@ function extractPulseVersion(title, body, report = parseReportMarkdown(body)) {
       // Legacy inline/standalone fields have the same authority as the form.
       // Unknown or incomplete must not borrow an agent/platform version or
       // an upgrade's starting version from the title.
-      const inlineValue = field[1].trim();
+      const visibleLine = (lines[i].heading ?? lines[i].fieldText).replace(/\*\*|__/g, "")
+        .replace(/^[ \t]*[-*][ \t]+/, "").trim();
+      const visibleField = visibleLine.match(
+        /^Pulse[ \t]*(?:[|-][ \t]*)?version(?:[ \t]*[:|][ \t]*|[ \t]+|$)(.*)$/i
+      );
+      const inlineValue = visibleField ? visibleField[1].trim() : "";
       if (inlineValue) return normalizeLegacyVersionValue(inlineValue, report);
       // A declared value may itself be fenced; that does not turn headings
       // elsewhere in a fenced log into declarations.
