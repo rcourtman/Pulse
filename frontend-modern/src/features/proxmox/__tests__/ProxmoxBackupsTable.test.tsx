@@ -1566,7 +1566,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
     fireEvent.click(retry);
     await waitFor(() =>
       expect(detail).toHaveTextContent(
-        'No restore points reported for this workload in the readable history.',
+        'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.',
       ),
     );
     expect(within(rowElement()).getByTitle('No PBS snapshot or PVE backup file')).toHaveTextContent(
