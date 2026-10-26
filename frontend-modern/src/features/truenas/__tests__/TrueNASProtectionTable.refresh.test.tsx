@@ -85,8 +85,9 @@ describe('TrueNAS protection refresh evidence', () => {
 
     expect(notice()).toHaveTextContent('Could not refresh TrueNAS protection.');
     expect(notice()).toHaveTextContent('Showing previously loaded events.');
-    expect(notice()).toHaveTextContent('Outcomes and counts may be out of date;');
-    expect(notice()).toHaveTextContent('newer activity may be missing.');
+    expect(notice()).toHaveTextContent(
+      'Outcomes and counts may be out of date. Newer activity may be missing.',
+    );
     expect(document.body).not.toHaveTextContent('private-host');
     expect(row('apps')).toHaveAttribute('data-truenas-protection-outcome', 'success');
     expect(row('archive')).toHaveAttribute('data-truenas-protection-outcome', 'failed');
