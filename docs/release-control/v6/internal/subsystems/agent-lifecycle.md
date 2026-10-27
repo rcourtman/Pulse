@@ -10448,3 +10448,22 @@ agent report admission, enrollment, credential revocation and installed updater
 contracts remain unchanged. The middleware exhaustion controls in
 `rate_limit_journey_budget_test.go` prove bounded HTTP admission, not an agent
 update, restart or recovery outcome.
+
+### QNAP upgrade boot-file ownership (27 October 2026)
+
+Agent installation and upgrade replace only complete, exact owned QNAP autorun
+entries, using the removal filter rather than substring/range deletion. Other
+startup lines and comments survive; malformed, foreign, incomplete, linked or
+unreadable content is not rewritten. The same-filesystem candidate is parsed
+without execution before replacement. Failed preparation or readback retains
+staging and recovery; a pending setup/removal recovery directory bars another
+write. Registration checks both replacement and flash unmount before claiming
+persistence, including when replacement failed after the agent was stopped.
+
+`TestInstallSHQNAPBootReplacementPreservesUnrelatedJobs` executes the production
+writer and registration caller in private ordinary-user fixtures. It covers
+first/repeated setup, exact legacy/current entries, unrelated jobs, malformed
+content, filesystem/write failures, concurrent source changes and unmount
+failure. The existing NAS removal inventory consumes the changed writer too.
+These checks establish boot-file preservation and truthful local completion,
+not a native QNAP install/reboot/update/removal or resolution of #2897/#1617.

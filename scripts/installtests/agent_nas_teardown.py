@@ -25,7 +25,7 @@ FUNCTIONS = (
     "filter_nas_agent_boot_file", "disable_nas_agent_boot_file", "nas_agent_boot_operation",
     "read_nas_agent_removal_processes", "nas_agent_processes_absent", "quiesce_nas_agent_for_removal",
     "confirm_nas_agent_removal_quiescent", "teardown_nas_agent_boot_owner",
-    "remove_qnap_autorun_block", "render_qnap_autorun_block", "append_qnap_autorun_block",
+    "render_qnap_autorun_block", "append_qnap_autorun_block",
     "render_unraid_go_launch", "write_unraid_go_entry",
 )
 
@@ -229,10 +229,10 @@ class AgentNASTeardown(unittest.TestCase):
             bootfile = root / "flash/autorun.sh" if platform == "QNAP" else root / "go"
             unrelated = "#!/bin/sh\necho before\nbash /other/start-pulse-agent-prod.sh\necho pulse-agent-prod\n/boot/config/pulse/telegraf/start_telegraf.sh\n"
             bootfile.write_text(unrelated)
-            producer = definitions(self.source, ("portable_sed_in_place", "remove_qnap_autorun_block", "render_qnap_autorun_block", "append_qnap_autorun_block", "render_unraid_go_launch", "write_unraid_go_entry"))
+            producer = definitions(self.source, ("portable_path_uid", "nas_agent_removal_file_safe", "filter_nas_agent_boot_file", "render_qnap_autorun_block", "append_qnap_autorun_block", "render_unraid_go_launch", "write_unraid_go_entry"))
             # Consume the real production boot emitters, not a second literal.
             if platform == "QNAP":
-                command = "AGENT_NAME=pulse-agent\nSTATE_DIR=" + shlex.quote(str(root / "state")) + "\n" + producer + "\nappend_qnap_autorun_block " + shlex.quote(str(bootfile)) + " " + shlex.quote(str(target)) + " " + shlex.quote(str(root / "state"))
+                command = "AGENT_NAME=pulse-agent BINARY_NAME=pulse-agent INSTALL_DIR=/usr/local/bin\nSTATE_DIR=" + shlex.quote(str(root / "state")) + "\n" + producer + "\nappend_qnap_autorun_block " + shlex.quote(str(bootfile)) + " " + shlex.quote(str(target)) + " " + shlex.quote(str(root / "state"))
             else:
                 command = "AGENT_NAME=pulse-agent\n" + producer + "\nwrite_unraid_go_entry " + shlex.quote(str(bootfile)) + " " + shlex.quote(str(target)) + " " + shlex.quote(str(root / "bin/pulse-agent"))
             subprocess.run(["bash", "-c", command], check=True, capture_output=True, text=True)
@@ -629,7 +629,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                 bootfile = root / 'flash/autorun.sh' if platform == 'QNAP' else root / 'go'
                 if platform == 'QNAP':
                     bootfile.write_text('#!/bin/sh\n')
-                    emitter = definitions(self.source, ('portable_sed_in_place', 'remove_qnap_autorun_block', 'render_qnap_autorun_block', 'append_qnap_autorun_block'))
+                    emitter = definitions(self.source, ('portable_path_uid', 'nas_agent_removal_file_safe', 'filter_nas_agent_boot_file', 'render_qnap_autorun_block', 'append_qnap_autorun_block'))
                     render_file.write_text(setup + emitter + '\nappend_qnap_autorun_block ' + shlex.quote(str(bootfile)) + ' "$WRAPPER_SCRIPT" "$STATE_DIR"\n')
                     rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
                     self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)

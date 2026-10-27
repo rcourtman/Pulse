@@ -1806,7 +1806,7 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 	required := []string{
 		`detect_qnap_data_volume() {`,
 		`find_qnap_state_dir() {`,
-		`remove_qnap_autorun_block() {`,
+		`filter_nas_agent_boot_file QNAP "$staging/original" filter`,
 		`write_qnap_wrapper_script() {`,
 		`append_qnap_autorun_block() {`,
 		`select_platform_state_dir "${QNAP_VOL}/.pulse-agent"`,

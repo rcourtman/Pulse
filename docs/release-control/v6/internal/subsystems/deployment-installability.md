@@ -4040,6 +4040,24 @@ artifact-selection behaviour.
 
 ## Current State
 
+### QNAP boot updates preserve unrelated startup work (27 October 2026)
+
+The agent installer stages a same-filesystem autorun replacement and admits
+only complete, exact Pulse entries through the existing NAS boot filter.
+Unrelated startup jobs/comments remain intact. Incomplete, foreign, linked or
+oversized input and pending setup/removal recovery stop replacement; boot text
+is syntax-checked without execution. Failed staging keeps the original and
+recovery rather than truncating the live file. Both append and flash unmount
+must succeed before persistence is reported; failure may follow an earlier
+agent stop and never triggers an automatic restart.
+
+`TestInstallSHQNAPBootReplacementPreservesUnrelatedJobs` runs the actual writer
+and registration caller with confined filesystem and manager controls. The
+existing `TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` also consumes
+its output. Native QNAP reboot/update/removal and #2897/#1617 recovery remain
+separate; source fixtures do not establish installed acceptance.
+
+
 ### Hosted chart verdict writer has no proposed executable
 
 Build and Test's optional workload-chart evidence job retains a read-only
