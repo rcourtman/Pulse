@@ -766,6 +766,17 @@ transport failure. Normal closure, navigation/going-away, and abnormal closure
 codes used by disconnected clients are informational; policy violations and
 other unexpected codes remain error-classified for operator visibility.
 
+Browser WebSocket ingress is bounded to 64 KiB both on the wire and after
+permessage-deflate decompression. The hub reads at most the decoded limit plus
+one byte before accepting a message or closing with code 1009. Oversized
+compressed messages must be rejected before JSON decoding and without waiting
+for a final frame, so an unfinished compressed message cannot retain an
+unbounded expanded buffer. Messages at the decoded limit remain valid when
+the wire limit is also met, and normal inbound and outbound compression remain
+supported. The transport proof
+is `internal/websocket/hub_inbound_limit_test.go`, covering plain, compressed,
+fragmented and unfinished messages with at-limit controls.
+
 Successful quick security setup is durable before its success response is
 emitted: Pulse writes the canonical auth environment file, activates the same
 hashed credentials in memory, and for root systemd installs reports both the

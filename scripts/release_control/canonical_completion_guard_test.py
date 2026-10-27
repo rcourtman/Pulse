@@ -2257,6 +2257,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/api/security_tokens_test.go",
                         "internal/api/system_settings_telemetry_test.go",
                         "internal/api/websocket_origin_security_test.go",
+                        "internal/websocket/hub_inbound_limit_test.go",
                         "internal/websocket/hub_test.go",
                     ],
                 }
