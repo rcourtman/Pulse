@@ -31,7 +31,7 @@ function followThrough(): HTMLElement {
   return section;
 }
 
-const prose = (element: HTMLElement): string =>
+const prose = (element: Element): string =>
   (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('public issue follow-through guidance', () => {
