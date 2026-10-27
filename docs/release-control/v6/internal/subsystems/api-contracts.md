@@ -21,6 +21,12 @@
 
 ## Purpose
 
+A member test announces and reveals its result beside that exact member rather
+than leaving feedback in the off-screen global footer. The normal primary
+Test connection result stays in the footer; both remain endpoint-qualified
+and do not update background or agent health. The member-section test and
+browser interaction proof check the locally scoped live result.
+
 The node API client retains server-projected TLS endpoint and first-use fields,
 serialises explicit per-endpoint empty pin choices, and keeps credentials out
 of saved-connection test payloads. Nonempty malformed pin strings are preserved,

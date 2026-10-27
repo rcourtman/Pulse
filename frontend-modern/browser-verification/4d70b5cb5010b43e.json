@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "dfbe3fa91cd82693242da203b53f7161c7a61156",
+  "verified_at": "2026-10-27T09:01:05Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "81b2ff3c164ced6a5843b4cdd01031492c3f9b58209e7e0aed10c73fd6032222",
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "0185405c945a69d5f47238df9095e17dc8890e19f31e4de36859d8884ace3224",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "55228cde5c3e6e50d28c3f70fab7e8e850de4004f2364ce933f50270857eefe4"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Separate primary and saved peer pins; preserved disabled collection flags",
+    "Qualified primary success while the peer still rejects its saved pin",
+    "Peer TLS failure and explicit pin update; save/authoritative readback/reopen",
+    "Explicit per-endpoint CA mode with verification enabled; empty policy saved/reopened",
+    "An old in-flight test result invalidated by a changed trust draft",
+    "Supplementary manually projected unknown-member state; deliberate CA choice, not silent pin clearing",
+    "Endpoint-bound success/failure feedback is beside the tested member and revealed within the modal viewport"
+  ],
+  "interactions": [
+    "Focus and Enter on the peer test control",
+    "Edit independently verified synthetic pin values; Test connection and Test TLS for beta",
+    "Save changes and reopen the actual configured-node owner after GET readback",
+    "Clear only selected primary/peer pins with Verify SSL still enabled",
+    "Change a peer draft while an earlier successful response is held, then release it",
+    "Use CA validation for beta explicitly; no generated credentials or agent action",
+    "Observe peer failure within the viewport without scrolling; edit draft and invalidate the prior member success"
+  ],
+  "checks": 96,
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop-chromium": "141.0.7390.37",
+    "narrow-webkit": "26.0"
+  },
+  "evidence_scope": "Actual saved/reopened API node and probe wires from final runtime source through production NodeCredentialSlot and configured-node owner. Member feedback is local and live, not hidden in the global footer. Unknown-member supplemental state is explicitly manual. No native or agent recovery claim.",
+  "native_pixel_review": {
+    "captures": 16,
+    "all_opened": true,
+    "limits": "Source-produced saved/readback/probe wires; manual unknown-member supplement. Member results are inline, live and automatically revealed without moving focus. Every latest desktop and narrow capture was presented through the native image tool; no reporter TLS or installed/agent-health acceptance."
+  }
+}

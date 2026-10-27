@@ -134,6 +134,7 @@ describe('connection tests with retained credentials', () => {
     });
     expect(NodesAPI.testConnection).not.toHaveBeenCalled();
     expect(state.testResult()?.message).toContain('peer:');
+    expect(state.testResult()?.endpoint).toBe(peer.tlsEndpoint);
     state.updateClusterEndpointFingerprint(peer.tlsEndpoint, 'new-pin');
     expect(state.testResult()).toBeNull();
   });

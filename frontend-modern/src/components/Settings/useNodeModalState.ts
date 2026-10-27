@@ -27,6 +27,7 @@ type NodeModalTestResult = {
   message: string;
   isCluster?: boolean;
   warnings?: string[];
+  endpoint?: string;
 };
 
 const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
@@ -578,6 +579,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       (endpoint && (data.password || data.tokenValue))
     ) {
       setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
         status: 'error',
         message:
           'Save changed addresses or credentials before testing this endpoint with stored credentials.',
@@ -600,6 +602,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       });
       if (generation !== probeGeneration) return;
       setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
         status: result.warnings?.length ? 'warning' : 'success',
         message: `${endpoint ? endpoint.nodeName + ': ' : ''}${result.message || 'Endpoint connection successful; background collection was not tested.'}`,
         warnings: result.warnings,
@@ -611,6 +614,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
           ? error.message.replace(/^API request failed: \d{3}\s*/, '')
           : 'Connection failed';
       setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
         status: 'error',
         message: `${endpoint ? endpoint.nodeName + ': ' : ''}${message}`,
       });

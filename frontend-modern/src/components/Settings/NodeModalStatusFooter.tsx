@@ -31,7 +31,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
 
   return (
     <>
-      <Show when={state.testResult()}>
+      <Show when={state.testResult() && !state.testResult()?.endpoint}>
         {(() => {
           const result = state.testResult();
           logger.debug('Test result display', {

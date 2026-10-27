@@ -15,6 +15,12 @@
 
 ## Purpose
 
+A member test announces and reveals its result beside that exact member rather
+than leaving feedback in the off-screen global footer. The normal primary
+Test connection result stays in the footer; both remain endpoint-qualified
+and do not update background or agent health. The member-section test and
+browser interaction proof check the locally scoped live result.
+
 The connection editor exposes each member's actual runtime TLS endpoint.
 Its pin/CA controls submit only deliberately edited scopes, distinguish unknown
 first-use trust, and leave primary and other-member policy independent. Tests

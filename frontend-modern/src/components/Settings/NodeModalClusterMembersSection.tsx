@@ -2,6 +2,7 @@ import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
 import type { ClusterEndpoint } from '@/types/nodes';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -192,6 +193,33 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       >
                         Test TLS for {endpoint.nodeName}
                       </button>
+                      <Show when={state.testResult()?.endpoint === endpoint.tlsEndpoint}>
+                        <div
+                          ref={(element) =>
+                            queueMicrotask(() => {
+                              if (element.isConnected)
+                                element.scrollIntoView?.({ block: 'nearest' });
+                            })
+                          }
+                        >
+                          <InlineNotice
+                            class="break-words"
+                            tone={
+                              state.testResult()?.status === 'error'
+                                ? 'danger'
+                                : state.testResult()?.status === 'warning'
+                                  ? 'warning'
+                                  : 'success'
+                            }
+                            role="status"
+                            aria-label={`TLS test result for ${endpoint.nodeName}`}
+                            aria-live="polite"
+                            aria-atomic="true"
+                          >
+                            {state.testResult()?.message}
+                          </InlineNotice>
+                        </div>
+                      </Show>
                     </div>
                   </Show>
                 </div>

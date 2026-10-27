@@ -1384,6 +1384,7 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalStateSource).toContain('buildClusterEndpointOverridesPayload(');
     expect(nodeModalStateSource).toContain('buildClusterEndpointTrustOverridesPayload(');
     expect(nodeModalStateSource).toContain('clusterEndpointTrustEdited');
+    expect(nodeModalStatusFooterSource).toContain('!state.testResult()?.endpoint');
     expect(nodeModalModelSource).toContain('export const buildClusterEndpointOverridesPayload = (');
   });
 
