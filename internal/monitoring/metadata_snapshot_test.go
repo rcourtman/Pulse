@@ -55,10 +55,10 @@ func TestMetadataMonitorProjectionParity(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		defer mustSetMockEnabled(t, false)
-		t.Run("live", assertMetadataMonitorProjectionParity)
+		assertMetadataMonitorProjectionParity(t, "live")
 
 		mustSetMockEnabled(t, true)
-		t.Run("mock-before-tick", assertMetadataMonitorProjectionParity)
+		assertMetadataMonitorProjectionParity(t, "mock-before-tick")
 		version := mock.FixtureDataVersion()
 		const ticks = 11 // Includes two supplemental-health cohorts, not just PVE ticks.
 		time.Sleep(ticks * mock.GetConfig().UpdateInterval)
@@ -66,17 +66,18 @@ func TestMetadataMonitorProjectionParity(t *testing.T) {
 		if got := mock.FixtureDataVersion(); got != version+ticks {
 			t.Fatalf("ordinary mock sampler advanced version %d to %d; want %d ticks", version, got, ticks)
 		}
-		t.Run("mock-after-tick", assertMetadataMonitorProjectionParity)
+		assertMetadataMonitorProjectionParity(t, "mock-after-tick")
 	})
 }
 
-func assertMetadataMonitorProjectionParity(t *testing.T) {
+func assertMetadataMonitorProjectionParity(t *testing.T, phase string) {
 	t.Helper()
 	// Both projections must describe the same graph epoch. CPU time spent
 	// cloning/serializing a large estate must not advance the mock sampler;
 	// increasing its interval or accepting a later matching retry would hide
 	// the invalid cross-epoch comparison instead of making it deterministic.
 	stamp, version := time.Now(), mock.FixtureDataVersion()
+	comparisons := 0
 	for _, fixture := range []struct {
 		name    string
 		monitor *Monitor
@@ -87,25 +88,26 @@ func assertMetadataMonitorProjectionParity(t *testing.T) {
 		{"populated-state", metadataMonitorFixture(100)},
 	} {
 		for _, reader := range metadataReaders {
-			t.Run(fixture.name+"/"+reader.name, func(t *testing.T) {
-				got, want := reader.current(fixture.monitor), reader.previous(fixture.monitor)
-				if !reflect.DeepEqual(got, want) {
-					t.Fatal("scoped and full metadata projections differ")
-				}
-				gotJSON, err := json.Marshal(got)
-				if err != nil {
-					t.Fatal(err)
-				}
-				wantJSON, err := json.Marshal(want)
-				if err != nil || string(gotJSON) != string(wantJSON) {
-					t.Fatal("scoped metadata changed serialized output")
-				}
-			})
+			name := phase + "/" + fixture.name + "/" + reader.name
+			got, want := reader.current(fixture.monitor), reader.previous(fixture.monitor)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("%s: scoped and full metadata projections differ", name)
+			}
+			gotJSON, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("%s: marshal scoped metadata: %v", name, err)
+			}
+			wantJSON, err := json.Marshal(want)
+			if err != nil || string(gotJSON) != string(wantJSON) {
+				t.Fatalf("%s: scoped metadata changed serialized output (marshal error: %v)", name, err)
+			}
+			comparisons++
 		}
 	}
 	if time.Now() != stamp || mock.FixtureDataVersion() != version {
-		t.Fatal("metadata parity compared different mock clock/graph epochs")
+		t.Fatalf("%s: metadata parity compared different mock clock/graph epochs", phase)
 	}
+	t.Logf("metadata parity phase=%s comparisons=%d version=%d", phase, comparisons, version)
 }
 
 func TestMetadataMonitorProjectionConcurrentReset(t *testing.T) {
