@@ -253,6 +253,33 @@ class E2EImageBundleTest(unittest.TestCase):
         with patch.dict(os.environ, {"PULSE_E2E_SEED_IMAGE": "untrusted.example/image:latest"}):
             self.assertEqual(IMAGES.seed_image(), pin)
 
+    def test_seed_digest_refresh_keeps_exact_producer_consumer_binding(self):
+        pin = IMAGES.seed_image()
+        previous = "alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6"
+        self.assertNotEqual(pin, previous, "the E2E seed must not retain the superseded Alpine digest")
+        manifest = self.produce()
+        self.assertEqual(manifest["seed_image"], pin)
+
+        # Even a valid old pin with a matching manifest hash cannot admit an
+        # older seed bundle to the refreshed checkout.
+        self.replace_manifest({**manifest, "seed_image": previous})
+        self.assert_refused_before_docker()
+        self.replace_manifest(manifest)
+
+        # Nor may a consumer silently switch its committed default after the
+        # producer sealed the bundle, even with unchanged run/source fields.
+        source = IMAGES.COMPOSE.read_text()
+        changed = Path(self.temp.name) / "changed-compose.yml"
+        changed.write_text(source.replace(pin, previous, 1))
+        with patch.object(IMAGES, "COMPOSE", changed):
+            self.assertEqual(IMAGES.seed_image(), previous)
+            self.assert_refused_before_docker()
+
+        IMAGES.load(self.directory, IDENTITY)
+        self.assertEqual(self.docker.calls[0], ("docker", "image", "load", "--input", str(self.directory / IMAGES.ARCHIVE)))
+        self.assertEqual(len(self.docker.calls), 4)  # one load, three identity reads
+        self.assertFalse(any("build" in args or "pull" in args for args in self.docker.calls))
+
 
 class E2EImageWorkflowTest(unittest.TestCase):
     def test_browser_fixture_budgets_are_explicit_bounded_and_dev_only(self):
