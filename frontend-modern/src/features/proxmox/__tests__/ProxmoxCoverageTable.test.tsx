@@ -132,9 +132,20 @@ describe('ProxmoxCoverageTable column visibility', () => {
   });
 
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {
+    const completedWithWarning: WorkloadCoverageRow = {
+      ...row,
+      latestTask: {
+        id: 'task-with-warning',
+        label: 'OK',
+        status: 'OK',
+        startedAt: '2026-07-18T23:00:00Z',
+        startedMs: Date.parse('2026-07-18T23:00:00Z'),
+        error: 'Provider reported completion with a warning',
+      },
+    };
     const { unmount } = renderInRouter(() => (
       <ProxmoxCoverageTable
-        rows={[row]}
+        rows={[completedWithWarning]}
         hasAnyRows
         emptyIcon={<span />}
         emptyTitle=""
@@ -150,6 +161,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     ));
 
     expect(document.body.textContent).not.toContain('Provider evidence');
+    expect(document.body.textContent).not.toContain(completedWithWarning.latestTask!.error);
     expect(document.body.textContent).not.toContain(
       'A current verified backup is available from complete provider history.',
     );
@@ -157,7 +169,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     renderInRouter(() => (
       <ProxmoxCoverageTable
-        rows={[row]}
+        rows={[completedWithWarning]}
         hasAnyRows
         emptyIcon={<span />}
         emptyTitle=""
@@ -176,6 +188,16 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).toContain('Proxmox Backup Server');
     expect(document.body.textContent).toContain('History Complete');
     expect(document.body.textContent).toContain('Access Sufficient');
+    const task = screen.getByText('Latest task', { selector: 'th' }).closest('tbody')!;
+    expect(task).toHaveTextContent('OK');
+    expect(task).toHaveTextContent(completedWithWarning.latestTask!.error!);
+    expect(task).toHaveTextContent('task-with-warning');
+    expect(task).toHaveTextContent('Not reported');
+    // A reported OK does not erase a provider warning or override protection.
+    expect(screen.getByText(completedWithWarning.latestTask!.error!)).toHaveClass(
+      'whitespace-pre-wrap',
+      'wrap-anywhere',
+    );
   });
 
   it('keeps each provider scope beside its own access and history evidence', () => {
