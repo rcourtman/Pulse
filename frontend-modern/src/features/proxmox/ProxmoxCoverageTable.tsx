@@ -755,6 +755,21 @@ export function ProxmoxCoverageTable(props: {
                                             class={getPlatformTableCellClassForKind('name')}
                                           >
                                             <ArtifactSourceIdentity artifact={artifact} wrap />
+                                            <Show
+                                              when={
+                                                !isCoverageEvidenceColumnVisible(
+                                                  layoutMode(),
+                                                  'location',
+                                                )
+                                              }
+                                            >
+                                              <span
+                                                class="mt-1 block whitespace-normal text-muted leading-snug wrap-anywhere"
+                                                data-coverage-evidence-location
+                                              >
+                                                Location: {artifact.location}
+                                              </span>
+                                            </Show>
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(

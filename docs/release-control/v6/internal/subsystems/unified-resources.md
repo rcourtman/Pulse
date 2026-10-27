@@ -8904,3 +8904,10 @@ keys, restore points, protection policy and guest operations are unchanged;
 removing fabricated node metadata prevents one false unscoped-task match.
 Desktop and phone browser proof exercises both existing detail views. This
 corrects attribution, not #2681/#3248 causality or native recovery.
+
+When Coverage hides the Location column on narrow containers, each existing
+restore-evidence Source cell also wraps its labelled repository location.
+Removing a guessed node must not discard the useful namespace/datastore it
+misrepresented. `ProxmoxCoverageTable.test.tsx` checks narrow/full projection
+and complete long location text; the parsed inventory regressions also retain
+reader identity and full repository context without adding reads or routes.

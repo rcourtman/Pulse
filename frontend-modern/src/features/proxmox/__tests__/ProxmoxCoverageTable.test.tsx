@@ -132,6 +132,53 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).not.toContain('VM 100 · pve1');
   });
 
+  it.each([330, 600, 1200])(
+    'keeps backup locations readable as locations at %ipx without using them as nodes',
+    (width) => {
+      const model = buildProxmoxBackupRecoveryModel({
+        workloads: [],
+        pbsBackups: [],
+        snapshots: [],
+        tasks: [],
+        nowMs: BACKUP_IDENTITY_NOW,
+        archives: [
+          identityArchive({
+            node: '',
+            instance: 'reader-only',
+            storage: 'long-repository-'.repeat(8),
+          }),
+        ],
+      });
+      const current = model.coverageRows[0];
+      renderInRouter(() => (
+        <ProxmoxCoverageTable
+          rows={[current]}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKey={current.key}
+          onToggleExpand={() => {}}
+          showTaskColumn={false}
+          layoutWidth={() => width}
+        />
+      ));
+      const detail = screen.getByTestId('proxmox-coverage-detail');
+      const location = detail.querySelector('[data-coverage-evidence-location]')!;
+      expect(location).toHaveTextContent('long-repository-'.repeat(8));
+      expect(location).toHaveClass('whitespace-normal', 'wrap-anywhere');
+      if (width < 480)
+        expect(location.textContent).toBe(`Location: ${current.artifacts[0].location}`);
+      expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+        'Not reported',
+      );
+      expect(detail.querySelectorAll('[data-coverage-evidence-location]')).toHaveLength(1);
+    },
+  );
+
   it('keeps provider evidence in the workload drill-down instead of every table row', () => {
     const completedWithWarning: WorkloadCoverageRow = {
       ...row,
