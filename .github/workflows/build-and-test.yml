@@ -451,8 +451,8 @@ jobs:
       - name: Compile every Go race-test binary without executing it
         run: bash scripts/compile-go-tests.sh
 
-  backend:
-    name: Backend tests (${{ matrix.shard }})
+  backend-packages:
+    name: Backend package tests (${{ matrix.shard }})
     needs: [changes, test-compile]
     # Expand the unchanged required checks even when compilation fails. A
     # skipped dependency must not turn a broken source into a green check.
@@ -465,7 +465,8 @@ jobs:
       fail-fast: false
       matrix:
         # internal/api has its own sharded job below. Measured weights balance
-        # every other whole package across these two unchanged required checks.
+        # the remaining whole packages across these two workers. The two slow
+        # packages have exhaustive source-derived slices in backend-slow.
         shard: [rest-0, rest-1]
 
     steps:
@@ -524,7 +525,7 @@ jobs:
             rest-1) index=1 ;;
             *) echo "unknown shard ${{ matrix.shard }}" >&2; exit 1 ;;
           esac
-          pkgs=$(go list ./... | grep -v '/internal/api$' \
+          pkgs=$(go list ./... | grep -vE '/(internal/api|internal/monitoring|scripts/installtests)$' \
             | python3 .github/scripts/select-go-package-shard.py \
                 .github/scripts/go-package-test-seconds.txt 2 "$index")
           if [ -z "$pkgs" ]; then
@@ -533,6 +534,98 @@ jobs:
           fi
           printf 'Packages in this shard:\n%s\n' "$pkgs"
           go test -race -timeout 50m $pkgs
+
+  # These packages now take 10–12 minutes each under -race. Whole-package
+  # weights cannot shorten that serial floor. Preserve each package's test
+  # order in two source-derived slices; the recorder requires every selected
+  # root exactly once, not just a package-level pass.
+  backend-slow:
+    name: Backend slices (${{ matrix.suite }}-${{ matrix.index }}/2)
+    needs: [changes, test-compile]
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.code == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [monitoring, installtests]
+        index: [0, 1]
+        include:
+          - suite: monitoring
+            package: internal/monitoring
+          - suite: installtests
+            package: scripts/installtests
+    steps:
+      - name: Require compiled backend tests
+        env:
+          COMPILE_REQUIRED: ${{ needs.changes.outputs.go_compile }}
+          COMPILE_RESULT: ${{ needs.test-compile.result }}
+        run: |
+          if [ "$COMPILE_REQUIRED" = true ] && [ "$COMPILE_RESULT" != success ]; then
+            echo "::error::Backend test compilation did not pass; no sliced tests started."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Provide frontend embed stub
+        run: bash scripts/ensure_test_assets.sh
+
+      - name: Run source-derived backend slice
+        env:
+          PULSE_DATA_DIR: /tmp/pulse-test-data
+          TEST_PACKAGE: ${{ matrix.package }}
+          TEST_INDEX: ${{ matrix.index }}
+        run: >-
+          python3 .github/scripts/run-go-package-slice.py
+          --package "$TEST_PACKAGE" --index "$TEST_INDEX"
+          --output "$RUNNER_TEMP/backend-slice"
+
+      - name: Retain slice coverage and failure observations
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-slice-${{ matrix.suite }}-${{ matrix.index }}
+          path: ${{ runner.temp }}/backend-slice/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # Branch protection keeps its exact two names. Neither a skipped/failed
+  # worker nor a partial matrix can manufacture a successful required check.
+  backend:
+    name: Backend tests (${{ matrix.shard }})
+    needs: [changes, backend-packages, backend-slow]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        shard: [rest-0, rest-1]
+    steps:
+      - name: Require exhaustive backend coverage
+        env:
+          CHANGE_RESULT: ${{ needs.changes.result }}
+          CODE_REQUIRED: ${{ needs.changes.outputs.code }}
+          PACKAGES_RESULT: ${{ needs.backend-packages.result }}
+          SLICES_RESULT: ${{ needs.backend-slow.result }}
+        run: |
+          set -euo pipefail
+          test "$CHANGE_RESULT" = success
+          test "$PACKAGES_RESULT" = success
+          case "$CODE_REQUIRED:$SLICES_RESULT" in
+            true:success) echo "Every whole-package worker and all four source-derived slices passed." ;;
+            false:skipped) echo "Runtime tests not applicable to this source range." ;;
+            *) echo "::error::Backend slice coverage unavailable or failed ($CODE_REQUIRED:$SLICES_RESULT)."; exit 1 ;;
+          esac
 
   # internal/api alone took ~27 of the ~31 minutes of the old single
   # `Backend tests (api)` job under -race, which made it the critical path of

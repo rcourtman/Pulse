@@ -4650,6 +4650,7 @@
         ".github/scripts/recover-demo-runtime.sh",
         ".github/scripts/refresh-internal-api-test-seconds.py",
         ".github/scripts/resolve-demo-runtime-profile.sh",
+        ".github/scripts/run-go-package-slice.py",
         ".github/scripts/select-internal-api-shard.sh",
         ".github/scripts/setup-demo-ssh.sh",
         ".github/scripts/tests/demo_runtime_native.py",
@@ -5290,7 +5291,8 @@
               ".github/scripts/select-internal-api-shard.sh",
               ".github/workflows/build-and-test.yml",
               "frontend-modern/package-lock.json",
-              "frontend-modern/package.json"
+              "frontend-modern/package.json",
+              ".github/scripts/run-go-package-slice.py"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
