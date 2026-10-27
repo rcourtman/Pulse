@@ -21,6 +21,47 @@
 
 ## Purpose
 
+A member test announces and reveals its result beside that exact member rather
+than leaving feedback in the off-screen global footer. The normal primary
+Test connection result stays in the footer; both remain endpoint-qualified
+and do not update background or agent health. The member-section test and
+browser interaction proof check the locally scoped live result.
+
+The node API client retains server-projected TLS endpoint and first-use fields,
+serialises explicit per-endpoint empty pin choices, and keeps credentials out
+of saved-connection test payloads. Nonempty malformed pin strings are preserved,
+not normalised into an empty CA choice. The editor's configured-node state consumes
+GET readback after saving trust instead of interpreting write-only overrides
+as configuration. `NodesAPI` tests and the configured-node readback test cover
+these client boundaries; peer edits never imply a cluster-wide trust reset.
+
+Existing PVE `monitorVMs`, `monitorContainers`, `monitorStorage` and
+`monitorBackups` response fields include false values. Omitting a disabled
+scope would make the editor substitute its new-connection defaults and enable
+collectors during an unrelated trust save.
+`TestPVEEndpointTrustEditorPreservesDisabledCollectors` verifies the round-trip.
+
+### Scoped Proxmox trust edits and connection tests
+
+PVE updates accept `clusterEndpointTrustOverrides` entries containing an
+existing HTTPS `endpoint` and required string `fingerprint`. An empty string
+selects the existing verification setting for that endpoint; missing/null,
+duplicate equivalent endpoints, unknown scopes and contradictory primary
+settings are rejected before mutation. A primary `fingerprint` edit also
+reconciles that exact endpoint in polling trust. Candidate PVE configuration
+is published in memory only after persistence succeeds.
+
+Cluster member responses expose the permitted runtime `tlsEndpoint` and
+`usesPrimaryTLS`, with the effective fingerprint. `tlsFirstUse` distinguishes
+an unknown member from an explicit empty-pin choice, so the editor does not
+claim that automatic first-use trust is saved CA validation. Saved-credential Test accepts
+an optional existing PVE `endpoint` and temporary TLS edits. It makes no saved
+trust or health changes and states that other endpoints/background collection
+were not tested. Omitted TLS edits use polling's saved trust, including an
+ambiguity failure. Other provider types cannot select a PVE endpoint.
+`TestPVEEndpointTrustAdmission` and `TestPVEEndpointTrustSavedPolling` cover
+rejected inputs, failed persistence, bounded probes and unchanged credentials.
+
 ### Configuration imports distinguish saved files from live recovery
 
 After an archive commits, every attempted live alert, webhook, email and guest

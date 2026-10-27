@@ -58,6 +58,9 @@ describe('NodesAPI', () => {
               ip: ' 10.0.0.1 ',
               ipOverride: ' 10.0.0.10 ',
               fingerprint: ' fp ',
+              tlsEndpoint: ' https://pve-1.local:8006 ',
+              usesPrimaryTLS: true,
+              tlsFirstUse: false,
               online: true,
               lastSeen: ' 2026-03-04T00:00:00Z ',
               pulseReachable: null,
@@ -86,7 +89,10 @@ describe('NodesAPI', () => {
         guestURL: 'https://guest.local',
         ip: '10.0.0.1',
         ipOverride: '10.0.0.10',
-        fingerprint: 'fp',
+        fingerprint: ' fp ',
+        tlsEndpoint: 'https://pve-1.local:8006',
+        usesPrimaryTLS: true,
+        tlsFirstUse: false,
         online: true,
         lastSeen: '2026-03-04T00:00:00Z',
         lastPulseCheck: '2026-03-04T00:00:01Z',
@@ -282,6 +288,43 @@ describe('NodesAPI', () => {
         body: JSON.stringify({ verifySSL: false, fingerprint: '' }),
       });
     });
+  });
+
+  it('tests one existing member with an explicit empty pin and no credential transfer', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({ status: 'success' });
+    await NodesAPI.testExistingNode('pve-0', {
+      endpoint: 'https://peer.test:8006',
+      verifySSL: true,
+      fingerprint: '',
+    });
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/config/nodes/pve-0/test', {
+      method: 'POST',
+      body: JSON.stringify({
+        endpoint: 'https://peer.test:8006',
+        verifySSL: true,
+        fingerprint: '',
+      }),
+    });
+  });
+
+  it('does not normalise malformed nonempty member trust into CA mode', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce([
+      makePveNode({
+        clusterEndpoints: [
+          {
+            nodeId: 'peer',
+            nodeName: 'peer',
+            host: 'https://peer.test:8006',
+            ip: '',
+            online: true,
+            lastSeen: '',
+            fingerprint: '   ',
+          },
+        ],
+      }),
+    ]);
+    const [node] = await NodesAPI.getNodes();
+    expect('clusterEndpoints' in node && node.clusterEndpoints?.[0].fingerprint).toBe('   ');
   });
 
   describe('refreshClusterNodes', () => {

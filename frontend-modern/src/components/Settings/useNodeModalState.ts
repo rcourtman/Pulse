@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import type { NodeConfig } from '@/types/nodes';
+import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 
 import { notificationStore } from '@/stores/notifications';
 import { NodesAPI } from '@/api/nodes';
@@ -16,6 +16,7 @@ import {
 
 import {
   buildClusterEndpointOverridesPayload,
+  buildClusterEndpointTrustOverridesPayload,
   buildClusterNodeDisplayNameOverridesPayload,
   deriveNameFromHost,
   type NodeModalProps,
@@ -26,6 +27,7 @@ type NodeModalTestResult = {
   message: string;
   isCluster?: boolean;
   warnings?: string[];
+  endpoint?: string;
 };
 
 const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
@@ -33,6 +35,7 @@ const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
 export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
+  let probeGeneration = 0;
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
   );
@@ -398,6 +401,15 @@ export const useNodeModalState = (props: NodeModalProps) => {
               ]),
             )
           : {},
+      clusterEndpointTrustEdited: {},
+      clusterEndpointFingerprints:
+        node.type === 'pve' && 'clusterEndpoints' in node
+          ? Object.fromEntries(
+              (node.clusterEndpoints ?? []).flatMap((endpoint) =>
+                endpoint.tlsEndpoint ? [[endpoint.tlsEndpoint, endpoint.fingerprint ?? '']] : [],
+              ),
+            )
+          : {},
       clusterNodeDisplayNames:
         node.type === 'pve' && 'clusterEndpoints' in node
           ? Object.fromEntries(
@@ -479,6 +491,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (overrides) {
         Object.assign(nodeData, { clusterEndpointOverrides: overrides });
       }
+      const trustOverrides = buildClusterEndpointTrustOverridesPayload(
+        endpoints,
+        data.clusterEndpointFingerprints,
+        data.clusterEndpointTrustEdited,
+      );
+      if (trustOverrides)
+        Object.assign(nodeData, { clusterEndpointTrustOverrides: trustOverrides });
       const displayNameOverrides = buildClusterNodeDisplayNameOverridesPayload(
         endpoints,
         data.clusterNodeDisplayNames,
@@ -493,6 +512,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateField = (field: string, value: string | boolean | number) => {
     formEditedByUser = true;
+    probeGeneration++;
+    setTestResult(null);
     if (field === 'host' && typeof value === 'string') {
       setFormData((prev) => {
         const next = { ...prev, host: value };
@@ -522,6 +543,8 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateClusterEndpointOverride = (nodeName: string, value: string) => {
     formEditedByUser = true;
+    probeGeneration++;
+    setTestResult(null);
     setFormData((prev) => ({
       ...prev,
       clusterEndpointOverrides: { ...prev.clusterEndpointOverrides, [nodeName]: value },
@@ -536,6 +559,72 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }));
   };
 
+  const updateClusterEndpointFingerprint = (endpoint: string, value: string) => {
+    formEditedByUser = true;
+    probeGeneration++;
+    setTestResult(null);
+    setFormData((prev) => ({
+      ...prev,
+      clusterEndpointFingerprints: { ...prev.clusterEndpointFingerprints, [endpoint]: value },
+      clusterEndpointTrustEdited: { ...prev.clusterEndpointTrustEdited, [endpoint]: true },
+    }));
+  };
+
+  const testSavedEndpoint = async (endpoint?: ClusterEndpoint) => {
+    const data = formData();
+    if (
+      data.host !== props.editingNode?.host ||
+      (endpoint &&
+        (data.clusterEndpointOverrides[endpoint.nodeName] ?? '') !== (endpoint.ipOverride ?? '')) ||
+      (endpoint && (data.password || data.tokenValue))
+    ) {
+      setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
+        status: 'error',
+        message:
+          'Save changed addresses or credentials before testing this endpoint with stored credentials.',
+      });
+      return;
+    }
+    if (endpoint && !endpoint.tlsEndpoint) return;
+    const generation = ++probeGeneration;
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
+        verifySSL: data.verifySSL,
+        ...(!endpoint || endpoint.usesPrimaryTLS
+          ? { fingerprint: data.fingerprint }
+          : data.clusterEndpointTrustEdited[endpoint.tlsEndpoint!]
+            ? { fingerprint: data.clusterEndpointFingerprints[endpoint.tlsEndpoint!] ?? '' }
+            : {}),
+        ...(endpoint ? { endpoint: endpoint.tlsEndpoint } : {}),
+      });
+      if (generation !== probeGeneration) return;
+      setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
+        status: result.warnings?.length ? 'warning' : 'success',
+        message: `${endpoint ? endpoint.nodeName + ': ' : ''}${result.message || 'Endpoint connection successful; background collection was not tested.'}`,
+        warnings: result.warnings,
+      });
+    } catch (error) {
+      if (generation !== probeGeneration) return;
+      const message =
+        error instanceof Error
+          ? error.message.replace(/^API request failed: \d{3}\s*/, '')
+          : 'Connection failed';
+      setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
+        status: 'error',
+        message: `${endpoint ? endpoint.nodeName + ': ' : ''}${message}`,
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleTestClusterEndpoint = (endpoint: ClusterEndpoint) => testSavedEndpoint(endpoint);
+
   const handleTestConnection = async () => {
     const data = formData();
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
@@ -549,31 +638,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       const hasNewToken = data.authType === 'token' && data.tokenValue;
 
       if (!hasNewPassword && !hasNewToken) {
-        setIsTesting(true);
-        setTestResult(null);
-
-        try {
-          const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
-            verifySSL: data.verifySSL,
-            fingerprint: data.fingerprint,
-          });
-          setTestResult({
-            status: 'success',
-            message: result.message || 'Connection successful',
-          });
-        } catch (error) {
-          logger.error('Test existing node error:', error);
-          let errorMessage = 'Connection failed';
-          if (error instanceof Error) {
-            errorMessage = error.message.replace(/^API request failed: \d{3}\s*/, '');
-          }
-          setTestResult({
-            status: 'error',
-            message: errorMessage,
-          });
-        } finally {
-          setIsTesting(false);
-        }
+        await testSavedEndpoint();
         return;
       }
     }
@@ -646,6 +711,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     formData,
     handleSubmit,
     handleTestConnection,
+    handleTestClusterEndpoint,
     isAdvancedSetupMode,
     isEditingExistingNode,
     isTesting,
@@ -660,6 +726,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     testResult,
     testResultPresentation,
     updateClusterEndpointOverride,
+    updateClusterEndpointFingerprint,
     updateClusterNodeDisplayName,
     updateField,
   };

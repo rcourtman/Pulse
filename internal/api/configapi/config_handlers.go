@@ -798,6 +798,7 @@ type NodeConfigRequest struct {
 	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
 	// PVE only: per-cluster-member connection address overrides. Only the
 	// members named here are touched; an empty ipOverride clears the override.
+	ClusterEndpointTrustOverrides   []ClusterEndpointTrustOverrideRequest   `json:"clusterEndpointTrustOverrides,omitempty"`
 	ClusterEndpointOverrides        []ClusterEndpointOverrideRequest        `json:"clusterEndpointOverrides,omitempty"`
 	ClusterNodeDisplayNameOverrides []ClusterNodeDisplayNameOverrideRequest `json:"clusterNodeDisplayNameOverrides,omitempty"`
 	guestURLSet                     bool                                    `json:"-"`
@@ -903,10 +904,10 @@ type NodeResponse struct {
 	HasToken                     bool                      `json:"hasToken"`
 	Fingerprint                  string                    `json:"fingerprint,omitempty"`
 	VerifySSL                    bool                      `json:"verifySSL"`
-	MonitorVMs                   bool                      `json:"monitorVMs,omitempty"`
-	MonitorContainers            bool                      `json:"monitorContainers,omitempty"`
-	MonitorStorage               bool                      `json:"monitorStorage,omitempty"`
-	MonitorBackups               bool                      `json:"monitorBackups,omitempty"`
+	MonitorVMs                   bool                      `json:"monitorVMs"`
+	MonitorContainers            bool                      `json:"monitorContainers"`
+	MonitorStorage               bool                      `json:"monitorStorage"`
+	MonitorBackups               bool                      `json:"monitorBackups"`
 	MonitorPhysicalDisks         *bool                     `json:"monitorPhysicalDisks,omitempty"`
 	PhysicalDiskPollingMinutes   int                       `json:"physicalDiskPollingMinutes,omitempty"`
 	TemperatureMonitoringEnabled *bool                     `json:"temperatureMonitoringEnabled,omitempty"`
@@ -956,6 +957,9 @@ type ClusterEndpointResponse struct {
 	GuestURL       string     `json:"guestURL,omitempty"`
 	IP             string     `json:"ip,omitempty"`
 	IPOverride     string     `json:"ipOverride,omitempty"`
+	TLSEndpoint    string     `json:"tlsEndpoint,omitempty"`
+	UsesPrimaryTLS bool       `json:"usesPrimaryTLS,omitempty"`
+	TLSFirstUse    bool       `json:"tlsFirstUse,omitempty"`
 	Fingerprint    string     `json:"fingerprint,omitempty"`
 	Online         bool       `json:"online"`
 	LastSeen       time.Time  `json:"lastSeen,omitempty"`
@@ -1647,7 +1651,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			HasPassword:                  pve.Password != "",
 			TokenName:                    pve.TokenName,
 			HasToken:                     pve.TokenValue != "",
-			Fingerprint:                  pve.Fingerprint,
+			Fingerprint:                  pvePrimaryTLSFingerprint(pve),
 			VerifySSL:                    pve.VerifySSL,
 			MonitorVMs:                   pve.MonitorVMs,
 			MonitorContainers:            pve.MonitorContainers,
@@ -1660,7 +1664,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
-			ClusterEndpoints:             toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
+			ClusterEndpoints:             pveClusterEndpointTLSResponses(pve, h.getConfig(ctx).Discovery),
 			Source:                       pve.Source,
 		}.NormalizeCollections()
 		nodes = append(nodes, node)

@@ -15,6 +15,37 @@
 
 ## Purpose
 
+A member test announces and reveals its result beside that exact member rather
+than leaving feedback in the off-screen global footer. The normal primary
+Test connection result stays in the footer; both remain endpoint-qualified
+and do not update background or agent health. The member-section test and
+browser interaction proof check the locally scoped live result.
+
+### Proxmox endpoint trust in the existing connection editor
+
+The primary SSL fingerprint edits only its authority/base path. Each peer shows
+the server-projected `tlsEndpoint`, its own effective pin and, when applicable,
+unknown first-use state. A deliberate peer edit or CA-validation action submits
+only that endpoint; unchanged members are not cleared or assigned the primary
+pin. Explicit CA validation keeps Verify SSL enabled. Unknown first-use policy
+is not described as saved CA validation.
+
+Single-endpoint tests use stored credentials and optional draft TLS choices,
+not unsaved addresses or credentials. They do not save trust, mark background
+or agent health recovered, or claim other endpoints were tested. Draft edits
+invalidate earlier results, including a pending result from an older draft.
+After a successful trust save the configured-node owner reads back the actual
+server policy before reopening; write-only trust payloads are not cached as
+configuration. Disabled collection scope and secrets remain unchanged.
+
+Normal `nodeModalModel`, `useNodeModalState.connectionTest` and
+`NodeModalClusterMembersSection` tests cover partial trust submission, explicit
+empty choices, unknown members, saved-credential probes and stale-result
+invalidation. Desktop/narrow browser proof consumes actual source-produced
+node and probe responses through `NodeCredentialSlot` and the configured-node
+state owner. These fixtures do not establish native IdP, agent or appliance
+recovery.
+
 Own organization role/share semantics and the canonical settings surfaces that
 let users review organization metadata, manage membership, assign roles, and
 create, review, and approve cross-organization shares.

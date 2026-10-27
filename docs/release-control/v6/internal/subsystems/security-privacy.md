@@ -18,6 +18,21 @@
 
 ## Purpose
 
+### Proxmox trust choices are endpoint-scoped
+
+Persisted PVE `tlsFingerprintOverrides` are exact authority/base-path operator
+choices, including deliberate empty pins. Empty does not authorise TOFU or
+inherit another endpoint's pin; with verification enabled, normal certificate
+chain and hostname checks remain required. A known member's renewed certificate
+is not automatically trusted. Unrelated saved pins, credentials, routing and
+access restrictions remain unchanged. Primary and per-member edits cannot
+silently disagree for the same authority. Trust maps are deeply copied before
+candidate mutation and survive encrypted node save/reopen.
+
+`TestPVEEndpointTrustOverridePersistenceAndClone` and
+`TestPVEEndpointTrustSavedPolling` cover clone isolation, encrypted persistence,
+valid-CA/renewed-pin controls and no authenticated HTTP on rejected TLS.
+
 ### Agent delivery is separate from authenticated transport
 
 A saved agent enrollment or an authenticated rejected report does not establish

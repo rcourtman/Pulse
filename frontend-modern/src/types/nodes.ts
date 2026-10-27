@@ -18,6 +18,9 @@ export interface ClusterEndpoint {
   ip: string;
   ipOverride?: string;
   fingerprint?: string;
+  tlsEndpoint?: string;
+  usesPrimaryTLS?: boolean;
+  tlsFirstUse?: boolean;
   online: boolean; // Proxmox's view: is the node online in the cluster?
   lastSeen: string;
   pulseReachable?: boolean | null; // Pulse's view: can Pulse reach this endpoint? null/undefined = not yet checked
@@ -39,6 +42,12 @@ export interface ClusterEndpointOverridePayload {
 export interface ClusterNodeDisplayNameOverridePayload {
   nodeIdentity: string;
   displayName: string;
+}
+
+// One existing runtime endpoint, never an inferred cluster-wide trust edit.
+export interface ClusterEndpointTrustOverridePayload {
+  endpoint: string;
+  fingerprint: string;
 }
 
 export interface PVENodeConfig {
@@ -67,6 +76,7 @@ export interface PVENodeConfig {
   // Write-only: per-member connection address overrides included in PUT
   // payloads; never returned by the API.
   clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
+  clusterEndpointTrustOverrides?: ClusterEndpointTrustOverridePayload[];
   // Write-only presentation overrides keyed by immutable node identity.
   clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[];
 }

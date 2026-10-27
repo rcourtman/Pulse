@@ -561,16 +561,19 @@ func looksLikeNumericSeconds(value string) bool {
 
 // PVEInstance represents a Proxmox VE connection
 type PVEInstance struct {
-	Name                         string
-	Host                         string // Primary endpoint (user-provided)
-	GuestURL                     string // Optional guest-accessible URL (for navigation)
-	User                         string
-	Password                     string
-	TokenName                    string
-	TokenValue                   string
-	Fingerprint                  string
-	VerifySSL                    bool
-	VerifySSLExplicit            bool `json:"verifySSLExplicit,omitempty"` // operator-chosen VerifySSL; survives automatic consolidation (#2140)
+	Name        string
+	Host        string // Primary endpoint (user-provided)
+	GuestURL    string // Optional guest-accessible URL (for navigation)
+	User        string
+	Password    string
+	TokenName   string
+	TokenValue  string
+	Fingerprint string
+	VerifySSL   bool
+	// Exact endpoint-scoped operator decisions, including an explicit empty pin
+	// (CA verification when VerifySSL is true). Discovery cannot replace them.
+	TLSFingerprintOverrides      map[string]string `json:"tlsFingerprintOverrides,omitempty"`
+	VerifySSLExplicit            bool              `json:"verifySSLExplicit,omitempty"` // operator-chosen VerifySSL; survives automatic consolidation (#2140)
 	MonitorVMs                   bool
 	MonitorContainers            bool
 	MonitorStorage               bool

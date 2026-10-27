@@ -1432,6 +1432,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 
 	var pendingPMG []config.PMGInstance
+	var pendingPVE []config.PVEInstance
 	var req NodeConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -1535,7 +1536,16 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Disabled = !*req.Enabled
 		}
 
-		*pve = updated
+		updated, err = applyPVEEndpointTrustUpdates(updated, req, h.getConfig(r.Context()).Discovery)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		pendingPVE = make([]config.PVEInstance, len(h.getConfig(r.Context()).PVEInstances))
+		for i, instance := range h.getConfig(r.Context()).PVEInstances {
+			pendingPVE[i] = instance.DeepCopy()
+		}
+		pendingPVE[index] = updated
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbs := &h.getConfig(r.Context()).PBSInstances[index]
 		current := *pbs
@@ -1667,15 +1677,30 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Save configuration to disk using our persistence instance
-	h.normalizePVEConfigState(r.Context())
+	pveToSave := h.getConfig(r.Context()).PVEInstances
+	if pendingPVE != nil {
+		if normalized, changed := config.ConsolidatePVEInstances(pendingPVE); changed {
+			pendingPVE = normalized
+		}
+		config.EnsurePVEClusterNodeIdentities(pendingPVE)
+		pveToSave = pendingPVE
+	} else {
+		h.normalizePVEConfigState(r.Context())
+		pveToSave = h.getConfig(r.Context()).PVEInstances
+	}
 	pmgToSave := h.getConfig(r.Context()).PMGInstances
 	if pendingPMG != nil {
 		pmgToSave = pendingPMG
 	}
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
+	if err := h.getPersistence(r.Context()).SaveNodesConfig(pveToSave, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
+	}
+	if pendingPVE != nil {
+		config.Mu.Lock()
+		h.getConfig(r.Context()).PVEInstances = pendingPVE
+		config.Mu.Unlock()
 	}
 	if pendingPMG != nil {
 		config.Mu.Lock()
@@ -2146,6 +2171,7 @@ func (h *ConfigHandlers) handleTestNodeConfig(w http.ResponseWriter, r *http.Req
 type nodeConnectionTestTLSOptions struct {
 	VerifySSL   *bool   `json:"verifySSL"`
 	Fingerprint *string `json:"fingerprint"`
+	Endpoint    string  `json:"endpoint,omitempty"`
 }
 
 func (o nodeConnectionTestTLSOptions) apply(verifySSL bool, fingerprint string) (bool, string) {
@@ -2195,12 +2221,22 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	if nodeType != "pve" && tlsOptions.Endpoint != "" {
+		http.Error(w, "Endpoint selection is only supported for PVE", http.StatusBadRequest)
+		return
+	}
+
 	// Find the node to test
 	var testResult map[string]interface{}
 
 	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
-		pve := h.getConfig(r.Context()).PVEInstances[index]
-		verifySSL, fingerprint := tlsOptions.apply(pve.VerifySSL, pve.Fingerprint)
+		pve := h.getConfig(r.Context()).PVEInstances[index].DeepCopy()
+		endpoint, fingerprint, trustErr := pveConnectionTestTrust(pve, tlsOptions, h.getConfig(r.Context()).Discovery)
+		if trustErr != nil {
+			http.Error(w, trustErr.Error(), http.StatusBadRequest)
+			return
+		}
+		verifySSL, _ := tlsOptions.apply(pve.VerifySSL, pve.Fingerprint)
 
 		// Create a temporary client to test connection
 		authUser := pve.User
@@ -2208,7 +2244,7 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 			authUser = normalizePVEUser(authUser)
 		}
 		clientConfig := proxmox.ClientConfig{
-			Host:        pve.Host,
+			Host:        endpoint,
 			User:        authUser,
 			Password:    pve.Password,
 			TokenName:   pve.TokenName,
@@ -2237,7 +2273,7 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 				latency := time.Since(startTime).Milliseconds()
 				testResult = map[string]interface{}{
 					"status":  "success",
-					"message": fmt.Sprintf("Connected to PVE cluster with %d nodes", len(nodes)),
+					"message": fmt.Sprintf("Connected to this PVE endpoint (%d nodes reported). Other endpoints and background collection were not tested.", len(nodes)),
 					"latency": latency,
 				}
 			}

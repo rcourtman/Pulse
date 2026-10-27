@@ -17,6 +17,24 @@
 
 ## Purpose
 
+### Explicit Proxmox endpoint trust survives save and reload
+
+A managed primary fingerprint edit reconciles only that exact HTTP authority
+and base path in the polling pin set. A member decision uses its actual
+runtime `tlsEndpoint`, not a node-name alias. Other member pins and conflicting
+scopes remain intact. Persisted `tlsFingerprintOverrides` take precedence over
+old discovery observations for the same scope; an explicit empty value means
+use the existing `VerifySSL` policy, not primary-pin fallback or first-use
+capture. Discovery does not replace the operator's decision or change routing.
+Conflicting equivalent explicit decisions fail closed. Unknown members retain
+the established first-use boundary; a known member's renewal is not accepted
+automatically. Init and reconnect use the same builder.
+
+`TestPVEEndpointTrustSavedPolling`, `TestPVEEndpointTrustOverridesScoped` and
+`TestClusterExplicitEmptyEndpointTrust` prove saved/reopened policy, real
+synthetic TLS collection and exact authority/base-path isolation. They do not
+establish installed agent health, reporter-specific causality or recovery.
+
 ### Retained local archives do not change kind when a VMID is reused
 
 A PVE VM archive cannot advance the backup date or protect a live LXC using

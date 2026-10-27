@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,11 +22,22 @@ func (m *Monitor) buildClusterEndpointsForReconnect(pve config.PVEInstance) ([]s
 // addresses remain useful failover and reachability evidence, but they must
 // never displace the URL the operator proved reachable when adding the cluster.
 func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string, map[string]string, []string) {
+	return BuildPVEClusterClientEndpoints(pve, monitorDiscoveryConfig(m))
+}
+
+// PVEClusterEndpointURL exposes the same permitted dial target used by polling.
+// It neither probes nor resolves a different address for the editor/test flow.
+func PVEClusterEndpointURL(endpoint config.ClusterEndpoint, verifySSL bool, discoveryCfg config.DiscoveryConfig) string {
+	return clusterEndpointRuntimeURL(endpoint, verifySSL, false, discoveryCfg)
+}
+
+// BuildPVEClusterClientEndpoints constructs polling trust, including explicit
+// decisions for exact endpoint identities. It performs no network operation.
+func BuildPVEClusterClientEndpoints(pve config.PVEInstance, discoveryCfg config.DiscoveryConfig) ([]string, map[string]string, []string) {
 	endpoints := make([]string, 0, len(pve.ClusterEndpoints)+1)
 	endpointFingerprints := make(map[string]string)
 	var conflictingEndpoints []string
 	conflicts := make(map[string]bool)
-	discoveryCfg := monitorDiscoveryConfig(m)
 	hasFingerprint := pve.Fingerprint != ""
 	seen := make(map[string]struct{}, len(pve.ClusterEndpoints)+1)
 
@@ -69,6 +81,36 @@ func (m *Monitor) buildClusterClientEndpoints(pve config.PVEInstance) ([]string,
 				endpointFingerprints[host] = ep.Fingerprint
 			}
 		}
+	}
+
+	// An explicit save reconciles only this exact authority/base path, including
+	// equivalent URL spellings. Keep other member pins and conflicts untouched.
+	for _, endpoint := range endpoints {
+		fingerprint, known, err := proxmox.ResolveEndpointFingerprint(endpoint, pve.TLSFingerprintOverrides)
+		if !known {
+			continue
+		}
+		key, valid := proxmox.ClusterEndpointIdentity(endpoint)
+		if !valid {
+			continue
+		}
+		if err != nil {
+			conflictingEndpoints = append(conflictingEndpoints, endpoint)
+			continue
+		}
+		for saved := range endpointFingerprints {
+			if savedKey, ok := proxmox.ClusterEndpointIdentity(saved); ok && savedKey == key {
+				delete(endpointFingerprints, saved)
+			}
+		}
+		filtered := conflictingEndpoints[:0]
+		for _, conflict := range conflictingEndpoints {
+			if conflictKey, ok := proxmox.ClusterEndpointIdentity(conflict); !ok || conflictKey != key {
+				filtered = append(filtered, conflict)
+			}
+		}
+		conflictingEndpoints = filtered
+		endpointFingerprints[endpoint] = fingerprint
 	}
 
 	if configuredAuthority != "" {

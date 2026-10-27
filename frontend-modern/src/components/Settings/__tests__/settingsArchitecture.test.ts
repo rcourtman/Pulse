@@ -1406,6 +1406,9 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalClusterMembersSectionSource).toContain('Connection address for ');
     // Only changed members ride the write-only PUT payload.
     expect(nodeModalStateSource).toContain('buildClusterEndpointOverridesPayload(');
+    expect(nodeModalStateSource).toContain('buildClusterEndpointTrustOverridesPayload(');
+    expect(nodeModalStateSource).toContain('clusterEndpointTrustEdited');
+    expect(nodeModalStatusFooterSource).toContain('!state.testResult()?.endpoint');
     expect(nodeModalModelSource).toContain('export const buildClusterEndpointOverridesPayload = (');
   });
 

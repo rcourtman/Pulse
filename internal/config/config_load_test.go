@@ -724,3 +724,48 @@ func TestPMGCollectionPersistenceDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestPVEEndpointTrustOverridePersistenceAndClone(t *testing.T) {
+	original := PVEInstance{Host: "https://primary.test:8006", VerifySSL: true, TokenValue: "synthetic-preserved", TLSFingerprintOverrides: map[string]string{"https://primary.test:8006": "", "https://member.test:8006": "member-pin"}}
+	clone := original.DeepCopy()
+	clone.TLSFingerprintOverrides["https://member.test:8006"] = "changed"
+	if original.TLSFingerprintOverrides["https://member.test:8006"] != "member-pin" {
+		t.Fatal("candidate trust mutation escaped its clone")
+	}
+	persistence := NewConfigPersistence(t.TempDir())
+	if err := persistence.SaveNodesConfig([]PVEInstance{original}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := persistence.LoadNodesConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.PVEInstances) != 1 {
+		t.Fatal("saved connection disappeared")
+	}
+	saved := loaded.PVEInstances[0]
+	if pin, known := saved.TLSFingerprintOverrides[original.Host]; !known || pin != "" || !saved.VerifySSL || saved.TokenValue != original.TokenValue || saved.TLSFingerprintOverrides["https://member.test:8006"] != "member-pin" {
+		t.Fatal("reload lost explicit scoped CA policy or unrelated state")
+	}
+}
+
+func TestPVEEndpointTrustOverrideSurvivesMerge(t *testing.T) {
+	target := PVEInstance{Host: "https://primary.test:8006", VerifySSL: true, TLSFingerprintOverrides: map[string]string{"https://primary.test:8006": ""}}
+	source := PVEInstance{Host: target.Host, Fingerprint: "old-observation", TLSFingerprintOverrides: map[string]string{"https://member.test:8006": "member-pin"}}
+	mergePVEInstanceData(&target, source)
+	if target.Fingerprint != "" || target.TLSFingerprintOverrides[target.Host] != "" || target.TLSFingerprintOverrides["https://member.test:8006"] != "member-pin" {
+		t.Fatal("merge changed explicit trust decisions")
+	}
+	source.TLSFingerprintOverrides["https://PRIMARY.test:8006/"] = "contradictory"
+	if !pveClusterInstancesHaveFingerprintConflict(target, source) {
+		t.Fatal("consolidation ignored contradictory explicit authority trust")
+	}
+}
+
+func TestPVEEndpointTrustEmptyAndMalformedChoicesConflict(t *testing.T) {
+	a := PVEInstance{Host: "https://primary.test:8006", TLSFingerprintOverrides: map[string]string{"https://member.test:8006": ""}}
+	b := PVEInstance{Host: a.Host, TLSFingerprintOverrides: map[string]string{"https://MEMBER.test:8006/": ":"}}
+	if !pveClusterInstancesHaveFingerprintConflict(a, b) {
+		t.Fatal("merge treated an invalid nonempty pin as deliberate empty CA policy")
+	}
+}

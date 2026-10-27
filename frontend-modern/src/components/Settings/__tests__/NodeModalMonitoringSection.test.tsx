@@ -223,9 +223,13 @@ describe('NodeModalMonitoringSection collection safety', () => {
             'not a connection-test result',
           );
           if (nodeType === 'pve') {
-            expect(region.getByText(/Cluster members may have/)).toBeInTheDocument();
+            expect(
+              region.getByText(/Other members retain their own trust settings/),
+            ).toBeInTheDocument();
           } else {
-            expect(region.queryByText(/Cluster members may have/)).not.toBeInTheDocument();
+            expect(
+              region.queryByText(/Other members retain their own trust settings/),
+            ).not.toBeInTheDocument();
           }
           const verification = region.getByRole('checkbox', { name: 'Verify SSL certificate' });
           expect(verification).toHaveAccessibleDescription(

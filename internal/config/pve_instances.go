@@ -1,10 +1,12 @@
 package config
 
 import (
+	"maps"
 	"net"
 	"net/url"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -39,6 +41,7 @@ func clonePVEInstances(instances []PVEInstance) []PVEInstance {
 	out := make([]PVEInstance, len(instances))
 	copy(out, instances)
 	for i := range out {
+		out[i].TLSFingerprintOverrides = maps.Clone(instances[i].TLSFingerprintOverrides)
 		if len(instances[i].ClusterEndpoints) > 0 {
 			out[i].ClusterEndpoints = make([]ClusterEndpoint, len(instances[i].ClusterEndpoints))
 			copy(out[i].ClusterEndpoints, instances[i].ClusterEndpoints)
@@ -90,6 +93,17 @@ func ProxmoxFingerprintsConflict(a, b string) bool {
 // certificate rotated between discoveries stays as two views rather than two
 // distinct clusters being silently folded into one.
 func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
+	for _, instance := range []PVEInstance{a, b} {
+		if proxmox.CheckEndpointFingerprintConflicts(instance.TLSFingerprintOverrides) != nil {
+			return true
+		}
+	}
+	for endpoint, fingerprint := range a.TLSFingerprintOverrides {
+		other, known, err := proxmox.ResolveEndpointFingerprint(endpoint, b.TLSFingerprintOverrides)
+		if err != nil || (known && ((fingerprint == "") != (other == "") || strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != strings.ToLower(strings.ReplaceAll(other, ":", "")))) {
+			return true
+		}
+	}
 	if ProxmoxFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
 		return true
 	}
@@ -330,6 +344,16 @@ func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
 	if dst == nil {
 		return
 	}
+	if len(src.TLSFingerprintOverrides) > 0 {
+		if dst.TLSFingerprintOverrides == nil {
+			dst.TLSFingerprintOverrides = make(map[string]string)
+		}
+		for endpoint, fingerprint := range src.TLSFingerprintOverrides {
+			if _, exists := dst.TLSFingerprintOverrides[endpoint]; !exists {
+				dst.TLSFingerprintOverrides[endpoint] = fingerprint
+			}
+		}
+	}
 
 	if dst.Host == "" && strings.TrimSpace(src.Host) != "" {
 		dst.Host = strings.TrimSpace(src.Host)
@@ -337,7 +361,8 @@ func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
 	if dst.GuestURL == "" && strings.TrimSpace(src.GuestURL) != "" {
 		dst.GuestURL = strings.TrimSpace(src.GuestURL)
 	}
-	if dst.Fingerprint == "" && strings.TrimSpace(src.Fingerprint) != "" {
+	_, primaryTrustExplicit, _ := proxmox.ResolveEndpointFingerprint(dst.Host, dst.TLSFingerprintOverrides)
+	if dst.Fingerprint == "" && !primaryTrustExplicit && strings.TrimSpace(src.Fingerprint) != "" {
 		dst.Fingerprint = strings.TrimSpace(src.Fingerprint)
 	}
 	if dst.Source == "" && strings.TrimSpace(src.Source) != "" {
