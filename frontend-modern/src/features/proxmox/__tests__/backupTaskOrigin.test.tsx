@@ -148,7 +148,7 @@ describe('task-reported origin through the inventory consumer', () => {
       mount();
       await screen.findByRole('button', { name: /Expand details for same-name.*east/ });
       fireEvent.input(
-        screen.getByPlaceholder('Search backups by workload, node, source, or status'),
+        screen.getByPlaceholderText('Search backups by workload, node, source, or status'),
         { target: { value: term } },
       );
       await waitFor(() => expect(window.location.search).toContain(term));
