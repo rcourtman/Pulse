@@ -41,7 +41,7 @@ func (c *localArchiveIdentityClient) GetStorage(ctx context.Context, node string
 	return rows, err
 }
 
-func (c *localArchiveIdentityClient) GetStorageContent(ctx context.Context, storage, volume string) ([]proxmox.StorageContent, error) {
+func (c *localArchiveIdentityClient) GetStorageContent(ctx context.Context, node, storage string) ([]proxmox.StorageContent, error) {
 	rows, err := c.pveReconciliationClient.GetStorageContent(ctx, node, storage)
 	for i := range rows {
 		rows[i].VMID = 101
