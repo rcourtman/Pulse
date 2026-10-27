@@ -269,24 +269,30 @@ describe('useWorkloads', () => {
     },
   );
 
-  it.each(['invalid', '0002-01-01T00:00:00Z'])(
-    'does not turn a present unusable backup time %s into absence',
-    async (lastBackup) => {
-      const [snapshot] = createSignal([{ ...sampleResource, proxmox: { lastBackup } }] as any);
-      let dispose = () => {};
-      let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
-      createRoot((d) => {
-        dispose = d;
-        result = useWorkloads(() => true, { resourceSnapshot: snapshot });
-      });
-      try {
-        await flushAsync();
-        expect(result!.workloads()[0]?.lastBackup).not.toBe(0);
-      } finally {
-        dispose();
+  it.each([
+    'invalid',
+    '0002-01-01T00:00:00Z',
+    '2026-09-31T11:00:00Z',
+    '2026-10-04T11:00:00',
+    '2026-10-04',
+  ])('does not turn a present unusable backup time %s into absence', async (lastBackup) => {
+    const [snapshot] = createSignal([{ ...sampleResource, proxmox: { lastBackup } }] as any);
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useWorkloads(() => true, { resourceSnapshot: snapshot });
+    });
+    try {
+      await flushAsync();
+      expect(result!.workloads()[0]?.lastBackup).not.toBe(0);
+      if (lastBackup !== '0002-01-01T00:00:00Z') {
+        expect(result!.workloads()[0]?.lastBackup).toBeNaN();
       }
-    },
-  );
+    } finally {
+      dispose();
+    }
+  });
 
   it('preserves linked-agent RAID arrays and agent ID from the VM resource for guest detail', async () => {
     const [snapshot] = createSignal([

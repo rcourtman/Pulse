@@ -15,6 +15,18 @@
 
 ## Purpose
 
+### Workloads maps backup instants once per resource update
+
+The REST and owning-snapshot adapters use the shared strict backup timestamp
+parser before producing numeric WorkloadGuest completion evidence. Impossible,
+unzoned/date-only input produces unknown numeric evidence (NaN), not a normalised
+completion or absence. Zero/Go-zero absence, valid zoned values, VM/LXC identity,
+backup activity, snapshot ownership, row reconciliation and polling are unchanged.
+No new request, clock subscription or per-visible-row parse loop is added.
+The existing `useWorkloads.test.ts` invalid-evidence controls and normal-suite
+`backupTimestampFlow.test.tsx` exercise producer-to-badge/shield/drawer updates;
+source-bound desktop/narrow browser proof covers live recovery and recurrence.
+
 ### Drawer History scrubbing does not reflow (26 October 2026)
 
 Reserved readout widths are derived from the points a panel already holds (one

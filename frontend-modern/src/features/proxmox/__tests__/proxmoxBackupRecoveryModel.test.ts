@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { BackupTask, GuestSnapshot, PBSBackup, StorageBackup } from '@/types/api';
 import type { ProtectionPosture, ProtectionState } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { getBackupInfo, formatBackupCompletionTime } from '@/utils/format';
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
@@ -739,5 +740,38 @@ describe('completed restore-point totals', () => {
       totalBytes: 200,
     });
     expect(complete.recoverableArtifacts[0].id).toBe(pending.recoverableArtifacts[0].id);
+  });
+});
+
+describe('shared backup instant rule across inventory and workload age', () => {
+  it.each([
+    ['2026-09-31T11:00:00Z', undefined],
+    ['2026-10-04T11:00:00', undefined],
+    ['2026-10-04', undefined],
+    ['2026-10-04T13:00:00+02:00', Date.parse('2026-10-04T11:00:00Z')],
+  ] as const)('keeps the same evidence for %s', (time, expectedMs) => {
+    const nowMs = Date.parse('2026-10-04T12:00:00Z');
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [pbsBackup({ backupTime: time })],
+      archives: [],
+      snapshots: [],
+      tasks: [],
+      nowMs,
+    });
+    expect(model.recoverableArtifacts).toHaveLength(1);
+    expect(model.recoverableArtifacts[0].createdAt).toBe(time);
+    expect(model.recoverableArtifacts[0].createdMs).toBe(expectedMs);
+    expect(model.coverageSummary.recoverableArtifacts).toBe(1);
+    const info = getBackupInfo(time, undefined, nowMs);
+    if (expectedMs === undefined) {
+      expect(info.status).toBe('unknown');
+      expect(formatBackupCompletionTime(time)).toBeNull();
+    } else {
+      expect(info.status).toBe('fresh');
+      expect(formatBackupCompletionTime(time)?.completedAt).toBe(
+        new Date(expectedMs).toISOString(),
+      );
+    }
   });
 });

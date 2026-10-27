@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7f0c25a66e7efc8787d4bd1d2ee1c2772d988fc0",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/hooks/useWorkloads.ts",
+    "frontend-modern/src/utils/backupTimestamp.ts",
+    "frontend-modern/src/utils/format.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "08298dc81162690564ba03fe1042f2adcf8f3feaa9c2ddba66c1f67bf6d9e460",
+    "frontend-modern/src/hooks/useWorkloads.ts": "32b07bc5fd0b5707d6eb935470fca14c92d06d3050a3bdbf4d92a36390c14da4",
+    "frontend-modern/src/utils/format.ts": "d2cb5b86ff67f4fdff4063437da13368fdb03864fb6704874d1d20b45a1da45d",
+    "frontend-modern/src/utils/backupTimestamp.ts": "3d22076ab048159de507f08b8523bbafaa30e64afe6f1cd565329971a4356db2"
+  },
+  "verified_at": "2026-10-27T18:33:28Z",
+  "runtime_source_sha": "d60e4a5541b5806401a631850d81c389d0404ffd",
+  "containing_source_sha": "7f0c25a66e7efc8787d4bd1d2ee1c2772d988fc0",
+  "routes": [
+    "/workloads",
+    "/proxmox/overview",
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "REST and owning-snapshot resource producers keep impossible, unzoned and date-only backup completions unknown through real GuestRow, backup badge/shield/disclosure and GuestDrawer consumers for VM/LXC.",
+    "Valid zoned offsets/fractions restore the same exact UTC instant and Fresh Hours presentation; subsequent malformed updates withdraw the completion while retaining open panels and focus.",
+    "Running is separate from completion; explicit Go-zero absence and future-time uncertainty remain distinct. Inventory shares the parser, retains malformed PBS/archive observations and restores activity only for supplied valid dates."
+  ],
+  "interactions": [
+    "Desktop native keyboard row and backup disclosure; narrow touch row/shield disclosure, native Close and trigger focus return.",
+    "REST normal five-second polls and owner-snapshot refetches drive recovery, recurrence, activity, absence and future states without remounting evidence.",
+    "Existing inventory consumer uses ordinary thirty-second polling; no mutation/off-origin requests, Back/reload or stopped recovery operation.",
+    "Offline evidence-only fixture routes assemble unchanged production rows/drawers/hooks/CSS, backed by synthetic raw HTTP and a quiet fixture WebSocket. Fixture code is retained only with lane evidence."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37",
+      "timezoneId": "UTC"
+    },
+    {
+      "engine": "webkit",
+      "version": "26.0",
+      "timezoneId": "America/Los_Angeles"
+    }
+  ],
+  "checks": 150,
+  "pixel_review": "Nine retained final captures were opened natively with image content presented. Full invalid-time warnings and settled UTC-completion disclosures fit desktop/390px/320px surfaces. Earlier mid-transition captures remain labelled; the two settled supplemental captures establish modal pixels. Unchanged narrow chart-caption/subtitle clipping is retained, not claimed repaired.",
+  "captures": [
+    {
+      "name": "desktop-rest-unknown-drawer.png",
+      "sha256": "2a478813bd904d0f3cc03ad2a570ffcf41c9b4287ccdca109ff1f0a4efe9ea9c",
+      "bytes": 97359
+    },
+    {
+      "name": "desktop-snapshot-unknown-drawer.png",
+      "sha256": "dfa11c29cc331d2f782fdcee743e99897dd1a5e2a0b0f749a7dd9e1b4c96aabd",
+      "bytes": 98313
+    },
+    {
+      "name": "desktop-snapshot-valid-disclosure.png",
+      "sha256": "6cec516044762820ec40cf51581cfd100db8ecc6a48b6ca15ad9bcc7cb1b07c9",
+      "bytes": 138969
+    },
+    {
+      "name": "phone-rest-unknown-drawer.png",
+      "sha256": "552c4b3843664e1df092be9ef001aa6903bf8ec26c559e41d130f15688012d61",
+      "bytes": 71454
+    },
+    {
+      "name": "phone-snapshot-unknown-drawer.png",
+      "sha256": "d0f3eb7fefafb82b1e51f5fabb02b4319bee135a790428a1ef468399c64f3a01",
+      "bytes": 72845
+    },
+    {
+      "name": "phone-320-snapshot-unknown.png",
+      "sha256": "7c311d7d25223c7433e54ef133e925cc87242d381c7830c7af80e44959d3493d",
+      "bytes": 69378
+    },
+    {
+      "name": "phone-snapshot-valid-disclosure.png",
+      "sha256": "14f2036c44cdebc2b5223e64e3171286bad1ef324954a84a726459007bdaabd1",
+      "bytes": 83781
+    },
+    {
+      "name": "desktop-settled-valid-disclosure.png",
+      "sha256": "0d423258bc5234c69992039fa3b0123a82c7b9c77e46b19d5958014b105fa6ac",
+      "bytes": 65377
+    },
+    {
+      "name": "phone-settled-valid-disclosure.png",
+      "sha256": "9915acaba7c408e37a63dabda74a7d61a942e46ac603fb67ad11eedd1e3bb084",
+      "bytes": 28030
+    }
+  ],
+  "evidence": "RECEIPTS.md, BROWSER-RESULT.json, PIXEL-SUPPLEMENT.json and PIXEL-REVIEW.json in this lane outcome; earlier fixture/selector/geometry observations stay in ADVERSE-NOTES.json."
+}
