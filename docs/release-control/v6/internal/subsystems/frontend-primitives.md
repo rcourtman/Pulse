@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Restore evidence names its source connection
+
+The existing By date source cell and Coverage restore-evidence source cell
+show the backup reader's connection alongside its provider kind. Repository,
+namespace, guest name and node are not substitutes for that connection: two
+independent sources may share all of those labels. The list keeps the source
+inside its column; the existing restore-point detail names the full Connection
+separately from Location, and Coverage wraps the full connection even when its
+Location column is hidden on phones. Missing source identity stays explicit as
+Unknown connection / Not reported, never inferred from the workload.
+
+`backupSourceConnection.test.tsx` exercises the actual API/model/table path
+for PBS, PVE archives and guest snapshots, same-named sources, missing origins,
+literal text, unchanged posture and same-point polling with retained detail and
+focus. Desktop/narrow consuming browser proof checks keyboard/touch access and
+readable long source names. Exact filter keys, IDs, namespace, chronology,
+completion, verification and server-owned protection policy are unchanged.
+This is source-selection clarity, not an installed restore or guest recovery.
+
 ### Backup retention never substitutes for verification
 
 The existing restore-point State cell and drawer status prioritise running or

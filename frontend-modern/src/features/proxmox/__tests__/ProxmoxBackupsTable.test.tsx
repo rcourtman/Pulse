@@ -2071,6 +2071,12 @@ describe('backup location identity in the consuming views', () => {
     await waitFor(() => expect(points()).toHaveLength(1));
     expect(screen.getByText('Main / minipc')).toBeInTheDocument();
     expect(screen.queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(points()[0].querySelector('[data-backup-source-connection]')).toHaveTextContent(
+      'Connection: pbs-main',
+    );
+    fireEvent.click(within(points()[0]).getByRole('button', { name: /expand details/i }));
+    const pointDetail = screen.getByTestId('proxmox-recoverable-detail');
+    expect(within(pointDetail).getByText('Connection').closest('tr')).toHaveTextContent('pbs-main');
     const key = '["pbs","pbs-main","Main"]';
     await waitFor(() =>
       expect(new URLSearchParams(window.location.search).get('location')).toBe(key),
@@ -2082,6 +2088,9 @@ describe('backup location identity in the consuming views', () => {
     const detail = screen.getByTestId('proxmox-coverage-detail');
     expect(within(detail).getByText('Main / minipc')).toBeInTheDocument();
     expect(within(detail).queryByText('main / minipc')).not.toBeInTheDocument();
+    expect(detail.querySelector('[data-backup-source-connection]')).toHaveTextContent(
+      'Connection: pbs-main',
+    );
     expect(new URLSearchParams(window.location.search).get('location')).toBe(key);
     expect(apiFetchMock).toHaveBeenCalledTimes(calls);
     mounted.unmount();

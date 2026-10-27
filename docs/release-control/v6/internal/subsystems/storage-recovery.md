@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Restore-point origin is distinct from workload placement
+
+The existing frontend location scope retains the backup reader's connection
+as a display fact separately from its positional source/connection/repository
+key. Existing inventory and Coverage consumers show that connection, including
+the full value in restore-point details and wrapped Coverage evidence. No guest
+node, namespace or workload connection supplies a missing backup origin.
+Same-named repositories remain independently identified; existing exact and
+legacy filter resolution, archive/PBS matching, native IDs, chronology, provider
+observations and protection policy are unchanged. No API shape, stored record,
+backup/restore or guest-agent operation changes.
+
+The normal-suite `backupSourceConnection.test.tsx` covers the real inventory
+producer and consumers for PBS, PVE archives and snapshots, unknown origins,
+same-point polling and literal rendering. `proxmoxBackupLocation.test.ts` keeps
+the exact key and compatibility controls. Desktop/narrow consuming browser
+proof establishes readable source selection, not original #3248/#2681 recovery
+or actual restore availability.
+
 ### Backup retention never substitutes for verification
 
 The existing restore-point State cell and drawer status prioritise running or

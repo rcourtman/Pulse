@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup evidence keeps the reader connection separate from its owner
+
+Existing By date and Coverage consumers show each restore point's backup
+connection, independently of the workload name, node and owner link. The full
+connection remains readable in the existing point detail and wrapped Coverage
+evidence; a missing origin stays unknown rather than borrowing owner placement.
+The frontend location scope carries this display fact without changing exact
+source keys, resource/point IDs, namespace, routing, association or canonical
+protection assessment. `ProxmoxBackupsTable.test.tsx` and the normal-suite
+`backupSourceConnection.test.tsx` exercise inventory-to-consumer attribution,
+unknowns and polling; desktop/narrow browser proof checks source readability.
+This is not original multi-surface identity recovery or restore acceptance.
+
 ### REST snapshots retain canonical source provenance
 
 `useUnifiedResources` preserves the validated source list on the canonical

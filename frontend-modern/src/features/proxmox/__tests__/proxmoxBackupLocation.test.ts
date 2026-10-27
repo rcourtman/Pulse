@@ -55,6 +55,8 @@ describe('backup location identity', () => {
     expect(location('same', 'same').locationLabel).toBe('PBS · same / same');
     expect(location('', 'same').locationLabel).toBe('PBS · Unknown connection / same');
     expect(location('same', '').locationLabel).toBe('PBS · same / Unknown location');
+    expect(location('  PBS-East  ', 'main').locationConnection).toBe('PBS-East');
+    expect(location(undefined, 'main').locationConnection).toBeUndefined();
     expect(location(undefined, undefined)).toEqual({});
     expect(location(' ', '')).toEqual({});
   });
