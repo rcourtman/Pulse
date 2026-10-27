@@ -2435,6 +2435,75 @@ test("formatted field headings retain visible declarations and field boundaries"
   }
 });
 
+test("legacy version labels use visible formatting without borrowing a title or agent version", () => {
+  for (const label of [
+    "_Pulse version_",
+    "***Pulse version***",
+    '[Pulse version](https://example.invalid/6.4.1 "Agent version")',
+    "**[Pulse version][field]**",
+    "[Pulse version][]",
+    "[Pulse version]",
+  ]) {
+    for (const [value, expected] of [["`6.6.0`", "6.6.0"], ["unknown", null], ["6.6", null]]) {
+      for (const field of [`${label}: ${value}`, `- ${label}: ${value}`, `${label}\n\n${value}`]) {
+        // A shortcut followed by a colon is a reference definition, not a
+        // rendered link label. Its standalone visible form remains covered.
+        if (label === "[Pulse version]" && field.includes(":")) continue;
+        const body = `${field}\n\n### Agent version\n9.9.9\n\n` +
+          "[field]: https://example.invalid/6.4.1\n[Pulse version]: https://example.invalid/6.4.1";
+        for (const newline of ["\n", "\r\n"]) {
+          assert.equal(triage.internals.extractPulseVersion("[Bug]: 6.4.1 prior image",
+            body.replaceAll("\n", newline)), expected, body);
+        }
+      }
+    }
+  }
+});
+
+test("literal or withdrawn legacy labels remain evidence rather than version declarations", () => {
+  for (const label of [
+    "`Pulse version`",
+    "**`Pulse version`**",
+    "~~Pulse version~~",
+    "![Pulse version](https://example.invalid/ignored)",
+    '[Context](https://example.invalid/ignored "Pulse version")',
+    "<span>Pulse version</span>",
+    "<!-- Pulse version -->Context",
+  ]) {
+    for (const field of [`${label}: 6.6.0`, `- ${label}: 6.6.0`]) {
+      assert.equal(triage.internals.extractPulseVersion("Unversioned report", field), null, field);
+    }
+  }
+  const field = "[Pulse version](https://example.invalid/6.4.1): 6.6.0";
+  for (const body of ["> " + field, "```markdown\n" + field + "\n```", "    " + field]) {
+    assert.equal(triage.internals.extractPulseVersion("Unversioned report", body), null, body);
+  }
+  assert.equal(triage.internals.extractPulseVersion("Unversioned report",
+    "[Pulse version]: https://example.invalid/6.6.0"), null);
+});
+
+test("the silent consumer respects linked legacy versions while preserving Community decisions", async () => {
+  for (const [value, additions, removals] of [
+    ["6.6.0", ["affects-6.6.0"], ["affects-6.4.1", "needs-version-info"]],
+    ["unknown", [], ["affects-6.4.1"]],
+  ]) {
+    const { github, calls } = createGithub();
+    const issue = { number: 42, title: "[Bug]: 6.4.1 prior image",
+      body: `- **[Pulse version][field]**: ${value}\n\n### Agent version\n9.9.9\n\n` +
+        "[field]: https://example.invalid/6.4.1",
+      labels: ["bug", "affects-6.4.1", "needs-version-info", "needs-human", "release-blocker",
+        "needs-decomposition", "needs-retest-on-latest"].map(name => ({ name })) };
+    await syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), additions.length ? [additions] : []);
+    assert.deepEqual(calls.removeLabel.map(call => call.name), removals);
+    assert.deepEqual(calls.createComment, []);
+    assert.deepEqual(calls.getLatestRelease, []);
+    assert.deepEqual(calls.getEvents, []);
+    assert.deepEqual(calls.paginate, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
+
 test("heading destinations, literal examples and withdrawn text cannot declare fields", () => {
   for (const format of [
     value => `\`${value}\``,
