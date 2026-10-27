@@ -6,6 +6,8 @@ import {
 export interface BackupLocationScope {
   locationKey?: string;
   locationLabel?: string;
+  /** The backup reader's connection, never inferred from the guest's placement. */
+  locationConnection?: string;
   /** Read compatibility only; never write this lossy identity to a new URL. */
   legacyLocationKey?: string;
 }
@@ -25,6 +27,7 @@ export function backupLocationScope(
     // not a colon-delimited display label. Preserve missing positions as well.
     locationKey: JSON.stringify([sourceKind, instance ?? '', repository ?? '']),
     locationLabel: `${getProxmoxBackupSourcePresentation(sourceKind).badgeLabel} · ${instance?.trim() || 'Unknown connection'} / ${repository?.trim() || 'Unknown location'}`,
+    locationConnection: instance?.trim() || undefined,
     legacyLocationKey: [sourceKind, ...legacyParts].join(':'),
   };
 }

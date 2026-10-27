@@ -37,7 +37,7 @@ import {
 import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
 import type { CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
-  ArtifactSourceBadge,
+  ArtifactSourceIdentity,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
@@ -646,7 +646,7 @@ export function ProxmoxCoverageTable(props: {
                                           <TableCell
                                             class={getPlatformTableCellClassForKind('name')}
                                           >
-                                            <ArtifactSourceBadge artifact={artifact} wrap />
+                                            <ArtifactSourceIdentity artifact={artifact} wrap />
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(

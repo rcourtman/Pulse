@@ -33,7 +33,7 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
 import type { RecoverableSortKey } from './proxmoxBackupsTableModel';
 import {
-  ArtifactSourceBadge,
+  ArtifactSourceIdentity,
   ArtifactStateBadge,
   PROXMOX_BACKUP_COLUMN_LABELS,
   ProxmoxBackupAgeText,
@@ -116,6 +116,7 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         makeDetailRow('Source', source.detailFallbackLabel, {
           title: artifact.sourceTitle ?? source.sourceTitle,
         }),
+        makeDetailRow('Connection', artifact.locationConnection || 'Not reported', { wrap: true }),
         makeDetailRow('Location', artifact.location, { wrap: true }),
         makeDetailRow(
           PROXMOX_BACKUP_COLUMN_LABELS.created,
@@ -277,7 +278,7 @@ export function ProxmoxRecoverableTable(props: {
           </TableCell>
         </Show>
         <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>
-          <ArtifactSourceBadge artifact={artifact} />
+          <ArtifactSourceIdentity artifact={artifact} />
         </TableCell>
         <Show when={columnVisible('location')}>
           <TableCell class={`${getPlatformTableCellClassForKind('text')} text-base-content`}>

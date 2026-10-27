@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "base_sha": "3510f087d74f8871ad6712af5fb30310cf4a115e",
+  "verified_at": "2026-10-27T09:08:11.637536Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupLocation.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupLocation.ts": "374534e0606f25dbdd9daa8fd51f0fe106688fb7a6848b262984969048dc2aef",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "499e033840ec7dff141e0ccd159e8d4580cf3643036e036183ce5bb900849e09",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "7553cb3a2e71662773df60025c3b1a28cdef40f5e92ce50d18af7765a1ededc6",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "bebd98d2962620abe45567034bae25eff120d59426c5fc0b4d8b48dfdc99d1c6",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "e113d456f137b55a4caa9f141e1c9667d54006b59dd9020bf0027d8fd6cdf808"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production ProxmoxBackupsTable, apiClient, inventory parser/recovery model, router and shared CSS consume synthetic offline HTTP fixtures; the evidence-only entry is not a shipped route or source test.",
+    "PBS sources with identical guest/repository/namespace/time retain separately visible connections. PVE archives and guest snapshots retain their reader connections. Unknown origins are never borrowed from workload placement. Verification, counts, dates, policy, namespace and exact filter identity stay unchanged.",
+    "Compact list source names may truncate; full Connection details and wrapped Coverage evidence remain legible on the phone, including long names and explicit Not reported. All seven final captures were opened with native view_image and inspected.",
+    "Playwright 1.56.1 matches the integration lock; Chromium 141.0.7390.37 desktop and WebKit 26.0 touch phone. All five runtime file hashes observed at fdf82e5a23e4d8924878a6cdf2bf1b7e8745abdf equal this receipt parent; its intervening change only types a test helper.",
+    "60 assertions pass. No page/console errors, off-origin request, unexpected API call, mutation or page-level horizontal overflow was observed. Synthetic browser proof is not guest/restore recovery, native sign-in, installation or release availability."
+  ],
+  "interactions": [
+    "Native desktop keyboard Enter on disclosures and phone tap on visible row identity open the existing point details; long/unknown Connection and Location remain readable.",
+    "Case-insensitive source search and clear select the right By date point without another read; Coverage source search retains the matching workload and its individually attributed evidence.",
+    "Ordinary 30-second polling updates the same point's connection in its row and open detail without replacing their DOM or dropping focused disclosure. The other connection stays independently identified."
+  ],
+  "captures": [
+    {
+      "name": "desktop-pbs-detail.png",
+      "sha256": "142f58c3baa1bf435e1e1dab757e2ab94a94f164b0c3b2bdd790c70ae51761b4"
+    },
+    {
+      "name": "desktop-coverage-long.png",
+      "sha256": "9a5e607cf99b32a71427c7d3647e442ac272082da4721381cc4099e7e2351a7a"
+    },
+    {
+      "name": "desktop-pve-detail.png",
+      "sha256": "f34c95a7af7206db539acaf26d6c092fc69fd85a5c05f6b6c8245629ec76543c"
+    },
+    {
+      "name": "phone-pbs-detail.png",
+      "sha256": "865cf128f9f95e36ada556b3a30e78ec18cdb6ab81469c67abb432dc3b132e83"
+    },
+    {
+      "name": "phone-coverage-long.png",
+      "sha256": "42f27e37c993ef0d509fd35a0ab5a3fa3c14e4766a4625d3af6289d6624f71d0"
+    },
+    {
+      "name": "phone-full-source-detail.png",
+      "sha256": "8ec51448733dbddd2eee91c9feca0eb495ddcbf1c8777c10c60feda040f1cda2"
+    },
+    {
+      "name": "phone-unknown-detail.png",
+      "sha256": "b706ea3fc31d1f27a992e2c3d60ca641af74c36edb768a84e0704cd32997e479"
+    }
+  ]
+}

@@ -98,6 +98,31 @@ const protectionPosture = (resourceId: string, state: ProtectionState): Protecti
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it.each(['pbs-west', undefined])(
+    'searches the displayed backup connection independently of workload placement: %s',
+    (instance) => {
+      const model = buildProxmoxBackupRecoveryModel({
+        workloads: [workload({})],
+        pbsBackups: [pbsBackup({ id: 'point', instance })],
+        archives: [],
+        snapshots: [],
+        tasks: [],
+        nowMs: Date.parse('2026-05-26T00:00:00Z'),
+      });
+      const [point] = model.recoverableArtifacts;
+      const [row] = model.coverageRows;
+      expect(point.locationConnection).toBe(instance);
+      expect(point.workload.instance).toBe('homelab');
+      expect(point.nativeId).toBe('point');
+      expect(JSON.parse(point.locationKey!)).toEqual(['pbs', instance ?? '', 'main']);
+      const query = instance?.toUpperCase() ?? 'Unknown connection';
+      expect(recoverableArtifactMatchesSearch(point, query)).toBe(true);
+      expect(coverageRowMatchesSearch(row, query)).toBe(true);
+      expect(recoverableArtifactMatchesSearch(point, 'absent-backup-connection')).toBe(false);
+      expect(coverageRowMatchesSearch(row, 'absent-backup-connection')).toBe(false);
+    },
+  );
+
   it('classifies backup ages for restore-point presentation', () => {
     const nowMs = Date.parse('2026-05-26T08:00:00Z');
 

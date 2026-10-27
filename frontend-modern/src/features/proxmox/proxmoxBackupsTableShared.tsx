@@ -323,6 +323,30 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact; wrap
   );
 }
 
+// A provider kind and a repository name do not identify a backup's origin:
+// separate connections can both contain "main". Coverage wraps the full
+// connection; the compact list keeps it in its cell and its drawer shows it whole.
+export function ArtifactSourceIdentity(props: { artifact: RecoverableArtifact; wrap?: boolean }) {
+  const connection = () => props.artifact.locationConnection || 'Unknown connection';
+  return (
+    <div class="min-w-0 space-y-0.5">
+      <ArtifactSourceBadge artifact={props.artifact} wrap={props.wrap} />
+      <span
+        class={
+          props.wrap
+            ? 'block whitespace-normal text-muted leading-snug wrap-anywhere'
+            : 'block truncate text-muted'
+        }
+        title={`Connection: ${connection()}`}
+        data-backup-source-connection
+      >
+        <span class="sr-only">Connection: </span>
+        {connection()}
+      </span>
+    </div>
+  );
+}
+
 const proxmoxBackupWorkloadBadgeType = (
   type: WorkloadReference['type'],
 ): string | null | undefined => {
