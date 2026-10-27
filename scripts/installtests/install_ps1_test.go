@@ -372,20 +372,34 @@ func TestInstallPS1UninstallRequiresExactServerConfirmationBeforeErasure(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := string(content)
-	if err := windowsUninstallRegistrationContract(script); err != nil {
-		t.Fatal(err)
-	}
-	for _, boundary := range []string{
-		`$result.success -isnot [bool]`, `$result.success -ne $true`,
-		`$result.agentId -isnot [string]`, `$result.agentId -cne $AgentId`,
-		`throw "The original Pulse URL is missing."`,
-		`throw "The saved agent ID is missing; do not select another agent by hostname."`,
-		`ErrorAction = "Stop"`, "Remove-PulseAgentRegistration\n",
+	// Git can check PowerShell out with CRLF on Windows. Exercise both forms
+	// without depending on the checkout's core.autocrlf setting, and remove
+	// the call itself rather than assuming the line terminator is LF.
+	canonical := strings.ReplaceAll(string(content), "\r\n", "\n")
+	for _, ending := range []struct{ name, separator string }{
+		{"LF", "\n"}, {"CRLF", "\r\n"},
 	} {
-		t.Run(boundary, func(t *testing.T) {
-			if err := windowsUninstallRegistrationContract(strings.Replace(script, boundary, "", 1)); err == nil {
-				t.Fatal("accepted missing unregistration boundary")
+		t.Run(ending.name, func(t *testing.T) {
+			script := strings.ReplaceAll(canonical, "\n", ending.separator)
+			if err := windowsUninstallRegistrationContract(script); err != nil {
+				t.Fatal(err)
+			}
+			for _, boundary := range []string{
+				`$result.success -isnot [bool]`, `$result.success -ne $true`,
+				`$result.agentId -isnot [string]`, `$result.agentId -cne $AgentId`,
+				`throw "The original Pulse URL is missing."`,
+				`throw "The saved agent ID is missing; do not select another agent by hostname."`,
+				`ErrorAction = "Stop"`, "\t\tRemove-PulseAgentRegistration",
+			} {
+				t.Run(boundary, func(t *testing.T) {
+					mutated := strings.Replace(script, boundary, "", 1)
+					if mutated == script {
+						t.Fatal("negative control did not remove the selected boundary")
+					}
+					if err := windowsUninstallRegistrationContract(mutated); err == nil {
+						t.Fatal("accepted missing unregistration boundary")
+					}
+				})
 			}
 		})
 	}
