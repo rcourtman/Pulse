@@ -83,6 +83,8 @@ export interface WorkloadCoverageRow {
   /** Unknown chronology is not an absent backup, nor an older dated backup. */
   ageUnknown?: Record<'backup' | 'pbs' | 'archive' | 'snapshot', boolean>;
   latestTask?: CoverageTask;
+  /** Possible latest tasks when missing/future or tied starts prevent ordering. */
+  taskCandidates?: CoverageTask[];
   pbsCount: number;
   archiveCount: number;
   snapshotCount: number;
@@ -545,6 +547,29 @@ function taskDurationSeconds(task: BackupTask): number | undefined {
   return Math.round((end - start) / 1000);
 }
 
+function selectLatestTask(
+  tasks: readonly CoverageTask[],
+): Pick<WorkloadCoverageRow, 'latestTask' | 'taskCandidates'> {
+  const unknown = tasks.filter((task) => task.startedMs === undefined);
+  const newestMs = tasks.reduce((latest, task) => Math.max(latest, task.startedMs ?? 0), 0);
+  // An undated task might be newer than any dated task. Equal starts do not
+  // order distinct observations either. Retain all possible latest tasks;
+  // never choose by API input order, status, ID or an invented zero date.
+  const candidates = tasks.filter(
+    (task) => task.startedMs === undefined || task.startedMs === newestMs,
+  );
+  if (candidates.length === 1) return { latestTask: candidates[0] };
+  if (candidates.length === 0) return {};
+  return {
+    taskCandidates: [
+      ...unknown.sort((left, right) => left.id.localeCompare(right.id)),
+      ...candidates
+        .filter((task) => task.startedMs !== undefined)
+        .sort((left, right) => left.id.localeCompare(right.id)),
+    ],
+  };
+}
+
 function protectionPostureRank(posture: WorkloadRecoveryPosture): number {
   if (posture === 'attention') return 0;
   if (posture === 'unprotected') return 1;
@@ -719,26 +744,30 @@ export function buildProxmoxBackupRecoveryModel(
     });
   }
 
+  const tasksByWorkload = new Map<string, CoverageTask[]>();
   for (const task of input.tasks) {
     const workload = resolveTaskWorkload(candidateIndex, pveWorkloadsByVmid, task);
     if (!workload) continue;
     const row = ensureRow(workload, true);
+    const parsedStart = parseTimestampMs(task.startTime);
     const candidateTask: CoverageTask = {
       id: task.id,
       status: task.status,
       label: taskLabel(task),
       startedAt: task.startTime,
-      startedMs: parseTimestampMs(task.startTime),
+      startedMs:
+        getRecoveryAgeBand(parsedStart, input.nowMs) === 'unknown' ? undefined : parsedStart,
       durationSeconds: taskDurationSeconds(task),
       error: task.error,
     };
-    if (!row.latestTask || (candidateTask.startedMs ?? 0) > (row.latestTask.startedMs ?? 0)) {
-      row.latestTask = candidateTask;
-    }
+    const rowTasks = tasksByWorkload.get(row.key) ?? [];
+    rowTasks.push(candidateTask);
+    tasksByWorkload.set(row.key, rowTasks);
   }
 
   for (const row of rows.values()) {
     Object.assign(row, selectWorkloadRecoveryArtifacts(row.artifacts, input.nowMs));
+    Object.assign(row, selectLatestTask(tasksByWorkload.get(row.key) ?? []));
   }
 
   const coverageRows = Array.from(rows.values()).map((row) => {
@@ -808,6 +837,7 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     getWorkloadRecoveryPostureLabel(row.posture),
     row.latestTask?.label,
     row.latestTask?.error,
+    ...(row.taskCandidates ?? []).flatMap((task) => [task.label, task.error, task.id]),
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
       artifact.sourceTitle,

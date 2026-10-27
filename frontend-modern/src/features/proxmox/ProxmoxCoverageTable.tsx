@@ -34,6 +34,7 @@ import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
 import {
   getWorkloadRecoveryPostureLabel,
   type WorkloadCoverageRow,
+  type CoverageTask,
 } from './proxmoxBackupRecoveryModel';
 import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
 import { formatDurationFromSeconds, type CoverageSortKey } from './proxmoxBackupsTableModel';
@@ -181,6 +182,49 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
   return 'Pulse cannot tell yet whether this guest is backed up.';
 };
 
+const TASK_ORDER_NOTICE =
+  'Task start times do not establish which task ran last. Possible latest tasks are listed below without a time order.';
+
+const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSection => ({
+  label,
+  rows: compactDetailRows([
+    makeDetailRow('Status', task.label, {
+      tone: statusDetailTone(taskWordVariant(task.label)),
+    }),
+    makeDetailRow(
+      'Started',
+      task.startedMs === undefined ? 'Unknown' : formatPlatformTableDateTimeValue(task.startedMs),
+      { tone: task.startedMs === undefined ? 'warning' : undefined },
+    ),
+    makeDetailRow(
+      'Duration',
+      task.durationSeconds === undefined
+        ? 'Not reported'
+        : task.durationSeconds === 0
+          ? '0s'
+          : formatDurationFromSeconds(task.durationSeconds),
+    ),
+    makeDetailRow(
+      'Error',
+      task.error?.trim() || (task.label === 'Failed' ? 'Not reported' : undefined),
+      {
+        tone: 'danger',
+        valueContent: (
+          <span class="block whitespace-pre-wrap text-left font-normal leading-snug wrap-anywhere">
+            {task.error?.trim() || 'Not reported'}
+          </span>
+        ),
+      },
+    ),
+    makeDetailRow('Task ID', task.id, { wrap: true }),
+  ]),
+  footerContent: (
+    <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+      Task status does not verify a restore or guest responsiveness.
+    </p>
+  ),
+});
+
 // Provider evidence quality (did the job run, is history complete, can Pulse
 // read it) explains a posture; it is detail, not the answer.
 const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] =>
@@ -196,50 +240,21 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
         }),
       ]),
     },
-    row.latestTask
+    row.taskCandidates?.length
       ? {
-          label: 'Latest task',
-          rows: compactDetailRows([
-            makeDetailRow('Status', row.latestTask.label, {
-              tone: statusDetailTone(taskWordVariant(row.latestTask.label)),
-            }),
-            makeDetailRow(
-              'Started',
-              row.latestTask.startedMs === undefined
-                ? 'Unknown'
-                : formatPlatformTableDateTimeValue(row.latestTask.startedMs),
-              { tone: row.latestTask.startedMs === undefined ? 'warning' : undefined },
-            ),
-            makeDetailRow(
-              'Duration',
-              row.latestTask.durationSeconds === undefined
-                ? 'Not reported'
-                : row.latestTask.durationSeconds === 0
-                  ? '0s'
-                  : formatDurationFromSeconds(row.latestTask.durationSeconds),
-            ),
-            makeDetailRow(
-              'Error',
-              row.latestTask.error?.trim() ||
-                (row.latestTask.label === 'Failed' ? 'Not reported' : undefined),
-              {
-                tone: 'danger',
-                valueContent: (
-                  <span class="block whitespace-pre-wrap text-left font-normal leading-snug wrap-anywhere">
-                    {row.latestTask.error?.trim() || 'Not reported'}
-                  </span>
-                ),
-              },
-            ),
-            makeDetailRow('Task ID', row.latestTask.id, { wrap: true }),
-          ]),
+          label: 'Task order',
+          rows: compactDetailRows([makeDetailRow('Latest task', 'Unknown', { tone: 'warning' })]),
           footerContent: (
             <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-              Task status does not verify a restore or guest responsiveness.
+              {TASK_ORDER_NOTICE}
             </p>
           ),
         }
       : null,
+    ...(row.taskCandidates ?? []).map((task, index) =>
+      buildCoverageTaskSection(task, `Possible latest task ${index + 1}`),
+    ),
+    row.latestTask ? buildCoverageTaskSection(row.latestTask, 'Latest task') : null,
     {
       label: 'Provider evidence',
       rows: compactDetailRows(
@@ -571,12 +586,33 @@ export function ProxmoxCoverageTable(props: {
                               when={row.latestTask}
                               fallback={
                                 <Show
-                                  when={layoutMode() !== 'compact'}
-                                  fallback={<span class="block text-center text-muted">—</span>}
+                                  when={!row.taskCandidates?.length}
+                                  fallback={
+                                    <div
+                                      class="flex items-center justify-center gap-2 sm:justify-start"
+                                      title={TASK_ORDER_NOTICE}
+                                    >
+                                      <StatusDot size="sm" variant="warning" ariaHidden />
+                                      <span
+                                        class={
+                                          layoutMode() === 'compact'
+                                            ? 'sr-only'
+                                            : 'text-amber-600 dark:text-amber-300'
+                                        }
+                                      >
+                                        <span class="sr-only">Latest task: </span>Unknown
+                                      </span>
+                                    </div>
+                                  }
                                 >
-                                  <span class="text-muted" title="No recent task">
-                                    {COVERAGE_EMPTY_LABEL}
-                                  </span>
+                                  <Show
+                                    when={layoutMode() !== 'compact'}
+                                    fallback={<span class="block text-center text-muted">—</span>}
+                                  >
+                                    <span class="text-muted" title="No recent task">
+                                      {COVERAGE_EMPTY_LABEL}
+                                    </span>
+                                  </Show>
                                 </Show>
                               }
                             >
