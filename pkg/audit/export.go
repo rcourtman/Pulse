@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // ExportFormat defines the export file format.
@@ -142,15 +144,15 @@ func (e *Exporter) exportCSV(events []ExportEvent, timestamp string, includeVeri
 		}
 
 		row := []string{
-			event.ID,
+			auditCSVText(event.ID),
 			event.Timestamp.Format(time.RFC3339),
-			event.EventType,
-			event.User,
-			event.IP,
-			event.Path,
+			auditCSVText(event.EventType),
+			auditCSVText(event.User),
+			auditCSVText(event.IP),
+			auditCSVText(event.Path),
 			success,
-			event.Details,
-			event.Signature,
+			auditCSVText(event.Details),
+			auditCSVText(event.Signature),
 		}
 
 		if includeVerification {
@@ -181,6 +183,31 @@ func (e *Exporter) exportCSV(events []ExportEvent, timestamp string, includeVeri
 		Filename:    fmt.Sprintf("audit-log-%s.csv", timestamp),
 		EventCount:  len(events),
 	}, nil
+}
+
+// auditCSVText projects untrusted text as a spreadsheet literal. CSV quoting
+// protects column boundaries, not cell types. Match the reporting CSV boundary,
+// preserving the original bytes after a single text marker. This runs only at
+// CSV rendering: verification must use the original signed event, and JSON
+// remains the lossless evidence export rather than this spreadsheet projection.
+func auditCSVText(value string) string {
+	if value == "" {
+		return value
+	}
+	switch value[0] {
+	case '\t', '\r', '\n':
+		return "'" + value
+	}
+	leading := strings.TrimLeftFunc(value, func(r rune) bool {
+		return unicode.IsSpace(r) || r == '\uFEFF'
+	})
+	for _, first := range leading {
+		if strings.ContainsRune("=+-@＝＋－＠", first) {
+			return "'" + value
+		}
+		break
+	}
+	return value
 }
 
 // exportJSON generates a JSON export.

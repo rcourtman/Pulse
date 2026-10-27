@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/stretchr/testify/assert"
@@ -1310,5 +1313,103 @@ func TestSAMLACSAuditsResponseNotAnsweringThisBrowsersLogin(t *testing.T) {
 	completions := loginEvents()
 	if len(completions) != 1 || !completions[0].Success || completions[0].Details != "SAML login success via okta" {
 		t.Fatalf("expected one successful saml_login event, got %+v", completions)
+	}
+}
+
+// Real exporter, HMAC verification and authenticated router, without a database.
+type csvAuditLogger struct {
+	*auditSelectionLogger
+	signer   *audit.Signer
+	verified []audit.Event
+}
+
+func (l *csvAuditLogger) VerifySignature(event audit.Event) bool {
+	l.verified = append(l.verified, event)
+	return l.signer.Verify(event)
+}
+func newCSVAuditFixture(t *testing.T) *csvAuditLogger {
+	t.Helper()
+	signer, err := audit.NewSignerWithKey(bytes.Repeat([]byte{0x43}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := audit.Event{ID: "valid", Timestamp: time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC), EventType: "login",
+		User: "=operator", IP: "192.0.2.1", Path: "+path", Details: "=1+1, \"quote\"\nline two", Success: true}
+	original.Signature = signer.Sign(original)
+	tampered := original
+	tampered.ID = "tampered"
+	tampered.Signature = signer.Sign(tampered)
+	tampered.Details += " altered"
+	malformed := original
+	malformed.ID = "malformed"
+	malformed.Signature = "@invalid"
+	unsigned := original
+	unsigned.ID = "unsigned"
+	unsigned.Signature = ""
+	unsigned.Success = false
+	other := original
+	other.ID = "unselected"
+	other.User = "other-operator"
+	logger := newAuditSelectionLogger()
+	logger.events = []audit.Event{original, tampered, malformed, unsigned, other}
+	return &csvAuditLogger{auditSelectionLogger: logger, signer: signer}
+}
+
+func TestHandleExportAuditCSVUsesLiteralProjection(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	logger := newCSVAuditFixture(t)
+	setAuditLogger(t, logger)
+	token := "synthetic-csv-audit-token-123.12345678"
+	record := newTokenRecord(t, token, []string{config.ScopeAuditRead}, nil)
+	router := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "1.0.0")
+	original := append([]audit.Event(nil), logger.events...)
+	for _, verify := range []bool{false, true} {
+		for repeat := 0; repeat < 2; repeat++ {
+			logger.verified = nil
+			path := "/api/audit/export?event=login&user=%3Doperator&format=csv&verify=" + fmt.Sprint(verify) + "&limit=1&offset=999"
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("X-API-Token", token)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != 200 || rec.Header().Get("Content-Type") != "text/csv; charset=utf-8" || rec.Header().Get("X-Event-Count") != "4" || !strings.HasPrefix(rec.Header().Get("Content-Disposition"), "attachment; filename=audit-log-") {
+				t.Fatalf("CSV status/metadata = %d/%v", rec.Code, rec.Header())
+			}
+			rows, err := csv.NewReader(rec.Body).ReadAll()
+			if err != nil || len(rows) != 5 {
+				t.Fatalf("invalid selected CSV: %v / %q", err, rows)
+			}
+			for i, row := range rows[1:] {
+				if row[0] != original[i].ID || row[3] != "'=operator" || row[5] != "'+path" || row[7] != "'"+original[i].Details {
+					t.Fatalf("row %d lost literal fields: %q", i, row)
+				}
+				if verify && row[9] != []string{"true", "false", "false", ""}[i] {
+					t.Fatal("CSV changed original verdict")
+				}
+			}
+			if verify && !reflect.DeepEqual(logger.verified, original[:3]) || !verify && len(logger.verified) != 0 {
+				t.Fatal("verification did not receive original selected signatures")
+			}
+			if logger.lastQuery.User != "=operator" || logger.lastQuery.Limit != audit.MaxExportEvents+1 || logger.lastQuery.Offset != 0 || !reflect.DeepEqual(logger.events, original) {
+				t.Fatal("projection changed selection/limits/source")
+			}
+			req = httptest.NewRequest(http.MethodGet, strings.Replace(path, "format=csv", "format=json", 1), nil)
+			req.Header.Set("X-API-Token", token)
+			rec = httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			var body struct {
+				Events []audit.ExportEvent `json:"events"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if rec.Code != 200 || len(body.Events) != 4 {
+				t.Fatal("JSON lost original selection")
+			}
+			for i, event := range body.Events {
+				if event.ID != original[i].ID || event.User != original[i].User || event.Details != original[i].Details || event.Path != original[i].Path || event.Signature != original[i].Signature {
+					t.Fatal("JSON changed signed evidence")
+				}
+			}
+		}
 	}
 }
