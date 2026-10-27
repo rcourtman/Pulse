@@ -109,8 +109,9 @@ describe('restore-point source connections in real inventory consumers', () => {
         const detail = screen.getByTestId('proxmox-recoverable-detail');
         const connectionRow = within(detail).getByText('Connection').closest('tr')!;
         expect(within(connectionRow).getByText(connection)).toBeInTheDocument();
+        const locationRow = within(detail).getByText('Location').closest('tr')!;
         expect(
-          within(detail).getByText(
+          within(locationRow).getByText(
             kind === 'pbs' ? 'main / pve-1' : kind === 'archive' ? 'main' : 'pve-1',
           ),
         ).toBeInTheDocument();
