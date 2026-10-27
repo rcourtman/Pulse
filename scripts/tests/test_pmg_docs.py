@@ -123,7 +123,7 @@ class PMGDocsTest(unittest.TestCase):
                 self.assertIn(f"client.{method}(", body)
                 self.assertEqual(body.count(f"client.{method}("), poll.count(f"client.{method}("))
             self.assertIn(description, self.guide)
-        for phrase in ("saved switches control these subsequent ordinary poll requests",
+        for phrase in ("respect these saved switches for subsequent ordinary poll requests",
                        "Edits apply to the next poll", "not requests already in flight",
                        "does not dismiss an existing alert or establish recovery"):
             self.assertIn(phrase, self.guide)
@@ -168,6 +168,28 @@ class PMGDocsTest(unittest.TestCase):
                        "domain statistics alone follow their switch",
                        "assume development-source behaviour is present in an installed release"):
             self.assertIn(phrase, self.guide)
+
+    def test_shipped_scope_is_not_described_as_development_only(self):
+        self.assertIn("Published v6.6.0 and current source", self.guide)
+        self.assertIn("Published v6.6.0 records downstream read failures", self.guide)
+        self.assertNotIn("In current development source", self.guide)
+        self.assertNotIn("Current development source records", self.guide)
+
+    def test_upgrade_guidance_does_not_turn_missing_queue_data_into_recovery(self):
+        section = self.guide.split("Upgraded from v6.5.0 to v6.6.0?", 1)[1]
+        section = section.split("Use PMG's own existing queue view", 1)[0]
+        for phrase in ("logged only at Debug level", "same failure counts as a failed ordinary poll",
+                       "do not establish that your network or credentials changed",
+                       "or that queue readings were correct before the upgrade",
+                       "Keep any other reported failure separate",
+                       "If you deliberately turn off Queue health insights on v6.6.0",
+                       "not by repairing it", "Keep independent queue monitoring",
+                       "Pulse cannot evaluate new queue data with collection off",
+                       "retained alerts do not establish current queue health",
+                       "Do not repeatedly toggle collection"):
+            self.assertIn(phrase, section)
+        self.assertIn("(#collection-scope-and-older-releases)", self.text)
+        self.assertNotRegex(section, r"```|\b(?:curl|wget)\b|upgrade to|fixed in|beta")
 
     def test_incomplete_collection_does_not_promise_zero_or_recovery(self):
         for phrase in ("records downstream read failures as incomplete collection",
