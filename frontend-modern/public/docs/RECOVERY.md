@@ -161,6 +161,42 @@ VMIDs alone are not sufficient to identify a duplicate or the right restore.
 Direct PBS observations and PBS-through-PVE observations can differ in detail.
 See [PBS data sources](PBS.md#data-source-indicator).
 
+### Backup location and guest placement
+
+In **Coverage** and **By date**, expand the workload or backup row before
+deciding which installation owns it. Keep these identities separate:
+
+| Evidence | Meaning and limit |
+|---|---|
+| Workload type, **Target ID**, **PVE connection** and **Node** | The guest and its reported PVE scope and placement. A VMID is unique only within its owning installation; a missing connection or node stays **Not reported**. |
+| Artifact **Source** and **Location** | The inventory reader and backup repository, including a PBS datastore or namespace. A repository name is not a guest node, and its reader is not necessarily the guest's owning PVE connection. |
+| **Provider evidence → Scope** | The collection context for that evidence, not a substitute for missing workload ownership or placement. |
+
+**Node: Not reported** does not mean that a backup failed, a guest was deleted
+or its node is offline. An unmatched PBS backup may retain its repository and
+guest type/ID without a known PVE owner. Do not infer that owner or node from
+the datastore, namespace, connection label or a repeated VMID. Older versions
+may have shown one of those hints as a Node; that label alone is not native
+placement evidence.
+
+The **Node** filter offers reported placement, not every backup location.
+If an expected row is absent under a selected node, choose **All nodes** and
+compare its **Backup location** or search for its repository instead. A
+namespace missing from the Node options is not evidence that its backups are
+missing. Clearing a display filter neither refreshes collection nor repairs
+identity or protection posture. On a phone, expand the row to read its full
+source and location rather than relying on the shortened summary.
+
+Compare existing provider records with consistent private aliases for the
+installation, guest type/ID, repository and time. Keep unknown ownership
+unknown; do not rename nodes, move backups, widen permissions or recreate a
+connection to fill the label. Keep full identifiers and private paths out of
+public reports. If node errors or agent-backed Docker readings are also mixed,
+follow the [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations):
+one corrected backup label does not establish recovery in those other views.
+An unresponsive guest or uncertain thaw needs the separate
+[backup safety procedure](VM_DISK_MONITORING.md#backup-safety), not a filter change.
+
 ### Outcomes and verification
 
 Recorded outcomes are `success`, `warning`, `failed`, `running` or `unknown`.

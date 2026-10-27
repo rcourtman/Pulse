@@ -597,6 +597,9 @@ from a PBS-backed storage target. If that explanation is unavailable, keep the
 origin unknown rather than inferring it from a matching guest ID or name.
 
 A source label is not a protection, verification, restore or thaw result.
+Keep the backup repository separate from
+[guest placement and Node filters](RECOVERY.md#backup-location-and-guest-placement),
+especially when a PBS backup has no reported PVE owner or node.
 **PVE/PBS inventory loading or unavailable** notices mean counts are incomplete,
 not that missing backups do not exist. Existing PBS and PVE observations can
 refer to the same backup; compare their owning installation, storage,
