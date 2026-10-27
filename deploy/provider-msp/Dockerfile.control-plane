@@ -51,7 +51,7 @@ RUN --mount=type=cache,id=pulse-control-plane-go-mod,target=/go/pkg/mod \
       -trimpath \
       -o /pulse-control-plane ./cmd/pulse-control-plane
 
-FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS control-plane-runtime-foundation
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS control-plane-runtime-foundation
 RUN apk add --no-cache ca-certificates docker-cli
 ENTRYPOINT ["pulse-control-plane"]
 
