@@ -21,6 +21,30 @@
 
 ## Purpose
 
+### Protection assessments require explicit, valid instants
+
+The browser admits assessment and provider timestamps only as calendar-valid,
+explicitly zoned RFC3339 instants, using the same parser as restore evidence.
+Date-only, timezone-free, impossible and browser-repaired dates cannot validate
+an otherwise Protected response. One invalid timestamp rejects the entire
+joined assessment through the existing unavailable/retry path: retained
+verdicts, provider quality and policy are withdrawn, not replaced by a partial
+batch or a client-computed protection decision. Independent restore evidence,
+workload identity and open details remain usable. Valid leap days, offsets,
+nanosecond fractions, epoch/future instants and optional absent/null fields keep
+their existing meaning and server-authored verdict. No endpoint, producer,
+policy, store or guest operation changes.
+
+Normal-suite `protectionPostureResponse.test.ts` covers every assessment and
+provider timestamp field and valid controls. `useProtectionPostures.test.ts`
+checks whole-read withdrawal/recovery when the last of two fleet batches has an
+invalid instant. `ProxmoxBackupsTable.test.tsx` drives malformed calendar,
+zone-free and date-only assessments through the real Coverage consumer and
+isolated retry. Desktop/narrow browser proof must exercise that changed HTTP
+producer through health counts, open details and recovery/recurrence. This is
+malformed-response safety, not original stale-protection causality or native
+backup/guest recovery.
+
 ### Coverage previews retain the evidence behind uncertainty
 
 The existing Coverage restore-evidence preview retains the newest observed and

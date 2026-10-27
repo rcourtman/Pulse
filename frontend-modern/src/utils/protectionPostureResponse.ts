@@ -4,6 +4,7 @@ import type {
   ProtectionPosturesResponse,
   ProtectionProviderState,
 } from '@/types/recovery';
+import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 
 export class ProtectionPostureFormatError extends Error {
   constructor() {
@@ -15,7 +16,10 @@ export class ProtectionPostureFormatError extends Error {
 
 type Check = (value: unknown) => boolean;
 const text: Check = (value) => typeof value === 'string' && value.trim().length > 0;
-const timestamp: Check = (value) => text(value) && Number.isFinite(Date.parse(value as string));
+// Assessments use the same explicit, calendar-valid instant rule as their
+// restore evidence. Browser date repair cannot validate a server assessment.
+const timestamp: Check = (value) =>
+  typeof value === 'string' && parseBackupTimestampMs(value) !== undefined;
 const optionalTime: Check = (value) => value == null || timestamp(value);
 const boolean: Check = (value) => typeof value === 'boolean';
 const positiveSeconds: Check = (value) =>

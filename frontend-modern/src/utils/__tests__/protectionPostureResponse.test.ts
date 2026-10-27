@@ -58,6 +58,66 @@ describe('protection posture response boundary', () => {
     expect(parseProtectionPostureBatches([response(row)]).data).toEqual([row]);
   });
 
+  const timestampFields = [
+    'evaluatedAt',
+    'lastAttemptAt',
+    'lastSuccessfulPointAt',
+    'lastVerifiedAt',
+    'provider.lastAttemptAt',
+    'provider.lastSuccessAt',
+    'provider.lastVerifiedAt',
+  ];
+  const withTimestamp = (field: string, value: string) => {
+    const row = protectionPosture();
+    if (field.startsWith('provider.')) {
+      return {
+        ...row,
+        providerStates: [{ ...row.providerStates[0], [field.slice('provider.'.length)]: value }],
+      };
+    }
+    return { ...row, [field]: value };
+  };
+
+  it.each(
+    timestampFields.flatMap((field) =>
+      [
+        '2026-09-31T10:00:00Z',
+        '2026-02-29T10:00:00Z',
+        '2026-10-26T10:00:00',
+        '2026-10-26',
+        '2026-10-26T24:00:00Z',
+        'Mon, 26 Oct 2026 10:00:00 GMT',
+        '2026-10-26T10:00:00.1234567890Z',
+      ].map((value) => ({ field, value })),
+    ),
+  )(
+    'rejects ambiguous or repaired $field=$value for the entire joined read',
+    ({ field, value }) => {
+      expect(() =>
+        parseProtectionPostureBatches([
+          response(protectionPosture('vm:valid')),
+          response(withTimestamp(field, value)),
+        ]),
+      ).toThrow(ProtectionPostureFormatError);
+    },
+  );
+
+  it.each(
+    timestampFields.flatMap((field) =>
+      [
+        '2024-02-29T23:59:59Z',
+        '2026-10-26T10:00:00.123456789Z',
+        '2026-10-26T10:00:00+05:30',
+        '2026-10-26T10:00:00-07:00',
+        '1970-01-01T00:00:00Z',
+        '2099-01-01T00:00:00Z',
+      ].map((value) => ({ field, value })),
+    ),
+  )('preserves valid $field=$value without changing the server verdict', ({ field, value }) => {
+    const row = withTimestamp(field, value);
+    expect(parseProtectionPostureBatches([response(row)])).toEqual(response(row));
+  });
+
   it.each([
     ['no batches', []],
     ['null envelope', [null]],

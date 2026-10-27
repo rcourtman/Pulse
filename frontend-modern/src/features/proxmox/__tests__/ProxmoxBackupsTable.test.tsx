@@ -1623,7 +1623,7 @@ describe('Coverage qualifies missing restore evidence through the consuming API 
 });
 
 describe('Coverage withdraws failed protection assessments', () => {
-  it.each(['duplicate', 'provider', 'policy'])(
+  it.each(['duplicate', 'provider', 'policy', 'calendar', 'timezone', 'date-only'])(
     'treats HTTP200 malformed %s evidence as unavailable and preserves independent restore points',
     async (invalid) => {
       vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
@@ -1641,8 +1641,22 @@ describe('Coverage withdraws failed protection assessments', () => {
         const accepted = (await apiFetchJSONMock.mock.results[0]
           .value) as ProtectionPosturesResponse;
         const privateValue = { private: 'SYNTHETIC_PRIVATE_VALUE' };
-        const malformed =
-          invalid === 'duplicate'
+        const malformed = ['calendar', 'timezone', 'date-only'].includes(invalid)
+          ? {
+              ...accepted,
+              data: [
+                {
+                  ...accepted.data[0],
+                  evaluatedAt:
+                    invalid === 'calendar'
+                      ? '2026-09-31T10:00:00Z'
+                      : invalid === 'timezone'
+                        ? '2026-10-26T10:00:00'
+                        : '2026-10-26',
+                },
+              ],
+            }
+          : invalid === 'duplicate'
             ? {
                 ...accepted,
                 data: [{ ...accepted.data[0], state: 'unprotected' }, accepted.data[0]],

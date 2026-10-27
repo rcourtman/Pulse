@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "7770552b461591f6c86eaa47baae61d95bfc58b9",
+  "changed_paths": [
+    "frontend-modern/src/utils/protectionPostureResponse.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/protectionPostureResponse.ts": "527c192e530ae902467d7779c0cd821e4fb187a5a7fba8d3f485b28777127512"
+  },
+  "verified_at": "2026-10-27T21:03:48Z",
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Calendar-invalid, zone-free provider and date-only assessment timestamps take the existing whole-joined-read unavailable path. Initial and retained healthy verdicts, provider quality and policy cannot persist as accepted protection.",
+    "Explicitly zoned nanosecond timestamps restore server-authored Protected readings on a complete isolated retry. Independent restore points, ages and namesake scope remain visible."
+  ],
+  "interactions": [
+    "Desktop keyboard disclosure and isolated retry; ordinary 30-second malformed reads withdraw healthy verdicts, preserve the same open keyed panel and disclosure focus, then valid retry restores the accepted response.",
+    "WebKit 390px touch disclosure and retry; initial malformed read, recovery, invalid recurrence, failed retry, final recovery and independent same-name peer details. 320px notice, control and retained evidence fit.",
+    "Only expected GET inventory/posture requests; isolated retry adds no inventory reads. No navigation reload/Back, guest/restore operation, mutation or off-origin request."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timezoneId": "UTC"
+    },
+    {
+      "browser": "webkit",
+      "version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timezoneId": "America/Los_Angeles"
+    }
+  ],
+  "checks": 197,
+  "pixel_review": "All eight final retained captures were opened with native view_image; image content reached the maintainer. Unavailable notice, retry, Unknown counts and independent restore evidence are readable at desktop/390px/320px. Existing summary/search truncation is unchanged.",
+  "captures": [
+    {
+      "name": "desktop-valid.png",
+      "sha256": "f3051ef773cf14fd38541cf178208e5bd2e5894a4d349c276b2e80ae41b095cc",
+      "bytes": 91030
+    },
+    {
+      "name": "desktop-calendar-unavailable.png",
+      "sha256": "f16d1f21799f64239113e4a6356facfc5064fb23ecc0cb6a9358bfb3a7cef685",
+      "bytes": 78750
+    },
+    {
+      "name": "desktop-recurrence.png",
+      "sha256": "23811691d0550e4c17c3c8933fb3cffde22e6b4cfbf8ad953d16b9b997625e8b",
+      "bytes": 78244
+    },
+    {
+      "name": "phone-initial-malformed.png",
+      "sha256": "fca522d94c2589700be540cec57ba1d04d5be420eee4c6073b513db0fd31a377",
+      "bytes": 65512
+    },
+    {
+      "name": "phone-valid.png",
+      "sha256": "4b67c6f58e58d91e0b449ac53b304a28f8e82abeb6701bedf115f8b89a16af1f",
+      "bytes": 78488
+    },
+    {
+      "name": "phone-calendar-unavailable.png",
+      "sha256": "81ce9e5d4a24e6df1f7c744da157ab2dc5cbdb77d5abc38fd7b66e84284af043",
+      "bytes": 65681
+    },
+    {
+      "name": "phone-320-unavailable.png",
+      "sha256": "d9512af6c9136e0688d1fc69f20dfa639d513884b31a9a5085fa4f19db4a42d9",
+      "bytes": 63699
+    },
+    {
+      "name": "phone-recurrence.png",
+      "sha256": "919c04e6e08d8f68a000947bb4140524be2ca483382fde70e79f3fca393a9e9c",
+      "bytes": 65545
+    }
+  ],
+  "evidence": "RECEIPTS.md, BROWSER-PROOFS.tar.xz, BROWSER-FIXTURE.tar.xz, PIXEL-REVIEW.json and ADVERSE-NOTES.json in the lane outcome."
+}
