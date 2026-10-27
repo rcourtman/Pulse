@@ -23,6 +23,24 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Latest backup task evidence stays separate from recovery
+
+Coverage’s existing expanded detail shows the scoped latest PVE task’s reported
+status, start, duration, full literal error and task ID. Long/multiline provider
+text wraps without markup interpretation. An unreadable start says Unknown,
+a missing duration says Not reported, and a failed task without error text
+says Not reported. No task means no task section. Ordinary polling updates
+and removes stale task details in the same keyed panel without losing focus.
+The detail explicitly does not verify a restore or guest responsiveness.
+That qualification wraps at narrow widths instead of inheriting cell nowrap.
+
+`backupTaskEvidence.test.tsx` exercises the HTTP inventory parser, recovery
+model and production Coverage consumer at desktop/narrow layouts, namesake
+connection isolation, literal text, missing/invalid evidence, running/OK tasks
+and same-panel polling/removal. Desktop keyboard and narrow touch browser
+proof must inspect these existing details. No new read, route, task action,
+matching rule, protection policy, backup/restore or guest operation is added.
+
 ### Backup workload scope stays visible independently of its reader
 
 Coverage retains the guest's PVE connection in its identity cell at every

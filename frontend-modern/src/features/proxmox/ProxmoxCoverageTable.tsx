@@ -14,6 +14,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
+  formatPlatformTableDateTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformDetailTable,
@@ -35,7 +36,7 @@ import {
   type WorkloadCoverageRow,
 } from './proxmoxBackupRecoveryModel';
 import { proxmoxBackupWorkloadSubject } from './proxmoxBackupWorkloadSubject';
-import type { CoverageSortKey } from './proxmoxBackupsTableModel';
+import { formatDurationFromSeconds, type CoverageSortKey } from './proxmoxBackupsTableModel';
 import {
   ArtifactSourceIdentity,
   ArtifactStateBadge,
@@ -193,13 +194,52 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
         makeDetailRow('PVE connection', getBackupWorkloadPVEConnection(row.workload), {
           wrap: true,
         }),
-        makeDetailRow('Latest task', row.latestTask?.label, {
-          tone: row.latestTask
-            ? statusDetailTone(taskWordVariant(row.latestTask.label))
-            : undefined,
-        }),
       ]),
     },
+    row.latestTask
+      ? {
+          label: 'Latest task',
+          rows: compactDetailRows([
+            makeDetailRow('Status', row.latestTask.label, {
+              tone: statusDetailTone(taskWordVariant(row.latestTask.label)),
+            }),
+            makeDetailRow(
+              'Started',
+              row.latestTask.startedMs === undefined
+                ? 'Unknown'
+                : formatPlatformTableDateTimeValue(row.latestTask.startedMs),
+              { tone: row.latestTask.startedMs === undefined ? 'warning' : undefined },
+            ),
+            makeDetailRow(
+              'Duration',
+              row.latestTask.durationSeconds === undefined
+                ? 'Not reported'
+                : row.latestTask.durationSeconds === 0
+                  ? '0s'
+                  : formatDurationFromSeconds(row.latestTask.durationSeconds),
+            ),
+            makeDetailRow(
+              'Error',
+              row.latestTask.error?.trim() ||
+                (row.latestTask.label === 'Failed' ? 'Not reported' : undefined),
+              {
+                tone: 'danger',
+                valueContent: (
+                  <span class="block whitespace-pre-wrap text-left font-normal leading-snug wrap-anywhere">
+                    {row.latestTask.error?.trim() || 'Not reported'}
+                  </span>
+                ),
+              },
+            ),
+            makeDetailRow('Task ID', row.latestTask.id, { wrap: true }),
+          ]),
+          footerContent: (
+            <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+              Task status does not verify a restore or guest responsiveness.
+            </p>
+          ),
+        }
+      : null,
     {
       label: 'Provider evidence',
       rows: compactDetailRows(

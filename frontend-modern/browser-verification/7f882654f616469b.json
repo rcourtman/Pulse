@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "base_sha": "fca2fbb99e0a6f8eaf8d0dd2353b74910b05776a",
+  "verified_at": "2026-10-27T12:00:45.258937Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "37f5aee1fc00fcf23d6d4d6c7ec020124183e3c8084fb2659dae86f2850e7b59"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production ProxmoxBackupsTable, apiClient, inventory parser/recovery model, router and shared CSS consume offline synthetic HTTP inventory. The evidence-only entry is not committed or shipped.",
+    "Latest task detail shows reported status, absolute start, duration, full literal multiline error and provider task ID. Missing failure explanation/duration and invalid start stay explicit; running and OK do not establish protection or restore/guest responsiveness.",
+    "Namesake guests in separate PVE connections retain isolated tasks and exact owner links. Task removal retains independent restore evidence, Unknown posture and the open keyed panel.",
+    "All six final desktop/phone captures were opened with native view_image and their pixels inspected. The 320px qualification wraps fully after correcting its inherited nowrap. Full errors/IDs and all existing detail cells remain contained.",
+    "83 checks pass with Playwright 1.56.1 matching the integration lock, Chromium desktop and WebKit touch phones. No page/console/off-origin/unexpected API/mutation error or page-level overflow was observed. Earlier script/geometry failures remain retained separately; they are not passing proof."
+  ],
+  "interactions": [
+    "Desktop native disclosure uses keyboard Enter. Phone uses an ordinary tap on the visible identity cell (the standard phone row touch target), and the visible panel collapse action; no force or JavaScript click.",
+    "Opening/closing details introduces no inventory read. The other namesake connection never borrows the task, ID or error.",
+    "Ordinary 30-second polling reads each inventory once, updates failure to OK and removes the old error, then removes the task section when no task is reported. Row/panel DOM and focused disclosure survive, with protection unchanged.",
+    "Desktop and narrow inspections cover Failed, Running, OK, missing explanation/start/duration, long literal provider text, exact provider task ID and 320px resize."
+  ],
+  "captures": [
+    {
+      "name": "desktop-failed-task.png",
+      "sha256": "2d02def344d744197595b52abe2145ba52cd9a29e05e64feeb99159ac55bdbb6"
+    },
+    {
+      "name": "desktop-recovered-task.png",
+      "sha256": "fd444b1ad8b79ce57e56643b71f48c6552c6d297420646aa835800da51fd81bc"
+    },
+    {
+      "name": "phone-failed-task.png",
+      "sha256": "de86c25523852d33f98a5276b516ea59639c106f5cdf463e6931db30d1bc2c07"
+    },
+    {
+      "name": "phone-320-failed-task.png",
+      "sha256": "57a715564feace1071e12e1e1b2bbf4071b19b1ce6dbf9bb45582c4d23a5f1a2"
+    },
+    {
+      "name": "phone-running-task.png",
+      "sha256": "c766596e05d8691df10dde6bfc5c6b88270fb69f1ba420679141f29541cc0a40"
+    },
+    {
+      "name": "phone-missing-task-evidence.png",
+      "sha256": "63054df2dfdba3e09405673e92a5154b7078ddabc3566ea7e2157ef738d2914c"
+    }
+  ]
+}
