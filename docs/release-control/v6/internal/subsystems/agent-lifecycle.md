@@ -4163,6 +4163,29 @@ Help must describe both retained-state and older-script limits and have actual
 Docs desktop/narrow browser proof; neither Help nor doubles establish native
 installed removal, credential revocation, publication or whole-issue recovery.
 
+The existing native lifecycle must also exercise the installed saved-only path,
+not just an unauthenticated peer that echoes any requested ID. Its loopback-only
+synthetic peer requires the saved fixture token and exact identity, counts each
+POST independently and supplies HTTP refusal, wrong-ID, string-success and
+missing-ID responses. After each refusal the real installer must return exit 1,
+with SCM/listener absence and every installed recovery file's bytes and ACL
+unchanged. Quiescence precedes the snapshot so final agent log writes are not
+mislabelled loss. Only one confirmed POST permits local cleanup; repeated
+removal must independently observe absence without another POST. Child removal
+receives no connection arguments or ambient connection/credential/TLS inputs.
+The peer exposes counts only, never credential or request/response contents.
+
+`-NonInteractive` errors print their diagnostic and return without loading a
+desktop dialogue. Interactive error UI remains available. The saved-removal
+child is deadline-bound, checks exact exits and private-output controls, and
+confirms owned child termination on failure. `TestInstallPS1NonInteractiveErrorsKeepAnUnattendedExit`,
+`TestWindowsAgentLifecycleSavedRemovalRequiresAdverseAndCleanReadback` and
+`TestWindowsAgentLifecycleSavedRemovalInvokerRuntime` cover this route alongside
+the peer's `TestUninstallProof*` HTTP/race controls. The real hosted Windows
+PowerShell 5.1 lifecycle, configured-CA transport, signed shipped installer and
+original customer recovery remain distinct evidence; Linux skips do not prove
+them. No production service or provider is a test target.
+
 
 `cmd/pulse-agent-helper/main_test.go`, `internal/agenthelper/server_test.go`, `internal/hostagent/privilege_helper_client_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must cover version negotiation, successful partial rows, all-failed/global-unavailable distinction, contradictory/overbound identities, degraded health and independent operation recovery. `scripts/installtests/safe_profile_migration_test.go` covers installer-managed helper replacement after effective-unit/socket validation and fatal restart failure. These source controls do not prove an installed upgrade or PVE recovery.
 

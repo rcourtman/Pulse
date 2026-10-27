@@ -25,7 +25,7 @@ func windowsNativeAcceptanceContract(harness string, steps []nativeWindowsExitSt
 		`if (-not $script:serverProcess.WaitForExit(5000)) {`,
 		`$listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {`,
 		`foreach ($label in @('uninstall', 'repeated uninstall')) {`,
-		`Invoke-Installer -Label $label -Arguments '-Uninstall $true -NonInteractive $true'`,
+		`Invoke-SavedUninstall -Label $label -ExpectFailure $false`,
 		`Assert-LifecycleAgentAbsent`,
 	} {
 		if !strings.Contains(harness, needle) {
@@ -35,6 +35,14 @@ func windowsNativeAcceptanceContract(harness string, steps []nativeWindowsExitSt
 	if strings.Contains(harness, "Get-Service $serviceName -ErrorAction SilentlyContinue") ||
 		strings.Contains(harness, "Get-NetTCPConnection -LocalPort 9191") {
 		return fmt.Errorf("failed observation can stand in for absence")
+	}
+	// Retained-state acceptance also reads listeners. That independent read
+	// cannot stand in for the final post-uninstall absence function's own gate.
+	absenceStart := strings.Index(harness, "function Assert-LifecycleAgentAbsent {")
+	absenceEnd := strings.Index(harness, "function Invoke-UninstallAndAssertClean {")
+	if absenceStart < 0 || absenceEnd <= absenceStart ||
+		!strings.Contains(harness[absenceStart:absenceEnd], `$listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {`) {
+		return fmt.Errorf("post-uninstall absence requires its own independent listener enumeration")
 	}
 	preflight := "Assert-LifecycleAgentAbsent\n    $previousDisableAutoUpdate = [Environment]::GetEnvironmentVariable"
 	if !strings.Contains(harness, preflight) {

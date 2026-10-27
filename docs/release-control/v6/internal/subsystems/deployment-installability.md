@@ -8894,6 +8894,18 @@ owned server teardown fails; an unconfirmed stop fails and retains the handle
 rather than reporting clean teardown. Real Windows execution and full terminal
 cleanup evidence still have to be returned by the existing native CI job.
 
+The same native job now runs the saved-removal invoker controls and its
+loopback-only peer tests. Its real installed lifecycle checks four adverse
+unregistration responses before confirmation/repeated cleanup, authenticates
+with the saved synthetic token and exact ID, and compares every recovery
+file's bytes/ACL and state-directory ACL after each refusal. Removal children
+have no supplied or inherited connection selectors and must return within a
+bounded deadline. A `-NonInteractive` installer error prints but opens no modal
+dialogue; interactive behaviour is unchanged. The agent-lifecycle contract
+owns these exact-ID/retention boundaries. Source/HTTP tests and Linux skips
+do not substitute for the containing Windows PowerShell 5.1/SCM job, saved-CA
+transport or installed customer acceptance.
+
 ### Server-only installer release discovery (9 October 2026)
 
 The server installer uses one selector for its installer-script URL and server

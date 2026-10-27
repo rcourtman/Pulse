@@ -272,7 +272,7 @@ jobs:
 
       - name: Test native Windows installer contracts
         if: ${{ !matrix.unix }}
-        run: go test ./scripts/installtests -run '^Test(InstallPS1|WindowsAgentLifecycle)'
+        run: go test ./scripts/installtests ./scripts/installtests/windowslifecycleserver -run '^Test(InstallPS1|WindowsAgentLifecycle|UninstallProof)'
 
       - name: Execute generated command with Windows PowerShell 5.1
         if: ${{ !matrix.unix }}

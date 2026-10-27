@@ -130,6 +130,10 @@ function Show-Error {
     param([string]$Message)
     Write-Host $Message -ForegroundColor Red
 
+    # An unattended failure must return its exit, not wait for a desktop user
+    # to dismiss a modal dialogue (including during saved-state recovery).
+    if ($NonInteractive) { return }
+
     # Try to show a popup if running in a GUI environment
     try {
         Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
