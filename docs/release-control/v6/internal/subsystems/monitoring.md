@@ -31,12 +31,16 @@ live guest lookup, the archive retains its historical typed canonical subject
 without borrowing the new occupant's ID or display name. Collector placement
 lookup likewise ignores an opposite-kind occupant: its archive keeps the read
 node, while a same-kind migrated guest still supplies its actual placement.
-The independent local storage read origin and archive ID are unchanged.
+The final state-layer alignment uses the same typed fence, so publishing
+the list cannot undo the collector decision. Both date and placement selection
+share the model's explicit-kind normalisation; legacy/untyped fallback remains
+unchanged. The independent local storage read origin and archive ID are unchanged.
 Same-kind metadata and legacy/untyped fallback retain their existing behaviour.
 The point ID, archive time, size and public JSON shape do not change. Ordinary
 collection updates existing point attribution; no deletion, schema migration,
 backup/restore or guest-agent operation is introduced.
 
+`TestUpdateStorageBackupsForInstanceKeepsArchiveGuestKind`,
 `TestSyncGuestBackupTimesLocalArchiveGuestKinds`,
 `TestFromPVEStorageBackupsRetainsExplicitGuestKind` and the normal-suite
 `TestPVEArchiveSubjectKindLifecycle` cover both replacement directions, aliases,

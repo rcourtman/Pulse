@@ -2265,3 +2265,38 @@ func TestUpdateNodesForInstanceHoldsASplitAgentBackBeforeItFoldsNodeViews(t *tes
 		}
 	}
 }
+
+func TestUpdateStorageBackupsForInstanceKeepsArchiveGuestKind(t *testing.T) {
+	for _, kind := range []string{"qemu", "vm", " QEMU ", "lxc", "ct", " LXC ", "", "unknown"} {
+		t.Run(kind, func(t *testing.T) {
+			state := NewState()
+			state.UpdateVMs([]VM{{VMID: 100, Instance: "a", Node: "vm-node"}, {VMID: 100, Instance: "b", Node: "other-cluster"}})
+			state.UpdateContainers([]Container{{VMID: 101, Instance: "a", Node: "ct-node"}})
+			rows := []StorageBackup{{ID: "100", Instance: "a", VMID: 100, Node: "read-node", StorageNode: "read-node", Type: kind}, {ID: "101", Instance: "a", VMID: 101, Node: "read-node", StorageNode: "read-node", Type: kind}}
+			state.UpdateStorageBackupsForInstance("a", rows)
+			want100, want101 := "vm-node", "ct-node"
+			switch kind {
+			case "qemu", "vm", " QEMU ":
+				want101 = "read-node"
+			case "lxc", "ct", " LXC ":
+				want100 = "read-node"
+			}
+			snapshot := state.GetSnapshot()
+			if len(snapshot.PVEBackups.StorageBackups) != 2 {
+				t.Fatal("archive count changed")
+			}
+			for _, b := range snapshot.PVEBackups.StorageBackups {
+				want := want100
+				if b.VMID == 101 {
+					want = want101
+				}
+				if b.Node != want || b.StorageNode != "read-node" || b.Type != kind {
+					t.Errorf("explicit kind borrowed opposite placement or lost original facts: %+v want=%s", b, want)
+				}
+			}
+			if rows[0].Node != "read-node" || rows[1].Node != "read-node" {
+				t.Error("state alignment mutated caller archive facts")
+			}
+		})
+	}
+}

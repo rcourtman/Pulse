@@ -4625,6 +4625,25 @@ func backupKey(instance string, vmid int) string {
 	return instance + "-" + strconv.Itoa(vmid)
 }
 
+type localBackupSubjectKey struct {
+	instance, guestType string
+	vmid                int
+}
+
+// localBackupGuestType keeps explicit archive kinds consistent between date
+// selection and placement alignment. An untyped legacy row keeps its existing
+// best-effort VMID lookup; a known contradictory kind never uses that fallback.
+func localBackupGuestType(kind string) string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "qemu", "vm":
+		return "vm"
+	case "lxc", "ct":
+		return "ct"
+	default:
+		return ""
+	}
+}
+
 // UpdatePBSGuestConfirmationsForInstance replaces the PVE-side PBS snapshot
 // evidence for one connection. Pass an empty slice when the connection's
 // storage poll saw no pbs-type storage content so stale evidence cannot
@@ -4713,11 +4732,7 @@ func (s *State) SyncGuestBackupTimes() {
 	// A retained archive may belong to the other guest kind after VMID reuse.
 	// Keep its kind as well as its connection; the live occupant cannot turn
 	// a removed VM's archive into an LXC backup (or the reverse).
-	type localSubjectKey struct {
-		instance, guestType string
-		vmid                int
-	}
-	latestBackup := make(map[localSubjectKey]time.Time)
+	latestBackup := make(map[localBackupSubjectKey]time.Time)
 
 	// Guests with a backup running right now: a live vzdump task is the
 	// authoritative PVE-side signal. Partial artifacts (an in-flight PBS
@@ -4758,23 +4773,16 @@ func (s *State) SyncGuestBackupTimes() {
 			// above already reports the guest as backing up.
 			continue
 		}
-		guestType := ""
-		switch strings.ToLower(strings.TrimSpace(backup.Type)) {
-		case "qemu", "vm":
-			guestType = "vm"
-		case "lxc", "ct":
-			guestType = "ct"
-		}
-		key := localSubjectKey{backup.Instance, guestType, backup.VMID}
+		key := localBackupSubjectKey{backup.Instance, localBackupGuestType(backup.Type), backup.VMID}
 		if existing, ok := latestBackup[key]; !ok || backup.Time.After(existing) {
 			latestBackup[key] = backup.Time
 		}
 	}
 	latestLocalBackup := func(instance string, vmid int, guestType string) time.Time {
-		latest := latestBackup[localSubjectKey{instance, guestType, vmid}]
+		latest := latestBackup[localBackupSubjectKey{instance, guestType, vmid}]
 		// Preserve best-effort matching of older/untyped rows. Only an explicit
 		// artifact discriminator can establish a contradictory guest kind.
-		if untyped := latestBackup[localSubjectKey{instance, "", vmid}]; untyped.After(latest) {
+		if untyped := latestBackup[localBackupSubjectKey{instance, "", vmid}]; untyped.After(latest) {
 			latest = untyped
 		}
 		return latest
@@ -6274,22 +6282,27 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 
 	// When storage is shared across nodes, backups can appear under whichever node reported the content.
 	// Align each backup with the guest's current node so the frontend column matches the VM/CT placement.
-	guestNodeByVMID := make(map[int]string)
+	// Keep explicit kinds here too: this final state alignment must not undo
+	// the collector's refusal to borrow an opposite-kind replacement's node.
+	guestNodeBySubject := make(map[localBackupSubjectKey]string)
 	for _, vm := range s.VMs {
 		if vm.Instance == instanceName && vm.Node != "" {
-			guestNodeByVMID[vm.VMID] = vm.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "vm", vm.VMID}] = vm.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "", vm.VMID}] = vm.Node
 		}
 	}
 	for _, ct := range s.Containers {
 		if ct.Instance == instanceName && ct.Node != "" {
-			guestNodeByVMID[ct.VMID] = ct.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "ct", ct.VMID}] = ct.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "", ct.VMID}] = ct.Node
 		}
 	}
 
 	normalizedBackups := make([]StorageBackup, 0, len(backups))
 	for _, backup := range backups {
 		if backup.VMID > 0 {
-			if node, ok := guestNodeByVMID[backup.VMID]; ok {
+			key := localBackupSubjectKey{instanceName, localBackupGuestType(backup.Type), backup.VMID}
+			if node, ok := guestNodeBySubject[key]; ok {
 				backup.Node = node
 			}
 		}
