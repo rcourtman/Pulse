@@ -181,7 +181,7 @@ describe('backup workload identity in real inventory consumers', () => {
   it('keeps a same-numbered LXC distinguishable from a VM in the same PVE connection', async () => {
     const guest = guests()[0];
     mount({
-      workloads: [guest, { ...guest, id: 'guest-lxc', type: 'lxc' }],
+      workloads: [guest, { ...guest, id: 'guest-lxc', type: 'system-container' }],
       pve: {
         ...emptyPVE,
         storageBackups: [identityArchive(), identityArchive({ id: 'lxc-file', type: 'lxc' })],
