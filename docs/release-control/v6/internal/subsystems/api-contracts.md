@@ -4964,7 +4964,10 @@ the authoritative analysis outcome.
     failures without reflecting untrusted discovery values. Successful Test
     only establishes discovery and issuer equality, not client credentials or
     sign-in, and must say so. Testing must not change saved provider settings,
-    secrets, admission restrictions or local administrator recovery.
+    secrets, admission restrictions or local administrator recovery. A non-200
+    discovery response exposes only its numeric HTTP status with fixed recovery
+    guidance; never reflect provider/proxy reason phrases, headers or bodies.
+    The failure must state that nothing was saved and sign-in was not tested.
 32. Keep SSO provider-detail payloads edit-complete and non-secret:
     `GET /api/security/sso/providers/{id}` may keep flat list/card fields for
     summary compatibility, but it must also return the nested OIDC/SAML fields
@@ -7258,6 +7261,11 @@ case, realm, authority and missing-issuer controls to `NewOIDCService`.
 collections, non-reflecting failures and unchanged provider/credential/admin
 state. The existing Settings SSO result consumes these qualified outcomes;
 metadata success alone is never sign-in acceptance.
+`TestOIDCConnectionHTTPStatusPrivacy` sends real custom HTTP/1.1 status lines,
+including long, private-URL and markup reason phrases. Non-200 diagnostics keep
+only `HTTP <numeric status>` and fixed recovery guidance. The authenticated
+consumer contract also checks these failures, no credential/settings/file/admin
+mutation and one read-only discovery request; no upstream body/header is echoed.
 That same SSO boundary also owns manual SAML endpoint validation payloads.
 `internal/api/identity_sso_handlers.go`, `internal/api/saml_service.go`, and
 `internal/api/contract_test.go` must preserve both `idpSsoUrl` and optional

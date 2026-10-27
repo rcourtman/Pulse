@@ -1750,6 +1750,12 @@ token-free command. No copy receipt establishes installed removal or a release.
 
 ## Shared Boundaries
 
+The shared OIDC Test diagnostic exposes only a numeric upstream HTTP status
+and fixed recovery guidance on failed discovery, never a provider/proxy reason
+phrase, header or body. It makes no agent credential, enrollment, lifecycle or
+update-state change and must preserve local administrator recovery. The
+`api-contracts` authenticated consumer verifies this read-only boundary.
+
 The shared `internal/api/` audit exporter/summary now refuses synchronous
 selections above 10,000 events before verification or encoding. This read-only
 boundary does not change agent identity, update/rollback admission, lifecycle

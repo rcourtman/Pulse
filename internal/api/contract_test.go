@@ -28283,12 +28283,20 @@ func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
 	beforeFiles := ssoAdmissionFiles(t, r.config.DataPath)
 	beforeAuthUser, beforeAuthPass := r.config.AuthUser, r.config.AuthPass
 	var frames []map[string]interface{}
+	var upstreamStatus atomic.Int32
+	upstreamStatus.Store(http.StatusOK)
+	var requests atomic.Int32
 	var discovered atomic.Value
 	discovered.Store("")
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requests.Add(1)
 		if req.Method != http.MethodGet || req.URL.Path != "/realms/pulse/.well-known/openid-configuration" {
 			t.Errorf("unexpected diagnostic request: %s %s", req.Method, req.URL.Path)
 			http.NotFound(w, req)
+			return
+		}
+		if status := int(upstreamStatus.Load()); status != http.StatusOK {
+			writeOIDCDiscoveryStatus(t, w, status, "https://idp.example.test/private?secret=SYNTHETIC_REASON_PRIVATE")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -28300,14 +28308,20 @@ func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
 	defer server.Close()
 	issuer := server.URL + "/realms/pulse"
 	for _, tt := range []struct {
-		name, reported, code string
-		status               int
+		name, reported, code   string
+		status, upstreamStatus int
 	}{
-		{"mismatch", issuer + "/other", "issuer_mismatch", http.StatusBadRequest},
-		{"missing", "", "missing_discovery_issuer", http.StatusBadRequest},
-		{"exact", issuer, "", http.StatusOK},
+		{"mismatch", issuer + "/other", "issuer_mismatch", http.StatusBadRequest, http.StatusOK},
+		{"missing", "", "missing_discovery_issuer", http.StatusBadRequest, http.StatusOK},
+		{"not found", "", "HTTP 404", http.StatusBadRequest, http.StatusNotFound},
+		{"unauthorised", "", "HTTP 401", http.StatusBadRequest, http.StatusUnauthorized},
+		{"limited", "", "HTTP 429", http.StatusBadRequest, http.StatusTooManyRequests},
+		{"unavailable", "", "HTTP 503", http.StatusBadRequest, http.StatusServiceUnavailable},
+		{"exact", issuer, "", http.StatusOK, http.StatusOK},
 	} {
 		discovered.Store(tt.reported)
+		upstreamStatus.Store(int32(tt.upstreamStatus))
+		beforeRequests := requests.Load()
 		payload, _ := json.Marshal(SSOTestRequest{Type: "oidc", OIDC: &OIDCTestConfig{IssuerURL: issuer, ClientID: "synthetic-client"}})
 		req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(payload))
 		req.Header.Set("X-API-Token", token)
@@ -28334,6 +28348,14 @@ func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
 			}
 		} else if response.Details != nil || tt.reported != "" && strings.Contains(w.Body.String(), tt.reported) {
 			t.Fatal("failure must not echo untrusted issuer or validated details")
+		}
+		if requests.Load() != beforeRequests+1 {
+			t.Fatal("diagnostic must make exactly one discovery GET and no token/JWKS request")
+		}
+		if tt.upstreamStatus != http.StatusOK {
+			if !strings.Contains(response.Message, "Nothing was saved; sign-in was not tested.") || len(w.Body.Bytes()) > 220 || strings.Contains(w.Body.String(), "SYNTHETIC_") {
+				t.Fatal("upstream HTTP failure must keep bounded recovery guidance without provider text")
+			}
 		}
 		if strings.Contains(w.Body.String(), "fixture-secret") || strings.Contains(w.Body.String(), "synthetic-token") {
 			t.Fatal("diagnostic exposed a saved credential")
