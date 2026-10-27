@@ -13,6 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNNER = ROOT / "scripts/release_control/run_go_package_slice.py"
+SHARD = ROOT / "scripts/release_control/run_go_rest_shard.py"
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 spec = importlib.util.spec_from_file_location("package_slices", RUNNER)
 runner = importlib.util.module_from_spec(spec)
@@ -67,8 +68,21 @@ args = sys.argv[1:]
 with Path(os.environ['CALLS']).open('a') as f: f.write(json.dumps(args)+'\\n')
 if args[0] == 'list':
     print('\\n'.join('github.com/rcourtman/pulse-go-rewrite/'+n for n in
-          ['internal/api','internal/monitoring','scripts/installtests','internal/a','internal/b','internal/c','internal/d']))
-    sys.exit(0)
+          ['internal/api','internal/monitoring','scripts/installtests']+
+          ['internal/'+str(i) for i in range(12)]))
+    sys.exit(int(os.environ.get('INVENTORY_EXIT','0')))
+events = os.environ.get('EVENTS')
+if events and '-list' not in args:
+    import fcntl, time
+    def event(kind):
+        with open(events,'a') as f:
+            fcntl.flock(f,fcntl.LOCK_EX)
+            f.write(json.dumps({'kind':kind,'pid':os.getpid(),'ordinary':'-json' not in args,
+                                'goflags':os.environ.get('GOFLAGS',''),
+                                'at':time.monotonic()})+'\\n')
+    import atexit
+    event('start'); atexit.register(event,'end')
+    time.sleep(0.06 if '-json' in args else 0.4)
 if '-list' not in args and '-json' not in args:
     print('ok ordinary packages 0.01s')
     sys.exit(int(os.environ.get('ORDINARY_EXIT','0')))
@@ -148,13 +162,11 @@ class WorkflowTest(unittest.TestCase):
         for expected in (
             'name: Backend tests (${{ matrix.shard }})', 'shard: [rest-0, rest-1]',
             'needs: [changes, test-compile]', "GOMAXPROCS: '2'",
-            "grep -v '/internal/api$'", "grep -vE '/(internal/monitoring|scripts/installtests)$'",
-            'go test -race -timeout 50m $pkgs &',
-            'for package in internal/monitoring scripts/installtests; do',
-            'scripts/release_control/run_go_package_slice.py',
-            '--package "$package" --index "$index"',
-            'for pid in "${pids[@]}"; do', 'if wait "$pid"; then :; else status=1; fi',
-            'exit "$status"', 'name: backend-slices-${{ matrix.shard }}',
+            'python3 scripts/release_control/run_go_rest_shard.py',
+            'ordinary_command=\'go test -race -timeout 50m $pkgs\'',
+            '--ordinary-command "$ordinary_command"',
+            '--index "$index" --output "$RUNNER_TEMP/backend-slices"',
+            'name: backend-slices-${{ matrix.shard }}',
         ):
             self.assertIn(expected, block)
         self.assertNotIn('continue-on-error', block)
@@ -167,6 +179,7 @@ class WorkflowTest(unittest.TestCase):
         self.addCleanup(fixture.doCleanups)
         root = fixture.root
         for name in ('scripts/release_control/run_go_package_slice.py',
+                     'scripts/release_control/run_go_rest_shard.py',
                      '.github/scripts/record-internal-api-test-seconds.py',
                      '.github/scripts/select-go-package-shard.py',
                      '.github/scripts/go-package-test-seconds.txt'):
@@ -182,7 +195,8 @@ class WorkflowTest(unittest.TestCase):
         command = '\n'.join(line[10:] for line in body.splitlines()
                             if line.startswith('          ') or not line.strip())
         for index, options in enumerate(({}, {'ORDINARY_EXIT':'9'}, {'MODE':'failed-root'},
-                                         {'LISTING_EXIT':'7'}, {'CONTROL_EXIT':'5'})):
+                                         {'LISTING_EXIT':'7'}, {'CONTROL_EXIT':'5'},
+                                         {'INVENTORY_EXIT':'8'})):
             with self.subTest(options=options):
                 calls = root / 'calls'
                 calls.write_text('')
@@ -194,15 +208,79 @@ class WorkflowTest(unittest.TestCase):
                 observed = [json.loads(line) for line in calls.read_text().splitlines()]
                 if 'CONTROL_EXIT' in options:
                     self.assertEqual(observed, [])
+                elif 'INVENTORY_EXIT' in options:
+                    # Partial output from a failed discovery admits no task.
+                    self.assertEqual(observed, [['list', './...']])
                 else:
                     self.assertEqual(sum('-list' in call for call in observed), 2)
                     self.assertEqual(sum('-json' not in call and '-list' not in call
-                                         and call[0]=='test' for call in observed), 1)
+                                         and call[0]=='test' for call in observed), 6)
+                    receipt = json.loads((root / f'output{index}/backend-slices/ordinary-packages.json').read_text())
+                    self.assertEqual(receipt['slots'], 4)
+                    self.assertEqual(len(receipt['tasks']), 8)
+                    self.assertEqual(len({task['package'] for task in receipt['tasks']}), 8)
+                    self.assertEqual(all(task['exit']==0 for task in receipt['tasks']), not options)
+
+    def test_real_process_queue_reuses_finished_slice_slots_and_drains_all_tasks(self):
+        fixture = ExecutedRunnerTest()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        events = fixture.root / 'events'
+        output = fixture.root / 'output'
+        env = {**os.environ, 'PATH': str(fixture.root)+':'+os.environ['PATH'],
+               'CALLS':str(fixture.root / 'calls'), 'EVENTS':str(events), 'GOMAXPROCS':'2'}
+        all_ordinary = []
+        for index in (0, 1):
+            names = sorted(runner.MODULE+'internal/'+str(i) for i in range(12))
+            result = subprocess.run(['python3', str(SHARD), '--index', str(index),
+                                     '--ordinary-command','go test -race -timeout 50m $pkgs',
+                                     '--output',str(output / str(index))],
+                                    input='\n'.join(names[index::2])+'\n',
+                                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            receipt = json.loads((output / str(index) / 'ordinary-packages.json').read_text())
+            all_ordinary += [task['package'] for task in receipt['tasks'][2:]]
+        self.assertEqual(sorted(all_ordinary), sorted(runner.MODULE+'internal/'+str(i) for i in range(12)))
+        calls = [json.loads(line) for line in (fixture.root / 'calls').read_text().splitlines()]
+        for call in calls:
+            if call[0]=='test' and '-list' not in call and '-json' not in call:
+                self.assertEqual(call[:-1], ['test','-race','-timeout','50m'])
+        active = {}; peak = ordinary_peak = 0
+        for event in map(json.loads,events.read_text().splitlines()):
+            if event['ordinary']: self.assertEqual(event['goflags'].split()[-1],'-p=1')
+            if event['kind']=='start': active[event['pid']] = event['ordinary']
+            else: del active[event['pid']]
+            peak = max(peak,len(active)); ordinary_peak = max(ordinary_peak,sum(active.values()))
+        self.assertEqual(active,{})
+        self.assertLessEqual(peak,4)
+        self.assertGreaterEqual(ordinary_peak,3, 'finished slices did not release their slots')
+
+        for supplied in ('', '\n'.join(names), '\n'.join(reversed(names[::2]))):
+            result = subprocess.run(['python3', str(SHARD), '--index','0',
+                                     '--ordinary-command','go test -race -timeout 50m $pkgs',
+                                     '--output',str(output / 'rejected')],
+                                    input=supplied, cwd=ROOT, env=env,
+                                    capture_output=True, text=True, timeout=20)
+            self.assertNotEqual(result.returncode,0)
+            self.assertFalse((output / 'rejected').exists())
+
+    def test_inventory_and_launch_failures_cannot_admit_partial_success(self):
+        spec = importlib.util.spec_from_file_location('rest_shard', SHARD)
+        shard = importlib.util.module_from_spec(spec); spec.loader.exec_module(shard)
+        from unittest.mock import patch
+        prefix = runner.MODULE
+        valid = [prefix+n for n in ('internal/api','internal/monitoring','scripts/installtests','internal/a','internal/b')]
+        for inventory in (valid[:-3], valid+valid[:1], valid+['example.invalid/foreign']):
+            with patch.object(shard.subprocess, 'run', return_value=subprocess.CompletedProcess([],0,'\n'.join(inventory),'')):
+                with self.assertRaises(ValueError): shard.ordinary_packages(0)
+        with patch.object(shard.subprocess,'run',side_effect=OSError('start failed')):
+            self.assertEqual(shard.run_task(('internal/a',['not-a-command']))['exit'],127)
 
     def test_helpers_are_part_of_the_exact_main_controls_copied_to_patches(self):
         stable_patch = (ROOT / 'scripts/release_control/stable_patch.py').read_text()
         self.assertIn('"scripts/release_control"', stable_patch)
         self.assertTrue(RUNNER.is_relative_to(ROOT / 'scripts/release_control'))
+        self.assertTrue(SHARD.is_relative_to(ROOT / 'scripts/release_control'))
         self.assertTrue(Path(__file__).is_relative_to(ROOT / 'scripts/release_control'))
         self.assertIn('python3 scripts/release_control/run_go_package_slice_test.py', job('backend'))
 
