@@ -2158,6 +2158,10 @@ jobs:
           GH_TOKEN="${IMMUTABILITY_ADMIN_TOKEN}" \
             ./scripts/check-github-release-immutability.sh "${GITHUB_REPOSITORY}"
           unset IMMUTABILITY_ADMIN_TOKEN
+          # Builds and staging may outlive patch eligibility or its stable base.
+          # Re-read both immediately before the irreversible publication call.
+          python3 scripts/release_control/stable_patch.py activation-check \
+            --version "${TAG}" --source-sha "${EXPECTED_COMMIT}"
           gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
             -X PATCH --input "$publish_payload" > "$release_json"
           activated=true

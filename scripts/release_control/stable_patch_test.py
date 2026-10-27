@@ -1,7 +1,9 @@
 """Whole merge results and exact controls, with real Git but no network or publishing."""
 from copy import deepcopy
+from datetime import datetime, timezone
 from fnmatch import fnmatchcase
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -165,6 +167,156 @@ class StablePatchTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'clean disposable'):
             self.assemble()
         self.assertEqual('do not discard', (self.root / 'untracked').read_text())
+
+    def activation_evidence(self, *, tag='v6.6.0', age=86400):
+        now = 1800000000
+        row = {'tag_name': tag, 'draft': False, 'prerelease': False,
+               'published_at': datetime.fromtimestamp(now - age, timezone.utc).isoformat()}
+        return now, row
+
+    def test_activation_rechecks_exact_base_and_late_clock_for_rc_and_stable(self):
+        self.assemble()
+        stamp, stable = self.activation_evidence()
+        for version in ('v6.6.1-rc.1', 'v6.6.1'):
+            for elapsed in (0, 3 * 86400 - 1, 3 * 86400, 9 * 86400):
+                def read(path):
+                    # The clock can advance while API collection is in flight.
+                    clock.return_value = stamp + elapsed
+                    if path == 'releases?per_page=100&page=1':
+                        return [stable]
+                    self.assertEqual('commits/v6.6.0', path)
+                    return {'sha': self.base}
+                with self.subTest(version=version, elapsed=elapsed), \
+                        mock.patch.object(patch, 'api', side_effect=read), \
+                        mock.patch.object(patch.time, 'time', return_value=stamp) as clock:
+                    if elapsed >= 3 * 86400:
+                        with self.assertRaisesRegex(ValueError, '48 hours'):
+                            patch.activation_check(self.root, version, self.head())
+                    else:
+                        result = patch.activation_check(self.root, version, self.head())
+                        self.assertEqual((True, self.base, stamp + elapsed),
+                                         (result['applicable'], result['stable_sha'], result['observed_at']))
+
+    def test_new_minor_and_base_tag_drift_stop_activation_after_source_admission(self):
+        self.assemble()
+        # A valid reconstruction is not a durable publication permission.
+        patch.validate(self.root, '6.6.1-rc.1', 'release/v6.6.1')
+        stamp, stable = self.activation_evidence()
+        for rows, sha, message in (([stable, {**stable, 'tag_name': 'v6.7.0'}], self.base, 'newer stable'),
+                                   ([stable], self.fix, 'source changed')):
+            with self.subTest(message=message), mock.patch.object(patch, 'api', side_effect=[rows, {'sha': sha}]), \
+                    mock.patch.object(patch.time, 'time', return_value=stamp), self.assertRaisesRegex(ValueError, message):
+                patch.activation_check(self.root, '6.6.1', self.head())
+
+    def test_activation_has_no_minor_beta_or_historical_patch_gate(self):
+        with mock.patch.object(patch, 'api', side_effect=AssertionError('no patch API read')):
+            for version in ('6.7.0', 'v6.7.0-rc.1', 'v6.7.0-beta.1', 'v6.4.5', 'v6.4.5-rc.6'):
+                self.assertEqual({'applicable': False}, patch.activation_check(self.root, version, ''))
+
+    def test_activation_cannot_use_missing_or_other_source_manifest_or_second_rc(self):
+        self.assemble()
+        with mock.patch.object(patch, 'api', side_effect=AssertionError('local binding first')):
+            for version, sha in (('6.6.1', self.base), ('6.6.2', self.head()),
+                                 ('6.6.1-rc.2', self.head()), ('6.6.1-beta.1', self.head()), ('6.6.1', 'main')):
+                with self.subTest(version=version, sha=sha), self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                    patch.activation_check(self.root, version, sha)
+
+    def test_inventory_and_anchor_failures_never_turn_into_permission(self):
+        self.assemble()
+        stamp, stable = self.activation_evidence()
+        malformed = [None, {}, [None], [{'tag_name': 'v6.7.0'}], [],
+                     [{**stable, 'published_at': '2026-10-27T10:00:00'}]]
+        for rows in malformed:
+            with self.subTest(rows=rows), mock.patch.object(patch, 'api', return_value=rows), \
+                    mock.patch.object(patch.time, 'time', return_value=stamp), self.assertRaises((ValueError, TypeError)):
+                patch.activation_check(self.root, '6.6.1', self.head())
+        with mock.patch.object(patch, 'api', side_effect=subprocess.CalledProcessError(1, 'gh')) as api, \
+                self.assertRaises(subprocess.CalledProcessError):
+            patch.activation_check(self.root, '6.6.1', self.head())
+        api.assert_called_once()  # no fallback/retry after a failed evidence read
+
+    def test_pagination_cannot_hide_newer_stable_behind_previews(self):
+        self.assemble()
+        _, stable = self.activation_evidence()
+        preview = {**stable, 'prerelease': True, 'tag_name': 'v6.7.0-beta.1'}
+        with mock.patch.object(patch, 'api', side_effect=[[preview] * 100,
+                                                       [stable, {**stable, 'tag_name': 'v6.7.0'}]]) as api, \
+                self.assertRaisesRegex(ValueError, 'newer stable'):
+            patch.activation_check(self.root, '6.6.1', self.head())
+        self.assertEqual('releases?per_page=100&page=2', api.call_args.args[0])
+
+    def test_later_patch_uses_minor_publication_not_recent_patch_clock(self):
+        self.assemble()
+        self.git('tag', 'v6.6.1')
+        prior = self.head()
+        self.git('checkout', '--quiet', 'main')
+        self.write('later', 'next fix')
+        self.commit('next main fix')
+        merge = self.head()
+        self.selection.update(version='6.6.2', stable_tag='v6.6.1', stable_sha=prior,
+                              control_sha=merge, fixes=[{'number': 15, 'merge_sha': merge, 'issues': [2]}])
+        self.assemble()
+        stamp, stable = self.activation_evidence(tag='v6.6.1', age=60)
+        _, anchor = self.activation_evidence(age=4 * 86400)
+        for observed_anchor in (anchor, {**anchor, 'draft': True}):
+            with mock.patch.object(patch, 'api', side_effect=[[stable], {'sha': prior}, observed_anchor]) as api, \
+                    mock.patch.object(patch.time, 'time', return_value=stamp), self.assertRaises(ValueError):
+                patch.activation_check(self.root, '6.6.2', self.head())
+            self.assertEqual('releases/tags/v6.6.0', api.call_args.args[0])
+
+    def test_actual_activation_and_recovery_shell_refuse_before_publication_post(self):
+        """Execute the final workflow boundary with the real guard and offline gh."""
+        import yaml
+        self.assemble()
+        repo = Path(__file__).resolve().parents[2]
+        bin_dir = Path(self.temp.name) / 'bin'
+        bin_dir.mkdir()
+        gh = bin_dir / 'gh'
+        gh.write_text('''#!/usr/bin/env python3
+import json,os,pathlib,sys
+args=sys.argv[1:]
+if '-X' in args:
+    assert args[args.index('-X')+1] == 'PATCH'
+    pathlib.Path(os.environ['POST_MARKER']).write_text('publication attempted')
+    print('{}')
+else:
+    assert args[0] == 'api'
+    evidence=json.loads(pathlib.Path(os.environ['API_EVIDENCE']).read_text())
+    if args[1] not in evidence: sys.exit(22)
+    print(json.dumps(evidence[args[1]]))
+''')
+        gh.chmod(0o755)
+        evidence = Path(self.temp.name) / 'api.json'
+        marker = Path(self.temp.name) / 'post'
+        now = __import__('time').time()
+        _, stable = self.activation_evidence()
+        stable['published_at'] = datetime.fromtimestamp(now - 86400, timezone.utc).isoformat()
+        env = {**os.environ, 'PATH': str(bin_dir) + os.pathsep + os.environ['PATH'],
+               'TAG': 'v6.6.1', 'EXPECTED_COMMIT': self.head(), 'RELEASE_ID': '123',
+               'GITHUB_REPOSITORY': patch.REPOSITORY, 'POST_MARKER': str(marker),
+               'release_json': str(Path(self.temp.name) / 'published.json'),
+               'publish_payload': str(Path(self.temp.name) / 'payload.json'),
+               'API_EVIDENCE': str(evidence)}
+        for path, job_name, step_name in (('.github/workflows/create-release.yml', 'activate_release',
+                                          'Publish the fully staged release'),
+                                         ('.github/workflows/recover-release-activation.yml', 'recover_activation',
+                                          'Commit the recovered activation')):
+            workflow = yaml.load((repo / path).read_text(), Loader=yaml.BaseLoader)
+            script = next(step['run'] for step in workflow['jobs'][job_name]['steps'] if step.get('name') == step_name)
+            boundary = script.split('unset IMMUTABILITY_ADMIN_TOKEN\n', 1)[1].split('activated=true', 1)[0]
+            self.assertIn('stable_patch.py activation-check', boundary)
+            boundary = boundary.replace('python3 scripts/release_control/stable_patch.py',
+                                        'python3 ' + str(repo / 'scripts/release_control/stable_patch.py'))
+            boundary = boundary.replace('${{ github.repository }}', '${GITHUB_REPOSITORY}')
+            for current in (stable, {**stable, 'tag_name': 'v6.7.0'}):
+                marker.unlink(missing_ok=True)
+                evidence.write_text(json.dumps({f'repos/{patch.REPOSITORY}/releases?per_page=100&page=1': [current],
+                                                f'repos/{patch.REPOSITORY}/commits/v6.6.0': {'sha': self.base}}))
+                result = subprocess.run(['bash', '-euc', boundary], cwd=self.root, env=env,
+                                        capture_output=True, text=True)
+                with self.subTest(workflow=path, current=current['tag_name']):
+                    self.assertEqual(current is stable, result.returncode == 0, result.stderr)
+                    self.assertEqual(current is stable, marker.exists())
 
 
 class StablePatchGovernanceTest(unittest.TestCase):

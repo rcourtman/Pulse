@@ -7,12 +7,14 @@ selection again and admits only release metadata on top, never other main work.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
 import subprocess
 import tempfile
 import sys
+import time
 
 sys.dont_write_bytecode = True
 
@@ -20,6 +22,12 @@ SHA = re.compile(r"[0-9a-f]{40}")
 VERSION = re.compile(r"(\d+)\.(\d+)\.([1-9]\d*)")
 CONTROLS = (".github/workflows", "scripts/release_control")
 SCHEMA = 1
+# Founder direction, 14/26 October: weekly minor, 24-hour candidate soak.
+# This publication fence has no caller-selected cadence or clock override.
+MINOR_CYCLE_SECONDS = 7 * 86400
+MINOR_SOAK_SECONDS = 24 * 3600
+PATCH_MARGIN_SECONDS = 48 * 3600
+REPOSITORY = "rcourtman/Pulse"
 
 
 def git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -163,16 +171,103 @@ def validate(root: Path, version: str, source_branch: str) -> dict:
     return receipt
 
 
+def api(path: str) -> object:
+    """Read fixed project evidence only; a failed read is never retried or defaulted."""
+    result = subprocess.run(["gh", "api", f"repos/{REPOSITORY}/{path}"],
+                            check=True, text=True, capture_output=True)
+    return json.loads(result.stdout)
+
+
+def published_at(row: dict, tag: str) -> float:
+    if (row.get("tag_name") != tag or row.get("draft") is not False
+            or row.get("prerelease") is not False or not row.get("published_at")):
+        raise ValueError("patch base/anchor must be a published stable release")
+    stamp = datetime.fromisoformat(row["published_at"].replace("Z", "+00:00"))
+    if stamp.tzinfo is None:
+        raise ValueError("stable publication time has no timezone")
+    return stamp.timestamp()
+
+
+def activation_check(root: Path, version: str, source_sha: str) -> dict:
+    """Re-read current stable and the clock immediately before public activation.
+
+    Source reconstruction earlier in the pipeline cannot establish that its
+    stable base is still current after a long build or activation-only recovery.
+    Minor, beta and historical-line publication rules are deliberately unchanged.
+    """
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?", version)
+    if not match:
+        raise ValueError("invalid release version")
+    major, minor, patch = map(int, match.groups()[:3])
+    if not patch or (major, minor) < (6, 5):
+        return {"applicable": False}
+    if match.group(4) and match.groups()[3:] != ("rc", "1"):
+        raise ValueError("mechanical patches permit only rc.1 and stable")
+    if not SHA.fullmatch(source_sha):
+        raise ValueError("activation source must be an exact SHA")
+    core = f"{major}.{minor}.{patch}"
+    receipt = json.loads(value(root, "show", f"{source_sha}:{manifest_path(core)}"))
+    if receipt["version"] != core or receipt["stable_tag"] != f"v{major}.{minor}.{patch - 1}":
+        raise ValueError("activation manifest does not identify the preceding stable")
+    if not SHA.fullmatch(receipt["stable_sha"]):
+        raise ValueError("activation manifest has no exact stable source")
+    # Pagination is bounded and complete. A short/truncated first page cannot
+    # hide a newer stable behind a run of previews or draft releases.
+    rows = []
+    for page in range(1, 101):
+        batch = api(f"releases?per_page=100&page={page}")
+        if not isinstance(batch, list):
+            raise ValueError("stable release inventory unavailable")
+        for row in batch:
+            if not isinstance(row, dict) or not isinstance(row.get("tag_name"), str):
+                raise ValueError("malformed release inventory")
+            if re.fullmatch(r"v\d+\.\d+\.\d+", row["tag_name"]):
+                if type(row.get("draft")) is not bool or type(row.get("prerelease")) is not bool:
+                    raise ValueError("stable release inventory has unknown publication state")
+        rows.extend(batch)
+        if len(batch) < 100:
+            break
+    else:
+        raise ValueError("stable release inventory exceeds bounded pagination")
+    stable = [row for row in rows if row.get("draft") is False
+              and row.get("prerelease") is False
+              and re.fullmatch(r"v\d+\.\d+\.\d+", row.get("tag_name", ""))]
+    if not stable:
+        raise ValueError("no current published stable")
+    current = max(stable, key=lambda row: tuple(map(int, row["tag_name"][1:].split("."))))
+    if current["tag_name"] != receipt["stable_tag"]:
+        raise ValueError("a newer stable superseded the patch base before activation")
+    published_at(current, receipt["stable_tag"])
+    commit = api(f"commits/{receipt['stable_tag']}")
+    if not isinstance(commit, dict) or commit.get("sha") != receipt["stable_sha"]:
+        raise ValueError("published patch base source changed before activation")
+    anchor_tag = f"v{major}.{minor}.0"
+    anchor = current if current["tag_name"] == anchor_tag else api(f"releases/tags/{anchor_tag}")
+    due = published_at(anchor, anchor_tag) + MINOR_CYCLE_SECONDS - MINOR_SOAK_SECONDS
+    # Read the time after provider evidence, not before potentially slow reads.
+    observed = time.time()
+    if observed >= due - PATCH_MARGIN_SECONDS:
+        raise ValueError("patch activation is within 48 hours of minor candidate eligibility (or overdue)")
+    return {"applicable": True, "source_sha": source_sha, "stable_tag": current["tag_name"],
+            "stable_sha": receipt["stable_sha"], "observed_at": observed,
+            "not_after": datetime.fromtimestamp(due - PATCH_MARGIN_SECONDS, timezone.utc).isoformat()}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("assemble", "validate"))
+    parser.add_argument("operation", choices=("assemble", "validate", "activation-check"))
     parser.add_argument("--selection", type=Path)
     parser.add_argument("--version")
     parser.add_argument("--source-branch")
+    parser.add_argument("--source-sha")
     args = parser.parse_args()
     root = Path.cwd().resolve()
-    result = assemble(root, json.loads(args.selection.read_text())) if args.operation == "assemble" \
-        else validate(root, args.version, args.source_branch)
+    if args.operation == "assemble":
+        result = assemble(root, json.loads(args.selection.read_text()))
+    elif args.operation == "validate":
+        result = validate(root, args.version, args.source_branch)
+    else:
+        result = activation_check(root, args.version, args.source_sha)
     print(json.dumps(result, sort_keys=True))
 
 
