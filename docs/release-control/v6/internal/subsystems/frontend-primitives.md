@@ -222,7 +222,10 @@ TLS trust on the Pulse server without suggesting a verification bypass. Each
 deliberate Preview makes one request, including CSRF/rate-limit refusals, and
 does not save provider configuration. URL/certificate drafts and access
 restrictions survive failure and retry; a successful parsed/XML preview still
-closes back to the editor and leaves saving explicit. Existing authentication
+closes back to the editor and leaves saving explicit. Its existing Dialog return-
+focus capability targets the Preview button explicitly, even when disabling that
+button during fetch blurred it before the preview opened. No shared focus-trap
+implementation changes. Existing authentication
 expiry handling remains owned by the API client, not replaced by preview copy.
 The normal-suite SSOMetadataPreview.test.tsx exercises create/edit through the
 real state hook and API client, including failure -> explicit retry -> preview ->

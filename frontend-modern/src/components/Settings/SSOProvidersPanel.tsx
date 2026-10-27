@@ -72,6 +72,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     canTest,
     fetchMetadataPreview,
   } = useSSOProvidersState(props);
+  let metadataPreviewButton: HTMLButtonElement | undefined;
 
   return (
     <div class="space-y-6">
@@ -500,6 +501,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           {testing() ? 'Testing...' : 'Test'}
                         </Button>
                         <Button
+                          ref={metadataPreviewButton}
                           type="button"
                           onClick={fetchMetadataPreview}
                           disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
@@ -875,6 +877,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           onClose={() => setShowMetadataPreview(false)}
           panelClass="max-w-4xl"
           ariaLabel="IdP metadata preview"
+          returnFocus={() => metadataPreviewButton}
         >
           <div class="w-full max-h-[90vh] flex flex-col">
             {/* Modal header */}

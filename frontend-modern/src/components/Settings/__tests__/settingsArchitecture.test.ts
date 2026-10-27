@@ -1195,6 +1195,7 @@ describe('settings architecture guardrails', () => {
     expect(previewLifecycle).toContain('getSSOMetadataFetchErrorMessage(error)');
     expect(previewLifecycle).toContain('getSSOMetadataFetchErrorMessage()');
     expect(previewLifecycle).toContain('setEditorFeedback');
+    expect(ssoProvidersPanelSource).toContain('returnFocus={() => metadataPreviewButton}');
     expect(previewLifecycle).toContain('retry: false');
     expect(previewLifecycle).not.toContain('response.text()');
     expect(previewLifecycle).not.toContain('String(error)');

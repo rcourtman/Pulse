@@ -186,6 +186,39 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
     },
   );
 
+  it('returns to Preview even when its pending disabled state loses focus', async () => {
+    let finishPreview!: (response: Response) => void;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/metadata/preview'))
+        return new Promise<Response>((resolve) => {
+          finishPreview = resolve;
+        });
+      if (url.endsWith('/corp-saml')) return json(provider);
+      return json({ providers: editing ? [provider] : [] });
+    });
+    render(() => <SSOProvidersPanel />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: editing ? 'Edit provider' : 'Add SAML' }),
+    );
+    const editor = within(await screen.findByRole('dialog'));
+    fireEvent.input(editor.getByLabelText('IdP Metadata URL'), {
+      target: { value: 'https://idp.example.test/metadata' },
+    });
+    const opener = editor.getByRole('button', { name: 'Preview' });
+    opener.focus();
+    fireEvent.click(opener);
+    await waitFor(() => expect(finishPreview).toBeTypeOf('function'));
+    expect(opener).toBeDisabled();
+    // Native browsers can blur a button when it becomes disabled during fetch.
+    // Do not rely on that transient focus as the nested Dialog's return target.
+    (editor.getByLabelText('Provider Name') as HTMLInputElement).focus();
+    finishPreview(json(preview));
+    const result = await screen.findByRole('dialog', { name: 'IdP metadata preview' });
+    fireEvent.click(within(result).getByRole('button', { name: 'Close metadata preview' }));
+    await waitFor(() => expect(opener).toHaveFocus());
+    expect(opener).toBeEnabled();
+  });
+
   it('does not dispatch a blank URL or interpret preview as saving', async () => {
     fetchMock.mockImplementation(async (url: string) =>
       url.endsWith('/corp-saml') ? json(provider) : json({ providers: editing ? [provider] : [] }),
