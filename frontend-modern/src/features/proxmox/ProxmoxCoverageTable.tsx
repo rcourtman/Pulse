@@ -243,7 +243,7 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
     row.taskCandidates?.length
       ? {
           label: 'Task order',
-          rows: [makeDetailRow('Latest task', 'Unknown', { tone: 'warning' })],
+          rows: compactDetailRows([makeDetailRow('Latest task', 'Unknown', { tone: 'warning' })]),
           footerContent: (
             <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
               {TASK_ORDER_NOTICE}
