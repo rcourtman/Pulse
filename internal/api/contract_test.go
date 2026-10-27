@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crewjam/saml"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
