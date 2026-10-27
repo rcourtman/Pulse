@@ -16,7 +16,7 @@ SNAPSHOT_REF = re.compile(r"release-candidate/[0-9A-Za-z._-]+")
 # them, so the release environment can admit them while unmerged
 # release-candidate heads stay outside it. Each mirrors its PR's head name.
 DISPATCH_REF = re.compile(r"release-dispatch/([0-9A-Za-z._-]+)")
-SOURCE_BRANCH = re.compile(r"main|release/v[0-9]+\.[0-9]+")
+SOURCE_BRANCH = re.compile(r"main|release/v[0-9]+\.[0-9]+(?:\.[1-9][0-9]*)?")
 
 
 def snapshot_head(branch: str) -> str:
@@ -41,6 +41,11 @@ def source_branch(ref: str, requested: str, pull_request: str) -> str:
         raise ValueError("snapshot provenance inputs require a reserved release-candidate or release-dispatch ref")
     if not SOURCE_BRANCH.fullmatch(branch):
         raise ValueError("release dispatch is outside a governed source branch")
+    patch = re.fullmatch(r"release/v(\d+)\.(\d+)\.([1-9]\d*)", branch)
+    if patch and tuple(map(int, patch.groups())) >= (6, 5, 1):
+        # A new patch target is not protected main. Its execution must identify
+        # the reviewed immutable preparation, not just a caller-controlled ref.
+        raise ValueError("mechanical patches require a reviewed immutable snapshot")
     return branch
 
 

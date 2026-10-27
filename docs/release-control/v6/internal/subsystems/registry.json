@@ -4760,10 +4760,12 @@
         "scripts/release_asset_common.sh",
         "scripts/release_build_targets.sh",
         "scripts/release_candidate_manifest.py",
+        "scripts/release_control/control_plane.py",
         "scripts/release_control/customer_promotion_lease.sh",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
+        "scripts/release_control/release_snapshot.py",
         "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_control/secure_runtime_attestation_v6.py",
@@ -4774,6 +4776,7 @@
         "scripts/release_control/secure_runtime_rootless_source_manifest_v1.json",
         "scripts/release_control/secure_runtime_source_manifest_v6.json",
         "scripts/release_control/secure_runtime_source_manifest_v7.json",
+        "scripts/release_control/stable_patch.py",
         "scripts/release_control/validate_artifact_release_line.py",
         "scripts/release_ldflags.sh",
         "scripts/release_lifecycle_rehearsal.sh",
@@ -4996,6 +4999,7 @@
               "scripts/release_control/release_promotion_policy_test.py",
               "scripts/release_control/render_release_body_test.py",
               "scripts/release_control/resolve_release_promotion_test.py",
+              "scripts/release_control/stable_patch_test.py",
               "scripts/release_control/validate_artifact_release_line_test.py",
               "scripts/release_control/verify_github_release_integrity_test.py"
             ]

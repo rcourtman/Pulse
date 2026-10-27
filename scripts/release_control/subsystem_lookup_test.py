@@ -65,6 +65,7 @@ RELEASE_PROMOTION_METADATA_EXACT_FILES = [
     "scripts/release_control/release_promotion_policy_test.py",
     "scripts/release_control/render_release_body_test.py",
     "scripts/release_control/resolve_release_promotion_test.py",
+    "scripts/release_control/stable_patch_test.py",
     "scripts/release_control/validate_artifact_release_line_test.py",
     "scripts/release_control/verify_github_release_integrity_test.py",
 ]

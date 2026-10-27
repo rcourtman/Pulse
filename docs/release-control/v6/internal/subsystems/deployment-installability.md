@@ -15,6 +15,55 @@
 ```
 
 ## Purpose
+### Mechanical stable patch source admission
+
+Stable-regression patches are the sole main-only release exception. The release
+train selects complete main pull-request merge results that GitHub records as
+closing labelled issues, once per fix, in merge order. A disposable checkout
+starts at the current stable tag, skips only genuine content conflicts and
+copies all `.github/workflows/` and `scripts/release_control/` bytes at its fixed
+main cut. No unrelated source is added. The patch's exact Enterprise pair stays
+at the one shipped by that stable.
+
+`scripts/release_control/stable_patch.py` records and independently reconstructs
+that selection. `create-release.yml` runs reconstruction before payload creation.
+It rejects wrong tags, out-of-order or foreign merge results, changed controls
+and every extra non-metadata source byte. Version-bound `release/vX.Y.Z` targets
+are admitted by `control_plane.py` and `release_snapshot.py`; reviewed head,
+canonical repository, merged target and ancestry checks remain mandatory. Only
+rc.1 and its unchanged stable promotion use the new path. Minor releases and
+historical line mappings retain their existing source rules.
+
+The public guard proves source composition, not GitHub label collection, signing,
+installation, publication or host activation. The train's independent patch state
+owns selection, bounded retries, soak, abandonment, retirement and keeping the
+weekly minor's clock and progress unchanged.
+
+The independently required `governance` context must be produced for preparation
+PRs targeting `release/v*` as well as `main`, including metadata-only promotions.
+Canonical Governance runs on those PRs and branch pushes without path filters,
+with its existing read-only permission and public checks. Private credentialed
+governance remains post-merge only. A missing required context stays pending in
+the train; branch admission does not remove or synthesise a required check.
+
+Slow collection cannot reserve an obsolete base or consume fixes after the
+48-hour cut boundary. The train rechecks the current stable's tag/source and
+minor-anchored clock at reservation and before later RC preparation, merge and
+dispatch mutations. A superseded/late reserved cut is abandoned without
+changing the independent minor's state.
+
+Both normal activation and activation-only recovery run the source-bound
+`stable_patch.py activation-check` immediately before their publication PATCH.
+It reads the exact candidate manifest, complete bounded published-release
+inventory, base-tag commit and the minor's actual publication date. A newer
+stable, changed base or unknown/failed evidence stops publication. Arrival at
+the 48-hour boundary also stops a new rc.1 cut, never the unchanged promotion
+of an already-cut, soaked patch: the cut rule is not an extra promotion hold.
+A recent patch cannot reset the minor clock. This is a final
+read-before-write fence, not an atomic cross-workflow provider transaction;
+existing activation identities, quarantine and immutability checks remain.
+Minor/beta and historical-line paths gain no new patch gate.
+
 ### Unraid boot replacement preserves operator work
 
 Agent setup/upgrade replaces only complete exact generated top-level go entries.

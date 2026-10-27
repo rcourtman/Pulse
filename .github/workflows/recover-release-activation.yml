@@ -502,6 +502,9 @@ jobs:
           GH_TOKEN="${IMMUTABILITY_ADMIN_TOKEN}" \
             ./scripts/check-github-release-immutability.sh "${GITHUB_REPOSITORY}"
           unset IMMUTABILITY_ADMIN_TOKEN
+          # Activation-only recovery cannot publish an obsolete or late patch.
+          python3 scripts/release_control/stable_patch.py activation-check \
+            --version "${TAG}" --source-sha "${EXPECTED_COMMIT}"
           gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
             -X PATCH --input "${publish_payload}" > "${release_json}"
           activated=true
