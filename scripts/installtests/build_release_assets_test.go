@@ -1788,6 +1788,11 @@ func TestDockerBuildUsesCanonicalReleaseLdflags(t *testing.T) {
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM --platform=linux/amd64 golang:1.26.10-alpine@sha256:`, ` AS backend-builder`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS agent_runtime`)
 	assertDigestPinnedDockerStage(t, dockerfile, `FROM alpine:3.24@sha256:`, ` AS pulse-runtime-foundation`)
+	// Source-built and prebuilt servers/agents must consume the same selected
+	// runtime image; checking only digest syntax would permit a partial refresh.
+	for _, stage := range []string{"agent_runtime", "apprise-builder", "pulse-runtime-foundation", "agent_runtime_prebuilt"} {
+		assertContainsAll(t, dockerfile, "FROM alpine:3.24@sha256:"+alpine324RuntimeDigest+" AS "+stage+"\n")
+	}
 	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
 	runtimeStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS runtime`)
 	if hostedStart == -1 || runtimeStart == -1 || hostedStart > runtimeStart {

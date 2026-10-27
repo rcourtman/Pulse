@@ -32,6 +32,24 @@ func TestProviderMSPGoBuilderMatchesIntegrationMock(t *testing.T) {
 	}
 }
 
+func TestProviderMSPAlpineRuntimeMatchesIntegrationMock(t *testing.T) {
+	// The hosted control plane and its mock must not silently retain an older
+	// runtime base when the server and agent runtime images are refreshed.
+	for _, fixture := range []struct {
+		path  []string
+		stage string
+	}{
+		{[]string{"deploy", "provider-msp", "Dockerfile.control-plane"}, " AS control-plane-runtime-foundation"},
+		{[]string{"tests", "integration", "mock-github-server", "Dockerfile"}, ""},
+	} {
+		contents, err := os.ReadFile(repoFile(fixture.path...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertContainsAll(t, string(contents), "FROM alpine:3.24@sha256:"+alpine324RuntimeDigest+fixture.stage+"\n")
+	}
+}
+
 func TestProviderMSPControlPlaneImageConsumesExactCandidate(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("deploy", "provider-msp", "Dockerfile.control-plane"))
 	if err != nil {

@@ -32,7 +32,9 @@ func assertDigestPinnedDockerStage(t *testing.T, dockerfile, prefix, suffix stri
 	}
 }
 
-const node24Amd64FrontendDigest = "ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1"
+const alpine324RuntimeDigest = "be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a"
+
+const node24Amd64FrontendDigest = "06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53"
 
 func TestNode24FrontendBuilderDigestIsAligned(t *testing.T) {
 	pattern := regexp.MustCompile(`(?m)^FROM --platform=linux/amd64 node:24-alpine@sha256:([0-9a-f]{64}) AS frontend-builder$`)
