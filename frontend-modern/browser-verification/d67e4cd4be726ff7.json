@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "base_sha": "45bc752f47091a9ba6874f74bf4b71fec12e8d5d",
+  "verified_at": "2026-10-27T13:15:31.022860Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "8c0815c60150f71d60af0406b2841d6f9a5f65a9529b6a5ddbac920d61df1752",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "a221fbb33fdf04c4490c22b63858373a41876efd70cf03293f73e22a898bea09",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "2a36e9cb297194504086f9cb33c0a0544f3b9eda6af7a17280f50fa340a0af26"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production ProxmoxBackupsTable, API client, inventory parser/recovery model, router and shared CSS consume safe synthetic HTTP inventory via an evidence-only uncommitted entry.",
+    "Unknown, invalid, future and tied starts cannot silently select latest OK. Task order is explicit Unknown; every possible latest task retains status, start evidence, literal multiline error and full provider task ID. All-unknown tasks keep the summary column visible.",
+    "Corrected ordinary observations restore a single latest task; reintroduced uncertainty removes the ordered latest, and empty tasks remove all task sections without removing restore evidence or claiming protection.",
+    "All seven final captures were opened using native view_image with original detail and the actual pixels inspected. Desktop cards and 390px/320px stacked evidence contain the full task-order message, errors, IDs and safety qualifications without horizontal clipping.",
+    "164 checks pass. Playwright 1.56.1 matches the integration lock; Chromium desktop and WebKit touch phones. No page/console/off-origin/unexpected API/mutation error was observed. Two earlier script header-name assertion failures remain separately retained, not passing proof.",
+    "Fresh containing-source pass after typing the task-order row with the standard nullable-row compactor. Earlier proof stays attributed to its own source; no public API, posture or guest semantics changed."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and ordinary phone identity-row tap open the existing scoped detail; the visible collapse action closes it. No forced or JavaScript clicks.",
+    "Opening adds no read, and the namesake guest in the other PVE connection never borrows tasks, errors or uncertainty. Exact workload owner link and independent restore evidence remain unchanged.",
+    "Ordinary 30-second polling reads each inventory once and exercises uncertain to ordered to tied to future to absent task evidence. Keyed row/panel and focus are retained; desktop uses the native disclosure, phones the visible panel collapse control.",
+    "Existing search filters by possible-task ID and error while updating the real query URL and retaining the scoped panel, without adding an inventory read. Narrow resizing exercises 320px wrapping."
+  ],
+  "captures": [
+    {
+      "name": "desktop-unknown-task-order.png",
+      "sha256": "3c4ae6cc4513cfebbeda0e775689cda09f02d0fa72085c40936c37f7e5e4004a"
+    },
+    {
+      "name": "desktop-ordered-task.png",
+      "sha256": "86bd26f8eebe7916dc196e64309cd9a48da3229e0904509bc0751010569b1b3e"
+    },
+    {
+      "name": "desktop-tied-task-order.png",
+      "sha256": "fdb0afd07aa98c1e3414d717769fa86b5f544b3bbe5f538b2daad635b0097804"
+    },
+    {
+      "name": "phone-unknown-task-order.png",
+      "sha256": "3c4671a5b78fe16b1fd902ccdc06175abff3ccb375cd69392bff75d37ac1da09"
+    },
+    {
+      "name": "phone-320-unknown-task-order.png",
+      "sha256": "46af2bdd32a30410f39a52ec824100762153b61c681f9f917560079e7aaf7d7d"
+    },
+    {
+      "name": "phone-future-task-order.png",
+      "sha256": "3c4671a5b78fe16b1fd902ccdc06175abff3ccb375cd69392bff75d37ac1da09"
+    },
+    {
+      "name": "phone-all-unknown-task-order.png",
+      "sha256": "0a17936c24cda164f9fa047889d10fb22e0e5c699ea57989fd5a594d1e3c54e0"
+    }
+  ]
+}
