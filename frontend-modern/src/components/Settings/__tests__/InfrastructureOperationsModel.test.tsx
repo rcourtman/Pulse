@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createRoot, createSignal } from 'solid-js';
+import { NodesAPI } from '@/api/nodes';
+import type { NodeConfigWithStatus } from '@/types/nodes';
+import { useInfrastructureConfiguredNodesState } from '../useInfrastructureConfiguredNodesState';
+
+vi.mock('@/api/nodes', () => ({ NodesAPI: { updateNode: vi.fn(), getNodes: vi.fn() } }));
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  useUnifiedResources: () => ({ resources: () => [], aggregations: () => null }),
+}));
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
@@ -569,5 +578,74 @@ describe('infrastructure operations model', () => {
     expect(discoveryStateSource).toMatch(
       /if \(!canReadInfrastructure\(\)\) \{\s*return;\s*\}\s*discoveryInterval = setInterval\(/,
     );
+  });
+});
+
+describe('configured-node trust readback', () => {
+  it('reopens the actual effective server policy without caching the write-only payload', async () => {
+    const existing = {
+      id: 'pve-0',
+      type: 'pve',
+      name: 'cluster',
+      host: 'https://primary.test:8006',
+      status: 'disconnected',
+      monitorVMs: false,
+      monitorContainers: false,
+      monitorStorage: false,
+      monitorBackups: false,
+      verifySSL: true,
+      clusterEndpoints: [],
+      user: 'fixture@pve',
+      hasPassword: false,
+      hasToken: false,
+      temperature: undefined,
+      monitorPhysicalDisks: false,
+    } satisfies NodeConfigWithStatus;
+    const returned = {
+      ...existing,
+      clusterEndpoints: [
+        {
+          nodeId: 'peer',
+          nodeName: 'peer',
+          host: 'https://peer.test:8006',
+          ip: '',
+          online: true,
+          lastSeen: '',
+          tlsEndpoint: 'https://peer.test:8006',
+          fingerprint: 'verified-member',
+        },
+      ],
+    };
+    vi.mocked(NodesAPI.updateNode).mockResolvedValueOnce({ success: true });
+    vi.mocked(NodesAPI.getNodes).mockResolvedValueOnce([returned]);
+    let dispose = () => {};
+    const state = createRoot((cleanup) => {
+      dispose = cleanup;
+      const [saving, setSaving] = createSignal(false);
+      return useInfrastructureConfiguredNodesState({
+        canReadInfrastructure: () => false,
+        temperatureMonitoringEnabled: () => false,
+        savingTemperatureSetting: saving,
+        setSavingTemperatureSetting: setSaving,
+      });
+    });
+    try {
+      const ok = await state.saveNode(
+        {
+          fingerprint: 'verified-primary',
+          clusterEndpointTrustOverrides: [
+            { endpoint: 'https://peer.test:8006', fingerprint: 'verified-member' },
+          ],
+        },
+        existing,
+      );
+      expect(ok).toBe(true);
+      expect(NodesAPI.getNodes).toHaveBeenCalledOnce();
+      expect(state.nodes()).toEqual([returned]);
+      expect(state.nodes()[0]).not.toHaveProperty('clusterEndpointTrustOverrides');
+      expect(state.nodes()[0]).toHaveProperty('monitorVMs', false);
+    } finally {
+      dispose();
+    }
   });
 });

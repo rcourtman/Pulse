@@ -14,6 +14,7 @@ type RawClusterEndpoint = Partial<ClusterEndpoint>;
 export type NodeConnectionTestTLSOptions = {
   verifySSL?: boolean;
   fingerprint?: string;
+  endpoint?: string;
 };
 
 const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint => ({
@@ -30,7 +31,11 @@ const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint
   guestURL: optionalTrimmedString(endpoint.guestURL),
   ip: trimmedString(endpoint.ip),
   ipOverride: optionalTrimmedString(endpoint.ipOverride),
-  fingerprint: optionalTrimmedString(endpoint.fingerprint),
+  // A malformed nonempty saved pin must not become an empty CA choice.
+  fingerprint: typeof endpoint.fingerprint === 'string' ? endpoint.fingerprint : undefined,
+  tlsEndpoint: optionalTrimmedString(endpoint.tlsEndpoint),
+  usesPrimaryTLS: strictBoolean(endpoint.usesPrimaryTLS),
+  tlsFirstUse: strictBoolean(endpoint.tlsFirstUse),
   online: strictBoolean(endpoint.online),
   lastSeen: trimmedString(endpoint.lastSeen),
   pulseReachable: endpoint.pulseReachable ?? undefined,

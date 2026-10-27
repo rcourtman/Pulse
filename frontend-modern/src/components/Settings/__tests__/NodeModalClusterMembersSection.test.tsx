@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, type Setter } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NodesAPI } from '@/api/nodes';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 import { NodeModalClusterMembersSection } from '../NodeModalClusterMembersSection';
 import type { NodeModalProps } from '../nodeModalModel';
@@ -73,6 +74,7 @@ describe('Cluster member connection diagnostics', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('gives a refused online member a named native disclosure with its actual reason', () => {
@@ -163,5 +165,69 @@ describe('Cluster member connection diagnostics', () => {
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('tokenValue');
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('password');
     expect(fetch).not.toHaveBeenCalled();
+  });
+  it('edits only the displayed peer TLS endpoint and leaves the primary settings separate', () => {
+    const { onSave } = renderMembers([
+      member({
+        nodeName: 'primary',
+        tlsEndpoint: 'https://primary.test:8006',
+        usesPrimaryTLS: true,
+        fingerprint: 'primary-pin',
+      }),
+      member({ tlsEndpoint: 'https://member.test:8006', fingerprint: 'member-pin' }),
+    ]);
+    expect(
+      screen.queryByRole('textbox', { name: 'Certificate fingerprint for primary' }),
+    ).toBeNull();
+    const pin = screen.getByRole('textbox', { name: 'Certificate fingerprint for member' });
+    fireEvent.input(pin, { target: { value: '' } });
+    expect(
+      screen.getByText('No pin: a trusted, hostname-matching certificate is required.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clusterEndpointTrustOverrides: [{ endpoint: 'https://member.test:8006', fingerprint: '' }],
+      }),
+    );
+  });
+  it('requires a deliberate CA choice for an unknown first-use member', () => {
+    const { onSave } = renderMembers([
+      member({ tlsEndpoint: 'https://member.test:8006', tlsFirstUse: true, fingerprint: '' }),
+    ]);
+    expect(
+      screen.getByText(
+        'No saved member pin. Existing first-use policy applies. Enter a verified pin or explicitly choose CA validation.',
+      ),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Use CA validation for member' }));
+    expect(
+      screen.getByText('No pin: a trusted, hostname-matching certificate is required.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clusterEndpointTrustOverrides: [{ endpoint: 'https://member.test:8006', fingerprint: '' }],
+      }),
+    );
+  });
+  it('shows a member test result beside that member without requiring a trip to the footer', async () => {
+    vi.spyOn(NodesAPI, 'testExistingNode').mockResolvedValueOnce({
+      status: 'success',
+      message:
+        'Connected to this PVE endpoint. Other endpoints and background collection were not tested.',
+    });
+    renderMembers([
+      member({ tlsEndpoint: 'https://member.test:8006', fingerprint: 'verified-pin' }),
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Test TLS for member' }));
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: 'TLS test result for member' })).toHaveTextContent(
+        'member: Connected to this PVE endpoint.',
+      ),
+    );
+    expect(screen.getByRole('status', { name: 'TLS test result for member' })).toHaveTextContent(
+      'Other endpoints and background collection were not tested.',
+    );
   });
 });

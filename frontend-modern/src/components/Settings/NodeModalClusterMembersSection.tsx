@@ -1,7 +1,8 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
 import type { ClusterEndpoint } from '@/types/nodes';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { controlClass, formHelpText } from '@/components/shared/Form';
 
@@ -25,6 +26,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
   props,
 ) => {
   const { modalProps, state } = props;
+  const trustDescriptionId = createUniqueId();
 
   const endpoints = createMemo<ClusterEndpoint[]>(() => {
     const node = modalProps.editingNode;
@@ -47,7 +49,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
         </p>
         <div class="rounded-md border border-border">
           <For each={endpoints()}>
-            {(endpoint) => (
+            {(endpoint, index) => (
               <div class="grid gap-3 border-b border-border-subtle p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                 <div class="min-w-0">
                   <div class="flex items-center gap-1.5 text-sm text-base-content">
@@ -114,6 +116,112 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       class={controlClass()}
                     />
                   </label>
+                  <Show when={endpoint.tlsEndpoint}>
+                    <div class="grid min-w-0 gap-2">
+                      <p class="break-all text-xs text-muted">
+                        TLS endpoint: {endpoint.tlsEndpoint}
+                      </p>
+                      <Show
+                        when={!endpoint.usesPrimaryTLS}
+                        fallback={
+                          <p class="text-xs text-muted">
+                            Uses the primary SSL settings. Editing them does not change other
+                            members.
+                          </p>
+                        }
+                      >
+                        <label class="grid gap-1 text-xs text-muted">
+                          Certificate fingerprint (optional)
+                          <input
+                            type="text"
+                            value={
+                              state.formData().clusterEndpointFingerprints[endpoint.tlsEndpoint!] ??
+                              endpoint.fingerprint ??
+                              ''
+                            }
+                            onInput={(event) =>
+                              state.updateClusterEndpointFingerprint(
+                                endpoint.tlsEndpoint!,
+                                event.currentTarget.value,
+                              )
+                            }
+                            aria-label={`Certificate fingerprint for ${endpoint.nodeName}`}
+                            aria-describedby={`${trustDescriptionId}-${index()}`}
+                            disabled={!endpoint.tlsEndpoint?.startsWith('https://')}
+                            class={controlClass('font-mono')}
+                          />
+                        </label>
+                      </Show>
+                      <p id={`${trustDescriptionId}-${index()}`} class="text-xs text-muted">
+                        {endpoint.usesPrimaryTLS
+                          ? 'Primary endpoint only.'
+                          : endpoint.tlsFirstUse &&
+                              !state.formData().clusterEndpointTrustEdited[endpoint.tlsEndpoint!]
+                            ? 'No saved member pin. Existing first-use policy applies. Enter a verified pin or explicitly choose CA validation.'
+                            : (state.formData().clusterEndpointFingerprints[
+                                  endpoint.tlsEndpoint!
+                                ] ??
+                                  endpoint.fingerprint ??
+                                  '') !== ''
+                              ? 'This endpoint must present the matching certificate.'
+                              : state.formData().verifySSL
+                                ? 'No pin: a trusted, hostname-matching certificate is required.'
+                                : 'No pin and verification unchecked: certificate identity is not verified.'}
+                      </p>
+                      <Show
+                        when={
+                          !endpoint.usesPrimaryTLS &&
+                          state.formData().verifySSL &&
+                          endpoint.tlsEndpoint?.startsWith('https://')
+                        }
+                      >
+                        <button
+                          type="button"
+                          class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          onClick={() =>
+                            state.updateClusterEndpointFingerprint(endpoint.tlsEndpoint!, '')
+                          }
+                        >
+                          Use CA validation for {endpoint.nodeName}
+                        </button>
+                      </Show>
+                      <button
+                        type="button"
+                        class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        disabled={state.isTesting()}
+                        onClick={() => void state.handleTestClusterEndpoint(endpoint)}
+                      >
+                        Test TLS for {endpoint.nodeName}
+                      </button>
+                      <Show when={state.testResult()?.endpoint === endpoint.tlsEndpoint}>
+                        <div
+                          ref={(element) =>
+                            queueMicrotask(() => {
+                              if (element.isConnected)
+                                element.scrollIntoView?.({ block: 'nearest' });
+                            })
+                          }
+                        >
+                          <InlineNotice
+                            class="break-words"
+                            tone={
+                              state.testResult()?.status === 'error'
+                                ? 'danger'
+                                : state.testResult()?.status === 'warning'
+                                  ? 'warning'
+                                  : 'success'
+                            }
+                            role="status"
+                            aria-label={`TLS test result for ${endpoint.nodeName}`}
+                            aria-live="polite"
+                            aria-atomic="true"
+                          >
+                            {state.testResult()?.message}
+                          </InlineNotice>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
                 </div>
               </div>
             )}
@@ -123,6 +231,13 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
           Leave a display name blank to use the native Proxmox name. Connection addresses are also
           optional. Enter an IP or hostname, with a port if it isn't 8006, only when Pulse cannot
           reach the discovered address.
+        </p>
+        <p class={formHelpText}>
+          Trust edits apply only to the displayed TLS endpoint. Independently verify a renewed
+          certificate through an already-trusted administration channel before changing a pin. For
+          CA-managed certificates, clear only that endpoint's pin and keep Verify SSL enabled. Tests
+          use stored credentials without saving TLS edits or updating background/agent health. Save
+          address or credential changes before testing them.
         </p>
       </div>
     </Show>

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
 import { NodesAPI } from '@/api/nodes';
-import type { NodeConfig } from '@/types/nodes';
+import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 import { useNodeModalState, type NodeModalState } from '../useNodeModalState';
 import type { NodeModalProps } from '../nodeModalModel';
 
@@ -21,7 +21,7 @@ describe('connection tests with retained credentials', () => {
 
   afterEach(() => dispose?.());
 
-  const mount = (nodeType: NodeModalProps['nodeType']) => {
+  const mount = (nodeType: NodeModalProps['nodeType'], clusterEndpoints?: ClusterEndpoint[]) => {
     let state!: NodeModalState;
     dispose = createRoot((cleanup) => {
       state = useNodeModalState({
@@ -35,6 +35,23 @@ describe('connection tests with retained credentials', () => {
           tokenName: 'root@pam!pulse',
           fingerprint: 'saved-pin',
           verifySSL: true,
+          user: 'fixture@pve',
+          monitorVMs: true,
+          monitorContainers: true,
+          monitorStorage: true,
+          monitorBackups: true,
+          monitorPhysicalDisks: false,
+          monitorDatastores: true,
+          monitorSyncJobs: true,
+          monitorVerifyJobs: true,
+          monitorPruneJobs: true,
+          monitorGarbageJobs: true,
+          excludeDatastores: [],
+          monitorMailStats: true,
+          monitorQueues: true,
+          monitorQuarantine: true,
+          monitorDomainStats: false,
+          clusterEndpoints,
         } as NodeConfig,
         onClose: vi.fn(),
         onSave: vi.fn(),
@@ -93,5 +110,68 @@ describe('connection tests with retained credentials', () => {
         fingerprint: '',
       }),
     );
+  });
+  const peer = {
+    nodeName: 'peer',
+    tlsEndpoint: 'https://peer.test:8006',
+    fingerprint: 'peer-pin',
+    ipOverride: '',
+    host: 'https://peer.test:8006',
+    ip: '',
+    nodeId: 'peer',
+    online: true,
+    lastSeen: '',
+  } satisfies ClusterEndpoint;
+
+  it('tests an explicit peer CA choice without copying the primary pin or saving', async () => {
+    const state = mount('pve', [peer]);
+    state.updateClusterEndpointFingerprint(peer.tlsEndpoint, '');
+    await state.handleTestClusterEndpoint(peer);
+    expect(NodesAPI.testExistingNode).toHaveBeenCalledWith('pve-saved', {
+      endpoint: peer.tlsEndpoint,
+      fingerprint: '',
+      verifySSL: true,
+    });
+    expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+    expect(state.testResult()?.message).toBe(
+      'peer: Endpoint connection successful. Background collection was not tested.',
+    );
+    expect(state.testResult()?.endpoint).toBe(peer.tlsEndpoint);
+    state.updateClusterEndpointFingerprint(peer.tlsEndpoint, 'new-pin');
+    expect(state.testResult()).toBeNull();
+  });
+
+  it('refuses to claim a test of unsaved addresses using stored credentials', async () => {
+    const state = mount('pve', [peer]);
+    state.updateClusterEndpointOverride('peer', 'new-peer.test');
+    await state.handleTestClusterEndpoint(peer);
+    expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+    expect(state.testResult()?.status).toBe('error');
+    state.updateField('host', 'https://changed-primary.test:8006');
+    await state.handleTestConnection();
+    expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+  });
+
+  it('does not display an old in-flight success after trust changes', async () => {
+    const state = mount('pve', [peer]);
+    let complete!: (result: { status: string }) => void;
+    vi.mocked(NodesAPI.testExistingNode).mockReturnValueOnce(
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+    );
+    const pending = state.handleTestClusterEndpoint(peer);
+    state.updateClusterEndpointFingerprint(peer.tlsEndpoint, 'different-pin');
+    complete({ status: 'success' });
+    await pending;
+    expect(state.testResult()).toBeNull();
+  });
+  it('tests untouched member trust without implicitly clearing its saved policy', async () => {
+    const state = mount('pve', [peer]);
+    await state.handleTestClusterEndpoint(peer);
+    expect(NodesAPI.testExistingNode).toHaveBeenCalledWith('pve-saved', {
+      endpoint: peer.tlsEndpoint,
+      verifySSL: true,
+    });
   });
 });

@@ -15,6 +15,36 @@
 
 ## Purpose
 
+A member test announces and reveals its result beside that exact member rather
+than leaving feedback in the off-screen global footer. The normal primary
+Test connection result stays in the footer; both remain endpoint-qualified
+and do not update background or agent health. The member-section test and
+browser interaction proof check the locally scoped live result.
+
+The connection editor exposes each member's actual runtime TLS endpoint.
+Its pin/CA controls submit only deliberately edited scopes, distinguish unknown
+first-use trust, and leave primary and other-member policy independent. Tests
+read the nodes API without enrolling agents or mutating background health.
+Address/credential changes must be saved before a stored-credential probe.
+The configured-node readback test and desktop/narrow consumer proof cover the
+saved policy and preservation of disabled collection, not installed recovery.
+
+A trust edit round-trips explicit disabled PVE collection flags. It is not
+permission to re-enable guest collection through a missing response field or
+a new-connection default. `TestPVEEndpointTrustEditorPreservesDisabledCollectors`
+checks this boundary.
+
+### Managed Proxmox TLS edits do not provision agents
+
+The node editor's endpoint-scoped fingerprint edits and saved-credential tests
+manage only existing API connection trust. They do not enrol, restart or probe
+an agent, rotate its credentials, broaden access or mark agent health current.
+Tests explicitly qualify a successful API endpoint connection as distinct from
+background collection and the other members' health. Discovery observations
+cannot overwrite a saved exact-endpoint trust override.
+`TestPVEEndpointTrustSavedPolling` verifies the producer boundary with synthetic
+TLS endpoints; installed/agent recovery remains a separate outcome.
+
 ### Configuration-import retries preserve the remote-agent boundary
 
 The import API's process-local replay admission rejects duplicate committed

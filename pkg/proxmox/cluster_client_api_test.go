@@ -1022,3 +1022,42 @@ func TestClusterProducerPinConflictsAreOwnedAndScoped(t *testing.T) {
 		}
 	}
 }
+
+func TestClusterExplicitEmptyEndpointTrust(t *testing.T) {
+	primary := "https://primary.test:8006"
+	member := "https://member.test:8006"
+	cc := &ClusterClient{config: ClientConfig{Host: primary, Fingerprint: "primary-pin"}, endpoints: []string{primary, member}, endpointFingerprints: map[string]string{member: ""}}
+	fingerprint, err := cc.getEndpointFingerprint(member)
+	if err != nil || fingerprint != "" {
+		t.Fatalf("explicit CA policy inherited primary pin: %q %v", fingerprint, err)
+	}
+	if cc.canTrustMemberOnFirstUseLocked(member) {
+		t.Fatal("explicit CA policy allowed automatic trust capture")
+	}
+	cc.endpointFingerprints["https://MEMBER.test:8006/"] = "different-pin"
+	if _, err := cc.getEndpointFingerprint(member); !errors.Is(err, errConflictingEndpointFingerprints) {
+		t.Fatalf("explicit CA/pin ambiguity did not fail closed: %v", err)
+	}
+	for _, endpoint := range []string{"https://alias.test:8006", "https://member.test:8007", "http://member.test:8006", "https://member.test:8006/other"} {
+		if _, known, err := ResolveEndpointFingerprint(endpoint, map[string]string{member: ""}); known || err != nil {
+			t.Fatalf("explicit trust escaped authority/base path: %s", endpoint)
+		}
+	}
+}
+
+func TestClusterExplicitEmptyTrustCannotEraseMalformedNonemptyPin(t *testing.T) {
+	endpoint := "https://member.test:8006"
+	for _, malformed := range []string{":", "::", "   "} {
+		pins := map[string]string{endpoint: malformed, "https://MEMBER.test:8006/": ""}
+		for _, spelling := range []string{endpoint, "https://MEMBER.test:8006/"} {
+			if _, _, err := ResolveEndpointFingerprint(spelling, pins); !errors.Is(err, errConflictingEndpointFingerprints) {
+				t.Fatalf("malformed nonempty pin %q became CA policy through alias %s: %v", malformed, spelling, err)
+			}
+		}
+		delete(pins, "https://MEMBER.test:8006/")
+		got, known, err := ResolveEndpointFingerprint(endpoint, pins)
+		if err != nil || !known || got != malformed {
+			t.Fatal("malformed saved pin was erased")
+		}
+	}
+}

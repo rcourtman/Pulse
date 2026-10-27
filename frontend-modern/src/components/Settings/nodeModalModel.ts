@@ -1,6 +1,7 @@
 import type {
   ClusterEndpoint,
   ClusterEndpointOverridePayload,
+  ClusterEndpointTrustOverridePayload,
   ClusterNodeDisplayNameOverridePayload,
   NodeConfig,
 } from '@/types/nodes';
@@ -46,6 +47,26 @@ export const buildClusterEndpointOverridesPayload = (
       ipOverride: (overrides[endpoint.nodeName] ?? '').trim(),
     }));
   return changed.length > 0 ? changed : undefined;
+};
+
+// Submit only deliberately changed endpoint trust. The primary uses the SSL
+// settings field; peer decisions must never be inferred from that field.
+export const buildClusterEndpointTrustOverridesPayload = (
+  endpoints: ClusterEndpoint[] | undefined,
+  fingerprints: Record<string, string>,
+  edited: Record<string, boolean> = {},
+): ClusterEndpointTrustOverridePayload[] | undefined => {
+  const changed = new Map<string, string>();
+  for (const endpoint of endpoints ?? []) {
+    const target = endpoint.tlsEndpoint;
+    if (!target || endpoint.usesPrimaryTLS || !target.startsWith('https://')) continue;
+    const value = fingerprints[target];
+    if (value !== undefined && (edited[target] || value !== (endpoint.fingerprint ?? '')))
+      changed.set(target, value);
+  }
+  return changed.size
+    ? Array.from(changed, ([endpoint, fingerprint]) => ({ endpoint, fingerprint }))
+    : undefined;
 };
 
 // Mirror a saved clusterEndpointOverrides payload onto locally cached

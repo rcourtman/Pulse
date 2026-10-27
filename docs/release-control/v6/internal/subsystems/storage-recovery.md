@@ -64,6 +64,22 @@ the exact key and compatibility controls. Desktop/narrow consuming browser
 proof establishes readable source selection, not original #3248/#2681 recovery
 or actual restore availability.
 
+Disabled guest, storage and backup collection scopes remain disabled when a
+trust edit is saved. Their false response values must survive the editor
+round-trip rather than fall back to enabled new-connection defaults.
+`TestPVEEndpointTrustEditorPreservesDisabledCollectors` verifies preservation.
+
+### Proxmox TLS recovery preserves storage and guest state
+
+Reconciliation of saved API certificate trust is confined to the selected
+endpoint authority/base path. It leaves backup/History data, guest identity,
+credentials, discovered member records and unrelated pins intact. A saved
+connection test reads the nodes API only and does not perform backup, restore,
+freeze/thaw, filesystem, storage or guest-agent operations. Failure to persist
+the PVE candidate does not publish its trust in memory.
+`TestPVEEndpointTrustAdmission` and `TestPVEEndpointTrustSavedPolling` prove
+these scoped save/probe boundaries, not installed backup or filesystem recovery.
+
 ### Backup retention never substitutes for verification
 
 The existing restore-point State cell and drawer status prioritise running or

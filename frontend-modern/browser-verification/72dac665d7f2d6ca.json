@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "b782b8d8674af87fa14fe39feaa54ef13219f9df",
+  "verified_at": "2026-10-27T10:28:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "a2525f073ee5e6b68bca4baf523c35320840a3230bcbcdaafcf595c72462d270",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "ec666924bf48c5ea76d654fa6bdc5d042e03365bc4b5891dfd1764e08c755be4"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "First-use member guidance uses complete sentences and names deliberate verified-pin or CA choices.",
+    "A successful peer response without its optional message renders a qualified fallback beside that peer.",
+    "Editing a peer pin clears the stale success."
+  ],
+  "interactions": [
+    "Tab-equivalent focus and Enter activate the selected peer Test TLS button.",
+    "Read first-use guidance and the live inline result at desktop and narrow widths.",
+    "Edit the peer fingerprint after success and observe result invalidation."
+  ],
+  "checks": 35,
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop-chromium": "141.0.7390.37",
+    "narrow-webkit": "26.0"
+  },
+  "evidence_scope": "Two changed copy strings in the production connection editor. Exact retained producer wires are reused only after all seven runtime producer hashes match. Unknown first-use is manually projected. The optional-message fallback removes message from a successful probe wire. No source/installed trust recovery replay or acceptance.",
+  "native_pixel_review": {
+    "captures": 4,
+    "all_opened": true,
+    "limits": "Native image content inspected. No clipped copy or horizontal overflow. The temporary disabled test button loses focus in Chromium and retains it in WebKit. Keyboard activation and automatic live-result reveal pass. No focus-recovery, native IdP, installed or reporter recovery claim."
+  }
+}

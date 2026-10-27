@@ -3,21 +3,34 @@ package configapi
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"io"
+	stdlog "log"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"time"
 )
 
 func TestHandleTestConnection(t *testing.T) {
@@ -306,5 +319,331 @@ func TestNodeMutationEventsStayWithRequestOrganization(t *testing.T) {
 			}
 			assertTenantEvents(t, owner, other, "nodes_updated", "node_deleted")
 		})
+	}
+}
+
+// The standard root pool is process-cached. Keep the synthetic CA experiment in
+// a fresh copy of this test process so the normal full suite is order-independent.
+func TestPVEEndpointTrustSavedPolling(t *testing.T) {
+	if os.Getenv("PULSE_TLS_TEST_CHILD") != "1" {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(executable, "-test.run=^TestPVEEndpointTrustSavedPolling$", "-test.v")
+		cmd.Env = append(os.Environ(), "PULSE_TLS_TEST_CHILD=1")
+		output, err := cmd.CombinedOutput()
+		t.Log(string(output))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	pub, key, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "isolated polling CA"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	der, err := x509.CreateCertificate(rand.Reader, ca, ca, pub, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err = x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SSL_CERT_FILE", caFile)
+	t.Setenv("SSL_CERT_DIR", t.TempDir())
+	makeLeaf := func(serial int64) tls.Certificate {
+		pub, leafKey, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf := &x509.Certificate{SerialNumber: big.NewInt(serial), NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
+		der, err := x509.CreateCertificate(rand.Reader, leaf, ca, pub, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tls.Certificate{Certificate: [][]byte{der, ca.Raw}, PrivateKey: leafKey}
+	}
+	pin := func(c tls.Certificate) string { return fmt.Sprintf("%x", sha256.Sum256(c.Certificate[0])) }
+	old := [2]tls.Certificate{makeLeaf(2), makeLeaf(3)}
+	renewed := [2]tls.Certificate{makeLeaf(4), makeLeaf(5)}
+	makeUntrusted := func(serial int64) tls.Certificate {
+		pub, key, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf := &x509.Certificate{SerialNumber: big.NewInt(serial), NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
+		der, err := x509.CreateCertificate(rand.Reader, leaf, leaf, pub, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	}
+	untrusted := [2]tls.Certificate{makeUntrusted(6), makeUntrusted(7)}
+
+	var active [2]atomic.Pointer[tls.Certificate]
+	var authenticated [2]atomic.Int32
+	var servers [2]*httptest.Server
+	for i := range servers {
+		active[i].Store(&renewed[i])
+		servers[i] = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api2/json/nodes" {
+				t.Errorf("unexpected request path %s", r.URL.Path)
+				http.NotFound(w, r)
+				return
+			}
+			if r.Header.Get("Authorization") != "PVEAPIToken=fixture@pve!pulse=synthetic-only" {
+				t.Error("saved credential changed")
+				w.WriteHeader(401)
+				return
+			}
+			authenticated[i].Add(1)
+			fmt.Fprint(w, `{"data":[{"node":"alpha","status":"online"},{"node":"beta","status":"online"}]}`)
+		}))
+		servers[i].Config.ErrorLog = stdlog.New(io.Discard, "", 0)
+		servers[i].TLS = &tls.Config{MinVersion: tls.VersionTLS12, GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{*active[i].Load()}}, nil
+		}}
+		servers[i].StartTLS()
+		t.Cleanup(servers[i].Close)
+	}
+	// Admit the intended, hostname-matching leaf independently of pinning.
+	roots := x509.NewCertPool()
+	roots.AddCert(ca)
+	for i, s := range servers {
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Second}, "tcp", strings.TrimPrefix(s.URL, "https://"), &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := fmt.Sprintf("%x", sha256.Sum256(conn.ConnectionState().PeerCertificates[0].Raw))
+		conn.Close()
+		if got != pin(renewed[i]) {
+			t.Fatal("wrong fixture leaf presented")
+		}
+	}
+	for _, tc := range []struct {
+		name, action string
+		original     bool
+		wantHealth   [2]bool
+		wantTest     int
+	}{
+		{"unapproved-rotation", "", false, [2]bool{false, false}, 400},
+		{"primary-edit-is-scoped", "primary-pin", false, [2]bool{true, false}, 200},
+		{"primary-CA-clear-is-scoped", "primary-ca", false, [2]bool{true, false}, 200},
+		{"explicit-both-pins", "both-pins", false, [2]bool{true, true}, 200},
+		{"explicit-both-CA", "both-ca", false, [2]bool{true, true}, 200},
+		{"CA-mode-rejects-untrusted-leaves", "both-ca-untrusted", false, [2]bool{false, false}, 400},
+		{"member-CA-does-not-inherit-primary-pin", "member-ca", false, [2]bool{true, true}, 200},
+		{"original-leaves-control", "", true, [2]bool{true, true}, 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for i, s := range servers {
+				if tc.action == "both-ca-untrusted" {
+					active[i].Store(&untrusted[i])
+				} else if tc.original {
+					active[i].Store(&old[i])
+				} else {
+					active[i].Store(&renewed[i])
+				}
+				s.CloseClientConnections()
+				authenticated[i].Store(0)
+			}
+			inst := config.PVEInstance{Name: "fixture-cluster", Host: servers[0].URL, TokenName: "fixture@pve!pulse", TokenValue: "synthetic-only", VerifySSL: true, VerifySSLExplicit: true, IsCluster: true, ClusterName: "fixture-cluster", Fingerprint: pin(old[0]), ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeIdentity: "alpha-id", NodeName: "alpha", Host: servers[0].URL, Fingerprint: pin(old[0])},
+				{NodeIdentity: "beta-id", NodeName: "beta", Host: servers[1].URL, Fingerprint: pin(old[1])},
+			}}
+			cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{inst}}
+			t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
+			persistence := config.NewConfigPersistence(cfg.DataPath)
+			if err := persistence.SaveNodesConfig(cfg.PVEInstances, nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			reloads := 0
+			h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, runtime: defaultRuntimeDependencies(), reloadFunc: func() error { reloads++; return nil }}
+			initialNode := h.GetAllNodesForAPI(context.Background())[0]
+			if tc.action != "" {
+				primary := pin(renewed[0])
+				if strings.Contains(tc.action, "ca") && tc.action != "member-ca" {
+					primary = ""
+				}
+				update := map[string]any{"verifySSL": true, "fingerprint": primary}
+				if strings.HasPrefix(tc.action, "both") || tc.action == "member-ca" {
+					member := pin(renewed[1])
+					if strings.Contains(tc.action, "ca") {
+						member = ""
+					}
+					update["clusterEndpointTrustOverrides"] = []map[string]string{{"endpoint": servers[1].URL, "fingerprint": member}}
+				}
+				body, _ := json.Marshal(update)
+				rec := httptest.NewRecorder()
+				h.HandleUpdateNode(rec, httptest.NewRequest("PUT", "/api/config/nodes/pve-0", strings.NewReader(string(body))))
+				if rec.Code != 200 || reloads != 1 {
+					t.Fatalf("save=%d reloads=%d: %s", rec.Code, reloads, rec.Body.String())
+				}
+			}
+			disk, err := persistence.LoadNodesConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.PVEInstances = disk.PVEInstances
+			saved := cfg.PVEInstances[0]
+			if saved.TokenValue != inst.TokenValue || !saved.VerifySSL || !reflect.DeepEqual(saved.ClusterEndpoints, inst.ClusterEndpoints) {
+				t.Fatal("trust edit changed credentials, verification or discovered member records")
+			}
+			before, _ := json.Marshal(saved)
+			rec := httptest.NewRecorder()
+			h.HandleTestNode(rec, httptest.NewRequest("POST", "/api/config/nodes/pve-0/test", strings.NewReader(`{}`)))
+			if rec.Code != tc.wantTest {
+				t.Fatalf("saved Test=%d want=%d: %s", rec.Code, tc.wantTest, rec.Body.String())
+			}
+			if rec.Code == 200 && !strings.Contains(rec.Body.String(), "Other endpoints and background collection were not tested") {
+				t.Fatal("primary test claims cluster collection")
+			}
+			primaryProbeCode, primaryProbeBody := rec.Code, rec.Body.String()
+			projection := pveClusterEndpointTLSResponses(saved, cfg.Discovery)
+			if len(projection) != 2 || !projection[0].UsesPrimaryTLS || projection[1].UsesPrimaryTLS || projection[1].TLSEndpoint != servers[1].URL {
+				t.Fatalf("incorrect effective endpoint projection: %+v", projection)
+			}
+			// Init/reconnect share this same exported production builder.
+			endpoints, pins, conflicts := monitoring.BuildPVEClusterClientEndpoints(saved, cfg.Discovery)
+			clientCfg := config.CreateProxmoxConfig(&saved)
+			clientCfg.Timeout = time.Second
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			cc, err := proxmox.NewClusterClientWithContext(ctx, saved.Name, clientCfg, endpoints, pins, conflicts...)
+			if err != nil {
+				cancel()
+				t.Fatal(err)
+			}
+			nodes, pollErr := cc.GetNodes(ctx)
+			cancel()
+			health := cc.GetHealthStatus()
+			if health[servers[0].URL] != tc.wantHealth[0] || health[servers[1].URL] != tc.wantHealth[1] {
+				t.Fatalf("health=%v want=%v", health, tc.wantHealth)
+			}
+			if tc.wantHealth[0] || tc.wantHealth[1] {
+				if pollErr != nil || len(nodes) != 2 {
+					t.Fatalf("ordinary nodes poll: %v, %d", pollErr, len(nodes))
+				}
+			} else if pollErr == nil {
+				t.Fatal("unapproved renewal accepted")
+			}
+			t.Logf("primary=%t member=%t verifySSL=%t", health[servers[0].URL], health[servers[1].URL], saved.VerifySSL)
+			// A member probe uses the same scoped policy, saved credentials and no
+			// persistent trust or health update. It never captures a replacement pin.
+			rec = httptest.NewRecorder()
+			body, _ := json.Marshal(map[string]string{"endpoint": servers[1].URL})
+			h.HandleTestNode(rec, httptest.NewRequest("POST", "/api/config/nodes/pve-0/test", strings.NewReader(string(body))))
+			if (rec.Code == 200) != tc.wantHealth[1] {
+				t.Fatalf("member probe=%d: %s", rec.Code, rec.Body.String())
+			}
+			frame, err := json.Marshal(map[string]any{"scenario": tc.name, "initial_node": initialNode, "saved_node": h.GetAllNodesForAPI(context.Background())[0], "primary_probe": map[string]any{"code": primaryProbeCode, "body": primaryProbeBody}, "member_probe": map[string]any{"code": rec.Code, "body": rec.Body.String()}, "renewed_primary_pin": pin(renewed[0]), "renewed_member_pin": pin(renewed[1])})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("PVE_TLS_CONSUMER_FRAME=%s", frame)
+			after, _ := json.Marshal(cfg.PVEInstances[0])
+			if string(before) != string(after) {
+				t.Fatal("test mutated saved state")
+			}
+			for i, healthy := range tc.wantHealth {
+				if !healthy && authenticated[i].Load() != 0 {
+					t.Fatal("rejected TLS sent authenticated HTTP")
+				}
+			}
+		})
+	}
+}
+
+func TestPVEEndpointTrustAdmission(t *testing.T) {
+	instance := config.PVEInstance{Name: "cluster", Host: "https://primary.test:8006", Fingerprint: "primary-pin", VerifySSL: true, TokenValue: "preserved", ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "member", Host: "https://member.test:8006", Fingerprint: "member-pin"}}}
+	for _, body := range []string{
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"https://outside.test:8006","fingerprint":""}]}`,
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"https://member.test:8006"}]}`,
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"https://member.test:8006","fingerprint":null}]}`,
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"https://member.test:8006","fingerprint":""},{"endpoint":"https://MEMBER.test:8006/","fingerprint":""}]}`,
+		`{"fingerprint":"new","clusterEndpointTrustOverrides":[{"endpoint":"https://primary.test:8006","fingerprint":"different"}]}`,
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"http://member.test:8006","fingerprint":""}]}`,
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"https://member.test:8007","fingerprint":""}]}`,
+		`{"clusterEndpointTrustOverrides":[{"endpoint":"https://member.test:8006/other","fingerprint":""}]}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{instance.DeepCopy()}}
+			h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: config.NewConfigPersistence(cfg.DataPath), runtime: defaultRuntimeDependencies()}
+			before, _ := json.Marshal(cfg)
+			rec := httptest.NewRecorder()
+			h.HandleUpdateNode(rec, httptest.NewRequest("PUT", "/api/config/nodes/pve-0", strings.NewReader(body)))
+			after, _ := json.Marshal(cfg)
+			if rec.Code != 400 || string(before) != string(after) {
+				t.Fatalf("invalid trust update mutated config: %d %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+	// A storage failure must not publish the trust/credential candidate in memory.
+	cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{instance.DeepCopy()}}
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	if err := os.Mkdir(filepath.Join(cfg.DataPath, "nodes.enc"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, runtime: defaultRuntimeDependencies()}
+	before, _ := json.Marshal(cfg)
+	rec := httptest.NewRecorder()
+	h.HandleUpdateNode(rec, httptest.NewRequest("PUT", "/api/config/nodes/pve-0", strings.NewReader(`{"fingerprint":"new-pin"}`)))
+	after, _ := json.Marshal(cfg)
+	if rec.Code != 500 || string(before) != string(after) {
+		t.Fatalf("failed save published trust: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPVEEndpointUnknownTrustProjection(t *testing.T) {
+	instance := config.PVEInstance{Host: "https://primary.test:8006", Fingerprint: "primary-pin", VerifySSL: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "peer", Host: "https://peer.test:8006"}}}
+	projected := pveClusterEndpointTLSResponses(instance, config.DiscoveryConfig{})
+	if len(projected) != 1 || !projected[0].TLSFirstUse {
+		t.Fatal("unknown first-use member was described as CA policy")
+	}
+	empty := ""
+	updated, err := applyPVEEndpointTrustUpdates(instance, NodeConfigRequest{ClusterEndpointTrustOverrides: []ClusterEndpointTrustOverrideRequest{{Endpoint: projected[0].TLSEndpoint, Fingerprint: &empty}}}, config.DiscoveryConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected = pveClusterEndpointTLSResponses(updated, config.DiscoveryConfig{})
+	if projected[0].TLSFirstUse || projected[0].Fingerprint != "" {
+		t.Fatal("explicit CA policy was described as first-use trust")
+	}
+	_, fingerprint, err := pveConnectionTestTrust(updated, nodeConnectionTestTLSOptions{Endpoint: projected[0].TLSEndpoint}, config.DiscoveryConfig{})
+	if err != nil || fingerprint != "" {
+		t.Fatal("saved probe discarded explicit member CA policy")
+	}
+}
+
+func TestPVEEndpointTrustEditorPreservesDisabledCollectors(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{{Name: "scope", Host: "https://primary.test:8006", VerifySSL: true, IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "primary", Host: "https://primary.test:8006"}}}}}
+	h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: config.NewConfigPersistence(cfg.DataPath), runtime: defaultRuntimeDependencies()}
+	data, err := json.Marshal(h.GetAllNodesForAPI(context.Background())[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for _, flag := range []string{"monitorVMs", "monitorContainers", "monitorStorage", "monitorBackups"} {
+		if value, present := wire[flag]; !present || value != false {
+			t.Fatalf("disabled %s omitted from editor response", flag)
+		}
+	}
+	wire["fingerprint"] = "verified-new-pin"
+	// Send the same complete collection-scope fields the editor round-trips.
+	body, _ := json.Marshal(map[string]any{"fingerprint": wire["fingerprint"], "monitorVMs": wire["monitorVMs"], "monitorContainers": wire["monitorContainers"], "monitorStorage": wire["monitorStorage"], "monitorBackups": wire["monitorBackups"]})
+	rec := httptest.NewRecorder()
+	h.HandleUpdateNode(rec, httptest.NewRequest("PUT", "/api/config/nodes/pve-0", strings.NewReader(string(body))))
+	saved := cfg.PVEInstances[0]
+	if rec.Code != 200 || saved.MonitorVMs || saved.MonitorContainers || saved.MonitorStorage || saved.MonitorBackups || !saved.VerifySSL {
+		t.Fatal("trust edit enabled an excluded collector")
 	}
 }
