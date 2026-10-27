@@ -188,3 +188,139 @@ describe('latest backup task evidence through the inventory consumer', () => {
     expect(api.fetch).toHaveBeenCalledTimes(6);
   });
 });
+
+describe('uncertain task chronology through the inventory consumer', () => {
+  const chronology = (panel: HTMLElement) =>
+    within(panel).getByText('Task order', { exact: true, selector: 'th' }).closest('tbody')!;
+  const candidate = (panel: HTMLElement, n: number) =>
+    within(panel)
+      .getByText(`Possible latest task ${n}`, { exact: true, selector: 'th' })
+      .closest('tbody')!;
+  const setAmbiguous = (startTime = 'invalid') => {
+    tasks = [failedTask({ id: 'uncertain-failure', startTime }), identityTask({ id: 'dated-ok' })];
+  };
+
+  it.each([
+    { start: '', width: 1200 },
+    { start: 'invalid', width: 330 },
+    { start: '2027-01-01T00:00:00Z', width: 1200 },
+    { start: '2026-10-04T11:00:00Z', width: 330 },
+  ])(
+    'withdraws a false latest OK and exposes both possible tasks: $start / $width',
+    async ({ start, width }) => {
+      api.width = width;
+      setAmbiguous(start);
+      mount();
+      const panel = await open();
+      expect(value(chronology(panel), 'Latest task')).toHaveTextContent('Unknown');
+      expect(chronology(panel)).toHaveTextContent(
+        'Task start times do not establish which task ran last. Possible latest tasks are listed below without a time order.',
+      );
+      expect(within(panel).queryByText('Latest task', { exact: true, selector: 'th' })).toBeNull();
+      const candidates = [candidate(panel, 1), candidate(panel, 2)];
+      const failureSection = candidates.find(
+        (section) => value(section, 'Task ID').textContent === 'uncertain-failure',
+      )!;
+      expect(value(failureSection, 'Status')).toHaveTextContent('Failed');
+      expect(value(failureSection, 'Error').textContent).toBe(failure);
+      expect(value(failureSection, 'Error').querySelector('svg')).toBeNull();
+      expect(value(failureSection, 'Started')).toHaveTextContent(
+        start === '2026-10-04T11:00:00Z'
+          ? formatPlatformTableDateTimeValue(Date.parse(start))
+          : 'Unknown',
+      );
+      const summary = screen
+        .getByRole('button', {
+          name: 'Collapse details for same-name (VM 100) · PVE connection: east',
+        })
+        .closest('tr')!;
+      expect(summary).toHaveTextContent('Latest task: Unknown');
+      expect(summary).not.toHaveTextContent('OK');
+      expect(panel).toHaveTextContent('dated-ok');
+      expect(panel).toHaveTextContent('Restore evidence');
+      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+      expect(api.fetch).toHaveBeenCalledTimes(2);
+
+      fireEvent.click(within(panel).getByRole('button', { name: 'Collapse same-name details' }));
+      const west = await open('west');
+      expect(west).not.toHaveTextContent('Possible latest task');
+      expect(west.textContent).not.toContain(failure);
+      expect(west).not.toHaveTextContent('Task order');
+    },
+  );
+
+  it('keeps the task column and all possible tasks when every start is unknown', async () => {
+    tasks = [
+      failedTask({ id: 'failure-a', startTime: 'invalid' }),
+      identityTask({ id: 'ok-b', startTime: '' }),
+    ];
+    mount();
+    const panel = await open();
+    expect(screen.getByRole('columnheader', { name: 'Job' })).toBeInTheDocument();
+    expect(value(chronology(panel), 'Latest task')).toHaveTextContent('Unknown');
+    expect(value(candidate(panel, 1), 'Started')).toHaveTextContent('Unknown');
+    expect(value(candidate(panel, 2), 'Started')).toHaveTextContent('Unknown');
+    expect(panel).toHaveTextContent('failure-a');
+    expect(panel).toHaveTextContent('ok-b');
+  });
+
+  it('reconciles uncertain, ordered, uncertain and absent tasks in the open keyed panel on ordinary polls', async () => {
+    setAmbiguous();
+    mount();
+    const panel = await open();
+    expect(value(chronology(panel), 'Latest task')).toHaveTextContent('Unknown');
+    const toggle = screen.getByRole('button', {
+      name: 'Collapse details for same-name (VM 100) · PVE connection: east',
+    });
+    toggle.focus();
+    const summary = toggle.closest('tr');
+    tasks = [failedTask({ startTime: '2026-10-03T11:00:00Z' }), identityTask({ id: 'ordered-ok' })];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() =>
+      expect(value(taskSection(panel), 'Task ID')).toHaveTextContent('ordered-ok'),
+    );
+    expect(value(taskSection(panel), 'Status')).toHaveTextContent('OK');
+    expect(panel).not.toHaveTextContent('Task order');
+    expect(panel).not.toHaveTextContent('Possible latest task');
+    expect(panel.textContent).not.toContain(failure);
+
+    setAmbiguous('2027-01-01T00:00:00Z');
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() =>
+      expect(value(chronology(panel), 'Latest task')).toHaveTextContent('Unknown'),
+    );
+    expect(panel.textContent).toContain(failure);
+    expect(panel).not.toHaveTextContent('ordered-ok');
+    expect(within(panel).queryByText('Latest task', { exact: true, selector: 'th' })).toBeNull();
+
+    tasks = [];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(panel).not.toHaveTextContent('Task order'));
+    expect(panel).not.toHaveTextContent('Possible latest task');
+    expect(panel.textContent).not.toContain(failure);
+    expect(panel).toHaveTextContent('Restore evidence');
+    expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+    expect(toggle.closest('tr')).toBe(summary);
+    expect(document.activeElement).toBe(toggle);
+    expect(api.fetch).toHaveBeenCalledTimes(8);
+  });
+
+  it('finds scoped possible-task errors and IDs through the existing saved-view search', async () => {
+    setAmbiguous();
+    mount();
+    await open();
+    const input = screen.getByPlaceholderText(
+      'Search backups by workload, node, source, or status',
+    );
+    fireEvent.input(input, { target: { value: 'uncertain-failure' } });
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1),
+    );
+    await waitFor(() => expect(window.location.search).toContain('q=uncertain-failure'));
+    expect(screen.getByTestId('proxmox-coverage-detail').textContent).toContain(failure);
+    fireEvent.input(input, { target: { value: 'backup target unavailable' } });
+    await waitFor(() => expect(window.location.search).toContain('backup+target+unavailable'));
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+    expect(api.fetch).toHaveBeenCalledTimes(2);
+  });
+});

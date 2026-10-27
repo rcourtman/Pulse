@@ -10,6 +10,7 @@ import {
   BACKUP_IDENTITY_NOW,
   identityArchive,
   identityGuest,
+  identityTask,
 } from '../__fixtures__/backupIdentity';
 import type { WorkloadCoverageRow } from '../proxmoxBackupRecoveryModel';
 import type { CoverageSortKey } from '../proxmoxBackupsTableModel';
@@ -822,6 +823,67 @@ describe('backup evidence native scrolling', () => {
         expect(container.querySelector('[data-platform-window-spacer]')).toBeNull();
         expect(detail).not.toBeInTheDocument();
       });
+    },
+  );
+});
+
+describe('indeterminate task order in the canonical Coverage consumer', () => {
+  it.each([330, 1200])(
+    'does not show a latest OK when a failed task cannot be ordered at %ipx',
+    (width) => {
+      const model = buildProxmoxBackupRecoveryModel({
+        workloads: [identityGuest('east-100', 'east', 'pve-1')],
+        pbsBackups: [],
+        archives: [],
+        snapshots: [],
+        tasks: [
+          identityTask({
+            id: 'unknown-start',
+            status: 'failed',
+            startTime: '',
+            error: 'retained failure',
+          }),
+          identityTask({ id: 'dated-ok' }),
+        ],
+        nowMs: BACKUP_IDENTITY_NOW,
+      });
+      const current = model.coverageRows[0];
+      renderInRouter(() => (
+        <ProxmoxCoverageTable
+          rows={model.coverageRows}
+          hasAnyRows
+          emptyIcon={<span />}
+          emptyTitle=""
+          emptyDescription=""
+          sortKey={() => 'posture'}
+          sortDirection={() => 'asc'}
+          onSort={() => {}}
+          expandedKey={current.key}
+          onToggleExpand={() => {}}
+          showTaskColumn
+          layoutWidth={() => width}
+        />
+      ));
+      const summary = document.querySelector('[data-proxmox-backup-row="coverage"]')!;
+      expect(summary).toHaveTextContent('Latest task: Unknown');
+      expect(summary).not.toHaveTextContent('OK');
+      const panel = screen.getByTestId('proxmox-coverage-detail');
+      expect(within(panel).queryByText('Latest task', { selector: 'th', exact: true })).toBeNull();
+      expect(
+        within(panel).getByText('Task order', { selector: 'th', exact: true }),
+      ).toBeInTheDocument();
+      expect(
+        within(panel).getByText('Possible latest task 1', { selector: 'th', exact: true }),
+      ).toBeInTheDocument();
+      expect(
+        within(panel).getByText('Possible latest task 2', { selector: 'th', exact: true }),
+      ).toBeInTheDocument();
+      expect(panel).toHaveTextContent('unknown-start');
+      expect(panel).toHaveTextContent('retained failure');
+      expect(panel).toHaveTextContent('dated-ok');
+      expect(panel).toHaveTextContent(
+        'Task status does not verify a restore or guest responsiveness.',
+      );
     },
   );
 });

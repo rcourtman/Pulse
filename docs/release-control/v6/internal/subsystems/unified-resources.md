@@ -8861,3 +8861,29 @@ The reserve derives from the full keyed measured-height map plus table chrome,
 not a DOM height sampled while a window retires. Offscreen detail measurements
 remain in that map until the owning item is remeasured or removed, so a transient
 DOM extent cannot lower the reserve before its compensating spacer settles.
+
+### Coverage task order is evidence, not an input-order tie-break
+
+The Coverage task summary names a latest task only when the observed start times
+establish one (or only one task was observed). Missing, invalid, non-positive or
+future starts cannot be ranked as epoch dates; distinct observations with equal
+latest starts cannot be ordered by input position, status or ID. In either
+ambiguous case the summary is Unknown, not OK or None. The existing detail
+explains the uncertainty and retains every possible latest task's status, start,
+duration, literal error and full ID. Possible tasks are displayed in a stable
+non-time order; older known tasks are not possible latest tasks.
+
+The task column remains visible even when no latest task can be established.
+Existing workload/search scope includes candidate errors and IDs, never another
+connection's namesake. Ordinary inventory refresh can restore an ordered latest,
+reintroduce uncertainty or remove all task evidence without replacing the keyed
+row, open panel or disclosure focus. No new API read, route, association rule,
+protection assessment, backup/guest operation or recovery guarantee is added.
+
+`proxmoxBackupTaskChronology.test.ts` checks permutations, ties, future/unknown
+starts, candidate completeness, scope and sole/absent tasks.
+`ProxmoxCoverageTable.test.tsx` checks the canonical compact/full consuming
+summary and complete candidate detail. `backupTaskEvidence.test.tsx` exercises the parsed HTTP inventory through the
+router, compact/full summaries, complete literal evidence, saved-view search and
+ordinary polling. Browser verification must exercise these states through the
+production consumer at desktop and narrow widths and inspect actual pixels.
