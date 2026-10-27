@@ -976,7 +976,7 @@ func (r *Router) testSAMLConnection(ctx context.Context, cfg *SAMLTestConfig) SS
 		}
 		return SSOTestResponse{
 			Success: true,
-			Message: "SSO URL is valid (manual configuration)",
+			Message: "Only the SAML SSO URL format was checked. Certificates and sign-in have not been tested.",
 			Details: &SSOTestDetails{
 				Type:   "saml",
 				SSOURL: cfg.IDPSSOURL,
@@ -1019,9 +1019,21 @@ func (r *Router) testSAMLConnection(ctx context.Context, cfg *SAMLTestConfig) SS
 
 	_ = rawXML // Used for metadata preview endpoint
 
+	// Parsing XML alone does not establish that it describes an IdP with a
+	// supported SSO endpoint. Do not present incomplete or unsafe metadata as
+	// a successful diagnostic, or fall back to unrelated manual settings.
+	// This is a format/evidence check only: do not contact the SSO endpoint
+	// or change the sign-in service's certificate or authentication policy.
+	if strings.TrimSpace(details.EntityID) == "" || !validateURL(details.SSOURL, []string{"https", "http"}) {
+		return SSOTestResponse{
+			Message: "The SAML test did not identify an IdP and a usable SSO URL. Check the IdP metadata or manual SSO URL, then test again. Sign-in has not been tested.",
+			Error:   "metadata_incomplete",
+		}
+	}
+
 	return SSOTestResponse{
 		Success: true,
-		Message: "SAML metadata validated successfully",
+		Message: "SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.",
 		Details: details,
 	}
 }
