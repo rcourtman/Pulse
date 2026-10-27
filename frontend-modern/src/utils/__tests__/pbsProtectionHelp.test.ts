@@ -79,7 +79,7 @@ describe('PBS protection disagreement help', () => {
     expect(text()).toContain('without running Diagnostics or another verification');
   });
 
-  it('keeps the Protected caution truthful for every hidden verification value', () => {
+  it('keeps retention guidance truthful without hiding a reported verification value', () => {
     const point: RecoverableArtifact = {
       id: 'fixture-point',
       nativeId: 'fixture-point',
@@ -97,15 +97,20 @@ describe('PBS protection disagreement help', () => {
       detail: '',
       protected: true,
     };
-    for (const verified of [true, false, undefined]) {
-      expect(artifactStateLabel({ ...point, verified })).toBe('Protected');
+    for (const [verified, label] of [
+      [true, 'Verified'],
+      [false, 'Unverified'],
+      [undefined, 'Kept'],
+    ] as const) {
+      expect(artifactStateLabel({ ...point, verified })).toBe(label);
     }
     expect(artifactStateLabel({ ...point, protected: false, verified: true })).toBe('Verified');
     expect(artifactStateLabel({ ...point, protected: false, verified: false })).toBe('Unverified');
-    expect(text()).toContain(
-      'Protected point leaves its verification state unknown from that label alone',
-    );
-    expect(text()).toContain("displays the backup's protected flag before its verification state");
+    expect(text()).toContain('Kept point has no reported verification result');
+    expect(text()).toContain('Prune protection is shown separately in the By date detail');
+    expect(text()).toContain('never replaces a reported Verified or Unverified state');
+    expect(text()).toContain('Older Pulse versions may show Protected for the prune flag instead');
+    expect(text()).toContain('point label alone does not establish verification');
   });
 
   it('prevents destructive diagnostics and an assumed freshness-policy cause', () => {

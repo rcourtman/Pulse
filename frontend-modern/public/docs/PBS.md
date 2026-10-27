@@ -388,7 +388,7 @@ backup or working protection from the strip alone.
 | --- | --- |
 | **With PBS snapshots** or a matching backup row | That Pulse's protection assessment received the same subject-linked backup evidence. A similar name or guest ID alone is not identity proof. |
 | **Verified** on a PBS backup | That every backup is current, every covered disk is included, or the guest recovered after the backup. Verification is evidence about that backup, not a successful restore. |
-| **Protected** in a restore point's **State** | That this point is verified. This displays the backup's protected flag before its verification state; it is not the workload's protection assessment. |
+| **Kept** in a restore point's **State** | A verification result or the workload's protection assessment. This point is kept when pruning, but its verification was not reported. Expand its By date row for separate **Verification** and **Prune protection** details. |
 | **Protected**, **Attention**, **Unprotected** or **Unknown** on the workload | An independent check that backups are restorable. These are Pulse's assessment from the backup evidence it can read, not instructions to change backups. |
 
 Check one affected guest without changing its setup:
@@ -418,8 +418,11 @@ is an inventory discrepancy, before comparing verification. **Unverified** on
 the matching point means Pulse has no successful verification evidence for it;
 it does not prove that PBS's verification job failed. **Verified** with a
 workload still needing attention is a separate assessment disagreement: retain
-its explanation and Provider evidence. A **Protected** point leaves its
-verification state unknown from that label alone. **Job OK** is not an
+its explanation and Provider evidence. A **Kept** point has no reported
+verification result. **Prune protection** is shown separately in the By date
+detail and never replaces a reported **Verified** or **Unverified** state.
+Older Pulse versions may show **Protected** for the prune flag instead. That
+point label alone does not establish verification. **Job OK** is not an
 individual point's verification result. Use the records already available,
 without running Diagnostics or another verification just to compare them.
 
