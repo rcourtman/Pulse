@@ -133,7 +133,7 @@ describe('Coverage uncertain evidence inspection through parsed inventory', () =
       const evidence = evidenceTable(panel);
       expect(within(evidence).getAllByText('Unknown', { exact: true })).toHaveLength(5);
       expect(evidence).toHaveTextContent('Running');
-      expect(evidence).toHaveTextContent('Incomplete');
+      expect(evidence).toHaveTextContent('Failed');
       expect(evidence).toHaveTextContent(literal);
       expect(evidence.querySelector('img')).toBeNull();
       expect(evidence).toHaveTextContent('archive-undated-0');

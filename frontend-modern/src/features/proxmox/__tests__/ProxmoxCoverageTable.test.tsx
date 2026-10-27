@@ -70,7 +70,7 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
-  it('keeps uncertain archive evidence inspectable without changing server posture or its owner', () => {
+  it('keeps uncertain archive evidence inspectable without changing server posture or its owner', async () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [identityGuest('east-100', 'east', 'pve-1')],
       pbsBackups: [],
@@ -83,9 +83,10 @@ describe('ProxmoxCoverageTable column visibility', () => {
       ],
     });
     const current = model.coverageRows[0];
+    const [rows, setRows] = createSignal(model.coverageRows);
     renderInRouter(() => (
       <ProxmoxCoverageTable
-        rows={[current]}
+        rows={rows()}
         hasAnyRows
         emptyIcon={<span />}
         emptyTitle=""
@@ -115,6 +116,18 @@ describe('ProxmoxCoverageTable column visibility', () => {
       within(panel).getByRole('button', { name: 'All 13 evidence entries shown' }),
     ).toHaveAttribute('aria-disabled', 'true');
     expect(model.coverageRows[0]).toBe(current);
+    const more = within(panel).getByRole('button', { name: 'All 13 evidence entries shown' });
+    more.focus();
+    setRows([{ ...current, artifacts: [current.artifacts[0]] }]);
+    await waitFor(() => expect(more).toHaveTextContent('All 1 evidence entry shown'));
+    expect(document.activeElement).toBe(more);
+    setRows([{ ...current, artifacts: [] }]);
+    await waitFor(() => expect(more).toHaveTextContent('All 0 evidence entries shown'));
+    expect(panel).not.toHaveTextContent('Restore evidence');
+    expect(document.activeElement).toBe(more);
+    setRows(model.coverageRows);
+    await waitFor(() => expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(13));
+    expect(document.activeElement).toBe(more);
   });
 
   it('keeps full-width identity columns alongside the workload connection', () => {

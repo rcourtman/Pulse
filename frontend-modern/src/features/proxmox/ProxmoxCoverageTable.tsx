@@ -707,25 +707,25 @@ export function ProxmoxCoverageTable(props: {
                             sections={buildCoverageDetailSections(row)}
                             onClose={() => props.onToggleExpand(row.key)}
                           >
-                            <Show
-                              when={evidence().length > 0}
-                              fallback={
-                                <InlineNotice
-                                  tone={
-                                    row.posture === 'unprotected' || row.posture === 'attention'
-                                      ? 'warning'
-                                      : 'info'
-                                  }
-                                  role="status"
-                                  class="text-xs"
-                                >
-                                  {!backupHistoryComplete()
-                                    ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
-                                    : 'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.'}
-                                </InlineNotice>
-                              }
-                            >
-                              <div class="overflow-hidden rounded-sm border border-border bg-surface">
+                            <div class="overflow-hidden rounded-sm border border-border bg-surface">
+                              <Show
+                                when={evidence().length > 0}
+                                fallback={
+                                  <InlineNotice
+                                    tone={
+                                      row.posture === 'unprotected' || row.posture === 'attention'
+                                        ? 'warning'
+                                        : 'info'
+                                    }
+                                    role="status"
+                                    class="text-xs"
+                                  >
+                                    {!backupHistoryComplete()
+                                      ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
+                                      : 'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.'}
+                                  </InlineNotice>
+                                }
+                              >
                                 <div class="flex items-center justify-between gap-2 bg-surface-alt px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
                                   <span>Restore evidence</span>
                                   <Show when={row.artifacts.length > evidence().length}>
@@ -886,39 +886,45 @@ export function ProxmoxCoverageTable(props: {
                                     </For>
                                   </PlatformDetailTableBody>
                                 </PlatformDetailTable>
-                                <Show
-                                  when={row.artifacts.length > COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE}
-                                >
-                                  <div class="border-t border-border px-2 py-2">
-                                    <button
-                                      type="button"
-                                      class="rounded-sm px-2 py-1 text-xs font-medium text-accent hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                                      aria-disabled={evidence().length >= row.artifacts.length}
-                                      onClick={() => {
-                                        if (evidence().length < row.artifacts.length)
-                                          setEvidenceLimit(
-                                            evidence().length + COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
-                                          );
-                                      }}
+                              </Show>
+                              <Show
+                                when={
+                                  row.artifacts.length > COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE ||
+                                  evidenceLimit() > COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE
+                                }
+                              >
+                                <div class="border-t border-border px-2 py-2">
+                                  <button
+                                    type="button"
+                                    class="rounded-sm px-2 py-1 text-xs font-medium text-accent hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                                    aria-disabled={evidence().length >= row.artifacts.length}
+                                    onClick={() => {
+                                      if (evidence().length < row.artifacts.length)
+                                        setEvidenceLimit(
+                                          evidence().length + COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
+                                        );
+                                    }}
+                                  >
+                                    <Show
+                                      when={evidence().length < row.artifacts.length}
+                                      fallback={
+                                        <>
+                                          All {evidence().length} evidence{' '}
+                                          {evidence().length === 1 ? 'entry' : 'entries'} shown
+                                        </>
+                                      }
                                     >
-                                      <Show
-                                        when={evidence().length < row.artifacts.length}
-                                        fallback={
-                                          <>All {evidence().length} evidence entries shown</>
-                                        }
-                                      >
-                                        Show{' '}
-                                        {Math.min(
-                                          COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
-                                          row.artifacts.length - evidence().length,
-                                        )}{' '}
-                                        more evidence entries
-                                      </Show>
-                                    </button>
-                                  </div>
-                                </Show>
-                              </div>
-                            </Show>
+                                      Show{' '}
+                                      {Math.min(
+                                        COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
+                                        row.artifacts.length - evidence().length,
+                                      )}{' '}
+                                      more evidence entries
+                                    </Show>
+                                  </button>
+                                </div>
+                              </Show>
+                            </div>
                           </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>
