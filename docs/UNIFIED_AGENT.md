@@ -857,9 +857,11 @@ new version is available:
 5. Replaces itself atomically (with backup)
 6. Restarts with the same configuration
 
-Use the manual update path for v5 agents, PVE host agents, agents with
-auto-update disabled, and agents blocked by authentication, missing connection
-state, download, trust, or self-test failures. Open an outdated-agent notice or
+Use the manual update path for v5 agents, PVE host agents and agents with
+auto-update disabled. For a failed or uncertain update, first follow
+[Agent Not Updating](#agent-not-updating); a manual command is not a diagnostic
+retry or a repair for every automatic-update failure. For a planned manual
+update, open an outdated-agent notice or
 `/settings/infrastructure?agentDoctor=1` to open **Agent Doctor** and
 copy the command for each reported host. Pulse does not remotely execute those
 commands.
@@ -1385,18 +1387,46 @@ space problem is resolved; verify fresh reporting, free space and log growth
 after any planned repair. Keep log contents, connection files and tokens private.
 
 ### Agent Not Updating
-- Inspect existing errors with the [bounded agent log reader](#collect-agent-logs-safely);
-  a missing update entry is not proof that an update succeeded.
-- Verify network connectivity to Pulse server
-- Ensure auto-update is not disabled
-- Confirm the agent can authenticate and that its saved connection state still
-  identifies the Pulse URL and token.
-- Open **Agent Doctor** from an outdated-agent notice or
-  `/settings/infrastructure?agentDoctor=1` and use the command for that reported
-  host. Do not substitute the public GitHub server installer.
-- Administrators can query the read-only Agent Fleet Doctor endpoint,
-  `GET /api/agents/diagnostics`, for liveness, version, profile, telemetry, and
-  identity evidence. The endpoint reports repair handoffs but does not run them.
+
+Keep the server's update target, the agent's last reported version and the
+result of an update attempt separate. Updating Pulse does not prove an agent
+updated; a stale report does not establish what is running now. Read the
+[existing version and Last seen displays](TROUBLESHOOTING.md#find-the-running-server-and-agent-versions)
+and **Agent Doctor** for the affected host. Unknown is valid; do not restart
+or repeat an update to fill the gap.
+
+1. **Before download:** distinguish an offline or stale agent, an intentional
+   auto-update opt-out, and an authentication or saved-connection error. Use
+   existing Doctor findings and the [bounded agent log reader](#collect-agent-logs-safely).
+   A missing update entry is not proof of success. For a rejected report, use
+   [reporting checks](#agent-lookup-returns-http-401-or-403); do not replace a
+   token, delete connection state or re-enrol the host just to test it.
+2. **Download, validation or helper staging:** keep the original failure stage
+   and exact redacted error. A successful checksum, signature or self-test
+   does not establish activation. For example, the typed helper's
+   `signed artifact is not the requested pulse-agent version` error is a
+   later version-validation rejection, not a signature-verification failure.
+   Keep the requested and reported candidate versions, including any `v`
+   prefix, only if already available. Do not bypass signature checks, relax
+   permissions or replace the helper manually to force acceptance.
+3. **Activation, restart or rollback:** an accepted download or staged artifact
+   is not a completed update. Preserve the original result and any rollback
+   error, then compare fresh reporting from that same host with the intended
+   version. A healthy Doctor view after a manual update does not prove future
+   automatic updates work. Do not repeat the attempt while its result or
+   installed state is uncertain.
+
+If a copied manual command stopped at preflight or its private prompt, use
+[command preparation checks](#copied-agent-command-fails-before-installation).
+That is a separate failure from the automatic updater; passing preflight is
+not installation. Do not substitute the public GitHub server installer or
+change the installed privilege profile to get past an agent-update error.
+
+If the error remains, add the original stage, redacted error and known versions
+to the [existing report or help thread](TROUBLESHOOTING.md#-getting-help),
+including recovery already performed. Keep tokens, full copied commands,
+connection files and service environments private. No new update, Diagnostics
+run or full configuration export is required to ask for help.
 
 ### Duplicate Agents
 
