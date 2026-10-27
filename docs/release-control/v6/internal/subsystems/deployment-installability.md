@@ -7991,7 +7991,18 @@ All four Alpine source/prebuilt server, agent and Apprise foundation stages use
 the provider-MSP runtime and integration mock use that same Alpine 3.24 image.
 `TestDockerBuildUsesCanonicalReleaseLdflags` binds every production foundation,
 and `TestProviderMSPAlpineRuntimeMatchesIntegrationMock` rejects partial runtime
-refreshes across the hosted control plane and mock. Tag lines, compiler choices,
+refreshes across the hosted control plane and mock. The integration bootstrap
+seed's local compose default and same-run bundle now use that same Alpine
+digest too. `TestIntegrationContainersUseGovernedImmutableBases` binds the
+default to the shared runtime pin before native frontend preparation.
+`test_seed_digest_refresh_keeps_exact_producer_consumer_binding` exercises
+production and admission with real archive/hash operations and a Docker double:
+an old but well-formed seed pin in a rehashed manifest, or a changed consumer
+default, refuses before Docker load; the matching bundle loads without a pull
+or rebuild. The seed command, token permissions, image override and isolated
+same-run/run-attempt/source binding stay unchanged. These source controls do
+not establish a registry pull, hosted image transfer or journey result.
+Tag lines, compiler choices,
 release metadata, keys and exact-candidate consumption remain unchanged.
 These are source-contract checks, not an image build or registry verification.
 The hosted release build must verify the landed exact source, and provider-MSP

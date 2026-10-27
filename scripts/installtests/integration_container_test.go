@@ -24,6 +24,7 @@ func TestIntegrationContainersUseGovernedImmutableBases(t *testing.T) {
 	if !regexpDigestPinnedImage(`alpine:3.24`, compose) {
 		t.Fatal("integration seed image must use the governed Alpine line pinned by a full immutable digest")
 	}
+	assertContainsAll(t, compose, "    image: ${PULSE_E2E_SEED_IMAGE:-alpine:3.24@sha256:"+alpine324RuntimeDigest+"}\n")
 	if strings.Contains(dockerfile, "golang:1.23-alpine") || strings.Contains(compose, "image: alpine:3.20\n") {
 		t.Fatal("integration containers must not restore retired toolchain or runtime lines")
 	}
