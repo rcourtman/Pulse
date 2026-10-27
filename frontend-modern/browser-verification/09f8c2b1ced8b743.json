@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "base_sha": "b31ef703b651c15f1543e4511da79a08066fe18f",
+  "verified_at": "2026-10-27T15:45:33.019263Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "1f0f50ed041d3d785305f09b8a5fbeba7c1e77cacfeab6b1f6e82abb8e7c1c1c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "15081327e612021c6323f4b0df67611f5e52bdb0c4735686ec16f2eaf1f70147"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production inventory parser, recovery model and existing Coverage consumer, router, polling query and CSS consume safe synthetic HTTP fixtures through an uncommitted evidence-only entry. Exact committed runtime b31ef703b651c15f1543e4511da79a08066fe18f.",
+    "Task-reported connection/native node remain independent of migrated current workload placement; missing origin is Not reported, never borrowed. Unknown chronology retains both candidates and their independent origins. Protection remains Unknown.",
+    "116 checks pass using Playwright 1.56.1 with Chromium desktop and WebKit touch phones. All eight final captures opened using native view_image and inspected as pixels; detail values and qualifiers fit desktop,390px,320px. Long literal origins wrap without interpreting markup."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and phone row taps open existing details; native collapse closes them. Namesake west retains only its own task. There is no per-row fetch.",
+    "Existing search finds historical task node and known-latest task ID and excludes the other scope. Ordinary 30-second resources/PVE/PBS polling changes reported origin, ambiguous candidates, long/missing origins and task removal while retaining the keyed open panel and disclosure focus.",
+    "No page/console, unexpected API, mutation or off-origin errors observed. No backup/restore/guest operation or access/policy change introduced or exercised. This does not establish original #2681/#3248 causal or native recovery."
+  ],
+  "captures": [
+    {
+      "name": "desktop-migrated.png",
+      "sha256": "e1f819daa71de994f5f23359b0c155ba70b2e5dfa604be6f70dc7d763bc00756"
+    },
+    {
+      "name": "desktop-ambiguous.png",
+      "sha256": "bac89a844716e7ee9d982299a77cb260af6ecbb76951fcb46686bada97a8a0ad"
+    },
+    {
+      "name": "desktop-long.png",
+      "sha256": "91e6263129d7c6e36bd6e5f374c2aaeab44113978a813ff61cff78c4f0be09b0"
+    },
+    {
+      "name": "phone-migrated.png",
+      "sha256": "6481e9b69ce2e2f99fbba06442e69fa2201583f001b3d509a19403a7250173fb"
+    },
+    {
+      "name": "phone-320-migrated.png",
+      "sha256": "7229289dc62a5a9de785cf5d529d6eef9417a044226f2030f5ee306faa440f5a"
+    },
+    {
+      "name": "phone-ambiguous.png",
+      "sha256": "6ba0b2d75e4a623ed4c2c885818cf9cc57f9e024adf4961e5006aa11f507447b"
+    },
+    {
+      "name": "phone-long.png",
+      "sha256": "26d6ac04390eb955bff713e246e43655fbc9e3d7665b2bfe1a68d592e008f00b"
+    },
+    {
+      "name": "phone-missing.png",
+      "sha256": "71ce5d61c1987334b0c831ce1240e7aefb1dc49f479ba4e66df5657139c047f3"
+    }
+  ]
+}

@@ -24,7 +24,16 @@
 ### Latest backup task evidence stays separate from recovery
 
 Coverage’s existing expanded detail shows the scoped latest PVE task’s reported
-status, start, duration, full literal error and task ID. Long/multiline provider
+status, start, duration, full literal error and task ID. Each latest or possible
+latest task retains its own reported connection and native node, independent of
+the workload's current placement after migration. Missing task origins say Not
+reported; no workload, artifact reader or repository supplies them. Origin values
+wrap as literal text and remain searchable alongside the exposed task ID.
+Ordinary polling updates or clears them in the same open panel.
+`backupTaskOrigin.test.tsx` checks the inventory/model/consumer path for migration,
+namesake isolation, missing and literal origins, uncertain chronology, search
+and focused same-panel updates. The model's normal-suite origin test covers the
+same identity boundary. Matching, keys, posture and guest operations are unchanged. Long/multiline provider
 text wraps without markup interpretation. An unreadable start says Unknown,
 a missing duration says Not reported, and a failed task without error text
 says Not reported. No task means no task section. Ordinary polling updates

@@ -217,12 +217,19 @@ const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSect
         ),
       },
     ),
+    makeDetailRow('Task connection', task.instance || 'Not reported', { wrap: true }),
+    makeDetailRow('Task node', task.node || 'Not reported', { wrap: true }),
     makeDetailRow('Task ID', task.id, { wrap: true }),
   ]),
   footerContent: (
-    <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-      Task status does not verify a restore or guest responsiveness.
-    </p>
+    <>
+      <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+        Task connection and node are reported by the task, not the workload’s current placement.
+      </p>
+      <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+        Task status does not verify a restore or guest responsiveness.
+      </p>
+    </>
   ),
 });
 
