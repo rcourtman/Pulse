@@ -5288,11 +5288,11 @@
               ".github/scripts/internal-api-test-seconds.txt",
               ".github/scripts/record-internal-api-test-seconds.py",
               ".github/scripts/refresh-internal-api-test-seconds.py",
+              ".github/scripts/run-go-package-slice.py",
               ".github/scripts/select-internal-api-shard.sh",
               ".github/workflows/build-and-test.yml",
               "frontend-modern/package-lock.json",
-              "frontend-modern/package.json",
-              ".github/scripts/run-go-package-slice.py"
+              "frontend-modern/package.json"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
