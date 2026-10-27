@@ -271,6 +271,119 @@ test("case-insensitive deltas keep the exact live-label rename fence", async () 
   assert.deepEqual(calls.createComment, []);
 });
 
+for (const bug of ["bug", "Bug", "BUG"]) {
+  test(`known-version classification respects provider identities: ${bug}`, async () => {
+    const preserved = [bug, "Needs-Human", "Release-Blocker", "Needs-Retest-On-Latest",
+      "Needs-Decomposition", "operator-reviewed", "bug-fixed", "needs-version-info-note"];
+    const fixture = caseInsensitiveLabelFixture({ reported: "6.6.0",
+      labels: [...preserved, "AFFECTS-6.5.0", "NEEDS-VERSION-INFO"],
+      repositoryLabels: ["AFFECTS-6.6.0"] });
+    for (let pass = 0; pass < 2; pass += 1) {
+      await triage.syncLabels({ github: fixture.github,
+        context: createContext({ issue: fixture.read() }), core: createCore() });
+      assert.deepEqual(fixture.names(), [...preserved, "AFFECTS-6.6.0"].sort());
+      assert.deepEqual(fixture.calls.addLabels.map(call => call.labels), [["affects-6.6.0"]]);
+      assert.deepEqual(fixture.calls.removeLabel.map(call => call.name),
+        ["AFFECTS-6.5.0", "NEEDS-VERSION-INFO"]);
+      assert.deepEqual(fixture.calls.createLabel, []);
+      assert.deepEqual(fixture.calls.createComment, []);
+      assert.deepEqual(fixture.calls.getLatestRelease, []);
+      assert.deepEqual(fixture.calls.paginate, []);
+    }
+  });
+}
+
+test("unknown-version classification recognises a renamed bug without duplicating missing-version metadata", async () => {
+  for (const existing of [false, true]) {
+    const preserved = ["Bug", "Needs-Human", "Needs-Retest-On-Latest", "operator-reviewed"];
+    const fixture = caseInsensitiveLabelFixture({ reported: "unknown",
+      labels: [...preserved, "AFFECTS-6.5.0", ...(existing ? ["Needs-Version-Info"] : [])] });
+    for (let pass = 0; pass < 2; pass += 1) {
+      await triage.syncLabels({ github: fixture.github,
+        context: createContext({ issue: fixture.read() }), core: createCore() });
+      assert.deepEqual(fixture.names(), [...preserved, existing ? "Needs-Version-Info" : "needs-version-info"].sort());
+      assert.deepEqual(fixture.calls.addLabels.map(call => call.labels), existing ? [] : [["needs-version-info"]]);
+      assert.deepEqual(fixture.calls.removeLabel.map(call => call.name), ["AFFECTS-6.5.0"]);
+      assert.deepEqual(fixture.calls.createComment, []);
+    }
+  }
+});
+
+test("nearby custom label names do not become machine classifications", async () => {
+  for (const custom of ["bug-fixed", "debug", "bug ", "documentation"]) {
+    const labels = [custom, "Needs-Version-Info", "Needs-Decomposition-Note", "Needs-Human", "AFFECTS-6.5.0"];
+    const fixture = caseInsensitiveLabelFixture({ reported: "6.6.0", labels });
+    await triage.syncLabels({ github: fixture.github,
+      context: createContext({ issue: fixture.read() }), core: createCore() });
+    assert.deepEqual(fixture.names(), [...labels].sort());
+    assert.deepEqual(fixture.calls.addLabels, []);
+    assert.deepEqual(fixture.calls.removeLabel, []);
+    assert.deepEqual(fixture.calls.getLabel, []);
+    assert.deepEqual(fixture.calls.createComment, []);
+  }
+});
+
+test("a cleared mixed-case review stays cleared while independent version metadata advances", async () => {
+  for (const action of ["opened", "edited"]) {
+    for (const delayed of [false, true]) {
+      const body = "### Pulse version\n6.6.0\n### Additional actionable topics\nAlso retain failed attempts.\n";
+      const preserved = ["Bug", "Needs-Human", "Needs-Retest-On-Latest", "Release-Blocker"];
+      const eventIssue = { number: 42, state: "open", title: "Synthetic intake case", body,
+        updated_at: "2026-10-27T00:00:00Z", comments: 0,
+        labels: [...preserved, "Needs-Decomposition"].map(name => ({ name })) };
+      const { github, calls } = createGithub({ currentIssue: { ...eventIssue,
+        comments: delayed ? 1 : 0, labels: preserved.map(name => ({ name })) } });
+      const context = createContext({ action, issue: eventIssue });
+      if (action === "edited") context.payload.changes = { body: { from: body.replace("Also retain failed attempts.", "None") } };
+      await triage.syncLabels({ github, context, core: createCore() });
+      assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0"]]);
+      assert.deepEqual(calls.getLabel, ["affects-6.6.0"]);
+      assert.deepEqual(calls.removeLabel, []);
+      assert.deepEqual(calls.getEvents, [], "observed label removal already establishes the cleared review");
+      assert.deepEqual(calls.createComment, []);
+      assert.deepEqual(calls.getLatestRelease, []);
+      assert.equal(calls.getIssue.length, 2, "independent metadata retains its exact live-state fence");
+    }
+  }
+});
+
+test("an existing mixed-case review needs no label preparation before independent metadata", async () => {
+  for (const review of ["Needs-Decomposition", "NEEDS-DECOMPOSITION"]) {
+    const issue = { number: 42, state: "open", title: "Synthetic intake case",
+      body: "### Pulse version\n6.6.0\n### Additional actionable topics\nAlso retain failed attempts.\n",
+      updated_at: "2026-10-27T00:00:00Z", comments: 0,
+      labels: ["Bug", review, "Needs-Human", "Needs-Retest-On-Latest"].map(name => ({ name })) };
+    const { github, calls } = createGithub({ currentIssue: issue });
+    const lookup = github.rest.issues.getLabel;
+    github.rest.issues.getLabel = async payload => {
+      assert.notEqual(payload.name, "needs-decomposition", "an existing task requires no provider preparation");
+      return lookup(payload);
+    };
+    await triage.syncLabels({ github, context: createContext({ issue }), core: createCore() });
+    assert.deepEqual(calls.addLabels.map(call => call.labels), [["affects-6.6.0"]]);
+    assert.deepEqual(calls.getLabel, ["affects-6.6.0"]);
+    assert.deepEqual(calls.removeLabel, []);
+    assert.deepEqual(calls.getEvents, []);
+    assert.deepEqual(calls.createComment, []);
+    assert.equal(calls.getIssue.length, 2);
+  }
+});
+
+test("classification identity does not weaken an intervening bug-label rename fence", async () => {
+  const issue = { number: 42, state: "open", title: "Synthetic intake case",
+    body: "### Pulse version\n6.6.0\n", labels: ["Bug", "Needs-Version-Info"].map(name => ({ name })) };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  github.rest.issues.getLabel = async ({ name }) => {
+    github.currentIssue = { ...issue, labels: ["BUG", "Needs-Version-Info"].map(name => ({ name })) };
+    return { data: { name } };
+  };
+  await triage.syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
 test("syncLabels classifies older bug reports without requesting a retest", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.0.1" });
   const issue = {
