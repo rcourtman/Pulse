@@ -93,7 +93,9 @@ describe('ssoProviderPresentation', () => {
     );
     expect(getSSOConnectionTestErrorMessage()).toBe('Unable to run the connection test.');
     expect(getSSOMetadataUrlRequiredMessage()).toBe('Enter an IdP metadata URL.');
-    expect(getSSOMetadataFetchErrorMessage('timeout')).toBe('Unable to fetch metadata: timeout');
+    expect(getSSOMetadataFetchErrorMessage('timeout')).toBe(
+      'Unable to preview SAML metadata. Check the connection and metadata URL, then try again. Your draft has not been saved.',
+    );
   });
 
   it('points admins at the public URL setting when an endpoint URL is unavailable', () => {

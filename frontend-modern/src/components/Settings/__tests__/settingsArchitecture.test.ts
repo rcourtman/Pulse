@@ -1185,6 +1185,29 @@ describe('settings architecture guardrails', () => {
     expect(editor).not.toContain('sticky');
   });
 
+  it('keeps metadata preview recovery on private dialog-owned presentation', () => {
+    const start = ssoProvidersStateSource.indexOf('const fetchMetadataPreview =');
+    const previewLifecycle = ssoProvidersStateSource.slice(
+      start,
+      ssoProvidersStateSource.indexOf('\n  return {', start),
+    );
+    expect(previewLifecycle).toContain('apiErrorFromResponse(response)');
+    expect(previewLifecycle).toContain('getSSOMetadataFetchErrorMessage(error)');
+    expect(previewLifecycle).toContain('getSSOMetadataFetchErrorMessage()');
+    expect(previewLifecycle).toContain('setEditorFeedback');
+    expect(previewLifecycle).toContain('retry: false');
+    expect(previewLifecycle).not.toContain('response.text()');
+    expect(previewLifecycle).not.toContain('String(error)');
+    expect(previewLifecycle).not.toContain('notificationStore');
+    expect(previewLifecycle).not.toMatch(/logger\.error\([^;]*,\s*error\)/);
+    const presentation = ssoProviderPresentationSource.slice(
+      ssoProviderPresentationSource.indexOf('export function getSSOMetadataFetchErrorMessage'),
+      ssoProviderPresentationSource.indexOf('export function getSSOProviderSummary'),
+    );
+    expect(presentation).not.toContain('String(error)');
+    expect(presentation).not.toContain('error.message');
+  });
+
   it('keeps SAML SSO available without a self-hosted Pro upsell boundary', () => {
     expect(ssoProvidersPanelSource).toContain('@/components/shared/Button');
     expect(ssoProvidersPanelSource).toContain('ActionIconButton');

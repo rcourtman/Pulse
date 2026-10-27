@@ -117,7 +117,26 @@ export function getSSOMetadataUrlRequiredMessage(): string {
 }
 
 export function getSSOMetadataFetchErrorMessage(error?: unknown): string {
-  return `Unable to fetch metadata: ${String(error)}`;
+  // Preview callbacks, proxies and network errors can contain private provider
+  // data. Use recognised categories only, never their message or raw response.
+  const failure =
+    error && typeof error === 'object' ? (error as { code?: unknown; status?: unknown }) : {};
+  if (failure.status === 403) {
+    return 'Metadata preview was refused. Check your administrator session and permissions, then try again. Your draft has not been saved.';
+  }
+  if (failure.status === 429 || failure.code === 'rate_limited') {
+    return 'Too many metadata previews. Wait a moment and try again. Your draft has not been saved.';
+  }
+  switch (failure.code) {
+    case 'validation_error':
+      return 'Unable to preview SAML metadata. Check the metadata URL and try again. Your draft has not been saved.';
+    case 'fetch_error':
+      return 'Unable to fetch SAML metadata. Check the URL, provider availability and TLS trust on the Pulse server, then try again. Your draft has not been saved.';
+    case 'parse_error':
+      return 'Unable to parse SAML metadata. Check that the URL returns a SAML metadata document. Your draft has not been saved.';
+    default:
+      return 'Unable to preview SAML metadata. Check the connection and metadata URL, then try again. Your draft has not been saved.';
+  }
 }
 
 export function getSSOProviderSummary(provider: SSOProviderSummaryLike): string {

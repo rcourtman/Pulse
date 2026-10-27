@@ -213,6 +213,25 @@ source-bound desktop/narrow browser proof uses captured producer envelopes and
 synthetic non-JSON gateway/validation responses. This is not installed sign-in,
 issuer compatibility, server persistence or original #3038/#61 recovery proof.
 
+SAML metadata-preview failures use fixed guidance for recognised validation,
+fetch and parse categories, session/permission refusals and rate limits; unknown,
+legacy, malformed or unavailable replies use bounded connection/URL guidance.
+The editor never stringifies response bodies, error messages, diagnostic details
+or arbitrary callback values into this feedback or the preview logger. It names
+TLS trust on the Pulse server without suggesting a verification bypass. Each
+deliberate Preview makes one request, including CSRF/rate-limit refusals, and
+does not save provider configuration. URL/certificate drafts and access
+restrictions survive failure and retry; a successful parsed/XML preview still
+closes back to the editor and leaves saving explicit. Existing authentication
+expiry handling remains owned by the API client, not replaced by preview copy.
+The normal-suite SSOMetadataPreview.test.tsx exercises create/edit through the
+real state hook and API client, including failure -> explicit retry -> preview ->
+close/cancel, unsafe envelopes/HTML/network errors and disabled blank URLs.
+Presentation tests bind the category-only boundary without object coercion.
+Source-bound desktop/narrow browser proof uses existing public-shaped producer
+responses and adversarial safe fixtures through the production Settings editor.
+This is not a live IdP fetch, provider save, native sign-in or #3038 acceptance.
+
 The provider editor scrolls its fields independently of its header and recovery
 footer. Save refusals, metadata-preview errors and clipboard outcomes stay in
 that active dialog, with live alert/status semantics; connection tests use the
