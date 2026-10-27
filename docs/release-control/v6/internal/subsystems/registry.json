@@ -4676,6 +4676,9 @@
         ".github/workflows/test-e2e.yml",
         ".github/workflows/update-demo-server.yml",
         ".github/workflows/validate-release-assets.yml",
+        "Dockerfile",
+        "Makefile",
+        "VERSION",
         "cmd/pulse-control-plane/main.go",
         "cmd/pulse-control-plane/provider_msp.go",
         "cmd/pulse-control-plane/provider_msp_backup.go",
@@ -4685,13 +4688,12 @@
         "cmd/pulse-control-plane/provider_msp_recover.go",
         "cmd/pulse-control-plane/provider_msp_status.go",
         "docker-compose.yml",
-        "Dockerfile",
         "docs/MSP.md",
+        "docs/RELEASE_NOTES.md",
+        "docs/UPGRADE_v6.md",
         "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
         "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
         "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
-        "docs/RELEASE_NOTES.md",
-        "docs/UPGRADE_v6.md",
         "frontend-modern/package-lock.json",
         "frontend-modern/package.json",
         "frontend-modern/public/docs/MSP.md",
@@ -4712,7 +4714,6 @@
         "internal/cloudcp/provider_msp_backup.go",
         "internal/cloudcp/provider_msp_recovery.go",
         "internal/cloudcp/tenant_runtime_rollout.go",
-        "Makefile",
         "package-lock.json",
         "package.json",
         "pulse-enterprise:.github/workflows/build-pro-release.yml",
@@ -4760,10 +4761,12 @@
         "scripts/release_asset_common.sh",
         "scripts/release_build_targets.sh",
         "scripts/release_candidate_manifest.py",
+        "scripts/release_control/control_plane.py",
         "scripts/release_control/customer_promotion_lease.sh",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
+        "scripts/release_control/release_snapshot.py",
         "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_control/secure_runtime_attestation_v6.py",
@@ -4774,6 +4777,7 @@
         "scripts/release_control/secure_runtime_rootless_source_manifest_v1.json",
         "scripts/release_control/secure_runtime_source_manifest_v6.json",
         "scripts/release_control/secure_runtime_source_manifest_v7.json",
+        "scripts/release_control/stable_patch.py",
         "scripts/release_control/validate_artifact_release_line.py",
         "scripts/release_ldflags.sh",
         "scripts/release_lifecycle_rehearsal.sh",
@@ -4794,10 +4798,10 @@
         "scripts/uninstall-sensor-proxy.sh",
         "scripts/validate-release.sh",
         "scripts/verify-github-release-integrity.sh",
-        "tests/integration/docker-compose.test.yml",
-        "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
+        "tests/integration/docker-compose.test.yml",
+        "tests/integration/playwright.config.ts",
         "tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs",
         "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
         "tests/integration/scripts/hosted-tenant-runtime.mjs",
@@ -4807,8 +4811,7 @@
         "tests/integration/scripts/settings-scroll-audit.mjs",
         "tests/integration/tests/helpers.ts",
         "tests/integration/tests/runtime-defaults.ts",
-        "tests/integration/tests/vmware-workload-fixture.ts",
-        "VERSION"
+        "tests/integration/tests/vmware-workload-fixture.ts"
       ],
       "release_cycle_artifact_globs": [
         "docs/RELEASE_NOTES.md",
@@ -4996,6 +4999,7 @@
               "scripts/release_control/release_promotion_policy_test.py",
               "scripts/release_control/render_release_body_test.py",
               "scripts/release_control/resolve_release_promotion_test.py",
+              "scripts/release_control/stable_patch_test.py",
               "scripts/release_control/validate_artifact_release_line_test.py",
               "scripts/release_control/verify_github_release_integrity_test.py"
             ]
@@ -5484,6 +5488,23 @@
             "exact_files": [
               "tests/integration/scripts/settings-scroll-audit.test.mjs",
               "tests/integration/tests/05-settings-mobile-audit.spec.ts"
+            ]
+          },
+          {
+            "id": "mechanical-stable-patch-source",
+            "label": "exact merge-result stable patch reconstruction proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/release_control/stable_patch.py",
+              "scripts/release_control/control_plane.py",
+              "scripts/release_control/release_snapshot.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/release_control/stable_patch_test.py",
+              "scripts/release_control/control_plane_audit_test.py",
+              "scripts/release_control/release_snapshot_test.py"
             ]
           }
         ],

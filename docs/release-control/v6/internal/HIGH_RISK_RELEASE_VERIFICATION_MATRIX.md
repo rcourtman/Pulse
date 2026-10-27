@@ -1354,3 +1354,16 @@ as verification progresses:
   boot-logger/foreground adverse control and detached launch; the production
   NAS removal inventory consumes this writer. These are source fixtures, not
   native Unraid lifecycle or original installed-recovery acceptance.
+
+
+## Mechanical stable patch source reconstruction
+
+- `stable_patch_test.py` uses real disposable Git history for whole merge results,
+  skipped conflicts followed by clean fixes, successive patch bases, exact control
+  copies and rejection of unrelated or tampered source. Canonical CI runs it.
+- `release_snapshot_test.py` keeps reviewed-head/target/repository ancestry binding
+  on version-bound patch targets. `control_plane_audit_test.py` preserves minor and
+  historical mappings while deriving new patch branches.
+- Source reconstruction is not private payload compatibility, successful signing,
+  a published patch or installed forward/reverse recovery. The infrastructure
+  train's no-publication rehearsal and independent exact-head CI are separate.

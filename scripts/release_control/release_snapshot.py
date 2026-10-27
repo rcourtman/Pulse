@@ -16,7 +16,7 @@ SNAPSHOT_REF = re.compile(r"release-candidate/[0-9A-Za-z._-]+")
 # them, so the release environment can admit them while unmerged
 # release-candidate heads stay outside it. Each mirrors its PR's head name.
 DISPATCH_REF = re.compile(r"release-dispatch/([0-9A-Za-z._-]+)")
-SOURCE_BRANCH = re.compile(r"main|release/v[0-9]+\.[0-9]+")
+SOURCE_BRANCH = re.compile(r"main|release/v[0-9]+\.[0-9]+(?:\.[1-9][0-9]*)?")
 
 
 def snapshot_head(branch: str) -> str:

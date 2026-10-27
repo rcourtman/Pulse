@@ -68,6 +68,19 @@ class SnapshotIdentityTest(unittest.TestCase):
             with self.subTest(branch=branch), self.assertRaises(ValueError):
                 snapshot.snapshot_head(branch)
 
+    def test_patch_snapshot_requires_its_reviewed_version_bound_target(self):
+        ref = 'refs/heads/release-dispatch/v6.6.1-rc.1-stamp'
+        branch = 'release/v6.6.1'
+        self.assertEqual(branch, snapshot.source_branch(ref, branch, '42'))
+        pr = deepcopy(self.pr)
+        pr['head']['ref'] = 'release-candidate/v6.6.1-rc.1-stamp'
+        pr['base']['ref'] = branch
+        self.assertEqual(self.merge, snapshot.reviewed_merge(
+            pr, repository='rcourtman/Pulse', ref=ref, branch=branch, sha=self.sha))
+        with self.assertRaises(ValueError):
+            snapshot.reviewed_merge(pr, repository='rcourtman/Pulse', ref=ref,
+                                    branch='release/v6.6.2', sha=self.sha)
+
     def test_unbound_dispatch_inputs_are_rejected(self):
         dispatch = 'refs/heads/release-dispatch/packet-1'
         for args in [(self.ref, '', '42'), (self.ref, 'main', ''),
