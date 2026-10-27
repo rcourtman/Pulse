@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"regexp"
 	"sort"
@@ -174,6 +175,21 @@ func (m *Monitor) backupInventoryScopeForAlerts() *alerts.BackupInventoryScope {
 	return scope
 }
 
+// A volume ID names a path inside a storage, not an independent node's disk.
+// Shared repositories keep their existing IDs; local IDs use the exact read
+// origin, never the guest's current node. Length-prefix each UTF-8 byte string
+// before hashing so delimiters, case and field boundaries remain significant.
+func pveStorageBackupID(instance, storageNode, storage, volume string) string {
+	if storageNode == "" {
+		return fmt.Sprintf("%s-%s", instance, volume)
+	}
+	tuple := fmt.Sprintf("%d:%s%d:%s%d:%s%d:%s", len(instance), instance,
+		len(storageNode), storageNode, len(storage), storage, len(volume), volume)
+	// No hyphen in this namespace/digest: it cannot equal a legacy shared ID,
+	// whose connection and volume are always separated by a hyphen.
+	return fmt.Sprintf("pvelocal1:%x", sha256.Sum256([]byte(tuple)))
+}
+
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	if ctx.Err() != nil {
 		return
@@ -182,15 +198,15 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	var allBackups []models.StorageBackup
 	var pbsConfirmations []models.PBSGuestConfirmation
 	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
-	seenVolids := make(map[string]bool) // Track seen volume IDs to avoid duplicates
-	hadSuccessfulNode := false          // Track if at least one node responded successfully
-	successfulNodeQueries := 0          // Number of nodes whose storage list was enumerated
-	storagesWithBackup := 0             // Number of storages that should contain backups
-	contentSuccess := 0                 // Number of successful storage content fetches
-	contentFailures := 0                // Number of failed storage content fetches
-	storageQueryErrors := 0             // Number of nodes where storage list could not be queried
-	hadPermissionError := false         // Track if any permission errors occurred this cycle
-	permissionFailureCount := 0         // Number of node/storage reads rejected by authorization
+	seenBackups := make(map[string]bool) // Collapse repeated views of the same repository only
+	hadSuccessfulNode := false           // Track if at least one node responded successfully
+	successfulNodeQueries := 0           // Number of nodes whose storage list was enumerated
+	storagesWithBackup := 0              // Number of storages that should contain backups
+	contentSuccess := 0                  // Number of successful storage content fetches
+	contentFailures := 0                 // Number of failed storage content fetches
+	storageQueryErrors := 0              // Number of nodes where storage list could not be queried
+	hadPermissionError := false          // Track if any permission errors occurred this cycle
+	permissionFailureCount := 0          // Number of node/storage reads rejected by authorization
 	storagePreserveNeeded := map[string]struct{}{}
 	confirmationPreserveNeeded := map[string]struct{}{}
 	unreadNodes := map[string]struct{}{}
@@ -363,11 +379,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 			// Convert to models
 			for _, content := range contents {
-				// Skip if we've already seen this item (shared storage duplicate)
-				if seenVolids[content.Volid] {
+				backupID := pveStorageBackupID(instanceName, storageNode, storage.Storage, content.Volid)
+				// Shared views collapse, but matching paths on independent local
+				// disks must survive both live inventory and recovery ingestion.
+				if seenBackups[backupID] {
 					continue
 				}
-				seenVolids[content.Volid] = true
+				seenBackups[backupID] = true
 
 				// Skip templates and ISOs - they're not backups
 				if content.Content == "vztmpl" || content.Content == "iso" {
@@ -465,7 +483,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 				backup := models.StorageBackup{
 					StorageNode:  storageNode,
-					ID:           fmt.Sprintf("%s-%s", instanceName, content.Volid),
+					ID:           backupID,
 					Storage:      storage.Storage,
 					Node:         backupNode,
 					Instance:     instanceName,
