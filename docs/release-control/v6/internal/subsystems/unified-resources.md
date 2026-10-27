@@ -23,6 +23,28 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Backup workload scope stays visible independently of its reader
+
+Coverage retains the guest's PVE connection in its identity cell at every
+container width. When Target ID is hidden, type and VMID remain beside the
+name. Native disclosure names include the workload label and PVE connection;
+the existing Coverage and By date Workload details show the full wrapped
+connection, separate from the restore point's backup-reader Connection.
+A missing VM/LXC connection stays Not reported, including unmatched PBS
+evidence; PBS readers, namespaces and nodes never supply it. Host backups
+imply no PVE connection. Displayed scope does not change identity matching,
+resource/artifact keys, owner-link IDs, search/filter behaviour, completion,
+protection policy, verification, access or guest/recovery operations.
+
+The normal-suite `backupWorkloadIdentity.test.tsx` exercises inventory parser,
+recovery model and both table consumers, five layouts, duplicate names/IDs/nodes,
+unknown/unmatched/host scope, distinct PBS origins, exact owner links, literal
+text and same-key live updates with disclosure focus. Existing windowed-table
+proof remains applicable; the Coverage row-height estimate accounts for its
+second identity line. Browser proof must inspect real desktop/narrow consumers,
+full long/unknown details and keyboard/touch interactions. This does not
+establish original multi-surface identity, collector, guest or restore recovery.
+
 ### Backup evidence keeps the reader connection separate from its owner
 
 Existing By date and Coverage consumers show each restore point's backup

@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "base_sha": "c8db2bdbf6f65c8fe0de1f1b905c115cb29a004c",
+  "verified_at": "2026-10-27T10:39:18.844257Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "274608f000b2f68f60a6985f2c49322a46a866e1e8ed475c356e2634204cd0bd",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "fd5c491eb040b5e6d5d3386afb8271a7511ad59a3c8439adec4dc300c88bd1ca",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "9d1e6972af0a9fdae00b3a4d16bae714308fecf91a65836659820dfb764bcf04"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production ProxmoxBackupsTable, real inventory parser, recovery model, router, tables and shared CSS consume safe offline HTTP fixtures. The non-shipped fixture supplies canonical VM/system-container resource props and no replacement table implementation.",
+    "Coverage distinguishes identical names, VMIDs and nodes through the PVE workload connection at every width. Type and VMID remain when their columns hide. Long scope wraps in both existing Workload details; missing and unmatched VM scope remains Not reported. PBS reader/namespace are independent, and host backups imply no PVE scope.",
+    "96 assertions pass in Playwright 1.56.1 (integration-lock parity), Chromium 141.0.7390.37 desktop and WebKit 26.0 phone. All nine final capture files were opened with native view_image and pixels inspected.",
+    "No page/console errors, unexpected API call, mutation, off-origin request or page horizontal overflow observed. Keys, exact owner-link IDs, source associations, posture, verification, counts, dates and existing search semantics remain unchanged. Fixture verification is not native guest/restore, installed acceptance or release availability."
+  ],
+  "interactions": [
+    "Desktop native disclosure activation with keyboard Enter and phone row taps open the correct namesake; native accessible names include workload label and PVE connection.",
+    "Existing case-insensitive search finds west without another read and clears back to both workloads. Each detail retains its exact resource owner link and independently scoped evidence.",
+    "Ordinary 30-second polling reads both inventories once while retaining identity DOM, the open panel and focused disclosure.",
+    "PBS By date search opens the matched guest while displaying separate reader and workload scope. Long LXC, unknown live VM, unmatched PBS VM and host backup states retain honest identities; unnamed fallback type/ID appears once."
+  ],
+  "captures": [
+    {
+      "name": "desktop-coverage-summary.png",
+      "sha256": "e7efa078d8fe736554444f456a792b3bb8fad3abf166432c37c72ce29580f565"
+    },
+    {
+      "name": "desktop-west-detail.png",
+      "sha256": "f374579540f5a64b5d0d7599fd951732d53042bba3b31acf35759e584a292040"
+    },
+    {
+      "name": "desktop-long-lxc-detail.png",
+      "sha256": "aaae54959c8c0acec4a07731553e24cd65660bc861408cf466ae6e1a503c3c42"
+    },
+    {
+      "name": "phone-coverage-summary.png",
+      "sha256": "7d3ee4d43317d1e094f95bd8c40ea94e61c5b4c79200b50b5ed12fc51dfdc1dd"
+    },
+    {
+      "name": "phone-west-detail.png",
+      "sha256": "c019b1117016e5f7ef9dae3e7d62257beef5bd72ff41dcfc6b109262153bfe2f"
+    },
+    {
+      "name": "phone-pbs-workload-and-reader.png",
+      "sha256": "753a05cf68eaac39eeed9f0bf461408b3c5ed2519f5cfa0a89e49ce992c5c59d"
+    },
+    {
+      "name": "phone-long-lxc-detail.png",
+      "sha256": "5ad27ca2de08e01b2cbffee427d0b4ab592e84574848b8e12541105c7533617e"
+    },
+    {
+      "name": "phone-unknown-workload-detail.png",
+      "sha256": "30c4c9648178864f4f98a83599426e5d2ec3c7954768b2325bb240135be2cf19"
+    },
+    {
+      "name": "phone-unmatched-detail.png",
+      "sha256": "a8eca521cb542684a126f31d7f573be035924e182ceca4746c13ed5e5186e543"
+    }
+  ]
+}
