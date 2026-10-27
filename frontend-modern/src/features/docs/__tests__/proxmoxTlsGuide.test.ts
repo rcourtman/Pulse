@@ -60,7 +60,8 @@ describe('Proxmox TLS troubleshooting guide', () => {
     expect(text).toContain('Do not edit encrypted files, run Diagnostics, force rediscovery');
     expect(section.querySelector('pre, code')).toBeNull();
     const help = section.querySelector('a[href="#-getting-help"]');
-    expect(help?.hasAttribute('data-doc-link')).toBe(true);
+    expect(help?.textContent).toBe('Getting Help');
+    expect(help?.hasAttribute('target')).toBe(false);
     expect(article.querySelector('#-getting-help')?.tagName).toBe('H2');
     expect(
       section.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]'),
