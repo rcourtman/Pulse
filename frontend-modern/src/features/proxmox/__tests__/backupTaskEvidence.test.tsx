@@ -306,6 +306,8 @@ describe('uncertain task chronology through the inventory consumer', () => {
   });
 
   it('finds scoped possible-task errors and IDs through the existing saved-view search', async () => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date'] });
     setAmbiguous();
     mount();
     await open();
