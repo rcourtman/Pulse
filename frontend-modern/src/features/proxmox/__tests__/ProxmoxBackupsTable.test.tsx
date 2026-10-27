@@ -2052,7 +2052,8 @@ describe('backup location identity in the consuming views', () => {
       },
     });
   };
-  const points = () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
+  const points = () =>
+    document.querySelectorAll<HTMLElement>('[data-proxmox-backup-row="recoverable"]');
 
   it('keeps case-sensitive repositories separate through date filtering, Coverage, details and reload', async () => {
     supplyLocations();
