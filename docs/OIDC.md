@@ -43,6 +43,14 @@ Only after verifying SSO, optionally hide the local username/password form with
 Appending `?show_local=true` to your Pulse URL shows that form again; it does
 not create or restore local credentials, bypass the proxy or revoke SSO sessions.
 
+**Hiding the form is not SSO-only enforcement.** Local password authentication
+remains enabled: valid existing local credentials can still sign in, including
+through the local login endpoint. The visibility setting does not reject those
+requests or revoke local sessions. Keep the independent administrator recovery
+path; do not remove credentials or disable authentication to simulate an
+OIDC-only policy. Login restrictions and group-role mappings below apply to SSO
+sign-ins, not to the separate local password login.
+
 ## ⚙️ Configuration
 
 | Setting | Description |

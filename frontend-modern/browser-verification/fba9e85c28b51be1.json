@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "f3b08cb5246157df956f3ea883efaa855d0338d3",
+  "verified_at": "2026-10-27T04:33:06.241625Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/OIDC.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/OIDC.md": "49d71e6391544e2c7e607041fbee9fcaef990536f08dac44daf2800f48000011"
+  },
+  "routes": [
+    "/docs/OIDC#-quick-start",
+    "/docs/OIDC#access-control",
+    "/docs/OIDC#safe-diagnosis"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "The production Docs/router/renderer/PageHeader/CSS consume the actual shipped OIDC guide through successful local GETs in an isolated page mount. Not full authenticated shell, native password or SSO acceptance.",
+    "The visibility setting and show_local URL sit immediately above an explicit warning: hiding is not SSO-only enforcement; valid local credentials still work; local sessions are not revoked; independent administrator recovery is retained. SSO restrictions are distinguished from local login."
+  ],
+  "interactions": [
+    "32 consuming checks across desktop Chromium and 390px WebKit, including keyboard Enter to actual Access Control and Safe diagnosis headings. No page exception or page-wide overflow.",
+    "Both complete-warning captures were opened with native view_image and visually inspected. All changed prose wraps without clipping at both widths. No credential, account, external IdP, Back/reload or stopped operation was used."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": 2,
+    "remaining": null
+  },
+  "evidence": "Product intelligence outcome RECEIPTS.md retains exact browser script/results/captures, complete source proof and both corrected fixture-only failures."
+}
