@@ -124,8 +124,8 @@ describe('recovery help', () => {
     rendered.innerHTML = renderDocMarkdown(guide, 'RECOVERY');
     const link = within(rendered).getByRole<HTMLAnchorElement>('link', {
       name: 'safe issue reporting',
-      exact: true,
     });
+    expect(link.textContent).toBe('safe issue reporting');
     expect(link?.hasAttribute('data-doc-link')).toBe(true);
     const destination = new URL(link!.getAttribute('href')!, 'https://pulse.example.invalid');
     expect(destination.pathname).toBe('/docs/TROUBLESHOOTING');
