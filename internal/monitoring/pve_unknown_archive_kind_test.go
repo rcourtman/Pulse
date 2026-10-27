@@ -70,7 +70,7 @@ func TestPVEUnknownArchiveKindLifecycle(t *testing.T) {
 				t.Fatalf("phase=%s archive facts changed: row=%+v point=%+v", phase, row, p)
 			}
 			if row.Type == "unknown" {
-				if row.Node != "node-a" || p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence == nil || p.Evidence.Subject.ResourceID != "" {
+				if row.Node != "node-a" || p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence != nil {
 					t.Fatalf("phase=%s unknown archive borrowed occupant: row=%+v point=%+v", phase, row, p)
 				}
 			} else {
@@ -120,5 +120,60 @@ func TestPVEUnknownArchiveKindLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Log("UNKNOWN_ARCHIVE_FRAMES=" + string(b))
+	}
+}
+
+// Loss of an exact format discriminator must clear prior attribution even
+// when the archive ID does not change. A successful reread may restore it.
+func TestPVEUnknownArchiveKindWithdrawsPriorAttribution(t *testing.T) {
+	f := newPVEReconciliationFixture(t)
+	f.nodes = f.nodes[:1]
+	f.ids = f.ids[:1]
+	client := &backupTypeLifecycleClient{backupContentTypeClient: backupContentTypeClient{storage: "local"}, rows: []proxmox.StorageContent{
+		{Volid: "local:backup/opaque-101", VMID: 101, CTime: f.client.at.Unix(), Size: 2048, Content: "backup", Format: "pbs-vm"},
+	}}
+	var id string
+	for _, format := range []string{"pbs-vm", "", "pbs-vm"} {
+		client.rows[0].Format = format
+		f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+		f.wait(t)
+		rows, points := f.m.state.GetSnapshot().PVEBackups.StorageBackups, f.points(t)
+		if len(rows) != 1 || len(points) != 1 {
+			t.Fatal("same-ID attribution transition lost the archive")
+		}
+		if id == "" {
+			id = rows[0].ID
+		}
+		if rows[0].ID != id {
+			t.Fatal("kind recognition renamed the archive")
+		}
+		point := points["pve-backup:"+id]
+		wantProtected := format != ""
+		current := f.postures(t)[0]
+		if wantProtected {
+			if point.SubjectResourceID != f.ids[0] || current.State != recovery.ProtectionStateProtected {
+				t.Fatalf("recognised format lost protection: point=%+v posture=%+v", point, current)
+			}
+		} else if point.SubjectResourceID != "" || current.State == recovery.ProtectionStateProtected || current.LastSuccessfulPointAt != nil || !f.m.state.GetSnapshot().VMs[0].LastBackup.IsZero() {
+			t.Fatalf("unknown format retained prior attribution: point=%+v posture=%+v", point, current)
+		}
+		// Resource-ID reads re-evaluate. Also inspect the saved/list path so prior
+		// protected rows cannot outlive the subject change there.
+		saved, _, err := f.store.ListProtectionPostures(context.Background(), recovery.ProtectionPostureQuery{Limit: 100})
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := false
+		for _, posture := range saved {
+			if posture.SubjectResourceID == f.ids[0] {
+				found = true
+				if !wantProtected && (posture.State == recovery.ProtectionStateProtected || posture.LastSuccessfulPointAt != nil) {
+					t.Fatalf("saved posture retained prior subject: %+v", posture)
+				}
+			}
+		}
+		if wantProtected && !found {
+			t.Fatal("recognised archive has no saved posture")
+		}
 	}
 }

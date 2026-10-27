@@ -931,7 +931,7 @@ func TestFromPVEStorageBackupsExplicitUnknownKindCannotBorrowSubject(t *testing.
 						t.Fatalf("points=%+v err=%v", points, err)
 					}
 					p := points[0]
-					if p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence == nil || p.Evidence.Subject.ResourceID != "" {
+					if p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence != nil {
 						t.Fatalf("unclassified archive borrowed a current subject: %+v", p)
 					}
 					if p.ID != "pve-backup:opaque" || p.StartedAt == nil || !p.StartedAt.Equal(now) || p.SizeBytes == nil || *p.SizeBytes != b.Size || p.Details["type"] != kind || p.Details["volid"] != b.Volid || p.ProviderScope != "cluster" {
