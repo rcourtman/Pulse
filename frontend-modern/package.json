@@ -52,7 +52,7 @@
     "check:bundlesize": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
-    "@solidjs/router": "^0.10.10",
+    "@solidjs/router": "^1.0.0",
     "dompurify": "^3.4.17",
     "lucide-solid": "^0.577.0",
     "marked": "^17.0.1",
