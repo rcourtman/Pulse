@@ -4625,6 +4625,25 @@ func backupKey(instance string, vmid int) string {
 	return instance + "-" + strconv.Itoa(vmid)
 }
 
+type localBackupSubjectKey struct {
+	instance, guestType string
+	vmid                int
+}
+
+// localBackupGuestType keeps explicit archive kinds consistent between date
+// selection and placement alignment. An untyped legacy row keeps its existing
+// best-effort VMID lookup; a known contradictory kind never uses that fallback.
+func localBackupGuestType(kind string) string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "qemu", "vm":
+		return "vm"
+	case "lxc", "ct":
+		return "ct"
+	default:
+		return ""
+	}
+}
+
 // UpdatePBSGuestConfirmationsForInstance replaces the PVE-side PBS snapshot
 // evidence for one connection. Pass an empty slice when the connection's
 // storage poll saw no pbs-type storage content so stale evidence cannot
@@ -4710,9 +4729,10 @@ func (s *State) SyncGuestBackupTimes() {
 		vmid       int
 	}
 
-	// Build a map of instance+VMID -> latest backup time from all backup sources
-	// Using composite key prevents cross-instance VMID collision issues
-	latestBackup := make(map[string]time.Time)
+	// A retained archive may belong to the other guest kind after VMID reuse.
+	// Keep its kind as well as its connection; the live occupant cannot turn
+	// a removed VM's archive into an LXC backup (or the reverse).
+	latestBackup := make(map[localBackupSubjectKey]time.Time)
 
 	// Guests with a backup running right now: a live vzdump task is the
 	// authoritative PVE-side signal. Partial artifacts (an in-flight PBS
@@ -4753,10 +4773,19 @@ func (s *State) SyncGuestBackupTimes() {
 			// above already reports the guest as backing up.
 			continue
 		}
-		key := backupKey(backup.Instance, backup.VMID)
+		key := localBackupSubjectKey{backup.Instance, localBackupGuestType(backup.Type), backup.VMID}
 		if existing, ok := latestBackup[key]; !ok || backup.Time.After(existing) {
 			latestBackup[key] = backup.Time
 		}
+	}
+	latestLocalBackup := func(instance string, vmid int, guestType string) time.Time {
+		latest := latestBackup[localBackupSubjectKey{instance, guestType, vmid}]
+		// Preserve best-effort matching of older/untyped rows. Only an explicit
+		// artifact discriminator can establish a contradictory guest kind.
+		if untyped := latestBackup[localBackupSubjectKey{instance, "", vmid}]; untyped.After(latest) {
+			latest = untyped
+		}
+		return latest
 	}
 
 	// Process PBS backups (VMID is string, BackupTime is the timestamp).
@@ -5020,11 +5049,8 @@ func (s *State) SyncGuestBackupTimes() {
 
 	// Update VMs - recompute from current backup evidence instead of preserving stale values
 	for i := range s.VMs {
-		var lastBackup time.Time
+		lastBackup := latestLocalBackup(s.VMs[i].Instance, s.VMs[i].VMID, "vm")
 		key := backupKey(s.VMs[i].Instance, s.VMs[i].VMID)
-		if backupTime, ok := latestBackup[key]; ok {
-			lastBackup = backupTime
-		}
 		// Check if PBS has a more recent backup
 		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
 		if !pbsTime.IsZero() {
@@ -5046,11 +5072,8 @@ func (s *State) SyncGuestBackupTimes() {
 
 	// Update Containers - recompute from current backup evidence instead of preserving stale values
 	for i := range s.Containers {
-		var lastBackup time.Time
+		lastBackup := latestLocalBackup(s.Containers[i].Instance, s.Containers[i].VMID, "ct")
 		key := backupKey(s.Containers[i].Instance, s.Containers[i].VMID)
-		if backupTime, ok := latestBackup[key]; ok {
-			lastBackup = backupTime
-		}
 		// Check if PBS has a more recent backup
 		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
 		if !pbsTime.IsZero() {
@@ -6259,22 +6282,27 @@ func (s *State) UpdateStorageBackupsForInstance(instanceName string, backups []S
 
 	// When storage is shared across nodes, backups can appear under whichever node reported the content.
 	// Align each backup with the guest's current node so the frontend column matches the VM/CT placement.
-	guestNodeByVMID := make(map[int]string)
+	// Keep explicit kinds here too: this final state alignment must not undo
+	// the collector's refusal to borrow an opposite-kind replacement's node.
+	guestNodeBySubject := make(map[localBackupSubjectKey]string)
 	for _, vm := range s.VMs {
 		if vm.Instance == instanceName && vm.Node != "" {
-			guestNodeByVMID[vm.VMID] = vm.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "vm", vm.VMID}] = vm.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "", vm.VMID}] = vm.Node
 		}
 	}
 	for _, ct := range s.Containers {
 		if ct.Instance == instanceName && ct.Node != "" {
-			guestNodeByVMID[ct.VMID] = ct.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "ct", ct.VMID}] = ct.Node
+			guestNodeBySubject[localBackupSubjectKey{instanceName, "", ct.VMID}] = ct.Node
 		}
 	}
 
 	normalizedBackups := make([]StorageBackup, 0, len(backups))
 	for _, backup := range backups {
 		if backup.VMID > 0 {
-			if node, ok := guestNodeByVMID[backup.VMID]; ok {
+			key := localBackupSubjectKey{instanceName, localBackupGuestType(backup.Type), backup.VMID}
+			if node, ok := guestNodeBySubject[key]; ok {
 				backup.Node = node
 			}
 		}

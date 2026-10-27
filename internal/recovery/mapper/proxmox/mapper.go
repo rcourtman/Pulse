@@ -268,13 +268,19 @@ func FromPVEStorageBackups(backups []models.StorageBackup, guestInfoByKey map[st
 		if vmid > 0 && instanceName != "" && nodeName != "" {
 			key := guestLookupKey(instanceName, nodeName, vmid)
 			info := guestInfoByKey[key]
+			resourceType := resourceTypeFromGuestType(b.Type)
+			if resourceType == "" {
+				// Untyped legacy rows keep the existing best-effort lookup.
+				resourceType = info.ResourceType
+			} else if info.ResourceType != "" && info.ResourceType != resourceType {
+				// VMIDs can be reused across guest kinds. Keep the historical
+				// artifact's typed subject, without borrowing the new occupant's
+				// canonical ID, source ID or display name.
+				info = GuestInfo{}
+			}
 			sourceID := strings.TrimSpace(info.SourceID)
 			if sourceID == "" {
 				sourceID = guestSourceID(instanceName, nodeName, vmid)
-			}
-			resourceType := info.ResourceType
-			if resourceType == "" {
-				resourceType = resourceTypeFromGuestType(b.Type)
 			}
 			if resourceType != "" {
 				subjectRID = subjectResourceID(resourceType, info.ResourceID, sourceID)

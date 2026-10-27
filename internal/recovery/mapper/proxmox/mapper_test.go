@@ -865,3 +865,55 @@ func TestFromPVEStorageBackups_InProgressMapsToRunning(t *testing.T) {
 		t.Errorf("Verified = %v, want nil for a running backup", *p.Verified)
 	}
 }
+
+func TestFromPVEStorageBackupsRetainsExplicitGuestKind(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind             string
+		artifactType, liveType unifiedresources.ResourceType
+	}{
+		{"removed-vm-now-lxc", "qemu", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer},
+		{"removed-lxc-now-vm", "lxc", unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeVM},
+		{"vm-alias", " VM ", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer},
+		{"ct-alias", " CT ", unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeVM},
+		{"matching-vm", "qemu", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeVM},
+		{"matching-lxc", "lxc", unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeSystemContainer},
+		{"untyped-legacy", "", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeVM},
+		{"unknown-legacy", "unknown", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeVM},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC().Truncate(time.Second)
+			b := models.StorageBackup{ID: "retained-archive", Instance: "cluster", Node: "node", VMID: 100, Type: tc.kind, Time: now, Size: 2048, Storage: "local"}
+			info := map[string]GuestInfo{"cluster|node|100": {ResourceID: "current-canonical", SourceID: "current-source", ResourceType: tc.liveType, Name: "current-occupant"}}
+			points, err := FromPVEStorageBackupsWithEvidence([]models.StorageBackup{b}, info, now)
+			if err != nil || len(points) != 1 {
+				t.Fatalf("points=%+v err=%v", points, err)
+			}
+			p := points[0]
+			if tc.artifactType != tc.liveType {
+				want := unifiedresources.ProxmoxGuestCanonicalID(tc.artifactType, "cluster", 100)
+				if p.SubjectResourceID != want || p.SubjectRef == nil || p.SubjectRef.Name != "100" || p.SubjectRef.ID != "cluster:node:100" {
+					t.Errorf("opposite kind borrowed current occupant: %+v", p)
+				}
+			} else if p.SubjectResourceID != "current-canonical" || p.SubjectRef == nil || p.SubjectRef.Name != "current-occupant" || p.SubjectRef.ID != "current-source" {
+				t.Errorf("compatible metadata not preserved: %+v", p)
+			}
+			if p.ID != "pve-backup:retained-archive" || p.CompletedAt == nil || !p.CompletedAt.Equal(now) || p.Outcome != recovery.OutcomeSuccess || p.SizeBytes == nil || *p.SizeBytes != 2048 || p.ProviderScope != "cluster" {
+				t.Errorf("archive facts changed: %+v", p)
+			}
+			if p.SubjectRef != nil && tc.artifactType != tc.liveType {
+				wantType := "proxmox-vm"
+				if tc.artifactType == unifiedresources.ResourceTypeSystemContainer {
+					wantType = "proxmox-lxc"
+				}
+				if p.SubjectRef.Type != wantType {
+					t.Errorf("subject reference kind=%s want=%s", p.SubjectRef.Type, wantType)
+				}
+			}
+			b.InProgress = true
+			running := FromPVEStorageBackups([]models.StorageBackup{b}, info)[0]
+			if running.SubjectResourceID != p.SubjectResourceID || running.ID != p.ID || running.Outcome != recovery.OutcomeRunning || running.CompletedAt != nil {
+				t.Error("incomplete archive changed subject or claimed completion")
+			}
+		})
+	}
+}
