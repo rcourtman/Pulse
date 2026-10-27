@@ -15,6 +15,11 @@
 
 ## Purpose
 
+A trust edit round-trips explicit disabled PVE collection flags. It is not
+permission to re-enable guest collection through a missing response field or
+a new-connection default. `TestPVEEndpointTrustEditorPreservesDisabledCollectors`
+checks this boundary.
+
 ### Managed Proxmox TLS edits do not provision agents
 
 The node editor's endpoint-scoped fingerprint edits and saved-credential tests

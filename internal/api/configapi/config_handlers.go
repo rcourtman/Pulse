@@ -904,10 +904,10 @@ type NodeResponse struct {
 	HasToken                     bool                      `json:"hasToken"`
 	Fingerprint                  string                    `json:"fingerprint,omitempty"`
 	VerifySSL                    bool                      `json:"verifySSL"`
-	MonitorVMs                   bool                      `json:"monitorVMs,omitempty"`
-	MonitorContainers            bool                      `json:"monitorContainers,omitempty"`
-	MonitorStorage               bool                      `json:"monitorStorage,omitempty"`
-	MonitorBackups               bool                      `json:"monitorBackups,omitempty"`
+	MonitorVMs                   bool                      `json:"monitorVMs"`
+	MonitorContainers            bool                      `json:"monitorContainers"`
+	MonitorStorage               bool                      `json:"monitorStorage"`
+	MonitorBackups               bool                      `json:"monitorBackups"`
 	MonitorPhysicalDisks         *bool                     `json:"monitorPhysicalDisks,omitempty"`
 	PhysicalDiskPollingMinutes   int                       `json:"physicalDiskPollingMinutes,omitempty"`
 	TemperatureMonitoringEnabled *bool                     `json:"temperatureMonitoringEnabled,omitempty"`

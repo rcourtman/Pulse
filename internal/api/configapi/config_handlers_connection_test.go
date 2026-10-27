@@ -620,3 +620,30 @@ func TestPVEEndpointUnknownTrustProjection(t *testing.T) {
 		t.Fatal("saved probe discarded explicit member CA policy")
 	}
 }
+
+func TestPVEEndpointTrustEditorPreservesDisabledCollectors(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{{Name: "scope", Host: "https://primary.test:8006", VerifySSL: true, IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "primary", Host: "https://primary.test:8006"}}}}}
+	h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: config.NewConfigPersistence(cfg.DataPath), runtime: defaultRuntimeDependencies()}
+	data, err := json.Marshal(h.GetAllNodesForAPI(context.Background())[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for _, flag := range []string{"monitorVMs", "monitorContainers", "monitorStorage", "monitorBackups"} {
+		if value, present := wire[flag]; !present || value != false {
+			t.Fatalf("disabled %s omitted from editor response", flag)
+		}
+	}
+	wire["fingerprint"] = "verified-new-pin"
+	// Send the same complete collection-scope fields the editor round-trips.
+	body, _ := json.Marshal(map[string]any{"fingerprint": wire["fingerprint"], "monitorVMs": wire["monitorVMs"], "monitorContainers": wire["monitorContainers"], "monitorStorage": wire["monitorStorage"], "monitorBackups": wire["monitorBackups"]})
+	rec := httptest.NewRecorder()
+	h.HandleUpdateNode(rec, httptest.NewRequest("PUT", "/api/config/nodes/pve-0", strings.NewReader(string(body))))
+	saved := cfg.PVEInstances[0]
+	if rec.Code != 200 || saved.MonitorVMs || saved.MonitorContainers || saved.MonitorStorage || saved.MonitorBackups || !saved.VerifySSL {
+		t.Fatal("trust edit enabled an excluded collector")
+	}
+}

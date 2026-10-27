@@ -21,6 +21,12 @@
 
 ## Purpose
 
+Existing PVE `monitorVMs`, `monitorContainers`, `monitorStorage` and
+`monitorBackups` response fields include false values. Omitting a disabled
+scope would make the editor substitute its new-connection defaults and enable
+collectors during an unrelated trust save.
+`TestPVEEndpointTrustEditorPreservesDisabledCollectors` verifies the round-trip.
+
 ### Scoped Proxmox trust edits and connection tests
 
 PVE updates accept `clusterEndpointTrustOverrides` entries containing an

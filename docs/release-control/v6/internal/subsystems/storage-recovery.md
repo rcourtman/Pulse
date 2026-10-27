@@ -21,6 +21,11 @@
 
 ## Purpose
 
+Disabled guest, storage and backup collection scopes remain disabled when a
+trust edit is saved. Their false response values must survive the editor
+round-trip rather than fall back to enabled new-connection defaults.
+`TestPVEEndpointTrustEditorPreservesDisabledCollectors` verifies preservation.
+
 ### Proxmox TLS recovery preserves storage and guest state
 
 Reconciliation of saved API certificate trust is confined to the selected
