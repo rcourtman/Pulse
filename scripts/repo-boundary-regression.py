@@ -17,6 +17,25 @@ class ReportingSubjectBoundaryTests(unittest.TestCase):
         variants = [
             ("shared pipeline", None, None, None),
             (
+                "SSO configuration adapter exact path", "sso_config_preservation_extra.go",
+                "package api\n", "new production paid-domain implementation files are not baselined",
+            ),
+            (
+                "SSO configuration adapter private root import", "sso_config_preservation.go",
+                'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/internal/license"\n',
+                "API root imports of internal/license remain",
+            ),
+            (
+                "SSO configuration adapter private implementation import", "sso_config_preservation.go",
+                'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"\n',
+                "non-test internal API files still import internal/license",
+            ),
+            (
+                "SSO configuration adapter licensing bridge required", "sso_config_preservation.go",
+                'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"\n',
+                "API files outside bridge allowlist still import pkg/licensing",
+            ),
+            (
                 "activity observer exact path", "reporting_activity_extra.go",
                 "package api\n", "new production paid-domain implementation files are not baselined",
             ),

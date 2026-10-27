@@ -4973,7 +4973,18 @@ the authoritative analysis outcome.
     payload must round-trip through `PUT /api/security/sso/providers/{id}`
     without clearing existing OIDC redirect, logout, scopes, restrictions,
     role mappings, or stored secret markers unless the update explicitly
-    replaces them.
+    replaces them. Same-type edits also retain omitted advanced nested settings
+    that the detail/editor cannot represent: OIDC claim names/CA bundle and SAML
+    signing material, trust files, custom paths, attribute/policy and logout
+    settings. Explicit nested empty strings, false values and nulls still clear
+    those fields. No settings or secrets are inherited across protocol changes.
+    Visible fields and restriction clears keep their existing replacement
+    semantics, and blank OIDC secrets keep their existing preserve rule. Never
+    expose signing keys or hidden settings just to round-trip the editor.
+    `TestSSOProviderUnrepresentedFields` covers all omitted persisted fields,
+    aliases, clears and restart readback; `TestContractSSOUnrepresentedSettingsSurviveSignedProviderEdit`
+    verifies that an enabled signed SAML provider remains valid and initializes
+    its real runtime after an ordinary non-secret detail/save cycle.
 33. Keep config-archive import reloads fail-closed on the shared API/runtime
     boundary. `internal/api/configapi/config_export_import_handlers.go`,
     `internal/api/contract_test.go`, and adjacent config/runtime helpers must

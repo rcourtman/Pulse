@@ -146,6 +146,9 @@ var knownSharedInfrastructureFiles = map[string]bool{
 	// Shared SSO outbound helpers centralize restricted fetch/file access and are
 	// consumed by public handlers; they are not paid-domain business logic.
 	"sso_outbound.go": true,
+	// Shared configuration edit adapter: retains omitted stored fields without
+	// exposing them. No authentication, entitlement or paid endpoint logic.
+	"sso_config_preservation.go": true,
 }
 
 // TestPaidDomainBoundaryAudit enforces two rules:

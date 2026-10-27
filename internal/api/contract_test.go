@@ -28350,3 +28350,50 @@ func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
 	}
 	t.Logf("OIDC_CONSUMER_FRAMES %s", encoded)
 }
+
+// An ordinary editor save must not remove signing material the detail DTO
+// deliberately keeps private, or discard custom paths consumed by SAML runtime.
+func TestContractSSOUnrepresentedSettingsSurviveSignedProviderEdit(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	cert, key, _ := generateTestCert(t)
+	provider := config.SSOProvider{ID: "signed-provider", Name: "Signed provider", Type: config.SSOProviderTypeSAML, Enabled: true,
+		SAML: &config.SAMLProviderConfig{IDPSSOURL: "https://idp.example.test/sso", IDPEntityID: "https://idp.example.test", IDPCertificate: string(cert),
+			SignRequests: true, SPCertificate: string(cert), SPPrivateKey: string(key), SPACSPath: "/custom/acs", SPMetadataPath: "/custom/metadata", ForceAuthn: true, WantAssertionsSigned: true}}
+	if err := router.ssoConfig.AddProvider(provider); err != nil {
+		t.Fatal(err)
+	}
+	if err := router.saveSSOConfig(); err != nil {
+		t.Fatal(err)
+	}
+	detail := httptest.NewRecorder()
+	router.handleGetSSOProvider(detail, httptest.NewRequest(http.MethodGet, "/", nil), provider.ID)
+	if detail.Code != http.StatusOK || strings.Contains(detail.Body.String(), "PRIVATE KEY") {
+		t.Fatal("detail did not preserve the non-secret contract")
+	}
+	update := httptest.NewRecorder()
+	router.handleSSOProvider(update, httptest.NewRequest(http.MethodPut, "/api/security/sso/providers/"+provider.ID, bytes.NewReader(detail.Body.Bytes())))
+	if update.Code != http.StatusOK {
+		t.Fatalf("signed-provider edit failed: %s", update.Body.String())
+	}
+	if strings.Contains(update.Body.String(), "PRIVATE KEY") {
+		t.Fatal("write response exposed a signing key")
+	}
+	persisted, err := router.persistence.LoadSSOConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := persisted.Validate(); err != nil {
+		t.Fatalf("saved signed provider is invalid: %v", err)
+	}
+	saved := persisted.GetProvider(provider.ID)
+	if saved.SAML.SPPrivateKey != string(key) || saved.SAML.SPCertificate != string(cert) || !saved.SAML.WantAssertionsSigned {
+		t.Fatal("editor discarded signing settings")
+	}
+	service := router.samlManager.GetService(provider.ID)
+	if service == nil {
+		t.Fatal("saved provider could not initialize its real SAML service")
+	}
+	if service.sp.Key == nil || service.sp.AcsURL.Path != "/custom/acs" || service.sp.MetadataURL.Path != "/custom/metadata" || service.sp.ForceAuthn == nil || !*service.sp.ForceAuthn {
+		t.Fatal("SAML runtime did not consume retained settings")
+	}
+}

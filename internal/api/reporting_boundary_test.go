@@ -27,6 +27,25 @@ func TestReportingSubjectBoundaryExemptionIsExact(t *testing.T) {
 	}{
 		{name: "shared subject pipeline"},
 		{
+			name: "SSO configuration adapter exemption is exact", file: "sso_config_preservation_extra.go", content: "package api\n",
+			goMarker: "untracked paid-domain file sso_config_preservation_extra.go",
+		},
+		{
+			name: "SSO configuration adapter private root import denied", file: "sso_config_preservation.go",
+			content:  "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/internal/license\"\n",
+			goMarker: "direct internal/license import",
+		},
+		{
+			name: "SSO configuration adapter private implementation import denied", file: "sso_config_preservation.go",
+			content:  "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements\"\n",
+			goMarker: "direct internal/license import",
+		},
+		{
+			name: "SSO configuration adapter licensing bridge required", file: "sso_config_preservation.go",
+			content:  "package api\nimport _ \"github.com/rcourtman/pulse-go-rewrite/pkg/licensing\"\n",
+			goMarker: "sso_config_preservation.go",
+		},
+		{
 			name: "activity observer exemption is exact", file: "reporting_activity_extra.go", content: "package api\n",
 			goMarker: "untracked paid-domain file reporting_activity_extra.go",
 		},
