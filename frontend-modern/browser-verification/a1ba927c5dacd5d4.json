@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "b0509ece1cb78bb7dd89ca1aebba1e0630596c2d",
+  "verified_at": "2026-10-27T06:58:51.527805Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/TROUBLESHOOTING.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "6f4bde714fd76fc670fb749a75723054e94dff8fcf5639f3c709e3f042ba92a7"
+  },
+  "routes": [
+    "/docs/TROUBLESHOOTING#test-connection-succeeds-but-cluster-polling-fails",
+    "/docs/TROUBLESHOOTING#-getting-help"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "The production Docs/router/renderer/PageHeader/CSS consume the actual shipped guide in an isolated page mount. This is not a full authenticated shell, TLS or polling execution, installed PVE recovery or reporter acceptance.",
+    "New copy distinguishes primary connection-test settings from saved per-member polling pins, even for the same endpoint, and separates API trust from agent reporting. Existing verified-trust, private help and backup-safety guidance remains."
+  ],
+  "interactions": [
+    "35 consuming checks across desktop Chromium 1365x900 and narrow WebKit 390x844; actual guide GETs return 200, heading fragments focus and the Help link works by keyboard. No page exception or page-wide overflow.",
+    "All three retained final captures were opened with native view_image. Both complete new paragraphs wrap without clipping. The separate narrow capture preserves the entire private-help paragraph.",
+    "The initial fixture mount did not load the entry module; the next run reached 13 successful checks before an over-strict zero-coordinate assertion. Corrected measurement retains actual help y=-0.421875 CSS pixels and uses a one-pixel scroll-rounding tolerance. Neither product source nor product test limits was changed for the browser run."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "phone": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": 3,
+    "remaining": null
+  },
+  "evidence": "Product intelligence outcome RECEIPTS.md retains exact browser scripts, all results and captures, source proof and adverse fixture/test observations."
+}
