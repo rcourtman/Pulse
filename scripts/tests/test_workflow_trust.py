@@ -58,7 +58,14 @@ class WorkflowTrustTest(unittest.TestCase):
         self.assertGreater(count, 0)
         native = (REPO_ROOT / ".github/workflows/unified-agent-native.yml").read_text()
         self.assertIn("agentInstallCommand.windows.test.ts", native)
-        self.assertIn("^Test(InstallPS1|WindowsAgentLifecycle)", native)
+        # Keep both installer/lifecycle families and the authenticated peer
+        # controls in the actual recipe, not just a selector in a comment.
+        native_recipe = (
+            "run: go test ./scripts/installtests "
+            "./scripts/installtests/windowslifecycleserver "
+            "-run '^Test(InstallPS1|WindowsAgentLifecycle|UninstallProof)'"
+        )
+        self.assertIn(native_recipe, [line.strip() for line in native.splitlines()])
         self.assertIn("node-version: '24'", native)
 
     def test_browser_release_uses_governed_node_line(self) -> None:
