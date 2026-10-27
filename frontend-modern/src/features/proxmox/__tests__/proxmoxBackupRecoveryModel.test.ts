@@ -98,6 +98,23 @@ const protectionPosture = (resourceId: string, state: ProtectionState): Protecti
 });
 
 describe('proxmoxBackupRecoveryModel', () => {
+  it('retains task origin independently of migrated placement and exposed task search', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [workload({})],
+      pbsBackups: [],
+      archives: [],
+      snapshots: [],
+      tasks: [task({ node: ' original-Node ' })],
+      nowMs: Date.parse('2026-05-26T00:00:00Z'),
+    });
+    const row = model.coverageRows[0];
+    expect(row.workload.nativeNode).toBe('minipc');
+    expect(row.latestTask).toMatchObject({ node: 'original-Node', instance: 'homelab' });
+    expect(coverageRowMatchesSearch(row, 'ORIGINAL-NODE')).toBe(true);
+    expect(coverageRowMatchesSearch(row, 'task-112')).toBe(true);
+    expect(row.posture).toBe('unknown');
+  });
+
   it.each(['pbs-west', undefined])(
     'searches the displayed backup connection independently of workload placement: %s',
     (instance) => {

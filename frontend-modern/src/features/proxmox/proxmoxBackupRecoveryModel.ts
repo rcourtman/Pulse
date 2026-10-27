@@ -63,6 +63,9 @@ export interface CoverageTask {
   startedMs?: number;
   durationSeconds?: number;
   error?: string;
+  /** Task-reported origin, independent of the workload's current placement. */
+  instance?: string;
+  node?: string;
 }
 
 export interface WorkloadCoverageRow {
@@ -763,6 +766,8 @@ export function buildProxmoxBackupRecoveryModel(
         getRecoveryAgeBand(parsedStart, input.nowMs) === 'unknown' ? undefined : parsedStart,
       durationSeconds: taskDurationSeconds(task),
       error: task.error,
+      instance: task.instance?.trim() || undefined,
+      node: task.node?.trim() || undefined,
     };
     const rowTasks = tasksByWorkload.get(row.key) ?? [];
     rowTasks.push(candidateTask);
@@ -839,9 +844,9 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     ...(row.workload.nativeNodeAliases ?? []),
     row.workload.instance,
     getWorkloadRecoveryPostureLabel(row.posture),
-    row.latestTask?.label,
-    row.latestTask?.error,
-    ...(row.taskCandidates ?? []).flatMap((task) => [task.label, task.error, task.id]),
+    ...[...(row.latestTask ? [row.latestTask] : []), ...(row.taskCandidates ?? [])].flatMap(
+      (task) => [task.label, task.error, task.id, task.instance, task.node],
+    ),
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
       artifact.sourceTitle,
