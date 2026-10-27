@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { buildBackupActivityTimeline } from '@/features/proxmox/proxmoxBackupActivityPresentation';
+import {
+  buildBackupActivityTimeline,
+  getBackupActivityUnknownCount,
+} from '@/features/proxmox/proxmoxBackupActivityPresentation';
 import { COVERAGE_COLUMNS } from '@/features/proxmox/proxmoxBackupsTablePresentation';
 import {
   isCompletedRecoveryArtifact,
@@ -49,11 +52,15 @@ describe('completed backup count guidance', () => {
     expect(read('frontend-modern/public/docs/RECOVERY.md')).toBe(read('docs/RECOVERY.md'));
     const copy = text();
     const tableSource = read('frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx');
-    for (const label of ['Completed restore points per day', 'Completed restore volume per day']) {
+    for (const label of ['Completed restore points per day', 'Known restore volume per day']) {
       expect(copy).toContain(label);
       expect(tableSource).toContain(label);
     }
+    expect(copy).not.toContain('Completed restore volume per day');
     expect(tableSource).toContain('aria-label="Clear date filter"');
+    expect(tableSource).toContain(
+      'Activity follows the backup filters. Selecting a day narrows only the list.',
+    );
     expect(copy).toContain(
       'covers the loaded inventory, not just the rows matching your list filters',
     );
@@ -98,6 +105,7 @@ describe('completed backup count guidance', () => {
     });
     expect(dated.points.reduce((sum, day) => sum + day.total, 0)).toBe(2);
     expect(volume.points.reduce((sum, day) => sum + day.total, 0)).toBe(100);
+    expect(volume.points.reduce((sum, day) => sum + getBackupActivityUnknownCount(day), 0)).toBe(1);
     const copy = text();
     expect(copy).toContain(
       'excludes both, even when an incomplete entry has a size or a verification flag',
@@ -106,6 +114,9 @@ describe('completed backup count guidance', () => {
       'An undated completed point can count in Backup health but not in a daily column',
     );
     expect(copy).toContain('no reported size can count as a point without contributing volume');
+    expect(copy).toContain('It remains selectable in Volume and counts normally in Count');
+    expect(copy).toContain('Amber marks days with unknown sizes, not zero volume');
+    expect(copy).toContain('its known volume is a lower bound, not a complete total');
     expect(copy).toContain('not PBS datastore usage or deduplicated physical space');
   });
 
