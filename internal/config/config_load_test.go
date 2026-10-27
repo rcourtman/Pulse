@@ -748,3 +748,16 @@ func TestPVEEndpointTrustOverridePersistenceAndClone(t *testing.T) {
 		t.Fatal("reload lost explicit scoped CA policy or unrelated state")
 	}
 }
+
+func TestPVEEndpointTrustOverrideSurvivesMerge(t *testing.T) {
+	target := PVEInstance{Host: "https://primary.test:8006", VerifySSL: true, TLSFingerprintOverrides: map[string]string{"https://primary.test:8006": ""}}
+	source := PVEInstance{Host: target.Host, Fingerprint: "old-observation", TLSFingerprintOverrides: map[string]string{"https://member.test:8006": "member-pin"}}
+	mergePVEInstanceData(&target, source)
+	if target.Fingerprint != "" || target.TLSFingerprintOverrides[target.Host] != "" || target.TLSFingerprintOverrides["https://member.test:8006"] != "member-pin" {
+		t.Fatal("merge changed explicit trust decisions")
+	}
+	source.TLSFingerprintOverrides["https://PRIMARY.test:8006/"] = "contradictory"
+	if !pveClusterInstancesHaveFingerprintConflict(target, source) {
+		t.Fatal("consolidation ignored contradictory explicit authority trust")
+	}
+}

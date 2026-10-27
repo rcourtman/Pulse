@@ -359,7 +359,7 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 	t.Setenv("SSL_CERT_FILE", caFile)
 	t.Setenv("SSL_CERT_DIR", t.TempDir())
 	makeLeaf := func(serial int64) tls.Certificate {
-		pub, key, err := ed25519.GenerateKey(rand.Reader)
+		pub, leafKey, err := ed25519.GenerateKey(rand.Reader)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -368,7 +368,7 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return tls.Certificate{Certificate: [][]byte{der, ca.Raw}, PrivateKey: key}
+		return tls.Certificate{Certificate: [][]byte{der, ca.Raw}, PrivateKey: leafKey}
 	}
 	pin := func(c tls.Certificate) string { return fmt.Sprintf("%x", sha256.Sum256(c.Certificate[0])) }
 	old := [2]tls.Certificate{makeLeaf(2), makeLeaf(3)}
@@ -562,11 +562,11 @@ func TestPVEEndpointTrustAdmission(t *testing.T) {
 	}
 	// A storage failure must not publish the trust/credential candidate in memory.
 	cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{instance.DeepCopy()}}
-	blocked := filepath.Join(cfg.DataPath, "not-a-directory")
-	if err := os.WriteFile(blocked, []byte("blocked"), 0600); err != nil {
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	if err := os.Mkdir(filepath.Join(cfg.DataPath, "nodes.enc"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: config.NewConfigPersistence(blocked), runtime: defaultRuntimeDependencies()}
+	h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, runtime: defaultRuntimeDependencies()}
 	before, _ := json.Marshal(cfg)
 	rec := httptest.NewRecorder()
 	h.HandleUpdateNode(rec, httptest.NewRequest("PUT", "/api/config/nodes/pve-0", strings.NewReader(`{"fingerprint":"new-pin"}`)))

@@ -118,3 +118,10 @@ func pveClusterEndpointTLSResponses(instance config.PVEInstance, discovery confi
 	}
 	return responses
 }
+
+func pvePrimaryTLSFingerprint(instance config.PVEInstance) string {
+	if fingerprint, known, err := proxmox.ResolveEndpointFingerprint(instance.Host, instance.TLSFingerprintOverrides); err == nil && known {
+		return fingerprint
+	}
+	return instance.Fingerprint
+}

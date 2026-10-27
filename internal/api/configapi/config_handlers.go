@@ -1650,7 +1650,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			HasPassword:                  pve.Password != "",
 			TokenName:                    pve.TokenName,
 			HasToken:                     pve.TokenValue != "",
-			Fingerprint:                  pve.Fingerprint,
+			Fingerprint:                  pvePrimaryTLSFingerprint(pve),
 			VerifySSL:                    pve.VerifySSL,
 			MonitorVMs:                   pve.MonitorVMs,
 			MonitorContainers:            pve.MonitorContainers,
