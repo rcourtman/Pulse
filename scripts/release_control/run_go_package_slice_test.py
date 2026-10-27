@@ -5,13 +5,14 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNNER = ROOT / ".github/scripts/run-go-package-slice.py"
+RUNNER = ROOT / "scripts/release_control/run_go_package_slice.py"
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 spec = importlib.util.spec_from_file_location("package_slices", RUNNER)
 runner = importlib.util.module_from_spec(spec)
@@ -64,6 +65,13 @@ import json, os, re, sys
 from pathlib import Path
 args = sys.argv[1:]
 with Path(os.environ['CALLS']).open('a') as f: f.write(json.dumps(args)+'\\n')
+if args[0] == 'list':
+    print('\\n'.join('github.com/rcourtman/pulse-go-rewrite/'+n for n in
+          ['internal/api','internal/monitoring','scripts/installtests','internal/a','internal/b','internal/c','internal/d']))
+    sys.exit(0)
+if '-list' not in args and '-json' not in args:
+    print('ok ordinary packages 0.01s')
+    sys.exit(int(os.environ.get('ORDINARY_EXIT','0')))
 names = ['TestZ', 'TestA', 'FuzzB', 'ExampleC', 'TestLast']
 if '-list' in args:
     if os.environ.get('LISTING_EXIT'):
@@ -135,39 +143,68 @@ sys.exit(int(os.environ.get('TEST_EXIT','0')))
 
 
 class WorkflowTest(unittest.TestCase):
-    def test_fixed_matrix_and_whole_package_exclusion_match_the_runner(self):
-        slow = job('backend-slow')
-        self.assertIn('suite: [monitoring, installtests]', slow)
-        self.assertIn('index: [0, 1]', slow)
-        self.assertEqual(re.findall(r'            package: (\S+)', slow), list(runner.PACKAGES))
-        for required in ('fail-fast: false', 'needs: [changes, test-compile]',
-                         'needs.changes.outputs.code == \'true\'', 'persist-credentials: false',
-                         'if: always()', 'run-go-package-slice.py', '--package "$TEST_PACKAGE"',
-                         '--index "$TEST_INDEX"', 'backend-slice-${{ matrix.suite }}-${{ matrix.index }}'):
-            self.assertIn(required, slow)
-        self.assertNotIn('continue-on-error', slow)
-        self.assertIn("grep -vE '/(internal/api|internal/monitoring|scripts/installtests)$'",
-                      job('backend-packages'))
-        self.assertIn('shard: [rest-0, rest-1]', job('backend'))
-        self.assertIn('name: Backend tests (${{ matrix.shard }})', job('backend'))
-        self.assertIn('needs: [changes, backend-packages, backend-slow]', job('backend'))
-        self.assertIn('if: always()', job('backend'))
+    def test_same_two_required_workers_cover_both_sliced_packages(self):
+        block = job('backend')
+        for expected in (
+            'name: Backend tests (${{ matrix.shard }})', 'shard: [rest-0, rest-1]',
+            'needs: [changes, test-compile]', "GOMAXPROCS: '2'",
+            "grep -v '/internal/api$'", "grep -vE '/(internal/monitoring|scripts/installtests)$'",
+            'go test -race -timeout 50m $pkgs &',
+            'for package in internal/monitoring scripts/installtests; do',
+            'scripts/release_control/run_go_package_slice.py',
+            '--package "$package" --index "$index"',
+            'for pid in "${pids[@]}"; do', 'if wait "$pid"; then :; else status=1; fi',
+            'exit "$status"', 'name: backend-slices-${{ matrix.shard }}',
+        ):
+            self.assertIn(expected, block)
+        self.assertNotIn('continue-on-error', block)
+        self.assertNotIn('  backend-slow:', WORKFLOW.read_text())
+        self.assertNotIn('  backend-packages:', WORKFLOW.read_text())
 
-    def test_actual_required_verdict_rejects_every_unavailable_or_incomplete_matrix(self):
-        verdict = job('backend').split('        run: |\n', 1)[1]
-        script = '\n'.join(line[10:] for line in verdict.splitlines()
-                           if line.startswith('          ') or not line.strip())
-        for code, slices in (('true', 'success'), ('false', 'skipped')):
-            env = {**os.environ, 'CHANGE_RESULT': 'success', 'CODE_REQUIRED': code,
-                   'PACKAGES_RESULT': 'success', 'SLICES_RESULT': slices}
-            result = subprocess.run(['bash', '-c', script], env=env, capture_output=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            for field in ('CHANGE_RESULT', 'PACKAGES_RESULT', 'SLICES_RESULT', 'CODE_REQUIRED'):
-                for value in ('', 'failure', 'cancelled', 'unknown', 'true' if field != 'CODE_REQUIRED' else 'other'):
-                    with self.subTest(code=code, field=field, value=value):
-                        result = subprocess.run(['bash', '-c', script], env={**env, field: value},
-                                                capture_output=True)
-                        self.assertNotEqual(result.returncode, 0)
+    def test_actual_worker_recipe_waits_for_both_slices_and_ordinary_failures(self):
+        fixture = ExecutedRunnerTest()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        root = fixture.root
+        for name in ('scripts/release_control/run_go_package_slice.py',
+                     '.github/scripts/record-internal-api-test-seconds.py',
+                     '.github/scripts/select-go-package-shard.py',
+                     '.github/scripts/go-package-test-seconds.txt'):
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / name, target)
+        # Do not recursively execute this test from the extracted recipe.
+        # The real test command is separately exercised by the CI/source suite.
+        (root / 'scripts/release_control/run_go_package_slice_test.py').write_text(
+            'import os; raise SystemExit(int(os.environ.get("CONTROL_EXIT","0")))\n')
+        step = job('backend').split('      - name: Go unit tests (shard ${{ matrix.shard }})\n', 1)[1]
+        body = step.split('        run: |\n', 1)[1].split('\n      - name:', 1)[0]
+        command = '\n'.join(line[10:] for line in body.splitlines()
+                            if line.startswith('          ') or not line.strip())
+        for index, options in enumerate(({}, {'ORDINARY_EXIT':'9'}, {'MODE':'failed-root'},
+                                         {'LISTING_EXIT':'7'}, {'CONTROL_EXIT':'5'})):
+            with self.subTest(options=options):
+                calls = root / 'calls'
+                calls.write_text('')
+                env = {**os.environ, 'PATH': str(root)+':'+os.environ['PATH'],
+                       'CALLS':str(calls), 'RUNNER_TEMP':str(root / f'output{index}'), **options}
+                result = subprocess.run(['bash', '-c', command.replace('${{ matrix.shard }}', 'rest-0')],
+                                        cwd=root, env=env, capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode == 0, not options, result.stdout+result.stderr)
+                observed = [json.loads(line) for line in calls.read_text().splitlines()]
+                if 'CONTROL_EXIT' in options:
+                    self.assertEqual(observed, [])
+                else:
+                    self.assertEqual(sum('-list' in call for call in observed), 2)
+                    self.assertEqual(sum('-json' not in call and '-list' not in call
+                                         and call[0]=='test' for call in observed), 1)
+
+    def test_helpers_are_part_of_the_exact_main_controls_copied_to_patches(self):
+        stable_patch = (ROOT / 'scripts/release_control/stable_patch.py').read_text()
+        self.assertIn('"scripts/release_control"', stable_patch)
+        self.assertTrue(RUNNER.is_relative_to(ROOT / 'scripts/release_control'))
+        self.assertTrue(Path(__file__).is_relative_to(ROOT / 'scripts/release_control'))
+        self.assertIn('python3 scripts/release_control/run_go_package_slice_test.py', job('backend'))
 
 
 if __name__ == "__main__":

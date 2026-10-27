@@ -4165,11 +4165,11 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 
 	// Branch protection requires these exact check names. The rest shards stay
 	// matrix entries and internal/api keeps its name on the verdict job.
-	backend := workflowJobBlock(t, workflow, "backend-packages")
+	backend := workflowJobBlock(t, workflow, "backend")
 	for _, required := range []string{
-		"name: Backend package tests (${{ matrix.shard }})",
+		"name: Backend tests (${{ matrix.shard }})",
 		"shard: [rest-0, rest-1]",
-		"grep -vE '/(internal/api|internal/monitoring|scripts/installtests)$'",
+		"grep -v '/internal/api$'",
 		"python3 .github/scripts/select-go-package-shard.py",
 		`.github/scripts/go-package-test-seconds.txt 2 "$index")`,
 		"set -euo pipefail",
@@ -4180,34 +4180,17 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		}
 	}
 
-	// The old protected names now require both ordinary workers and every
-	// source-derived slice. A successful ordinary package cannot conceal an
-	// omitted, failed or skipped slow-package matrix.
-	restVerdict := workflowJobBlock(t, workflow, "backend")
 	for _, required := range []string{
-		"name: Backend tests (${{ matrix.shard }})",
-		"shard: [rest-0, rest-1]",
-		"needs: [changes, backend-packages, backend-slow]",
-		"if: always()",
-		"PACKAGES_RESULT: ${{ needs.backend-packages.result }}",
-		"SLICES_RESULT: ${{ needs.backend-slow.result }}",
-		"true:success)", "false:skipped)",
+		"grep -vE '/(internal/monitoring|scripts/installtests)$'",
+		"python3 scripts/release_control/run_go_package_slice_test.py",
+		"python3 scripts/release_control/run_go_package_slice.py",
+		"for package in internal/monitoring scripts/installtests; do",
+		"for pid in \"${pids[@]}\"; do",
+		"if wait \"$pid\"; then :; else status=1; fi",
+		"GOMAXPROCS: '2'", "name: backend-slices-${{ matrix.shard }}",
 	} {
-		if !strings.Contains(restVerdict, required) {
-			t.Fatalf("required rest verdict missing %q", required)
-		}
-	}
-	slow := workflowJobBlock(t, workflow, "backend-slow")
-	for _, required := range []string{
-		"needs: [changes, test-compile]", "fail-fast: false",
-		"suite: [monitoring, installtests]", "index: [0, 1]",
-		"package: internal/monitoring", "package: scripts/installtests",
-		"python3 .github/scripts/run-go-package-slice.py",
-		`--package "$TEST_PACKAGE" --index "$TEST_INDEX"`,
-		"PULSE_DATA_DIR: /tmp/pulse-test-data",
-	} {
-		if !strings.Contains(slow, required) {
-			t.Fatalf("source-derived backend slices missing %q", required)
+		if !strings.Contains(backend, required) {
+			t.Fatalf("required backend worker lost exhaustive sliced coverage: %q", required)
 		}
 	}
 
@@ -5647,8 +5630,8 @@ func TestCITestCompilationPreservesChecks(t *testing.T) {
 			t.Fatalf("compile admission removed independent CI requirement: %s", required)
 		}
 	}
-	if strings.Count(workflow, "name: Require compiled backend tests") != 3 {
-		t.Fatal("ordinary, sliced and API backend workers must report compilation failures")
+	if strings.Count(workflow, "name: Require compiled backend tests") != 2 {
+		t.Fatal("both required backend matrices must report compilation failures")
 	}
 	for _, path := range []string{
 		repoFile("scripts", "compile-go-tests.sh"),

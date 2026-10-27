@@ -132,13 +132,10 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
 
     def test_required_checks_fail_on_bad_compile_and_pass_docs_only_skip(self):
         source = WORKFLOW.read_text()
-        for name in ("backend-packages", "backend-slow", "backend-api"):
+        for name in ("backend", "backend-api"):
             section = job(source, name)
             self.assertIn("needs: [changes, test-compile]", section)
-            condition = "if: ${{ !cancelled() && needs.changes.result == 'success'"
-            if name == "backend-slow":
-                condition += " && needs.changes.outputs.code == 'true'"
-            self.assertIn(condition + " }}", section)
+            self.assertIn("if: ${{ !cancelled() && needs.changes.result == 'success' }}", section)
             self.assertIn("COMPILE_RESULT: ${{ needs.test-compile.result }}", section)
             self.assertLess(section.index("Require compiled backend tests"), section.index("Checkout repository"))
             script = prerequisite_script(section)
@@ -153,12 +150,7 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
                         expected = 0 if code == "false" or result == "success" else 1
                         self.assertEqual(observed.returncode, expected, observed.stdout + observed.stderr)
             # Compile-only success cannot replace these full race/vet runs.
-            if name == "backend-slow":
-                self.assertIn("run-go-package-slice.py", section)
-                self.assertIn('"-race", "-count=1", "-timeout", "50m", "-json"',
-                              (ROOT / ".github/scripts/run-go-package-slice.py").read_text())
-            else:
-                self.assertIn("go test -race -timeout 50m", section)
+            self.assertIn("go test -race -timeout 50m", section)
         self.assertIn("shard: [rest-0, rest-1]", job(source, "backend"))
         self.assertIn("index: [0, 1, 2, 3, 4]", job(source, "backend-api"))
         self.assertIn("name: Backend tests (api)", job(source, "backend-api-verdict"))
