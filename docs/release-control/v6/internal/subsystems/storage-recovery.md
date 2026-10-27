@@ -21,6 +21,27 @@
 
 ## Purpose
 
+### Archive guest kinds come from artifact discriminators
+
+PVE archive type detection ignores the storage-name prefix and incidental
+filename text. The `vzdump-qemu-`/`vzdump-lxc-` archive prefix or PBS `vm/`/`ct/`
+group discriminator (with optional `backup/`) determines guest kind; exact
+`pbs-vm`/`pbs-ct` formats remain the fallback. Unknown artifacts remain unknown.
+A disk named `qemu-archive` may hold LXC backups without hiding them behind the
+VM filter or emitting VM-typed PBS guest confirmations. VMID-zero host handling
+and template/ISO admission stay unchanged.
+
+The normal-suite `pve_backup_content_type_test.go` exercises named-disk and
+suffix collisions, prefixed/prefixless local and PBS paths, exact-format
+fallback, unknowns, host/non-backup controls and typed direct-PBS confirmations
+in separate connections. Its poll/ingest lifecycle checks exact archive facts,
+canonical dates and subjects, partial-read evidence preservation, accepted
+absence and ordinary recovery; optional actual-response frames drive desktop
+and narrow production Backups consumer proof. No identities, stored timestamps,
+policy, access, guest/backup operations or public JSON shape change. This is
+source classification correctness, not #3248 causal attribution or installed
+guest/filesystem recovery.
+
 ### Local archive identities include their independent disk
 
 A PVE volume ID is a path within a repository, not proof that identically named

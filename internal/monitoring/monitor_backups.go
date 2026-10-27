@@ -190,6 +190,38 @@ func pveStorageBackupID(instance, storageNode, storage, volume string) string {
 	return fmt.Sprintf("pvelocal1:%x", sha256.Sum256([]byte(tuple)))
 }
 
+// Guest kind belongs to the artifact discriminator, not the repository label
+// or incidental filename text. In particular, "qemu-archive" may contain LXC
+// backups. Keep unknown artifacts unknown rather than borrowing a label's type.
+func pveStorageBackupType(content proxmox.StorageContent) string {
+	if content.VMID == 0 {
+		return "host"
+	}
+	volume := content.Volid
+	// Strip an optional storage prefix, but not a colon in a prefixless PBS
+	// timestamp (backup/ct/101/2026-10-27T00:00:00Z).
+	if colon := strings.IndexByte(volume, ':'); colon >= 0 && !strings.Contains(volume[:colon], "/") {
+		volume = volume[colon+1:]
+	}
+	volume = strings.TrimPrefix(volume, "backup/")
+	switch {
+	case strings.HasPrefix(volume, "vzdump-qemu-"), strings.HasPrefix(volume, "vm/"):
+		return "qemu"
+	case strings.HasPrefix(volume, "vzdump-lxc-"), strings.HasPrefix(volume, "ct/"):
+		return "lxc"
+	}
+	// Explicit PBS formats remain a fallback for paths without a recognised
+	// discriminator. A substring of an unrelated format is not type evidence.
+	switch content.Format {
+	case "pbs-vm":
+		return "qemu"
+	case "pbs-ct":
+		return "lxc"
+	default:
+		return "unknown"
+	}
+}
+
 func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName string, client PVEClientInterface, nodes []proxmox.Node, nodeEffectiveStatus map[string]string) {
 	if ctx.Err() != nil {
 		return
@@ -392,21 +424,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					continue
 				}
 
-				// Determine type from content type and VMID
-				backupType := "unknown"
-				if content.VMID == 0 {
-					backupType = "host"
-				} else if strings.Contains(content.Volid, "/vm/") || strings.Contains(content.Volid, "qemu") {
-					backupType = "qemu"
-				} else if strings.Contains(content.Volid, "/ct/") || strings.Contains(content.Volid, "lxc") {
-					backupType = "lxc"
-				} else if strings.Contains(content.Format, "pbs-ct") {
-					// PBS format check as fallback
-					backupType = "lxc"
-				} else if strings.Contains(content.Format, "pbs-vm") {
-					// PBS format check as fallback
-					backupType = "qemu"
-				}
+				backupType := pveStorageBackupType(content)
 
 				// Determine the correct node: for guest backups (VMID > 0), use the actual guest's node
 				// For host backups (VMID == 0), use the node where the backup was found
