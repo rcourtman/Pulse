@@ -21,6 +21,17 @@
 
 ## Purpose
 
+### Proxmox TLS recovery preserves storage and guest state
+
+Reconciliation of saved API certificate trust is confined to the selected
+endpoint authority/base path. It leaves backup/History data, guest identity,
+credentials, discovered member records and unrelated pins intact. A saved
+connection test reads the nodes API only and does not perform backup, restore,
+freeze/thaw, filesystem, storage or guest-agent operations. Failure to persist
+the PVE candidate does not publish its trust in memory.
+`TestPVEEndpointTrustAdmission` and `TestPVEEndpointTrustSavedPolling` prove
+these scoped save/probe boundaries, not installed backup or filesystem recovery.
+
 ### Backup retention never substitutes for verification
 
 The existing restore-point State cell and drawer status prioritise running or

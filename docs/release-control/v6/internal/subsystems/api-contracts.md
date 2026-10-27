@@ -21,6 +21,25 @@
 
 ## Purpose
 
+### Scoped Proxmox trust edits and connection tests
+
+PVE updates accept `clusterEndpointTrustOverrides` entries containing an
+existing HTTPS `endpoint` and required string `fingerprint`. An empty string
+selects the existing verification setting for that endpoint; missing/null,
+duplicate equivalent endpoints, unknown scopes and contradictory primary
+settings are rejected before mutation. A primary `fingerprint` edit also
+reconciles that exact endpoint in polling trust. Candidate PVE configuration
+is published in memory only after persistence succeeds.
+
+Cluster member responses expose the permitted runtime `tlsEndpoint` and
+`usesPrimaryTLS`, with the effective fingerprint. Saved-credential Test accepts
+an optional existing PVE `endpoint` and temporary TLS edits. It makes no saved
+trust or health changes and states that other endpoints/background collection
+were not tested. Omitted TLS edits use polling's saved trust, including an
+ambiguity failure. Other provider types cannot select a PVE endpoint.
+`TestPVEEndpointTrustAdmission` and `TestPVEEndpointTrustSavedPolling` cover
+rejected inputs, failed persistence, bounded probes and unchanged credentials.
+
 ### Configuration imports distinguish saved files from live recovery
 
 After an archive commits, every attempted live alert, webhook, email and guest

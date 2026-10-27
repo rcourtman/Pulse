@@ -798,6 +798,7 @@ type NodeConfigRequest struct {
 	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
 	// PVE only: per-cluster-member connection address overrides. Only the
 	// members named here are touched; an empty ipOverride clears the override.
+	ClusterEndpointTrustOverrides   []ClusterEndpointTrustOverrideRequest   `json:"clusterEndpointTrustOverrides,omitempty"`
 	ClusterEndpointOverrides        []ClusterEndpointOverrideRequest        `json:"clusterEndpointOverrides,omitempty"`
 	ClusterNodeDisplayNameOverrides []ClusterNodeDisplayNameOverrideRequest `json:"clusterNodeDisplayNameOverrides,omitempty"`
 	guestURLSet                     bool                                    `json:"-"`
@@ -956,6 +957,8 @@ type ClusterEndpointResponse struct {
 	GuestURL       string     `json:"guestURL,omitempty"`
 	IP             string     `json:"ip,omitempty"`
 	IPOverride     string     `json:"ipOverride,omitempty"`
+	TLSEndpoint    string     `json:"tlsEndpoint,omitempty"`
+	UsesPrimaryTLS bool       `json:"usesPrimaryTLS,omitempty"`
 	Fingerprint    string     `json:"fingerprint,omitempty"`
 	Online         bool       `json:"online"`
 	LastSeen       time.Time  `json:"lastSeen,omitempty"`
@@ -1660,7 +1663,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
-			ClusterEndpoints:             toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
+			ClusterEndpoints:             pveClusterEndpointTLSResponses(pve, h.getConfig(ctx).Discovery),
 			Source:                       pve.Source,
 		}.NormalizeCollections()
 		nodes = append(nodes, node)

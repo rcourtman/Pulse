@@ -3,14 +3,13 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestMapPVENodeNetworkInterfacesKeepsConfiguredBridgesAndAddresses(t *testing.T) {
@@ -545,5 +544,46 @@ func TestClusterMemberBrowserURL(t *testing.T) {
 				t.Fatalf("clusterMemberBrowserURL = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestPVEEndpointTrustOverridesScoped(t *testing.T) {
+	instance := config.PVEInstance{Host: "https://primary.test:8006", Fingerprint: "new-primary", VerifySSL: true, ClusterEndpoints: []config.ClusterEndpoint{
+		{Host: "https://primary.test:8006", Fingerprint: "old-primary"},
+		{Host: "https://PRIMARY.test:8006/./", Fingerprint: "contradictory-primary"},
+		{Host: "https://member.test:8006", Fingerprint: "old-member"},
+		{Host: "https://MEMBER.test:8006/", Fingerprint: "contradictory-member"},
+		{Host: "https://member.test:8006/other", Fingerprint: "separate-path"},
+	}, TLSFingerprintOverrides: map[string]string{"https://primary.test:8006": "new-primary"}}
+	before := instance.DeepCopy()
+	m := &Monitor{config: &config.Config{}}
+	for _, build := range []struct {
+		name string
+		fn   func(config.PVEInstance) ([]string, map[string]string, []string)
+	}{{"init", m.buildClusterEndpointsForInit}, {"reconnect", m.buildClusterEndpointsForReconnect}} {
+		t.Run(build.name, func(t *testing.T) {
+			_, pins, conflicts := build.fn(instance)
+			pin, known, err := proxmox.ResolveEndpointFingerprint(instance.Host, pins, conflicts...)
+			if err != nil || !known || pin != "new-primary" {
+				t.Fatalf("primary save not applied: %q %t %v", pin, known, err)
+			}
+			if _, _, err := proxmox.ResolveEndpointFingerprint("https://member.test:8006", pins, conflicts...); err == nil {
+				t.Fatal("primary save discarded unrelated member ambiguity")
+			}
+			pin, known, err = proxmox.ResolveEndpointFingerprint("https://member.test:8006/other", pins, conflicts...)
+			if err != nil || !known || pin != "separate-path" {
+				t.Fatal("primary save affected different base path")
+			}
+			copy := instance.DeepCopy()
+			copy.TLSFingerprintOverrides["https://member.test:8006"] = ""
+			_, pins, conflicts = build.fn(copy)
+			pin, known, err = proxmox.ResolveEndpointFingerprint("https://member.test:8006", pins, conflicts...)
+			if err != nil || !known || pin != "" {
+				t.Fatalf("explicit member CA mode lost: %q %t %v", pin, known, err)
+			}
+		})
+	}
+	if !reflect.DeepEqual(before, instance) {
+		t.Fatal("building polling trust mutated source config")
 	}
 }

@@ -257,9 +257,6 @@ func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string
 	var fingerprint string
 	known := false
 	for storedEndpoint, fp := range cc.endpointFingerprints {
-		if fp == "" {
-			continue
-		}
 		storedKey, storedValid := clusterEndpointKey(storedEndpoint)
 		if storedEndpoint != endpoint && (!valid || !storedValid || storedKey != key) {
 			continue
@@ -280,6 +277,23 @@ func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string
 		known = true
 	}
 	return fingerprint, known, nil
+}
+
+// ClusterEndpointIdentity returns the existing certificate-trust scope: HTTP
+// origin and base path, not DNS aliases, node names or cluster membership.
+func ClusterEndpointIdentity(endpoint string) (string, bool) {
+	return clusterEndpointKey(endpoint)
+}
+
+// ResolveEndpointFingerprint resolves only saved endpoint trust, without a
+// fallback, network call or trust capture. A present empty value is deliberate
+// CA/explicit-opt-out policy, not an unknown first-use member.
+func ResolveEndpointFingerprint(endpoint string, fingerprints map[string]string, conflictingEndpoints ...string) (string, bool, error) {
+	cc := ClusterClient{endpointFingerprints: fingerprints, conflictingEndpointFingerprints: make(map[string]bool)}
+	for _, conflict := range conflictingEndpoints {
+		cc.conflictingEndpointFingerprints[conflict] = true
+	}
+	return cc.knownEndpointFingerprintLocked(endpoint)
 }
 
 // CheckEndpointFingerprintConflicts checks saved trust without constructing a

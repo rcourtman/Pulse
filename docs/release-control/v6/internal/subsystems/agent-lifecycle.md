@@ -15,6 +15,17 @@
 
 ## Purpose
 
+### Managed Proxmox TLS edits do not provision agents
+
+The node editor's endpoint-scoped fingerprint edits and saved-credential tests
+manage only existing API connection trust. They do not enrol, restart or probe
+an agent, rotate its credentials, broaden access or mark agent health current.
+Tests explicitly qualify a successful API endpoint connection as distinct from
+background collection and the other members' health. Discovery observations
+cannot overwrite a saved exact-endpoint trust override.
+`TestPVEEndpointTrustSavedPolling` verifies the producer boundary with synthetic
+TLS endpoints; installed/agent recovery remains a separate outcome.
+
 ### Configuration-import retries preserve the remote-agent boundary
 
 The import API's process-local replay admission rejects duplicate committed

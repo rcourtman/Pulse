@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"net"
 	"net/url"
 	"strings"
@@ -39,6 +40,7 @@ func clonePVEInstances(instances []PVEInstance) []PVEInstance {
 	out := make([]PVEInstance, len(instances))
 	copy(out, instances)
 	for i := range out {
+		out[i].TLSFingerprintOverrides = maps.Clone(instances[i].TLSFingerprintOverrides)
 		if len(instances[i].ClusterEndpoints) > 0 {
 			out[i].ClusterEndpoints = make([]ClusterEndpoint, len(instances[i].ClusterEndpoints))
 			copy(out[i].ClusterEndpoints, instances[i].ClusterEndpoints)
@@ -90,6 +92,11 @@ func ProxmoxFingerprintsConflict(a, b string) bool {
 // certificate rotated between discoveries stays as two views rather than two
 // distinct clusters being silently folded into one.
 func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
+	for endpoint, fingerprint := range a.TLSFingerprintOverrides {
+		if other, known := b.TLSFingerprintOverrides[endpoint]; known && fingerprint != other {
+			return true
+		}
+	}
 	if ProxmoxFingerprintsConflict(a.Fingerprint, b.Fingerprint) {
 		return true
 	}
@@ -329,6 +336,16 @@ func appendUniquePVEIdentityAliases(existing []string, values ...string) []strin
 func mergePVEInstanceData(dst *PVEInstance, src PVEInstance) {
 	if dst == nil {
 		return
+	}
+	if len(src.TLSFingerprintOverrides) > 0 {
+		if dst.TLSFingerprintOverrides == nil {
+			dst.TLSFingerprintOverrides = make(map[string]string)
+		}
+		for endpoint, fingerprint := range src.TLSFingerprintOverrides {
+			if _, exists := dst.TLSFingerprintOverrides[endpoint]; !exists {
+				dst.TLSFingerprintOverrides[endpoint] = fingerprint
+			}
+		}
 	}
 
 	if dst.Host == "" && strings.TrimSpace(src.Host) != "" {
