@@ -15,14 +15,20 @@ function uninstallArticle(): HTMLElement {
 
 describe('shipped Windows removal guidance', () => {
   it('keeps the served producer equal to the source guide', () => {
-    expect(readFileSync(path.join(root, 'frontend-modern/public/docs/UNIFIED_AGENT.md'), 'utf8')).toBe(guide);
+    expect(
+      readFileSync(path.join(root, 'frontend-modern/public/docs/UNIFIED_AGENT.md'), 'utf8'),
+    ).toBe(guide);
   });
 
   it('renders exact-ID confirmation and partial-service recovery without asking for a new token', () => {
     const article = uninstallArticle();
     const heading = article.querySelector('#remove-the-whole-agent')!;
     const parts = [];
-    for (let item = heading.nextElementSibling; item && item.tagName !== 'H3'; item = item.nextElementSibling) {
+    for (
+      let item = heading.nextElementSibling;
+      item && item.tagName !== 'H3';
+      item = item.nextElementSibling
+    ) {
       parts.push(item.textContent);
     }
     const text = parts.join(' ').replace(/\s+/g, ' ');
@@ -37,14 +43,16 @@ describe('shipped Windows removal guidance', () => {
       'older served or prepared Windows script',
       'do not rerun uninstall just to test',
     ]) expect(text).toContain(fact);
-    const commands = Array.from(article.querySelectorAll('pre code')).map((node) => node.textContent);
+    const commands = Array.from(article.querySelectorAll('pre code')).map(
+      (node) => node.textContent,
+    );
     expect(commands).toContain('& $installerFile -Uninstall $true\n');
   });
 
   it('keeps the existing safe-preparation and private-log links inside shipped documentation', () => {
     const article = uninstallArticle();
     for (const id of ['windows-powershell-run-as-administrator', 'collect-agent-logs-safely']) {
-      expect(article.querySelector(`a[href="/docs/UNIFIED_AGENT#${id}"]`)).not.toBeNull();
+      expect(article.querySelector(`a[href="#${id}"]`)).not.toBeNull();
       expect(article.querySelector(`#${id}`)).not.toBeNull();
     }
   });
