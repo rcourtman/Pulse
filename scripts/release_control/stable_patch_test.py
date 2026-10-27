@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 import stable_patch as patch
 
@@ -150,6 +151,12 @@ class StablePatchTest(unittest.TestCase):
         self.assertIn('python3 scripts/release_control/stable_patch.py validate', workflow)
         self.assertIn('python3 scripts/release_control/stable_patch_test.py',
                       (repo / '.github/workflows/canonical-governance.yml').read_text())
+
+    def test_assembly_does_not_disable_installed_git_hooks(self):
+        with mock.patch.object(patch.subprocess, 'run') as run:
+            patch.git(self.root, 'commit', '-m', 'fixture')
+        argv = run.call_args.args[0]
+        self.assertFalse(any('hooksPath' in value for value in argv))
 
     def test_dirty_checkout_is_not_discarded(self):
         self.write('untracked', 'do not discard')

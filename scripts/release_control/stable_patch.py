@@ -23,7 +23,7 @@ SCHEMA = 1
 
 
 def git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=Pulse release",
+    return subprocess.run(["git", "-c", "user.name=Pulse release",
                            "-c", "user.email=release@invalid", "-C", str(root), *args],
                           text=True, capture_output=True, check=check)
 
