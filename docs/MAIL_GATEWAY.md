@@ -41,8 +41,9 @@ repeat discovery merely to diagnose missing statistics.
 
 The connection form offers **Mail statistics & trends**, **Queue health
 insights**, **Quarantine totals** and **Domain-level statistics**. Domain
-statistics are off by default for a new connection. In current development
-source, the saved switches control these subsequent ordinary poll requests:
+statistics are off by default for a new connection. **Published v6.6.0 and
+current source** respect these saved switches for subsequent ordinary poll
+requests:
 
 | Saved option | Reads it controls |
 | --- | --- |
@@ -98,9 +99,9 @@ badge or one populated panel does not prove that every dataset was read. Compare
 the affected value and observation window with PMG's own existing view before
 acting on an apparent empty queue or quarantine.
 
-Current development source records downstream read failures as incomplete
-collection while retaining the successful version connection. Missing readings
-do not become observed zero totals or resolve their metric alerts. Partial
+**Published v6.6.0** records downstream read failures as incomplete collection
+while retaining the successful version connection. Missing readings do not
+become observed zero totals or resolve their metric alerts. Partial
 queue data can still raise the highest configured severity, but cannot clear
 or downgrade an existing alert; quarantine recovery requires both categories.
 These collector safeguards do not make every empty display a verified zero.
@@ -141,6 +142,21 @@ It does not, by itself, establish that the gateway is unreachable, the password
 is wrong or the queue is empty. A separate transport or permission error still
 needs its own assessment; a successful **Test Connection** does not resolve the
 decoding failure.
+
+**Upgraded from v6.5.0 to v6.6.0?** In v6.5.0, a queue-read failure could be
+logged only at Debug level while the connection appeared healthy. In v6.6.0,
+the same failure counts as a failed ordinary poll, even after a successful
+version read or connection test. Newly visible `pmg_queue_status` errors do not
+establish that your network or credentials changed, or that queue readings were
+correct before the upgrade. Keep any other reported failure separate.
+
+If you deliberately turn off **Queue health insights** on v6.6.0, subsequent
+polls omit queue reads under the [saved collection scope](#collection-scope-and-older-releases).
+That can remove this error by removing the failed read, not by repairing it.
+Keep independent queue monitoring while fresh queue readings are unavailable.
+Pulse cannot evaluate new queue data with collection off; retained alerts do
+not establish current queue health. Do not repeatedly toggle collection to
+diagnose the failure.
 
 Use PMG's own existing queue view for queue status while Pulse cannot read it.
 Keep the affected dataset, original time and short redacted error for the report;
