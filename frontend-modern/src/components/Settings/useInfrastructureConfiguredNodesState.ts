@@ -8,6 +8,7 @@ import type { Temperature } from '@/types/api';
 import type { ResourceType } from '@/types/resource';
 import type {
   ClusterEndpointOverridePayload,
+  ClusterEndpointTrustOverridePayload,
   ClusterNodeDisplayNameOverridePayload,
   NodeConfig,
   NodeConfigWithStatus,
@@ -310,11 +311,16 @@ export const useInfrastructureConfiguredNodesState = ({
         await NodesAPI.updateNode(existingNode.id, nodeData as NodeConfig);
         // clusterEndpointOverrides is a write-only payload field: mirror it
         // onto the cached endpoints instead of spreading it onto the node.
-        const { clusterEndpointOverrides, clusterNodeDisplayNameOverrides, ...nodePatch } =
-          nodeData as Partial<NodeConfig> & {
-            clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
-            clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[];
-          };
+        const {
+          clusterEndpointOverrides,
+          clusterNodeDisplayNameOverrides,
+          clusterEndpointTrustOverrides,
+          ...nodePatch
+        } = nodeData as Partial<NodeConfig> & {
+          clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
+          clusterEndpointTrustOverrides?: ClusterEndpointTrustOverridePayload[];
+          clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[];
+        };
         setNodes(
           nodes().map((node) => {
             if (node.id !== existingNode.id) return node;
@@ -341,6 +347,9 @@ export const useInfrastructureConfiguredNodesState = ({
             };
           }),
         );
+        // Read back the effective scoped TLS policy instead of guessing how
+        // primary/member URL aliases resolve on the server.
+        if (clusterEndpointTrustOverrides?.length || 'fingerprint' in nodeData) await loadNodes();
         notificationStore.success('Node updated successfully');
       } else {
         await NodesAPI.addNode(nodeData as NodeConfig);

@@ -4,6 +4,7 @@ import {
   applyClusterEndpointOverridesLocally,
   applyClusterNodeDisplayNamesLocally,
   buildClusterEndpointOverridesPayload,
+  buildClusterEndpointTrustOverridesPayload,
   buildClusterNodeDisplayNameOverridesPayload,
   PVE_MANUAL_PERMISSION_COMMAND,
 } from '../nodeModalModel';
@@ -121,5 +122,41 @@ describe('applyClusterEndpointOverridesLocally', () => {
     const endpoints = [endpoint('pve1')];
     expect(applyClusterEndpointOverridesLocally(endpoints, undefined)).toBe(endpoints);
     expect(applyClusterEndpointOverridesLocally(undefined, [])).toBeUndefined();
+  });
+});
+
+describe('endpoint-scoped TLS decisions', () => {
+  it('does not copy the primary pin to peers or submit untouched trust', () => {
+    const endpoints = [
+      {
+        ...endpoint('primary'),
+        tlsEndpoint: 'https://primary.test:8006',
+        usesPrimaryTLS: true,
+        fingerprint: 'primary-pin',
+      },
+      { ...endpoint('peer'), tlsEndpoint: 'https://peer.test:8006', fingerprint: 'peer-pin' },
+      { ...endpoint('other'), tlsEndpoint: 'https://other.test:8006', fingerprint: 'other-pin' },
+    ];
+    expect(buildClusterEndpointTrustOverridesPayload(endpoints, {})).toBeUndefined();
+    expect(
+      buildClusterEndpointTrustOverridesPayload(endpoints, {
+        'https://primary.test:8006': 'new-primary',
+        'https://peer.test:8006': '',
+        'https://other.test:8006': 'other-pin',
+      }),
+    ).toEqual([{ endpoint: 'https://peer.test:8006', fingerprint: '' }]);
+  });
+  it('requires an explicit choice before turning unknown first-use trust into CA mode', () => {
+    const peer = { ...endpoint('peer'), tlsEndpoint: 'https://peer.test:8006', tlsFirstUse: true };
+    expect(
+      buildClusterEndpointTrustOverridesPayload([peer], { [peer.tlsEndpoint]: '' }),
+    ).toBeUndefined();
+    expect(
+      buildClusterEndpointTrustOverridesPayload(
+        [peer],
+        { [peer.tlsEndpoint]: '' },
+        { [peer.tlsEndpoint]: true },
+      ),
+    ).toEqual([{ endpoint: peer.tlsEndpoint, fingerprint: '' }]);
   });
 });

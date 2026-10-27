@@ -111,7 +111,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             Form settings only, not a connection-test result.
             <Show when={modalProps.nodeType === 'pve'}>
               {' '}
-              Cluster members may have their own saved fingerprints.
+              This fingerprint applies only to the primary endpoint. Other members retain their own
+              trust settings in Cluster members.
             </Show>
           </p>
         </div>

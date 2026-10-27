@@ -37,6 +37,9 @@ export interface NodeModalFormData {
   // PVE clusters: per-member connection address overrides keyed by node name.
   // Empty string means "use the discovered address".
   clusterEndpointOverrides: Record<string, string>;
+  // Effective TLS policy keyed by the server-projected runtime endpoint.
+  clusterEndpointFingerprints: Record<string, string>;
+  clusterEndpointTrustEdited: Record<string, boolean>;
   // PVE clusters: optional labels keyed by immutable node identity.
   // Empty string means "use the native Proxmox node name".
   clusterNodeDisplayNames: Record<string, string>;
@@ -80,6 +83,8 @@ export function getNodeModalDefaultFormData(nodeType: NodeModalNodeType): NodeMo
     monitorQuarantine: true,
     monitorDomainStats: false,
     clusterEndpointOverrides: {},
+    clusterEndpointFingerprints: {},
+    clusterEndpointTrustEdited: {},
     clusterNodeDisplayNames: {},
   };
 }

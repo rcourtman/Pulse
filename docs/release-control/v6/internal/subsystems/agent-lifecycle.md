@@ -15,6 +15,14 @@
 
 ## Purpose
 
+The connection editor exposes each member's actual runtime TLS endpoint.
+Its pin/CA controls submit only deliberately edited scopes, distinguish unknown
+first-use trust, and leave primary and other-member policy independent. Tests
+read the nodes API without enrolling agents or mutating background health.
+Address/credential changes must be saved before a stored-credential probe.
+The configured-node readback test and desktop/narrow consumer proof cover the
+saved policy and preservation of disabled collection, not installed recovery.
+
 A trust edit round-trips explicit disabled PVE collection flags. It is not
 permission to re-enable guest collection through a missing response field or
 a new-connection default. `TestPVEEndpointTrustEditorPreservesDisabledCollectors`

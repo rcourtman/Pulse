@@ -164,4 +164,45 @@ describe('Cluster member connection diagnostics', () => {
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('password');
     expect(fetch).not.toHaveBeenCalled();
   });
+  it('edits only the displayed peer TLS endpoint and leaves the primary settings separate', () => {
+    const { onSave } = renderMembers([
+      member({
+        nodeName: 'primary',
+        tlsEndpoint: 'https://primary.test:8006',
+        usesPrimaryTLS: true,
+        fingerprint: 'primary-pin',
+      }),
+      member({ tlsEndpoint: 'https://member.test:8006', fingerprint: 'member-pin' }),
+    ]);
+    expect(
+      screen.queryByRole('textbox', { name: 'Certificate fingerprint for primary' }),
+    ).toBeNull();
+    const pin = screen.getByRole('textbox', { name: 'Certificate fingerprint for member' });
+    fireEvent.input(pin, { target: { value: '' } });
+    expect(
+      screen.getByText('No pin: a trusted, hostname-matching certificate is required.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clusterEndpointTrustOverrides: [{ endpoint: 'https://member.test:8006', fingerprint: '' }],
+      }),
+    );
+  });
+  it('requires a deliberate CA choice for an unknown first-use member', () => {
+    const { onSave } = renderMembers([
+      member({ tlsEndpoint: 'https://member.test:8006', tlsFirstUse: true, fingerprint: '' }),
+    ]);
+    expect(screen.getByText(/No saved member pin/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Use CA validation for member' }));
+    expect(
+      screen.getByText('No pin: a trusted, hostname-matching certificate is required.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save fixture' }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clusterEndpointTrustOverrides: [{ endpoint: 'https://member.test:8006', fingerprint: '' }],
+      }),
+    );
+  });
 });

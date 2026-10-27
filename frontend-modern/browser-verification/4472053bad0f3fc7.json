@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "af1b1a48bd98a8d1881959c854997325a954babd",
+  "verified_at": "2026-10-27T07:59:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/nodes.ts",
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts",
+    "frontend-modern/src/types/nodes.ts",
+    "frontend-modern/src/utils/nodeModalPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/nodes.ts": "db598a556b38679bf81863808f170a86a4ab824def263a47f622855b38641bf0",
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "224fd5c74d5d2f1290ba07e1e28a67ee2928a0541ba6ddd5a7b2e528bf487195",
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "b373049537c2b4e586ffec7adb57176c2d5a1da58c1e95c00dd9b772f4c87458",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts": "54da9a46a8e6afc0da549c66f4337b5aa58b2ac562fbfea1d6a4bfe91c55ff38",
+    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts": "ae12e4e5402af2633238f026384281d56f8189c27f5e36f8494395f09142240b",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "b6e7e2cf36588d15794a22fd3459a8ae4524b412f946843b51723b148c7e96ac",
+    "frontend-modern/src/types/nodes.ts": "e6f0d2a402967e597a9b39b2c5920c88d5885e40fe13def5a76319d1d5532cae",
+    "frontend-modern/src/utils/nodeModalPresentation.ts": "8ae0f5105bb848979310133374bc265d27ae7799425d2f63aedfe9c87f6409a0"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Separate primary and saved peer pins; preserved disabled collection flags",
+    "Qualified primary success while the peer still rejects its saved pin",
+    "Peer TLS failure and explicit pin update; save/authoritative readback/reopen",
+    "Explicit per-endpoint CA mode with verification enabled; empty policy saved/reopened",
+    "An old in-flight test result invalidated by a changed trust draft",
+    "Supplementary manually projected unknown-member state; deliberate CA choice, not silent pin clearing"
+  ],
+  "interactions": [
+    "Focus and Enter on the peer test control",
+    "Edit independently verified synthetic pin values; Test connection and Test TLS for beta",
+    "Save changes and reopen the actual configured-node owner after GET readback",
+    "Clear only selected primary/peer pins with Verify SSL still enabled",
+    "Change a peer draft while an earlier successful response is held, then release it",
+    "Use CA validation for beta explicitly; no generated credentials or agent action"
+  ],
+  "checks": 93,
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop-chromium": "141.0.7390.37",
+    "narrow-webkit": "26.0"
+  },
+  "evidence_scope": "Actual source-produced safe saved-node/probe frames from source-zvu2kva3 through production NodeCredentialSlot and configured-node state owner. Unknown-member supplemental GET projection is manual and distinguished in the evidence. Offline replay is not a live router, installed recovery, TLS identity of a reported endpoint, or agent-health acceptance.",
+  "native_pixel_review": {
+    "captures": 16,
+    "all_opened": true,
+    "limits": "Long pins scroll inside their input without page overflow. The result remains endpoint-qualified; tests do not prove background or agent health."
+  }
+}

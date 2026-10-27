@@ -21,6 +21,14 @@
 
 ## Purpose
 
+The node API client retains server-projected TLS endpoint and first-use fields,
+serialises explicit per-endpoint empty pin choices, and keeps credentials out
+of saved-connection test payloads. Nonempty malformed pin strings are preserved,
+not normalised into an empty CA choice. The editor's configured-node state consumes
+GET readback after saving trust instead of interpreting write-only overrides
+as configuration. `NodesAPI` tests and the configured-node readback test cover
+these client boundaries; peer edits never imply a cluster-wide trust reset.
+
 Existing PVE `monitorVMs`, `monitorContainers`, `monitorStorage` and
 `monitorBackups` response fields include false values. Omitting a disabled
 scope would make the editor substitute its new-connection defaults and enable
