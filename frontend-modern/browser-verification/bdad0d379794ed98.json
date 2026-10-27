@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "cd0deac1319195fcdac1e056c78f90e456281f35",
+  "verified_at": "2026-10-27T00:52:09.325552Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx": "e21d3801512c4373f504d783740a6f3022753931030d363af8d212b7460c96e0",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "322b742577fdfbbb9cbc046b381766d5ea78d92f052c7720d870f0736fff3e1f",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "28f392c5d881f465c15e5c618fdaece7d15c50feb3ca71fd80b62db3866f2dd1"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production ProxmoxBackupsTable HTTP inventory consumer, recovery model, chart, list and CSS compiled from 8ca12542d4cdcf16daa310778bd6bba761c6e3c9 with the assigned exact lock graph. Safe fixtures only; no guest or restore operation. Runtime files are unchanged at this receipt parent.",
+    "Parent false absence and disappearing Count control reproduced at desktop Chromium and narrow WebKit. Candidate unknown-only volume keeps Count, explicit size warning, amber day marker, unknown day labels and a non-numeric volume scale.",
+    "Mixed known and unknown sizes show measured bytes separately from unknowns. Incomplete, old and future entries do not inflate missing-size counts. Desktop source tooltip does not claim exact shares; touch uses the visible notice and day aria labels, respecting existing hover policy.",
+    "25 distinct browser checks completed across the retained initial and two continuation results. Ten captures received native image-tool inspection. No page exceptions or page-wide overflow; browser/server cleanup reported for all attempts. The phone known-source capture shows the chart and filters but clips the bottom row; the selected-list capture separately shows all four rows."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch select an unknown-size day and narrow the real list. Switch back to Count without losing selection; switch days, clear the date, change source and range.",
+    "Known-only PVE source clears unknown-size notice and markers and matches the one-row list and 1 KB day value. Range/source changes cause no API reads.",
+    "First desktop attempt stopped at an incorrect selected-label wait; first narrow tooltip assertion assumed hover support on touch. Corrected only proof assertions and continued remaining checks; no deadlines changed or completed tests replayed."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  }
+}

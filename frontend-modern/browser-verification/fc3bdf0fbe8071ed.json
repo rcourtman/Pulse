@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "2103558f4995df04699d2876e38258f80bd10443",
+  "verified_at": "2026-10-27T02:40:19.546153Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/RECOVERY.md",
+    "frontend-modern/public/docs/RECOVERY.md"
+  ],
+  "content_sha256": {
+    "docs/RECOVERY.md": "ee093cc92d98339830611af0fffa249040401e0639e43627977033316d940f1e",
+    "frontend-modern/public/docs/RECOVERY.md": "ee093cc92d98339830611af0fffa249040401e0639e43627977033316d940f1e"
+  },
+  "routes": [
+    "/docs/RECOVERY#why-proxmox-backup-counts-differ"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Composed recovery guide served byte-for-byte by the unmodified production Docs page, Markdown renderer, PageHeader and CSS in a synthetic local-only shell. Exact source 2103558f4995df04699d2876e38258f80bd10443. Preview built inside the browser sandbox from offline lock-only staged packages; Vite6.4.5, esbuild0.28.1, Playwright1.56.1. No full-application build or source-suite result claimed.",
+    "Known volume, selectable unknown-size points, amber unknown-not-zero and mixed-volume lower bounds coexist with protected-main precise facets, ambiguous-location guidance, inventory-wide health, chart-only ranges, day-only clearing and unchanged protection-policy/safety guidance.",
+    "38 browser checks and seven captures at desktop Chromium141.0.7390.37 and 390px WebKit26.0. All seven opened through native view_image. Desktop complete section and overlapping narrow count, known-volume, filter and safety views wrap without page-wide overflow. No page exceptions; browser/server closure reported."
+  ],
+  "interactions": [
+    "Initial direct fragment load fetches the exact composed shipped Markdown. Scroll count, known-volume, filter and safety sections; focus PBS evidence link and Tab to the existing guest-safety link. Focus outlines visible at desktop and narrow widths.",
+    "No link activation, Help/Back/reload, monitored target, guest, database, backup/restore, server restart or external operation. Existing chart source and own-parent receipts are unchanged; only combined guide proof is refreshed."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "engines": [
+      {
+        "name": "desktop-chromium",
+        "version": "141.0.7390.37",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        }
+      },
+      {
+        "name": "narrow-webkit",
+        "version": "26.0",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        }
+      }
+    ]
+  }
+}

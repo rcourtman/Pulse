@@ -36,6 +36,7 @@ import type { Resource } from '@/types/resource';
 import { BackupActivityChart } from './BackupActivityChart';
 import {
   buildBackupActivityTimeline,
+  getBackupActivityUnknownCount,
   type BackupActivityMetricMode,
   type BackupActivityRangeDays,
   type BackupActivitySegmentKind,
@@ -554,7 +555,15 @@ export const ProxmoxBackupsTable: Component<{
     ),
   );
   const hasRecoverableActivityInRange = createMemo(() =>
-    recoverableTimeline().points.some((point) => point.total > 0),
+    recoverableTimeline().points.some(
+      (point) => point.total > 0 || getBackupActivityUnknownCount(point) > 0,
+    ),
+  );
+  const unknownVolumeCount = createMemo(() =>
+    recoverableTimeline().points.reduce(
+      (sum, point) => sum + getBackupActivityUnknownCount(point),
+      0,
+    ),
   );
 
   const filteredRecoverableArtifacts = createMemo(() => {
@@ -897,10 +906,17 @@ export const ProxmoxBackupsTable: Component<{
                   <p class="text-xs text-muted">
                     Activity follows the backup filters. Selecting a day narrows only the list.
                   </p>
+                  <Show when={recoverableMetricMode() === 'volume' && unknownVolumeCount() > 0}>
+                    <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
+                      Sizes are unavailable for {unknownVolumeCount()} completed restore{' '}
+                      {unknownVolumeCount() === 1 ? 'point' : 'points'} in this window. Bars show
+                      known volume only. Amber marks days with unknown sizes, not zero volume.
+                    </p>
+                  </Show>
                   <BackupActivityChart
                     title={
                       recoverableMetricMode() === 'volume'
-                        ? 'Completed restore volume per day'
+                        ? 'Known restore volume per day'
                         : 'Completed restore points per day'
                     }
                     noun="restore point"
