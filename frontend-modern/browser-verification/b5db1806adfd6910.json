@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "07444f76cf251395e6378d856bb82c3a52b94545",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "24c3f827059edc34a415b63774bfcc39f2b7d95d55f92c3d116c234a092135ca"
+  },
+  "verified_at": "2026-10-27T21:53:20Z",
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "Exact-parent 320px namesake fixture clips the complete workload name and both distinguishing PVE connection suffixes.",
+    "Candidate 320px/390px compact and 600px basic table-container projections wrap complete names and connections and keep folded VM/LXC 100 targets on a separate line. Wide desktop projection retains dense cells and dedicated identity columns.",
+    "Two identically named VM 100/pve-1 guests keep distinct connection, owner and store-0/store-1 evidence; same-numbered LXC remains distinct.",
+    "Same-key literal name refresh, one ordinary 30-second HTTP inventory/posture poll, open detail retention and disclosure focus complete. The 160-row measured window stays bounded and reaches its last guest and returns."
+  ],
+  "interactions": [
+    "Native keyboard disclosure/collapse on desktop; whole-row touch disclosure/collapse on WebKit phone.",
+    "Live desktop pane resize selects basic wrapping independently of the 1440px viewport; phone resize from 320px to 390px retains complete labels.",
+    "Inspect all three named subjects, their exact owner links and isolated evidence without extra per-row inventory reads or mutations.",
+    "Normal polling keeps the same open panel and focused disclosure. Source labels remain literal; no injected element, guest operation, off-origin request or API mutation.",
+    "Paired observer diagnostic: fixed base then candidate on both Chromium and WebKit, resize/disclosure/poll/bounded end/return. Retain all observations."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "container_widths": [
+    600
+  ],
+  "browsers": [
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timezoneId": "UTC"
+    },
+    {
+      "browser": "webkit",
+      "version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timezoneId": "America/Los_Angeles"
+    }
+  ],
+  "completed_checks": 195,
+  "pixel_review": "Nine retained captures actually opened with native view_image and their image content presented to the maintainer. Full phone names and London/Bristol connections are readable, folded targets are separate, posture/age/job do not overlap, wide density is preserved and owner-specific evidence remains inspectable.",
+  "captures": [
+    {
+      "name": "parent-phone-320.png",
+      "sha256": "46d4e4ac30197913a81eb337044bd6360d5801fce6b0d346e51ff54bf12ff10f",
+      "bytes": 85172
+    },
+    {
+      "name": "desktop-identity-list.png",
+      "sha256": "dc5dc1df283ae906087d8b47731116be7c53be31963a001e3f4896bdde3fce63",
+      "bytes": 171997
+    },
+    {
+      "name": "desktop-narrow-pane.png",
+      "sha256": "1fe26553e8cce15016a655581026727a803a3fa53618b1150a66a04bc1513453",
+      "bytes": 106199
+    },
+    {
+      "name": "desktop-namesake-detail.png",
+      "sha256": "15163d219e00a2b99f91b99d410cdcdadd623d24538ed4ae6af53ceb6a7c56aa",
+      "bytes": 148181
+    },
+    {
+      "name": "desktop-peer-detail.png",
+      "sha256": "b83a46953081c0fcf1cea75ebb0f870c067eff64314b0719311a6c651a97097a",
+      "bytes": 144736
+    },
+    {
+      "name": "phone-identity-list.png",
+      "sha256": "84d74ab4202dc386417220dd7abdfaed3fe827c04065b93beac822cd2b64a095",
+      "bytes": 70445
+    },
+    {
+      "name": "phone390-identity-list.png",
+      "sha256": "3e23579169fd85523213f12d67c8653c803cbd11e526d72fe3796f144dfe1aec",
+      "bytes": 74471
+    },
+    {
+      "name": "phone-namesake-detail.png",
+      "sha256": "751c36893969a3e0274be691e97a11131d8b669d67c39ea8e9fe1218a3a6d01a",
+      "bytes": 75318
+    },
+    {
+      "name": "phone-peer-detail.png",
+      "sha256": "09f228ee57fd6e2b154d2721ee0042526a56abcc026b67279bf4b7202158f6be",
+      "bytes": 78840
+    }
+  ],
+  "execution_limits": {
+    "main_client_exit": 1,
+    "observed_message": "ResizeObserver loop completed with undelivered notifications.",
+    "terminal_assertion": "All 195 functional/geometric checks and nine captures completed before the final zero-browser-errors assertion failed on that one notification. No product source changed to get a favourable run.",
+    "paired_comparison_client_exit": 0,
+    "paired_comparison_checks": 50,
+    "paired_comparison_messages": [],
+    "decision": "The consuming identity/layout proof is accepted with this isolated observer diagnostic retained for independent review. The fixed paired comparison completed each required operation on base/candidate and both browsers without a notification, but does not clear the original observation or establish it cannot recur. No zero-console-errors or native-recovery claim."
+  },
+  "evidence": "Lane RECEIPTS.md, BROWSER-SUMMARY.json, BROWSER-FINAL.tar.xz, PIXEL-REVIEW.json, OBSERVER-COMPARISON.json and immutable browser attempts. Exact source execution receipt: source-ezg19qbs."
+}
