@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -47,14 +48,49 @@ var metadataReaders = []struct {
 
 func TestMetadataMonitorProjectionParity(t *testing.T) {
 	previous := mock.IsMockEnabled()
+	// A sampler created outside the virtual-clock bubble must stop before we
+	// start ours. Restore the incoming mode only after our sampler has stopped.
+	mustSetMockEnabled(t, false)
 	defer mustSetMockEnabled(t, previous)
-	for _, enabled := range []bool{false, true} {
-		mustSetMockEnabled(t, enabled)
-		for _, monitor := range []*Monitor{nil, {}, {state: models.NewState()}, metadataMonitorFixture(100)} {
-			for _, reader := range metadataReaders {
-				got, want := reader.current(monitor), reader.previous(monitor)
+
+	synctest.Test(t, func(t *testing.T) {
+		defer mustSetMockEnabled(t, false)
+		t.Run("live", assertMetadataMonitorProjectionParity)
+
+		mustSetMockEnabled(t, true)
+		t.Run("mock-before-tick", assertMetadataMonitorProjectionParity)
+		version := mock.FixtureDataVersion()
+		const ticks = 11 // Includes two supplemental-health cohorts, not just PVE ticks.
+		time.Sleep(ticks * mock.GetConfig().UpdateInterval)
+		synctest.Wait()
+		if got := mock.FixtureDataVersion(); got != version+ticks {
+			t.Fatalf("ordinary mock sampler advanced version %d to %d; want %d ticks", version, got, ticks)
+		}
+		t.Run("mock-after-tick", assertMetadataMonitorProjectionParity)
+	})
+}
+
+func assertMetadataMonitorProjectionParity(t *testing.T) {
+	t.Helper()
+	// Both projections must describe the same graph epoch. CPU time spent
+	// cloning/serializing a large estate must not advance the mock sampler;
+	// increasing its interval or accepting a later matching retry would hide
+	// the invalid cross-epoch comparison instead of making it deterministic.
+	stamp, version := time.Now(), mock.FixtureDataVersion()
+	for _, fixture := range []struct {
+		name    string
+		monitor *Monitor
+	}{
+		{"nil-monitor", nil},
+		{"no-state", &Monitor{}},
+		{"empty-state", &Monitor{state: models.NewState()}},
+		{"populated-state", metadataMonitorFixture(100)},
+	} {
+		for _, reader := range metadataReaders {
+			t.Run(fixture.name+"/"+reader.name, func(t *testing.T) {
+				got, want := reader.current(fixture.monitor), reader.previous(fixture.monitor)
 				if !reflect.DeepEqual(got, want) {
-					t.Fatalf("%s differs in mock=%t (nil=%t)", reader.name, enabled, monitor == nil)
+					t.Fatal("scoped and full metadata projections differ")
 				}
 				gotJSON, err := json.Marshal(got)
 				if err != nil {
@@ -62,10 +98,13 @@ func TestMetadataMonitorProjectionParity(t *testing.T) {
 				}
 				wantJSON, err := json.Marshal(want)
 				if err != nil || string(gotJSON) != string(wantJSON) {
-					t.Fatalf("%s changed serialized output", reader.name)
+					t.Fatal("scoped metadata changed serialized output")
 				}
-			}
+			})
 		}
+	}
+	if time.Now() != stamp || mock.FixtureDataVersion() != version {
+		t.Fatal("metadata parity compared different mock clock/graph epochs")
 	}
 }
 
