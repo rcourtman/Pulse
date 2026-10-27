@@ -251,6 +251,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// Build guest lookup map to find actual node for each VMID
 	snapshot := m.state.GetSnapshot()
+	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
 
@@ -431,7 +432,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				backupNode := node.Node
 				if content.VMID > 0 {
 					if actualNode, found := guestNodeMap[content.VMID]; found {
-						backupNode = actualNode
+						currentKind := guestInfo[proxmoxmapperKey(instanceName, actualNode, content.VMID)].ResourceType
+						// A reused VMID does not move a removed guest's archive
+						// to the opposite-kind occupant's current placement.
+						contradictoryKind := backupType == "qemu" && currentKind == unifiedresources.ResourceTypeSystemContainer ||
+							backupType == "lxc" && currentKind == unifiedresources.ResourceTypeVM
+						if !contradictoryKind {
+							backupNode = actualNode
+						}
 					}
 					// If not found in map, fall back to queried node (shouldn't happen normally)
 				}
@@ -651,7 +659,6 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	m.state.UpdatePBSGuestConfirmationsForInstance(instanceName, pbsConfirmations)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	points, evidenceErr := proxmoxrecoverymapper.FromPVEStorageBackupsWithEvidence(
 		observedBackups,
 		guestInfo,

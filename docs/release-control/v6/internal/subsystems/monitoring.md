@@ -17,6 +17,40 @@
 
 ## Purpose
 
+### Retained local archives do not change kind when a VMID is reused
+
+A PVE VM archive cannot advance the backup date or protect a live LXC using
+the same connection and VMID, and an LXC archive cannot protect a replacement
+VM. Local guest-date selection groups explicit `qemu`/`vm` and `lxc`/`ct`
+subjects independently before comparing recency. Incomplete archives still
+supply no completion date. Existing best-effort matching of legacy/untyped
+rows, PBS matching, task state and provider observation policy are unchanged.
+
+Recovery mapping uses the explicit artifact kind. When it contradicts the
+live guest lookup, the archive retains its historical typed canonical subject
+without borrowing the new occupant's ID or display name. Collector placement
+lookup likewise ignores an opposite-kind occupant: its archive keeps the read
+node, while a same-kind migrated guest still supplies its actual placement.
+The final state-layer alignment uses the same typed fence, so publishing
+the list cannot undo the collector decision. Both date and placement selection
+share the model's explicit-kind normalisation; legacy/untyped fallback remains
+unchanged. The independent local storage read origin and archive ID are unchanged.
+Same-kind metadata and legacy/untyped fallback retain their existing behaviour.
+The point ID, archive time, size and public JSON shape do not change. Ordinary
+collection updates existing point attribution; no deletion, schema migration,
+backup/restore or guest-agent operation is introduced.
+
+`TestUpdateStorageBackupsForInstanceKeepsArchiveGuestKind`,
+`TestSyncGuestBackupTimesLocalArchiveGuestKinds`,
+`TestFromPVEStorageBackupsRetainsExplicitGuestKind` and the normal-suite
+`TestPVEArchiveSubjectKindLifecycle` cover both replacement directions, aliases,
+connection isolation, migrated placement/read origin, recency, incomplete files,
+legacy controls, retained raw
+artifacts, canonical dates/subjects, partial reads, complete absence and ordinary
+recovery. Actual lifecycle frames drive production Coverage and backup-status
+browser proof at desktop and narrow widths. This is a source safety repair,
+not #3248 causal attribution, native recovery or verified restore availability.
+
 ### Archive guest kinds come from artifact discriminators
 
 PVE archive type detection ignores the storage-name prefix and incidental
