@@ -1,6 +1,10 @@
 internal/api/access_admin_handlers.go
 internal/api/activity_audit_handlers.go
 internal/api/identity_sso_handlers.go
+# Shared SSO configuration edit adapter: keeps omitted stored fields without
+# exposing them in responses. No authentication or entitlement implementation.
+# Exact path only; all private-import and licensing-bridge checks still apply.
+internal/api/sso_config_preservation.go
 internal/api/licensing_bridge.go
 internal/api/licensing_handlers.go
 internal/api/magic_link.go
