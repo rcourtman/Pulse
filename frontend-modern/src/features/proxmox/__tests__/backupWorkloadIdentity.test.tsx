@@ -56,7 +56,7 @@ async function coverageRows() {
   await screen.findAllByText('same-name');
   return Array.from(document.querySelectorAll<HTMLElement>('[data-proxmox-backup-row="coverage"]'));
 }
-const connectionOf = (row: HTMLElement) =>
+const connectionOf = (row: Element) =>
   row.querySelector('[data-backup-workload-connection]')?.textContent;
 const connectionRow = (detail: HTMLElement) =>
   within(detail).getByText('PVE connection', { exact: true }).closest('tr')!;
