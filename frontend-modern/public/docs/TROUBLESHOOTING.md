@@ -828,7 +828,7 @@ than undoing the repair or repeating the addition.
 | Affected reading | Safe comparison | What it does not prove |
 | --- | --- | --- |
 | Node errors | Compare the affected node and observation time with that installation's own Proxmox view. | A similar node name or a different Pulse label does not establish which installation owns the error. |
-| Guest backup status | Compare one affected guest with the matching native Proxmox/PBS record: owning installation, guest type/VMID, datastore, namespace and backup time. Follow the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected). | The same VMID or a visible backup from another installation does not establish protection for this guest. |
+| Guest backup status | Compare one affected guest with the matching native Proxmox/PBS record: owning installation, guest type/VMID, datastore, namespace and backup time. Follow the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unprotected) and distinguish [backup location from guest placement](RECOVERY.md#backup-location-and-guest-placement). | The same VMID or a visible backup from another installation does not establish protection for this guest. |
 | Agent-backed Docker monitoring | In **Settings → Infrastructure → Agent Doctor**, inspect the affected host's existing **Last seen** and **Identity evidence**, including **Connection** and **Hostname** where available. Compare with the known Docker host, not a similar guest name. | Recent agent contact or a Healthy badge does not prove that the correct host's containers are visible or correctly attributed. Missing evidence is unknown, not proof that the agent stopped. |
 
 While attribution is uncertain, use each installation's own Proxmox/PBS
