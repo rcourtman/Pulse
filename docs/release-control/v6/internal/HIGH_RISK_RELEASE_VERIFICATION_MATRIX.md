@@ -1336,3 +1336,21 @@ as verification progresses:
   removal against the production writer's output.
 - Confined source checks are not native NAS lifecycle or customer acceptance;
   original QNAP installed-recovery dependencies remain independent.
+
+### Unraid boot replacement preservation
+
+- `TestInstallSHUnraidBootReplacementPreservesUnrelatedJobs`: twenty actual
+  producer/caller controls preserve unrelated jobs, exact legacy/current
+  entries, complete CRLF and modes. Ambiguous/foreign/compound launches and
+  launch-like heredoc/quote/continuation data are refused unchanged. Bounded
+  prefix and candidate syntax checks never execute boot text.
+- Copy/rename/parser/render/write/readback/cleanup failures, linked files,
+  pending recovery and concurrent changes cannot be called configured. Partial
+  first creation retains the staged candidate and prevents a blind retry.
+  Actual caller failure exits before watchdog start or reboot-success output.
+  The no-chmod control preserves the FAT boundary without claiming to mount
+  real FAT; go is consumed through bash, not execute bits.
+- Existing `TestInstallSHUnraidGoEntryDoesNotBlockLaterBootLines` retains the
+  boot-logger/foreground adverse control and detached launch; the production
+  NAS removal inventory consumes this writer. These are source fixtures, not
+  native Unraid lifecycle or original installed-recovery acceptance.

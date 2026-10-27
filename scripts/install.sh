@@ -3971,11 +3971,23 @@ filter_nas_agent_boot_file() {
             }
             if (marker) {
                 if (!launch($0)) { bad = 1; exit 1 }
-                marker = 0; owned++; next
+                marker = 0; owned++
+                if (mode == "boundaries") {
+                    if (owned > 16) { bad = 1; exit 1 }
+                    print NR - 2
+                }
+                next
             }
             if ($0 == "# Pulse Agent") { marker = 1; next }
             if ($0 == "# Pulse Agent bootstrap end") { bad = 1; exit 1 }
-            if (launch($0)) { owned++; next }
+            if (launch($0)) {
+                owned++
+                if (mode == "boundaries") {
+                    if (owned > 16) { bad = 1; exit 1 }
+                    print NR - 1
+                }
+                next
+            }
             if ($0 !~ /^[[:space:]]*#/ && (target($0, "start-pulse-agent.sh") || target($0, runtime))) {
                 bad = 1; exit 1
             }
@@ -4157,67 +4169,76 @@ render_unraid_go_launch() {
     printf 'bash %q >> %q 2>&1 &\n' "$1" "/var/log/${AGENT_NAME}.log"
 }
 
-# go is the user's boot script. Remove only the installer's marker and command
-# lines that reference a Pulse wrapper or this runtime binary, which covers
-# foreground, hand-edited and old-location entries, so the new entry is the
-# only launch. Other lines that mention pulse-agent (log directories, hosts
-# entries, a co-installed agent, comments) stay. Line endings become LF, as
-# Unraid's fromdos makes them before running go, so removal can parse the file.
-# A removed line must not leave go unparseable either: bash stops at a syntax
-# error, which skips the rest of boot just as a hang does.
+# go belongs to the operator. Only exact generated entries may be replaced;
+# a line mentioning a wrapper can also run unrelated jobs. Unknown launches
+# need reconciliation, not deletion. Stage on the boot filesystem and parse
+# without execution before replacing the original. Normalise CRLF as Unraid's
+# fromdos does, but do not turn an incomplete last line into admitted content.
 write_unraid_go_entry() {
-    local go_script="$1" wrapper_script="$2" runtime_binary="$3" filtered=""
-    if [[ -f "$go_script" ]]; then
-        filtered=$(mktemp) || return 1
-        if ! LC_ALL=C awk -v runtime="$runtime_binary" '
-            # Whether s names word as a whole file name: neither neighbour can
-            # continue the name. A runtime path must not continue a longer path.
-            function refers(s, word, slash,    rest, i, b, a) {
-                rest = s
-                while ((i = index(rest, word)) > 0) {
-                    b = i > 1 ? substr(rest, i - 1, 1) : ""
-                    a = substr(rest, i + length(word), 1)
-                    if (b !~ /[A-Za-z0-9._-]/ && (slash || b != "/") && a !~ /[A-Za-z0-9._-]/) return 1
-                    rest = substr(rest, i + length(word))
-                }
-                return 0
-            }
-            # Text before a comment, only when the comment is certain. A
-            # backslash, an expansion, a backquote or an unterminated quote
-            # makes the line doubtful, and a doubtful line is still checked.
-            function code(s,    i, c, q) {
-                q = ""
-                for (i = 1; i <= length(s); i++) {
-                    c = substr(s, i, 1)
-                    if (q == "\047") { if (c == "\047") q = ""; continue }
-                    if (c == "\\" || c == "$" || c == "`") return s
-                    if (q == "\"") { if (c == "\"") q = ""; continue }
-                    if (c == "\"" || c == "\047") { q = c; continue }
-                    if (c == "#" && (i == 1 || substr(s, i - 1, 1) ~ /[[:space:];&|(]/)) return substr(s, 1, i - 1)
-                }
-                return s
-            }
-            {
-                line = $0
-                sub(/\r$/, "", line)
-                if (line == "# Pulse Agent") next
-                command = code(line)
-                if (refers(command, "start-pulse-agent.sh", 1) || refers(command, runtime, 0)) next
-                print line
-            }
-        ' "$go_script" > "$filtered" ||
-            { LC_ALL=C awk '{ sub(/\r$/, ""); print }' "$go_script" | bash -n 2>/dev/null &&
-                ! bash -n "$filtered" 2>/dev/null; } ||
-            ! cat "$filtered" > "$go_script"; then
-            rm -f "$filtered"
-            return 1
+    local go_script="$1" wrapper_script="$2" runtime_binary="$3"
+    local STATE_DIR="${2%/start-pulse-agent.sh}" INSTALL_DIR="${3%/*}" BINARY_NAME="${3##*/}"
+    local parent="" staging="" prior="" size="" last="" prefixes="" prefix="" existed=false
+    [[ "$go_script" == /* && "$wrapper_script" == /*/start-pulse-agent.sh && "$runtime_binary" == /*/* &&
+       "$go_script$wrapper_script$runtime_binary" != *$'\n'* &&
+       "$go_script$wrapper_script$runtime_binary" != *$'\r'* &&
+       "$wrapper_script$runtime_binary" != *[\$\`\"\\]* ]] || return 1
+    parent=$(dirname "$go_script") || return 1
+    [[ -d "$parent" && ! -L "$parent" && "$(portable_path_uid "$parent")" == "$(id -u)" ]] || return 1
+    for prior in "$go_script".pulse-setup.* "$go_script".pulse-removal.*; do
+        [[ ! -e "$prior" && ! -L "$prior" ]] || return 1
+    done
+    if [[ -e "$go_script" || -L "$go_script" ]]; then
+        nas_agent_removal_file_safe "$go_script" || return 1
+        size=$(wc -c < "$go_script") || return 1
+        [[ "$size" =~ ^[[:space:]]*([0-9]+)[[:space:]]*$ && ${BASH_REMATCH[1]} -le 1048576 ]] || return 1
+        if (( ${BASH_REMATCH[1]} > 0 )); then
+            last=$(tail -c 1 "$go_script" && printf x) || return 1
+            [[ "$last" == $'\nx' ]] || return 1
         fi
-        rm -f "$filtered"
-    else
-        printf '#!/bin/bash\n' > "$go_script" || return 1
-        chmod +x "$go_script"
+        existed=true
     fi
-    { printf '# Pulse Agent\n'; render_unraid_go_launch "$wrapper_script"; } >> "$go_script"
+    staging=$(mktemp -d "$go_script.pulse-setup.XXXXXX") || return 1
+    # mktemp requests a private directory where supported. Unraid boot media
+    # can be FAT: do not require chmod or executable go files there. rc.local
+    # runs go through bash, and all staging remains on the same boot volume.
+    if [[ "$existed" == true ]]; then
+        cp -p "$go_script" "$staging/original" || return 1
+        LC_ALL=C awk '{ sub(/\r$/, ""); print }' "$staging/original" > "$staging/normalised" || return 1
+        prefixes=$(filter_nas_agent_boot_file Unraid "$staging/normalised" boundaries) || return 1
+        # An exact launch inside a heredoc, quote, compound or continued line
+        # is not an owned top-level command. Parse each bounded prefix without
+        # execution; even a successful parse with a heredoc warning is unsure.
+        while IFS= read -r prefix; do
+            [[ -n "$prefix" ]] || continue
+            [[ "$prefix" =~ ^[0-9]+$ ]] || return 1
+            head -n "$prefix" "$staging/normalised" > "$staging/prefix" || return 1
+            [[ "$(tail -n 1 "$staging/prefix")" != *\\ ]] || return 1
+            bash -n "$staging/prefix" > "$staging/parse-errors" 2>&1 || return 1
+            [[ ! -s "$staging/parse-errors" ]] || return 1
+        done <<< "$prefixes"
+        filter_nas_agent_boot_file Unraid "$staging/normalised" filter > "$staging/updated" || return 1
+        # Preserve the boot file's mode on replacement; FAT may ignore modes.
+        cp -p "$staging/original" "$staging/ready" || return 1
+    else
+        printf '#!/bin/bash\n' > "$staging/updated" || return 1
+        printf '' > "$staging/ready" || return 1
+    fi
+    { printf '# Pulse Agent\n' && render_unraid_go_launch "$wrapper_script"; } >> "$staging/updated" || return 1
+    bash -n "$staging/updated" > "$staging/parse-errors" 2>&1 || return 1
+    [[ ! -s "$staging/parse-errors" ]] || return 1
+    cat "$staging/updated" > "$staging/ready" || return 1
+    cmp -s "$staging/ready" "$staging/updated" || return 1
+    if [[ "$existed" == true ]]; then
+        nas_agent_removal_file_safe "$go_script" && cmp -s "$go_script" "$staging/original" || return 1
+        mv -- "$staging/ready" "$go_script" || return 1
+    else
+        # FAT need not support hard links or mv -n. Refuse a concurrent file
+        # or link; a failed first write retains the complete staged candidate.
+        (set -o noclobber; cat "$staging/ready" > "$go_script") || return 1
+    fi
+    nas_agent_removal_file_safe "$go_script" && cmp -s "$go_script" "$staging/updated" || return 1
+    rm -f -- "$staging/original" "$staging/normalised" "$staging/prefix" "$staging/parse-errors" "$staging/updated" "$staging/ready" || return 1
+    rmdir -- "$staging"
 }
 
 write_qnap_wrapper_script() {
@@ -7679,8 +7700,7 @@ EOF
     if write_unraid_go_entry "$GO_SCRIPT" "$WRAPPER_SCRIPT" "$RUNTIME_BINARY"; then
         log_info "Added startup entry to ${GO_SCRIPT}..."
     else
-        log_warn "Could not update ${GO_SCRIPT} safely. To start the agent on boot, replace its Pulse Agent lines with:"
-        log_warn "  $(render_unraid_go_launch "$WRAPPER_SCRIPT")"
+        fail "Unraid boot setup was not confirmed; agent recovery files and any go.pulse-setup staging were retained. The agent may already be stopped. Reconcile the boot file before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
     fi
 
     # Start the agent now using the wrapper script (includes watchdog)
