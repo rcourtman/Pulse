@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/http"
@@ -24,7 +25,7 @@ import (
 )
 
 const (
-	// maxWebSocketInboundMessageSize bounds client->server websocket message size.
+	// maxWebSocketInboundMessageSize bounds both encoded and decoded inbound messages.
 	maxWebSocketInboundMessageSize = 64 * 1024
 	// maxWebSocketOrgIDLength keeps org IDs bounded to prevent oversized header/query abuse.
 	maxWebSocketOrgIDLength = 64
@@ -1850,6 +1851,29 @@ func isUnexpectedClientClose(err error) bool {
 	)
 }
 
+// Gorilla's read limit counts encoded frame bytes. Bound the decompressed
+// reader as well, before buffering or JSON decoding, including messages whose
+// sender has not finished the final frame.
+func (c *Client) readInboundMessage() ([]byte, error) {
+	_, reader, err := c.conn.NextReader()
+	if err != nil {
+		return nil, err
+	}
+	message, err := io.ReadAll(io.LimitReader(reader, maxWebSocketInboundMessageSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(message) > maxWebSocketInboundMessageSize {
+		if err := c.conn.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseMessageTooBig, ""),
+			time.Now().Add(time.Second)); err != nil {
+			log.Debug().Err(err).Str("client", c.id).Msg("Failed to send WebSocket size-limit close")
+		}
+		return nil, websocket.ErrReadLimit
+	}
+	return message, nil
+}
+
 // readPump handles incoming messages from the client
 func (c *Client) readPump() {
 	defer func() {
@@ -1875,7 +1899,7 @@ func (c *Client) readPump() {
 	log.Info().Str("client", c.id).Msg("readPump started")
 
 	for {
-		_, message, err := c.conn.ReadMessage()
+		message, err := c.readInboundMessage()
 		if err != nil {
 			if isUnexpectedClientClose(err) {
 				log.Error().Err(err).Str("client", c.id).Msg("webSocket read error")
