@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "caedc0574e8302a5f655aff895d20fb31f9e4f51",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "755113aa44c3d2bb286e6bb429363ba781c9589e78db9db826489824abed7998"
+  },
+  "verified_at": "2026-10-27T17:19:04Z",
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "Impossible calendar dates and unzoned/date-only backup dates remain unknown across PBS, PVE files and guest snapshots without dropping completed observations.",
+    "Malformed failed task remains a possible latest task beside dated OK, with unknown start/duration and searchable failure.",
+    "Valid UTC, numeric offsets and nanosecond fractions recover; recurrence restores uncertainty on the same open keyed panel.",
+    "Protection remains server-owned and unknown; unknown dates create no chart activity while valid dates support local-day selection."
+  ],
+  "interactions": [
+    "Desktop native keyboard disclosure and close; touch whole-row disclosure and close at narrow widths.",
+    "Coverage / By date navigation, each artifact detail, failure search and clear, local day select and clear.",
+    "Ordinary 30-second inventory polling restores dates/order and reintroduces malformed evidence with open panel/focus preserved.",
+    "Inspect real production parser/model/table/chart/CSS consumer from raw synthetic HTTP; no forced clicks, mutation, off-origin request or stopped Back/reload operation."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37",
+      "timezoneId": "UTC",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      }
+    },
+    {
+      "engine": "webkit",
+      "version": "26.0",
+      "timezoneId": "America/Los_Angeles",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    }
+  ],
+  "checks": 128,
+  "pixel_review": "All seven retained final captures opened natively with image content presented to the maintainer. Complete unknown-date/failure evidence and source/origin qualifiers fit desktop and narrow details; existing compact-summary/placeholder truncation is not repaired.",
+  "captures": [
+    {
+      "name": "desktop-unknown-coverage.png",
+      "sha256": "81086025f92d434f7e454be3369176dc500304ee4e83f886c77fbd13e60c22bc",
+      "bytes": 133876
+    },
+    {
+      "name": "desktop-unknown-date.png",
+      "sha256": "b9bbc438f1abb5231ba2db97227799247e301418065f3c3abd8158c69e51288d",
+      "bytes": 118335
+    },
+    {
+      "name": "desktop-valid-dates.png",
+      "sha256": "713f8d0b01a4f2450708b223532bdbb0e0587aa4ce8828242151b9745c49d778",
+      "bytes": 106105
+    },
+    {
+      "name": "phone-unknown-coverage.png",
+      "sha256": "a88f9cd4da74df13be4d55d69defa9e3c034968f3a39ab9c18b7e1546612e3f2",
+      "bytes": 127983
+    },
+    {
+      "name": "phone-320-unknown-coverage.png",
+      "sha256": "d7f9b56673e581b3094bb237077164703f47748cade8cb249734490baf61b27a",
+      "bytes": 124879
+    },
+    {
+      "name": "phone-unknown-date.png",
+      "sha256": "03869d0ec0f0f8f8be87541bd9121a4c980274bdf1ab3531a98fce76693a31f3",
+      "bytes": 103821
+    },
+    {
+      "name": "phone-valid-dates.png",
+      "sha256": "8b0784b38b05f12b63eae665270d152a390fdb48aa61134435120307ec4d10f2",
+      "bytes": 96133
+    }
+  ],
+  "evidence": "RECEIPTS.md and BROWSER-RESULT.json in this lane outcome; adverse selector/geometry attempts remain in ADVERSE-NOTES.json."
+}
