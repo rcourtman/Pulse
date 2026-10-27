@@ -7975,7 +7975,7 @@ a valid pinned SSH signature and the extracted request expression with absent
 and synthetic email. It does not establish installed onboarding, server acceptance
 or legal identity. See the qualification evidence below.
 
-### Node 24 amd64 release-builder digest parity
+### Governed Node 24 and Alpine 3.24 digest parity
 
 The canonical Pulse release Dockerfile and provider-MSP control-plane Dockerfile
 pin the same immutable amd64 Node 24 Alpine frontend-builder image. The
@@ -7984,7 +7984,16 @@ build inputs to the current dependency digest. The canonical release-build
 metadata proof `TestDockerBuildUsesCanonicalReleaseLdflags` and hosted
 provider-MSP control proof `TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary`
 also require that exact digest while retaining their release metadata and
-license-build assertions. These are source-contract checks, not an image build.
+license-build assertions. The selected Node 24 digest is
+`06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53`.
+All four Alpine source/prebuilt server, agent and Apprise foundation stages use
+`be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a`;
+the provider-MSP runtime and integration mock use that same Alpine 3.24 image.
+`TestDockerBuildUsesCanonicalReleaseLdflags` binds every production foundation,
+and `TestProviderMSPAlpineRuntimeMatchesIntegrationMock` rejects partial runtime
+refreshes across the hosted control plane and mock. Tag lines, compiler choices,
+release metadata, keys and exact-candidate consumption remain unchanged.
+These are source-contract checks, not an image build or registry verification.
 The hosted release build must verify the landed exact source, and provider-MSP
 rollout and installed acceptance must be observed separately before this refresh
 is considered operationally complete.
