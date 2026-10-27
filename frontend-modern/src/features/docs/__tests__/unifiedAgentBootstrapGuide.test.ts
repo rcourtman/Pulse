@@ -149,3 +149,68 @@ describe('Stopped agent-command help', () => {
     }
   });
 });
+
+describe('Agent update failure help', () => {
+  const section = () => docSection(source, 'UNIFIED_AGENT', 'agent-not-updating');
+
+  it('separates update stages and manual recovery from future automatic updating', () => {
+    const help = section();
+    const text = help.textContent!.replace(/\s+/g, ' ');
+    const steps = [...help.querySelectorAll(':scope > ol > li')];
+    expect(steps.map((step) => step.querySelector('strong')?.textContent)).toEqual([
+      'Before download:',
+      'Download, validation or helper staging:',
+      'Activation, restart or rollback:',
+    ]);
+    for (const fact of [
+      "the server's update target, the agent's last reported version",
+      'a stale report does not establish what is running now',
+      'A successful checksum, signature or self-test does not establish activation',
+      'signed artifact is not the requested pulse-agent version',
+      'not a signature-verification failure',
+      'A healthy Doctor view after a manual update does not prove future automatic updates work',
+      'passing preflight is not installation',
+    ]) {
+      expect(text).toContain(fact);
+    }
+  });
+
+  it('offers existing evidence and safe destinations instead of a diagnostic update recipe', () => {
+    const help = section();
+    const text = help.textContent!.replace(/\s+/g, ' ');
+    const article = document.createElement('article');
+    article.innerHTML = renderDocMarkdown(source, 'UNIFIED_AGENT');
+    for (const id of [
+      'collect-agent-logs-safely',
+      'agent-lookup-returns-http-401-or-403',
+      'copied-agent-command-fails-before-installation',
+    ]) {
+      expect(help.querySelector(`a[href="#${id}"]`)).not.toBeNull();
+      expect(article.querySelector(`#${id}`)).not.toBeNull();
+    }
+    for (const id of ['find-the-running-server-and-agent-versions', '-getting-help']) {
+      expect(help.querySelector(`a[href="/docs/TROUBLESHOOTING#${id}"]`)).not.toBeNull();
+    }
+    expect(help.querySelector('pre')).toBeNull();
+    for (const boundary of [
+      'do not restart or repeat an update to fill the gap',
+      'Do not bypass signature checks, relax permissions or replace the helper manually',
+      'Do not repeat the attempt while its result or installed state is uncertain',
+      'Keep tokens, full copied commands, connection files and service environments private',
+      'No new update, Diagnostics run or full configuration export is required',
+    ]) {
+      expect(text).toContain(boundary);
+    }
+  });
+
+  it('routes failed automatic updates to investigation before a planned manual update', () => {
+    const autoUpdate = docSection(source, 'UNIFIED_AGENT', 'auto-update');
+    expect(autoUpdate.querySelector('a[href="#agent-not-updating"]')).not.toBeNull();
+    expect(autoUpdate.textContent!.replace(/\s+/g, ' ')).toContain(
+      'a manual command is not a diagnostic retry or a repair for every automatic-update failure',
+    );
+    expect(readFileSync(path.join(frontendRoot, 'public/docs/UNIFIED_AGENT.md'), 'utf8')).toBe(
+      source,
+    );
+  });
+});

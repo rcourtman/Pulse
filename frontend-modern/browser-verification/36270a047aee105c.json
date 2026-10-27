@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "455a23acf9631fdb5a6e64b52476b4ec43f109e2",
+  "verified_at": "2026-10-27T09:10:57.655774Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/UNIFIED_AGENT.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "eb781df46253424f99aee5c5762d65e31b389937c89a1eee345d9d28f0db7717"
+  },
+  "routes": [
+    "/docs/UNIFIED_AGENT#auto-update",
+    "/docs/UNIFIED_AGENT#agent-not-updating",
+    "/docs/TROUBLESHOOTING#-getting-help"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Docs, router, renderer, PageHeader, CSS and shipped Markdown in an isolated page mount. Not a full authenticated shell, agent update execution, installed recovery or reporter acceptance.",
+    "Existing help separates server target, reported version, validation/helper staging, activation/rollback and fresh reporting; manual preflight is a separate failure and manual recovery does not prove future auto-update. No runtime update repair is claimed."
+  ],
+  "interactions": [
+    "44 consuming checks pass. Both engines load actual agent/troubleshooting guide GETs; the changed Auto-Update link focuses Agent Not Updating, and the Help link navigates and focuses its real other-guide destination. No page exceptions or page-wide overflow.",
+    "All seven retained captures were opened with native view_image. Changed copy is readable and wraps without clipping on desktop Chromium and narrow WebKit; helper-stage and complete recovery/privacy copy are separately visible on the narrow viewport."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": 7,
+    "remaining": null
+  },
+  "evidence": "Product intelligence outcome RECEIPTS.md retains exact browser script, results, screenshots, source proof and limitations."
+}
