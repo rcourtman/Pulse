@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "base_sha": "672bd026a226df188a43830d00c0330551670278",
+  "verified_at": "2026-10-27T04:17:30.587701Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "docs/PBS.md",
+    "frontend-modern/public/docs/PBS.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "99331d31f2dc3edcce4bbde38e17f55a2a47b9a6d38a81345dea180706cd515b",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "f58b7a176d27fb2f817fc3cbdaf0c4d8788cf5d0314c9455ca2ac0e7e87f0c72",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "cd165269cf6f43f30d9d871a0563c5c4a3bace3fe7e3c829ed3a5b4cb3f67406",
+    "docs/PBS.md": "f1361b9f214d693e79b94418a7bf9ecbbc2707c464d0305378d5086607c5ff49",
+    "frontend-modern/public/docs/PBS.md": "f1361b9f214d693e79b94418a7bf9ecbbc2707c464d0305378d5086607c5ff49"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Explicit reported verification outranks prune retention in the actual inventory consumer. Unverified stays amber, Verified green, unavailable-verdict retained points say Kept with informational tone. Running completion remains unchanged. Canonical workload health remains Unknown without an assessment.",
+    "Existing By date details independently show Verification and Prune protection. Coverage shares the same clear artifact state. Both shipped PBS guide copies agree, including the warning for older Protected labels and every guest-safety boundary.",
+    "65 completed unique checks across retained phases and14 retained captures, all opened natively with view_image. Desktop Chromium141.0.7390.37 and390px WebKit26.0, Playwright1.56.1 (integration-lock parity). Real production modules/CSS compiled in a synthetic local-only fixture shell, not an installed whole-app recovery result.",
+    "Original fixture-build/selector failures are retained in the lane evidence. Successful earlier checks were not replayed; continuations completed only outstanding checks. Browser/server cleanup and no page exceptions reported."
+  ],
+  "interactions": [
+    "Desktop native keyboard disclosure and phone native row tap open and close details. Search Kept and legacy protected, use verification filters (expand phone Filters first), inspect absent-verdict detail and nested Coverage evidence.",
+    "An ordinary30-second inventory poll changes an existing retained point from Unverified to Verified while preserving the mounted badge, open detail and disclosure focus in both browsers.",
+    "Load exact committed guide through production Docs, inspect Kept/caution sections, and focus the existing guest-safety link. No link activation, Help/Back/reload, guest/backup/restore, restart, database or external operation."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "engines": [
+      {
+        "name": "desktop-chromium",
+        "version": "141.0.7390.37",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        }
+      },
+      {
+        "name": "narrow-webkit",
+        "version": "26.0",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        }
+      }
+    ]
+  }
+}
