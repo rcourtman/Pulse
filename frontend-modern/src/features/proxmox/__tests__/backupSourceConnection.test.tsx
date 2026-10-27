@@ -102,9 +102,10 @@ describe('restore-point source connections in real inventory consumers', () => {
     expect(await screen.findByTestId('proxmox-coverage-detail')).toHaveTextContent('pbs-west');
     expect(new URLSearchParams(window.location.search).get('q')).toBe('PBS-WEST');
     expect(new URLSearchParams(window.location.search).has('location')).toBe(false);
-    fireEvent.input(screen.getByPlaceholderText(/Search backups by workload/), {
+    await fireEvent.input(screen.getByPlaceholderText(/Search backups by workload/), {
       target: { value: '' },
     });
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has('q')).toBe(false));
     await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     await waitFor(() =>
       expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2),
