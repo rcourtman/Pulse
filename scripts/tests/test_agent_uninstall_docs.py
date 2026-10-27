@@ -136,7 +136,9 @@ class AgentUninstallDocsTest(unittest.TestCase):
 
     def test_partial_failures_platform_differences_and_unknowns_remain_explicit(self):
         for fact in ("Windows removes the service first", "failed server notification",
-                     "completion message does not prove server-side revocation",
+                     "exact saved agent ID", "retains the binary, saved identity, credentials and logs",
+                     "retained files do not mean monitoring is still running",
+                     "cannot confirm server-side revocation",
                      "failure can leave a partial result", "before a later runner-revocation failure",
                      "host's service manager", "same-instance", "Settings → Infrastructure",
                      "before deciding on another action", "Retained-state warnings",
@@ -144,9 +146,12 @@ class AgentUninstallDocsTest(unittest.TestCase):
             self.assertIn(fact, self.words)
         source = (ROOT / "scripts/install.ps1").read_text().split(
             "# --- Uninstall Logic ---", 1)[1].split("# --- Validation", 1)[0]
-        self.assertLess(source.index("Remove-PulseService"), source.index('Uri         = "$Url/api/agents/agent/uninstall"'))
-        self.assertLess(source.index('# Ignore errors during uninstall', source.index('Uri         = "$Url/api/agents/agent/uninstall"')),
+        self.assertLess(source.index("Remove-PulseService"), source.index('Remove-PulseAgentRegistration'))
+        self.assertLess(source.index('Remove-PulseAgentRegistration'),
                         source.index('Remove-Item $StateDir -Recurse -Force'))
+        refusal = source.split('Remove-PulseAgentRegistration', 1)[1].split('Remove-Item', 1)[0]
+        self.assertIn('Exit 1', refusal)
+        self.assertIn('credentials and logs have been retained', refusal)
         commands = re.findall(r"```powershell\n(.*?)```", self.help, re.DOTALL)
         self.assertEqual(commands, ['& $installerFile -Uninstall $true\n'])
         self.assertIn('[bool]$Uninstall = $false', (ROOT / "scripts/install.ps1").read_text())

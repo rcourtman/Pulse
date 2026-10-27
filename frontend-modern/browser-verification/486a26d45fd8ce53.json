@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "cf330ff6f09d5d4d02e838dd5766c5eefc294c0c",
+  "tested_source_sha": "cf330ff6f09d5d4d02e838dd5766c5eefc294c0c",
+  "changed_paths": [
+    "docs/UNIFIED_AGENT.md",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md",
+    "frontend-modern/src/features/docs/__tests__/windowsUninstallGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/UNIFIED_AGENT.md": "ada1948ea48b0daf81786b685f600173084b4cc55da365042b9d1dc18e30bc54",
+    "frontend-modern/public/docs/UNIFIED_AGENT.md": "ada1948ea48b0daf81786b685f600173084b4cc55da365042b9d1dc18e30bc54",
+    "frontend-modern/src/features/docs/__tests__/windowsUninstallGuide.test.ts": "506bad8319dd980488e0ad71aac1e1c85639e5bb9f1a51b647f8ccaaf1c51057"
+  },
+  "routes": [
+    "/docs/UNIFIED_AGENT#remove-the-whole-agent",
+    "/docs/UNIFIED_AGENT#windows-powershell-run-as-administrator"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual production Docs/router/Markdown/styles render the exact served guide, with source-matching consuming fetch ArrayBuffer bytes in both engines.",
+    "Saved exact-ID confirmation, private credential/TLS reuse, refusal-preserved recovery and already-removed-service caution.",
+    "Credential-free repeated local cleanup is not revocation; older prepared scripts can still erase after a failed server notification."
+  ],
+  "interactions": [
+    "28 assertions across light desktop Chromium and dark phone WebKit; private-file removal command, readable refusal/recovery text and no page horizontal overflow.",
+    "Desktop keyboard Enter and phone touch follow the actual native fragment to the existing Windows safe-preparation heading. No Back/reload or installer execution."
+  ],
+  "runtime": {
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "source_sha": "cf330ff6f09d5d4d02e838dd5766c5eefc294c0c",
+    "opened": [
+      {
+        "file": "chromium-desktop-confirmation.png",
+        "sha256": "38eec54590e7c4f6f128f623fe09c5254687cbc9b39e069ced15f293500869e1",
+        "width": 1440,
+        "height": 1000,
+        "label": "confirmation"
+      },
+      {
+        "file": "chromium-desktop-retained-state.png",
+        "sha256": "3f8d0c769a31cb050a3c1de9411be54c313b971dafe316680669a59c68bc338e",
+        "width": 1440,
+        "height": 1000,
+        "label": "retained-state"
+      },
+      {
+        "file": "webkit-phone-confirmation.png",
+        "sha256": "0eb744e92660d7631c44325fbfe6d23e36123b7c916f3da4af9c3a9fd26522ca",
+        "width": 390,
+        "height": 844,
+        "label": "confirmation"
+      },
+      {
+        "file": "webkit-phone-retained-state.png",
+        "sha256": "0eb744e92660d7631c44325fbfe6d23e36123b7c916f3da4af9c3a9fd26522ca",
+        "width": 390,
+        "height": 844,
+        "label": "retained-state"
+      }
+    ],
+    "observations": "Four captures, three distinct byte identities, were opened. Desktop and phone show the complete changed Windows advice and command without page overflow; the phone visibly emphasises that a removed service is not running monitoring.",
+    "limitations": "Synthetic offline browser surface; no native PowerShell/service, customer removal, credential-revocation, release or installation acceptance."
+  },
+  "observer_limits": [
+    "Initial fixture used a rewritten-document URL selector for a native same-page hash link; corrected without changing production navigation.",
+    "Chromium protocol response.body observed 91452 bytes with mojibake for a 91275-byte text/markdown response; WebKit protocol bytes and both actual consuming fetch ArrayBuffers match the entire 91275-byte source. Protocol mismatch remains retained, not source-byte proof."
+  ],
+  "verified_at": "2026-10-27T15:10:20.809184+00:00"
+}

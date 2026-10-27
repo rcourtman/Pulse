@@ -310,16 +310,94 @@ func TestInstallPS1AllowsOptionalAuthUninstallWithoutToken(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`if (-not [string]::IsNullOrWhiteSpace($Url)) {`,
 		`$invokeArgs = @{`,
 		`if (-not [string]::IsNullOrWhiteSpace($Token)) {`,
 		`$invokeArgs.Headers = @{ "X-API-Token" = $Token }`,
-		`Invoke-RestMethod @invokeArgs | Out-Null`,
+		`Invoke-RestMethod @invokeArgs`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.ps1 missing optional-auth uninstall handling: %s", needle)
 		}
+	}
+}
+
+func windowsUninstallRegistrationContract(script string) error {
+	start := strings.Index(script, "function Remove-PulseAgentRegistration {")
+	end := strings.Index(script, "# --- Uninstall Logic ---")
+	if start < 0 || end <= start {
+		return fmt.Errorf("missing production unregistration boundary")
+	}
+	registration := script[start:end]
+	for _, needle := range []string{
+		`$savedTokenFile = $TokenFile`,
+		`$Token = (Get-Content -LiteralPath $savedTokenFile -Raw -ErrorAction Stop).Trim()`,
+		`$AgentId = (Get-Content -LiteralPath "$StateDir\agent-id" -Raw -ErrorAction Stop).Trim()`,
+		`throw "The original Pulse URL is missing."`,
+		`throw "The saved agent ID is missing; do not select another agent by hostname."`,
+		`$customCaCertificate = Load-CustomCaCertificate $CACertPath`,
+		`$body = @{ agentId = $AgentId } | ConvertTo-Json`,
+		`ErrorAction = "Stop"`,
+		`$result.success -isnot [bool]`,
+		`$result.success -ne $true`,
+		`$result.agentId -isnot [string]`,
+		`$result.agentId -cne $AgentId`,
+		`$customCaCertificate.Dispose()`,
+	} {
+		if !strings.Contains(registration, needle) {
+			return fmt.Errorf("missing exact-ID unregistration boundary %q", needle)
+		}
+	}
+	if strings.Contains(registration, "SilentlyContinue") || strings.Contains(registration, "/lookup?") ||
+		strings.Count(registration, "Invoke-RestMethod @invokeArgs") != 1 {
+		return fmt.Errorf("unregistration can suppress errors, select by hostname or repeat a POST")
+	}
+	branch := script[end:]
+	service := strings.Index(branch, "Remove-PulseService")
+	call := strings.Index(branch, "Remove-PulseAgentRegistration")
+	cleanup := strings.Index(branch, `Remove-Item "$InstallDir\$BinaryName"`)
+	if service < 0 || call <= service || cleanup <= call {
+		return fmt.Errorf("unregistration must follow service absence and precede erasure")
+	}
+	failure := branch[call:cleanup]
+	if !strings.Contains(failure, "} catch {") || !strings.Contains(failure, "Exit 1") ||
+		!strings.Contains(failure, "credentials and logs have been retained") || strings.Contains(failure, "$_") {
+		return fmt.Errorf("unregistration failure must preserve local state and withhold private HTTP errors")
+	}
+	return nil
+}
+
+func TestInstallPS1UninstallRequiresExactServerConfirmationBeforeErasure(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(content)
+	if err := windowsUninstallRegistrationContract(script); err != nil {
+		t.Fatal(err)
+	}
+	for _, boundary := range []string{
+		`$result.success -isnot [bool]`, `$result.success -ne $true`,
+		`$result.agentId -isnot [string]`, `$result.agentId -cne $AgentId`,
+		`throw "The original Pulse URL is missing."`,
+		`throw "The saved agent ID is missing; do not select another agent by hostname."`,
+		`ErrorAction = "Stop"`, "Remove-PulseAgentRegistration\n",
+	} {
+		t.Run(boundary, func(t *testing.T) {
+			if err := windowsUninstallRegistrationContract(strings.Replace(script, boundary, "", 1)); err == nil {
+				t.Fatal("accepted missing unregistration boundary")
+			}
+		})
+	}
+	if path := os.Getenv("PULSE_WINDOWS_UNREGISTRATION_PARENT"); path != "" {
+		parent, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := windowsUninstallRegistrationContract(string(parent)); err == nil {
+			t.Fatal("accepted the actual parent's ignored unregistration failures")
+		}
+		t.Log("rejected the complete supplied parent installer")
 	}
 }
 
@@ -390,7 +468,7 @@ func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 		`if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {`,
 		`Plain HTTP Pulse URL detected; enabling insecure mode for persisted agent update checks.`,
 		`Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {`,
-		`Invoke-RestMethod @invokeArgs | Out-Null`,
+		`Invoke-RestMethod @invokeArgs`,
 		`$downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)`,
 	}
 	for _, needle := range required {
@@ -454,24 +532,20 @@ func TestInstallPS1ReadsAgentIdentityFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestInstallPS1UsesHostnameLookupForUninstallFallback(t *testing.T) {
+func TestInstallPS1RefusesHostnameOnlyUninstall(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {
-		t.Fatalf("read install.ps1: %v", err)
+		t.Fatal(err)
 	}
-
 	script := string(content)
-	required := []string{
-		`$lookupHostname = $Hostname`,
-		`$lookupHostname = $env:COMPUTERNAME`,
-		`Uri         = "$Url/api/agents/agent/lookup?hostname=$([System.Uri]::EscapeDataString($lookupHostname))"`,
-		`$lookupResult = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {`,
-		`Invoke-RestMethod @lookupArgs`,
+	start := strings.Index(script, "function Remove-PulseAgentRegistration {")
+	end := strings.Index(script, "# --- Uninstall Logic ---")
+	if start < 0 || end <= start {
+		t.Fatal("missing unregistration boundary")
 	}
-	for _, needle := range required {
-		if !strings.Contains(script, needle) {
-			t.Fatalf("install.ps1 missing uninstall hostname lookup fallback: %s", needle)
-		}
+	registration := script[start:end]
+	if strings.Contains(registration, "/lookup?") || !strings.Contains(registration, `throw "The saved agent ID is missing; do not select another agent by hostname."`) {
+		t.Fatal("unregistration can choose a different same-name agent")
 	}
 }
 
@@ -491,7 +565,6 @@ func TestInstallPS1PersistsAndRecoversConnectionIdentity(t *testing.T) {
 		`$Token = Get-ConnectionStateValue "PULSE_TOKEN"`,
 		`$savedTokenFile = Get-ConnectionStateValue "PULSE_TOKEN_FILE"`,
 		`$AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"`,
-		`$Hostname = Get-ConnectionStateValue "PULSE_HOSTNAME"`,
 		`$Insecure = Parse-Bool (Get-ConnectionStateValue "PULSE_INSECURE_SKIP_VERIFY") $Insecure`,
 		`$CACertPath = Get-ConnectionStateValue "PULSE_CACERT"`,
 		`$lines += "PULSE_INSECURE_SKIP_VERIFY='true'"`,

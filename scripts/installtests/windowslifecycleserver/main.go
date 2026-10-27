@@ -63,6 +63,7 @@ func main() {
 		}
 		_, _ = w.Write(binary)
 	})
+	mux.HandleFunc("/api/agents/agent/uninstall", confirmUninstall)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true}`))
@@ -80,4 +81,22 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+// Match the product's exact-ID acknowledgement; generic success is not proof
+// that an uninstaller removed the identity it requested.
+func confirmUninstall(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	var request struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16*1024)).Decode(&request); err != nil || request.AgentID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "agentId": request.AgentID})
 }
