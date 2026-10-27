@@ -62,9 +62,12 @@ answer different questions:
   within the selected chart range. An undated completed point can count in
   Backup health but not in a daily column. A blank chart is not proof that
   no backups exist; check any inventory loading or access warning first.
-- **Completed restore volume per day** adds only positive reported sizes for
+- **Known restore volume per day** adds only positive reported sizes for
   those dated completed points. A point with no reported size can count as a
-  point without contributing volume. These are recorded artifact sizes, not
+  point without contributing volume. It remains selectable in **Volume** and
+  counts normally in **Count**. Amber marks days with unknown sizes, not zero
+  volume. When a day mixes known and unknown sizes, its known volume is a lower
+  bound, not a complete total. These are recorded artifact sizes, not
   PBS datastore usage or deduplicated physical space.
 - Guest **snapshots** can contribute to completed-point and chart totals.
   They are not independent backups and do not fill Coverage's **Last backup**.

@@ -7735,3 +7735,24 @@ The reserve derives from the full keyed measured-height map plus table chrome,
 not a DOM height sampled while a window retires. Offscreen detail measurements
 remain in that map until the owning item is remeasured or removed, so a transient
 DOM extent cannot lower the reserve before its compensating spacer settles.
+
+### Backup activity distinguishes unknown size from absent restore points
+
+The By date activity view keeps completed, in-window entries even when their
+sizes are unavailable. Count and day selection remain usable in Volume mode.
+Volume bars and axes measure known positive finite sizes only; unknown sizes
+have a separate amber day marker, explicit notice, day label and source tooltip.
+Mixed totals are labelled as known volume, never a complete total, and source
+percentages are omitted when any size for that day is unknown. An all-unknown
+window has no numeric volume scale. Empty days remain distinct from unknown size.
+
+The existing source, search, node, type, location and local-calendar window scope
+applies to both known and unknown sizes. Running/failed artifacts and unknown or
+future dates do not become completed activity. Posture, backup completion,
+permissions, guest operations and actual recovery are unchanged.
+
+`ProxmoxBackupsTable.test.tsx` exercises unknown-only and mixed inventories,
+Count/Volume switching, selection and source scope through the HTTP consumer.
+`proxmoxBackupActivityPresentation.test.ts` checks separate unknown counts,
+excluded dates, labels and per-source tooltips. Browser verification must inspect
+the real table/chart with safe inventory at desktop and narrow viewports.

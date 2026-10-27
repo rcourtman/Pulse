@@ -1787,8 +1787,10 @@ describe('completed restore-point summary and activity', () => {
     expect(screen.queryByRole('button', { name: /: 5 restore points$/ })).not.toBeInTheDocument();
     expect(screen.getByText('Completed restore points per day')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-    expect(screen.getByText('Completed restore volume per day')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /: 3.00 KB$/ })).toBeInTheDocument();
+    expect(screen.getByText('Known restore volume per day')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
   });
@@ -1823,6 +1825,115 @@ describe('completed restore-point summary and activity', () => {
       'false',
     );
     expect(container.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(5);
+  });
+});
+
+describe('restore volume with unavailable sizes', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const mountVolumeInventory = (mixed = false) => {
+    vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data: url.endsWith('/pbs')
+            ? {
+                backups: [
+                  identityPBS({ size: mixed ? 2048 : 0 }),
+                  ...(mixed
+                    ? [
+                        identityPBS({
+                          id: 'yesterday',
+                          size: 0,
+                          backupTime: '2026-10-03T10:00:00Z',
+                        }),
+                      ]
+                    : []),
+                  identityPBS({ id: 'running', size: 0, inProgress: true }),
+                  identityPBS({ id: 'old', size: 0, backupTime: '2025-01-01T10:00:00Z' }),
+                  identityPBS({ id: 'future', size: 0, backupTime: '2026-10-05T10:00:00Z' }),
+                ],
+              }
+            : {
+                storageBackups: [identityArchive({ size: mixed ? 1024 : 0 })],
+                guestSnapshots: [identitySnapshot()],
+                backupTasks: [],
+              },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    return renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
+      />
+    ));
+  };
+
+  it('[volume-size] keeps unknown-only activity and the Count control instead of claiming no restore points', async () => {
+    mountVolumeInventory();
+    await screen.findByRole('button', { name: /: 3 restore points$/ });
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+    expect(screen.getByRole('button', { name: 'Count' })).toBeInTheDocument();
+    expect(screen.getByText('Known restore volume per day')).toBeInTheDocument();
+    expect(
+      screen.queryByText(/No completed restore points with known dates/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Sizes are unavailable for 3 completed restore points in this window/),
+    ).toBeInTheDocument();
+    const day = screen.getByRole('button', { name: /: 3 sizes unknown$/ });
+    expect(day.querySelector('[data-unknown-volume]')).not.toBeNull();
+    await fireEvent.click(day);
+    expect(
+      screen.getByRole('button', { name: /: 3 sizes unknown, selected$/ }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
+    expect(
+      screen.getByRole('button', { name: /: 3 restore points, selected$/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Sizes are unavailable for/)).not.toBeInTheDocument();
+  });
+
+  it('[volume-size] distinguishes known bytes, unknown-only days and genuinely empty days', async () => {
+    mountVolumeInventory(true);
+    await screen.findByRole('button', { name: /: 3 restore points$/ });
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+    expect(
+      screen.getByText(/Sizes are unavailable for 2 completed restore points in this window/),
+    ).toBeInTheDocument();
+    const today = screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ });
+    const yesterday = screen.getByRole('button', { name: /: 1 size unknown$/ });
+    expect(screen.getAllByRole('button', { name: /: 0 B$/ }).length).toBeGreaterThan(0);
+    await fireEvent.focus(today);
+    expect(screen.getByText('3.00 KB known · 1 size unknown')).toBeInTheDocument();
+    expect(screen.getByText('Unknown size')).toBeInTheDocument();
+    expect(screen.queryByText('1.00 KB (33%)')).not.toBeInTheDocument();
+    await fireEvent.click(yesterday);
+    expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ }),
+    ).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
+    expect(
+      screen.getByRole('button', { name: /: 1 restore point, selected$/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('[volume-size] follows source scope without counting incomplete or out-of-window unknown sizes', async () => {
+    mountVolumeInventory(true);
+    await screen.findByRole('button', { name: /: 3 restore points$/ });
+    await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+    await fireEvent.click(
+      within(screen.getByRole('group', { name: 'Source' })).getByRole('button', {
+        name: 'PVE backup files found on Proxmox VE storage',
+      }),
+    );
+    expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Sizes are unavailable for/)).not.toBeInTheDocument();
+    expect(document.querySelector('[data-unknown-volume]')).toBeNull();
   });
 });
 
