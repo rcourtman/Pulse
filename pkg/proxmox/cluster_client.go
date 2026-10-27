@@ -265,7 +265,7 @@ func (cc *ClusterClient) knownEndpointFingerprintLocked(endpoint string) (string
 		// Exact URL spelling must not choose a winner over another saved pin
 		// for this authority, nor may Go map order decide which leaf is trusted.
 		normalized := strings.ToLower(strings.ReplaceAll(fp, ":", ""))
-		if known && strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != normalized {
+		if known && ((fingerprint == "") != (fp == "") || strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != normalized) {
 			return "", true, errConflictingEndpointFingerprints
 		}
 		// Keep a nonempty, malformed saved pin nonempty: returning its empty

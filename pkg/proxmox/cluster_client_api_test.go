@@ -1044,3 +1044,20 @@ func TestClusterExplicitEmptyEndpointTrust(t *testing.T) {
 		}
 	}
 }
+
+func TestClusterExplicitEmptyTrustCannotEraseMalformedNonemptyPin(t *testing.T) {
+	endpoint := "https://member.test:8006"
+	for _, malformed := range []string{":", "::", "   "} {
+		pins := map[string]string{endpoint: malformed, "https://MEMBER.test:8006/": ""}
+		for _, spelling := range []string{endpoint, "https://MEMBER.test:8006/"} {
+			if _, _, err := ResolveEndpointFingerprint(spelling, pins); !errors.Is(err, errConflictingEndpointFingerprints) {
+				t.Fatalf("malformed nonempty pin %q became CA policy through alias %s: %v", malformed, spelling, err)
+			}
+		}
+		delete(pins, "https://MEMBER.test:8006/")
+		got, known, err := ResolveEndpointFingerprint(endpoint, pins)
+		if err != nil || !known || got != malformed {
+			t.Fatal("malformed saved pin was erased")
+		}
+	}
+}

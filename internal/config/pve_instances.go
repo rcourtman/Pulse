@@ -100,7 +100,7 @@ func pveClusterInstancesHaveFingerprintConflict(a, b PVEInstance) bool {
 	}
 	for endpoint, fingerprint := range a.TLSFingerprintOverrides {
 		other, known, err := proxmox.ResolveEndpointFingerprint(endpoint, b.TLSFingerprintOverrides)
-		if err != nil || (known && strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != strings.ToLower(strings.ReplaceAll(other, ":", ""))) {
+		if err != nil || (known && ((fingerprint == "") != (other == "") || strings.ToLower(strings.ReplaceAll(fingerprint, ":", "")) != strings.ToLower(strings.ReplaceAll(other, ":", "")))) {
 			return true
 		}
 	}

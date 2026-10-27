@@ -761,3 +761,11 @@ func TestPVEEndpointTrustOverrideSurvivesMerge(t *testing.T) {
 		t.Fatal("consolidation ignored contradictory explicit authority trust")
 	}
 }
+
+func TestPVEEndpointTrustEmptyAndMalformedChoicesConflict(t *testing.T) {
+	a := PVEInstance{Host: "https://primary.test:8006", TLSFingerprintOverrides: map[string]string{"https://member.test:8006": ""}}
+	b := PVEInstance{Host: a.Host, TLSFingerprintOverrides: map[string]string{"https://MEMBER.test:8006/": ":"}}
+	if !pveClusterInstancesHaveFingerprintConflict(a, b) {
+		t.Fatal("merge treated an invalid nonempty pin as deliberate empty CA policy")
+	}
+}
