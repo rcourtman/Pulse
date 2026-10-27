@@ -43,6 +43,25 @@ describe('OIDC setup without losing access', () => {
     expect(readFileSync(resolve(process.cwd(), 'public/docs/OIDC.md'), 'utf8')).toBe(read('OIDC'));
   });
 
+  it('distinguishes hiding local login from enforcing SSO-only authentication', () => {
+    const guide = article('OIDC');
+    const warning = [...guide.querySelectorAll('p')].find((paragraph) =>
+      text(paragraph).startsWith('Hiding the form is not SSO-only enforcement.'),
+    )!;
+    expect(warning).toBeDefined();
+    expect(text(warning.querySelector('strong')!)).toBe(
+      'Hiding the form is not SSO-only enforcement.',
+    );
+    expect(text(warning.previousElementSibling!)).toContain('PULSE_AUTH_HIDE_LOCAL_LOGIN=true');
+    expect(text(warning.previousElementSibling!)).toContain('?show_local=true');
+    expect(text(warning)).toContain('valid existing local credentials can still sign in');
+    expect(text(warning)).toContain('does not reject those requests or revoke local sessions');
+    expect(text(warning)).toContain('Keep the independent administrator recovery path');
+    expect(text(warning)).toContain('do not remove credentials or disable authentication');
+    expect(text(warning)).toContain('not to the separate local password login');
+    expect(warning.querySelector('pre, form, input, button')).toBeNull();
+  });
+
   it('links all setup decisions to real focused documentation headings', () => {
     const guide = article('OIDC');
     for (const [name, fragment] of [
