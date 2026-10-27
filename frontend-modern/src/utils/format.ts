@@ -1,5 +1,6 @@
 // Type-safe formatting utilities
 import type { Disk } from '@/types/api';
+import { parseBackupTimestampMs } from './backupTimestamp';
 
 type DiskInput = {
   device?: string;
@@ -291,8 +292,15 @@ export interface BackupInfo {
 export function formatBackupCompletionTime(
   timestamp: string | number | Date,
 ): { completedAt: string; dateLabel: string } | null {
-  const date = new Date(timestamp instanceof Date ? timestamp.getTime() : timestamp);
-  if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return null;
+  const ms =
+    typeof timestamp === 'string'
+      ? parseBackupTimestampMs(timestamp)
+      : timestamp instanceof Date
+        ? timestamp.getTime()
+        : timestamp;
+  if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return null;
+  const date = new Date(ms);
+  if (!Number.isFinite(date.getTime())) return null;
   const completedAt = date.toISOString();
   return {
     completedAt,
@@ -338,14 +346,11 @@ export function getBackupInfo(
     return { status: 'never', ageMs: null, ageFormatted: 'Never' };
   }
 
-  let timestamp: number;
-  if (typeof lastBackup === 'string') {
-    timestamp = new Date(lastBackup).getTime();
-  } else {
-    timestamp = lastBackup;
-  }
+  const timestamp =
+    typeof lastBackup === 'string' ? parseBackupTimestampMs(lastBackup) : lastBackup;
 
   if (
+    timestamp === undefined ||
     !Number.isFinite(timestamp) ||
     timestamp <= 0 ||
     !Number.isFinite(new Date(timestamp).getTime())

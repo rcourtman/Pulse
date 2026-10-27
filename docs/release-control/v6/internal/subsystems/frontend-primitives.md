@@ -20,6 +20,18 @@
 
 ## Purpose
 
+### Backup age and completion do not normalise malformed strings
+
+The backup badge, shield disclosure and guest drawer share Backups inventory's
+strict calendar/zone parser. A present impossible, unzoned or date-only time is
+Unknown, never a green completed backup or an invented exact UTC completion.
+Numeric/Date inputs and valid zoned instants retain policy-relative age,
+current activity and existing absence/future semantics. `backupTimestamp.test.ts`
+and `backupTimestampFlow.test.tsx` cover direct formatting and REST/snapshot
+production consumers, recovery/recurrence, details and focus. Desktop/narrow
+browser proof must exercise these changed producers through the real consumers.
+See storage-recovery's backup completion rule; no restore/thaw claim is added.
+
 ### Latest backup task evidence stays separate from recovery
 
 Coverage’s existing expanded detail shows the scoped latest PVE task’s reported

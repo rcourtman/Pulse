@@ -21,6 +21,29 @@
 
 ## Purpose
 
+### Backup completion strings share one strict instant rule
+
+Backups inventory and Workloads use the same calendar-checked, explicitly zoned
+RFC3339 parser for reported backup times. Workloads must not turn impossible
+calendar dates, date-only strings or browser-local times into numeric completed
+backups before the badge, shield or guest drawer sees them. Age and exact UTC
+completion formatting apply the same rule to direct string inputs. Invalid
+present evidence stays Unknown, not fresh or absent; only existing absence
+sentinels (including Go zero time in resource mapping) mean no recorded backup.
+Numeric/Date inputs, valid offsets/leap days/fractions, future-time uncertainty,
+policy thresholds, backup activity, identity and canonical posture are unchanged.
+No backup/restore, filesystem or guest operation is added.
+
+Normal-suite `backupTimestamp.test.ts` checks shared age/completion admission and
+valid controls. `backupTimestampFlow.test.tsx` drives REST and owning-snapshot
+resource updates through real badge, shield disclosure and guest drawer for
+VM/LXC, recovery and recurrence while preserving open details/focus. Existing
+inventory timestamp tests continue to cover PBS/files/snapshots/task chronology.
+Source-bound desktop/narrow browser proof must exercise the changed resource
+producer and those consuming surfaces, not just a formatter demonstration.
+This is presentation truthfulness, not original stale-date causality, restore
+availability, thaw or every-filesystem recovery.
+
 ### Latest backup task evidence stays separate from recovery
 
 Coverage’s existing expanded detail shows the scoped latest PVE task’s reported
