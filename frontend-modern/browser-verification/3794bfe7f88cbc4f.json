@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "base_sha": "d3d0a84326f0bcf293fd1bba8788182370376512",
+  "verified_at": "2026-10-27T06:42:49.031336Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "aad88b70d9368b957fc02f5ce3c8ccd5e590579d39a97d6718a18dde7aa6046d",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "891ac0946539167d5f436852b06a77710bdff2b18d7d023818796d22f81ca6b7",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "c48e1823a1345e17c5349450a90304c1fb16ea36fb23e099c5c8bb8726c475d5"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Fixed category/status recovery guidance, never raw API envelopes, proxy pages, callback messages or network errors. Unknown replies remain bounded. Raw private values are absent from the preview logger.",
+    "Create and Edit preserve URL/certificate/exact group and mapping drafts. Preview remains explicitly non-saving; local synthetic Create is the only provider save. Community SSO, TLS verification and server access rules are unchanged.",
+    "Native desktop and phone Preview, pending disabled control, explicit retry, successful parsed/XML preview, close focus return, explicit save/reopen/Edit failure and Cancel all pass at this exact source.",
+    "Full 198-check browser pass and 40 overlapping capture-finalisation checks. All 14 routine frames natively inspected: 10 accepted settled pixels; 4 initial entrance-phase success/Edit images superseded. Prior fixture/type failures and actual parent focus failure remain retained, not erased."
+  ],
+  "interactions": [
+    "Desktop Chromium native keyboard and 390 px WebKit touch/keyboard; one deliberate request, drafts and restrictions preserved, footer reachable and no horizontal dialog overflow.",
+    "The existing shared Dialog returnFocus option targets Preview explicitly after its disabled pending state. Both engines return focus to it after successful nested preview close.",
+    "Generic/fetch/parse, synthetic private envelope, HTML gateway,403 and 429 fixtures recover without hidden retry or false success. Local-only provider create is deliberately submitted after preview; no real provider/customer operation."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "engines": [
+      {
+        "engine": "chromium",
+        "version": "141.0.7390.37",
+        "viewport": {
+          "name": "desktop",
+          "width": 1440,
+          "height": 1000,
+          "engine": "chromium"
+        }
+      },
+      {
+        "engine": "webkit",
+        "version": "26.0",
+        "viewport": {
+          "name": "narrow",
+          "width": 390,
+          "height": 844,
+          "engine": "webkit"
+        }
+      }
+    ],
+    "integration_lock_versions": {
+      "node_modules/@playwright/test": "1.56.1",
+      "node_modules/playwright": "1.56.1",
+      "node_modules/playwright-core": "1.56.1"
+    }
+  }
+}

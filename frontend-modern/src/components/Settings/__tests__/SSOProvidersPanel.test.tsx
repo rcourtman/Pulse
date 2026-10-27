@@ -407,7 +407,10 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
       target: { value: 'https://idp.example.com/metadata' },
     });
     fireEvent.click(dialog.getByRole('button', { name: 'Preview' }));
-    expect(await dialog.findByRole('alert')).toHaveTextContent('Metadata unavailable');
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'Unable to preview SAML metadata. Check the connection and metadata URL, then try again.',
+    );
+    expect(dialog.getByRole('alert')).not.toHaveTextContent('Metadata unavailable');
     expect(notificationErrorMock).not.toHaveBeenCalled();
   });
 

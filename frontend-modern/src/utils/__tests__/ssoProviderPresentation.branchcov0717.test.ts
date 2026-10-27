@@ -206,18 +206,52 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
       expect(getSSOMetadataUrlRequiredMessage()).toBe('Enter an IdP metadata URL.');
     });
 
-    it('coerces an undefined error to "undefined" via String()', () => {
-      expect(getSSOMetadataFetchErrorMessage()).toBe('Unable to fetch metadata: undefined');
+    const fallback =
+      'Unable to preview SAML metadata. Check the connection and metadata URL, then try again. Your draft has not been saved.';
+
+    it.each([
+      undefined,
+      null,
+      'timeout',
+      new Error('private upstream text'),
+      { code: 'ECONNRESET' },
+      { code: ['fetch_error'] },
+    ])('keeps unknown error input out of recovery guidance (%s)', (error) =>
+      expect(getSSOMetadataFetchErrorMessage(error)).toBe(fallback),
+    );
+
+    it('does not coerce arbitrary failures into visible text', () => {
+      expect(
+        getSSOMetadataFetchErrorMessage({
+          toString: () => {
+            throw new Error('must not coerce');
+          },
+        }),
+      ).toBe(fallback);
     });
 
-    it('coerces null to "null"', () => {
-      expect(getSSOMetadataFetchErrorMessage(null)).toBe('Unable to fetch metadata: null');
+    it.each([
+      ['validation_error', 'Check the metadata URL'],
+      ['fetch_error', 'TLS trust on the Pulse server'],
+      ['parse_error', 'URL returns a SAML metadata document'],
+      ['rate_limited', 'Wait a moment'],
+    ])('maps only the recognised %s category to fixed guidance', (code, guidance) => {
+      const message = getSSOMetadataFetchErrorMessage({
+        code,
+        message: 'private upstream text',
+        details: { private: 'private detail' },
+      });
+      expect(message).toContain(guidance);
+      expect(message).toContain('Your draft has not been saved.');
+      expect(message).not.toContain('private');
+      expect(message.length).toBeLessThan(200);
     });
 
-    it('coerces a plain object to "[object Object]"', () => {
-      expect(getSSOMetadataFetchErrorMessage({ code: 'ECONNRESET' })).toBe(
-        'Unable to fetch metadata: [object Object]',
+    it('uses the HTTP refusal or rate-limit status even without a code', () => {
+      expect(getSSOMetadataFetchErrorMessage({ status: 403, code: 'fetch_error' })).toContain(
+        'session and permissions',
       );
+      expect(getSSOMetadataFetchErrorMessage({ status: 429 })).toContain('Wait a moment');
     });
   });
 

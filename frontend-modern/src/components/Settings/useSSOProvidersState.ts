@@ -290,6 +290,9 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const canTest = () => canTestProviderForm(form);
 
   const fetchMetadataPreview = async () => {
+    if (!canManage() || loadingPreview()) {
+      return;
+    }
     setEditorFeedback(null);
     if (!form.samlIdpMetadataUrl.trim()) {
       setEditorFeedback({ tone: 'error', message: getSSOMetadataUrlRequiredMessage() });
@@ -300,23 +303,26 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     setMetadataPreview(null);
 
     try {
-      const { apiFetch } = await import('@/utils/apiClient');
+      const { apiFetch, apiErrorFromResponse } = await import('@/utils/apiClient');
       const response = await apiFetch('/api/security/sso/providers/metadata/preview', {
         method: 'POST',
+        retry: false,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildMetadataPreviewPayload(form)),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to fetch metadata');
+        const error = await apiErrorFromResponse(response);
+        setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage(error) });
+        logger.error('[SSOProvidersPanel] Metadata preview failed.', { status: response.status });
+        return;
       }
 
       setMetadataPreview((await response.json()) as MetadataPreview);
       setShowMetadataPreview(true);
-    } catch (error) {
-      logger.error('[SSOProvidersPanel] Metadata preview error:', error);
-      setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage(error) });
+    } catch {
+      logger.error('[SSOProvidersPanel] Metadata preview failed.');
+      setEditorFeedback({ tone: 'error', message: getSSOMetadataFetchErrorMessage() });
     } finally {
       setLoadingPreview(false);
     }
