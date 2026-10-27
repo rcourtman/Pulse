@@ -320,6 +320,22 @@ the affected node and existing failure reason. If **Unreachable — details**
 is available, open it with touch or keyboard rather than relying on a hover.
 A display-name edit does not reconcile certificate trust.
 
+#### Test Connection succeeds but cluster polling fails
+
+For a PVE cluster, **Test Connection** checks the primary endpoint with the
+selected TLS settings, not the saved per-member trust used by background
+polling. Changing or clearing the primary **SSL Fingerprint** does not by
+itself replace saved member pins, even for that same endpoint. A successful
+Test therefore does not establish that ordinary polling has recovered, or
+that every member now uses CA validation.
+
+Keep the successful Test result and the failing members' existing errors as
+separate evidence. If an independently verified primary-pin correction leaves
+polling unchanged, do not keep clearing pins, copy that pin to peers or restart
+Pulse to try to make the results agree. Preserve verification and saved trust;
+an API connection's TLS result also does not establish whether a Pulse agent
+is reporting successfully.
+
 If the affected member pin or conflicting entry cannot be safely reconciled
 through the existing controls, leave it intact and use [Getting Help](#-getting-help).
 Share only the running Pulse version, PVE/PBS version, original time, redacted
