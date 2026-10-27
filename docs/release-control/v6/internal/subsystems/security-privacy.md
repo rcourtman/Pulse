@@ -18,6 +18,24 @@
 
 ## Purpose
 
+### Audit CSV is a spreadsheet projection, not rewritten evidence
+
+The canonical audit exporter prefixes dangerous text cells with one apostrophe
+at CSV rendering only. ID, event type, user, IP, path, details and signature
+text cannot begin as formulas, including after whitespace/BOM, with full-width
+formula introducers, or with leading tab/CR/LF controls. Ordinary and already
+literal text is unchanged; CSV quoting still owns column/row boundaries.
+Generated timestamps, success and verification booleans keep their existing forms.
+
+Verification receives the original signed events before this projection. Valid
+v2 and historical signatures, invalid and absent verdicts, JSON evidence, stored
+records, selection/tenant scope and the 10,000-event ceiling are unchanged.
+Use JSON for lossless evidence; CSV's text marker is not part of the signed event.
+`TestExporterCSVLiteralCells` covers every text column and idempotence;
+`TestExporterCSVVerifiesOriginalSignedEvents` covers original inputs, real
+signatures, repeat CSV/JSON exports and unchanged source records. The canonical
+HTTP export tests retain attachment metadata and the same bounded, scoped rows.
+
 ### Proxmox trust choices are endpoint-scoped
 
 Persisted PVE `tlsFingerprintOverrides` are exact authority/base-path operator
