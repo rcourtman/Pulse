@@ -83,6 +83,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
       ],
     });
     const current = model.coverageRows[0];
+    // The keyed store reconciles a frame in place. A later HTTP read supplies
+    // an independent frame, not the now-mutated original object.
+    const restoredRows = structuredClone(model.coverageRows);
     const [rows, setRows] = createSignal(model.coverageRows);
     renderInRouter(() => (
       <ProxmoxCoverageTable
@@ -125,7 +128,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     await waitFor(() => expect(more).toHaveTextContent('All 0 evidence entries shown'));
     expect(panel).not.toHaveTextContent('Restore evidence');
     expect(document.activeElement).toBe(more);
-    setRows(model.coverageRows);
+    setRows(restoredRows);
     await waitFor(() => expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(13));
     expect(document.activeElement).toBe(more);
   });
