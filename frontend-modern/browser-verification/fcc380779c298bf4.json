@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "base_sha": "0ec511193e8c81988b54f3da025fc24f8dacc1c7",
+  "verified_at": "2026-10-27T16:14:04.390092Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "docs/RECOVERY.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/RECOVERY.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md",
+    "frontend-modern/src/features/docs/__tests__/backupPlacementGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "3d94c6a3ff37e0d421614c62ca7f39ef73ba4fce10b7f19afd0bc6b204c18f8a",
+    "docs/RECOVERY.md": "5ec4134c73c5167e24913adb4c251555ed24adbaa58289bb043fbeee2e25e744",
+    "docs/TROUBLESHOOTING.md": "c34e5d401d051143dbc76493c9863329bb0ee581ff623ba4073b6afa119a14ef",
+    "frontend-modern/public/docs/PBS.md": "3d94c6a3ff37e0d421614c62ca7f39ef73ba4fce10b7f19afd0bc6b204c18f8a",
+    "frontend-modern/public/docs/RECOVERY.md": "5ec4134c73c5167e24913adb4c251555ed24adbaa58289bb043fbeee2e25e744",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "c34e5d401d051143dbc76493c9863329bb0ee581ff623ba4073b6afa119a14ef",
+    "frontend-modern/src/features/docs/__tests__/backupPlacementGuide.test.ts": "52f626c3216ff0d51eb30ab6dd5e059a712625837d45510a14e98fc0ec2ec505"
+  },
+  "routes": [
+    "/docs/PBS#data-source-indicator",
+    "/docs/RECOVERY#backup-location-and-guest-placement",
+    "/docs/TROUBLESHOOTING#monitoring-is-mixed-between-proxmox-installations",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Docs component, router, header, Markdown renderer, CSS and real fetched guide assets consume the changed guidance in an evidence-only uncommitted mount. Production/embed build is independently validated; no installed-server or native recovery claim.",
+    "Workload ownership/placement, artifact reader/repository and provider evidence scope remain distinct. Missing placement is Not reported, not failed backup or lost guest; Node filters must not be treated as collection or identity repair.",
+    "All seven captures were opened through native view_image at original detail. The three identity rows wrap completely at 1365px/390px/320px without clipping. Missing-placement and filter guidance, private passive comparison and independent safety links are readable.",
+    "60 browser checks pass with Playwright 1.56.1 matching the integration lock. Desktop Chromium and touch WebKit exercise actual guide GETs; no page exception, off-origin/mutation request or horizontal overflow was observed."
+  ],
+  "interactions": [
+    "Keyboard Enter and ordinary phone taps follow PBS and mixed-installation Troubleshooting links to the exact Recovery heading, focus it and preserve the application shell.",
+    "The cross-installation and Backup safety links reach and focus their existing headings. A 320px resize retains the complete table; no Back/reload, guest probe or stopped operation was replayed."
+  ],
+  "captures": [
+    {
+      "name": "desktop-identity-table.png",
+      "sha256": "de0840bf6ea8d9ae04b96195cfde4c0e4633613658db4584ae788c145e1a060d"
+    },
+    {
+      "name": "desktop-missing-placement-and-filters.png",
+      "sha256": "2560728f46949230a9ddc02613ee7cfa716f20ecd0944a83596d883f962e0463"
+    },
+    {
+      "name": "desktop-safe-comparison.png",
+      "sha256": "944ca1167d8b624280fb84d4930bfb0b323298e3602204110fc51fa242eb5b9c"
+    },
+    {
+      "name": "phone-identity-table.png",
+      "sha256": "5c956204ee61fcdd4f8da340d59f662bcaffcdfb95f4a716e8e1b0a70a52293b"
+    },
+    {
+      "name": "phone-missing-placement-and-filters.png",
+      "sha256": "71150fe23648999cd6081ab94eb0d5886da9ebaa56ffddaebab91521fb0f1297"
+    },
+    {
+      "name": "phone-safe-comparison.png",
+      "sha256": "2890bb8c2107075e820acc05b3497ae18ae5d9d67416a11db2bcb4ebd4fb24ca"
+    },
+    {
+      "name": "phone-320-identity-table.png",
+      "sha256": "790310b0a399e785e5d2c615088ca3dd4a18ce469ab8a04dc40554f74d33d67b"
+    }
+  ]
+}
