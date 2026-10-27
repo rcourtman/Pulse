@@ -202,7 +202,7 @@ export function getBackupActivityPointTotalLabel(
   if (mode === 'volume') {
     if (unknownCount > 0) {
       const unknown = `${unknownCount} ${unknownCount === 1 ? 'size' : 'sizes'} unknown`;
-      return total > 0 ? `${formatBytes(total)} known; ${unknown}` : unknown;
+      return total > 0 ? `${formatBytes(total)} known · ${unknown}` : unknown;
     }
     return formatBytes(Math.max(0, total));
   }

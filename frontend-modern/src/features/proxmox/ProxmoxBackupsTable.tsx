@@ -910,7 +910,7 @@ export const ProxmoxBackupsTable: Component<{
                     <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
                       Sizes are unavailable for {unknownVolumeCount()} completed restore{' '}
                       {unknownVolumeCount() === 1 ? 'point' : 'points'} in this window. Bars show
-                      known volume only; amber marks days with unknown sizes, not zero volume.
+                      known volume only. Amber marks days with unknown sizes, not zero volume.
                     </p>
                   </Show>
                   <BackupActivityChart

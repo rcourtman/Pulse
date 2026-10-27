@@ -459,7 +459,7 @@ describe('proxmoxBackupActivityPresentation', () => {
         '1 size unknown',
       );
       expect(getBackupActivityPointTotalLabel(1024, 'restore point', 'volume', 2)).toBe(
-        '1.00 KB known; 2 sizes unknown',
+        '1.00 KB known · 2 sizes unknown',
       );
       expect(getBackupActivityPointTotalLabel(3, 'restore point', 'count', 2)).toBe(
         '3 restore points',

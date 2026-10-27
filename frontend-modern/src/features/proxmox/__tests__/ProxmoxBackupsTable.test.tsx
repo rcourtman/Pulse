@@ -1789,7 +1789,7 @@ describe('completed restore-point summary and activity', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
     expect(screen.getByText('Known restore volume per day')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /: 3.00 KB known; 1 size unknown$/ }),
+      screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ }),
     ).toBeInTheDocument();
     expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
@@ -1904,17 +1904,17 @@ describe('restore volume with unavailable sizes', () => {
     expect(
       screen.getByText(/Sizes are unavailable for 2 completed restore points in this window/),
     ).toBeInTheDocument();
-    const today = screen.getByRole('button', { name: /: 3.00 KB known; 1 size unknown$/ });
+    const today = screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ });
     const yesterday = screen.getByRole('button', { name: /: 1 size unknown$/ });
     expect(screen.getAllByRole('button', { name: /: 0 B$/ }).length).toBeGreaterThan(0);
     await fireEvent.focus(today);
-    expect(screen.getByText('3.00 KB known; 1 size unknown')).toBeInTheDocument();
+    expect(screen.getByText('3.00 KB known · 1 size unknown')).toBeInTheDocument();
     expect(screen.getByText('Unknown size')).toBeInTheDocument();
     expect(screen.queryByText('1.00 KB (33%)')).not.toBeInTheDocument();
     await fireEvent.click(yesterday);
     expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(1);
     expect(
-      screen.getByRole('button', { name: /: 3.00 KB known; 1 size unknown$/ }),
+      screen.getByRole('button', { name: /: 3.00 KB known · 1 size unknown$/ }),
     ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Count' }));
     expect(
