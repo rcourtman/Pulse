@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "8812e7757c47136f17ae031e63641555aec6fbd1",
+  "verified_at": "2026-10-27T10:55:14.925107Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/MAIL_GATEWAY.md",
+    "frontend-modern/public/docs/MAIL_GATEWAY.md",
+    "frontend-modern/src/features/docs/__tests__/pmgGuide.test.ts",
+    "scripts/tests/test_pmg_docs.py"
+  ],
+  "content_sha256": {
+    "docs/MAIL_GATEWAY.md": "4c3b503141d4dc0bf73d0872717c45bfb3984c31cae19d2dc9ff86f6534e3a8a",
+    "frontend-modern/public/docs/MAIL_GATEWAY.md": "4c3b503141d4dc0bf73d0872717c45bfb3984c31cae19d2dc9ff86f6534e3a8a",
+    "frontend-modern/src/features/docs/__tests__/pmgGuide.test.ts": "306c91d30dd21dde0bdb0833418203b03421e4916a74f6fb584e0cd8a6c7b7ac",
+    "scripts/tests/test_pmg_docs.py": "2e3ba9500480dcc2b1296fe0642a13fefb588e7555cf3289ab7d999c30dbb23c"
+  },
+  "routes": [
+    "/docs/MAIL_GATEWAY#response-decoding-is-not-a-network-verdict",
+    "/docs/MAIL_GATEWAY#collection-scope-and-older-releases"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual shipped PMG markdown consumed through production Docs, router, renderer, PageHeader and CSS in an evidence-only isolated mount. No new product route or navigation entry.",
+    "Published v6.6.0 saved collection scope and failed ordinary-poll distinction remain separate from v6.5.0 hidden errors, deliberate opt-out and restored queue-enabled monitoring. No network, permission or gateway change is prescribed.",
+    "42 assertions passed with Playwright 1.56.1 matching the integration lock. Chromium 141.0.7390.37 desktop and touch WebKit 26.0 phone; no page errors, mutation request or page-wide horizontal overflow.",
+    "All three raw captures were opened with native view_image and inspected. Full new paragraphs wrap visibly without clipping on desktop and phone. Phone collection table and shipped-release statement are readable.",
+    "Initial evidence mount placed its entry outside the Vite module root: zero checks/no guide GET/30-second focus timeout. Fixture placement corrected; no source, assertion or deadline changed. Browser proof is not PMG runtime/native recovery, reporter confirmation or published availability."
+  ],
+  "interactions": [
+    "Deep-linked decoding heading receives actual production fragment focus.",
+    "Desktop Enter and phone tap follow the new saved-scope link, focus the actual heading and show the four collection controls with their version qualification."
+  ],
+  "captures": [
+    {
+      "name": "desktop-upgrade.png",
+      "sha256": "6f3e9dbaa6777a2f3851003ed36d4fe5122c641f51e275cde9c8287b0c849500"
+    },
+    {
+      "name": "phone-upgrade.png",
+      "sha256": "fdbde2107d3c1ab42cc4ee3db7789a5df0c484027dc556bbdf768c42ae9201f8"
+    },
+    {
+      "name": "phone-scope.png",
+      "sha256": "2113263dbf04e1f8c89a834fade8d40924465f30a98348b75f4834627368aa08"
+    }
+  ]
+}
