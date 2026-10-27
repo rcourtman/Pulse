@@ -208,7 +208,7 @@ describe('useProtectionPostures transport', () => {
     }
   });
 
-  it.each(['row', 'policy', 'duplicate', 'mixed policies'])(
+  it.each(['row', 'policy', 'duplicate', 'mixed policies', 'timestamp'])(
     'withdraws the whole 201-subject read after a malformed %s in the last batch',
     async (invalid) => {
       const ids = Array.from({ length: 201 }, (_, index) => `vm:${index}`);
@@ -230,6 +230,11 @@ describe('useProtectionPostures transport', () => {
           const response = validResponse(url);
           if (response.data.length > 1) return response;
           if (invalid === 'row') return { ...response, data: [null] };
+          if (invalid === 'timestamp')
+            return {
+              ...response,
+              data: [{ ...response.data[0], evaluatedAt: '2026-09-31T10:00:00Z' }],
+            };
           if (invalid === 'policy')
             return { ...response, policy: { requireVerification: 'false' } };
           if (invalid === 'duplicate') return { ...response, data: [protectionPosture('vm:0')] };
