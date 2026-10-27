@@ -45,7 +45,9 @@ describe('shipped Windows removal guidance', () => {
     ]) {
       expect(text).toContain(fact);
     }
-    const commands = Array.from(article.querySelectorAll('pre code')).map((node) => node.textContent);
+    const commands = Array.from(article.querySelectorAll('pre code')).map(
+      (node) => node.textContent,
+    );
     expect(commands).toContain('& $installerFile -Uninstall $true\n');
   });
 

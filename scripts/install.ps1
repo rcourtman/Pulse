@@ -676,7 +676,7 @@ if ($Uninstall) {
         Remove-PulseAgentRegistration
     } catch {
         # Do not print an HTTP exception: it can contain private response data.
-        Show-Error "The service was removed, but Pulse server unregistration could not be confirmed. The binary, saved identity, credentials and logs have been retained. Check the saved connection, exact agent ID and TLS settings for the same Pulse instance before deciding how to recover; do not delete this state or generate a new token to force removal."
+        Show-Error "The service is absent, but Pulse server unregistration could not be confirmed. The binary, saved identity, credentials and logs have been retained. Check the saved connection, exact agent ID and TLS settings for the same Pulse instance before deciding how to recover; do not delete this state or generate a new token to force removal."
         Exit 1
     }
 
@@ -688,7 +688,7 @@ if ($Uninstall) {
             Remove-Item $StateDir -Recurse -Force -ErrorAction Stop
         }
     } catch {
-        Show-Error "Agent service was removed, but local cleanup did not complete. $_"
+        Show-Error "Agent service is absent, but local cleanup did not complete. $_"
         Exit 1
     }
 
