@@ -428,6 +428,21 @@ async function ensureLabel(github, context, name, color, description) {
   }
 }
 
+// Classification and targeted retirement use GitHub's label identity too.
+// Keep the original names in each snapshot: exact spelling still belongs in
+// provider writes and in the fence against intervening label edits.
+function hasLabel(labels, name) {
+  const key = name.toLowerCase();
+  return [...labels].some((label) => label.toLowerCase() === key);
+}
+
+function deleteLabel(labels, name) {
+  const key = name.toLowerCase();
+  for (const label of labels) {
+    if (label.toLowerCase() === key) labels.delete(label);
+  }
+}
+
 function buildTriageState(issue, core, latestVersion) {
   const labelNames = new Set((issue.labels || []).map((label) => label.name));
   const nextLabels = new Set(labelNames);
@@ -453,7 +468,7 @@ function buildTriageState(issue, core, latestVersion) {
     v6FeedbackClass,
     hasAdditionalActionableTopics,
     additionalTopicDeclarations,
-    isBugLike: nextLabels.has(BUG_LABEL),
+    isBugLike: hasLabel(nextLabels, BUG_LABEL),
     comparison:
       reportedVersion && latestVersion ? compareCore(reportedVersion, latestVersion) : null,
   };
@@ -639,10 +654,10 @@ async function syncLabels({ github, context, core }) {
   // when both clocks (and comment counts) match. That observed removal takes
   // precedence over the queued declaration; do not restore that review task
   // or require another history read to recognise the label difference.
-  const reviewClearedAfterEvent = !labelNames.has(NEEDS_DECOMPOSITION_LABEL) &&
-    (eventIssue.labels || []).some((label) => label.name === NEEDS_DECOMPOSITION_LABEL);
+  const reviewClearedAfterEvent = !hasLabel(labelNames, NEEDS_DECOMPOSITION_LABEL) &&
+    (eventIssue.labels || []).some((label) => label.name.toLowerCase() === NEEDS_DECOMPOSITION_LABEL);
   const newlyDeclared = declarationChanged && !reviewClearedAfterEvent &&
-    !nextLabels.has(NEEDS_DECOMPOSITION_LABEL) &&
+    !hasLabel(nextLabels, NEEDS_DECOMPOSITION_LABEL) &&
     (eventIsCurrent || await declarationSurvivesLaterComments(github, context, issue, eventIssue));
   if (newlyDeclared) {
     core.info("Issue newly declares additional actionable topics; decomposition is required.");
@@ -680,7 +695,7 @@ async function syncLabels({ github, context, core }) {
     } else {
       core.info("Declared version exceeds the exact-version label limit; retaining its evidence without a version label.");
     }
-    nextLabels.delete(NEEDS_VERSION_LABEL);
+    deleteLabel(nextLabels, NEEDS_VERSION_LABEL);
   } else {
     await ensureLabel(
       github,
