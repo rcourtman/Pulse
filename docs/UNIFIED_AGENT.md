@@ -967,9 +967,22 @@ session, or set `$installerFile` to the already inspected private script path:
 & $installerFile -Uninstall $true
 ```
 
-Windows removes the service first and attempts server unregistration before
-local binary/state cleanup. A failed server notification can still be followed
-by local removal; its completion message does not prove server-side revocation.
+Windows removes the service first, then requires Pulse to confirm removal of
+the **exact saved agent ID** before erasing the binary or local state. It reuses
+the saved credential and TLS settings; it does not select an agent by hostname.
+If the server rejects the request, cannot be reached, or returns an unconfirmed
+result, removal exits unsuccessfully and retains the binary, saved identity,
+credentials and logs. **The service may already be removed; retained files do
+not mean monitoring is still running.**
+
+Keep that recovery material private. Check the original connection and exact
+agent ID on the same Pulse instance before deciding on recovery; do not delete
+the state, generate a new token or bypass TLS to force removal. A missing saved
+URL or agent ID also refuses unregistration. When no saved connection,
+credential or identity remains, repeated local cleanup is allowed, but cannot
+confirm server-side revocation. An older served or prepared Windows script may
+ignore a failed server notification and still erase local state; do not rerun
+uninstall just to test which behaviour it has.
 
 ### Remove only the separate Linux action runner
 

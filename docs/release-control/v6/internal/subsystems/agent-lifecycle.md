@@ -4134,6 +4134,30 @@ rejection; they establish neither receiver delivery nor installed recovery.
 
 ## Completion Obligations
 
+### Windows exact-ID unregistration before local erasure
+
+After independent SCM absence, `scripts/install.ps1` must recover the existing
+connection/credential/identity and confirm one unregistration response with
+Boolean `success: true` and the exact, case-sensitive requested `agentId`.
+A hostname lookup, HTTP success alone, malformed acknowledgement, credential
+read error or failed configured CA must not authorise erasure. A failure exits
+nonzero and retains binary, identity, credentials and logs; the service can
+already be absent. Do not print private HTTP exceptions or create a new token.
+Only state without saved connection, identity or credentials permits local-only
+repeat cleanup, which is not server revocation. Optional-auth servers remain
+supported without inventing a credential.
+
+`TestInstallPS1UninstallRequiresExactServerConfirmationBeforeErasure` binds the
+caller ordering and refusal, and `TestInstallPS1UninstallRegistrationRuntime`
+executes the actual complete branch with confined service/filesystem/request
+controls in the existing native Windows job. Linux skips of PowerShell controls
+are explicit, not runtime acceptance. The native lifecycle server must return
+the product's exact-ID acknowledgement rather than generic success. Shipped
+Help must describe both retained-state and older-script limits and have actual
+Docs desktop/narrow browser proof; neither Help nor doubles establish native
+installed removal, credential revocation, publication or whole-issue recovery.
+
+
 `cmd/pulse-agent-helper/main_test.go`, `internal/agenthelper/server_test.go`, `internal/hostagent/privilege_helper_client_test.go` and `pkg/agents/host/proxmox_lxc_test.go` must cover version negotiation, successful partial rows, all-failed/global-unavailable distinction, contradictory/overbound identities, degraded health and independent operation recovery. `scripts/installtests/safe_profile_migration_test.go` covers installer-managed helper replacement after effective-unit/socket validation and fatal restart failure. These source controls do not prove an installed upgrade or PVE recovery.
 
 ### VM command results describe the guest, not transport success

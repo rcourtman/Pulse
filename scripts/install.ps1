@@ -577,6 +577,87 @@ function Remove-PulseService {
     } while ($true)
 }
 
+function Remove-PulseAgentRegistration {
+    # Recover the existing connection; removal must not require a new token.
+    # Read failures propagate before any local binary or state is erased.
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        $Url = Get-ConnectionStateValue "PULSE_URL"
+    }
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        $Token = Get-ConnectionStateValue "PULSE_TOKEN"
+    }
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        $savedTokenFile = $TokenFile
+        if ([string]::IsNullOrWhiteSpace($savedTokenFile)) {
+            $savedTokenFile = Get-ConnectionStateValue "PULSE_TOKEN_FILE"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($savedTokenFile)) {
+            $Token = (Get-Content -LiteralPath $savedTokenFile -Raw -ErrorAction Stop).Trim()
+            if ([string]::IsNullOrWhiteSpace($Token)) {
+                throw "The saved credential file is empty."
+            }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($AgentId)) {
+        $AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"
+    }
+    if ([string]::IsNullOrWhiteSpace($AgentId) -and (Test-Path -LiteralPath "$StateDir\agent-id")) {
+        $AgentId = (Get-Content -LiteralPath "$StateDir\agent-id" -Raw -ErrorAction Stop).Trim()
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        if (-not [string]::IsNullOrWhiteSpace($Token) -or
+            -not [string]::IsNullOrWhiteSpace($AgentId) -or
+            (Test-Path -LiteralPath $ConnectionStatePath) -or (Test-Path -LiteralPath $TokenFilePath)) {
+            throw "The original Pulse URL is missing."
+        }
+        Write-Host "No saved Pulse connection was found; local cleanup cannot confirm server unregistration." -ForegroundColor Yellow
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace($AgentId)) {
+        # A hostname is not an exact identity, especially in mixed fleets.
+        throw "The saved agent ID is missing; do not select another agent by hostname."
+    }
+    $AgentId = $AgentId.Trim()
+    if (-not $Insecure) {
+        $Insecure = Parse-Bool (Get-ConnectionStateValue "PULSE_INSECURE_SKIP_VERIFY") $Insecure
+    }
+    if ([string]::IsNullOrWhiteSpace($CACertPath)) {
+        $CACertPath = Get-ConnectionStateValue "PULSE_CACERT"
+    }
+    if ([string]::IsNullOrWhiteSpace($ServerFingerprint)) {
+        $ServerFingerprint = Get-ConnectionStateValue "PULSE_SERVER_FINGERPRINT"
+    }
+
+    $customCaCertificate = $null
+    if (-not [string]::IsNullOrWhiteSpace($CACertPath)) {
+        $customCaCertificate = Load-CustomCaCertificate $CACertPath
+    }
+    try {
+        $body = @{ agentId = $AgentId } | ConvertTo-Json
+        $invokeArgs = @{
+            Uri         = "$($Url.TrimEnd('/'))/api/agents/agent/uninstall"
+            Method      = "Post"
+            Body        = $body
+            ContentType = "application/json"
+            TimeoutSec  = 5
+            ErrorAction = "Stop"
+        }
+        if (-not [string]::IsNullOrWhiteSpace($Token)) {
+            $invokeArgs.Headers = @{ "X-API-Token" = $Token }
+        }
+        $result = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
+            Invoke-RestMethod @invokeArgs
+        }
+        if ($null -eq $result -or $result.success -isnot [bool] -or $result.success -ne $true -or
+            $result.agentId -isnot [string] -or $result.agentId -cne $AgentId) {
+            throw "Pulse did not confirm removal of the exact agent ID."
+        }
+    } finally {
+        if ($null -ne $customCaCertificate) { $customCaCertificate.Dispose() }
+    }
+}
+
 # --- Uninstall Logic ---
 if ($Uninstall) {
     Write-Host "Uninstalling $AgentName..." -ForegroundColor Cyan
@@ -590,105 +671,13 @@ if ($Uninstall) {
         Exit 1
     }
 
-    # Try to notify the Pulse server about uninstallation if we have connection details
-    if ([string]::IsNullOrWhiteSpace($Url)) {
-        $Url = Get-ConnectionStateValue "PULSE_URL"
-    }
-    if ([string]::IsNullOrWhiteSpace($Token)) {
-        $Token = Get-ConnectionStateValue "PULSE_TOKEN"
-    }
-    if ([string]::IsNullOrWhiteSpace($Token)) {
-        $savedTokenFile = Get-ConnectionStateValue "PULSE_TOKEN_FILE"
-        if (-not [string]::IsNullOrWhiteSpace($savedTokenFile) -and (Test-Path $savedTokenFile)) {
-            $Token = (Get-Content -Path $savedTokenFile -Raw).Trim()
-        }
-    }
-    if ([string]::IsNullOrWhiteSpace($AgentId)) {
-        $AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"
-    }
-    if ([string]::IsNullOrWhiteSpace($Hostname)) {
-        $Hostname = Get-ConnectionStateValue "PULSE_HOSTNAME"
-    }
-    if (-not $Insecure) {
-        $Insecure = Parse-Bool (Get-ConnectionStateValue "PULSE_INSECURE_SKIP_VERIFY") $Insecure
-    }
-    if ([string]::IsNullOrWhiteSpace($CACertPath)) {
-        $CACertPath = Get-ConnectionStateValue "PULSE_CACERT"
-    }
-    if ([string]::IsNullOrWhiteSpace($ServerFingerprint)) {
-        $ServerFingerprint = Get-ConnectionStateValue "PULSE_SERVER_FINGERPRINT"
-    }
-
-    $customCaCertificate = $null
-    if (-not [string]::IsNullOrWhiteSpace($CACertPath)) {
-        try {
-            $customCaCertificate = Load-CustomCaCertificate $CACertPath
-        } catch {
-            Write-Host "Warning: Failed to load custom CA certificate from $CACertPath during uninstall: $_" -ForegroundColor Yellow
-            $customCaCertificate = $null
-        }
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($Url)) {
-        # Try to recover agent ID if not provided
-        $detectedAgentId = $AgentId
-        $stateFile = "$StateDir\agent-id"
-        if ([string]::IsNullOrWhiteSpace($detectedAgentId) -and (Test-Path $stateFile)) {
-            $detectedAgentId = Get-Content $stateFile -Raw
-            if ($detectedAgentId) { $detectedAgentId = $detectedAgentId.Trim() }
-        }
-        if ([string]::IsNullOrWhiteSpace($detectedAgentId)) {
-            $lookupHostname = $Hostname
-            if ([string]::IsNullOrWhiteSpace($lookupHostname)) {
-                $lookupHostname = $env:COMPUTERNAME
-            }
-            if (-not [string]::IsNullOrWhiteSpace($lookupHostname)) {
-                try {
-                    $lookupArgs = @{
-                        Uri         = "$Url/api/agents/agent/lookup?hostname=$([System.Uri]::EscapeDataString($lookupHostname))"
-                        Method      = "Get"
-                        TimeoutSec  = 5
-                        ErrorAction = "SilentlyContinue"
-                    }
-                    if (-not [string]::IsNullOrWhiteSpace($Token)) {
-                        $lookupArgs.Headers = @{ "X-API-Token" = $Token }
-                    }
-
-                    $lookupResult = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
-                        Invoke-RestMethod @lookupArgs
-                    }
-                    if ($lookupResult -and $lookupResult.agent -and -not [string]::IsNullOrWhiteSpace($lookupResult.agent.id)) {
-                        $detectedAgentId = $lookupResult.agent.id.Trim()
-                    }
-                } catch {
-                    # Ignore lookup errors during uninstall
-                }
-            }
-        }
-
-        if (-not [string]::IsNullOrWhiteSpace($detectedAgentId)) {
-            Write-Host "Notifying Pulse server to unregister agent ID: $detectedAgentId..." -ForegroundColor Gray
-            try {
-                $body = @{ agentId = $detectedAgentId } | ConvertTo-Json
-                $invokeArgs = @{
-                    Uri         = "$Url/api/agents/agent/uninstall"
-                    Method      = "Post"
-                    Body        = $body
-                    ContentType = "application/json"
-                    TimeoutSec  = 5
-                    ErrorAction = "SilentlyContinue"
-                }
-                if (-not [string]::IsNullOrWhiteSpace($Token)) {
-                    $invokeArgs.Headers = @{ "X-API-Token" = $Token }
-                }
-
-                Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
-                    Invoke-RestMethod @invokeArgs | Out-Null
-                }
-            } catch {
-                # Ignore errors during uninstall
-            }
-        }
+    # Try to notify the Pulse server only after the service is confirmed absent.
+    try {
+        Remove-PulseAgentRegistration
+    } catch {
+        # Do not print an HTTP exception: it can contain private response data.
+        Show-Error "The service was removed, but Pulse server unregistration could not be confirmed. The binary, saved identity, credentials and logs have been retained. Check the saved connection, exact agent ID and TLS settings for the same Pulse instance before deciding how to recover; do not delete this state or generate a new token to force removal."
+        Exit 1
     }
 
     try {
