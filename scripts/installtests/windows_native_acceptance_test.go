@@ -25,7 +25,7 @@ func windowsNativeAcceptanceContract(harness string, steps []nativeWindowsExitSt
 		`if (-not $script:serverProcess.WaitForExit(5000)) {`,
 		`$listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {`,
 		`foreach ($label in @('uninstall', 'repeated uninstall')) {`,
-		`Invoke-Installer -Label $label -Arguments '-Uninstall $true -NonInteractive $true'`,
+		`Invoke-SavedUninstall -Label $label -ExpectFailure $false`,
 		`Assert-LifecycleAgentAbsent`,
 	} {
 		if !strings.Contains(harness, needle) {

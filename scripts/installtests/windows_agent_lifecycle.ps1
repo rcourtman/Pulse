@@ -56,7 +56,11 @@ function Stop-LifecycleServer {
 }
 
 function Start-LifecycleServer {
-    param([string]$AgentPath)
+    param(
+        [string]$AgentPath,
+        [ValidateSet('confirm', 'http-503', 'wrong-id', 'string-success', 'missing-id')]
+        [string]$UninstallMode = 'confirm'
+    )
     Stop-LifecycleServer
     $version = ((& $AgentPath --version 2>$null) | Select-Object -First 1).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Lifecycle input version check failed (exit $LASTEXITCODE)." }
@@ -66,7 +70,8 @@ function Start-LifecycleServer {
     $arguments = @(
         '--listen', "127.0.0.1:$Port",
         '--agent-binary', ('"{0}"' -f $AgentPath),
-        '--version', $version
+        '--version', $version,
+        '--uninstall-mode', $UninstallMode
     )
     $script:serverProcess = Start-Process -FilePath $script:resolvedServerBinary -ArgumentList $arguments -PassThru -NoNewWindow
     for ($i = 0; $i -lt 30; $i++) {
@@ -76,6 +81,7 @@ function Start-LifecycleServer {
         try {
             $response = Invoke-RestMethod -Uri "$baseUrl/api/version" -TimeoutSec 2
             if ($response.version -eq $version) {
+                Assert-UninstallObservation -Mode $UninstallMode -Requests 0
                 return $version
             }
         } catch {
@@ -204,10 +210,147 @@ function Assert-LifecycleAgentAbsent {
 
 function Invoke-UninstallAndAssertClean {
     foreach ($label in @('uninstall', 'repeated uninstall')) {
-        Invoke-Installer -Label $label -Arguments '-Uninstall $true -NonInteractive $true'
+        Invoke-SavedUninstall -Label $label -ExpectFailure $false
         Assert-LifecycleAgentAbsent
         Write-Host "${label}: independent SCM, binary, state and listener absence confirmed."
     }
+}
+
+function Assert-UninstallObservation {
+    param([string]$Mode, [int]$Requests)
+    $observed = Invoke-RestMethod -Uri "$baseUrl/__pulse_lifecycle__/uninstall" -TimeoutSec 2 -ErrorAction Stop
+    if ($observed.mode -cne $Mode -or $observed.requests -ne $Requests -or
+        $observed.authenticated -ne $Requests -or $observed.exactIdentity -ne $Requests) {
+        throw 'Lifecycle peer did not observe the expected single saved-credential/exact-ID request count.'
+    }
+}
+
+function Invoke-SavedUninstall {
+    param([string]$Label, [bool]$ExpectFailure)
+    # No URL, identity, token or TLS arguments and no ambient connection input:
+    # only the real installer's saved connection is available to this child.
+    $start = New-Object System.Diagnostics.ProcessStartInfo
+    $start.FileName = $script:powerShellPath
+    $escapedInstaller = $script:resolvedInstallerPath.Replace("'", "''")
+    $start.Arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"& '$escapedInstaller' -Uninstall `$true -NonInteractive `$true`""
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($name in @('PULSE_URL', 'PULSE_TOKEN', 'PULSE_TOKEN_FILE', 'PULSE_AGENT_ID',
+        'PULSE_HOSTNAME', 'PULSE_CACERT', 'PULSE_SERVER_FINGERPRINT', 'PULSE_INSECURE_SKIP_VERIFY')) {
+        $start.EnvironmentVariables.Remove($name)
+    }
+    $child = New-Object System.Diagnostics.Process
+    $child.StartInfo = $start
+    $started = $false
+    try {
+        $started = $child.Start()
+        if (-not $started) { throw 'Saved removal child did not start.' }
+        $stdout = $child.StandardOutput.ReadToEndAsync()
+        $stderr = $child.StandardError.ReadToEndAsync()
+        if (-not $child.WaitForExit(45000)) {
+            throw 'Saved removal did not return within its bounded unattended deadline.'
+        }
+        $tasks = [System.Threading.Tasks.Task[]]@($stdout, $stderr)
+        if (-not [System.Threading.Tasks.Task]::WaitAll($tasks, 5000)) {
+            throw 'Saved removal output did not close; result remains unverified.'
+        }
+        $output = $stdout.Result + $stderr.Result
+        if ($output.Contains('lifecycle-private-response-must-not-appear') -or
+            $output.Contains('windows-lifecycle-fixture-not-a-secret')) {
+            throw 'Saved removal exposed credential or private-response fixture content.'
+        }
+        $expectedExit = 0
+        if ($ExpectFailure) { $expectedExit = 1 }
+        if ($child.ExitCode -ne $expectedExit) {
+            throw "$Label returned exit $($child.ExitCode); expected $expectedExit."
+        }
+        if ($ExpectFailure -and ($output.Contains('Uninstallation complete.') -or
+            -not $output.Contains('binary, saved identity, credentials and logs have been retained'))) {
+            throw 'Unconfirmed removal lost its truthful retained-state diagnostic.'
+        }
+        Write-Host $output.Trim()
+    } finally {
+        if ($started -and -not $child.HasExited) {
+            # Only this owned child is terminated, never a selected agent PID.
+            $child.Kill()
+            if (-not $child.WaitForExit(5000)) {
+                throw 'Owned removal child cleanup is unconfirmed.'
+            }
+        }
+        $child.Dispose()
+    }
+}
+
+function Get-LifecycleRecoverySnapshot {
+    foreach ($path in @("$env:ProgramFiles\Pulse\pulse-agent.exe", "$stateDir\token", "$stateDir\connection.env", $logFile)) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw 'Installed recovery fixture is incomplete.'
+        }
+    }
+    $files = @(Get-ChildItem -LiteralPath $stateDir -File -Recurse -Force -ErrorAction Stop)
+    $files += Get-Item -LiteralPath "$env:ProgramFiles\Pulse\pulse-agent.exe" -ErrorAction Stop
+    $snapshot = @{}
+    foreach ($file in $files) {
+        $snapshot[$file.FullName] = @{
+            Hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256 -ErrorAction Stop).Hash
+            Acl = (Get-Acl -LiteralPath $file.FullName -ErrorAction Stop).Sddl
+        }
+    }
+    return @{ Files = $snapshot; StateAcl = (Get-Acl -LiteralPath $stateDir -ErrorAction Stop).Sddl }
+}
+
+function Assert-LifecycleRecoveryRetained {
+    param($Before)
+    $service = Get-LifecycleService
+    if ($null -ne $service) {
+        $service.Dispose()
+        throw 'Unconfirmed removal did not independently establish SCM absence.'
+    }
+    $listeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {
+        $_.LocalPort -eq 9191 -and $_.State -eq 'Listen'
+    })
+    if ($listeners.Count -ne 0) { throw 'Agent listener remains after unconfirmed removal.' }
+    $after = Get-LifecycleRecoverySnapshot
+    if ($after.StateAcl -cne $Before.StateAcl -or $after.Files.Count -ne $Before.Files.Count) {
+        throw 'Unconfirmed removal changed recovery files or directory access.'
+    }
+    foreach ($path in $Before.Files.Keys) {
+        if (-not $after.Files.ContainsKey($path) -or
+            $after.Files[$path].Hash -cne $Before.Files[$path].Hash -or
+            $after.Files[$path].Acl -cne $Before.Files[$path].Acl) {
+            throw 'Unconfirmed removal erased or changed installed recovery bytes or file access.'
+        }
+    }
+}
+
+function Invoke-SavedRemovalAcceptance {
+    # Quiesce the owned fixture before taking byte/ACL witnesses, so the
+    # agent's legitimate final log writes cannot look like erased evidence.
+    $service = Get-LifecycleService
+    if ($null -eq $service) { throw 'Installed removal fixture service is missing.' }
+    try {
+        $service.Stop()
+        $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,
+            [TimeSpan]::FromSeconds(30))
+        $service.Refresh()
+        if ($service.Status -ne 'Stopped') { throw 'Fixture service is not confirmed stopped.' }
+    } finally {
+        $service.Dispose()
+    }
+    $before = Get-LifecycleRecoverySnapshot
+    foreach ($mode in @('http-503', 'wrong-id', 'string-success', 'missing-id')) {
+        Start-LifecycleServer -AgentPath $script:resolvedAgentV2 -UninstallMode $mode | Out-Null
+        Invoke-SavedUninstall -Label $mode -ExpectFailure $true
+        Assert-UninstallObservation -Mode $mode -Requests 1
+        Assert-LifecycleRecoveryRetained -Before $before
+        Write-Host "PASS saved removal ${mode}: one authenticated exact-ID POST; SCM/listener absent; every recovery byte and ACL retained."
+    }
+    Start-LifecycleServer -AgentPath $script:resolvedAgentV2 -UninstallMode confirm | Out-Null
+    Invoke-UninstallAndAssertClean
+    Assert-UninstallObservation -Mode confirm -Requests 1
+    Write-Host 'PASS saved removal confirmation and repeat: one authenticated exact-ID POST total; independent cleanup after both attempts.'
 }
 
 Assert-Administrator
@@ -231,7 +374,7 @@ try {
         $restoreAutoUpdateAtExit = $true
         $versionV2 = Start-LifecycleServer -AgentPath $resolvedAgentV2
         Assert-AgentRuntime -ExpectedVersion $versionV2 | Out-Null
-        Invoke-UninstallAndAssertClean
+        Invoke-SavedRemovalAcceptance
         Write-Host 'Post-reboot persistence and uninstall proof passed.' -ForegroundColor Green
         return
     }
@@ -245,11 +388,11 @@ try {
 
     $versionV1 = Start-LifecycleServer -AgentPath $resolvedAgentV1
     Invoke-Installer -Label 'preflight' -Arguments "-Url '$baseUrl' -PreflightOnly `$true -NonInteractive `$true"
-    Invoke-Installer -Label 'install' -Arguments "-Url '$baseUrl' -AgentId 'windows-lifecycle-agent' -Hostname 'windows-lifecycle-agent' -EnableHost `$true -EnableDocker `$false -EnableKubernetes `$false -EnableProxmox `$false -EnableCommands `$false -NonInteractive `$true"
+    Invoke-Installer -Label 'install' -Arguments "-Url '$baseUrl' -Token 'windows-lifecycle-fixture-not-a-secret' -AgentId 'windows-lifecycle-agent' -Hostname 'windows-lifecycle-agent' -EnableHost `$true -EnableDocker `$false -EnableKubernetes `$false -EnableProxmox `$false -EnableCommands `$false -NonInteractive `$true"
     Assert-AgentRuntime -ExpectedVersion $versionV1 | Out-Null
 
     $versionV2 = Start-LifecycleServer -AgentPath $resolvedAgentV2
-    Invoke-Installer -Label 'update' -Arguments "-Url '$baseUrl' -AgentId 'windows-lifecycle-agent' -Hostname 'windows-lifecycle-agent' -EnableHost `$true -EnableDocker `$false -EnableKubernetes `$false -EnableProxmox `$false -EnableCommands `$false -NonInteractive `$true"
+    Invoke-Installer -Label 'update' -Arguments "-Url '$baseUrl' -Token 'windows-lifecycle-fixture-not-a-secret' -AgentId 'windows-lifecycle-agent' -Hostname 'windows-lifecycle-agent' -EnableHost `$true -EnableDocker `$false -EnableKubernetes `$false -EnableProxmox `$false -EnableCommands `$false -NonInteractive `$true"
     Assert-AgentRuntime -ExpectedVersion $versionV2 | Out-Null
     Assert-CrashRecovery -ExpectedVersion $versionV2
 
@@ -265,7 +408,7 @@ try {
 
     Restart-Service $serviceName -Force
     Assert-AgentRuntime -ExpectedVersion $versionV2 | Out-Null
-    Invoke-UninstallAndAssertClean
+    Invoke-SavedRemovalAcceptance
     Write-Host 'Full Windows service lifecycle proof passed.' -ForegroundColor Green
 } finally {
     try {

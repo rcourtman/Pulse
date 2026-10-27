@@ -47,9 +47,9 @@ function Get-NetTCPConnection {
     return @([PSCustomObject]@{ LocalPort = 80; State = 'Listen' },
         [PSCustomObject]@{ LocalPort = 9191; State = 'Established' })
 }
-function Invoke-Installer {
-    param([string]$Arguments, [string]$Label)
-    if ($Arguments -ne '-Uninstall $true -NonInteractive $true') { throw 'Unexpected installer arguments' }
+function Invoke-SavedUninstall {
+    param([string]$Label, [bool]$ExpectFailure)
+    if ($ExpectFailure) { throw 'Unexpected failure expectation in clean removal' }
     $script:labels.Add($Label)
 }
 $scenarios = @('absent', 'present', 'read-denied', 'wrong-error-id', 'wrong-category',
