@@ -72,6 +72,8 @@ func savedRemovalAcceptanceContract(script string) error {
 		`Assert-LifecycleRecoveryRetained -Before $before`,
 		`Assert-UninstallObservation -Mode confirm -Requests 1`,
 		`$observed.authenticated -ne $Requests`, `$observed.exactIdentity -ne $Requests`,
+		`$agentProcess.WaitForExit(10000)`, `$agentProcess.Path -ine`,
+		`if ($existingListeners.Count -ne 0)`,
 	} {
 		if !strings.Contains(script, gate) {
 			return fmt.Errorf("missing installed saved-removal proof boundary %q", gate)
@@ -122,6 +124,7 @@ func TestWindowsAgentLifecycleSavedRemovalRequiresAdverseAndCleanReadback(t *tes
 		`Assert-LifecycleRecoveryRetained -Before $before`,
 		`Assert-UninstallObservation -Mode confirm -Requests 1`,
 		`$observed.authenticated -ne $Requests`, `$observed.exactIdentity -ne $Requests`,
+		`$agentProcess.WaitForExit(10000)`, `if ($existingListeners.Count -ne 0)`,
 		`'PULSE_TOKEN_FILE'`, `'PULSE_SERVER_FINGERPRINT'`,
 	} {
 		t.Run(gate, func(t *testing.T) {

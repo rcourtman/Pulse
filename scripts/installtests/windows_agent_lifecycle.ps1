@@ -62,6 +62,12 @@ function Start-LifecycleServer {
         [string]$UninstallMode = 'confirm'
     )
     Stop-LifecycleServer
+    $existingListeners = @(Get-NetTCPConnection -ErrorAction Stop | Where-Object {
+        $_.LocalPort -eq $Port -and $_.State -eq 'Listen'
+    })
+    if ($existingListeners.Count -ne 0) {
+        throw 'Lifecycle peer port is already owned; no request or replacement is permitted.'
+    }
     $version = ((& $AgentPath --version 2>$null) | Select-Object -First 1).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Lifecycle input version check failed (exit $LASTEXITCODE)." }
     if ([string]::IsNullOrWhiteSpace($version)) {
@@ -330,14 +336,21 @@ function Invoke-SavedRemovalAcceptance {
     # agent's legitimate final log writes cannot look like erased evidence.
     $service = Get-LifecycleService
     if ($null -eq $service) { throw 'Installed removal fixture service is missing.' }
+    $agentProcess = $null
     try {
+        $serviceInfo = Get-CimInstance Win32_Service -ErrorAction Stop | Where-Object Name -eq $serviceName
+        if ($null -eq $serviceInfo -or [uint32]$serviceInfo.ProcessId -eq 0) { throw 'Fixture service process is unknown.' }
+        $agentProcess = Get-Process -Id $serviceInfo.ProcessId -ErrorAction Stop
+        if ($agentProcess.Path -ine "$env:ProgramFiles\Pulse\pulse-agent.exe") { throw 'Fixture service process identity differs.' }
         $service.Stop()
         $service.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Stopped,
             [TimeSpan]::FromSeconds(30))
         $service.Refresh()
         if ($service.Status -ne 'Stopped') { throw 'Fixture service is not confirmed stopped.' }
+        if (-not $agentProcess.WaitForExit(10000)) { throw 'Fixture process has not independently quiesced.' }
     } finally {
         $service.Dispose()
+        if ($null -ne $agentProcess) { $agentProcess.Dispose() }
     }
     $before = Get-LifecycleRecoverySnapshot
     foreach ($mode in @('http-503', 'wrong-id', 'string-success', 'missing-id')) {
