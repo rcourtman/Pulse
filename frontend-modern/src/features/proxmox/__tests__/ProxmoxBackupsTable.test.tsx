@@ -1928,7 +1928,7 @@ describe('restore volume with unavailable sizes', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
     await fireEvent.click(
       within(screen.getByRole('group', { name: 'Source' })).getByRole('button', {
-        name: 'PVE backup files',
+        name: 'PVE backup files found on Proxmox VE storage',
       }),
     );
     expect(screen.getByRole('button', { name: /: 1.00 KB$/ })).toBeInTheDocument();
