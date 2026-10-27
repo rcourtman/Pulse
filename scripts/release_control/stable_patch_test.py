@@ -1,5 +1,6 @@
 """Whole merge results and exact controls, with real Git but no network or publishing."""
 from copy import deepcopy
+from fnmatch import fnmatchcase
 import json
 from pathlib import Path
 import subprocess
@@ -8,6 +9,7 @@ import unittest
 from unittest import mock
 
 import stable_patch as patch
+from control_plane import release_branch_for_version
 
 
 class StablePatchTest(unittest.TestCase):
@@ -163,6 +165,65 @@ class StablePatchTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'clean disposable'):
             self.assemble()
         self.assertEqual('do not discard', (self.root / 'untracked').read_text())
+
+
+class StablePatchGovernanceTest(unittest.TestCase):
+    """Real patch targets must produce the independently required check context."""
+
+    def workflow(self):
+        import yaml
+        repo = Path(__file__).resolve().parents[2]
+        return yaml.load((repo / '.github/workflows/canonical-governance.yml').read_text(),
+                         Loader=yaml.BaseLoader)
+
+    def assert_admitted(self, workflow, version, event):
+        branch = release_branch_for_version(version)
+        self.assertEqual('release/v' + version.removesuffix('-rc.1'), branch)
+        trigger = workflow['on'][event]
+        # A paths filter would strand metadata-only promotion PRs even when
+        # their target matches. The required job must not be renamed or skipped.
+        self.assertFalse({'branches-ignore', 'paths', 'paths-ignore'} & trigger.keys())
+        self.assertTrue(any(fnmatchcase(branch, pattern) for pattern in trigger['branches']))
+        job = workflow['jobs']['governance']
+        self.assertEqual('governance', job.get('name', 'governance'))
+        self.assertNotIn('if', job)
+        self.assertNotIn('needs', job)
+        self.assertNotIn('continue-on-error', job)
+        steps = '\n'.join(step.get('run', '') for step in job['steps'])
+        self.assertIn('canonical_completion_guard.py', steps)
+        self.assertIn('stable_patch_test.py', steps)
+
+    def test_actual_governance_triggers_admit_candidate_and_promotion_targets(self):
+        workflow = self.workflow()
+        for version in ('6.6.1-rc.1', '6.6.1', '6.6.2-rc.1', '6.6.2'):
+            for event in ('pull_request', 'push'):
+                with self.subTest(version=version, event=event):
+                    self.assert_admitted(workflow, version, event)
+        # Extending branch admission must not import the private post-merge
+        # credential-bearing workflow into an unreviewed preparation.
+        self.assertEqual({'contents': 'read'}, workflow['permissions'])
+        self.assertIn('main', workflow['on']['pull_request']['branches'])
+        self.assertIn('main', workflow['on']['push']['branches'])
+
+    def test_old_main_only_or_filtered_or_renamed_job_cannot_pass(self):
+        for event in ('pull_request', 'push'):
+            changes = ('old-main-only', 'path-filter', 'renamed', 'conditional', 'tolerant')
+            for change in changes:
+                with self.subTest(event=event, change=change):
+                    workflow = self.workflow()
+                    trigger, job = workflow['on'][event], workflow['jobs']['governance']
+                    if change == 'old-main-only':
+                        trigger['branches'] = ['main']
+                    elif change == 'path-filter':
+                        trigger['paths'] = ['scripts/**']
+                    elif change == 'renamed':
+                        job['name'] = 'patch-governance'
+                    elif change == 'conditional':
+                        job['if'] = "github.base_ref == 'main'"
+                    else:
+                        job['continue-on-error'] = 'true'
+                    with self.assertRaises(AssertionError):
+                        self.assert_admitted(workflow, '6.6.1-rc.1', event)
 
 
 if __name__ == '__main__':

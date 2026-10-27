@@ -39,6 +39,13 @@ installation, publication or host activation. The train's independent patch stat
 owns selection, bounded retries, soak, abandonment, retirement and keeping the
 weekly minor's clock and progress unchanged.
 
+The independently required `governance` context must be produced for preparation
+PRs targeting `release/v*` as well as `main`, including metadata-only promotions.
+Canonical Governance runs on those PRs and branch pushes without path filters,
+with its existing read-only permission and public checks. Private credentialed
+governance remains post-merge only. A missing required context stays pending in
+the train; branch admission does not remove or synthesise a required check.
+
 ### Unraid boot replacement preserves operator work
 
 Agent setup/upgrade replaces only complete exact generated top-level go entries.

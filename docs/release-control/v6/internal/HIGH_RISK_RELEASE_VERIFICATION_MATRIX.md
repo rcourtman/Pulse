@@ -1361,6 +1361,11 @@ as verification progresses:
 - `stable_patch_test.py` uses real disposable Git history for whole merge results,
   skipped conflicts followed by clean fixes, successive patch bases, exact control
   copies and rejection of unrelated or tampered source. Canonical CI runs it.
+- Its workflow regression derives actual candidate/promotion targets from the
+  control plane and parses Canonical Governance's real triggers and required
+  job context. Main-only, path-filtered, renamed, conditional and tolerant
+  variants fail. Infra's train regression separately requires that context
+  before a patch preparation can merge; absence is never success.
 - `release_snapshot_test.py` keeps reviewed-head/target/repository ancestry binding
   on version-bound patch targets. `control_plane_audit_test.py` preserves minor and
   historical mappings while deriving new patch branches.
