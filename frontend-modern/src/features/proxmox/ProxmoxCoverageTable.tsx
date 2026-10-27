@@ -1,4 +1,13 @@
-import { For, Show, createMemo, type Accessor, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  type Accessor,
+  type JSX,
+} from 'solid-js';
 
 import {
   InlineDetailPanel,
@@ -56,6 +65,7 @@ import {
   getCoverageLayoutForContainer,
   isCoverageEvidenceColumnVisible,
   selectCoverageRestoreEvidence,
+  COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
   type CoverageColumnId,
 } from './proxmoxBackupsTablePresentation';
 import { PlatformWindowedRows } from '@/features/platformPage/PlatformWindowedRows';
@@ -323,6 +333,15 @@ export function ProxmoxCoverageTable(props: {
   historyReadIncomplete?: boolean;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
+  const [evidenceLimit, setEvidenceLimit] = createSignal(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE);
+  // There is one open workload. Keep its deliberate preview expansion across
+  // polling, but start bounded again when a different row is opened or closed.
+  createEffect(
+    on(
+      () => props.expandedKey,
+      () => setEvidenceLimit(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE),
+    ),
+  );
   const observedWidth = useObservedElementWidth();
   const layoutMode = createMemo(() => {
     const width = props.layoutWidth?.() ?? observedWidth.width();
@@ -447,7 +466,11 @@ export function ProxmoxCoverageTable(props: {
               >
                 {(row) => {
                   const isExpanded = () => props.expandedKey === row.key;
-                  const evidence = () => selectCoverageRestoreEvidence(row.artifacts);
+                  const evidence = createMemo(() =>
+                    selectCoverageRestoreEvidence(row.artifacts, evidenceLimit()),
+                  );
+                  const undatedCount = () =>
+                    row.artifacts.filter((artifact) => artifact.createdMs === undefined).length;
                   const backupHistoryComplete = () =>
                     !props.historyReadIncomplete && hasCompleteBackupHistory(row);
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
@@ -684,25 +707,25 @@ export function ProxmoxCoverageTable(props: {
                             sections={buildCoverageDetailSections(row)}
                             onClose={() => props.onToggleExpand(row.key)}
                           >
-                            <Show
-                              when={evidence().length > 0}
-                              fallback={
-                                <InlineNotice
-                                  tone={
-                                    row.posture === 'unprotected' || row.posture === 'attention'
-                                      ? 'warning'
-                                      : 'info'
-                                  }
-                                  role="status"
-                                  class="text-xs"
-                                >
-                                  {!backupHistoryComplete()
-                                    ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
-                                    : 'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.'}
-                                </InlineNotice>
-                              }
-                            >
-                              <div class="overflow-hidden rounded-sm border border-border bg-surface">
+                            <div class="overflow-hidden rounded-sm border border-border bg-surface">
+                              <Show
+                                when={evidence().length > 0}
+                                fallback={
+                                  <InlineNotice
+                                    tone={
+                                      row.posture === 'unprotected' || row.posture === 'attention'
+                                        ? 'warning'
+                                        : 'info'
+                                    }
+                                    role="status"
+                                    class="text-xs"
+                                  >
+                                    {!backupHistoryComplete()
+                                      ? 'Restore-point history is not confirmed complete. Missing entries do not mean no backups exist.'
+                                      : 'No restore-point details are visible in the current list. The posture above may use previously recorded evidence.'}
+                                  </InlineNotice>
+                                }
+                              >
                                 <div class="flex items-center justify-between gap-2 bg-surface-alt px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
                                   <span>Restore evidence</span>
                                   <Show when={row.artifacts.length > evidence().length}>
@@ -711,6 +734,19 @@ export function ProxmoxCoverageTable(props: {
                                     </span>
                                   </Show>
                                 </div>
+                                <Show when={undatedCount() > 0}>
+                                  <p class="px-2 py-2 text-[11px] leading-snug text-amber-700 dark:text-amber-300 whitespace-normal wrap-anywhere">
+                                    {undatedCount()}{' '}
+                                    {undatedCount() === 1 ? 'entry has' : 'entries have'} an
+                                    unavailable or future date. These entries cannot be placed in
+                                    time.
+                                    <Show when={row.artifacts.length > evidence().length}>
+                                      {' '}
+                                      The preview includes a sample from each affected source and
+                                      state.
+                                    </Show>
+                                  </p>
+                                </Show>
                                 <PlatformDetailTable class="table-fixed text-[11px]">
                                   <PlatformDetailTableHeader>
                                     <TableHead class={getPlatformTableHeadClassForKind('name')}>
@@ -850,8 +886,45 @@ export function ProxmoxCoverageTable(props: {
                                     </For>
                                   </PlatformDetailTableBody>
                                 </PlatformDetailTable>
-                              </div>
-                            </Show>
+                              </Show>
+                              <Show
+                                when={
+                                  row.artifacts.length > COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE ||
+                                  evidenceLimit() > COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE
+                                }
+                              >
+                                <div class="border-t border-border px-2 py-2">
+                                  <button
+                                    type="button"
+                                    class="rounded-sm px-2 py-1 text-xs font-medium text-accent hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                                    aria-disabled={evidence().length >= row.artifacts.length}
+                                    onClick={() => {
+                                      if (evidence().length < row.artifacts.length)
+                                        setEvidenceLimit(
+                                          evidence().length + COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
+                                        );
+                                    }}
+                                  >
+                                    <Show
+                                      when={evidence().length < row.artifacts.length}
+                                      fallback={
+                                        <>
+                                          All {evidence().length} evidence{' '}
+                                          {evidence().length === 1 ? 'entry' : 'entries'} shown
+                                        </>
+                                      }
+                                    >
+                                      Show{' '}
+                                      {Math.min(
+                                        COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
+                                        row.artifacts.length - evidence().length,
+                                      )}{' '}
+                                      more evidence entries
+                                    </Show>
+                                  </button>
+                                </div>
+                              </Show>
+                            </div>
                           </InlineDetailPanel>
                         </InlineDetailTableRow>
                       </Show>

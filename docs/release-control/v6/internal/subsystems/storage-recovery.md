@@ -21,6 +21,26 @@
 
 ## Purpose
 
+### Coverage previews retain the evidence behind uncertainty
+
+The existing Coverage restore-evidence preview retains the newest observed and
+completed point of each source, plus one undated observation of each source and
+completion state. Unknown dates cannot be silently sorted out behind a burst of
+dated backups or snapshots while the row tells the operator to inspect them.
+The preview states the number of unavailable/future dates without implying a
+time order or complete listing. Explicit bounded expansion makes every retained
+entry inspectable in the same panel, including literal origin and state.
+Expansion survives ordinary polling, resets on row close/change, and adds no
+read, route, restore/guest operation, identity or protection decision.
+
+Normal-suite `coverageEvidencePreview.test.ts` checks uncertain witnesses,
+deterministic bounded selection and valid newest/completed controls.
+`coverageEvidenceInspection.test.tsx` exercises parsed inventories through the
+real Coverage consumer, repeated expansion, namesake isolation, literal text,
+polling recovery/recurrence and closing/reopening. Desktop/narrow browser proof
+must inspect actual pixels and keyboard/touch expansion. This makes uncertain
+evidence usable, not original stale-date causality or native guest recovery.
+
 ### Backup completion strings share one strict instant rule
 
 Backups inventory and Workloads use the same calendar-checked, explicitly zoned

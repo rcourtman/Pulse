@@ -20,6 +20,19 @@
 
 ## Purpose
 
+### Coverage evidence remains inspectable without a pointer
+
+The bounded Coverage preview includes undated source/state witnesses and a
+plain count of dates which cannot be ordered. Its native expansion button adds
+eight evidence entries at a time without another read. The same control keeps
+keyboard focus and reports when all entries are shown, including after polling;
+closing or switching workload resets the preview. Provider text wraps literally
+at narrow widths. `coverageEvidenceInspection.test.tsx` and
+`ProxmoxCoverageTable.test.tsx` check real and direct consumers, preview bounds,
+literal origins, scope, focus, recovery/recurrence and reset. Desktop keyboard
+and narrow touch proof must inspect the production table and actual pixels.
+This does not change shared primitives, protection policy or guest operations.
+
 ### Backup age and completion do not normalise malformed strings
 
 The backup badge, shield disclosure and guest drawer share Backups inventory's
