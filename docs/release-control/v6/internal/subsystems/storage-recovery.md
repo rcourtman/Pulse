@@ -7935,6 +7935,17 @@ explains the uncertainty and retains every possible latest task's status, start,
 duration, literal error and full ID. Possible tasks are displayed in a stable
 non-time order; older known tasks are not possible latest tasks.
 
+Backup artifact and task times must be real calendar/time values with an explicit
+RFC3339 zone, matching the API's `time.Time` JSON. Do not let the browser normalise
+September 31, accept 24:00 or assume a timezone for an unzoned/date-only value.
+Malformed times retain their raw observations and unknown age/order; they do not
+drop a backup, imply failed completion, supply a duration or hide an undated
+failure behind a dated OK. Valid offsets, leap days and fractional seconds remain
+usable. `proxmoxBackupTimestamp.test.ts` and `backupTimestampEvidence.test.tsx`
+cover all three artifact sources and tasks through the parsed inventory boundary,
+including ordinary-poll recovery. Actual browser proof covers the changed model
+through Coverage, By date, detail and activity consumers in different timezones.
+
 The task column remains visible even when no latest task can be established.
 Existing workload/search scope includes candidate errors and IDs, never another
 connection's namesake. Ordinary inventory refresh can restore an ordered latest,
