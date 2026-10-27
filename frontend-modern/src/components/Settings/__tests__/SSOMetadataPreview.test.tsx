@@ -130,7 +130,7 @@ describe.each([false, true])('SAML metadata preview recovery (editing=%s)', (edi
     '$name preserves drafts and allows an explicit retry',
     async ({ response, expected }) => {
       let fail = true;
-      fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      fetchMock.mockImplementation(async (url: string) => {
         if (url.endsWith('/metadata/preview')) return fail ? response() : json(preview);
         if (url === '/api/security/status')
           return json({ publicUrl: 'https://pulse.example.test' });
