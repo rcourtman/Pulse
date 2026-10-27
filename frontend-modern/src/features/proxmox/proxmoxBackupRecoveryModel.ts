@@ -811,6 +811,7 @@ export function coverageRowMatchesSearch(row: WorkloadCoverageRow, term: string)
     ...row.artifacts.flatMap((artifact) => [
       artifact.sourceLabel,
       artifact.sourceTitle,
+      artifact.locationConnection || 'unknown connection',
       artifact.location,
       artifact.detail,
     ]),
@@ -835,6 +836,7 @@ export function recoverableArtifactMatchesSearch(
     artifact.workload.instance,
     artifact.sourceLabel,
     artifact.sourceTitle,
+    artifact.locationConnection || 'unknown connection',
     artifact.location,
     artifact.detail,
     artifact.detailTitle,

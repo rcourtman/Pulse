@@ -30,6 +30,8 @@ inside its column; the existing restore-point detail names the full Connection
 separately from Location, and Coverage wraps the full connection even when its
 Location column is hidden on phones. Missing source identity stays explicit as
 Unknown connection / Not reported, never inferred from the workload.
+Both existing text searches match the displayed connection (including Unknown
+connection), without changing the exact location filter or broadening its key.
 
 `backupSourceConnection.test.tsx` exercises the actual API/model/table path
 for PBS, PVE archives and guest snapshots, same-named sources, missing origins,

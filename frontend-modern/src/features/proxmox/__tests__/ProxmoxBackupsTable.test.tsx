@@ -2074,6 +2074,10 @@ describe('backup location identity in the consuming views', () => {
     expect(points()[0].querySelector('[data-backup-source-connection]')).toHaveTextContent(
       'Connection: pbs-main',
     );
+    fireEvent.input(screen.getByPlaceholderText(/Search backups by workload/), {
+      target: { value: 'pbs-main' },
+    });
+    await waitFor(() => expect(points()).toHaveLength(1));
     fireEvent.click(within(points()[0]).getByRole('button', { name: /expand details/i }));
     const pointDetail = screen.getByTestId('proxmox-recoverable-detail');
     expect(within(pointDetail).getByText('Connection').closest('tr')).toHaveTextContent('pbs-main');

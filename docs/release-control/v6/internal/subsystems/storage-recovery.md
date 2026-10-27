@@ -25,7 +25,9 @@
 
 The existing frontend location scope retains the backup reader's connection
 as a display fact separately from its positional source/connection/repository
-key. Existing inventory and Coverage consumers show that connection, including
+key. Existing inventory and Coverage searches match the display connection,
+including an explicitly unknown origin, without changing exact filter keys.
+Existing inventory and Coverage consumers show that connection, including
 the full value in restore-point details and wrapped Coverage evidence. No guest
 node, namespace or workload connection supplies a missing backup origin.
 Same-named repositories remain independently identified; existing exact and

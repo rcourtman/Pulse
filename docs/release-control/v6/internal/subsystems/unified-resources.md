@@ -31,7 +31,9 @@ connection remains readable in the existing point detail and wrapped Coverage
 evidence; a missing origin stays unknown rather than borrowing owner placement.
 The frontend location scope carries this display fact without changing exact
 source keys, resource/point IDs, namespace, routing, association or canonical
-protection assessment. `ProxmoxBackupsTable.test.tsx` and the normal-suite
+protection assessment. The existing text searches include that visible backup
+connection and its explicit unknown state, not a guessed owner connection.
+`ProxmoxBackupsTable.test.tsx` and the normal-suite
 `backupSourceConnection.test.tsx` exercise inventory-to-consumer attribution,
 unknowns and polling; desktop/narrow browser proof checks source readability.
 This is not original multi-surface identity recovery or restore acceptance.

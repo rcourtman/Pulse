@@ -77,6 +77,31 @@ afterEach(() => {
 });
 
 describe('restore-point source connections in real inventory consumers', () => {
+  it('finds the displayed connection in both existing search views without another read', async () => {
+    mount(() => points());
+    await inventoryRows();
+    const search = screen.getByPlaceholderText(/Search backups by workload/);
+    fireEvent.input(search, { target: { value: 'PBS-WEST' } });
+    await waitFor(() => {
+      const rows = document.querySelectorAll<HTMLElement>(
+        '[data-proxmox-backup-row="recoverable"]',
+      );
+      expect(rows).toHaveLength(1);
+      expect(connectionOf(rows[0])).toBe('Connection: pbs-west');
+    });
+    fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /expand details for same-name/i }));
+    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent('pbs-west');
+    expect(new URLSearchParams(window.location.search).get('q')).toBe('PBS-WEST');
+    expect(new URLSearchParams(window.location.search).has('location')).toBe(false);
+    fireEvent.input(search, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('link', { name: /by date/i }));
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2),
+    );
+    expect(api.fetch).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['pbs', 'archive', 'snapshot'] as const)(
     'distinguishes same-named %s repositories and workloads in rows and full details',
     async (kind) => {
