@@ -31,6 +31,7 @@ import {
   getBackupActivityPointTotalLabel,
   getBackupActivitySegmentPresentation,
   getBackupActivityTooltipRows,
+  getBackupActivityUnknownCount,
   type BackupActivityMetricMode,
   type BackupActivityNoun,
   type BackupActivityPoint,
@@ -72,6 +73,12 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
   const hasSelection = () => props.selectedDateKey() !== null;
   const metricMode = (): BackupActivityMetricMode =>
     props.metricMode?.() ?? props.metricToggle?.mode() ?? 'count';
+  const unknownCount = (point: BackupActivityPoint) =>
+    metricMode() === 'volume' ? getBackupActivityUnknownCount(point) : 0;
+  const onlyUnknownVolume = () =>
+    metricMode() === 'volume' &&
+    points().some((point) => unknownCount(point) > 0) &&
+    !points().some((point) => point.total > 0);
 
   const axisTicks = () =>
     getRecoveryTimelineAxisTicks(points().length, false, props.timeline().labelEvery);
@@ -185,7 +192,13 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
               <For each={[0, 1, 2]}>
                 {(step) => {
                   const value = () => (axisMax() * (2 - step)) / 2;
-                  return <span>{getBackupActivityAxisLabel(value(), metricMode())}</span>;
+                  return (
+                    <span>
+                      {onlyUnknownVolume()
+                        ? '—'
+                        : getBackupActivityAxisLabel(value(), metricMode())}
+                    </span>
+                  );
                 }}
               </For>
             </div>
@@ -221,6 +234,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                               isSelected(),
                               props.noun,
                               metricMode(),
+                              unknownCount(point),
                             )}
                             aria-pressed={isSelected() ? 'true' : 'false'}
                             onClick={() => props.onToggleDay(point.key)}
@@ -266,6 +280,13 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                                     }}
                                   </For>
                                 </div>
+                              </Show>
+                              <Show when={unknownCount(point) > 0}>
+                                <div
+                                  data-unknown-volume
+                                  aria-hidden="true"
+                                  class="absolute inset-x-0 bottom-0 h-1 rounded-xs bg-amber-500"
+                                />
                               </Show>
                             </div>
                           </button>
@@ -325,6 +346,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                           t().point.total,
                           props.noun,
                           metricMode(),
+                          unknownCount(t().point),
                         )}
                       </div>
                     </div>

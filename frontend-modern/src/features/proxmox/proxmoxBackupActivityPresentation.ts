@@ -69,6 +69,12 @@ export interface BackupActivityPoint {
   key: string;
   total: number;
   counts: Record<BackupActivitySegmentKind, number>;
+  /** In-window completed entries without a positive finite metric value. Not zero volume. */
+  unknownCounts?: Partial<Record<BackupActivitySegmentKind, number>>;
+}
+
+export function getBackupActivityUnknownCount(point: BackupActivityPoint): number {
+  return Object.values(point.unknownCounts ?? {}).reduce((sum, count) => sum + count, 0);
 }
 
 export interface BackupActivityTimeline {
@@ -121,7 +127,11 @@ export function buildBackupActivityTimeline<T>(
     const kind = classify(item);
     if (!kind) continue;
     const value = getValue(item);
-    if (!Number.isFinite(value) || value <= 0) continue;
+    if (!Number.isFinite(value) || value <= 0) {
+      bucket.unknownCounts ??= {};
+      bucket.unknownCounts[kind] = (bucket.unknownCounts[kind] ?? 0) + 1;
+      continue;
+    }
     bucket.counts[kind] += value;
     bucket.total += value;
   }
@@ -160,15 +170,25 @@ export function getBackupActivityTooltipRows(
   return kinds.map((kind) => {
     const presentation = SEGMENT_PRESENTATION[kind];
     const count = Math.max(0, point.counts[kind] ?? 0);
+    const unknown = mode === 'volume' ? (point.unknownCounts?.[kind] ?? 0) : 0;
     const percentage = total > 0 && count > 0 ? Math.round((count / total) * 100) : 0;
     const formatted = formatActivityValue(count, mode);
     return {
       kind,
       label: presentation.label,
       count,
-      value: percentage > 0 && kinds.length > 1 ? `${formatted} (${percentage}%)` : formatted,
+      value:
+        unknown > 0
+          ? count > 0
+            ? `≥ ${formatted}`
+            : 'Unknown size'
+          : percentage > 0 &&
+              kinds.length > 1 &&
+              !(mode === 'volume' && getBackupActivityUnknownCount(point) > 0)
+            ? `${formatted} (${percentage}%)`
+            : formatted,
       segmentClassName: presentation.segmentClassName,
-      muted: count === 0,
+      muted: count === 0 && unknown === 0,
     };
   });
 }
@@ -177,8 +197,13 @@ export function getBackupActivityPointTotalLabel(
   total: number,
   noun: BackupActivityNoun,
   mode: BackupActivityMetricMode = 'count',
+  unknownCount = 0,
 ): string {
   if (mode === 'volume') {
+    if (unknownCount > 0) {
+      const unknown = `${unknownCount} ${unknownCount === 1 ? 'size' : 'sizes'} unknown`;
+      return total > 0 ? `${formatBytes(total)} known; ${unknown}` : unknown;
+    }
     return formatBytes(Math.max(0, total));
   }
   const normalized = Math.max(0, Math.round(total));
@@ -192,8 +217,9 @@ export function getBackupActivityColumnAriaLabel(
   selected: boolean,
   noun: BackupActivityNoun,
   mode: BackupActivityMetricMode = 'count',
+  unknownCount = 0,
 ): string {
-  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode);
+  const countLabel = getBackupActivityPointTotalLabel(total, noun, mode, unknownCount);
   return selected ? `${dateLabel}: ${countLabel}, selected` : `${dateLabel}: ${countLabel}`;
 }
 

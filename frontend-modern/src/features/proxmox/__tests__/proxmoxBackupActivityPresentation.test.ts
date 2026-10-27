@@ -12,6 +12,7 @@ import {
   getBackupActivityPointTotalLabel,
   getBackupActivitySegmentPresentation,
   getBackupActivityTooltipRows,
+  getBackupActivityUnknownCount,
   type BackupActivityMetricMode,
   type BackupActivityNoun,
   type BackupActivityPoint,
@@ -244,7 +245,7 @@ describe('proxmoxBackupActivityPresentation', () => {
       expect(timeline.points.at(-1)!.total).toBe(3);
     });
 
-    it('accumulates per-item byte values in volume mode and rejects non-positive/non-finite values', () => {
+    it('keeps known byte totals separate from non-positive/non-finite sizes', () => {
       const items: ActivityItem[] = [
         { ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 1073741824 },
         { ts: localMs(2026, 1, 13, 10, 0), kind: 'failed', bytes: 2147483648 },
@@ -262,6 +263,33 @@ describe('proxmoxBackupActivityPresentation', () => {
       expect(today.counts.ok).toBe(1073741824);
       expect(today.counts.failed).toBe(2147483648);
       expect(today.total).toBe(1073741824 + 2147483648);
+      expect(today.unknownCounts).toEqual({ ok: 4 });
+      expect(getBackupActivityUnknownCount(today)).toBe(4);
+    });
+
+    it('retains unknown-only days without inventing byte volume or counting excluded entries', () => {
+      const items: ActivityItem[] = [
+        { ts: localMs(2026, 1, 13, 9), kind: 'pbs' },
+        { ts: localMs(2026, 1, 13, 10), kind: 'snapshot', bytes: 0 },
+        { ts: localMs(2026, 1, 12, 10), kind: 'archive', bytes: 2048 },
+        { ts: localMs(2026, 1, 13, 11), kind: null },
+        { ts: localMs(2026, 1, 6), kind: 'pbs' },
+        { ts: NOW.getTime() + 1, kind: 'pbs' },
+        { kind: 'pbs' },
+      ];
+      const volume = buildBackupActivityTimeline(7, items, itemMs, classify, {
+        now: NOW,
+        getValue: (item) => item.bytes ?? 0,
+      });
+      expect(volume.points.at(-1)!.total).toBe(0);
+      expect(volume.points.at(-1)!.unknownCounts).toEqual({ pbs: 1, snapshot: 1 });
+      expect(
+        volume.points.reduce((sum, point) => sum + getBackupActivityUnknownCount(point), 0),
+      ).toBe(2);
+      expect(volume.points.reduce((sum, point) => sum + point.total, 0)).toBe(2048);
+      const counts = buildBackupActivityTimeline(7, items, itemMs, classify, { now: NOW });
+      expect(counts.points.reduce((sum, point) => sum + point.total, 0)).toBe(3);
+      expect(counts.points.every((point) => getBackupActivityUnknownCount(point) === 0)).toBe(true);
     });
 
     it('keeps fractional positive values in volume mode', () => {
@@ -426,6 +454,33 @@ describe('proxmoxBackupActivityPresentation', () => {
   });
 
   describe('getBackupActivityPointTotalLabel', () => {
+    it('never presents unavailable sizes as a zero or a complete volume', () => {
+      expect(getBackupActivityPointTotalLabel(0, 'restore point', 'volume', 1)).toBe(
+        '1 size unknown',
+      );
+      expect(getBackupActivityPointTotalLabel(1024, 'restore point', 'volume', 2)).toBe(
+        '1.00 KB known; 2 sizes unknown',
+      );
+      expect(getBackupActivityPointTotalLabel(3, 'restore point', 'count', 2)).toBe(
+        '3 restore points',
+      );
+      expect(
+        getBackupActivityColumnAriaLabel('Feb 13', 0, true, 'restore point', 'volume', 2),
+      ).toBe('Feb 13: 2 sizes unknown, selected');
+    });
+
+    it('does not give unknown-only sources zero or partial-byte sources exact percentages', () => {
+      const point: BackupActivityPoint = {
+        key: '2026-02-13',
+        total: 3072,
+        counts: { ...emptyCounts(), pbs: 2048, archive: 1024 },
+        unknownCounts: { archive: 1, snapshot: 1 },
+      };
+      const rows = getBackupActivityTooltipRows(point, ['pbs', 'archive', 'snapshot'], 'volume');
+      expect(rows.map((row) => row.value)).toEqual(['2.00 KB', '≥ 1.00 KB', 'Unknown size']);
+      expect(rows.every((row) => !row.muted)).toBe(true);
+      expect(getBackupActivityTooltipRows(point, ['snapshot'], 'count')[0].value).toBe('0');
+    });
     it.each([
       [0, 'backup', '0 backups'],
       [1, 'backup', '1 backup'],
