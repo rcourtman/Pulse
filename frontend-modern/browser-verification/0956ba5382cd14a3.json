@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "base_sha": "d46b30685b2243bb3f78ae1d4cf31da8c306f8b7",
+  "verified_at": "2026-10-27T14:56:32.544739Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "0f8657534505789b25b82cf6f83735da0ac7f727a79b7fbaaa6294752057e061",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "3cbb8257fc30d3c7de5dead60484d360e4a3ca534bd30e10f4cc9fc619256f34",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "b9532c58715b15e582ca0b1118c028169212ba548b27ded1f2ae0007c57b4c18",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx": "8b92fd14280002f5aeeca81981651f50fb5e83856d8d642e0518cc936c2907d0"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production inventory parser, recovery model and both existing tables consume safe synthetic HTTP data using the production router, query and shared CSS via an uncommitted evidence-only entry.",
+    "Unmatched PBS namespace/datastore and missing PVE nodes are Not reported, not fabricated placement. Node filters include actual native nodes only. Backup readers and repository identity remain separate.",
+    "Narrow Coverage wraps labelled Location beneath Source when its location column is hidden; the full layout keeps the existing separate location column. Missing and reported PVE nodes, PBS, guest snapshots and host controls are exercised.",
+    "94 checks pass. Playwright 1.56.1 matches integration lock; Chromium desktop and WebKit touch phones. All seven retained final captures were opened with native view_image and inspected as image content. Values fit at desktop, 390px and 320px.",
+    "Two adverse attempts remain retained. An initial sr-only label/innerText assertion was corrected; the next exposed the narrow Coverage location gap now repaired in the containing source. No page, console, mutation, off-origin or unexpected API error was observed in final execution."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and ordinary phone row taps open the existing panels; visible native collapse actions close them, with no per-row read.",
+    "Actual native-node filtering updates the saved URL and selects the correct PVE record; namespace search still finds backup repository evidence without inventing a node.",
+    "Ordinary 30-second resource/PVE/PBS polling gives the PBS point a native node and exact owner only after its live workload appears, then withdraws them on removal. Both transitions preserve the open keyed By date panel and focus.",
+    "No guest, backup, restore or policy mutation was introduced or exercised. Existing matching rules and source keys remain; source-level attribution is not #2681/#3248 or native recovery."
+  ],
+  "captures": [
+    {
+      "name": "desktop-coverage-unmatched-pbs.png",
+      "sha256": "40f0eee88736cc7786fa1a36cdcf614ea4d574d4c7454085a8f99879fc967ae6"
+    },
+    {
+      "name": "desktop-reported-pve-control.png",
+      "sha256": "bcc1b1960d73ed07cafd5e94ee05ef50298cec0803d79a0294781341201f98f7"
+    },
+    {
+      "name": "desktop-date-unmatched-pbs.png",
+      "sha256": "10302273051d74ca568f05f72d43cc9f8255d2a9d6f6e69bab6af16f42d27975"
+    },
+    {
+      "name": "phone-coverage-unmatched-pbs.png",
+      "sha256": "0ba52dfd738e57ee62191c9e2bfb1c7bb1224c8cc80e1fdd54667c91fb1b0217"
+    },
+    {
+      "name": "phone-320-coverage-unmatched-pbs.png",
+      "sha256": "f7f6de95908a57fa8333931a3d74d55ff45a7cf07259d6d3ea63d8b6e982a2b3"
+    },
+    {
+      "name": "phone-date-unmatched-pbs.png",
+      "sha256": "06bdef19ae09905f7f59175067aa93d09761cdb8ca241305e13ff696a10df17f"
+    },
+    {
+      "name": "phone-date-missing-pve-node.png",
+      "sha256": "e73baa5f9d7f367348b93d0d87d84ce128d92ec021bfc6ac8b39850949cc1ae4"
+    }
+  ]
+}
