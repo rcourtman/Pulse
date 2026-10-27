@@ -62,7 +62,7 @@ describe('completed backup count guidance', () => {
       'covers the loaded inventory, not just the rows matching your list filters',
     );
     expect(copy).toContain(
-      'The chart follows the search, node, type, location, source and entry-state filters',
+      'The chart follows the search, node, type, location, source and verification filters',
     );
     expect(copy).toContain('Selecting a day narrows only the list, not the other chart days');
     expect(tableSource).toContain(

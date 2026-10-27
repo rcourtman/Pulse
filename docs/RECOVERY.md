@@ -60,7 +60,7 @@ answer different questions:
   covers the loaded inventory, not just the rows matching your list filters.
 - **Completed restore points per day** also requires a known, non-future date
   within the selected chart range. The chart follows the search, node, type,
-  location, source and entry-state filters, unlike the inventory-wide Backup
+  location, source and verification filters, unlike the inventory-wide Backup
   health total. Selecting a day narrows only the list, not the other chart days.
   An undated completed point can count in
   Backup health but not in a daily column. A blank chart is not proof that
