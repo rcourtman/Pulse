@@ -71,10 +71,20 @@ answer different questions:
   If a completed backup's date is unavailable or in the future, the latest
   backup age stays unknown rather than choosing an older dated backup.
 
-Selecting a chart day filters the list; it does not make every listed entry
-complete. Use **Clear date filter** and clear restrictive search or list filters
-to inspect undated and incomplete entries. This changes only the display, not
-collection, permissions or retention. Older versions may use different labels.
+Both activity charts follow the **By date** list's search, **Node**, **Backup
+location**, **Type** and **Source** filters, including Verified or Unverified.
+**Backup health** still covers the loaded inventory: a non-zero total there
+can sit beside an empty filtered chart. An unresolved or ambiguous saved backup
+location shows no matching points; choose the intended location again or clear
+that filter, rather than treating the empty view as missing backups.
+
+Selecting a chart day filters the list only; the other scoped days remain
+available in the chart. The chart's date range limits its activity columns, not
+the list. **Clear date filter** removes only the selected day; clear search and
+the other filter chips separately to inspect the wider inventory, including
+undated and incomplete entries. None of these display controls changes
+collection, permissions, retention or protection policy. Older versions may use
+different labels or show unfiltered activity charts.
 
 **Completed is not Verified, a tested restore or guest thaw.** Compare the same
 provider, guest, location and time using existing records, not just a count.

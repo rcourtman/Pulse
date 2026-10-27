@@ -57,10 +57,19 @@ describe('completed backup count guidance', () => {
     expect(copy).toContain(
       'covers the loaded inventory, not just the rows matching your list filters',
     );
-    expect(copy).toContain('Selecting a chart day filters the list');
-    expect(copy).toContain('Clear date filter');
     expect(copy).toContain(
-      'This changes only the display, not collection, permissions or retention',
+      "Both activity charts follow the By date list's search, Node, Backup location, Type and Source filters, including Verified or Unverified",
+    );
+    expect(copy).toContain('a non-zero total there can sit beside an empty filtered chart');
+    expect(copy).toContain('An unresolved or ambiguous saved backup location shows no matching points');
+    expect(copy).toContain('choose the intended location again or clear that filter');
+    expect(copy).toContain('Selecting a chart day filters the list only');
+    expect(copy).toContain('the other scoped days remain available in the chart');
+    expect(copy).toContain("The chart's date range limits its activity columns, not the list");
+    expect(copy).toContain('Clear date filter removes only the selected day');
+    expect(copy).toContain('clear search and the other filter chips separately');
+    expect(copy).toContain(
+      'None of these display controls changes collection, permissions, retention or protection policy',
     );
     expect(copy).toContain('Older versions may use different labels');
   });
