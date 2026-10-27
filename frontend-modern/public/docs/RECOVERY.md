@@ -202,6 +202,49 @@ new backup or changing stored history. For local `vzdump` archives, use the
 [PVE comparison below](#local-pve-backups-are-newer-than-coverage); PBS is not
 required.
 
+### Backup task results and backup age
+
+A recent backup and a failed task can both be genuine. In **Proxmox → Backups
+→ Coverage**, read these columns separately:
+
+| Column | What to compare |
+|---|---|
+| **Last backup** (**Backup** or **Age** at narrower widths) | The latest completed backup visible for the selected backup location, not the result of the latest task. A guest snapshot does not fill this column. |
+| **Task** | A collected task result for this workload, where the evidence establishes which task started last. It does not verify an artifact or replace its timestamp. |
+| **Posture** | Pulse's assessment of subject-linked protection evidence, not a synonym for either task success or backup age. A location filter does not recalculate this assessment. |
+
+Expand the workload, including on a phone, to inspect **Latest task**: **Status**,
+**Started**, **Duration**, **Error** and **Task ID**, where reported. Keep the
+workload's type, ID, node and **PVE connection** separate from the provider
+reader's **Scope**. Match the existing native task and backup record to that
+same owning installation and guest, not just a repeated name or VMID.
+
+- **Failed** does not erase an earlier completed backup. Inspect the task's
+  error and the existing artifact independently; a recent backup age does not
+  cancel the failure either.
+- **Running** is not a new completed recovery point. **OK** is a task result,
+  not verification, a tested restore or confirmation that the guest thawed.
+- If **Task order** says **Latest task: Unknown**, missing, future or tied
+  start times prevent Pulse from ordering several possible latest tasks.
+  Inspect each **Possible latest task** section. Its number is not a time
+  order: do not choose an OK task over a failed one to declare recovery.
+- **None** or a dash means no matching recent task is shown, not that no task
+  ran in the provider. An **Unknown** status is not OK, and **Not reported**
+  under Error is not proof that there was no error. If your version has no
+  task details, use the existing native task record rather than assuming success.
+
+Use the records already available. Do not run another backup, verification,
+restore or guest-agent probe, restart monitoring, clear History or change
+retention merely to reconcile these readings. Keep full task IDs, private
+paths and unredacted errors private; a public report needs only the affected
+view, running Pulse version, task status/time and a locally reviewed error
+summary with consistent aliases.
+
+If a guest is unresponsive or freeze/thaw is uncertain, stop this display
+comparison and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
+Neither an OK task nor a corrected badge confirms independent thaw, fresh
+successful writes to every covered filesystem and workload liveness.
+
 ### Local PVE backups are newer than Coverage
 
 A recent archive in PVE and an old or **Unprotected** Coverage row are
