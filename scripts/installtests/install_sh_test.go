@@ -2865,16 +2865,18 @@ func runUnraidGoWriter(functions, goScript, wrapper, runtimeBinary string) ([]by
 
 func unraidGoEntryShellFunctions(t *testing.T) string {
 	t.Helper()
-	return extractInstallShellFunction(t, "render_unraid_go_launch") + "\n" +
+	return extractInstallShellFunction(t, "portable_path_uid") + "\n" +
+		extractInstallShellFunction(t, "nas_agent_removal_file_safe") + "\n" +
+		extractInstallShellFunction(t, "filter_nas_agent_boot_file") + "\n" +
+		extractInstallShellFunction(t, "render_unraid_go_launch") + "\n" +
 		extractInstallShellFunction(t, "write_unraid_go_entry") + "\n"
 }
 
 // TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches runs the installer's
 // /boot/config/go writer. go is the user's boot script: only the installer's
-// marker and command lines that reference a Pulse wrapper or the runtime
-// binary are replaced. The earlier cleanup, sed '/pulse-agent/d', also deleted
-// any user line that merely mentioned pulse-agent. Removal must admit the
-// written entry, and a removal that would leave go unparseable is refused.
+// marker and exact generated launches are replaced. Hand-edited/foreign and
+// compound commands must be reconciled, not deleted along with unrelated work.
+// Removal must admit the written entry; unknown or unparseable input is kept.
 func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Unraid boot-file fixture needs bash")
@@ -2899,9 +2901,6 @@ func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 		before  string // empty: go does not exist yet
 		after   string
 		refused bool
-		// Removal refuses any command line naming the wrapper, even in a
-		// trailing comment; that conservatism is removal's, not the writer's.
-		skipRemoval bool
 	}{
 		{
 			name:  "missing go is created",
@@ -2919,6 +2918,11 @@ func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 			after:  userTop + "\n\n" + userRest + entry,
 		},
 		{
+			name:   "CRLF exact legacy entry",
+			before: strings.ReplaceAll(userTop+"# Pulse Agent\nbash \""+wrapper+"\"\n"+userRest, "\n", "\r\n"),
+			after:  user + entry,
+		},
+		{
 			// Unraid runs go through fromdos, so CRLF lines become LF.
 			name: "hand-edited, old-location and direct runtime launches",
 			before: strings.ReplaceAll(userTop, "\n", "\r\n") +
@@ -2934,13 +2938,12 @@ func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 				"bash /mnt/user/appdata/old/start-pulse-agent.sh\n" +
 				runtimeBinary + " --url https://pulse.example.invalid &\n" +
 				userRest,
-			after: user + entry,
+			refused: true,
 		},
 		{
-			name:        "command whose comment names the wrapper",
-			before:      "#!/bin/bash\nswapon /mnt/cache/swapfile # start-pulse-agent.sh needs this\n",
-			after:       "#!/bin/bash\nswapon /mnt/cache/swapfile # start-pulse-agent.sh needs this\n" + entry,
-			skipRemoval: true,
+			name:    "uncertain command whose comment names the wrapper",
+			before:  "#!/bin/bash\nswapon /mnt/cache/swapfile # start-pulse-agent.sh needs this\n",
+			refused: true,
 		},
 		{
 			name:    "removal that would break go's syntax",
@@ -2964,6 +2967,9 @@ func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 		extractInstallShellFunction(t, "render_unraid_go_launch") + "\n"
 	for i, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.refused && tc.after == "" {
+				tc.after = tc.before
+			}
 			goScript := filepath.Join(dir, fmt.Sprintf("go-%d", i))
 			if tc.before != "" {
 				if err := os.WriteFile(goScript, []byte(tc.before), 0644); err != nil {
@@ -2983,7 +2989,7 @@ func TestInstallSHUnraidGoEntryReplacesOnlyPulseLaunches(t *testing.T) {
 					t.Fatalf("go after install %d:\n--- got ---\n%s\n--- want ---\n%s", run, got, tc.after)
 				}
 			}
-			if tc.refused || tc.skipRemoval {
+			if tc.refused {
 				return
 			}
 

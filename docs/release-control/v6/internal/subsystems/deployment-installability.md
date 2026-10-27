@@ -15,6 +15,27 @@
 ```
 
 ## Purpose
+### Unraid boot replacement preserves operator work
+
+Agent setup/upgrade replaces only complete exact generated top-level go entries.
+Unknown/compound/foreign launches and launch-like data remain untouched and
+require reconciliation. The writer normalises complete CRLF input, stages on
+the boot filesystem, parses without execution, compares the original before
+rename and checks final bytes. Existing modes and unrelated jobs survive.
+Linked/incomplete/malformed content, pending recovery and failed writes or
+readback cannot be reported as reboot persistence. An initial failed write
+retains its staged candidate; no blind retry overwrites that evidence.
+
+Boot media may be FAT: no chmod operation or executable go file is required;
+rc.local consumes go through bash. Existing Unix modes are preserved where
+supported, without inventing FAT permission semantics. The real registration
+caller exits on failure before starting the watchdog or printing success.
+Recovery files remain, but the earlier stop means a running agent is not
+guaranteed. Twenty controls in
+`TestInstallSHUnraidBootReplacementPreservesUnrelatedJobs`, plus the existing
+boot-logger and NAS-removal inventory, qualify this confined source behaviour,
+not native flash, reboot, update, removal or customer recovery.
+
 ### Manual bootstrap transport remains HTTPS-only
 
 The generated manual update helper restricts curl's initial protocol and every

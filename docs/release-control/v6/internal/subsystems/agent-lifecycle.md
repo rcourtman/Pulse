@@ -10467,3 +10467,31 @@ content, filesystem/write failures, concurrent source changes and unmount
 failure. The existing NAS removal inventory consumes the changed writer too.
 These checks establish boot-file preservation and truthful local completion,
 not a native QNAP install/reboot/update/removal or resolution of #2897/#1617.
+
+### Unraid upgrade boot-file ownership (27 October 2026)
+
+The Unraid writer replaces only exact generated top-level launches, including
+the earlier foreground form. A hand-edited, compound, indirect or foreign
+launch is preserved and refused, not erased together with unrelated jobs.
+Exact-looking text inside a heredoc, quote, compound or continued line is not
+an owned entry. Bounded syntax-only prefix checks admit at most sixteen owned
+entries; boot text is never evaluated. Complete CRLF input is normalised as
+Unraid's fromdos does; incomplete or malformed content is not repaired silently.
+
+Replacement is staged on the boot filesystem, preserves the existing mode and
+compares the original before rename. Linked/unknown files, pending recovery,
+failed preparation or readback cannot yield a configured verdict. A partial
+first write retains its staged candidate and bars a blind retry. Registration
+failure stops before starting the watchdog or claiming reboot persistence;
+the agent may already have been stopped earlier in installation.
+
+Unraid boot media need not support chmod or execute bits. Registration does
+not require either: rc.local consumes go through bash. Ordinary Unix modes
+are preserved when copying the existing file; FAT mount masks remain its own
+semantics. The no-chmod control models that boundary, not a native FAT mount.
+
+`TestInstallSHUnraidBootReplacementPreservesUnrelatedJobs` runs twenty
+ordinary-user producer/caller controls through the normal installer inventory.
+Existing boot-logger and NAS-removal tests retain detached execution and exact
+removal compatibility. Source fixtures do not establish native Unraid lifecycle
+or original installed-recovery acceptance.

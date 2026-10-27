@@ -634,7 +634,7 @@ remove_safe_profile_state_dir() { rm -rf -- "$SAFE_PROFILE_STATE_DIR"; }
                     rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
                     self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
                 else:
-                    emitter = definitions(self.source, ('render_unraid_go_launch', 'write_unraid_go_entry'))
+                    emitter = definitions(self.source, ('portable_path_uid', 'nas_agent_removal_file_safe', 'filter_nas_agent_boot_file', 'render_unraid_go_launch', 'write_unraid_go_entry'))
                     render_file.write_text(setup + emitter + '\nwrite_unraid_go_entry ' + shlex.quote(str(bootfile)) + ' "$WRAPPER_SCRIPT" "$RUNTIME_BINARY"\n')
                     rendered = subprocess.run(['bash', str(render_file)], env=env, capture_output=True, text=True)
                     self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
