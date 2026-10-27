@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "e8d65faa4171d83d590a5b3785b9787500099b25",
+  "verified_at": "2026-10-26T21:26:46.786663Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "83194c859e1e1b3463bca00f814bf48c8d602ace9aaa7b49ead42f5ce43f1d84"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production ProxmoxBackupsTable and real inventory HTTP parser/model/filters/chart/list/CSS, compiled from e8d65faa4171d83d590a5b3785b9787500099b25 with the exact lock graph. Safe synthetic inventory only; not native PVE/PBS recovery.",
+    "31 consuming checks pass in desktop Chromium and narrow WebKit, including a reproduced parent mismatch. Ten initial captures and four targeted settled-state captures received native image inspection.",
+    "PVE-file counts and volume match one point/1 KB today and two points/12 KB yesterday. Exact Main repository shows only its single Saturday point; node, type, search, verified and unverified facets update chart and list together.",
+    "Empty search and ambiguous legacy locations do not advertise activity from another scope. Final settled empty-state pixels and the narrow single-location row are readable. No page exceptions or page-wide horizontal overflow."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and narrow touch select a day; the list narrows while other scoped chart days remain selectable. Switch days, clear the day and switch Count/Volume.",
+    "Use actual shared source controls, native Add filter selects for node/type/exact location, removable chips and search; clear restores the complete inventory. Filter-only interactions add no API reads.",
+    "Four targeted follow-up captures wait for the existing entrance animation and inspect the complete empty message and narrow single-location list without repeating the finished interaction suite."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  }
+}
