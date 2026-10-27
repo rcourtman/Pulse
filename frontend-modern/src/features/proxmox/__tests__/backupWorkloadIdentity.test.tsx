@@ -117,7 +117,7 @@ describe('backup workload identity in real inventory consumers', () => {
     });
     const [row] = await coverageRows();
     expect(connectionOf(row)).toBe('PVE: east');
-    fireEvent.click(within(row).getByRole('button', { name: /expand details/ }));
+    fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
     let detail = screen.getByTestId('proxmox-coverage-detail');
     expect(connectionRow(detail)).toHaveTextContent('east');
     expect(connectionRow(detail)).not.toHaveTextContent('pbs-reader');
@@ -215,7 +215,7 @@ describe('backup workload identity in real inventory consumers', () => {
     });
     const [row] = await coverageRows();
     expect(connectionOf(row)).toBe('PVE: Not reported');
-    fireEvent.click(within(row).getByRole('button', { name: /expand details/ }));
+    fireEvent.click(within(row).getByRole('button', { name: /expand details/i }));
     expect(connectionRow(screen.getByTestId('proxmox-coverage-detail'))).toHaveTextContent(
       'Not reported',
     );
@@ -225,7 +225,7 @@ describe('backup workload identity in real inventory consumers', () => {
     const guest = guests()[0];
     const setWorkloads = mount({ workloads: [guest], pve: emptyPVE });
     const [row] = await coverageRows();
-    const toggle = within(row).getByRole('button', { name: /expand details/ });
+    const toggle = within(row).getByRole('button', { name: /expand details/i });
     fireEvent.click(toggle);
     toggle.focus();
     const detail = screen.getByTestId('proxmox-coverage-detail');
