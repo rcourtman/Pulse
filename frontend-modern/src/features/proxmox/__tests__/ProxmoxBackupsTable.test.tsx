@@ -24,7 +24,10 @@ import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import type { ProtectionPosturesResponse } from '@/types/recovery';
 import { protectionPolicy } from '@/utils/__fixtures__/protectionPosture';
-import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
+import {
+  getRecoveryFullDateLabel,
+  getRecoveryPrettyDateLabel,
+} from '@/utils/recoveryDatePresentation';
 import { eventBus } from '@/stores/events';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
@@ -2071,5 +2074,139 @@ describe('backup location identity in the consuming views', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('backup activity follows the consuming inventory scope', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const mountScopedInventory = (query = '') => {
+    vi.spyOn(Date, 'now').mockReturnValue(BACKUP_IDENTITY_NOW);
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data: url.endsWith('/pbs')
+            ? {
+                backups: [
+                  identityPBS(),
+                  identityPBS({
+                    id: 'upper',
+                    datastore: 'Main',
+                    verified: false,
+                    backupTime: '2026-10-03T10:00:00Z',
+                    size: 16384,
+                  }),
+                  identityPBS({ id: 'running', inProgress: true, size: 1048576 }),
+                ],
+              }
+            : {
+                storageBackups: [
+                  identityArchive(),
+                  identityArchive({ id: 'old', time: '2026-10-03T11:00:00Z', size: 4096 }),
+                  identityArchive({
+                    id: 'west',
+                    instance: 'west',
+                    node: 'pve-2',
+                    vmid: 200,
+                    type: 'ct',
+                    time: '2026-10-03T11:00:00Z',
+                    size: 8192,
+                  }),
+                ],
+                guestSnapshots: [identitySnapshot()],
+                backupTasks: [],
+              },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
+    window.history.replaceState({}, '', `/proxmox/backups/date${query ? `?${query}` : ''}`);
+    return renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[
+          identityGuest('east-100', 'east', 'pve-1'),
+          {
+            ...identityGuest('west-200', 'west', 'pve-2', { vmid: 200 }),
+            type: 'system-container',
+          },
+        ]}
+      />
+    ));
+  };
+  const day = (date: string, value: string, selected = false) =>
+    screen.getByRole('button', {
+      name: `${getRecoveryPrettyDateLabel(date)}: ${value}${selected ? ', selected' : ''}`,
+    });
+  const rows = () => document.querySelectorAll('[data-proxmox-backup-row="recoverable"]');
+
+  it.each([
+    ['source', 'source=archive', 3, '1 restore point', '2 restore points', '1.00 KB', '12.0 KB'],
+    ['verified', 'source=verified', 1, '1 restore point', '0 restore points', '2.00 KB', '0 B'],
+    ['unverified', 'source=unverified', 1, '0 restore points', '1 restore point', '0 B', '16.0 KB'],
+    ['node', 'node=pve-2', 1, '0 restore points', '1 restore point', '0 B', '8.00 KB'],
+    ['type', 'type=ct', 1, '0 restore points', '1 restore point', '0 B', '8.00 KB'],
+    ['search', 'q=west-200', 1, '0 restore points', '1 restore point', '0 B', '8.00 KB'],
+    [
+      'combined',
+      'node=pve-1&type=vm&source=archive',
+      2,
+      '1 restore point',
+      '1 restore point',
+      '1.00 KB',
+      '4.00 KB',
+    ],
+    [
+      'case-sensitive location',
+      `location=${encodeURIComponent('["pbs","pbs-server","Main"]')}`,
+      1,
+      '0 restore points',
+      '1 restore point',
+      '0 B',
+      '16.0 KB',
+    ],
+  ])(
+    'keeps %s-filtered count and volume in agreement with the list',
+    async (_label, query, count, today, yesterday, todayBytes, yesterdayBytes) => {
+      mountScopedInventory(String(query));
+      await waitFor(() => expect(rows()).toHaveLength(Number(count)));
+      expect(day('2026-10-04', String(today))).toBeInTheDocument();
+      expect(day('2026-10-03', String(yesterday))).toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
+      expect(day('2026-10-04', String(todayBytes))).toBeInTheDocument();
+      expect(day('2026-10-03', String(yesterdayBytes))).toBeInTheDocument();
+    },
+  );
+
+  it.each(['q=no-such-workload', 'location=missing', 'location=pbs%3Apbs-server%3Amain'])(
+    'does not show another scope activity for empty or unresolved %s',
+    async (query) => {
+      mountScopedInventory(query);
+      await screen.findByText(/7 backup entries/);
+      expect(rows()).toHaveLength(0);
+      expect(screen.queryByRole('group', { name: 'Activity metric' })).not.toBeInTheDocument();
+      expect(screen.getByText(/No completed restore points with known dates/)).toBeInTheDocument();
+    },
+  );
+
+  it('keeps other scoped days available while selecting, clearing and changing filters', async () => {
+    mountScopedInventory('source=archive');
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    const calls = apiFetchMock.mock.calls.length;
+    await fireEvent.click(day('2026-10-04', '1 restore point'));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(day('2026-10-04', '1 restore point', true)).toBeInTheDocument();
+    expect(day('2026-10-03', '2 restore points')).toBeInTheDocument();
+    await fireEvent.click(day('2026-10-03', '2 restore points'));
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear date filter' }));
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    await fireEvent.click(
+      within(screen.getByRole('group', { name: 'Source' })).getByRole('button', { name: 'All' }),
+    );
+    await waitFor(() => expect(rows()).toHaveLength(7));
+    expect(day('2026-10-04', '3 restore points')).toBeInTheDocument();
+    expect(day('2026-10-03', '3 restore points')).toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(calls);
   });
 });
