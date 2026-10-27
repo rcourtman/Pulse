@@ -145,6 +145,10 @@ describe('task-reported origin through the inventory consumer', () => {
   it.each(['historical-node', 'task-100'])(
     'searches exposed task evidence without leaking into a namesake: %s',
     async (term) => {
+      // Match the existing saved-view consumer tests: real timers for input
+      // and URL navigation, with only the observation date fixed.
+      vi.useRealTimers();
+      vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date'] });
       mount();
       await screen.findByRole('button', { name: /Expand details for same-name.*east/ });
       fireEvent.input(
