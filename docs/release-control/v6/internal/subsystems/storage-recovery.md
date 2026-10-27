@@ -30,6 +30,7 @@ a missing duration says Not reported, and a failed task without error text
 says Not reported. No task means no task section. Ordinary polling updates
 and removes stale task details in the same keyed panel without losing focus.
 The detail explicitly does not verify a restore or guest responsiveness.
+That qualification wraps at narrow widths instead of inheriting cell nowrap.
 
 `backupTaskEvidence.test.tsx` exercises the HTTP inventory parser, recovery
 model and production Coverage consumer at desktop/narrow layouts, namesake

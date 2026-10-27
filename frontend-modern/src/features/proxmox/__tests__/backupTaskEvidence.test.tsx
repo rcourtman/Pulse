@@ -100,6 +100,9 @@ describe('latest backup task evidence through the inventory consumer', () => {
     expect(section).toHaveTextContent(
       'Task status does not verify a restore or guest responsiveness.',
     );
+    expect(
+      within(section).getByText('Task status does not verify a restore or guest responsiveness.'),
+    ).toHaveClass('whitespace-normal');
     expect(panel).toHaveTextContent('Restore evidence');
     expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
     expect(api.fetch).toHaveBeenCalledTimes(2);

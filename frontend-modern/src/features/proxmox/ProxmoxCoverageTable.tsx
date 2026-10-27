@@ -234,7 +234,7 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
             makeDetailRow('Task ID', row.latestTask.id, { wrap: true }),
           ]),
           footerContent: (
-            <p class="text-[11px] leading-snug text-muted wrap-anywhere">
+            <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
               Task status does not verify a restore or guest responsiveness.
             </p>
           ),

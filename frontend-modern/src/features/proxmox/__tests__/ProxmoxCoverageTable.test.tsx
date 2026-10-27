@@ -193,6 +193,9 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(task).toHaveTextContent(completedWithWarning.latestTask!.error!);
     expect(task).toHaveTextContent('task-with-warning');
     expect(task).toHaveTextContent('Not reported');
+    expect(
+      within(task).getByText('Task status does not verify a restore or guest responsiveness.'),
+    ).toHaveClass('whitespace-normal');
     // A reported OK does not erase a provider warning or override protection.
     expect(screen.getByText(completedWithWarning.latestTask!.error!)).toHaveClass(
       'whitespace-pre-wrap',
