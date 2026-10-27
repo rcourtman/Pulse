@@ -32,7 +32,8 @@ describe('PBS protection disagreement help', () => {
     expect(rows[1]).toContain('not a successful restore');
     expect(rows[1]).toContain('every covered disk');
     expect(rows[2]).toContain("restore point's State");
-    expect(rows[2]).toContain('not the workload');
+    expect(rows[2]).toContain("workload's protection assessment");
+    expect(rows[2]).toContain('verification was not reported');
     expect(rows[3]).toContain('not instructions to change backups');
     expect(text()).toContain("PBS's own backup and verification records");
     expect(text()).toContain('do not assume either a failed backup or working protection');
