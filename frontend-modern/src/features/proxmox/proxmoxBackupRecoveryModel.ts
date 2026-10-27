@@ -845,7 +845,8 @@ export function recoverableArtifactMatchesSearch(
         : undefined,
     artifact.running ? 'running' : undefined,
     artifact.failed ? 'failed incomplete' : undefined,
-    artifact.protected ? 'protected' : 'unprotected',
+    // Keep legacy saved searches while matching the visible retention wording.
+    artifact.protected ? 'protected kept pruning' : 'unprotected',
   ];
   return haystack.filter(Boolean).join(' ').toLowerCase().includes(normalizedTerm);
 }

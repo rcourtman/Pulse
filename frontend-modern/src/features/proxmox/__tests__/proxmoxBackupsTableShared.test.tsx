@@ -58,14 +58,14 @@ describe('proxmoxBackupsTableShared', () => {
     render(() => (
       <>
         <ArtifactSourceBadge artifact={artifact({ sourceKind: 'pbs', sourceLabel: 'PBS' })} />
-        <ArtifactStateBadge artifact={artifact({ protected: true })} label="Protected" />
+        <ArtifactStateBadge artifact={artifact({ protected: true })} label="Kept" />
         <ArtifactStateBadge artifact={artifact({ verified: true })} label="Verified" />
       </>
     ));
 
     expect(screen.getByText('PBS').className).toContain('whitespace-nowrap');
     expect(screen.getByText('PBS').className).toContain('bg-sky-100');
-    expect(screen.getByText('Protected').className).toContain('bg-amber-100');
+    expect(screen.getByText('Kept').className).toContain('bg-blue-100');
     expect(screen.getByText('Verified').className).toContain('bg-emerald-100');
   });
 
@@ -89,16 +89,23 @@ describe('proxmoxBackupsTableShared', () => {
       'indigo',
     ],
     [
-      'pruning protection is not verification',
+      'pruning protection does not hide verification',
       { protected: true, verified: true },
-      'Protected',
-      'warning',
+      'Verified',
+      'success',
     ],
+    ['retained unverified point', { protected: true, verified: false }, 'Unverified', 'warning'],
+    ['retention without verification', { protected: true }, 'Kept', 'info'],
     ['verification passed', { verified: true }, 'Verified', 'success'],
     ['verification absent or failed', { verified: false }, 'Unverified', 'warning'],
     ['unknown verification stays neutral', {}, 'Backup file', 'muted'],
   ] as const)('keeps state wording and tone consistent: %s', (_name, fields, label, tone) => {
-    render(() => <ArtifactStateBadge artifact={artifact(fields)} label={label} />);
+    render(() => (
+      <ArtifactStateBadge
+        artifact={artifact(fields)}
+        label={artifactStateLabel(artifact(fields))}
+      />
+    ));
     expect(screen.getByText(label).className).toBe(
       getMetadataBadgeClass({
         tone,
@@ -116,7 +123,9 @@ describe('proxmoxBackupsTableShared', () => {
       [{ verified: false }, 'Unverified', 'warning'],
       [{ running: true, verified: true }, 'Running', 'info'],
       [{ failed: true, protected: true }, 'Failed', 'danger'],
-      [{ protected: true, verified: true }, 'Protected', 'warning'],
+      [{ protected: true, verified: true }, 'Verified', 'success'],
+      [{ protected: true }, 'Kept', 'info'],
+      [{ protected: true, verified: false }, 'Unverified', 'warning'],
       [{}, 'Backup file', 'muted'],
       [{ verified: true }, 'Verified', 'success'],
     ] as const) {

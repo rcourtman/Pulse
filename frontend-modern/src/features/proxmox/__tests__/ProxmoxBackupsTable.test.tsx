@@ -265,7 +265,7 @@ describe('ProxmoxBackupsTable', () => {
     };
     await within(table).findByText('Unavailable');
     await waitFor(() => expect(backupCount()).toBe('1'));
-    await screen.findAllByText('Protected');
+    await screen.findAllByText('Verified');
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
 

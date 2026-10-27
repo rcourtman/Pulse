@@ -12,9 +12,9 @@ const api = vi.hoisted(() => ({ fetch: vi.fn(), json: vi.fn() }));
 vi.mock('@/utils/apiClient', () => ({ apiFetch: api.fetch, apiFetchJSON: api.json }));
 
 const guest = {
-  ...identityGuest('vm-kept', 'east', 'pve-1'),
-  name: 'kept-guest',
-  displayName: 'kept-guest',
+  ...identityGuest('vm-retention', 'east', 'pve-1'),
+  name: 'retention-guest',
+  displayName: 'retention-guest',
 };
 const point = (fields: Partial<PBSBackup> = {}) => identityPBS({ protected: true, ...fields });
 const jsonResponse = (data: unknown) =>
@@ -43,7 +43,7 @@ function mount(getPoint: () => PBSBackup) {
 }
 
 async function restorePointRow() {
-  await screen.findAllByText('kept-guest');
+  await screen.findAllByText('retention-guest');
   return document.querySelector('[data-proxmox-backup-row="recoverable"]') as HTMLElement;
 }
 
@@ -107,7 +107,7 @@ describe('prune protection is independent of backup verification', () => {
       fireEvent.input(search, { target: { value: query } });
       await waitFor(() => {
         const row = document.querySelector('[data-proxmox-backup-row="recoverable"]');
-        expect(row).toHaveTextContent('kept-guest');
+        expect(row).toHaveTextContent('retention-guest');
       });
     }
     expect(api.fetch).toHaveBeenCalledTimes(2);

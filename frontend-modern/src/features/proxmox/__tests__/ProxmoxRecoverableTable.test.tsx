@@ -91,7 +91,9 @@ describe('ProxmoxRecoverableTable record drawer', () => {
     expect(within(panel).getByRole('heading', { level: 2, name: /web/ })).toBeInTheDocument();
     expect(within(panel).getByText('PBS snapshot in main / pve1')).toBeInTheDocument();
     expect(within(panel).getByText('main / pve1', { selector: 'span' })).toBeInTheDocument();
-    expect(within(panel).getByText('Verified')).toBeInTheDocument();
+    expect(within(panel).getAllByText('Verified')).toHaveLength(2);
+    expect(within(panel).getByText('Prune protection')).toBeInTheDocument();
+    expect(within(panel).getByText('Kept when pruning')).toBeInTheDocument();
     expect(within(panel).getByText('5 PBS files')).toBeInTheDocument();
     expect(within(panel).getByRole('link', { name: 'Open web' })).toHaveAttribute(
       'href',
