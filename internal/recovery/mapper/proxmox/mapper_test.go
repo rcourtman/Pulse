@@ -1,6 +1,7 @@
 package proxmoxmapper
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -934,7 +935,7 @@ func TestFromPVEStorageBackupsExplicitUnknownKindCannotBorrowSubject(t *testing.
 					if p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence != nil {
 						t.Fatalf("unclassified archive borrowed a current subject: %+v", p)
 					}
-					if p.ID != "pve-backup:opaque" || p.StartedAt == nil || !p.StartedAt.Equal(now) || p.SizeBytes == nil || *p.SizeBytes != b.Size || p.Details["type"] != kind || p.Details["volid"] != b.Volid || p.ProviderScope != "cluster" {
+					if p.ID != "pve-backup:opaque" || p.StartedAt == nil || !p.StartedAt.Equal(now) || p.SizeBytes == nil || *p.SizeBytes != b.Size || p.Details["type"] != strings.TrimSpace(kind) || p.Details["volid"] != b.Volid || p.ProviderScope != "cluster" {
 						t.Fatalf("lost independent archive facts: %+v", p)
 					}
 					if running && (p.Outcome != recovery.OutcomeRunning || p.CompletedAt != nil) || !running && (p.Outcome != recovery.OutcomeSuccess || p.CompletedAt == nil || !p.CompletedAt.Equal(now)) {
