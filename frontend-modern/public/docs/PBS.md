@@ -379,6 +379,11 @@ For local PVE `vzdump` archives rather than PBS records, use the
 [PVE Coverage comparison](RECOVERY.md#local-pve-backups-are-newer-than-coverage).
 It does not require adding a PBS connection.
 
+For a recent backup beside a failed or unknown **Task**, compare
+[task results and backup age](RECOVERY.md#backup-task-results-and-backup-age)
+separately. A task result, artifact verification and workload posture answer
+different questions; use existing records rather than running another backup.
+
 The **Backup health** strip and the backup list answer different questions.
 If they disagree, use **PBS's own backup and verification records** for the
 same guest while checking Pulse's assessment; do not assume either a failed

@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "base_sha": "352c3dd7959d13873b93450151a218302fcd0404",
+  "verified_at": "2026-10-27T14:55:29.764154Z",
+  "result": "passed",
+  "changed_paths": [
+    "docs/PBS.md",
+    "docs/RECOVERY.md",
+    "docs/TROUBLESHOOTING.md",
+    "frontend-modern/public/docs/PBS.md",
+    "frontend-modern/public/docs/RECOVERY.md",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md",
+    "frontend-modern/src/features/docs/__tests__/backupTaskEvidenceGuide.test.ts"
+  ],
+  "content_sha256": {
+    "docs/PBS.md": "58e8e154c68b18039dc816a976e5efed35642e0d03bdc90b0ff33866b6b0d793",
+    "docs/RECOVERY.md": "546fb5ed0afe969d4546dc33400191adf02b7a5beea89efd15ef93e9524a895d",
+    "docs/TROUBLESHOOTING.md": "8c38d57409130188fd8fe8b824e776af4a6daed2258f99bac6f95d49cffaf562",
+    "frontend-modern/public/docs/PBS.md": "58e8e154c68b18039dc816a976e5efed35642e0d03bdc90b0ff33866b6b0d793",
+    "frontend-modern/public/docs/RECOVERY.md": "546fb5ed0afe969d4546dc33400191adf02b7a5beea89efd15ef93e9524a895d",
+    "frontend-modern/public/docs/TROUBLESHOOTING.md": "8c38d57409130188fd8fe8b824e776af4a6daed2258f99bac6f95d49cffaf562",
+    "frontend-modern/src/features/docs/__tests__/backupTaskEvidenceGuide.test.ts": "2934cdd15b77a4cac99a27ca0c97acc49bda8f17fecabfcbec83b2ebefcc2cdb"
+  },
+  "routes": [
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+    "/docs/RECOVERY#backup-task-results-and-backup-age",
+    "/docs/TROUBLESHOOTING#-getting-help",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "The actual Docs component, router, header, Markdown renderer and CSS consume shipped Recovery/PBS/Troubleshooting assets in an evidence-only uncommitted mount. Production/embed build is checked separately; no authenticated platform/backup/guest operation is performed.",
+    "Task, Last backup and Posture stay separate. Failed and Running remain distinct from completed artifacts; missing/future/tied start evidence, possible-task numbering, absent task evidence and Not reported errors do not imply OK.",
+    "All seven capture files were opened with native view_image at original detail and their pixels inspected. Desktop and 390px/320px phone tables and task meanings are readable without clipping; passive/private comparison and the independent guest-safety link remain readable.",
+    "62 browser checks pass with Playwright 1.56.1 matching the integration lock, Chromium desktop and touch WebKit phones. Ten actual shipped-guide GETs succeed; no page exception, off-origin or mutation request or page-wide overflow was observed."
+  ],
+  "interactions": [
+    "Desktop keyboard Enter and ordinary phone tap follow both new PBS and Troubleshooting links to the exact Recovery heading with focus and application-shell continuity.",
+    "The existing safety link opens and focuses Backup safety. The 320px resize retains readable complete table contents without page-wide overflow. No Back/reload or stopped renderer experiment was replayed."
+  ],
+  "captures": [
+    {
+      "name": "desktop-evidence-table.png",
+      "sha256": "57528f2664adceb8bd95d9d225cb3a80bf456fcf1de88d38c541ab03ac9f2d6c"
+    },
+    {
+      "name": "desktop-task-meanings.png",
+      "sha256": "3f984cef505522ac7ecbbd235b5b4509669d92a6e22096b261ba07ed84cfaa44"
+    },
+    {
+      "name": "desktop-safe-comparison.png",
+      "sha256": "04dd69ca26e267f5ac006f8a161fa6bf605576f8c494c187a221e0bf96728cb9"
+    },
+    {
+      "name": "phone-evidence-table.png",
+      "sha256": "08c0a1f75ef6e374ce9fee6af451eb0860df600683d437105f448cb35b36a031"
+    },
+    {
+      "name": "phone-task-meanings.png",
+      "sha256": "403375c3fa19ebd60e7929e94f7753f9c9907eb7fdb035110df3f689ab894640"
+    },
+    {
+      "name": "phone-safe-comparison.png",
+      "sha256": "bad6de180f90ff706343e3a0b99363fa8eddb0a826a3248751adb227712d8896"
+    },
+    {
+      "name": "phone-320-evidence-table.png",
+      "sha256": "e3b5e9711a1477b8537ceae9c7f2373c0c683cc540fdbb2012d1c887c9668a7d"
+    }
+  ]
+}

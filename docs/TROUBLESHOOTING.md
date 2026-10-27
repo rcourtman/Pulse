@@ -761,6 +761,11 @@ row, use the [PVE Coverage comparison](RECOVERY.md#local-pve-backups-are-newer-t
 Compare the owning installation and archive without adding PBS, re-enrolling
 nodes or changing stored history.
 
+For a recent backup beside a failed or unknown **Task**, use
+[task results and backup age](RECOVERY.md#backup-task-results-and-backup-age).
+Expand the workload to inspect the task result and any task-order uncertainty;
+a recent artifact does not cancel a task failure.
+
 #### Replication jobs are Pending, stale or missing
 
 **Proxmox → Replication** monitors storage replication between PVE nodes,
