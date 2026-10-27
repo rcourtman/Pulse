@@ -42,6 +42,19 @@ export const PROXMOX_BACKUP_COLUMN_LABELS = {
   details: 'Details',
 } as const;
 
+// This is the guest's PVE scope, not the connection reading its backup.
+// Unmatched PBS evidence has no known PVE owner; its reader or namespace
+// must never fill that gap. Host backups do not imply a PVE guest at all.
+export const getBackupWorkloadPVEConnection = (workload: WorkloadReference): string | undefined =>
+  workload.type === 'vm' || workload.type === 'ct'
+    ? workload.instance?.trim() || 'Not reported'
+    : undefined;
+
+export const getBackupWorkloadDisclosureLabel = (workload: WorkloadReference): string => {
+  const connection = getBackupWorkloadPVEConnection(workload);
+  return connection ? `${workload.label} · PVE connection: ${connection}` : workload.label;
+};
+
 const recoveryAgeClassByBand: Record<RecoveryAgeBand, string> = {
   current: 'text-emerald-600 dark:text-emerald-300',
   aging: 'text-amber-600 dark:text-amber-300',

@@ -69,7 +69,7 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
-  it('renders single-line rows with identity columns matching the by-date table', () => {
+  it('keeps full-width identity columns alongside the workload connection', () => {
     renderInRouter(() => (
       <ProxmoxCoverageTable
         rows={[row]}
@@ -99,7 +99,8 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(headers).not.toContain('Guest snapshot');
     expect(headers).not.toContain('PVE file');
     expect(headers).not.toContain('Task');
-    // Identity data lives in dedicated cells, not stacked under the name.
+    // Full width retains its dedicated identity cells. The connection remains
+    // in the name cell at every width, including explicit unknown scope.
     expect(document.body.textContent).toContain('VM');
     expect(document.body.textContent).toContain('100');
     expect(document.body.textContent).toContain('pve1');

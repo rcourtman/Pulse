@@ -41,6 +41,8 @@ import {
   RowMetricBar,
   SortableHead,
   artifactStateLabel,
+  getBackupWorkloadPVEConnection,
+  getBackupWorkloadDisclosureLabel,
 } from './proxmoxBackupsTableShared';
 import {
   getRecoverableColumns,
@@ -147,6 +149,9 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         makeDetailRow('Type', artifact.workload.typeLabel),
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, artifact.workload.vmid),
         makeDetailRow('Node', artifact.workload.node),
+        makeDetailRow('PVE connection', getBackupWorkloadPVEConnection(artifact.workload), {
+          wrap: true,
+        }),
       ]),
     },
     {
@@ -235,7 +240,7 @@ export function ProxmoxRecoverableTable(props: {
           <div class="flex min-w-0 items-center gap-1">
             <PlatformResourceDetailToggleButton
               expanded={drawer.isExpanded(artifact)}
-              resourceLabel={artifact.workload.name || artifact.workload.label}
+              resourceLabel={getBackupWorkloadDisclosureLabel(artifact.workload)}
               controlsId={drawer.detailRowId(artifact)}
               onToggle={() => drawer.toggle(artifact)}
             />

@@ -62,7 +62,13 @@ describe('ProxmoxRecoverableTable record drawer', () => {
     const second: RecoverableArtifact = {
       ...artifact,
       id: 'pbs:db:101',
-      workload: { ...artifact.workload, key: 'vm:101', vmid: '101', name: 'db', label: 'db' },
+      workload: {
+        ...artifact.workload,
+        key: 'vm:101',
+        vmid: '101',
+        name: 'db',
+        label: 'db (VM 101)',
+      },
       location: 'offsite / pbs2',
     };
     renderInRouter(() => (
@@ -83,7 +89,9 @@ describe('ProxmoxRecoverableTable record drawer', () => {
       />
     ));
 
-    const toggle = screen.getByRole('button', { name: 'Expand details for web' });
+    const toggle = screen.getByRole('button', {
+      name: 'Expand details for web (VM 100) · PVE connection: Not reported',
+    });
     expect(toggle).toHaveAttribute('aria-controls', 'proxmox-recoverable-detail-pbs:web:100');
     await fireEvent.click(toggle);
 
@@ -101,7 +109,11 @@ describe('ProxmoxRecoverableTable record drawer', () => {
     );
 
     // Opening another restore point closes the first.
-    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for db' }));
+    await fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Expand details for db (VM 101) · PVE connection: Not reported',
+      }),
+    );
     expect(screen.getAllByTestId('proxmox-recoverable-detail')).toHaveLength(1);
     expect(screen.getByTestId('proxmox-recoverable-detail')).toHaveAttribute(
       'data-inline-detail-for',

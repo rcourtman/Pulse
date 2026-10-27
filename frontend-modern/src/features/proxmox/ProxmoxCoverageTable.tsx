@@ -44,6 +44,8 @@ import {
   ProxmoxBackupWorkloadTypeBadge,
   SortableHead,
   artifactStateLabel,
+  getBackupWorkloadPVEConnection,
+  getBackupWorkloadDisclosureLabel,
 } from './proxmoxBackupsTableShared';
 import {
   getCoverageColumns,
@@ -188,6 +190,9 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
         makeDetailRow('Type', row.workload.typeLabel),
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, row.workload.vmid),
         makeDetailRow('Node', row.workload.node),
+        makeDetailRow('PVE connection', getBackupWorkloadPVEConnection(row.workload), {
+          wrap: true,
+        }),
         makeDetailRow('Latest task', row.latestTask?.label, {
           tone: row.latestTask
             ? statusDetailTone(taskWordVariant(row.latestTask.label))
@@ -233,9 +238,9 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
 // expanding to its restore evidence. Presentational — the parent owns the
 // filtered+sorted memo, shared filters, and the expansion set. table-fixed + a
 // colgroup keeps the columns from ballooning; the inner evidence table stays
-// content-sized. Rows are single-line with one datum per column — identity
-// (Type / Target ID / Node) gets its own columns, mirroring the by-date
-// recoverable table, instead of stacking under the workload name.
+// content-sized. The name cell retains the guest's connection at every width;
+// Type / Target ID fold beside the name when their columns are hidden. The
+// guest's connection is independent of its restore-evidence reader below.
 export function ProxmoxCoverageTable(props: {
   rows: WorkloadCoverageRow[];
   hasAnyRows: boolean;
@@ -374,7 +379,7 @@ export function ProxmoxCoverageTable(props: {
                 items={() => props.rows}
                 keyExtractor={(row) => row.key}
                 colSpan={columnCount()}
-                estimatedRowHeight={32}
+                estimatedRowHeight={44}
                 reserveScrollExtent
               >
                 {(row) => {
@@ -398,14 +403,37 @@ export function ProxmoxCoverageTable(props: {
                           <div class="flex min-w-0 items-center gap-2">
                             <PlatformResourceDetailToggleButton
                               expanded={isExpanded()}
-                              resourceLabel={row.workload.label}
+                              resourceLabel={getBackupWorkloadDisclosureLabel(row.workload)}
                               controlsId={detailRowId()}
                               onToggle={() => props.onToggleExpand(row.key)}
                             />
                             <div class="min-w-0">
-                              <div class="truncate font-semibold">
-                                {row.workload.name || row.workload.label}
+                              <div class="flex min-w-0 items-center gap-1">
+                                <span class="truncate font-semibold" title={row.workload.label}>
+                                  {row.workload.name || row.workload.label}
+                                </span>
+                                <Show
+                                  when={
+                                    !columnVisible('targetId') &&
+                                    (row.workload.type === 'vm' || row.workload.type === 'ct')
+                                  }
+                                >
+                                  <span class="shrink-0 text-[10px] text-muted">
+                                    {row.workload.typeLabel} {row.workload.vmid}
+                                  </span>
+                                </Show>
                               </div>
+                              <Show when={getBackupWorkloadPVEConnection(row.workload)}>
+                                {(connection) => (
+                                  <span
+                                    class="block truncate text-[10px] text-muted"
+                                    title={`PVE connection: ${connection()}`}
+                                    data-backup-workload-connection
+                                  >
+                                    PVE: {connection()}
+                                  </span>
+                                )}
+                              </Show>
                             </div>
                           </div>
                         </TableCell>
