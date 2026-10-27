@@ -604,7 +604,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       setTestResult({
         endpoint: endpoint?.tlsEndpoint,
         status: result.warnings?.length ? 'warning' : 'success',
-        message: `${endpoint ? endpoint.nodeName + ': ' : ''}${result.message || 'Endpoint connection successful; background collection was not tested.'}`,
+        message: `${endpoint ? endpoint.nodeName + ': ' : ''}${result.message || 'Endpoint connection successful. Background collection was not tested.'}`,
         warnings: result.warnings,
       });
     } catch (error) {

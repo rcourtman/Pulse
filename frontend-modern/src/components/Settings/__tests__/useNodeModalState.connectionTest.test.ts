@@ -133,7 +133,9 @@ describe('connection tests with retained credentials', () => {
       verifySSL: true,
     });
     expect(NodesAPI.testConnection).not.toHaveBeenCalled();
-    expect(state.testResult()?.message).toContain('peer:');
+    expect(state.testResult()?.message).toBe(
+      'peer: Endpoint connection successful. Background collection was not tested.',
+    );
     expect(state.testResult()?.endpoint).toBe(peer.tlsEndpoint);
     state.updateClusterEndpointFingerprint(peer.tlsEndpoint, 'new-pin');
     expect(state.testResult()).toBeNull();

@@ -157,7 +157,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                           ? 'Primary endpoint only.'
                           : endpoint.tlsFirstUse &&
                               !state.formData().clusterEndpointTrustEdited[endpoint.tlsEndpoint!]
-                            ? 'No saved member pin. Existing first-use policy applies; enter a verified pin or explicitly choose CA validation.'
+                            ? 'No saved member pin. Existing first-use policy applies. Enter a verified pin or explicitly choose CA validation.'
                             : (state.formData().clusterEndpointFingerprints[
                                   endpoint.tlsEndpoint!
                                 ] ??

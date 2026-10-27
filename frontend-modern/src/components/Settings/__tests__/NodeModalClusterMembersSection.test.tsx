@@ -195,7 +195,11 @@ describe('Cluster member connection diagnostics', () => {
     const { onSave } = renderMembers([
       member({ tlsEndpoint: 'https://member.test:8006', tlsFirstUse: true, fingerprint: '' }),
     ]);
-    expect(screen.getByText(/No saved member pin/)).toBeVisible();
+    expect(
+      screen.getByText(
+        'No saved member pin. Existing first-use policy applies. Enter a verified pin or explicitly choose CA validation.',
+      ),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Use CA validation for member' }));
     expect(
       screen.getByText('No pin: a trusted, hostname-matching certificate is required.'),
