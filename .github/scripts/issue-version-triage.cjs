@@ -460,11 +460,11 @@ function buildTriageState(issue, core, latestVersion) {
 }
 
 function keepOnlyReportedVersionLabel(nextLabels, reportedVersion) {
-  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}` : null;
+  const keep = reportedVersion ? `${VERSION_LABEL_PREFIX}${reportedVersion}`.toLowerCase() : null;
   for (const label of [...nextLabels]) {
     if (
-      /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(label) &&
-      label !== keep
+      /^affects-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/i.test(label) &&
+      label.toLowerCase() !== keep
     ) {
       nextLabels.delete(label);
     }
@@ -479,8 +479,14 @@ async function applyLabelDelta(github, context, issue, before, after, core) {
     repo: context.repo.repo,
     issue_number: issue.number,
   };
-  const additions = [...after].filter((name) => !before.has(name)).sort();
-  const removals = [...before].filter((name) => !after.has(name)).sort();
+  // GitHub label identity is case-insensitive. Adding RC.1 then removing
+  // rc.1 would remove the same label, not replace its spelling. Preserve the
+  // provider's names for writes and the exact live-state fence below; only
+  // calculate membership in the provider's case-insensitive namespace.
+  const beforeKeys = new Set([...before].map((name) => name.toLowerCase()));
+  const afterKeys = new Set([...after].map((name) => name.toLowerCase()));
+  const additions = [...after].filter((name) => !beforeKeys.has(name.toLowerCase())).sort();
+  const removals = [...before].filter((name) => !afterKeys.has(name.toLowerCase())).sort();
   if (!additions.length && !removals.length) return;
 
   // Label lookup/creation can take time after the initial report read. Do not

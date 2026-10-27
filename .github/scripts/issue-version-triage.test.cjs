@@ -170,6 +170,107 @@ function createCore() {
   };
 }
 
+// The provider has one label per case-insensitive name. Use a real mutable
+// namespace here: call-only fixtures cannot detect add-then-remove label loss.
+function caseInsensitiveLabelFixture({ reported, labels, repositoryLabels = [] }) {
+  const repository = new Map([...labels, ...repositoryLabels].map(name => [name.toLowerCase(), name]));
+  const live = new Map(labels.map(name => [name.toLowerCase(), name]));
+  const issue = { number: 42, state: "open", title: "Synthetic intake case",
+    body: `### Pulse version\n${reported}\n`, updated_at: "2026-10-27T00:00:00Z", comments: 0 };
+  const read = () => ({ ...issue, labels: [...live.values()].map(name => ({ name })) });
+  const { github, calls } = createGithub();
+  github.rest.issues.get = async payload => {
+    calls.getIssue.push(payload);
+    return { data: read() };
+  };
+  github.rest.issues.getLabel = async ({ name }) => {
+    calls.getLabel.push(name);
+    const canonical = repository.get(name.toLowerCase());
+    if (!canonical) throw Object.assign(new Error("Not Found"), { status: 404 });
+    return { data: { name: canonical } };
+  };
+  github.rest.issues.createLabel = async payload => {
+    calls.createLabel.push(payload);
+    if (repository.has(payload.name.toLowerCase())) throw labelNameConflict();
+    repository.set(payload.name.toLowerCase(), payload.name);
+    return { data: payload };
+  };
+  github.rest.issues.addLabels = async payload => {
+    calls.addLabels.push(payload);
+    for (const name of payload.labels) {
+      const canonical = repository.get(name.toLowerCase());
+      assert.ok(canonical, "only a provider-confirmed label may be applied");
+      live.set(name.toLowerCase(), canonical);
+    }
+  };
+  github.rest.issues.removeLabel = async payload => {
+    calls.removeLabel.push(payload);
+    live.delete(payload.name.toLowerCase());
+  };
+  return { github, calls, read, names: () => [...live.values()].sort() };
+}
+
+for (const [existing, reported] of [
+  ["affects-6.6.0-rc.1", "6.6.0-RC.1"],
+  ["affects-6.6.0-RC.1", "6.6.0-rc.1"],
+  ["AFFECTS-6.6.0-rc.1", "6.6.0-rc.1"],
+]) {
+  test(`case-only version differences cannot remove the current label: ${existing}`, async () => {
+    const labels = ["bug", existing, "needs-retest-on-latest", "needs-decomposition",
+      "needs-human", "release-blocker", "operator-reviewed"];
+    const fixture = caseInsensitiveLabelFixture({ reported, labels });
+    await triage.syncLabels({ github: fixture.github,
+      context: createContext({ issue: fixture.read() }), core: createCore() });
+    assert.deepEqual(fixture.names(), [...labels].sort());
+    assert.deepEqual(fixture.calls.addLabels, []);
+    assert.deepEqual(fixture.calls.removeLabel, []);
+    assert.deepEqual(fixture.calls.createLabel, []);
+    assert.deepEqual(fixture.calls.createComment, []);
+    assert.deepEqual(fixture.calls.getLatestRelease, []);
+    assert.deepEqual(fixture.calls.paginate, []);
+  });
+}
+
+test("a differently cased provider label is applied once and survives a second sync", async () => {
+  const labels = ["bug", "AFFECTS-6.5.0", "needs-version-info", "needs-retest-on-latest", "operator-reviewed"];
+  const fixture = caseInsensitiveLabelFixture({ reported: "6.6.0-rc.1", labels,
+    repositoryLabels: ["AFFECTS-6.6.0-RC.1"] });
+  for (let pass = 0; pass < 2; pass += 1) {
+    await triage.syncLabels({ github: fixture.github,
+      context: createContext({ issue: fixture.read() }), core: createCore() });
+    assert.deepEqual(fixture.names(), ["bug", "AFFECTS-6.6.0-RC.1", "needs-retest-on-latest", "operator-reviewed"].sort());
+    assert.deepEqual(fixture.calls.addLabels.map(call => call.labels), [["affects-6.6.0-rc.1"]]);
+    assert.deepEqual(fixture.calls.removeLabel.map(call => call.name), ["AFFECTS-6.5.0", "needs-version-info"]);
+    assert.deepEqual(fixture.calls.createLabel, []);
+    assert.deepEqual(fixture.calls.createComment, []);
+  }
+});
+
+test("unknown versions retire differently cased stale labels, not nearby Community labels", async () => {
+  const fixture = caseInsensitiveLabelFixture({ reported: "unknown",
+    labels: ["bug", "AFFECTS-6.5.0", "affects-6.6.0-RC.1", "affects-6.6", "affects-storage", "operator-reviewed"] });
+  await triage.syncLabels({ github: fixture.github,
+    context: createContext({ issue: fixture.read() }), core: createCore() });
+  assert.deepEqual(fixture.names(), ["bug", "needs-version-info", "affects-6.6", "affects-storage", "operator-reviewed"].sort());
+  assert.deepEqual(fixture.calls.removeLabel.map(call => call.name), ["AFFECTS-6.5.0", "affects-6.6.0-RC.1"]);
+  assert.deepEqual(fixture.calls.createComment, []);
+});
+
+test("case-insensitive deltas keep the exact live-label rename fence", async () => {
+  const issue = { number: 42, state: "open", title: "Synthetic intake case",
+    body: "### Pulse version\n6.6.0-rc.1\n", labels: [{ name: "bug" }, { name: "affects-6.5.0" }] };
+  const { github, calls } = createGithub({ currentIssue: issue });
+  github.rest.issues.getLabel = async ({ name }) => {
+    github.currentIssue = { ...issue, labels: [{ name: "bug" }, { name: "AFFECTS-6.5.0" }] };
+    return { data: { name } };
+  };
+  await triage.syncLabels({ github, context: createContext({ issue }), core: createCore() });
+  assert.equal(calls.getIssue.length, 2);
+  assert.deepEqual(calls.addLabels, []);
+  assert.deepEqual(calls.removeLabel, []);
+  assert.deepEqual(calls.createComment, []);
+});
+
 test("syncLabels classifies older bug reports without requesting a retest", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.0.1" });
   const issue = {
