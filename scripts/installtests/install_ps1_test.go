@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -376,6 +377,7 @@ func TestInstallPS1UninstallRequiresExactServerConfirmationBeforeErasure(t *test
 	// without depending on the checkout's core.autocrlf setting, and remove
 	// the call itself rather than assuming the line terminator is LF.
 	canonical := strings.ReplaceAll(string(content), "\r\n", "\n")
+	callLine := regexp.MustCompile(`(?m)^[ \t]*Remove-PulseAgentRegistration[ \t]*\r?$`)
 	for _, ending := range []struct{ name, separator string }{
 		{"LF", "\n"}, {"CRLF", "\r\n"},
 	} {
@@ -389,10 +391,16 @@ func TestInstallPS1UninstallRequiresExactServerConfirmationBeforeErasure(t *test
 				`$result.agentId -isnot [string]`, `$result.agentId -cne $AgentId`,
 				`throw "The original Pulse URL is missing."`,
 				`throw "The saved agent ID is missing; do not select another agent by hostname."`,
-				`ErrorAction = "Stop"`, "\t\tRemove-PulseAgentRegistration",
+				`ErrorAction = "Stop"`, "Remove-PulseAgentRegistration",
 			} {
 				t.Run(boundary, func(t *testing.T) {
 					mutated := strings.Replace(script, boundary, "", 1)
+					if boundary == "Remove-PulseAgentRegistration" {
+						if len(callLine.FindAllStringIndex(script, -1)) != 1 {
+							t.Fatal("expected one complete production unregistration call")
+						}
+						mutated = callLine.ReplaceAllString(script, "")
+					}
 					if mutated == script {
 						t.Fatal("negative control did not remove the selected boundary")
 					}
