@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -208,7 +209,7 @@ func TestHandleTestSSOProvider_OIDCSuccess(t *testing.T) {
 	discoveryServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/.well-known/openid-configuration" {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(testOIDCDiscovery))
+			fmt.Fprint(w, strings.Replace(testOIDCDiscovery, "https://idp.example.com", "http://"+r.Host, 1))
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}

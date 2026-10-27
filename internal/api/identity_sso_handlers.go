@@ -1113,12 +1113,22 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 		}
 	}
 
-	// Validate issuer matches
-	if discovery.Issuer != cfg.IssuerURL && discovery.Issuer != strings.TrimRight(cfg.IssuerURL, "/") {
-		log.Warn().
-			Str("expected", cfg.IssuerURL).
-			Str("actual", discovery.Issuer).
-			Msg("OIDC issuer mismatch - this may cause token validation issues")
+	// Normal sign-in uses oidc.NewProvider, which requires the discovery issuer
+	// to equal the configured issuer byte-for-byte. Do not normalise this
+	// identity comparison just because the fetch URL has been normalised.
+	if discovery.Issuer == "" {
+		return SSOTestResponse{
+			Success: false,
+			Message: "OIDC discovery did not return an issuer. Sign-in requires an exact issuer match.",
+			Error:   "missing_discovery_issuer",
+		}
+	}
+	if discovery.Issuer != cfg.IssuerURL {
+		return SSOTestResponse{
+			Success: false,
+			Message: "OIDC discovery issuer does not exactly match the Issuer URL. Check the URL, including any trailing slash.",
+			Error:   "issuer_mismatch",
+		}
 	}
 
 	details := &SSOTestDetails{
@@ -1132,7 +1142,7 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 
 	return SSOTestResponse{
 		Success: true,
-		Message: "OIDC discovery successful",
+		Message: "OIDC discovery succeeded with an exact issuer match. Client credentials and sign-in have not been tested.",
 		Details: details,
 	}
 }
