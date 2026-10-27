@@ -10566,3 +10566,5 @@ only diagnostic evidence, not agent credentials, enrolment, saved provider
 settings, certificate trust or authentication. The adjacent
 `TestContractSSOSAMLDiagnosticConsumer` proves read-only authenticated results,
 correct audit verdicts and unchanged saved secrets/local administrator recovery.
+Existing XML-parser failures keep their original categories; this evidence
+check only runs after that parser succeeds.

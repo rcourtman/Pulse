@@ -30,19 +30,19 @@ func samlDiagnosticDescriptor(binding, endpoint, keys string) string {
 }
 
 func TestSAMLConnectionRequiresMetadataEvidence(t *testing.T) {
-	for _, tt := range []struct{ name, entity, descriptor string }{
-		{"empty metadata", "", ""},
-		{"no IdP descriptor", "urn:synthetic:idp", ""},
-		{"SP only", "urn:synthetic:idp", `<SPSSODescriptor/>`},
-		{"missing identity", "", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "https://idp.example.test/sso", "")},
-		{"blank identity", " &#x9;&#x2003;", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "https://idp.example.test/sso", "")},
-		{"missing endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "", "")},
-		{"no endpoints", "urn:synthetic:idp", `<IDPSSODescriptor/>`},
-		{"unsupported binding", "urn:synthetic:idp", samlDiagnosticDescriptor("urn:unsupported:binding", "https://idp.example.test/sso", "")},
-		{"relative endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "/sso", "")},
-		{"unsafe endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPPostBinding, "javascript:SYNTHETIC_PRIVATE", "")},
-		{"credentialled endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPPostBinding, "https://synthetic:SYNTHETIC_PRIVATE@idp.example.test/sso", "")},
-		{"blank endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPPostBinding, " &#x9;", "")},
+	for _, tt := range []struct{ name, entity, descriptor, code string }{
+		{"empty metadata", "", "", "metadata_incomplete"},
+		{"no IdP descriptor", "urn:synthetic:idp", "", "metadata_incomplete"},
+		{"SP only", "urn:synthetic:idp", `<SPSSODescriptor/>`, "metadata_incomplete"},
+		{"missing identity", "", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "https://idp.example.test/sso", ""), "metadata_incomplete"},
+		{"blank identity", " &#x9;&#x2003;", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "https://idp.example.test/sso", ""), "metadata_incomplete"},
+		{"missing endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "", ""), "parse_failed"},
+		{"no endpoints", "urn:synthetic:idp", `<IDPSSODescriptor/>`, "metadata_incomplete"},
+		{"unsupported binding", "urn:synthetic:idp", samlDiagnosticDescriptor("urn:unsupported:binding", "https://idp.example.test/sso", ""), "metadata_incomplete"},
+		{"relative endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "/sso", ""), "parse_failed"},
+		{"unsafe endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPPostBinding, "javascript:SYNTHETIC_PRIVATE", ""), "parse_failed"},
+		{"credentialled endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPPostBinding, "https://synthetic:SYNTHETIC_PRIVATE@idp.example.test/sso", ""), "metadata_incomplete"},
+		{"blank endpoint", "urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPPostBinding, " &#x9;", ""), "parse_failed"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			result := (&Router{}).testSAMLConnection(t.Context(), &SAMLTestConfig{
@@ -51,10 +51,12 @@ func TestSAMLConnectionRequiresMetadataEvidence(t *testing.T) {
 				IDPSSOURL: "https://manual.example.test/sso",
 			})
 			require.False(t, result.Success)
-			require.Equal(t, "metadata_incomplete", result.Error)
+			require.Equal(t, tt.code, result.Error)
 			require.Nil(t, result.Details, "incomplete evidence must not be presented as validated details")
-			require.Contains(t, result.Message, "test again")
-			require.Contains(t, result.Message, "Sign-in has not been tested.")
+			if tt.code == "metadata_incomplete" {
+				require.Contains(t, result.Message, "test again")
+				require.Contains(t, result.Message, "Sign-in has not been tested.")
+			}
 			require.NotContains(t, result.Message, "SYNTHETIC_PRIVATE")
 		})
 	}

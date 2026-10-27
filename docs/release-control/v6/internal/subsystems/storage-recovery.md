@@ -7996,3 +7996,5 @@ authority, saves no configuration and changes no sign-in service policy.
 `TestContractSSOSAMLDiagnosticConsumer` binds the real authenticated diagnostic,
 audit success/failure and preserved settings/files/secrets/admin access. Actual
 native sign-in and installed recovery remain distinct evidence.
+Existing XML-parser failures keep their original categories; this evidence
+check only runs after that parser succeeds.
