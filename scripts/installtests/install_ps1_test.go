@@ -468,7 +468,7 @@ func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 		`if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {`,
 		`Plain HTTP Pulse URL detected; enabling insecure mode for persisted agent update checks.`,
 		`Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {`,
-		`Invoke-RestMethod @invokeArgs | Out-Null`,
+		`Invoke-RestMethod @invokeArgs`,
 		`$downloadTask = $webClient.DownloadFileTaskAsync($DownloadUrl, $TempPath)`,
 	}
 	for _, needle := range required {
@@ -532,24 +532,20 @@ func TestInstallPS1ReadsAgentIdentityFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestInstallPS1UsesHostnameLookupForUninstallFallback(t *testing.T) {
+func TestInstallPS1RefusesHostnameOnlyUninstall(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {
-		t.Fatalf("read install.ps1: %v", err)
+		t.Fatal(err)
 	}
-
 	script := string(content)
-	required := []string{
-		`$lookupHostname = $Hostname`,
-		`$lookupHostname = $env:COMPUTERNAME`,
-		`Uri         = "$Url/api/agents/agent/lookup?hostname=$([System.Uri]::EscapeDataString($lookupHostname))"`,
-		`$lookupResult = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {`,
-		`Invoke-RestMethod @lookupArgs`,
+	start := strings.Index(script, "function Remove-PulseAgentRegistration {")
+	end := strings.Index(script, "# --- Uninstall Logic ---")
+	if start < 0 || end <= start {
+		t.Fatal("missing unregistration boundary")
 	}
-	for _, needle := range required {
-		if !strings.Contains(script, needle) {
-			t.Fatalf("install.ps1 missing uninstall hostname lookup fallback: %s", needle)
-		}
+	registration := script[start:end]
+	if strings.Contains(registration, "/lookup?") || !strings.Contains(registration, `throw "The saved agent ID is missing; do not select another agent by hostname."`) {
+		t.Fatal("unregistration can choose a different same-name agent")
 	}
 }
 
@@ -569,7 +565,6 @@ func TestInstallPS1PersistsAndRecoversConnectionIdentity(t *testing.T) {
 		`$Token = Get-ConnectionStateValue "PULSE_TOKEN"`,
 		`$savedTokenFile = Get-ConnectionStateValue "PULSE_TOKEN_FILE"`,
 		`$AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"`,
-		`$Hostname = Get-ConnectionStateValue "PULSE_HOSTNAME"`,
 		`$Insecure = Parse-Bool (Get-ConnectionStateValue "PULSE_INSECURE_SKIP_VERIFY") $Insecure`,
 		`$CACertPath = Get-ConnectionStateValue "PULSE_CACERT"`,
 		`$lines += "PULSE_INSECURE_SKIP_VERIFY='true'"`,
