@@ -6,7 +6,12 @@ import { renderDocMarkdown, stripLeadingTitle } from '../docMarkdown';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const shippedDocs = path.join(repoRoot, 'frontend-modern/public/docs');
-const source = readFileSync(path.join(shippedDocs, 'AI_TRANSPARENCY.md'), 'utf8');
+const readGuide = (name: string) =>
+  readFileSync(
+    process.env[`PULSE_${name}_GUIDE_TEST_INPUT`] ?? path.join(shippedDocs, `${name}.md`),
+    'utf8',
+  );
+const source = readGuide('AI_TRANSPARENCY');
 
 function renderGuide(name: string, markdown: string): HTMLElement {
   const article = document.createElement('article');
@@ -83,7 +88,7 @@ describe('public issue follow-through guidance', () => {
     const article = renderGuide('AI_TRANSPARENCY', source);
     const text = prose(article);
     expect(text).toContain(
-      'Stable publication is targeted seven days after the last stable release',
+      'Minor stable publication is targeted seven days after the last minor stable release',
     );
     expect(text).toContain('one day earlier, reserving its full 24-hour soak');
     expect(text).toContain(
@@ -95,7 +100,7 @@ describe('public issue follow-through guidance', () => {
     expect(
       article.querySelector('a[href="/docs/RELEASE_PROCESS"]')?.hasAttribute('data-doc-link'),
     ).toBe(true);
-    const releaseSource = readFileSync(path.join(shippedDocs, 'RELEASE_PROCESS.md'), 'utf8');
+    const releaseSource = readGuide('RELEASE_PROCESS');
     expect(releaseSource).toBe(
       readFileSync(path.join(repoRoot, 'docs/RELEASE_PROCESS.md'), 'utf8'),
     );
@@ -104,5 +109,39 @@ describe('public issue follow-through guidance', () => {
     expect(prose(release)).toContain('an important fix ships in the next daily beta');
     expect(prose(release)).toContain('Only a release-blocker requires a fresh candidate');
     expect(prose(release)).not.toContain('can bring');
+  });
+
+  it('makes the unavailable patch path and limited contents explicit in both consumed guides', () => {
+    for (const name of ['AI_TRANSPARENCY', 'RELEASE_PROCESS']) {
+      const article = renderGuide(name, readGuide(name));
+      const text = prose(article);
+      expect(text).toContain('As of 27 October 2026, stable patches are not yet available');
+      expect(text).toContain('containing minor release');
+      expect(text).toContain('eligible repairs already merged to main');
+      expect(text).toContain('release metadata and publication support');
+      expect(text).toContain('stable-regression');
+      expect(text).not.toContain('Patch releases are not scheduled');
+    }
+  });
+
+  it('links the public triage disclosure to the actual scoped patch guidance', () => {
+    const article = renderGuide('AI_TRANSPARENCY', source);
+    const link = article.querySelector<HTMLAnchorElement>(
+      'a[href="/docs/RELEASE_PROCESS#limited-stable-patches"]',
+    );
+    expect(link?.textContent).toBe('limited stable patches');
+    expect(link?.hasAttribute('data-doc-link')).toBe(true);
+    const release = renderGuide('RELEASE_PROCESS', readGuide('RELEASE_PROCESS'));
+    const heading = release.querySelector(new URL(link!.href).hash);
+    expect(heading?.tagName).toBe('H3');
+    const status = heading!.nextElementSibling;
+    expect(status?.querySelector('strong')?.textContent).toBe(
+      'As of 27 October 2026, stable patches are not yet available.',
+    );
+    expect(prose(status!)).toContain('is not an available update');
+    expect(prose(release)).toContain('A stable patch does not restart this weekly clock');
+    expect(prose(release)).toContain('does not move the next minor');
+    expect(prose(release)).toContain('patch delivery is not guaranteed for every labelled issue');
+    expect(prose(release)).toContain('Do not downgrade, repeat an unsafe operation');
   });
 });

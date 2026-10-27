@@ -23,7 +23,7 @@ class TransparencyDocsTest(unittest.TestCase):
     def test_all_main_minor_cycle_not_selective_backports(self):
         for path, text in self.documents():
             with self.subTest(document=path):
-                self.assertIn("Stable publication is targeted seven days after the last stable release", text)
+                self.assertIn("Minor stable publication is targeted seven days after the last minor stable release", text)
                 self.assertIn("next minor release candidate becomes eligible one day earlier", text)
                 self.assertIn("reserving its full 24-hour soak", text)
                 self.assertIn("preparation and qualification can move publication later", text)
@@ -32,7 +32,8 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("Repairs go on `main`, not onto an older release line", text)
                 self.assertIn("An important fix ships in the next beta, not through an early candidate or stable release", text)
                 self.assertIn("no beta is cut within a day of the candidate being due", text)
-                self.assertIn("Patch releases are not scheduled", text)
+                self.assertIn("A stable patch does not restart the weekly minor clock", text)
+                self.assertNotIn("Patch releases are not scheduled", text)
                 self.assertNotIn("takes only backports", text)
                 self.assertNotIn("Every 14 days", text)
                 self.assertNotIn("An early cut can bring", text)
@@ -42,7 +43,7 @@ class TransparencyDocsTest(unittest.TestCase):
             path = ROOT / directory / "RELEASE_PROCESS.md"
             text = " ".join(path.read_text(encoding="utf-8").split()).replace("**", "")
             with self.subTest(document=path):
-                self.assertIn("seven days after the last stable release", text)
+                self.assertIn("seven days after the last minor stable release", text)
                 self.assertIn("one day earlier", text)
                 self.assertIn("Nothing brings that cut forward", text)
                 self.assertIn("an important fix ships in the next daily beta", text)
@@ -50,6 +51,38 @@ class TransparencyDocsTest(unittest.TestCase):
                 self.assertIn("does not replace a soaking candidate or bring stable publication forward", text)
                 self.assertIn("same required checks and full 24-hour soak", text)
                 self.assertNotIn("can bring", text)
+
+    def test_patch_policy_is_not_claimed_as_available_delivery(self):
+        for directory in ("docs", "frontend-modern/public/docs"):
+            for name in ("AI_TRANSPARENCY", "RELEASE_PROCESS"):
+                path = ROOT / directory / f"{name}.md"
+                text = " ".join(path.read_text(encoding="utf-8").split()).replace("**", "")
+                with self.subTest(document=path):
+                    self.assertIn("As of 27 October 2026, stable patches are not yet available", text)
+                    self.assertIn("stable-regression", text)
+                    self.assertIn("eligible repairs already merged to `main`", text)
+                    self.assertIn("release metadata and publication support", text)
+                    self.assertIn("containing minor release", text)
+                    self.assertNotIn("Patch releases are not scheduled", text)
+
+    def test_patch_guide_distinguishes_eligibility_cadence_and_safe_reporting(self):
+        for directory in ("docs", "frontend-modern/public/docs"):
+            path = ROOT / directory / "RELEASE_PROCESS.md"
+            text = " ".join(path.read_text(encoding="utf-8").split()).replace("**", "")
+            with self.subTest(document=path):
+                for claim in (
+                    "current stable broke behaviour working in the previous stable",
+                    "security vulnerability or loses data",
+                    "not a fast track for other bugs or feature requests",
+                    "patch delivery is not guaranteed for every labelled issue",
+                    "promoted unchanged after its required soak",
+                    "never delays or replaces the weekly minor candidate",
+                    "does not move the next minor's date",
+                    "Only the current stable can be patched",
+                    "You do not need to install a preview to report a stable regression",
+                    "Do not downgrade, repeat an unsafe operation or change update channels",
+                ):
+                    self.assertIn(claim, text)
 
     def test_blockers_need_a_fresh_candidate_not_a_changed_soak(self):
         for path, text in self.documents():

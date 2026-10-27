@@ -60,12 +60,12 @@ around the failure by disabling signature verification or replacing the server
 with a chart asset. Follow the existing installation's
 [signed update route and helper ownership checks](AUTO_UPDATE.md#proxmoxve-lxc-manual).
 
-## How releases are prepared
+## How minor releases are prepared
 
 Releases follow a fixed schedule rather than individual judgment.
 
-1. **Cut a candidate from `main`.** Stable publication is targeted **seven days
-   after the last stable release**, provided `main` has changed since that release.
+1. **Cut a candidate from `main`.** Minor stable publication is targeted **seven days
+   after the last minor stable release**, provided `main` has changed since that release.
    The next release candidate becomes eligible **one day earlier**, reserving the
    full 24-hour soak. Preparation and qualification can move publication later.
    Nothing brings that cut forward: an important fix ships in the next daily
@@ -81,10 +81,10 @@ Releases follow a fixed schedule rather than individual judgment.
 4. **Promote it unchanged.** After a clean soak, the same candidate is promoted to
    stable. Release metadata may change, but product content cannot.
 
-## Cadence and stable promotion
+## Minor cadence and stable promotion
 
-- Each release is the next minor version: after `6.5.0` comes `6.6.0`. Patch
-  releases are not scheduled.
+- The weekly release is the next minor version: after `6.6.0` comes `6.7.0`.
+  A stable patch does not restart this weekly clock.
 - Only an open issue labelled `release-blocker` stops a promotion. That label marks
   something that worked in the current stable release but is broken in the
   candidate. Each such issue is closed once its fix is on `main`. When every one is
@@ -92,13 +92,45 @@ Releases follow a fixed schedule rather than individual judgment.
 - Successive candidates for the same version are published at least **24 hours**
   apart. Time spent on a beta does not count towards an RC's soak.
 - A defect that the current stable release already has is fixed on `main` and ships
-  in the next release.
+  in a containing minor release, or an eligible [stable patch](#limited-stable-patches)
+  once that path is available.
 
 Work merged during a candidate's soak waits for the next cycle's betas and
 candidate. Only a `release-blocker` requires a fresh candidate; an important fix
 alone does not replace a soaking candidate or bring stable publication forward.
 Every replacement still carries everything on `main` at its cut and goes
 through the same required checks and full 24-hour soak.
+
+### Limited stable patches
+
+**As of 27 October 2026, stable patches are not yet available.** Until this path
+is enabled, stable users receive repairs in the next minor release that contains
+them. An approved patch policy, an issue label or a fix on `main` is not an
+available update; check the [published releases](https://github.com/rcourtman/Pulse/releases)
+and the containing version named in the issue reply.
+
+The patch policy is narrower than the weekly minor cycle:
+
+- **Current stable regressions only.** The maintainer applies `stable-regression`
+  when a report establishes that the current stable broke behaviour working in
+  the previous stable, has a security vulnerability or loses data. It is not a
+  fast track for other bugs or feature requests. A regression in a release
+  candidate instead uses `release-blocker`, not `stable-regression`.
+- **Limited contents.** A patch starts from the current stable and adds only
+  eligible repairs already merged to `main`, plus release metadata and
+  publication support. It does not carry every unrelated change on `main`.
+  A repair that cannot be included still reaches users through a containing
+  minor; patch delivery is not guaranteed for every labelled issue.
+- **Separate timing.** For example, a patch after `6.6.0` would be `6.6.1`,
+  first published as an opt-in `6.6.1-rc.1`, then promoted unchanged after its
+  required soak. It never delays or replaces the weekly minor candidate or
+  its soak, and does not move the next minor's date. Only the current stable
+  can be patched; a newer stable ends an unfinished patch for the older one.
+
+You do not need to install a preview to report a stable regression. Describe the
+original failure and any already-observed working version in the existing issue;
+unknown details are valid. Do not downgrade, repeat an unsafe operation or change
+update channels just to establish a baseline.
 
 ## Taking part in Preview testing
 
