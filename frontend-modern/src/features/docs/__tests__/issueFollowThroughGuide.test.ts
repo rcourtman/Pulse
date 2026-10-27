@@ -31,8 +31,7 @@ function followThrough(): HTMLElement {
   return section;
 }
 
-const prose = (element: Element): string =>
-  (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+const prose = (element: Element): string => (element.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 describe('public issue follow-through guidance', () => {
   it('keeps resolution, stable-release retest and timeout distinct in rendered paragraphs', () => {
