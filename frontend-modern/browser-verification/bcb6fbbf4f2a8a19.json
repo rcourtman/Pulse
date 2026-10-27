@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "base_sha": "fce0d66d360dbd2ed03b4fe6ddac0b83b709b4a1",
+  "verified_at": "2026-10-27T12:54:31.089196+00:00",
+  "result": "passed",
+  "changed_paths": [
+    "docs/AI_TRANSPARENCY.md",
+    "docs/RELEASE_PROCESS.md",
+    "frontend-modern/public/docs/AI_TRANSPARENCY.md",
+    "frontend-modern/public/docs/RELEASE_PROCESS.md",
+    "frontend-modern/src/features/docs/__tests__/issueFollowThroughGuide.test.ts",
+    "scripts/tests/test_transparency_docs.py"
+  ],
+  "content_sha256": {
+    "docs/AI_TRANSPARENCY.md": "bf1d99887514ab75dfcf1ff6695c1f46dace13645406595ab415d15d91fb69b9",
+    "docs/RELEASE_PROCESS.md": "86739d649aad5b026ad801b69490090ada6aa209d809811fa7da71602a3d836c",
+    "frontend-modern/public/docs/AI_TRANSPARENCY.md": "bf1d99887514ab75dfcf1ff6695c1f46dace13645406595ab415d15d91fb69b9",
+    "frontend-modern/public/docs/RELEASE_PROCESS.md": "86739d649aad5b026ad801b69490090ada6aa209d809811fa7da71602a3d836c",
+    "frontend-modern/src/features/docs/__tests__/issueFollowThroughGuide.test.ts": "b96aba809b72b1c4ab617a30e9d061023a1348c3883f534e89e2d925b79b863e",
+    "scripts/tests/test_transparency_docs.py": "05dd099ca68a84ebacc7fb2f71d2163b0b8e02056f06f6ede8d8f17598855ad3"
+  },
+  "routes": [
+    "/docs/AI_TRANSPARENCY#how-changes-land-and-ship",
+    "/docs/RELEASE_PROCESS#limited-stable-patches"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production Docs consumes actual shipped release/disclosure markdown, router, renderer, header and CSS in an isolated evidence-only mount. This is not an authenticated shell or patch-operation/release/recovery proof.",
+    "Unavailable stable-patch delivery is explicit and dated; eligible current-stable fixes differ from candidate regressions and all-main minor scope. A patch cannot restart the weekly minor clock.",
+    "No new product route or navigation entry. No preview/downgrade or unsafe repeat is required for a stable report.",
+    "57 assertions, four actual guide GETs, no page exceptions or mutation/off-origin requests, no page-wide overflow. Playwright 1.56.1 matches the integration lock.",
+    "All six captures natively opened and inspected. Desktop and narrow copy wraps without clipping, linked heading focus is visible and the complete phone policy list is readable. A viewport screenshot can end within later content; the full policy element capture supplies the remainder.",
+    "Final browser pass uses the installed assigned locked dependency graph. An earlier canonical dependency copy had older formatter/Vite/DOMPurify/Solid versions and is not substituted for this pass. Final six captures exactly match the six image bytes already opened with native view_image. No graph mismatch or earlier adverse source result is erased."
+  ],
+  "interactions": [
+    "Desktop keyboard focus and Enter follow the disclosure link to the release-guide patch heading without a document reload.",
+    "Touch WebKit follows the same link and focuses the actual target heading.",
+    "Read both complete amended paragraphs and patch-status/eligibility/timing guidance at desktop and narrow widths."
+  ],
+  "checks": 57,
+  "browsers": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "phone": "26.0"
+  },
+  "captures": [
+    {
+      "name": "desktop-disclosure.png",
+      "sha256": "46d80a9d3f58c90071e19fef017c42d501043e29a2be22f91d3dc8fbad48f69d",
+      "bytes": 250905,
+      "native_view_image_opened": true
+    },
+    {
+      "name": "desktop-patch-status.png",
+      "sha256": "1d196cb982304dcc2a33c4bbc3c56f3acdd2138157333937638e4541e6762c62",
+      "bytes": 230020,
+      "native_view_image_opened": true
+    },
+    {
+      "name": "desktop-patch-policy.png",
+      "sha256": "64ace691584f0e7a9fdd2b4f00c2adbe32233028eac9cc07c902cb908a43a77e",
+      "bytes": 70777,
+      "native_view_image_opened": true
+    },
+    {
+      "name": "phone-disclosure.png",
+      "sha256": "b6fe1b898cb8eeab63e6ff711199334b2750da365846a3609b537f6bb933cc92",
+      "bytes": 143244,
+      "native_view_image_opened": true
+    },
+    {
+      "name": "phone-patch-status.png",
+      "sha256": "03c40a3058105b924f16ad5af798f5204a62d96bccb17622529c7bca817bda58",
+      "bytes": 135415,
+      "native_view_image_opened": true
+    },
+    {
+      "name": "phone-patch-policy.png",
+      "sha256": "0f16be00a40c29171e51eda5592351cf7ee2d0404ad7729b231dabf4977cd0c9",
+      "bytes": 90605,
+      "native_view_image_opened": true
+    }
+  ],
+  "dependency_identity": "7411fc03818b7e4649d9fcec35b0be859716bb185828cd99eea25d403b318d2f",
+  "locked_dependencies": {
+    "prettier": "3.9.10",
+    "vite": "6.4.5",
+    "marked": "17.0.6",
+    "dompurify": "3.4.17",
+    "solid-js": "1.9.17",
+    "tailwindcss": "4.3.3",
+    "@tailwindcss/vite": "4.3.3"
+  }
+}
