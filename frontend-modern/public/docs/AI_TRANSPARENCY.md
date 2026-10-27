@@ -60,12 +60,22 @@ requests are opened by `pulse-triage[bot]` and state what changed, why it
 was needed, which reports or demand-ledger entries it answers, and what
 validation was used, so the record on GitHub is the record of the decision.
 
-Stable publication is targeted seven days after the last stable release. The
+Minor stable publication is targeted seven days after the last minor stable release. The
 next minor release candidate becomes eligible one day earlier, reserving its
 full 24-hour soak; preparation and qualification can move publication later.
 It is cut from the head of `main` and carries everything on `main` at that cut,
 not a selected set of fixes. Repairs go on `main`, not onto an older release
-line. Patch releases are not scheduled.
+line. A stable patch does not restart the weekly minor clock.
+
+A limited stable-patch path is being added for regressions in the current
+stable release, security vulnerabilities and data loss. **As of 27 October 2026,
+stable patches are not yet available.** Until enabled, repairs reach stable users
+in a containing minor release. Once available, a patch starts from the current
+stable and adds only eligible repairs already merged to `main`, plus release
+metadata and publication support, not every unrelated change on `main`. It does
+not delay or replace the weekly minor cycle. The `stable-regression` label does
+not guarantee a patch or establish availability; see
+[limited stable patches](RELEASE_PROCESS.md#limited-stable-patches).
 
 Between stable releases, daily betas carry new changes from `main`; no beta is
 cut within a day of the candidate being due. An important fix ships in the next
