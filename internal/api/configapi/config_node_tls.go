@@ -112,6 +112,7 @@ func pveClusterEndpointTLSResponses(instance config.PVEInstance, discovery confi
 		key, valid := proxmox.ClusterEndpointIdentity(target)
 		responses[i].UsesPrimaryTLS = valid && primaryValid && key == primary
 		fingerprint, known, err := proxmox.ResolveEndpointFingerprint(target, pins, conflicts...)
+		responses[i].TLSFirstUse = !known && instance.Fingerprint != "" && !responses[i].UsesPrimaryTLS
 		if err == nil && known {
 			responses[i].Fingerprint = fingerprint
 		}

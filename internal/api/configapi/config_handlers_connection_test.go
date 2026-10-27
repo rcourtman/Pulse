@@ -373,6 +373,20 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 	pin := func(c tls.Certificate) string { return fmt.Sprintf("%x", sha256.Sum256(c.Certificate[0])) }
 	old := [2]tls.Certificate{makeLeaf(2), makeLeaf(3)}
 	renewed := [2]tls.Certificate{makeLeaf(4), makeLeaf(5)}
+	makeUntrusted := func(serial int64) tls.Certificate {
+		pub, key, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf := &x509.Certificate{SerialNumber: big.NewInt(serial), NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, KeyUsage: x509.KeyUsageDigitalSignature}
+		der, err := x509.CreateCertificate(rand.Reader, leaf, leaf, pub, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	}
+	untrusted := [2]tls.Certificate{makeUntrusted(6), makeUntrusted(7)}
+
 	var active [2]atomic.Pointer[tls.Certificate]
 	var authenticated [2]atomic.Int32
 	var servers [2]*httptest.Server
@@ -424,12 +438,15 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 		{"primary-CA-clear-is-scoped", "primary-ca", false, [2]bool{true, false}, 200},
 		{"explicit-both-pins", "both-pins", false, [2]bool{true, true}, 200},
 		{"explicit-both-CA", "both-ca", false, [2]bool{true, true}, 200},
+		{"CA-mode-rejects-untrusted-leaves", "both-ca-untrusted", false, [2]bool{false, false}, 400},
 		{"member-CA-does-not-inherit-primary-pin", "member-ca", false, [2]bool{true, true}, 200},
 		{"original-leaves-control", "", true, [2]bool{true, true}, 200},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for i, s := range servers {
-				if tc.original {
+				if tc.action == "both-ca-untrusted" {
+					active[i].Store(&untrusted[i])
+				} else if tc.original {
 					active[i].Store(&old[i])
 				} else {
 					active[i].Store(&renewed[i])
@@ -580,5 +597,26 @@ func TestPVEEndpointTrustAdmission(t *testing.T) {
 	after, _ := json.Marshal(cfg)
 	if rec.Code != 500 || string(before) != string(after) {
 		t.Fatalf("failed save published trust: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPVEEndpointUnknownTrustProjection(t *testing.T) {
+	instance := config.PVEInstance{Host: "https://primary.test:8006", Fingerprint: "primary-pin", VerifySSL: true, ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "peer", Host: "https://peer.test:8006"}}}
+	projected := pveClusterEndpointTLSResponses(instance, config.DiscoveryConfig{})
+	if len(projected) != 1 || !projected[0].TLSFirstUse {
+		t.Fatal("unknown first-use member was described as CA policy")
+	}
+	empty := ""
+	updated, err := applyPVEEndpointTrustUpdates(instance, NodeConfigRequest{ClusterEndpointTrustOverrides: []ClusterEndpointTrustOverrideRequest{{Endpoint: projected[0].TLSEndpoint, Fingerprint: &empty}}}, config.DiscoveryConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected = pveClusterEndpointTLSResponses(updated, config.DiscoveryConfig{})
+	if projected[0].TLSFirstUse || projected[0].Fingerprint != "" {
+		t.Fatal("explicit CA policy was described as first-use trust")
+	}
+	_, fingerprint, err := pveConnectionTestTrust(updated, nodeConnectionTestTLSOptions{Endpoint: projected[0].TLSEndpoint}, config.DiscoveryConfig{})
+	if err != nil || fingerprint != "" {
+		t.Fatal("saved probe discarded explicit member CA policy")
 	}
 }

@@ -959,6 +959,7 @@ type ClusterEndpointResponse struct {
 	IPOverride     string     `json:"ipOverride,omitempty"`
 	TLSEndpoint    string     `json:"tlsEndpoint,omitempty"`
 	UsesPrimaryTLS bool       `json:"usesPrimaryTLS,omitempty"`
+	TLSFirstUse    bool       `json:"tlsFirstUse,omitempty"`
 	Fingerprint    string     `json:"fingerprint,omitempty"`
 	Online         bool       `json:"online"`
 	LastSeen       time.Time  `json:"lastSeen,omitempty"`

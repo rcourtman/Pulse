@@ -32,7 +32,9 @@ reconciles that exact endpoint in polling trust. Candidate PVE configuration
 is published in memory only after persistence succeeds.
 
 Cluster member responses expose the permitted runtime `tlsEndpoint` and
-`usesPrimaryTLS`, with the effective fingerprint. Saved-credential Test accepts
+`usesPrimaryTLS`, with the effective fingerprint. `tlsFirstUse` distinguishes
+an unknown member from an explicit empty-pin choice, so the editor does not
+claim that automatic first-use trust is saved CA validation. Saved-credential Test accepts
 an optional existing PVE `endpoint` and temporary TLS edits. It makes no saved
 trust or health changes and states that other endpoints/background collection
 were not tested. Omitted TLS edits use polling's saved trust, including an
