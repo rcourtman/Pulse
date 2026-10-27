@@ -42,10 +42,10 @@ describe('shipped Windows removal guidance', () => {
       'cannot confirm server-side revocation',
       'older served or prepared Windows script',
       'do not rerun uninstall just to test',
-    ]) expect(text).toContain(fact);
-    const commands = Array.from(article.querySelectorAll('pre code')).map(
-      (node) => node.textContent,
-    );
+    ]) {
+      expect(text).toContain(fact);
+    }
+    const commands = Array.from(article.querySelectorAll('pre code')).map((node) => node.textContent);
     expect(commands).toContain('& $installerFile -Uninstall $true\n');
   });
 
