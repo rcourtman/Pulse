@@ -93,16 +93,16 @@ const artifactStateIndicator = (artifact: RecoverableArtifact): StatusIndicator 
   if (artifact.running) return { variant: 'info', label };
   if (artifact.failed) return { variant: 'danger', label };
   if (artifact.sourceKind === 'snapshot') return { variant: 'info', label };
-  if (artifact.protected) return { variant: 'warning', label };
   if (artifact.verified === true) return { variant: 'success', label };
   if (artifact.verified === false) return { variant: 'warning', label };
+  if (artifact.protected) return { variant: 'info', label };
   return { variant: 'muted', label };
 };
 
 const artifactVerificationText = (artifact: RecoverableArtifact): string => {
   if (artifact.verified === true) return 'Verified';
   if (artifact.verified === false) return 'Not verified';
-  return '';
+  return artifact.sourceKind === 'snapshot' ? '' : 'Not reported';
 };
 
 // Phones drop the location, size and details columns, so the drawer is where
@@ -137,7 +137,7 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         makeDetailRow('Verification', artifactVerificationText(artifact), {
           tone: artifact.verified === false ? 'warning' : undefined,
         }),
-        makeDetailRow('Protected', artifact.protected ? 'Yes, kept when pruning' : ''),
+        makeDetailRow('Prune protection', artifact.protected ? 'Kept when pruning' : ''),
       ]),
     },
     {

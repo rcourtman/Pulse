@@ -20,6 +20,25 @@
 
 ## Purpose
 
+### Backup retention never substitutes for verification
+
+The existing restore-point State cell and drawer status prioritise running or
+failed completion and then the reported verification result. A point kept when
+pruning still says Unverified or Verified as reported. Retention without a
+verification verdict says Kept with an informational tone, never Protected.
+The existing detail names Prune protection separately and says Not reported
+when backup verification is unavailable. Guest snapshots retain their existing
+informational state. The shared Coverage evidence uses the same state wording.
+Canonical workload protection, freshness, policy and inventory counts are not
+inferred from prune retention or an individual verified file.
+
+The normal-suite `backupRetentionPresentation.test.tsx` exercises the real
+inventory consumer, independent assessment, explicit/missing verification,
+search compatibility and same-point polling with an open drawer and focus.
+Shared badge and drawer tests retain completion precedence and reactive tones.
+Desktop/narrow consuming browser proof checks the existing rows and details.
+No provider data, route, access, retention operation or guest recovery changes.
+
 ### Backup filters also scope activity
 
 The existing Proxmox By date chart and date warning consume the same

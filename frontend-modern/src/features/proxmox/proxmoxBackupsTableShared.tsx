@@ -262,7 +262,7 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact; com
 }
 
 // Short state label for a recoverable artifact, paired with ArtifactStateBadge
-// for colour. Snapshot and protected take precedence over verification state.
+// for colour. Prune retention is not verification or workload protection.
 export function artifactStateLabel(artifact: RecoverableArtifact): string {
   if (artifact.sourceKind === 'snapshot') {
     return getProxmoxBackupSourcePresentation('snapshot').stateFallbackLabel;
@@ -270,9 +270,9 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
   // Runtime/terminal incompleteness outranks every completed-artifact state.
   if (artifact.running) return 'Running';
   if (artifact.failed) return 'Failed';
-  if (artifact.protected) return 'Protected';
   if (artifact.verified === true) return 'Verified';
   if (artifact.verified === false) return 'Unverified';
+  if (artifact.protected) return 'Kept';
   return getProxmoxBackupSourcePresentation(artifact.sourceKind).stateFallbackLabel;
 }
 
@@ -280,9 +280,9 @@ const artifactStateTone = (artifact: RecoverableArtifact): MetadataBadgeTone => 
   if (artifact.running) return 'info';
   if (artifact.failed) return 'danger';
   if (artifact.sourceKind === 'snapshot') return 'indigo';
-  if (artifact.protected) return 'warning';
   if (artifact.verified === true) return 'success';
   if (artifact.verified === false) return 'warning';
+  if (artifact.protected) return 'info';
   return 'muted';
 };
 
@@ -294,6 +294,11 @@ export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label
     <MetadataBadge
       {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
       tone={artifactStateTone(props.artifact)}
+      title={
+        props.artifact.protected
+          ? 'Kept when pruning. This does not establish verification or workload protection.'
+          : undefined
+      }
     >
       {props.label}
     </MetadataBadge>
