@@ -272,6 +272,8 @@ scripts/release_control/*
 !scripts/release_control/render_release_body_test.py
 !scripts/release_control/resolve_release_promotion.py
 !scripts/release_control/resolve_release_promotion_test.py
+!scripts/release_control/run_go_package_slice.py
+!scripts/release_control/run_go_package_slice_test.py
 !scripts/release_control/repo_file_io.py
 !scripts/release_control/repo_file_io_test.py
 !scripts/release_control/record_rc_to_ga_rehearsal.py

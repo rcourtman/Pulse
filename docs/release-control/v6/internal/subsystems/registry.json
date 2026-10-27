@@ -4769,6 +4769,7 @@
         "scripts/release_control/release_snapshot.py",
         "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
+        "scripts/release_control/run_go_package_slice.py",
         "scripts/release_control/secure_runtime_attestation_v6.py",
         "scripts/release_control/secure_runtime_attestation_v7.py",
         "scripts/release_control/secure_runtime_rootful_attestation_v1.py",
@@ -5290,7 +5291,8 @@
               ".github/scripts/select-internal-api-shard.sh",
               ".github/workflows/build-and-test.yml",
               "frontend-modern/package-lock.json",
-              "frontend-modern/package.json"
+              "frontend-modern/package.json",
+              "scripts/release_control/run_go_package_slice.py"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

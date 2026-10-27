@@ -4180,6 +4180,20 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 		}
 	}
 
+	for _, required := range []string{
+		"grep -vE '/(internal/monitoring|scripts/installtests)$'",
+		"python3 scripts/release_control/run_go_package_slice_test.py",
+		"python3 scripts/release_control/run_go_package_slice.py",
+		"for package in internal/monitoring scripts/installtests; do",
+		"for pid in \"${pids[@]}\"; do",
+		"if wait \"$pid\"; then :; else status=1; fi",
+		"GOMAXPROCS: '2'", "name: backend-slices-${{ matrix.shard }}",
+	} {
+		if !strings.Contains(backend, required) {
+			t.Fatalf("required backend worker lost exhaustive sliced coverage: %q", required)
+		}
+	}
+
 	shards := workflowJobBlock(t, workflow, "backend-api")
 	indexes := regexp.MustCompile(`(?m)^        index: \[([0-9, ]+)\]$`).FindStringSubmatch(shards)
 	count := regexp.MustCompile(`(?m)^      API_SHARD_COUNT: ([0-9]+)$`).FindStringSubmatch(shards)

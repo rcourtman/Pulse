@@ -1318,10 +1318,38 @@ caches only its last compiled pattern, so `-run .` next to `-skip` recompiled
 the long skip pattern for every test and subtest and roughly doubled that
 shard. The required check name
 `Backend tests (api)` belongs to a verdict job that passes only when every
-shard succeeded, and `Backend tests (rest-0)` and `Backend tests (rest-1)` keep
-their names and package split. All shards still expand for documentation-only
-changes so no required check is left pending or reads skipped shards as a
-pass. Go test steps are not skipped for frontend-only changes, because Go tests
+shard succeeded. `Backend tests (rest-0)` and `Backend tests (rest-1)`
+keep their original names, compile dependencies and two-worker matrix. Within
+each worker the ordinary source-listed packages exclude exactly `internal/api`,
+`internal/monitoring` and `scripts/installtests`. API coverage remains in its
+unchanged five shards. Each worker runs the other two slow packages as contiguous
+source-listed halves through `scripts/release_control/run_go_package_slice.py`.
+The ordinary Go command and both sliced commands run concurrently; every child
+must finish successfully before that same protected check can pass. A failed
+listing, incomplete JSON execution or failed child cannot be hidden by another
+passing command. `GOMAXPROCS=2` bounds the ordinary command to two package
+workers, alongside the two sliced binaries: four package workers, not extra
+hosted jobs. Documentation-only changes retain the original explicit
+runtime-inapplicable results and required check names.
+
+The slice runner preserves declaration order, `-race`, uncached execution, the
+50-minute test deadline and the existing JSON recorder's exact selected-root
+and package checks. It chooses only one of `-run` and `-skip`, bounded to
+120,000 bytes, and retains each inventory, selection, terminal exits, timings
+and bounded failure/skip observations as a source-bound CI artifact. No
+maintained test-name list or timing estimate defines coverage. A new root
+belongs to exactly one half. The helper and its executable controls live under
+`scripts/release_control/`, which the mechanical patch path copies from main;
+no unrelated stable source or expansion of the patch contents is needed. The
+old job shapes, compile controls and ordinary Go command stay compatible with
+source contract tests shipped by the current stable.
+
+Three complete passing main runs on 27 October measured monitoring at
+524–719 seconds and installer tests at 605–725 seconds. Whole-package weights
+cannot shorten that serial floor. Splitting those suites is a CI scheduling
+change, not reduced source coverage or release/native acceptance. Contiguous
+halves may expose existing package-state coupling; actual split-suite proof and
+required CI, not a prediction, establish whether the partition is valid. Go test steps are not skipped for frontend-only changes, because Go tests
 read frontend sources (the `internal/api` contract tests, the
 `internal/unifiedresources` code standards walk of `frontend-modern/src`, and
 the `internal/telemetry` repository-wide wording scan). Core E2E runs its
@@ -2069,6 +2097,7 @@ Windows lifecycle controls or macOS installer and logging checks on native CI.
 13a. `.github/workflows/compile-release-payload.yml`
 13b. `.github/workflows/qualify-secure-runtime-release.yml`
 14. `.github/workflows/build-and-test.yml`
+14a. `scripts/release_control/run_go_package_slice.py`
 14. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`

@@ -511,12 +511,15 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
+          # Two ordinary package binaries plus the two sliced binaries: keep
+          # the four-package concurrency envelope, rather than adding runners.
+          GOMAXPROCS: '2'
         # Source, not the timing file, defines coverage. Longest measured
         # packages go to the lightest shard and start first within that shard;
         # new packages use a default weight. Do not leave slow binaries behind
         # the alphabetically earlier small packages in Go's parallel scheduler.
-        # Package binaries are independent, so only internal/api needs the
-        # contiguous, order-preserving test slices used in its separate job.
+        # Package binaries are independent. Keep each slow package's own
+        # source order inside its two slices, as the API shards already do.
         run: |
           set -euo pipefail
           case "${{ matrix.shard }}" in
@@ -524,7 +527,11 @@ jobs:
             rest-1) index=1 ;;
             *) echo "unknown shard ${{ matrix.shard }}" >&2; exit 1 ;;
           esac
+          # These controls travel with main's copied patch controls too; no
+          # test-name allowlist or unrelated stable source is required.
+          python3 scripts/release_control/run_go_package_slice_test.py
           pkgs=$(go list ./... | grep -v '/internal/api$' \
+            | grep -vE '/(internal/monitoring|scripts/installtests)$' \
             | python3 .github/scripts/select-go-package-shard.py \
                 .github/scripts/go-package-test-seconds.txt 2 "$index")
           if [ -z "$pkgs" ]; then
@@ -532,7 +539,32 @@ jobs:
             exit 1
           fi
           printf 'Packages in this shard:\n%s\n' "$pkgs"
-          go test -race -timeout 50m $pkgs
+          # GOMAXPROCS=2 bounds ordinary go test to two package workers. The
+          # other two binaries each run this worker's contiguous source-listed
+          # half. Preserve both protected rest names and compilation gates.
+          pids=()
+          go test -race -timeout 50m $pkgs &
+          pids+=("$!")
+          for package in internal/monitoring scripts/installtests; do
+            python3 scripts/release_control/run_go_package_slice.py \
+              --package "$package" --index "$index" \
+              --output "$RUNNER_TEMP/backend-slices/${package##*/}" &
+            pids+=("$!")
+          done
+          status=0
+          for pid in "${pids[@]}"; do
+            if wait "$pid"; then :; else status=1; fi
+          done
+          exit "$status"
+
+      - name: Retain source-listed backend coverage
+        if: always() && needs.changes.outputs.code == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: backend-slices-${{ matrix.shard }}
+          path: ${{ runner.temp }}/backend-slices/
+          if-no-files-found: warn
+          retention-days: 7
 
   # internal/api alone took ~27 of the ~31 minutes of the old single
   # `Backend tests (api)` job under -race, which made it the critical path of
