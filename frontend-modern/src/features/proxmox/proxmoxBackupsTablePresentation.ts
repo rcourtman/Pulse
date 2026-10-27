@@ -377,13 +377,15 @@ const formatPostureWindow = (seconds: number): string => {
   return hours === 1 ? '1 hour' : `${hours} hours`;
 };
 
-const COVERAGE_RESTORE_EVIDENCE_LIMIT = 8;
+export const COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE = 8;
 
 // Newest restore points for a coverage row's expansion. The newest point and
 // the newest completed point of every source always make the cut, so neither a
 // burst of recent guest snapshots nor a running or failed job can hide the
 // latest usable PBS or PVE backup now that the table carries no per-source
-// age columns.
+// age columns. Undated entries cannot be ordered behind those points: retain
+// one witness of each source/completion state so the reason for an Unknown
+// age (or an incomplete observation) is inspectable in the initial preview.
 export const selectCoverageRestoreEvidence = <
   T extends {
     id: string;
@@ -394,14 +396,16 @@ export const selectCoverageRestoreEvidence = <
   },
 >(
   artifacts: readonly T[],
-  limit = COVERAGE_RESTORE_EVIDENCE_LIMIT,
+  limit = COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE,
 ): T[] => {
   const newestFirst = [...artifacts].sort(
-    (left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0),
+    (left, right) =>
+      (right.createdMs ?? 0) - (left.createdMs ?? 0) || left.id.localeCompare(right.id),
   );
   const picked = new Set<string>();
   const newestSeen = new Set<string>();
   const completedSeen = new Set<string>();
+  const undatedSeen = new Set<string>();
   for (const artifact of newestFirst) {
     if (!newestSeen.has(artifact.sourceKind)) {
       newestSeen.add(artifact.sourceKind);
@@ -410,6 +414,14 @@ export const selectCoverageRestoreEvidence = <
     if (!artifact.running && !artifact.failed && !completedSeen.has(artifact.sourceKind)) {
       completedSeen.add(artifact.sourceKind);
       picked.add(artifact.id);
+    }
+    if (artifact.createdMs === undefined) {
+      const state = artifact.running ? 'running' : artifact.failed ? 'failed' : 'completed';
+      const key = `${artifact.sourceKind}:${state}`;
+      if (!undatedSeen.has(key)) {
+        undatedSeen.add(key);
+        picked.add(artifact.id);
+      }
     }
   }
   const cap = Math.max(limit, picked.size);

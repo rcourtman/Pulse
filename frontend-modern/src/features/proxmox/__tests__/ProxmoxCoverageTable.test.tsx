@@ -70,6 +70,53 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
+  it('keeps uncertain archive evidence inspectable without changing server posture or its owner', () => {
+    const model = buildProxmoxBackupRecoveryModel({
+      workloads: [identityGuest('east-100', 'east', 'pve-1')],
+      pbsBackups: [],
+      snapshots: [],
+      tasks: [],
+      nowMs: BACKUP_IDENTITY_NOW,
+      archives: [
+        ...Array.from({ length: 12 }, (_, index) => identityArchive({ id: `dated-${index}` })),
+        identityArchive({ id: 'unknown', time: '2026-09-31T10:00:00Z', storage: 'undated-disk' }),
+      ],
+    });
+    const current = model.coverageRows[0];
+    renderInRouter(() => (
+      <ProxmoxCoverageTable
+        rows={[current]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={() => 'posture'}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKey={current.key}
+        onToggleExpand={() => {}}
+        showTaskColumn={false}
+        layoutWidth={() => 390}
+      />
+    ));
+    const panel = screen.getByTestId('proxmox-coverage-detail');
+    const evidence = () =>
+      within(within(panel).getByText('Restore evidence').closest('div')!.parentElement!).getByRole(
+        'table',
+      );
+    expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(8);
+    expect(evidence()).toHaveTextContent('undated-disk');
+    expect(panel).toHaveTextContent('1 entry has an unavailable or future date');
+    expect(current.workload.resourceId).toBe('east-100');
+    expect(current.posture).toBe('unknown');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 5 more evidence entries' }));
+    expect(evidence().querySelectorAll('tbody > tr')).toHaveLength(13);
+    expect(
+      within(panel).getByRole('button', { name: 'All 13 evidence entries shown' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    expect(model.coverageRows[0]).toBe(current);
+  });
+
   it('keeps full-width identity columns alongside the workload connection', () => {
     renderInRouter(() => (
       <ProxmoxCoverageTable

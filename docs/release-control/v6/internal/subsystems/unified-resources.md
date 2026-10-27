@@ -23,6 +23,19 @@ and sort the complete canonical change table while startup and ingestion wait.
 
 ## Purpose
 
+### Coverage evidence expansion preserves workload ownership
+
+An uncertain backup date remains inspectable beside the newest dated evidence
+in the same workload's bounded Coverage preview. Explicit expansion reveals
+retained entries without another read, changing ownership, or replacing the
+server's protection rating. Unmatched and namesake guests must not borrow those
+entries. Expansion and focus survive polling; closing or changing the workload
+resets the preview. `coverageEvidenceInspection.test.tsx` and
+`ProxmoxCoverageTable.test.tsx` check scoped inventory/model/consumer behaviour,
+literal origins, bounded expansion, reset and live recovery/recurrence. Actual
+desktop/narrow browser consumers must be inspected. No canonical resource ID,
+association, owner link, API, storage or guest operation changes.
+
 ### Latest backup task evidence stays separate from recovery
 
 Coverage’s existing expanded detail shows the scoped latest PVE task’s reported
