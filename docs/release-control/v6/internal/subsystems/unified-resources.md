@@ -8887,3 +8887,20 @@ summary and complete candidate detail. `backupTaskEvidence.test.tsx` exercises t
 router, compact/full summaries, complete literal evidence, saved-view search and
 ordinary polling. Browser verification must exercise these states through the
 production consumer at desktop and narrow widths and inspect actual pixels.
+
+### Unmatched backup placement comes only from node evidence
+
+Unmatched PBS namespaces and datastores remain backup locations, not guest
+nodes. Unmatched PVE records retain their reported native node, never their
+connection name as a substitute. Both existing workload detail views say
+`Not reported` for missing VM/LXC placement; host labels remain separate.
+Node filters and unscoped task matching cannot use invented fallback nodes.
+
+`proxmoxBackupRecoveryModel.identity.test.ts` and the normal-suite
+`backupWorkloadIdentity.test.tsx` cover absent/blank placement, independent
+reader/location identity, native-node controls, node filtering and live owner
+arrival/removal through the parsed inventory consumer. Matching rules, source
+keys, restore points, protection policy and guest operations are unchanged;
+removing fabricated node metadata prevents one false unscoped-task match.
+Desktop and phone browser proof exercises both existing detail views. This
+corrects attribution, not #2681/#3248 causality or native recovery.

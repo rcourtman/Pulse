@@ -47,6 +47,7 @@ import {
   SortableHead,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
+  getBackupWorkloadNodeLabel,
   getBackupWorkloadDisclosureLabel,
 } from './proxmoxBackupsTableShared';
 import {
@@ -234,7 +235,7 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
       rows: compactDetailRows([
         makeDetailRow('Type', row.workload.typeLabel),
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, row.workload.vmid),
-        makeDetailRow('Node', row.workload.node),
+        makeDetailRow('Node', getBackupWorkloadNodeLabel(row.workload)),
         makeDetailRow('PVE connection', getBackupWorkloadPVEConnection(row.workload), {
           wrap: true,
         }),
