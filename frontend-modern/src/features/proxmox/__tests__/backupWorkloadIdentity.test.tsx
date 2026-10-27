@@ -150,6 +150,7 @@ describe('backup workload identity in real inventory consumers', () => {
         identityPBS({ id: 'host-point', backupType: 'host', vmid: 'nas-box' }),
       ],
     });
+    fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
     const vm = await screen.findByRole('button', {
       name: 'Expand details for VM 100 · PVE connection: Not reported',
     });
@@ -173,6 +174,35 @@ describe('backup workload identity in real inventory consumers', () => {
     );
     expect(connectionRow(screen.getByTestId('proxmox-recoverable-detail'))).toHaveTextContent(
       'Not reported',
+    );
+  });
+
+  it('keeps a same-numbered LXC distinguishable from a VM in the same PVE connection', async () => {
+    const guest = guests()[0];
+    mount({
+      workloads: [guest, { ...guest, id: 'guest-lxc', type: 'lxc' }],
+      pve: {
+        ...emptyPVE,
+        storageBackups: [identityArchive(), identityArchive({ id: 'lxc-file', type: 'lxc' })],
+      },
+    });
+    const rows = await coverageRows();
+    expect(rows).toHaveLength(2);
+    const vm = screen.getByRole('button', {
+      name: 'Expand details for same-name (VM 100) · PVE connection: east',
+    });
+    const ct = screen.getByRole('button', {
+      name: 'Expand details for same-name (LXC 100) · PVE connection: east',
+    });
+    expect(vm.closest('tr')).toHaveTextContent('VM 100');
+    expect(ct.closest('tr')).toHaveTextContent('LXC 100');
+    fireEvent.click(ct);
+    const detail = screen.getByTestId('proxmox-coverage-detail');
+    expect(connectionRow(detail)).toHaveTextContent('east');
+    expect(detail.querySelectorAll('[data-backup-source-connection]')).toHaveLength(1);
+    expect(within(detail).getByRole('link')).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=guest-lxc',
     );
   });
 
