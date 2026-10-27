@@ -10454,3 +10454,18 @@ Removing a guessed node must not discard the useful namespace/datastore it
 misrepresented. `ProxmoxCoverageTable.test.tsx` checks narrow/full projection
 and complete long location text; the parsed inventory regressions also retain
 reader identity and full repository context without adding reads or routes.
+
+### Narrow Coverage keeps workload identity visible
+
+Coverage containers below 720px wrap the full workload name and PVE connection
+instead of making touch users rely on hover titles. The folded VM/LXC target ID
+sits on its own line so it cannot squeeze the name to an ellipsis. Wider tables
+retain their dense projection; the expanded owner, inventory association, posture,
+read cadence and guest operations are unchanged. This is readable identity, not
+original-incident recovery.
+
+The normal `backupWorkloadIdentity.test.tsx` suite checks long namesake labels,
+end-distinguished connections, 719/720px projection, scoped evidence and owner
+links. Browser proof must inspect complete rendered names/connections, layout
+resize, keyboard/touch disclosure and retained polling at desktop and narrow
+widths, with actual pixels.

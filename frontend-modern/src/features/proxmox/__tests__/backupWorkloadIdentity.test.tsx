@@ -109,6 +109,66 @@ describe('backup workload identity in real inventory consumers', () => {
     },
   );
 
+  it.each([320, 390, 600, 719, 720, 1200])(
+    'keeps complete guest and connection labels readable in narrow Coverage at %ipx',
+    async (width) => {
+      api.width = width;
+      const name = 'accounting-database-production-primary';
+      const scopes = [
+        'pve.cluster.production.london.example.internal',
+        'pve.cluster.production.bristol.example.internal',
+      ];
+      const workloads = scopes.map((instance, index) => ({
+        ...identityGuest(`guest-${index}`, instance, 'pve-1'),
+        name,
+        displayName: name,
+      }));
+      mount({
+        workloads,
+        pve: {
+          ...emptyPVE,
+          storageBackups: scopes.map((instance, index) =>
+            identityArchive({ id: `file-${index}`, instance, storage: `store-${index}` }),
+          ),
+        },
+      });
+      await screen.findAllByText(name);
+      const rows = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-proxmox-backup-row="coverage"]'),
+      );
+      expect(rows).toHaveLength(2);
+      for (const [index, scope] of scopes.entries()) {
+        const row = rows.find((item) => connectionOf(item) === `PVE: ${scope}`)!;
+        const label = within(row).getByText(name, { exact: true });
+        const connection = row.querySelector('[data-backup-workload-connection]')!;
+        if (width < 720) {
+          expect(label).toHaveClass('whitespace-normal', 'wrap-anywhere');
+          expect(label).not.toHaveClass('truncate');
+          expect(label.parentElement).toHaveClass('flex-col', 'items-start');
+          expect(connection).toHaveClass('whitespace-normal', 'wrap-anywhere');
+          expect(connection).not.toHaveClass('truncate');
+        } else {
+          expect(label).toHaveClass('truncate');
+          expect(connection).toHaveClass('truncate');
+        }
+        if (width < 1120) expect(row).toHaveTextContent('VM 100');
+        const toggle = within(row).getByRole('button', { name: /Expand details/ });
+        fireEvent.click(toggle);
+        const panel = screen.getByTestId('proxmox-coverage-detail');
+        expect(connectionRow(panel)).toHaveTextContent(scope);
+        expect(panel).toHaveTextContent(`store-${index}`);
+        expect(panel).not.toHaveTextContent(`store-${1 - index}`);
+        expect(within(panel).getByRole('link', { name: `Open ${name}` })).toHaveAttribute(
+          'href',
+          `/proxmox/overview?resource=guest-${index}`,
+        );
+        fireEvent.click(toggle);
+      }
+      expect(api.fetch).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
+    },
+  );
+
   it('keeps the PVE workload scope separate from its PBS reader and namespace in both details', async () => {
     mount({
       workloads: guests().slice(0, 1),
