@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "588afd65cd02b861e4739bafafc7749a47824bf5",
+  "verified_at": "2026-10-27T00:59:51.594807Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "812745e40c18f9f627ce1d18385188f6b81e4bfd68164cf7423d35dd200f0574",
+    "frontend-modern/src/features/proxmox/proxmoxBackupActivityPresentation.ts": "f944f3cdc600849f308a7633b5ef04a8d2892f9446cf55f84991cd21eabef872"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Final production consumer built from 588afd65cd02b861e4739bafafc7749a47824bf5 with the assigned lock graph. Safe synthetic HTTP inventories only. Existing unknown-size algorithm and chart component are unchanged.",
+    "Twelve fresh final-copy checks pass at desktop Chromium and narrow WebKit. Unknown-only and mixed-size warnings use sentences and the day/tooltip mixed total uses a visual separator. No extra numeric volume or complete source shares are invented.",
+    "All four final-copy captures were opened natively. Desktop tooltip wraps the unknown count onto a second line without losing words; narrow notice, heading and Count/Volume controls fit. Unknown-only scale remains non-numeric. No page exceptions or page-wide overflow.",
+    "The preceding receipt retains the original 25 checks and ten inspected captures, including parent defect reproduction and source/range filtering. The final copy pass supplements, not replaces or rebinds, that source-bound proof."
+  ],
+  "interactions": [
+    "Keyboard focus reads the final mixed tooltip on desktop; narrow touch selects the mixed day. Selecting the unknown-only day and switching to Count preserves selection and the one-row list.",
+    "Read the exact final unknown-size notice in both mixed and unknown-only states. Inspect the known-byte bar, amber markers and available Count control at both widths.",
+    "Both engines and local HTTP server report closure. Playwright 1.56.1 matches the integration lock."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "desktop": "141.0.7390.37",
+    "narrow": "26.0"
+  }
+}
