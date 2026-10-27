@@ -241,6 +241,11 @@ def activation_check(root: Path, version: str, source_sha: str) -> dict:
     commit = api(f"commits/{receipt['stable_tag']}")
     if not isinstance(commit, dict) or commit.get("sha") != receipt["stable_sha"]:
         raise ValueError("published patch base source changed before activation")
+    if match.group(4) is None:
+        # The 48-hour rule forbids a NEW patch cut. It must not become an
+        # additional hold on promotion of its already-cut, soaked rc.1.
+        return {"applicable": True, "source_sha": source_sha, "stable_tag": current["tag_name"],
+                "stable_sha": receipt["stable_sha"], "observed_at": time.time(), "new_cut": False}
     anchor_tag = f"v{major}.{minor}.0"
     anchor = current if current["tag_name"] == anchor_tag else api(f"releases/tags/{anchor_tag}")
     due = published_at(anchor, anchor_tag) + MINOR_CYCLE_SECONDS - MINOR_SOAK_SECONDS
@@ -248,7 +253,7 @@ def activation_check(root: Path, version: str, source_sha: str) -> dict:
     observed = time.time()
     if observed >= due - PATCH_MARGIN_SECONDS:
         raise ValueError("patch activation is within 48 hours of minor candidate eligibility (or overdue)")
-    return {"applicable": True, "source_sha": source_sha, "stable_tag": current["tag_name"],
+    return {"applicable": True, "new_cut": True, "source_sha": source_sha, "stable_tag": current["tag_name"],
             "stable_sha": receipt["stable_sha"], "observed_at": observed,
             "not_after": datetime.fromtimestamp(due - PATCH_MARGIN_SECONDS, timezone.utc).isoformat()}
 

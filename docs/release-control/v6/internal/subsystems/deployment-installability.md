@@ -48,16 +48,18 @@ the train; branch admission does not remove or synthesise a required check.
 
 Slow collection cannot reserve an obsolete base or consume fixes after the
 48-hour cut boundary. The train rechecks the current stable's tag/source and
-minor-anchored clock at reservation and before later preparation, merge and
-dispatch mutations. A superseded/late reserved patch is abandoned without
+minor-anchored clock at reservation and before later RC preparation, merge and
+dispatch mutations. A superseded/late reserved cut is abandoned without
 changing the independent minor's state.
 
 Both normal activation and activation-only recovery run the source-bound
 `stable_patch.py activation-check` immediately before their publication PATCH.
 It reads the exact candidate manifest, complete bounded published-release
 inventory, base-tag commit and the minor's actual publication date. A newer
-stable, changed base, unknown/failed evidence or arrival at the 48-hour boundary
-stops publication. A recent patch cannot reset the minor clock. This is a final
+stable, changed base or unknown/failed evidence stops publication. Arrival at
+the 48-hour boundary also stops a new rc.1 cut, never the unchanged promotion
+of an already-cut, soaked patch: the cut rule is not an extra promotion hold.
+A recent patch cannot reset the minor clock. This is a final
 read-before-write fence, not an atomic cross-workflow provider transaction;
 existing activation identities, quarantine and immutability checks remain.
 Minor/beta and historical-line paths gain no new patch gate.

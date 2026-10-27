@@ -189,13 +189,14 @@ class StablePatchTest(unittest.TestCase):
                 with self.subTest(version=version, elapsed=elapsed), \
                         mock.patch.object(patch, 'api', side_effect=read), \
                         mock.patch.object(patch.time, 'time', return_value=stamp) as clock:
-                    if elapsed >= 3 * 86400:
+                    if elapsed >= 3 * 86400 and version.endswith('-rc.1'):
                         with self.assertRaisesRegex(ValueError, '48 hours'):
                             patch.activation_check(self.root, version, self.head())
                     else:
                         result = patch.activation_check(self.root, version, self.head())
                         self.assertEqual((True, self.base, stamp + elapsed),
                                          (result['applicable'], result['stable_sha'], result['observed_at']))
+                        self.assertEqual(version.endswith('-rc.1'), result['new_cut'])
 
     def test_new_minor_and_base_tag_drift_stop_activation_after_source_admission(self):
         self.assemble()
@@ -261,7 +262,7 @@ class StablePatchTest(unittest.TestCase):
         for observed_anchor in (anchor, {**anchor, 'draft': True}):
             with mock.patch.object(patch, 'api', side_effect=[[stable], {'sha': prior}, observed_anchor]) as api, \
                     mock.patch.object(patch.time, 'time', return_value=stamp), self.assertRaises(ValueError):
-                patch.activation_check(self.root, '6.6.2', self.head())
+                patch.activation_check(self.root, '6.6.2-rc.1', self.head())
             self.assertEqual('releases/tags/v6.6.0', api.call_args.args[0])
 
     def test_actual_activation_and_recovery_shell_refuse_before_publication_post(self):
