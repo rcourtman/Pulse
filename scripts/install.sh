@@ -4220,14 +4220,6 @@ write_unraid_go_entry() {
     { printf '# Pulse Agent\n'; render_unraid_go_launch "$wrapper_script"; } >> "$go_script"
 }
 
-remove_qnap_autorun_block() {
-    local autorun_path="$1"
-
-    portable_sed_in_place '/^# Pulse Agent bootstrap begin$/,/^# Pulse Agent bootstrap end$/d' "$autorun_path"
-    portable_sed_in_place '/^# Pulse Agent$/d' "$autorun_path"
-    portable_sed_in_place '/start-pulse-agent\.sh/d' "$autorun_path"
-}
-
 write_qnap_wrapper_script() {
     local wrapper_script="$1"
     local runtime_binary="$2"
@@ -4399,18 +4391,57 @@ EOF
 append_qnap_autorun_block() {
     local autorun_path="$1"
     local wrapper_script="$2"
-    local state_dir="$3"
+    local STATE_DIR="$3" parent="" staging="" prior="" observed="" existed=false
 
-    remove_qnap_autorun_block "$autorun_path"
-    if [[ ! -f "$autorun_path" ]]; then
-        echo "#!/bin/sh" > "$autorun_path"
+    # Upgrade must use the same exact-entry admission as removal. Substring
+    # deletion also erased unrelated startup jobs and an unfinished marker
+    # erased every later line. Never evaluate the operator's boot text.
+    [[ "$STATE_DIR" == /* && "$wrapper_script" == "$STATE_DIR/start-pulse-agent.sh" &&
+       "$STATE_DIR" != *[\$\`\"\\]* && "$STATE_DIR" != *$'\n'* && "$STATE_DIR" != *$'\r'* &&
+       "$autorun_path" == /* ]] || return 1
+    parent=$(dirname "$autorun_path") || return 1
+    [[ -d "$parent" && ! -L "$parent" && "$(portable_path_uid "$parent")" == "$(id -u)" ]] || return 1
+    for prior in "$autorun_path".pulse-setup.* "$autorun_path".pulse-removal.*; do
+        [[ ! -e "$prior" && ! -L "$prior" ]] || return 1
+    done
+    if [[ -e "$autorun_path" || -L "$autorun_path" ]]; then
+        nas_agent_removal_file_safe "$autorun_path" || return 1
+        # Admit complete bounded content before copying onto small flash.
+        observed=$(filter_nas_agent_boot_file QNAP "$autorun_path" status) || return 1
+        [[ "$observed" == present || "$observed" == absent ]] || return 1
+        existed=true
     fi
 
-    printf '\n' >> "$autorun_path"
-    render_qnap_autorun_block "$wrapper_script" >> "$autorun_path"
-    printf '\n' >> "$autorun_path"
-
-    chmod +x "$autorun_path"
+    # Stage on the flash filesystem. Any failed read/filter/write/rename keeps
+    # the original and staging for reconciliation, not a blind overwrite.
+    staging=$(mktemp -d "$autorun_path.pulse-setup.XXXXXX") || return 1
+    chmod 700 "$staging" || return 1
+    if [[ "$existed" == true ]]; then
+        cp -p "$autorun_path" "$staging/original" || return 1
+    else
+        printf '#!/bin/sh\n' > "$staging/original" || return 1
+        chmod 755 "$staging/original" || return 1
+    fi
+    cp -p "$staging/original" "$staging/updated" || return 1
+    filter_nas_agent_boot_file QNAP "$staging/original" filter > "$staging/updated" || return 1
+    # Do not accumulate separator lines on every upgrade.
+    render_qnap_autorun_block "$wrapper_script" >> "$staging/updated" || return 1
+    sh -n "$staging/updated" >/dev/null 2>&1 || return 1
+    chmod +x "$staging/updated" || return 1
+    cp -p "$staging/updated" "$staging/ready" || return 1
+    if [[ "$existed" == true ]]; then
+        nas_agent_removal_file_safe "$autorun_path" && cmp -s "$autorun_path" "$staging/original" || return 1
+        mv -- "$staging/ready" "$autorun_path" || return 1
+    else
+        # FAT flash volumes need not support hard links or mv -n. Noclobber
+        # refuses a concurrent file or link; a partial first write stays visible
+        # with its complete staged copy and is never called configured.
+        (set -o noclobber; cat "$staging/ready" > "$autorun_path") || return 1
+        chmod 755 "$autorun_path" || return 1
+    fi
+    nas_agent_removal_file_safe "$autorun_path" && cmp -s "$autorun_path" "$staging/updated" || return 1
+    rm -f -- "$staging/original" "$staging/updated" "$staging/ready" || return 1
+    rmdir -- "$staging"
 }
 
 # --- Auto-Detection Functions ---
@@ -7725,8 +7756,12 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
     if [[ -x /etc/init.d/init_disk.sh ]]; then
         if /etc/init.d/init_disk.sh mount_flash_config 2>/dev/null && [[ -d /tmp/nasconfig_tmp ]]; then
             AUTORUN_PATH="/tmp/nasconfig_tmp/autorun.sh"
-            append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"
-            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || true
+            AUTORUN_RESULT=0
+            append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR" || AUTORUN_RESULT=1
+            /etc/init.d/init_disk.sh umount_flash_config 2>/dev/null || AUTORUN_RESULT=1
+            if [[ "$AUTORUN_RESULT" != 0 ]]; then
+                fail "QNAP boot setup was not confirmed; agent recovery files and any autorun.sh.pulse-setup staging were retained. The agent may already be stopped. Reconcile the boot file and flash mount before retrying; no automatic restart was attempted." "$EXIT_GENERAL"
+            fi
             AUTORUN_CONFIGURED=true
             log_info "Configured autorun.sh with a deferred Pulse Agent bootstrap."
         else

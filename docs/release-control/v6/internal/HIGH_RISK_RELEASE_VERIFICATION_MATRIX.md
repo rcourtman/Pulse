@@ -1321,3 +1321,18 @@ as verification progresses:
 - Exact-source race/vet/build and desktop/narrow consuming pixels are source qualification, not installed/native acceptance or release availability.
 
 `TestClusterFirstUseConcurrentSelectionSharesConstruction` holds a real first-use TLS capture while eight ordinary readers join: one captured pin, one short/full login pair, independent returned readings and usable concurrent health inspection.
+
+### QNAP boot replacement preservation
+
+- `TestInstallSHQNAPBootReplacementPreservesUnrelatedJobs`: production boot
+  writer preserves unrelated tasks/comments; first/repeated writes and exact
+  legacy/current entries remain supported. Malformed/foreign/linked content,
+  pending recovery, partial rendering, copy/mode/rename failure and a source
+  change during staging leave the original intact. Boot text is parsed, never
+  executed, and credentials do not enter output.
+- The actual registration caller unmounts after a failed append and refuses
+  the persistence-success message when append or unmount fails. The existing
+  `TestInstallSHNASBootOwnersQuiesceBeforeRecoveryErasure` inventory exercises
+  removal against the production writer's output.
+- Confined source checks are not native NAS lifecycle or customer acceptance;
+  original QNAP installed-recovery dependencies remain independent.
