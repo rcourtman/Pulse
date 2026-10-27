@@ -15,6 +15,37 @@
 ```
 
 ## Purpose
+### Mechanical stable patch source admission
+
+Stable-regression patches are the sole main-only release exception. The release
+train selects complete main pull-request merge results that GitHub records as
+closing labelled issues, once per fix, in merge order. A disposable checkout
+starts at the current stable tag, skips only genuine content conflicts and
+copies all `.github/workflows/` and `scripts/release_control/` bytes at its fixed
+main cut. No unrelated source is added. The patch's exact Enterprise pair stays
+at the one shipped by that stable.
+
+`scripts/release_control/stable_patch.py` records and independently reconstructs
+that selection. `create-release.yml` runs reconstruction before payload creation.
+It rejects wrong tags, out-of-order or foreign merge results, changed controls
+and every extra non-metadata source byte. Version-bound `release/vX.Y.Z` targets
+are admitted by `control_plane.py` and `release_snapshot.py`; reviewed head,
+canonical repository, merged target and ancestry checks remain mandatory. Only
+rc.1 and its unchanged stable promotion use the new path. Minor releases and
+historical line mappings retain their existing source rules.
+
+The public guard proves source composition, not GitHub label collection, signing,
+installation, publication or host activation. The train's independent patch state
+owns selection, bounded retries, soak, abandonment, retirement and keeping the
+weekly minor's clock and progress unchanged.
+
+The independently required `governance` context must be produced for preparation
+PRs targeting `release/v*` as well as `main`, including metadata-only promotions.
+Canonical Governance runs on those PRs and branch pushes without path filters,
+with its existing read-only permission and public checks. Private credentialed
+governance remains post-merge only. A missing required context stays pending in
+the train; branch admission does not remove or synthesise a required check.
+
 ### Unraid boot replacement preserves operator work
 
 Agent setup/upgrade replaces only complete exact generated top-level go entries.

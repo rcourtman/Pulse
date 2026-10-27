@@ -470,6 +470,12 @@ def release_branch_for_version(
             if is_prerelease_version(version)
             else legacy_release_line["stable_branch"]
         )
+    # Stable patches are the sole mechanical exception to main-only releases.
+    # Historical mappings above stay intact. Each new patch has its own frozen
+    # target branch; the release snapshot guard also reconstructs its source.
+    patch = re.fullmatch(r"v?(\d+)\.(\d+)\.([1-9]\d*)(?:-rc\.1)?", version)
+    if patch and tuple(map(int, patch.groups())) >= (6, 5, 1):
+        return "release/v" + ".".join(patch.groups())
     return resolved["prerelease_branch"] if is_prerelease_version(version) else resolved["stable_branch"]
 
 
