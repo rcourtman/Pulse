@@ -4946,7 +4946,14 @@ the authoritative analysis outcome.
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must
     append `/.well-known/openid-configuration` beneath the configured issuer
-    base path instead of resetting to the origin root.
+    base path instead of resetting to the origin root. OIDC Test must reject a
+    missing discovery issuer or any byte-for-byte mismatch with the configured
+    issuer, including trailing slashes and case, just as normal sign-in
+    discovery does. Use bounded `missing_discovery_issuer` / `issuer_mismatch`
+    failures without reflecting untrusted discovery values. Successful Test
+    only establishes discovery and issuer equality, not client credentials or
+    sign-in, and must say so. Testing must not change saved provider settings,
+    secrets, admission restrictions or local administrator recovery.
 32. Keep SSO provider-detail payloads edit-complete and non-secret:
     `GET /api/security/sso/providers/{id}` may keep flat list/card fields for
     summary compatibility, but it must also return the nested OIDC/SAML fields
@@ -7222,6 +7229,13 @@ egress boundary. It is exported via `pkg/securityutil`, with
 such as `pulse-enterprise` can reuse the same DNS-rebinding-safe dial and
 redirect policy for operator-configured audit webhooks instead of reintroducing
 raw `http.Client` egress paths.
+The admin OIDC Test verdict must match normal sign-in's nonempty exact issuer
+comparison. `TestOIDCConnectionIssuerParity` couples matching, trailing-slash,
+case, realm, authority and missing-issuer controls to `NewOIDCService`.
+`TestContractSSOOIDCIssuerConsumer` exercises the authenticated route, canonical
+collections, non-reflecting failures and unchanged provider/credential/admin
+state. The existing Settings SSO result consumes these qualified outcomes;
+metadata success alone is never sign-in acceptance.
 That same SSO boundary also owns manual SAML endpoint validation payloads.
 `internal/api/identity_sso_handlers.go`, `internal/api/saml_service.go`, and
 `internal/api/contract_test.go` must preserve both `idpSsoUrl` and optional

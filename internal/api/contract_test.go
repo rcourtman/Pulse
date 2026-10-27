@@ -28268,3 +28268,82 @@ func TestContractSSOEnvironmentBoundaryConsumer(t *testing.T) {
 		}
 	}
 }
+
+// The real authenticated SSO test route must report issuer failures without
+// changing a saved provider, its secret/restrictions, or local admin recovery.
+func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
+	const token = "oidc-issuer-consumer-synthetic-token.12345678"
+	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	r := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "test")
+	seedRestrictedSSOProvider(t, r)
+	before, err := json.Marshal(r.currentSSOConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeFiles := ssoAdmissionFiles(t, r.config.DataPath)
+	beforeAuthUser, beforeAuthPass := r.config.AuthUser, r.config.AuthPass
+	var frames []map[string]interface{}
+	var discovered atomic.Value
+	discovered.Store("")
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodGet || req.URL.Path != "/realms/pulse/.well-known/openid-configuration" {
+			t.Errorf("unexpected diagnostic request: %s %s", req.Method, req.URL.Path)
+			http.NotFound(w, req)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"issuer": discovered.Load().(string), "token_endpoint": "https://idp.example.test/token",
+			"authorization_endpoint": "https://idp.example.test/authorize", "jwks_uri": "https://idp.example.test/jwks",
+		})
+	}))
+	defer server.Close()
+	issuer := server.URL + "/realms/pulse"
+	for _, tt := range []struct {
+		name, reported, code string
+		status               int
+	}{
+		{"mismatch", issuer + "/other", "issuer_mismatch", http.StatusBadRequest},
+		{"missing", "", "missing_discovery_issuer", http.StatusBadRequest},
+		{"exact", issuer, "", http.StatusOK},
+	} {
+		discovered.Store(tt.reported)
+		payload, _ := json.Marshal(SSOTestRequest{Type: "oidc", OIDC: &OIDCTestConfig{IssuerURL: issuer, ClientID: "synthetic-client"}})
+		req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(payload))
+		req.Header.Set("X-API-Token", token)
+		req.Header.Set("Content-Type", "application/json")
+		setTestIP(req)
+		w := httptest.NewRecorder()
+		r.Handler().ServeHTTP(w, req)
+		if w.Code != tt.status {
+			t.Fatalf("%s: status %d, want %d: %s", tt.name, w.Code, tt.status, w.Body.String())
+		}
+		var response SSOTestResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response.Success != (tt.status == http.StatusOK) || response.Error != tt.code {
+			t.Fatalf("%s: misleading result: %+v", tt.name, response)
+		}
+		if response.Success {
+			if response.Details == nil || response.Details.Certificates == nil || response.Details.SupportedScopes == nil {
+				t.Fatal("successful details must have canonical empty collections")
+			}
+		} else if response.Details != nil || tt.reported != "" && strings.Contains(w.Body.String(), tt.reported) {
+			t.Fatal("failure must not echo untrusted issuer or validated details")
+		}
+		if strings.Contains(w.Body.String(), "fixture-secret") || strings.Contains(w.Body.String(), "synthetic-token") {
+			t.Fatal("diagnostic exposed a saved credential")
+		}
+		frames = append(frames, map[string]interface{}{"name": tt.name, "request": string(payload), "status": w.Code, "body": w.Body.String()})
+		after, err := json.Marshal(r.currentSSOConfig())
+		if err != nil || string(before) != string(after) || !reflect.DeepEqual(beforeFiles, ssoAdmissionFiles(t, r.config.DataPath)) || r.config.AuthUser != beforeAuthUser || r.config.AuthPass != beforeAuthPass {
+			t.Fatalf("%s: a diagnostic changed provider settings, files or local admin recovery: %v", tt.name, err)
+		}
+	}
+	encoded, err := json.Marshal(frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("OIDC_CONSUMER_FRAMES %s", encoded)
+}
