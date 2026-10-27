@@ -89,13 +89,23 @@ describe('restore-point source connections in real inventory consumers', () => {
       expect(rows).toHaveLength(1);
       expect(connectionOf(rows[0])).toBe('Connection: pbs-west');
     });
-    fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /expand details for same-name/i }));
-    expect(screen.getByTestId('proxmox-coverage-detail')).toHaveTextContent('pbs-west');
+    await fireEvent.click(screen.getByRole('link', { name: /coverage/i }));
+    await waitFor(() =>
+      expect(document.querySelector('[data-proxmox-backups-table="coverage"]')).toBeInTheDocument(),
+    );
+    const coverage = document.querySelector<HTMLElement>(
+      '[data-proxmox-backups-table="coverage"]',
+    )!;
+    await fireEvent.click(
+      within(coverage).getByRole('button', { name: /expand details for same-name/i }),
+    );
+    expect(await screen.findByTestId('proxmox-coverage-detail')).toHaveTextContent('pbs-west');
     expect(new URLSearchParams(window.location.search).get('q')).toBe('PBS-WEST');
     expect(new URLSearchParams(window.location.search).has('location')).toBe(false);
-    fireEvent.input(search, { target: { value: '' } });
-    fireEvent.click(screen.getByRole('link', { name: /by date/i }));
+    fireEvent.input(screen.getByPlaceholderText(/Search backups by workload/), {
+      target: { value: '' },
+    });
+    await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
     await waitFor(() =>
       expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2),
     );
