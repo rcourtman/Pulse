@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "b9c551d5117b790c8dd9c1d279868c5fcea16862",
+  "verified_at": "2026-10-27T01:20:04.338394Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/public/docs/RECOVERY.md"
+  ],
+  "content_sha256": {
+    "frontend-modern/public/docs/RECOVERY.md": "bcba76d6b14b17903fc9e5375ccfeeea5770a156ded38f5980cb1048d7e0be7c"
+  },
+  "routes": [
+    "/docs/RECOVERY#why-proxmox-backup-counts-differ",
+    "/docs/PBS#backups-are-visible-but-coverage-says-unprotected",
+    "/docs/VM_DISK_MONITORING#backup-safety"
+  ],
+  "viewports": [
+    {
+      "width": 1365,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual production Docs page, router, sanitised Markdown renderer and CSS consume the shipped Recovery guide through real local GETs. Isolated mount with safe auth-status fixture only, not the full authenticated app or native backup/guest/recovery acceptance.",
+    "Both viewports render filtered activity versus inventory-wide Backup health, ambiguous saved locations, day-only selection, chart-only date range, separate clearing and unchanged protection policy. No collection, guest-agent request, backup, restore or stopped Back/reload operation was run."
+  ],
+  "interactions": [
+    "Direct fragment focuses the actual count-guidance heading. Twenty-eight consuming checks across desktop Chromium and 390px WebKit; no page exception or page-wide overflow.",
+    "Keyboard Enter follows existing PBS evidence and backup-safety links to their actual loaded headings at both viewports. Two captures inspected with native view_image; scope, policy and safety paragraphs wrap without clipping."
+  ],
+  "client": {
+    "playwright": "1.56.1",
+    "integration_lock": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "webkit": "26.0"
+  },
+  "pixel_review": {
+    "tool": "native view_image",
+    "captures": 2,
+    "remaining": null
+  },
+  "evidence": "Product intelligence outcome RECEIPTS.md retains source-bound browser results, exact captures, raw source proof and the corrected fixture-only router import failure."
+}
