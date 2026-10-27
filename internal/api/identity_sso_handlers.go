@@ -473,7 +473,8 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	}
 
 	var updated config.SSOProvider
-	if err := decodeAdminJSONObject(w, req, &updated, maxRequestBodySize); err != nil {
+	data, err := decodeAdminJSONObjectData(w, req, &updated, maxRequestBodySize)
+	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid JSON payload", nil)
 		return
 	}
@@ -524,12 +525,19 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	// Preserve fields the editor cannot represent, without turning explicit
+	// empty strings/false values into keeps or inheriting across provider types.
+	if err := preserveUnrepresentedSSOFields(data, &updated, existing); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid JSON payload", nil)
+		return
+	}
+
 	// Preserve existing config when not provided in update (e.g., toggle enabled/disabled
 	// sends the flat list response format, which doesn't include nested OIDC/SAML objects)
-	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC == nil && existing.OIDC != nil {
+	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeOIDC && updated.OIDC == nil && existing.OIDC != nil {
 		updated.OIDC = existing.OIDC
 	}
-	if updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
+	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
 		updated.SAML = existing.SAML
 	}
 	// groupsClaim, groupRoleMappings, allowedGroups, allowedDomains and
@@ -538,7 +546,7 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	// intentional clear.
 
 	// Preserve secrets if not provided in update
-	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
+	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
 		existingHasSecret := existing.OIDC.ClientSecretSet || existing.OIDC.ClientSecret != ""
 		if updated.OIDC.ClientSecret == "" && existingHasSecret {
 			updated.OIDC.ClientSecret = existing.OIDC.ClientSecret

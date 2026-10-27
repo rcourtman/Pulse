@@ -17,22 +17,32 @@ var errAmbiguousAdminJSON = errors.New("request body must contain one unambiguou
 // Callers supply small request structs (no embedded fields or custom decoders).
 // Validate before unmarshalling so an invalid request cannot partially apply.
 func decodeAdminJSONObject(w http.ResponseWriter, r *http.Request, dst any, limit int64) error {
+	_, err := decodeAdminJSONObjectData(w, r, dst, limit)
+	return err
+}
+
+// decodeAdminJSONObjectData also returns the validated document for callers
+// that must distinguish omitted settings from deliberately supplied zero values.
+func decodeAdminJSONObjectData(w http.ResponseWriter, r *http.Request, dst any, limit int64) ([]byte, error) {
 	if r.Body == nil {
-		return errAmbiguousAdminJSON
+		return nil, errAmbiguousAdminJSON
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 || data[0] != '{' || !json.Valid(data) {
-		return errAmbiguousAdminJSON
+		return nil, errAmbiguousAdminJSON
 	}
 	if err := validateAdminJSONMembers(data, reflect.TypeOf(dst)); err != nil {
-		return err
+		return nil, err
 	}
-	return json.Unmarshal(data, dst)
+	if err := json.Unmarshal(data, dst); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 func validateAdminJSONMembers(data []byte, target reflect.Type) error {
