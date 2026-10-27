@@ -203,6 +203,9 @@ jobs:
       - name: Run release promotion policy unit tests
         run: python3 scripts/release_control/release_promotion_policy_test.py
 
+      - name: Verify mechanical stable patch source
+        run: python3 scripts/release_control/stable_patch_test.py
+
       - name: Run release convergence reconciler unit tests
         run: python3 scripts/release_control/reconcile_release_convergence_test.py
 

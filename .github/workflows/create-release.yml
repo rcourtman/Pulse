@@ -247,6 +247,21 @@ jobs:
           python3 scripts/write_github_output.py required_branch "${REQUIRED_BRANCH}"
           echo "[OK] Governed release branch for ${WORKFLOW_OUTPUT_1} is ${REQUIRED_BRANCH}"
 
+      - name: Reconstruct stable patch source
+        if: ${{ startsWith(steps.extract.outputs.source_branch, 'release/v') }}
+        env:
+          PATCH_VERSION: ${{ steps.extract.outputs.version }}
+          PATCH_SOURCE_BRANCH: ${{ steps.extract.outputs.source_branch }}
+        run: |
+          # Historical minor lines predate the mechanical stable-patch path.
+          if [[ "${PATCH_SOURCE_BRANCH}" =~ ^release/v[0-9]+\.[0-9]+\.[1-9][0-9]*$ ]]; then
+            IFS=. read -r PATCH_MAJOR PATCH_MINOR PATCH_NUMBER <<< "${PATCH_SOURCE_BRANCH#release/v}"
+            if (( PATCH_MAJOR > 6 || (PATCH_MAJOR == 6 && PATCH_MINOR >= 5) )); then
+              python3 scripts/release_control/stable_patch.py validate \
+                --version "${PATCH_VERSION}" --source-branch "${PATCH_SOURCE_BRANCH}"
+            fi
+          fi
+
       - name: Validate release-note visual plan
         id: visual_plan
         env:
