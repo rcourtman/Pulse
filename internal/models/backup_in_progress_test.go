@@ -275,3 +275,71 @@ func TestSyncGuestBackupTimesIgnoresAbandonedInFlightSnapshot(t *testing.T) {
 		t.Errorf("LastBackup = %v, want zero", snapshot.VMs[0].LastBackup)
 	}
 }
+
+// Local archives retain their explicit guest kind after VMID reuse. PBS has
+// always used typed subjects; local files must not bypass that safety property.
+func TestSyncGuestBackupTimesLocalArchiveGuestKinds(t *testing.T) {
+	for _, kind := range []string{"qemu", "vm", " QEMU ", "lxc", "ct", " LXC "} {
+		t.Run(kind, func(t *testing.T) {
+			state := NewState()
+			now := time.Now().UTC().Truncate(time.Second)
+			matching, opposite := "qemu", "lxc"
+			isVM := kind == "qemu" || kind == "vm" || kind == " QEMU "
+			if !isVM {
+				matching, opposite = "lxc", "qemu"
+			}
+			state.UpdateVMs([]VM{{VMID: 100, Instance: "a"}, {VMID: 100, Instance: "b"}})
+			state.UpdateContainers([]Container{{VMID: 100, Instance: "a"}, {VMID: 100, Instance: "b"}})
+			state.UpdateStorageBackupsForInstance("a", []StorageBackup{{ID: "artifact", Instance: "a", VMID: 100, Type: kind, Time: now}})
+			state.SyncGuestBackupTimes()
+			snap := state.GetSnapshot()
+			right, wrong := snap.VMs[0].LastBackup, snap.Containers[0].LastBackup
+			if !isVM {
+				right, wrong = wrong, right
+			}
+			if !right.Equal(now) || !wrong.IsZero() {
+				t.Errorf("explicit %q archive right=%s wrong=%s", kind, right, wrong)
+			}
+			if !snap.VMs[1].LastBackup.IsZero() || !snap.Containers[1].LastBackup.IsZero() {
+				t.Fatal("another connection inherited backup time")
+			}
+			// Recency is considered within a kind, never before attribution.
+			older := now.Add(-time.Hour)
+			state.UpdateStorageBackupsForInstance("a", []StorageBackup{
+				{ID: "correct", Instance: "a", VMID: 100, Type: matching, Time: older},
+				{ID: "opposite", Instance: "a", VMID: 100, Type: opposite, Time: now},
+				{ID: "partial", Instance: "a", VMID: 100, Type: matching, Time: now.Add(time.Minute), InProgress: true},
+			})
+			state.SyncGuestBackupTimes()
+			snap = state.GetSnapshot()
+			right = snap.VMs[0].LastBackup
+			if !isVM {
+				right = snap.Containers[0].LastBackup
+			}
+			if !right.Equal(older) {
+				t.Errorf("newer opposite/partial file hid correct archive: %s want %s", right, older)
+			}
+			state.UpdateStorageBackupsForInstance("a", nil)
+			state.SyncGuestBackupTimes()
+			snap = state.GetSnapshot()
+			if !snap.VMs[0].LastBackup.IsZero() || !snap.Containers[0].LastBackup.IsZero() {
+				t.Error("accepted absence retained typed dates")
+			}
+		})
+	}
+}
+
+func TestSyncGuestBackupTimesUntypedLocalArchiveCompatibility(t *testing.T) {
+	for _, kind := range []string{"", "unknown", "legacy"} {
+		t.Run(kind, func(t *testing.T) {
+			state := NewState()
+			now := time.Now().UTC().Truncate(time.Second)
+			state.UpdateVMs([]VM{{VMID: 100, Instance: "a"}})
+			state.UpdateStorageBackupsForInstance("a", []StorageBackup{{ID: "legacy", Instance: "a", VMID: 100, Type: kind, Time: now}})
+			state.SyncGuestBackupTimes()
+			if got := state.GetSnapshot().VMs[0].LastBackup; !got.Equal(now) {
+				t.Errorf("untyped legacy behavior changed: %s", got)
+			}
+		})
+	}
+}

@@ -1113,3 +1113,27 @@ func TestPollPBSBackups_PreservesCacheOnTransientDatastoreError(t *testing.T) {
 		})
 	}
 }
+
+func TestBackupArchivePlacementKeepsGuestKind(t *testing.T) {
+	for _, tc := range []struct {
+		archive string
+		current unifiedresources.ResourceType
+		want    string
+	}{
+		{"qemu", unifiedresources.ResourceTypeVM, "migrated"},
+		{"lxc", unifiedresources.ResourceTypeSystemContainer, "migrated"},
+		{"qemu", unifiedresources.ResourceTypeSystemContainer, "read-node"},
+		{"lxc", unifiedresources.ResourceTypeVM, "read-node"},
+		{"unknown", unifiedresources.ResourceTypeVM, "migrated"},
+	} {
+		t.Run(tc.archive+"/"+string(tc.current), func(t *testing.T) {
+			m := &Monitor{state: models.NewState(), resourceStore: backupReadStateResourceStore([]unifiedresources.Resource{{ID: "current-guest", Type: tc.current, Name: "current", Status: unifiedresources.StatusOnline, Proxmox: &unifiedresources.ProxmoxData{Instance: "site", NodeName: "migrated", VMID: 100}}})}
+			client := &backupContentTypeClient{storage: "local", row: pveapi.StorageContent{Volid: "local:backup/vzdump-" + tc.archive + "-100.tar.zst", Content: "backup", VMID: 100, CTime: time.Now().Add(-time.Hour).Unix(), Size: 1024}}
+			m.pollStorageBackupsWithNodes(context.Background(), "site", client, []pveapi.Node{{Node: "read-node"}}, map[string]string{"read-node": "online"})
+			rows := m.state.GetSnapshot().PVEBackups.StorageBackups
+			if len(rows) != 1 || rows[0].Node != tc.want || rows[0].StorageNode != "read-node" {
+				t.Fatalf("archive kind borrowed wrong placement or lost read origin: %+v want=%s", rows, tc.want)
+			}
+		})
+	}
+}

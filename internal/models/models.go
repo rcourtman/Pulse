@@ -4710,9 +4710,14 @@ func (s *State) SyncGuestBackupTimes() {
 		vmid       int
 	}
 
-	// Build a map of instance+VMID -> latest backup time from all backup sources
-	// Using composite key prevents cross-instance VMID collision issues
-	latestBackup := make(map[string]time.Time)
+	// A retained archive may belong to the other guest kind after VMID reuse.
+	// Keep its kind as well as its connection; the live occupant cannot turn
+	// a removed VM's archive into an LXC backup (or the reverse).
+	type localSubjectKey struct {
+		instance, guestType string
+		vmid                int
+	}
+	latestBackup := make(map[localSubjectKey]time.Time)
 
 	// Guests with a backup running right now: a live vzdump task is the
 	// authoritative PVE-side signal. Partial artifacts (an in-flight PBS
@@ -4753,10 +4758,26 @@ func (s *State) SyncGuestBackupTimes() {
 			// above already reports the guest as backing up.
 			continue
 		}
-		key := backupKey(backup.Instance, backup.VMID)
+		guestType := ""
+		switch strings.ToLower(strings.TrimSpace(backup.Type)) {
+		case "qemu", "vm":
+			guestType = "vm"
+		case "lxc", "ct":
+			guestType = "ct"
+		}
+		key := localSubjectKey{backup.Instance, guestType, backup.VMID}
 		if existing, ok := latestBackup[key]; !ok || backup.Time.After(existing) {
 			latestBackup[key] = backup.Time
 		}
+	}
+	latestLocalBackup := func(instance string, vmid int, guestType string) time.Time {
+		latest := latestBackup[localSubjectKey{instance, guestType, vmid}]
+		// Preserve best-effort matching of older/untyped rows. Only an explicit
+		// artifact discriminator can establish a contradictory guest kind.
+		if untyped := latestBackup[localSubjectKey{instance, "", vmid}]; untyped.After(latest) {
+			latest = untyped
+		}
+		return latest
 	}
 
 	// Process PBS backups (VMID is string, BackupTime is the timestamp).
@@ -5020,11 +5041,8 @@ func (s *State) SyncGuestBackupTimes() {
 
 	// Update VMs - recompute from current backup evidence instead of preserving stale values
 	for i := range s.VMs {
-		var lastBackup time.Time
+		lastBackup := latestLocalBackup(s.VMs[i].Instance, s.VMs[i].VMID, "vm")
 		key := backupKey(s.VMs[i].Instance, s.VMs[i].VMID)
-		if backupTime, ok := latestBackup[key]; ok {
-			lastBackup = backupTime
-		}
 		// Check if PBS has a more recent backup
 		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.VMs[i].VMID, "vm", s.VMs[i].Instance, s.VMs[i].Node, s.VMs[i].Name)
 		if !pbsTime.IsZero() {
@@ -5046,11 +5064,8 @@ func (s *State) SyncGuestBackupTimes() {
 
 	// Update Containers - recompute from current backup evidence instead of preserving stale values
 	for i := range s.Containers {
-		var lastBackup time.Time
+		lastBackup := latestLocalBackup(s.Containers[i].Instance, s.Containers[i].VMID, "ct")
 		key := backupKey(s.Containers[i].Instance, s.Containers[i].VMID)
-		if backupTime, ok := latestBackup[key]; ok {
-			lastBackup = backupTime
-		}
 		// Check if PBS has a more recent backup
 		pbsTime := findBestPBSBackup(pbsBackupsBySubject, s.Containers[i].VMID, "ct", s.Containers[i].Instance, s.Containers[i].Node, s.Containers[i].Name)
 		if !pbsTime.IsZero() {
