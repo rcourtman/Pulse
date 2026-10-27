@@ -41,6 +41,11 @@ def source_branch(ref: str, requested: str, pull_request: str) -> str:
         raise ValueError("snapshot provenance inputs require a reserved release-candidate or release-dispatch ref")
     if not SOURCE_BRANCH.fullmatch(branch):
         raise ValueError("release dispatch is outside a governed source branch")
+    patch = re.fullmatch(r"release/v(\d+)\.(\d+)\.([1-9]\d*)", branch)
+    if patch and tuple(map(int, patch.groups())) >= (6, 5, 1):
+        # A new patch target is not protected main. Its execution must identify
+        # the reviewed immutable preparation, not just a caller-controlled ref.
+        raise ValueError("mechanical patches require a reviewed immutable snapshot")
     return branch
 
 

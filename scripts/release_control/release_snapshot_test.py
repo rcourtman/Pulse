@@ -72,6 +72,10 @@ class SnapshotIdentityTest(unittest.TestCase):
         ref = 'refs/heads/release-dispatch/v6.6.1-rc.1-stamp'
         branch = 'release/v6.6.1'
         self.assertEqual(branch, snapshot.source_branch(ref, branch, '42'))
+        with self.assertRaisesRegex(ValueError, 'reviewed immutable snapshot'):
+            snapshot.source_branch('refs/heads/' + branch, '', '')
+        # Preserve direct dispatch on pre-train historical source lines.
+        self.assertEqual('release/v6.3.2', snapshot.source_branch('refs/heads/release/v6.3.2', '', ''))
         pr = deepcopy(self.pr)
         pr['head']['ref'] = 'release-candidate/v6.6.1-rc.1-stamp'
         pr['base']['ref'] = branch
