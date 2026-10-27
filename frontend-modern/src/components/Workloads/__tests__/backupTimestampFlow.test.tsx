@@ -49,7 +49,14 @@ const rawResource = (lastBackup: string, type: 'vm' | 'system-container', runnin
   status: 'running',
   lastSeen: new Date(now).toISOString(),
   sources: ['proxmox'],
-  proxmox: { vmid: 100, instance: 'east', node: 'pve-1', lastBackup, backupInProgress: running },
+  proxmox: {
+    vmid: 100,
+    instance: 'east',
+    node: 'pve-1',
+    nodeName: 'pve-1',
+    lastBackup,
+    backupInProgress: running,
+  },
 });
 
 function mount(transport: 'api' | 'snapshot', type: 'vm' | 'system-container') {
