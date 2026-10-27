@@ -435,9 +435,9 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 						currentKind := guestInfo[proxmoxmapperKey(instanceName, actualNode, content.VMID)].ResourceType
 						// A reused VMID does not move a removed guest's archive
 						// to the opposite-kind occupant's current placement.
-						contradictoryKind := backupType == "qemu" && currentKind == unifiedresources.ResourceTypeSystemContainer ||
-							backupType == "lxc" && currentKind == unifiedresources.ResourceTypeVM
-						if !contradictoryKind {
+						matchingKind := backupType == "qemu" && currentKind == unifiedresources.ResourceTypeVM ||
+							backupType == "lxc" && currentKind == unifiedresources.ResourceTypeSystemContainer
+						if matchingKind {
 							backupNode = actualNode
 						}
 					}

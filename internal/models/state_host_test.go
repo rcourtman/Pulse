@@ -2267,7 +2267,7 @@ func TestUpdateNodesForInstanceHoldsASplitAgentBackBeforeItFoldsNodeViews(t *tes
 }
 
 func TestUpdateStorageBackupsForInstanceKeepsArchiveGuestKind(t *testing.T) {
-	for _, kind := range []string{"qemu", "vm", " QEMU ", "lxc", "ct", " LXC ", "", "unknown"} {
+	for _, kind := range []string{"qemu", "vm", " QEMU ", "lxc", "ct", " LXC ", "", "unknown", " UNKNOWN ", "unsupported", "host"} {
 		t.Run(kind, func(t *testing.T) {
 			state := NewState()
 			state.UpdateVMs([]VM{{VMID: 100, Instance: "a", Node: "vm-node"}, {VMID: 100, Instance: "b", Node: "other-cluster"}})
@@ -2280,6 +2280,8 @@ func TestUpdateStorageBackupsForInstanceKeepsArchiveGuestKind(t *testing.T) {
 				want101 = "read-node"
 			case "lxc", "ct", " LXC ":
 				want100 = "read-node"
+			case "unknown", " UNKNOWN ", "unsupported", "host":
+				want100, want101 = "read-node", "read-node"
 			}
 			snapshot := state.GetSnapshot()
 			if len(snapshot.PVEBackups.StorageBackups) != 2 {

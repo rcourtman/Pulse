@@ -4627,6 +4627,17 @@ named and default organizations. The custom event envelope stays unchanged.
 
 ## Current State
 
+PVE backup collection keeps an explicitly unclassified archive separate from
+the live occupant of its VMID. Only matching recognised guest kinds can borrow
+current placement; model date selection and recovery subject mapping cannot
+upgrade `unknown`/unsupported non-empty kinds through the legacy empty-type
+fallback. The raw archive remains available with its original facts. The
+normal-suite `TestPVEUnknownArchiveKindLifecycle` exercises polling, asynchronous
+ingestion, canonical dates and postures across unknown-only, typed, partial,
+recovered and absent inventories, including a namesake in another connection.
+This preserves existing artifact-kind safety, not an explanation of #3248 or
+proof of installed guest recovery. No host-agent lifecycle authority changes.
+
 ### Tenant monitors read agent credentials from both token inventories
 
 A non-default organization's monitor config is a deep copy whose `APITokens`

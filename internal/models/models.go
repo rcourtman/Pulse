@@ -4632,15 +4632,18 @@ type localBackupSubjectKey struct {
 
 // localBackupGuestType keeps explicit archive kinds consistent between date
 // selection and placement alignment. An untyped legacy row keeps its existing
-// best-effort VMID lookup; a known contradictory kind never uses that fallback.
+// best-effort VMID lookup; an explicitly unknown or contradictory kind never
+// uses that fallback.
 func localBackupGuestType(kind string) string {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "qemu", "vm":
 		return "vm"
 	case "lxc", "ct":
 		return "ct"
-	default:
+	case "":
 		return ""
+	default:
+		return "unknown"
 	}
 }
 
@@ -4780,8 +4783,8 @@ func (s *State) SyncGuestBackupTimes() {
 	}
 	latestLocalBackup := func(instance string, vmid int, guestType string) time.Time {
 		latest := latestBackup[localBackupSubjectKey{instance, guestType, vmid}]
-		// Preserve best-effort matching of older/untyped rows. Only an explicit
-		// artifact discriminator can establish a contradictory guest kind.
+		// Preserve best-effort matching only for an absent legacy discriminator.
+		// An explicitly unknown kind cannot establish either guest's identity.
 		if untyped := latestBackup[localBackupSubjectKey{instance, "", vmid}]; untyped.After(latest) {
 			latest = untyped
 		}

@@ -213,6 +213,21 @@ A disk named `qemu-archive` may hold LXC backups without hiding them behind the
 VM filter or emitting VM-typed PBS guest confirmations. VMID-zero host handling
 and template/ISO admission stay unchanged.
 
+An explicit `unknown` or unsupported non-empty kind is not an absent legacy
+discriminator. Keep that archive's ID, read node, repository, date, size and
+completion visible, but do not borrow a live VM/LXC's kind, name, canonical
+subject or placement merely because its VMID matches. It cannot advance that
+guest's LastBackup or protected posture, or hide an older correctly typed
+backup. Only the empty-type legacy path retains best-effort matching.
+
+`TestPVEUnknownArchiveKindLifecycle` follows opaque and recognised files through
+polling, live dates, asynchronous ingestion and resource-ID postures, including
+ordinary typed recovery, failed reads, return to unknown-only inventory and
+accepted absence. It preserves a namesake in another connection. Mapper and
+model tests also cover explicit unsupported/host kinds and the empty legacy
+control. Actual lifecycle responses drive desktop and narrow Coverage, By date
+and workload backup-status browser verification; no guest operation is used.
+
 The normal-suite `pve_backup_content_type_test.go` exercises named-disk and
 suffix collisions, prefixed/prefixless local and PBS paths, exact-format
 fallback, unknowns, host/non-backup controls and typed direct-PBS confirmations
