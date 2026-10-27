@@ -62,7 +62,6 @@ func TestOIDCConnectionIssuerParity(t *testing.T) {
 			require.Equal(t, tt.wantError, response.Error)
 			if tt.wantError == "" {
 				require.Equal(t, issuer, response.Details.EntityID)
-				require.Contains(t, response.Message, "Client credentials and sign-in have not been tested.")
 			} else {
 				require.Nil(t, response.Details, "untrusted discovery values must not be presented as validated details")
 				require.NotContains(t, response.Message, server.URL)

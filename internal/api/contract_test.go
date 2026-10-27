@@ -28326,6 +28326,9 @@ func TestContractSSOOIDCIssuerConsumer(t *testing.T) {
 			t.Fatalf("%s: misleading result: %+v", tt.name, response)
 		}
 		if response.Success {
+			if !strings.Contains(response.Message, "Client credentials and sign-in have not been tested.") {
+				t.Fatal("discovery success must not claim tested client credentials or sign-in")
+			}
 			if response.Details == nil || response.Details.Certificates == nil || response.Details.SupportedScopes == nil {
 				t.Fatal("successful details must have canonical empty collections")
 			}
