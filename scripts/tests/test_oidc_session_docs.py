@@ -43,6 +43,27 @@ def assert_group_claim_advice(case, guide):
         case.assertIn(marker, " ".join(guide.split()))
 
 
+def assert_discovery_test_scope(case, handlers):
+    oidc = handlers.split("func (r *Router) testOIDCConnection(", 1)[1].split(
+        "// SSO Metadata Preview", 1)[0]
+    # Match the discovery verdict, not a punctuation-sensitive success slogan.
+    # These source checks complement the executable OIDC issuer-parity tests.
+    for condition, error in (
+        ('if discovery.Issuer == "" {', '"missing_discovery_issuer"'),
+        ('if discovery.Issuer != cfg.IssuerURL {', '"issuer_mismatch"'),
+    ):
+        case.assertIn(condition, oidc)
+        branch = oidc.split(condition, 1)[1].split("\n\t}", 1)[0]
+        case.assertIn("return SSOTestResponse{", branch)
+        case.assertIn("Success: false", branch)
+        case.assertIn(error, branch)
+        case.assertLess(oidc.index(condition), oidc.index("details := &SSOTestDetails{"))
+    success = oidc.rsplit("return SSOTestResponse{", 1)[1]
+    case.assertIn("Success: true", success)
+    case.assertIn("exact issuer match", success)
+    case.assertIn("Client credentials and sign-in have not been tested.", success)
+
+
 class OIDCSessionDocsTest(unittest.TestCase):
     def test_setup_orders_callback_and_access_before_cutover(self):
         assert_callback_setup(self, GUIDE.read_text())
@@ -74,7 +95,22 @@ class OIDCSessionDocsTest(unittest.TestCase):
         create = handlers.split("func (r *Router) handleCreateSSOProvider", 1)[1].split(
             "func (r *Router) handleUpdateSSOProvider", 1)[0]
         self.assertIn("provider.ID = uuid.NewString()", create)
-        self.assertIn('Message: "OIDC discovery successful"', handlers)
+        assert_discovery_test_scope(self, handlers)
+
+    def test_discovery_consistency_rejects_false_green_regressions(self):
+        handlers = (ROOT / "internal/api/identity_sso_handlers.go").read_text()
+        mutations = (
+            ('if discovery.Issuer == "" {', 'if false {'),
+            ('if discovery.Issuer != cfg.IssuerURL {', 'if false {'),
+            ('"missing_discovery_issuer"', '"ignored_missing_issuer"'),
+            ('"issuer_mismatch"', '"ignored_issuer_mismatch"'),
+            ("Client credentials and sign-in have not been tested.", "Sign-in is ready."),
+        )
+        for before, after in mutations:
+            with self.subTest(regression=before):
+                self.assertIn(before, handlers)
+                with self.assertRaises(AssertionError):
+                    assert_discovery_test_scope(self, handlers.replace(before, after, 1))
 
     def test_cookie_server_and_idp_lifetimes_are_distinct(self):
         text = guide_section("### Sessions and `offline_access`", "#### Changing or removing access")
