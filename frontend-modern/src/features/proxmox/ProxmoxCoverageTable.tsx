@@ -415,6 +415,9 @@ export function ProxmoxCoverageTable(props: {
                                 <Show
                                   when={
                                     !columnVisible('targetId') &&
+                                    row.workload.name &&
+                                    row.workload.name.trim() !==
+                                      `${row.workload.typeLabel} ${row.workload.vmid}` &&
                                     (row.workload.type === 'vm' || row.workload.type === 'ct')
                                   }
                                 >

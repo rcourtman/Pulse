@@ -155,6 +155,7 @@ describe('backup workload identity in real inventory consumers', () => {
     const vm = await screen.findByRole('button', {
       name: 'Expand details for VM 100 · PVE connection: Not reported',
     });
+    expect(vm.closest('tr')!.textContent?.match(/VM 100/g)).toHaveLength(1);
     fireEvent.click(vm);
     let detail = screen.getByTestId('proxmox-coverage-detail');
     expect(connectionRow(detail)).toHaveTextContent('Not reported');
