@@ -100,7 +100,8 @@ describe('backup workload identity in real inventory consumers', () => {
         const sources = detail.querySelectorAll('[data-backup-source-connection]');
         expect(sources).toHaveLength(1);
         expect(sources[0]).toHaveTextContent(`Connection: ${scope}`);
-        expect(detail).toHaveTextContent('Not verified');
+        expect(detail).toHaveTextContent('Backup file');
+        expect(detail).not.toHaveTextContent('Unverified');
         fireEvent.click(toggle);
       }
       expect(screen.getByRole('button', { name: '2 unknown' })).toBeInTheDocument();
