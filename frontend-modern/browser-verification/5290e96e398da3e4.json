@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "b94e3fc464023f9d9b0f6cd312ace58bdf02ddfc",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "ed2cd752326ab9634d52b275223439d93501676ea427ea7168015b8d087530d5",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "7a23b549a8e7745c197bf78f387b63ff693c5784b0b89b18309b34891b682631"
+  },
+  "verified_at": "2026-10-27T19:50:51Z",
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "states": [
+    "A 44-entry parsed inventory retains five uncertain source/state witnesses beside newest dated completed points in the bounded initial Coverage preview.",
+    "The preview explains eight unavailable/future dates and shows a partial count; explicit expansion makes every retained entry inspectable, including literal source and distinct Failed/Running states.",
+    "Valid-date recovery, malformed-date recurrence, accepted one/zero-entry reads and ordinary return keep the same open keyed panel and focused expansion control.",
+    "Namesake guests with identical VMIDs/nodes keep distinct PVE scope and do not borrow evidence; protection, identity, completion, dates and guest operations are unchanged."
+  ],
+  "interactions": [
+    "Desktop native keyboard disclosure, repeated Enter expansion 8/16/24/32/40/44, all-shown no-op and close/focus return.",
+    "WebKit narrow whole-row touch disclosure, repeated touch expansion, readable wrapped source/location/warning text at 390px and 320px.",
+    "Ordinary 30-second inventory polls restore and remove dates, shrink and empty retained inventory, and return evidence without losing user expansion or focused control.",
+    "Close, inspect the namesake and reopen the original workload to restore a bounded preview. No extra API read on expansion, mutation, off-origin request or stopped Back/reload operation."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "browser": "chromium",
+      "version": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "timezoneId": "UTC"
+    },
+    {
+      "browser": "webkit",
+      "version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "timezoneId": "America/Los_Angeles"
+    }
+  ],
+  "checks": 117,
+  "pixel_review": "All nine retained captures opened with native view_image and image content presented to the maintainer. The warning/count, uncertainty witnesses, literal origins, incomplete states, incremental/all-shown controls and owner scope are readable at desktop/390px/320px. Existing 320px summary-name/search truncation is unchanged, not repaired.",
+  "captures": [
+    {
+      "name": "desktop-uncertain-preview.png",
+      "sha256": "17054b4e173229832e8d5a10e4a5e7bd83845da8799c77fef36812b4d5cfa62e",
+      "bytes": 132762
+    },
+    {
+      "name": "desktop-all-evidence-tail.png",
+      "sha256": "ea6f8183d3016bca13f08859850b225a4d7d1cbb358ee3486f02528ab3b4ffc4",
+      "bytes": 102661
+    },
+    {
+      "name": "desktop-empty-evidence.png",
+      "sha256": "a8d18f0fb1bfecee16963e491c267e194dee4228acd0eeb0719715583372cb9b",
+      "bytes": 83617
+    },
+    {
+      "name": "desktop-recurrence-reset.png",
+      "sha256": "3151671f031c8dc01481ce3c0f602af8bcb91fed0285c967d78a3841040f3e15",
+      "bytes": 133007
+    },
+    {
+      "name": "phone-uncertain-preview.png",
+      "sha256": "546133d83889f3e23e0a026b7d64fe2296ef77c3925c68f4f470297edc965216",
+      "bytes": 121326
+    },
+    {
+      "name": "phone-320-uncertain-preview.png",
+      "sha256": "ab72449c6657e479eddfd10fea29c90132f73b3fd498b88745d9d2e6149e60c8",
+      "bytes": 120335
+    },
+    {
+      "name": "phone-all-evidence-tail.png",
+      "sha256": "af7c318585b283e7b6e84df4ff67bd168d180d83cda81aa42e6cf2a72244a9f4",
+      "bytes": 57474
+    },
+    {
+      "name": "phone-valid-evidence-tail.png",
+      "sha256": "6a9da7f25f214b2d3afbef3d5cfa7f3e4c109104845c3be543f5740556acde29",
+      "bytes": 56857
+    },
+    {
+      "name": "phone-recurrence-reset.png",
+      "sha256": "35ddf9cea45fec5b4800d042c9c7d83240fb2dcb7f507f762879e98d7d8c519a",
+      "bytes": 121618
+    }
+  ],
+  "evidence": "RECEIPTS.md, BROWSER-PROOFS.tar.xz, BROWSER-FIXTURE.tar.xz and PIXEL-REVIEW.json in the lane outcome; first authored status-label failure retained in ADVERSE-RECORDS.tar.xz."
+}
