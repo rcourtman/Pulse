@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { within } from '@solidjs/testing-library';
 
 import { renderDocMarkdown } from '@/features/docs/docMarkdown';
 
@@ -121,8 +122,10 @@ describe('recovery help', () => {
   it('resolves safe issue reporting to the actual troubleshooting heading', () => {
     const rendered = document.createElement('article');
     rendered.innerHTML = renderDocMarkdown(guide, 'RECOVERY');
-    const link = rendered.querySelector<HTMLAnchorElement>('a[href^="/docs/TROUBLESHOOTING#"]');
-    expect(link?.textContent).toBe('safe issue reporting');
+    const link = within(rendered).getByRole<HTMLAnchorElement>('link', {
+      name: 'safe issue reporting',
+    });
+    expect(link.textContent).toBe('safe issue reporting');
     expect(link?.hasAttribute('data-doc-link')).toBe(true);
     const destination = new URL(link!.getAttribute('href')!, 'https://pulse.example.invalid');
     expect(destination.pathname).toBe('/docs/TROUBLESHOOTING');
