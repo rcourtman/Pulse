@@ -449,6 +449,7 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 			}
 			reloads := 0
 			h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, runtime: defaultRuntimeDependencies(), reloadFunc: func() error { reloads++; return nil }}
+			initialNode := h.GetAllNodesForAPI(context.Background())[0]
 			if tc.action != "" {
 				primary := pin(renewed[0])
 				if strings.Contains(tc.action, "ca") && tc.action != "member-ca" {
@@ -487,6 +488,7 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 			if rec.Code == 200 && !strings.Contains(rec.Body.String(), "Other endpoints and background collection were not tested") {
 				t.Fatal("primary test claims cluster collection")
 			}
+			primaryProbeCode, primaryProbeBody := rec.Code, rec.Body.String()
 			projection := pveClusterEndpointTLSResponses(saved, cfg.Discovery)
 			if len(projection) != 2 || !projection[0].UsesPrimaryTLS || projection[1].UsesPrimaryTLS || projection[1].TLSEndpoint != servers[1].URL {
 				t.Fatalf("incorrect effective endpoint projection: %+v", projection)
@@ -523,6 +525,11 @@ func TestPVEEndpointTrustSavedPolling(t *testing.T) {
 			if (rec.Code == 200) != tc.wantHealth[1] {
 				t.Fatalf("member probe=%d: %s", rec.Code, rec.Body.String())
 			}
+			frame, err := json.Marshal(map[string]any{"scenario": tc.name, "initial_node": initialNode, "saved_node": h.GetAllNodesForAPI(context.Background())[0], "primary_probe": map[string]any{"code": primaryProbeCode, "body": primaryProbeBody}, "member_probe": map[string]any{"code": rec.Code, "body": rec.Body.String()}, "renewed_primary_pin": pin(renewed[0]), "renewed_member_pin": pin(renewed[1])})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("PVE_TLS_CONSUMER_FRAME=%s", frame)
 			after, _ := json.Marshal(cfg.PVEInstances[0])
 			if string(before) != string(after) {
 				t.Fatal("test mutated saved state")
