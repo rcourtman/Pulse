@@ -10555,3 +10555,14 @@ ordinary-user producer/caller controls through the normal installer inventory.
 Existing boot-logger and NAS-removal tests retain detached execution and exact
 removal compatibility. Source fixtures do not establish native Unraid lifecycle
 or original installed-recovery acceptance.
+
+### Shared SAML diagnostic limits remain separate from agent authority
+
+The API-owned SAML Test now requires IdP identity and a supported HTTP(S) SSO
+endpoint before reporting metadata success, and labels metadata/manual results
+as untested sign-in (manual certificates are untested too). Incomplete metadata
+returns `metadata_incomplete` without details or a manual fallback. This changes
+only diagnostic evidence, not agent credentials, enrolment, saved provider
+settings, certificate trust or authentication. The adjacent
+`TestContractSSOSAMLDiagnosticConsumer` proves read-only authenticated results,
+correct audit verdicts and unchanged saved secrets/local administrator recovery.

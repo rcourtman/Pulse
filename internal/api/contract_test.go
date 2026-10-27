@@ -28419,3 +28419,128 @@ func TestContractSSOUnrepresentedSettingsSurviveSignedProviderEdit(t *testing.T)
 		t.Fatal("SAML runtime did not consume retained settings")
 	}
 }
+
+// The real authenticated Settings diagnostic must reject incomplete SAML
+// evidence without saving the draft, exposing saved secrets, or claiming an
+// actual sign-in. These synthetic wire frames also bind consuming-browser proof.
+func TestContractSSOSAMLDiagnosticConsumer(t *testing.T) {
+	const token = "saml-diagnostic-synthetic-token.12345678"
+	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	r := NewRouter(newTestConfigWithTokens(t, record), nil, nil, nil, nil, "test")
+	seedRestrictedSSOProvider(t, r)
+	before, err := json.Marshal(r.currentSSOConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeFiles := ssoAdmissionFiles(t, r.config.DataPath)
+	beforeAuthUser, beforeAuthPass := r.config.AuthUser, r.config.AuthPass
+	logger := &testAuditLogger{}
+	setAuditLogger(t, logger)
+
+	const ssoURL = "https://idp.example.test/Case/Sso"
+	good := samlDiagnosticMetadata("urn:Synthetic:IdP", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, ssoURL, ""))
+	documents := map[string]string{
+		"/empty":       samlDiagnosticMetadata("urn:Synthetic:IdP", ""),
+		"/unsupported": samlDiagnosticMetadata("urn:Synthetic:IdP", samlDiagnosticDescriptor("urn:unsupported:binding", ssoURL, "")),
+		"/unsafe":      samlDiagnosticMetadata("urn:Synthetic:IdP", samlDiagnosticDescriptor(saml.HTTPPostBinding, "https://synthetic:SYNTHETIC_PRIVATE@idp.example.test/sso", "")),
+		"/good":        good,
+		"/broken":      "not XML",
+	}
+	var requests atomic.Int32
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requests.Add(1)
+		xml, ok := documents[req.URL.Path]
+		if req.Method != http.MethodGet || !ok {
+			t.Errorf("unexpected request: %s %s", req.Method, req.URL.Path)
+			http.NotFound(w, req)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(xml))
+	}))
+	defer server.Close()
+	var frames []map[string]interface{}
+	for _, tt := range []struct {
+		name, code string
+		cfg        *SAMLTestConfig
+	}{
+		{"fetched-incomplete", "metadata_incomplete", &SAMLTestConfig{IDPMetadataURL: server.URL + "/empty"}},
+		{"fetched-unsupported", "metadata_incomplete", &SAMLTestConfig{IDPMetadataURL: server.URL + "/unsupported"}},
+		{"fetched-unsafe", "metadata_incomplete", &SAMLTestConfig{IDPMetadataURL: server.URL + "/unsafe"}},
+		{"fetched-format-only", "", &SAMLTestConfig{IDPMetadataURL: server.URL + "/good"}},
+		{"fetched-parse-failure", "fetch_failed", &SAMLTestConfig{IDPMetadataURL: server.URL + "/broken"}},
+		{"metadata-no-manual-fallback", "metadata_incomplete", &SAMLTestConfig{IDPMetadataURL: server.URL + "/empty", IDPMetadataXML: good, IDPSSOURL: ssoURL}},
+		{"inline-incomplete", "metadata_incomplete", &SAMLTestConfig{IDPMetadataXML: samlDiagnosticMetadata("urn:Synthetic:IdP", "")}},
+		{"inline-format-only", "", &SAMLTestConfig{IDPMetadataXML: good}},
+		{"manual-format-only", "", &SAMLTestConfig{IDPSSOURL: ssoURL}},
+		{"manual-certificate-untested", "", &SAMLTestConfig{IDPSSOURL: ssoURL, IDPCertificate: "synthetic-not-a-certificate"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			beforeRequests := requests.Load()
+			beforeAudit := len(logger.events)
+			payload, _ := json.Marshal(SSOTestRequest{Type: "saml", SAML: tt.cfg})
+			req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(payload))
+			req.Header.Set("X-API-Token", token)
+			req.Header.Set("Content-Type", "application/json")
+			setTestIP(req)
+			w := httptest.NewRecorder()
+			r.Handler().ServeHTTP(w, req)
+			wantStatus := http.StatusOK
+			if tt.code != "" {
+				wantStatus = http.StatusBadRequest
+			}
+			if w.Code != wantStatus {
+				t.Fatalf("status %d, want %d: %s", w.Code, wantStatus, w.Body.String())
+			}
+			var result SSOTestResponse
+			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Success != (tt.code == "") || result.Error != tt.code {
+				t.Fatalf("misleading diagnostic: %+v", result)
+			}
+			if result.Success {
+				if !strings.Contains(strings.ToLower(result.Message), "not been tested") || result.Details == nil || result.Details.Certificates == nil || result.Details.SupportedScopes == nil {
+					t.Fatal("success must retain diagnostic limits and canonical details")
+				}
+				if tt.cfg.IDPMetadataURL == "" && tt.cfg.IDPMetadataXML == "" && !strings.Contains(result.Message, "Certificates and sign-in") {
+					t.Fatal("manual URL test must not claim certificate validation")
+				}
+			} else if result.Details != nil {
+				t.Fatal("failed diagnostic must not return validated details")
+			}
+			if strings.Contains(w.Body.String(), "fixture-secret") || strings.Contains(w.Body.String(), "synthetic-token") || strings.Contains(w.Body.String(), "SYNTHETIC_PRIVATE") {
+				t.Fatal("diagnostic exposed saved credentials or untrusted failure details")
+			}
+			wantRequests := int32(0)
+			if tt.cfg.IDPMetadataURL != "" {
+				wantRequests = 1
+			}
+			if requests.Load() != beforeRequests+wantRequests {
+				t.Fatal("test must make one metadata GET at most; never contact SSO or fall back on failure")
+			}
+			var diagnosticAudits int
+			for _, event := range logger.events[beforeAudit:] {
+				if event.EventType == "sso_provider_test" {
+					diagnosticAudits++
+					if event.Success != result.Success {
+						t.Fatal("audit must record the diagnostic's actual verdict")
+					}
+				}
+			}
+			if diagnosticAudits != 1 {
+				t.Fatalf("want one diagnostic audit event, got %d", diagnosticAudits)
+			}
+			after, err := json.Marshal(r.currentSSOConfig())
+			if err != nil || string(before) != string(after) || !reflect.DeepEqual(beforeFiles, ssoAdmissionFiles(t, r.config.DataPath)) || r.config.AuthUser != beforeAuthUser || r.config.AuthPass != beforeAuthPass {
+				t.Fatalf("diagnostic changed provider settings, files or local administrator recovery: %v", err)
+			}
+			frames = append(frames, map[string]interface{}{"name": tt.name, "request": string(payload), "status": w.Code, "body": w.Body.String()})
+		})
+	}
+	encoded, err := json.Marshal(frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("SAML_CONSUMER_FRAMES %s", encoded)
+}

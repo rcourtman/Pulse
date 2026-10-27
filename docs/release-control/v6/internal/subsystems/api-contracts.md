@@ -13002,3 +13002,21 @@ refusal. `TestContractSSOEnvironmentBoundaryConsumer` binds actual authenticated
 responses and temporary persistence to the existing editor's request shapes;
 optional synthetic fixtures support consuming browser proof. These controls
 are not a claim of an installed leak or native identity-provider recovery.
+
+### SAML Test reports metadata evidence, not sign-in acceptance
+
+The existing SSO diagnostic on `internal/api/identity_sso_handlers.go` requires
+nonblank IdP identity and an HTTP(S) SSO endpoint in a supported binding before
+returning metadata success. Incomplete, unsupported or credential-bearing
+endpoints return `metadata_incomplete` without success details; selected metadata
+cannot fall back to manual settings. Success says only that identity and an SSO
+URL were found, explicitly not that sign-in was tested. The manual path checks
+URL format only and explicitly leaves certificates and sign-in untested.
+Certificate information remains informational; no new trust, save or login
+policy is introduced. `TestSAMLConnectionRequiresMetadataEvidence` covers format
+and evidence boundaries; `TestContractSSOSAMLDiagnosticConsumer` exercises the
+authenticated route, exact wire results, audit verdicts and unchanged settings,
+files, saved secrets and local administrator recovery. Existing fetch/parse
+categories, metadata-source precedence, limits, rate checks and outbound/TLS
+policy remain unchanged. Browser proof consumes those actual synthetic wire
+results through the existing Settings editor at desktop and narrow viewports.
