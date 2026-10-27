@@ -253,6 +253,60 @@ describe('backup-identity: native ownership rather than first label match', () =
     ).toBe(true);
   });
 
+  it.each(['namespace-only', ''])(
+    'does not project unmatched PBS location %j as a guest node',
+    (namespace) => {
+      const result = model({
+        pbsBackups: [
+          identityPBS({ instance: 'pbs-reader', namespace, datastore: 'datastore-only' }),
+        ],
+      });
+      const row = result.coverageRows[0];
+      expect(row.workload.node).toBeUndefined();
+      expect(row.workload.nativeNode).toBeUndefined();
+      expect(row.workload.instance).toBeUndefined();
+      expect(row.isOrphaned).toBe(true);
+      expect(row.posture).toBe('not-evaluated');
+      expect(row.artifacts[0].location).toBe(`datastore-only / ${namespace || '(root)'}`);
+      expect(row.artifacts[0].locationConnection).toBe('pbs-reader');
+    },
+  );
+
+  it.each(['', '   '])(
+    'does not substitute a PVE connection for missing native node %j',
+    (node) => {
+      const result = model({ archives: [identityArchive({ instance: 'connection-only', node })] });
+      const row = result.coverageRows[0];
+      expect(row.workload.node).toBeUndefined();
+      expect(row.workload.nativeNode).toBeUndefined();
+      expect(row.workload.instance).toBe('connection-only');
+      expect(row.artifacts[0].location).toBe('local');
+      expect(row.artifacts[0].locationConnection).toBe('connection-only');
+    },
+  );
+
+  it('retains an explicitly reported PVE node for unmatched archives, snapshots and typed tasks', () => {
+    const result = model({
+      archives: [identityArchive()],
+      snapshots: [identitySnapshot()],
+      tasks: [identityTask({ type: 'vm' })],
+    });
+    expect(result.coverageRows).toHaveLength(1);
+    expect(result.coverageRows[0].workload.node).toBe('pve-1');
+    expect(result.coverageRows[0].workload.nativeNode).toBe('pve-1');
+    expect(result.coverageRows[0].latestTask?.id).toBe('task-100');
+    expect(result.coverageRows[0].artifacts).toHaveLength(2);
+  });
+
+  it('does not attach an unscoped task by mistaking the connection name for a native node', () => {
+    const result = model({
+      archives: [identityArchive({ instance: 'connection-only', node: '' })],
+      tasks: [identityTask({ instance: '', node: 'connection-only' })],
+    });
+    expect(result.coverageRows).toHaveLength(1);
+    expect(result.coverageRows[0].latestTask).toBeUndefined();
+  });
+
   it('does not attach a PVE task to a PBS-only orphan with a similar location label', () => {
     const result = model({ pbsBackups: [identityPBS()], tasks: [identityTask({ instance: '' })] });
     expect(result.coverageRows[0].latestTask).toBeUndefined();

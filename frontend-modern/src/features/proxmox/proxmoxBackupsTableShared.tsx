@@ -50,6 +50,12 @@ export const getBackupWorkloadPVEConnection = (workload: WorkloadReference): str
     ? workload.instance?.trim() || 'Not reported'
     : undefined;
 
+// Missing guest placement is explicit in both detail views. Backup repository
+// and namespace hints are not PVE nodes; host backups have no guest placement.
+export const getBackupWorkloadNodeLabel = (workload: WorkloadReference): string | undefined =>
+  workload.node?.trim() ||
+  (workload.type === 'vm' || workload.type === 'ct' ? 'Not reported' : undefined);
+
 export const getBackupWorkloadDisclosureLabel = (workload: WorkloadReference): string => {
   const connection = getBackupWorkloadPVEConnection(workload);
   return connection ? `${workload.label} · PVE connection: ${connection}` : workload.label;

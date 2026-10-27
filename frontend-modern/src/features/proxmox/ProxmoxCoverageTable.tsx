@@ -47,6 +47,7 @@ import {
   SortableHead,
   artifactStateLabel,
   getBackupWorkloadPVEConnection,
+  getBackupWorkloadNodeLabel,
   getBackupWorkloadDisclosureLabel,
 } from './proxmoxBackupsTableShared';
 import {
@@ -234,7 +235,7 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
       rows: compactDetailRows([
         makeDetailRow('Type', row.workload.typeLabel),
         makeDetailRow(PROXMOX_BACKUP_COLUMN_LABELS.targetId, row.workload.vmid),
-        makeDetailRow('Node', row.workload.node),
+        makeDetailRow('Node', getBackupWorkloadNodeLabel(row.workload)),
         makeDetailRow('PVE connection', getBackupWorkloadPVEConnection(row.workload), {
           wrap: true,
         }),
@@ -754,6 +755,21 @@ export function ProxmoxCoverageTable(props: {
                                             class={getPlatformTableCellClassForKind('name')}
                                           >
                                             <ArtifactSourceIdentity artifact={artifact} wrap />
+                                            <Show
+                                              when={
+                                                !isCoverageEvidenceColumnVisible(
+                                                  layoutMode(),
+                                                  'location',
+                                                )
+                                              }
+                                            >
+                                              <span
+                                                class="mt-1 block whitespace-normal text-muted leading-snug wrap-anywhere"
+                                                data-coverage-evidence-location
+                                              >
+                                                Location: {artifact.location}
+                                              </span>
+                                            </Show>
                                           </TableCell>
                                           <Show
                                             when={isCoverageEvidenceColumnVisible(

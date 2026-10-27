@@ -311,6 +311,7 @@ function fallbackWorkload(
   hints: readonly (string | undefined)[],
   sourceScope: readonly (string | undefined)[],
   pveInstance?: string,
+  pveNode?: string,
 ): WorkloadReference {
   const id = fallbackWorkloadId(type, vmid, hints);
   // A VMID (or host label) and repository name are not cross-source identity.
@@ -324,8 +325,10 @@ function fallbackWorkload(
     typeLabel: typeLabel(type),
     vmid: id,
     label: workloadFallbackLabel(type, id),
-    node: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
-    nativeNode: type === 'host' ? undefined : hints.find((hint) => !!hint?.trim()),
+    // Repository/namespace and connection hints can name a fallback target,
+    // but do not report a guest node. Only the PVE producer supplies one.
+    node: type === 'host' ? undefined : pveNode?.trim() || undefined,
+    nativeNode: type === 'host' ? undefined : pveNode?.trim() || undefined,
     instance: pveInstance,
   };
 }
@@ -423,6 +426,7 @@ function resolvePVEWorkload(
       type === 'host' ? [instance, node] : [node, instance],
       ['pve', instance, node],
       instance,
+      node,
     )
   );
 }

@@ -263,4 +263,139 @@ describe('backup workload identity in real inventory consumers', () => {
     );
     expect(api.fetch).toHaveBeenCalledTimes(2);
   });
+  it.each([330, 1200])(
+    'keeps unmatched PBS repository hints out of guest nodes and Node filters at %ipx',
+    async (width) => {
+      api.width = width;
+      mount({
+        workloads: [],
+        pve: emptyPVE,
+        pbs: [
+          identityPBS({
+            instance: 'pbs-reader',
+            namespace: 'namespace-only',
+            datastore: 'datastore-only',
+          }),
+        ],
+      });
+      fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+      let detail = screen.getByTestId('proxmox-coverage-detail');
+      expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+        'Not reported',
+      );
+      expect(detail).toHaveTextContent('datastore-only / namespace-only');
+      expect(detail).toHaveTextContent('Connection: pbs-reader');
+      expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('option', { name: 'Node: namespace-only' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('option', { name: 'Node: datastore-only' }),
+      ).not.toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+      detail = screen.getByTestId('proxmox-recoverable-detail');
+      expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+        'Not reported',
+      );
+      expect(within(detail).getByText('Location', { exact: true }).closest('tr')).toHaveTextContent(
+        'datastore-only / namespace-only',
+      );
+      expect(connectionRow(detail)).toHaveTextContent('Not reported');
+      expect(api.fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([330, 1200])(
+    'does not call a PVE reader a node when placement is absent at %ipx',
+    async (width) => {
+      api.width = width;
+      mount({
+        workloads: [],
+        pve: {
+          ...emptyPVE,
+          storageBackups: [identityArchive({ instance: 'connection-only', node: '' })],
+        },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+      let detail = screen.getByTestId('proxmox-coverage-detail');
+      expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+        'Not reported',
+      );
+      expect(connectionRow(detail)).toHaveTextContent('connection-only');
+      expect(
+        screen.queryByRole('option', { name: 'Node: connection-only' }),
+      ).not.toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+      detail = screen.getByTestId('proxmox-recoverable-detail');
+      expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+        'Not reported',
+      );
+      expect(
+        within(detail).getByText('Connection', { exact: true }).closest('tr'),
+      ).toHaveTextContent('connection-only');
+      expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+      expect(api.fetch).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('keeps a reported unmatched PVE node selectable without inventing a live owner', async () => {
+    api.width = 1200;
+    mount({ workloads: [], pve: { ...emptyPVE, storageBackups: [identityArchive()] } });
+    fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+    const detail = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+      'pve-1',
+    );
+    expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Node: pve-1' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), {
+      target: { value: 'node\u001fpve-1' },
+    });
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('node')).toBe('pve-1'),
+    );
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+  });
+
+  it('replaces unknown placement only with a live matched workload and withdraws it when that owner disappears', async () => {
+    const setWorkloads = mount({
+      workloads: [],
+      pve: emptyPVE,
+      pbs: [identityPBS({ instance: 'pbs-reader', namespace: 'namespace-only' })],
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /1 unmatched backup/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+    expect(
+      within(screen.getByTestId('proxmox-coverage-detail'))
+        .getByText('Node', { exact: true })
+        .closest('tr'),
+    ).toHaveTextContent('Not reported');
+    setWorkloads([identityGuest('guest-east', 'east', 'native-node')]);
+    const matched = await screen.findByRole('button', { name: /expand details for guest-east/i });
+    fireEvent.click(matched);
+    let detail = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+      'native-node',
+    );
+    expect(within(detail).getByRole('link')).toHaveAttribute(
+      'href',
+      '/proxmox/overview?resource=guest-east',
+    );
+    expect(detail).toHaveTextContent('main / namespace-only');
+    setWorkloads([]);
+    fireEvent.click(await screen.findByRole('button', { name: /expand details for VM 100/i }));
+    detail = screen.getByTestId('proxmox-coverage-detail');
+    expect(within(detail).getByText('Node', { exact: true }).closest('tr')).toHaveTextContent(
+      'Not reported',
+    );
+    expect(detail).not.toHaveTextContent('native-node');
+    expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Node: native-node' })).not.toBeInTheDocument();
+    expect(api.fetch).toHaveBeenCalledTimes(2);
+  });
 });
