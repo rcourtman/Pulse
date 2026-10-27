@@ -596,6 +596,9 @@ describe('configured-node trust readback', () => {
       verifySSL: true,
       clusterEndpoints: [],
       user: 'fixture@pve',
+      hasPassword: false,
+      hasToken: false,
+      temperature: undefined,
       monitorPhysicalDisks: false,
     } satisfies NodeConfigWithStatus;
     const returned = {
