@@ -1086,10 +1086,12 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// The reason phrase is supplied by the provider or an intervening proxy.
+		// Do not reflect it (or response headers/body) into Settings diagnostics.
 		return SSOTestResponse{
 			Success: false,
-			Message: "OIDC discovery returned non-200 status",
-			Error:   resp.Status,
+			Message: "OIDC discovery returned an unexpected HTTP status. Check the Issuer URL and the provider or proxy's access settings. Nothing was saved; sign-in was not tested.",
+			Error:   fmt.Sprintf("HTTP %d", resp.StatusCode),
 		}
 	}
 

@@ -1307,6 +1307,13 @@ Compact Coverage age cells use the existing metadata-size text and reclaim numer
 
 ## Shared Boundaries
 
+The shared OIDC Test diagnostic's failed-discovery response carries only a
+numeric HTTP status and fixed guidance, not provider/proxy reason phrases,
+headers or bodies. Testing does not save settings or replace credentials and
+must not imply successful sign-in or completed recovery. Storage, backup and
+restore state remain untouched; `api-contracts` owns the executable consumer
+and provider/settings/file preservation checks.
+
 The shared `internal/api/` audit exporter/summary now refuses synchronous
 selections above 10,000 events before verification or encoding, never returning
 truncated history as a complete recovery record. Storage recovery, retention,
