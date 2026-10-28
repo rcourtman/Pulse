@@ -124,7 +124,7 @@ describe('troubleshooting workflow entry', () => {
         ['/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing'],
       ],
       [
-        'Usage alert stays open after the reading falls:',
+        'Usage fell but an alert remains open:',
         ['#usage-alert-stays-open-after-the-reading-falls'],
       ],
       [
