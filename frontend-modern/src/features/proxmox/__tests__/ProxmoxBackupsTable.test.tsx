@@ -23,7 +23,7 @@ import {
 import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import type { ProtectionPosturesResponse } from '@/types/recovery';
-import { protectionPolicy } from '@/utils/__fixtures__/protectionPosture';
+import { protectionPolicy, protectionPosture } from '@/utils/__fixtures__/protectionPosture';
 import {
   getRecoveryFullDateLabel,
   getRecoveryPrettyDateLabel,
@@ -2169,6 +2169,7 @@ describe('backup location identity in the consuming views', () => {
     ).toBeInTheDocument();
     expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(0);
     expect(document.body).not.toHaveTextContent('SYNTHETIC_UNKNOWN_LOCATION');
+    expect(screen.queryByRole('note', { name: 'Backup location scope' })).not.toBeInTheDocument();
   });
 
   it('withdraws a legacy selection when refreshed inventory makes it ambiguous, without broadening an exact choice', async () => {
@@ -2213,6 +2214,154 @@ describe('backup location identity in the consuming views', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('location-scoped evidence keeps workload-wide protection explicit', () => {
+  beforeEach(() => vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date'] }));
+  afterEach(() => vi.useRealTimers());
+
+  const scopeNote = () => screen.queryByRole('note', { name: 'Backup location scope' });
+  const pointTable = (panel: HTMLElement) =>
+    within(
+      within(panel).getByText('Restore evidence', { exact: true }).closest('div')!.parentElement!,
+    ).getByRole('table');
+  const setup = (kind: 'stale' | 'running' | 'snapshot') => {
+    const guest = identityGuest('east-100', 'east', 'pve-1');
+    const pve = {
+      data: {
+        backupTasks: [identityTask({ status: 'running', id: 'whole-workload-task' })],
+        storageBackups: [identityArchive({ storage: 'current-local' })],
+        guestSnapshots: kind === 'snapshot' ? [identitySnapshot()] : [],
+      },
+    };
+    const pbs = {
+      data: {
+        backups:
+          kind === 'snapshot'
+            ? []
+            : [
+                identityPBS({
+                  datastore: 'offsite',
+                  backupTime: '2026-09-04T10:00:00Z',
+                  inProgress: kind === 'running',
+                }),
+              ],
+      },
+    };
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbs : pve)),
+    );
+    const posture = {
+      ...protectionPosture(guest.id),
+      lastSuccessfulPointAt: '2026-10-04T11:00:00Z',
+    };
+    apiFetchJSONMock.mockResolvedValue({
+      data: [posture, { ...protectionPosture('west-101'), state: 'unprotected' }],
+      policy: protectionPolicy,
+    });
+    const key =
+      kind === 'snapshot' ? '["snapshot","east","pve-1"]' : '["pbs","pbs-server","offsite"]';
+    window.history.replaceState(
+      {},
+      '',
+      `/proxmox/backups/coverage?location=${encodeURIComponent(key)}`,
+    );
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[
+          guest,
+          {
+            ...identityGuest('west-101', 'west', 'pve-2'),
+            proxmox: { vmid: 101, instance: 'west', node: 'pve-2' },
+          },
+        ]}
+      />
+    ));
+    return {
+      pbs,
+      key,
+      label: kind === 'snapshot' ? 'Snapshot · east / pve-1' : 'PBS · pbs-server / offsite',
+    };
+  };
+
+  it.each(['stale', 'running', 'snapshot'] as const)(
+    'qualifies %s selected evidence without recomputing protection, tasks or all-target counts',
+    async (kind) => {
+      const { label } = setup(kind);
+      const note = await screen.findByRole('note', { name: 'Backup location scope' });
+      expect(note).toHaveTextContent(label);
+      expect(note).toHaveTextContent('Backup ages and restore evidence below use');
+      expect(note).toHaveTextContent(
+        'Protection assessments and task history are workload-wide, not a rating of this location.',
+      );
+      expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1 unprotected' })).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Health counts cover all targets and backup locations, regardless of filters.',
+        ),
+      ).toBeInTheDocument();
+      const row = document.querySelector<HTMLElement>('[data-proxmox-backup-row="coverage"]')!;
+      expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+      expect(row).toHaveTextContent('Protected');
+      if (kind === 'stale')
+        expect(row.querySelector('[title*="2026-09-04T10:00:00Z"]')).not.toBeNull();
+      else expect(row).toHaveTextContent('Unknown');
+      const toggle = within(row).getByRole('button', { name: /Expand details/ });
+      fireEvent.click(toggle);
+      const panel = screen.getByTestId('proxmox-coverage-detail');
+      expect(within(panel).getByRole('note', { name: 'Restore evidence scope' })).toHaveTextContent(
+        label,
+      );
+      expect(panel).toHaveTextContent('cover the whole workload, not just this location.');
+      expect(panel).toHaveTextContent('A current verified backup is available.');
+      expect(panel).toHaveTextContent('whole-workload-task');
+      expect(pointTable(panel)).not.toHaveTextContent('current-local');
+      expect(pointTable(panel).querySelectorAll('tbody > tr')).toHaveLength(1);
+      expect(apiFetchMock).toHaveBeenCalledTimes(2);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Backup location filter' }));
+      await waitFor(() => expect(scopeNote()).not.toBeInTheDocument());
+      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(
+        within(panel).queryByRole('note', { name: 'Restore evidence scope' }),
+      ).not.toBeInTheDocument();
+      expect(pointTable(panel)).toHaveTextContent('current-local');
+      expect(pointTable(panel).querySelectorAll('tbody > tr')).toHaveLength(2);
+      expect(screen.getByRole('button', { name: '1 protected' })).toBeInTheDocument();
+      expect(apiFetchMock).toHaveBeenCalledTimes(2);
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('withdraws unresolved scope text on ordinary polling and restores only the inventory label', async () => {
+    vi.useFakeTimers({
+      now: BACKUP_IDENTITY_NOW,
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+    });
+    const { pbs, key, label } = setup('stale');
+    await screen.findByRole('note', { name: 'Backup location scope' });
+    const original = structuredClone(pbs.data.backups);
+    pbs.data.backups = [];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await screen.findByText(/saved backup location cannot be identified uniquely/);
+    expect(scopeNote()).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(0);
+    expect(document.body).not.toHaveTextContent('current-local');
+    expect(new URLSearchParams(window.location.search).get('location')).toBe(key);
+    pbs.data.backups = original;
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(await screen.findByRole('note', { name: 'Backup location scope' })).toHaveTextContent(
+      label,
+    );
+    expect(
+      screen.queryByText(/saved backup location cannot be identified uniquely/),
+    ).not.toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(6);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(3);
   });
 });
 

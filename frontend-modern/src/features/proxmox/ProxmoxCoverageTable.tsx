@@ -331,6 +331,8 @@ export function ProxmoxCoverageTable(props: {
   showTaskColumn: boolean;
   /** Inventory or posture read is pending/failed; retained quality cannot confirm absence. */
   historyReadIncomplete?: boolean;
+  /** Resolved restore-evidence filter; assessments and tasks remain workload-wide. */
+  evidenceLocationLabel?: string;
   layoutWidth?: Accessor<number | null | undefined>;
 }) {
   const [evidenceLimit, setEvidenceLimit] = createSignal(COVERAGE_RESTORE_EVIDENCE_PAGE_SIZE);
@@ -727,6 +729,19 @@ export function ProxmoxCoverageTable(props: {
                             sections={buildCoverageDetailSections(row)}
                             onClose={() => props.onToggleExpand(row.key)}
                           >
+                            <Show when={props.evidenceLocationLabel}>
+                              {(label) => (
+                                <InlineNotice
+                                  tone="info"
+                                  role="note"
+                                  aria-label="Restore evidence scope"
+                                  class="text-xs whitespace-normal wrap-anywhere"
+                                >
+                                  Restore evidence: {label()}. Protection assessments and task
+                                  history cover the whole workload, not just this location.
+                                </InlineNotice>
+                              )}
+                            </Show>
                             <div class="overflow-hidden rounded-sm border border-border bg-surface">
                               <Show
                                 when={evidence().length > 0}

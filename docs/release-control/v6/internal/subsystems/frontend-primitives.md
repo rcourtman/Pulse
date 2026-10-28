@@ -10469,3 +10469,25 @@ end-distinguished connections, 719/720px projection, scoped evidence and owner
 links. Browser proof must inspect complete rendered names/connections, layout
 resize, keyboard/touch disclosure and retained polling at desktop and narrow
 widths, with actual pixels.
+
+### Location-filtered backup evidence is not a location protection rating
+
+The Proxmox backup-health strip names its all-target/all-location count scope,
+independent of filters. In Coverage, a resolved backup-location filter qualifies
+ages and restore evidence next to the list and inside an expanded record. The
+server's protection assessment, provider evidence and task history remain
+workload-wide; a current backup elsewhere must not read as protection of a
+stale, running-only or snapshot-only selected location. Labels come only from
+resolved inventory identity, never raw saved-query text. An unresolved location
+keeps the existing explicit empty selection rather than broadening to another
+repository. Clearing the filter removes the qualification without replacing the
+keyed open record or making another read. No assessment, association, policy,
+API, route, guest operation or recovery authority changes.
+
+Normal-suite `ProxmoxBackupsTable.test.tsx` covers stale, running and snapshot-only
+selected evidence beside a server-owned Protected workload, all-target counts,
+independent task history, filter clearing and ordinary-poll disappearance/return.
+Desktop/narrow browser proof must exercise the parsed inventory consumer,
+filter interactions, scoped open records and literal long labels and inspect
+actual pixels. This corrects evidence scope, not original incident causality or
+native backup/guest recovery.

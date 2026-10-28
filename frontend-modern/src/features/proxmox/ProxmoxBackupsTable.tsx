@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, type Component, type JSX } from 's
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useProtectionPostures } from '@/hooks/useProtectionPostures';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
@@ -341,6 +342,15 @@ export const ProxmoxBackupsTable: Component<{
   const locationSelection = createMemo(() =>
     resolveBackupLocationFilter(locationFilter(), recoveryModel().recoverableArtifacts),
   );
+  // A location narrows restore evidence, not the server's workload assessment
+  // or task history. Name only a resolved inventory location, never URL text.
+  const evidenceLocationLabel = createMemo(() => {
+    const key = locationSelection().key;
+    return key
+      ? recoveryModel().recoverableArtifacts.find((artifact) => artifact.locationKey === key)
+          ?.locationLabel
+      : undefined;
+  });
 
   // Node options for the scope filter: the distinct nodes across the workload
   // set, "All nodes" first. PBS snapshots carry no node, so this scopes the
@@ -790,7 +800,14 @@ export const ProxmoxBackupsTable: Component<{
             {/* The health strip renders identically in both route-backed views. */}
             <ProxmoxBackupsCoverageStrip
               title="Backup health"
-              footnote={getBackupPostureRuleText(protectionPostures.policy()) ?? undefined}
+              footnote={
+                <>
+                  <span class="font-medium">
+                    Health counts cover all targets and backup locations, regardless of filters.
+                  </span>{' '}
+                  {getBackupPostureRuleText(protectionPostures.policy())}
+                </>
+              }
               tail={
                 <span>
                   {liveTotalCount()} targets ·{' '}
@@ -1004,6 +1021,19 @@ export const ProxmoxBackupsTable: Component<{
             </Show>
 
             <Show when={view() === 'coverage'}>
+              <Show when={evidenceLocationLabel()}>
+                {(label) => (
+                  <InlineNotice
+                    tone="info"
+                    role="note"
+                    aria-label="Backup location scope"
+                    class="text-xs whitespace-normal wrap-anywhere"
+                  >
+                    Backup ages and restore evidence below use {label()}. Protection assessments and
+                    task history are workload-wide, not a rating of this location.
+                  </InlineNotice>
+                )}
+              </Show>
               <ProxmoxCoverageTable
                 rows={liveCoverageRows()}
                 hasAnyRows={liveTotalCount() > 0}
@@ -1016,6 +1046,7 @@ export const ProxmoxBackupsTable: Component<{
                 expandedKey={expandedCoverageKey()}
                 onToggleExpand={toggleCoverageExpansion}
                 showTaskColumn={coverageHasTask()}
+                evidenceLocationLabel={evidenceLocationLabel()}
                 historyReadIncomplete={
                   inventoryIncomplete() ||
                   !protectionPostures.resolvedOnce() ||
@@ -1057,6 +1088,7 @@ export const ProxmoxBackupsTable: Component<{
                         expandedKey={expandedCoverageKey()}
                         onToggleExpand={toggleCoverageExpansion}
                         showTaskColumn={coverageHasTask()}
+                        evidenceLocationLabel={evidenceLocationLabel()}
                         historyReadIncomplete={
                           inventoryIncomplete() ||
                           !protectionPostures.resolvedOnce() ||
