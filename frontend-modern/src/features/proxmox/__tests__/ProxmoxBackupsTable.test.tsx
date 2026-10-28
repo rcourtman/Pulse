@@ -29,6 +29,7 @@ import {
   getRecoveryPrettyDateLabel,
 } from '@/utils/recoveryDatePresentation';
 import { eventBus } from '@/stores/events';
+import { setKioskMode } from '@/utils/url';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
 // ProxmoxBackupsTable reads URL search params (node/type scope filters), so it
@@ -965,6 +966,160 @@ const serverTable = () => document.querySelector('[data-proxmox-backups-table="s
 const sourceCalls = (source: 'pve' | 'pbs') =>
   apiFetchMock.mock.calls.filter(([url]) => url === `/api/backups/${source}`);
 
+describe('backup read recovery keeps keyboard position', () => {
+  beforeEach(() => window.history.replaceState({}, '', '/proxmox/backups/coverage?q=backup#proof'));
+  afterEach(() => {
+    setKioskMode(false);
+    window.sessionStorage.removeItem('pulse_kiosk_mode');
+  });
+
+  const acceptedPosture = { data: [protectionPosture('ct-112')], policy: protectionPolicy };
+  const setup = (source: 'pve' | 'pbs' | 'posture') => {
+    let read = Promise.resolve(new Response('{}', { status: 503 }));
+    apiFetchMock.mockImplementation((url: string) =>
+      url.endsWith(`/${source}`)
+        ? read
+        : Promise.resolve(jsonResponse(url.endsWith('/pve') ? readPvePayload : pbsPayload)),
+    );
+    apiFetchJSONMock.mockImplementation(() =>
+      source === 'posture'
+        ? read.then(async (response) => {
+            if (!response.ok) throw new Error('Synthetic unavailable posture');
+            return response.json();
+          })
+        : Promise.resolve(acceptedPosture),
+    );
+    return {
+      mount: () => mountBackupReadState(),
+      pending: () => {
+        const pending = deferred<Response>();
+        read = pending.promise;
+        return (success = true) =>
+          pending.resolve(
+            success
+              ? jsonResponse(
+                  source === 'posture'
+                    ? acceptedPosture
+                    : source === 'pve'
+                      ? readPvePayload
+                      : pbsPayload,
+                )
+              : new Response('{}', { status: 503 }),
+          );
+      },
+      label:
+        source === 'posture'
+          ? 'Retry protection posture'
+          : `Retry ${source.toUpperCase()} inventory`,
+    };
+  };
+
+  it.each(['pve', 'pbs', 'posture'] as const)(
+    'keeps %s retry focused while pending and after failure, then hands successful recovery to the active view',
+    async (source) => {
+      const fixture = setup(source);
+      fixture.mount();
+      const retry = await screen.findByRole('button', { name: fixture.label });
+      retry.focus();
+      let finish = fixture.pending();
+      fireEvent.click(retry);
+      expect(retry).toHaveFocus();
+      expect(retry).toHaveAttribute('aria-disabled', 'true');
+      const count = apiFetchMock.mock.calls.length + apiFetchJSONMock.mock.calls.length;
+      fireEvent.click(retry);
+      expect(apiFetchMock.mock.calls.length + apiFetchJSONMock.mock.calls.length).toBe(count);
+      finish(false);
+      await waitFor(() => expect(retry).toHaveAttribute('aria-disabled', 'false'));
+      expect(retry).toHaveFocus();
+      finish = fixture.pending();
+      fireEvent.click(retry);
+      finish();
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus());
+      expect(screen.queryByRole('button', { name: fixture.label })).toBeNull();
+      expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+        '/proxmox/backups/coverage?q=backup#proof',
+      );
+    },
+  );
+
+  it.each(['pve', 'pbs', 'posture'] as const)(
+    'does not steal focus moved away from the %s retry',
+    async (source) => {
+      const fixture = setup(source);
+      fixture.mount();
+      const retry = await screen.findByRole('button', { name: fixture.label });
+      retry.focus();
+      const finish = fixture.pending();
+      fireEvent.click(retry);
+      const search = screen.getByPlaceholderText(
+        'Search backups by workload, node, source, or status',
+      );
+      search.focus();
+      finish();
+      await waitFor(() => expect(retry).not.toBeInTheDocument());
+      expect(search).toHaveFocus();
+    },
+  );
+
+  it('hands whole-inventory Refresh focus to inspection when either source recovers', async () => {
+    apiFetchMock.mockResolvedValue(new Response('{}', { status: 503 }));
+    apiFetchJSONMock.mockResolvedValue(acceptedPosture);
+    mountBackupReadState();
+    const refresh = await screen.findByRole('button', { name: 'Refresh' });
+    refresh.focus();
+    const pve = deferred<Response>();
+    const pbs = deferred<Response>();
+    apiFetchMock.mockImplementation((url: string) =>
+      url.endsWith('/pve') ? pve.promise : pbs.promise,
+    );
+    fireEvent.click(refresh);
+    fireEvent.click(refresh);
+    expect(sourceCalls('pve')).toHaveLength(2);
+    expect(sourceCalls('pbs')).toHaveLength(2);
+    pve.resolve(jsonResponse(readPvePayload));
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus());
+    expect(screen.getByRole('button', { name: 'Retry PBS inventory' })).toBeInTheDocument();
+    pbs.resolve(jsonResponse(pbsPayload));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Retry PBS inventory' })).toBeNull(),
+    );
+    expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus();
+  });
+
+  it('uses the named inspection region when kiosk mode hides the view links', async () => {
+    setKioskMode(true);
+    const fixture = setup('pbs');
+    fixture.mount();
+    const retry = await screen.findByRole('button', { name: fixture.label });
+    retry.focus();
+    const finish = fixture.pending();
+    fireEvent.click(retry);
+    finish();
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Backup inspection' })).toHaveFocus(),
+    );
+    expect(screen.queryByRole('navigation', { name: 'Backup views' })).toBeNull();
+  });
+
+  it('never restores focus after the inspection has been unmounted', async () => {
+    const fixture = setup('pbs');
+    const mounted = fixture.mount();
+    const retry = await screen.findByRole('button', { name: fixture.label });
+    retry.focus();
+    const finish = fixture.pending();
+    fireEvent.click(retry);
+    mounted.unmount();
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(outside).toHaveFocus();
+    outside.remove();
+  });
+});
+
 describe('independent Proxmox backup inventory reads', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/proxmox/backups/date');
@@ -991,7 +1146,7 @@ describe('independent Proxmox backup inventory reads', () => {
       response = pending.promise;
       const retry = screen.getByRole('button', { name: `Retry ${source.toUpperCase()} inventory` });
       fireEvent.click(retry);
-      expect(retry).toBeDisabled();
+      expect(retry).toHaveAttribute('aria-disabled', 'true');
       expect(screen.getByText(/The response format is invalid/)).toBeInTheDocument();
       expect(recoverableRows()).toHaveLength(1);
       pending.resolve(jsonResponse(source === 'pbs' ? pbsPayload : readPvePayload));
@@ -1112,7 +1267,7 @@ describe('independent Proxmox backup inventory reads', () => {
       const pending = deferred<Response>();
       response = pending.promise;
       fireEvent.click(retry);
-      expect(retry).toBeDisabled();
+      expect(retry).toHaveAttribute('aria-disabled', 'true');
       fireEvent.click(retry);
       expect(sourceCalls(source)).toHaveLength(2);
       expect(recoverableRows()).toHaveLength(1);
@@ -1726,7 +1881,7 @@ describe('Coverage withdraws failed protection assessments', () => {
       apiFetchJSONMock.mockReturnValue(pending.promise);
       const retry = screen.getByRole('button', { name: 'Retry protection posture' });
       fireEvent.click(retry);
-      expect(retry).toBeDisabled();
+      expect(retry).toHaveAttribute('aria-disabled', 'true');
       expect(retry).toHaveTextContent('Retrying');
       expect(row()).toHaveTextContent('Unknown');
       fireEvent.click(retry);
