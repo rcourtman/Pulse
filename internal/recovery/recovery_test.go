@@ -1,6 +1,8 @@
 package recovery
 
 import (
+	"math"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1245,5 +1247,89 @@ func TestComputeVerifyIntentAt_BoundaryEqualsWindow(t *testing.T) {
 	}
 	if ts == nil {
 		t.Fatalf("beyond boundary lastVerifiedAt = nil, want non-nil so UI can render history")
+	}
+}
+
+func TestRollupVerificationClockBoundaries(t *testing.T) {
+	now := time.Date(2026, 10, 28, 23, 0, 0, 0, time.UTC)
+	recent := now.Add(-time.Hour).UnixMilli()
+	boundary := now.Add(-BackupVerifyStaleWindow).UnixMilli()
+	for _, tc := range []struct {
+		name              string
+		success, verified int64
+		want              VerifyIntent
+	}{
+		{"recent", recent, recent, VerifyIntentVerified},
+		{"at-evaluation", now.UnixMilli(), now.UnixMilli(), VerifyIntentVerified},
+		{"inclusive-window", boundary, boundary, VerifyIntentVerified},
+		{"past-window", recent, boundary - 1, VerifyIntentStale},
+		{"no-verification", recent, 0, VerifyIntentStale},
+		{"invalid-verification", recent, -1, VerifyIntentStale},
+		{"no-success", 0, recent, VerifyIntentUnknown},
+		{"invalid-success", -1, recent, VerifyIntentUnknown},
+		{"future-verification", recent, now.UnixMilli() + 1, VerifyIntentUnknown},
+		{"future-success", now.UnixMilli() + 1, recent, VerifyIntentUnknown},
+		{"future-success-unverified", now.UnixMilli() + 1, 0, VerifyIntentUnknown},
+		{"both-future", now.UnixMilli() + 1, now.UnixMilli() + 1, VerifyIntentUnknown},
+		{"extreme-future-verification", recent, math.MaxInt64, VerifyIntentUnknown},
+		{"extreme-future-success", math.MaxInt64, recent, VerifyIntentUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			intent, verified := ComputeVerifyIntentAt(tc.success, tc.verified, now)
+			if intent != tc.want {
+				t.Errorf("intent=%q, want %q", intent, tc.want)
+			}
+			if tc.verified <= 0 {
+				if verified != nil {
+					t.Fatalf("unobserved verification became %v", verified)
+				}
+			} else if verified == nil || verified.UnixMilli() != tc.verified {
+				t.Fatalf("source verification date rewritten: %v, want %d", verified, tc.verified)
+			}
+		})
+	}
+}
+
+func TestRollupFutureDateCorrectionPreservesEvidence(t *testing.T) {
+	now := time.Date(2026, 10, 28, 23, 0, 0, 0, time.UTC)
+	recent, future := now.Add(-time.Hour), now.Add(time.Hour)
+	verified := true
+	for _, provider := range []Provider{ProviderProxmoxPVE, ProviderProxmoxPBS, ProviderProxmoxPMG, ProviderTrueNAS, ProviderKubernetes} {
+		t.Run(string(provider), func(t *testing.T) {
+			point := RecoveryPoint{ID: "clock-backup", Provider: provider, Kind: KindBackup, Mode: ModeRemote, Outcome: OutcomeSuccess,
+				CompletedAt: &future, Verified: &verified, SubjectResourceID: "clock-guest", ProviderScope: "clock-estate"}
+			points := []RecoveryPoint{point}
+			before := []RecoveryPoint{point}
+			rollups := BuildRollupsFromPointsAt(points, now)
+			if len(rollups) != 1 {
+				t.Fatalf("rollups=%+v", rollups)
+			}
+			r := rollups[0]
+			if r.VerifyIntent != VerifyIntentUnknown {
+				t.Errorf("future intent=%q, want unknown", r.VerifyIntent)
+			}
+			if r.LastSuccessAt == nil || !r.LastSuccessAt.Equal(future) || r.LastVerifiedAt == nil || !r.LastVerifiedAt.Equal(future) || r.LastAttemptAt == nil || !r.LastAttemptAt.Equal(future) {
+				t.Fatalf("future evidence lost: %+v", r)
+			}
+			if r.RollupID != "res:clock-guest" || r.SubjectResourceID != point.SubjectResourceID || len(r.Providers) != 1 || r.Providers[0] != provider || !reflect.DeepEqual(points, before) {
+				t.Fatalf("scope, identity or input changed: %+v", r)
+			}
+			// Merely collecting the same point again must not invent a new date.
+			again := BuildRollupsFromPointsAt(points, now)
+			if !reflect.DeepEqual(rollups, again) {
+				t.Fatal("ordinary reread changed evidence")
+			}
+			// Only a corrected source date (or actual time reaching the reported instant)
+			// makes this same verified point eligible for a verified assessment.
+			points[0].CompletedAt = &recent
+			corrected := BuildRollupsFromPointsAt(points, now)[0]
+			if corrected.VerifyIntent != VerifyIntentVerified || corrected.LastVerifiedAt == nil || !corrected.LastVerifiedAt.Equal(recent) || corrected.RollupID != r.RollupID {
+				t.Fatalf("corrected date did not recover in place: %+v", corrected)
+			}
+			atReportedTime := BuildRollupsFromPointsAt(before, future)[0]
+			if atReportedTime.VerifyIntent != VerifyIntentVerified || !atReportedTime.LastVerifiedAt.Equal(future) {
+				t.Fatal("evaluation did not recover at reported time")
+			}
+		})
 	}
 }

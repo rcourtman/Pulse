@@ -21,10 +21,10 @@ const BackupVerifyStaleWindow = 7 * 24 * time.Hour
 // Semantics:
 //   - verified : a verification-bearing point exists within window of now
 //   - stale    : a successful backup exists, but no verification within window
-//   - unknown  : no successful backup at all (or no info)
+//   - unknown  : no successful backup, or a success/verification date is in the future
 //
 // LastVerifiedAt is returned regardless of intent (when known) so consumers
-// can surface "last verified X days ago" alongside the badge.
+// can retain the source date even when clock uncertainty prevents an assessment.
 func ComputeVerifyIntentAt(lastSuccessMs, lastVerifiedMs int64, now time.Time) (VerifyIntent, *time.Time) {
 	windowMs := BackupVerifyStaleWindow.Milliseconds()
 	nowMs := now.UTC().UnixMilli()
@@ -35,7 +35,10 @@ func ComputeVerifyIntentAt(lastSuccessMs, lastVerifiedMs int64, now time.Time) (
 		lastVerifiedAt = &t
 	}
 
-	if lastSuccessMs <= 0 {
+	// A future date proves no recency. Keep the reported date as evidence,
+	// but align the rollup with posture: clock uncertainty is neither verified
+	// nor stale. Check before subtraction so extreme dates cannot overflow age.
+	if lastSuccessMs <= 0 || lastSuccessMs > nowMs || lastVerifiedMs > nowMs {
 		return VerifyIntentUnknown, lastVerifiedAt
 	}
 

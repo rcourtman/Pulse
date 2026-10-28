@@ -121,13 +121,13 @@ type VerifyIntent string
 
 const (
 	// VerifyIntentVerified means a verification-bearing successful recovery
-	// point exists within the staleness window.
+	// point exists at or before evaluation time within the staleness window.
 	VerifyIntentVerified VerifyIntent = "verified"
 	// VerifyIntentStale means a successful backup exists for the subject but
 	// no verification-bearing point has landed within the staleness window.
 	VerifyIntentStale VerifyIntent = "stale"
-	// VerifyIntentUnknown means there is no information one way or the other
-	// (no successful backup, or no verification-bearing points at all).
+	// VerifyIntentUnknown means there is no successful backup, or a reported
+	// success/verification date is in the future and its age cannot be assessed.
 	VerifyIntentUnknown VerifyIntent = "unknown"
 )
 

@@ -643,6 +643,23 @@ synthetic poll, async ingest, requested and state-filtered posture reads, and
 clock correction. No clock mutation, backup execution or native recovery is
 established by these fixtures.
 
+The existing recovery rollup API uses the same upper clock boundary. Its shared
+`ComputeVerifyIntentAt` classifier returns `unknown` when the success or newest
+verification date is later than evaluation, instead of a false `verified` or a
+stale-age claim. The existing seven-day inclusive verification window and
+`verified`/`stale`/`unknown` wire values are unchanged. Both persisted and in-memory
+rollups retain the original success, verification and attempt timestamps and
+subject/provider scope; a normal corrected source date recovers on the next read.
+This is a machine-API assessment correction, not a new frontend surface or an
+installed/native backup recovery claim.
+
+`recovery_test.go` covers future, absent, invalid, equal-time and window-boundary
+inputs, extreme timestamps, five provider types and in-place correction without
+rewriting evidence. `recovery_handlers_test.go` exercises real persisted writes,
+org-isolated rollup reads and the canonical/compatibility HTTP payload through
+future and corrected dates. The current frontend does not consume this rollup
+intent; Coverage's separately assessed posture and its pixels are unchanged.
+
 ### Canonical posture recognises recovery's Proxmox subject aliases
 
 Protection posture selects stored points and publishes its subject ID using
