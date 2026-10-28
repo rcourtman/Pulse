@@ -124,6 +124,10 @@ describe('troubleshooting workflow entry', () => {
         ['/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing'],
       ],
       [
+        'Usage alert stays open after the reading falls:',
+        ['#usage-alert-stays-open-after-the-reading-falls'],
+      ],
+      [
         'Private information was posted:',
         ['/docs/TROUBLESHOOTING#if-you-already-posted-private-information'],
       ],
@@ -184,12 +188,16 @@ describe('troubleshooting workflow entry', () => {
     expect(links.length).toBeGreaterThan(0);
     for (const link of links) {
       const href = link.getAttribute('href')!;
-      const match = /^\/docs\/([^#]+)#(.+)$/.exec(href);
+      // The production viewer preserves local fragments and rewrites Markdown
+      // links to other guides. Both must still lead to a real shipped heading.
+      const match = /^(?:\/docs\/([^#]+))?#(.+)$/.exec(href);
       expect(match, href).not.toBeNull();
-      const target = renderGuide(match![1]).querySelector(`[id="${match![2]}"]`);
+      const target = renderGuide(match![1] ?? 'TROUBLESHOOTING').querySelector(
+        `[id="${match![2]}"]`,
+      );
       expect(target, href).not.toBeNull();
       expect(target?.tagName, href).toMatch(/^H[1-6]$/);
-      expect(link.hasAttribute('data-doc-link'), href).toBe(true);
+      expect(link.hasAttribute('data-doc-link'), href).toBe(!href.startsWith('#'));
       expect(link.hasAttribute('target'), href).toBe(false);
     }
   });
