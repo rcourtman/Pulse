@@ -47,16 +47,29 @@ describe('shipped alert Off FAQ', () => {
     expect(guide('FAQ')).toBe(readFileSync(path.join(root, 'docs/FAQ.md'), 'utf8'));
   });
 
-  it('routes the two independent warning paths to real shipped headings', () => {
+  it('routes required warning and scope guidance to real shipped headings', () => {
     const links = [...section().querySelectorAll('a')];
-    expect(links).toHaveLength(2);
-    expect(links.map((link) => link.textContent)).toEqual([
-      'how Patrol works',
-      'ordinary notification checks',
-    ]);
+    // Require each existing job, but allow another useful link when its
+    // destination also passes the real-viewer checks below.
+    for (const [label, href] of [
+      ['how Patrol works', '/docs/AI#how-patrol-works'],
+      [
+        'ordinary notification checks',
+        '/docs/TROUBLESHOOTING#test-succeeds-but-real-alerts-are-missing',
+      ],
+      [
+        'runtime, container and machine alert scopes',
+        '/docs/DOCKER#runtime-and-container-alert-scopes',
+      ],
+    ]) {
+      const matches = links.filter((link) => link.textContent === label);
+      expect(matches, label).toHaveLength(1);
+      expect(matches[0].getAttribute('href'), label).toBe(href);
+    }
     for (const link of links) {
-      const [name, fragment] = link.getAttribute('href')!.replace('/docs/', '').split('#');
-      expect(article(name).querySelector(`#${fragment}`)).not.toBeNull();
+      const route = /^\/docs\/([^#]+)#(.+)$/.exec(link.getAttribute('href') ?? '');
+      expect(route).not.toBeNull();
+      expect(article(route![1]).querySelector(`[id="${route![2]}"]`)).not.toBeNull();
       expect(link.hasAttribute('data-doc-link')).toBe(true);
       expect(link.hasAttribute('target')).toBe(false);
     }
