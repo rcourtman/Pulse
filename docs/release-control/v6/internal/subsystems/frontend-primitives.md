@@ -20,6 +20,23 @@
 
 ## Purpose
 
+### Backup read recovery retains keyboard position
+
+PVE, PBS and protection-posture retries remain focusable while pending, report
+`aria-disabled`, and reject duplicate activation. A failed retry retains its
+control. When a recovered notice or whole-inventory error is removed, focus
+owned by that content moves to the existing active Backups view link, or the
+named inspection region when kiosk mode hides navigation. Recovery never
+moves focus the operator has taken elsewhere, or restores it after leaving
+the surface. Independent inventory, server health, assessment withdrawal,
+read cadence, filters, guest operations and protection policy are unchanged.
+
+`ProxmoxBackupsTable.test.tsx` exercises pending/failed/successful retries,
+duplicate activation, partial whole-inventory recovery, moved focus, kiosk
+fallback and disposal. Desktop and narrow browser proof must exercise the
+real HTTP clients, keyboard input, ordinary polling and consuming pixels.
+This is inspection accessibility, not original guest or installed recovery.
+
 ### Runtime alert controls describe only supported scope (28 October 2026)
 
 Container Runtime rows expose their existing Offline Alerts control, not an

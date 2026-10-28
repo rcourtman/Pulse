@@ -4,6 +4,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -134,6 +135,22 @@ export const ProxmoxBackupsTable: Component<{
   workloads?: readonly Resource[];
   servers?: readonly Resource[];
 }> = (props) => {
+  let inspection: HTMLDivElement | undefined;
+  // Recovering a read removes its notice (or the whole-inventory error).
+  // Hand off only focus owned by that retiring content, never focus the
+  // operator has moved elsewhere or focus after leaving this surface.
+  const retainRecoveryFocus = (notice: HTMLElement): void => {
+    onCleanup(() => {
+      if (!notice.contains(document.activeElement)) return;
+      queueMicrotask(() => {
+        if (!inspection?.isConnected || document.activeElement !== document.body) return;
+        const activeView = inspection.querySelector<HTMLElement>(
+          'nav[aria-label="Backup views"] [aria-current="page"]',
+        );
+        (activeView ?? inspection).focus();
+      });
+    });
+  };
   // Independent read owners contain source failures and replace pending reads
   // on org changes/disposal. Refresh while mounted at the same bounded cadence
   // as protection posture; no cross-route inventory cache or per-row reads.
@@ -724,11 +741,18 @@ export const ProxmoxBackupsTable: Component<{
     );
 
   return (
-    <div class="space-y-3">
+    <div
+      ref={inspection}
+      role="region"
+      aria-label="Backup inspection"
+      tabIndex={-1}
+      class="space-y-3"
+    >
       <For each={inventorySources}>
         {({ label, query }) => (
           <Show when={!query.resolvedOnce() || query.error()}>
             <div
+              ref={retainRecoveryFocus}
               role="status"
               class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center justify-between gap-2`}
             >
@@ -744,10 +768,12 @@ export const ProxmoxBackupsTable: Component<{
               <Show when={query.error()}>
                 <button
                   type="button"
-                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
                   aria-label={`Retry ${label} inventory`}
-                  disabled={query.loading()}
-                  onClick={() => void query.refetch()}
+                  aria-disabled={query.loading()}
+                  onClick={() => {
+                    if (!query.loading()) void query.refetch();
+                  }}
                 >
                   {query.loading() ? 'Retrying…' : `Retry ${label} inventory`}
                 </button>
@@ -770,11 +796,13 @@ export const ProxmoxBackupsTable: Component<{
       <Show
         when={!allInventoriesFailed()}
         fallback={
-          <PlatformErrorState
-            title="Could not load Proxmox backup inventory"
-            description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
-            onRefresh={retryAllInventories}
-          />
+          <div ref={retainRecoveryFocus}>
+            <PlatformErrorState
+              title="Could not load Proxmox backup inventory"
+              description="PVE and PBS backup inventories are unavailable. Counts are incomplete. Refresh to retry both sources."
+              onRefresh={retryAllInventories}
+            />
+          </div>
         }
       >
         <Show
@@ -792,6 +820,7 @@ export const ProxmoxBackupsTable: Component<{
             <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
             <Show when={protectionPostures.response.error}>
               <div
+                ref={retainRecoveryFocus}
                 role="status"
                 class={`${BACKUP_READ_NOTICE_CLASS} flex flex-wrap items-center justify-between gap-2`}
               >
@@ -801,10 +830,12 @@ export const ProxmoxBackupsTable: Component<{
                 </span>
                 <button
                   type="button"
-                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+                  class="min-h-10 shrink-0 rounded-md border border-current px-3 font-medium hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:opacity-50"
                   aria-label="Retry protection posture"
-                  disabled={protectionPostures.response.loading}
-                  onClick={() => void protectionPostures.refetch()}
+                  aria-disabled={protectionPostures.response.loading}
+                  onClick={() => {
+                    if (!protectionPostures.response.loading) void protectionPostures.refetch();
+                  }}
                 >
                   {protectionPostures.response.loading ? 'Retrying…' : 'Retry protection posture'}
                 </button>
