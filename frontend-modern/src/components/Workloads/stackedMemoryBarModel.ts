@@ -31,6 +31,8 @@ export interface StackedMemoryBarProps {
   /** Render a direct used-vs-total comparison instead of composition/free rows. */
   comparisonTotalLabel?: string;
   tooltipTitle?: string;
+  /** Opt in to a keyboard/touch breakdown, named by the consuming resource. */
+  detailsLabel?: string;
 }
 
 export interface StackedMemorySegment {

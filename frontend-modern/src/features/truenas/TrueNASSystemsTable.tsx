@@ -409,6 +409,7 @@ export const TrueNASSystemsTable: Component<{
                                 total={memoryTotal()}
                                 cache={memoryCache()}
                                 cacheInclusiveLabel="Used with ARC cache"
+                                detailsLabel={`Memory composition for ${name()}`}
                                 percentOnly={memoryPercentOnly()}
                                 thresholds={memoryThresholds()}
                               />
