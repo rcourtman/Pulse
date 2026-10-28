@@ -6511,9 +6511,9 @@
             "match_prefixes": [],
             "match_files": [
               "internal/truenas/client.go",
-          "internal/truenas/disk_rates.go",
               "internal/truenas/core_reporting.go",
               "internal/truenas/disk_health.go",
+              "internal/truenas/disk_rates.go",
               "internal/truenas/fixtures.go",
               "internal/truenas/pool_capacity.go",
               "internal/truenas/provider.go",
