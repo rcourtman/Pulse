@@ -10,12 +10,127 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestRootInstallProxmoxLeavesLegacyCleanupExplicit(t *testing.T) {
+	content, err := os.ReadFile(repoFile("install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), "cleanup_stale_sensor_proxy_mounts") {
+		t.Fatal("new Pulse installation must not contain or invoke estate-wide legacy mount cleanup")
+	}
+	// Explicit maintenance remains separate; do not replace its failure/state
+	// controls with the old install-time best-effort stop/edit/start path.
+	legacy, err := os.ReadFile(repoFile("scripts", "uninstall-sensor-proxy.sh"))
+	if err != nil || !strings.Contains(string(legacy), "cleanup_stale_sensor_proxy_mounts()") {
+		t.Fatalf("separate legacy maintenance helper missing: %v", err)
+	}
+}
+
+func TestRootInstallProxmoxEntryPreservesExistingGuests(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix controlling-terminal installer fixture")
+	}
+	for _, tc := range []struct {
+		name, wantActions, wantOutput string
+		wantExit                      int
+	}{
+		{"cancel", "cleanup\n", "Installation cancelled", 0},
+		{"quick", "nextid\ncleanup\n", "fixture stopped at Port [7655]:", 47},
+		{"advanced", "nextid\ncleanup\n", "fixture stopped at Frontend port [7655]:", 47},
+		{"noninteractive", "nextid\ncleanup\n", "Non-interactive mode detected. Using Quick installation.", 47},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			// The exact production entry runs, but no real guest, /etc/pve
+			// config, legacy cleanup body or lifecycle tool is ever reached.
+			// The old call is caught by an inert spy, not reenacted.
+			body := `#!/bin/bash
+set -euo pipefail
+scenario="$1"
+print_header() { :; }
+print_info() { printf '%s\n' "$1"; }
+handle_install_interrupt() { exit 75; }
+cleanup_container_install_inputs() {
+    [[ -z "$1" && -z "$2" && "$3" == false ]]
+    printf 'cleanup\n' >>"$FIXTURE_ROOT/actions"
+}
+cleanup_stale_sensor_proxy_mounts() {
+    printf 'UNEXPECTED legacy-cleanup\n' >>"$FIXTURE_ROOT/actions"
+}
+pvesh() {
+    [[ "$*" == 'get /cluster/nextid' ]] || return 81
+    printf 'nextid\n' >>"$FIXTURE_ROOT/actions"
+    printf '222\n'
+}
+pct() { printf 'UNEXPECTED pct %s\n' "$*" >>"$FIXTURE_ROOT/actions"; return 82; }
+qm() { printf 'UNEXPECTED qm %s\n' "$*" >>"$FIXTURE_ROOT/actions"; return 83; }
+safe_read_with_default() {
+    if [[ "$1" == 'Select [1-3]: ' ]]; then
+        case "$scenario" in
+            cancel) printf -v "$2" 3 ;;
+            quick) printf -v "$2" 1 ;;
+            advanced) printf -v "$2" 2 ;;
+            *) exit 84 ;;
+        esac
+        return 0
+    fi
+    printf 'fixture stopped at %s\n' "$1"
+    exit 47
+}
+` + extractRootInstallShellFunction(t, "create_lxc_container") + `
+create_lxc_container
+exit 85
+`
+			script := filepath.Join(dir, "entry.sh")
+			if err := os.WriteFile(script, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			// A PTY exercises the real /dev/tty branch. A new session with
+			// pipe stdio exercises the detached installer, independent of the
+			// terminal from which go test was launched. This needs no root.
+			const runner = `import os, pty, subprocess, sys
+command = ["bash", sys.argv[1], sys.argv[2]]
+if sys.argv[2] == "noninteractive":
+    sys.exit(subprocess.run(command, start_new_session=True).returncode)
+sys.exit(os.waitstatus_to_exitcode(pty.spawn(command)))
+`
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "python3", "-c", runner, script, tc.name)
+			cmd.Env = append(os.Environ(), "FIXTURE_ROOT="+dir)
+			out, err := cmd.CombinedOutput()
+			if ctx.Err() != nil {
+				t.Fatalf("entry fixture deadline: %v\n%s", ctx.Err(), out)
+			}
+			code := 0
+			if err != nil {
+				if exit, ok := err.(*exec.ExitError); ok {
+					code = exit.ExitCode()
+				} else {
+					t.Fatalf("start fixture: %v\n%s", err, out)
+				}
+			}
+			if code != tc.wantExit || !strings.Contains(string(out), tc.wantOutput) {
+				t.Fatalf("entry exit %d, want %d and %q:\n%s", code, tc.wantExit, tc.wantOutput, out)
+			}
+			actions, err := os.ReadFile(filepath.Join(dir, "actions"))
+			if err != nil || string(actions) != tc.wantActions {
+				t.Fatalf("unexpected existing-guest or pre-prompt action: %v, %q; want %q\n%s", err, actions, tc.wantActions, out)
+			}
+			if strings.Contains(string(out), "Cleaned sensor-proxy") {
+				t.Fatalf("new installation claimed legacy recovery:\n%s", out)
+			}
+		})
+	}
+}
 
 func TestRootInstallScriptVersionFlagRequiresValue(t *testing.T) {
 	scriptPath := filepath.Join("..", "..", "install.sh")
