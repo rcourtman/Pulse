@@ -39,6 +39,7 @@ import {
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { useObservedElementWidth } from '@/hooks/useObservedElementWidth';
+import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 
 import {
   getWorkloadRecoveryPostureLabel,
@@ -196,6 +197,40 @@ const postureExplanation = (row: WorkloadCoverageRow): string => {
 const TASK_ORDER_NOTICE =
   'Task start times do not establish which task ran last. Possible latest tasks are listed below without a time order.';
 
+// Keep the assessment's clocks independent of the currently visible artifacts.
+// Use explicit UTC instants, not relative ages which could imply a fresh read
+// or turn the evaluation time into a backup completion time.
+const assessmentTimeRow = (label: string, value: string | null | undefined) => {
+  const ms = parseBackupTimestampMs(value ?? undefined);
+  const display =
+    ms === undefined
+      ? value
+        ? 'Unknown'
+        : 'Not reported'
+      : formatPlatformTableDateTimeValue(ms, {
+          dateTimeFormat: {
+            year: 'numeric',
+            month: 'short',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            timeZone: 'UTC',
+            timeZoneName: 'short',
+          },
+        });
+  return makeDetailRow(label, display, {
+    wrap: true,
+    tone: ms === undefined ? 'muted' : undefined,
+    valueContent:
+      ms === undefined ? undefined : (
+        <time dateTime={value!} class="block whitespace-normal text-left tabular-nums">
+          {display}
+        </time>
+      ),
+  });
+};
+
 const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSection => ({
   label,
   rows: compactDetailRows([
@@ -258,6 +293,26 @@ const buildCoverageDetailSections = (row: WorkloadCoverageRow): DetailSection[] 
         }),
       ]),
     },
+    row.protectionPosture
+      ? {
+          label: 'Protection assessment',
+          rows: compactDetailRows([
+            assessmentTimeRow('Evaluated', row.protectionPosture.evaluatedAt),
+            assessmentTimeRow(
+              'Latest successful point',
+              row.protectionPosture.lastSuccessfulPointAt,
+            ),
+            assessmentTimeRow('Last verified', row.protectionPosture.lastVerifiedAt),
+          ]),
+          footerContent: (
+            <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
+              Evaluation time is not a backup completion time. These are the server assessment’s
+              recorded times, independent of the current list and its filters. They do not verify a
+              restore or guest responsiveness.
+            </p>
+          ),
+        }
+      : null,
     row.taskCandidates?.length
       ? {
           label: 'Task order',

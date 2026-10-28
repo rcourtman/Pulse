@@ -8219,3 +8219,26 @@ initial assessments, retry, deferred initial assessment, common filters/hash,
 replace-history semantics, explicit views and empty inventory. Browser proof
 must exercise the actual table, inventory parsers and posture client through a
 local safe producer at desktop and narrow widths, with native pixel inspection.
+
+
+### Coverage distinguishes assessment clocks from visible restore evidence
+
+An expanded Proxmox Coverage record exposes the server assessment's `evaluatedAt`,
+`lastSuccessfulPointAt` and `lastVerifiedAt` as separately labelled UTC instants.
+Evaluation is not backup completion. These workload-wide recorded times do not
+come from the current artifact list or its location filters and do not establish
+a fresh inventory read, successful restore or guest responsiveness. Missing
+optional clocks say Not reported; malformed instants say Unknown rather than
+being repaired by the browser or borrowed from another field. A failed posture
+read withdraws the section with the assessment; ordinary recovery restores it.
+No provider, policy, association, age, permission, guest operation or polling
+contract changes.
+
+Normal-suite `coverageAssessmentEvidence.test.tsx` exercises the parsed Backups
+consumer at desktop/narrow widths, differing artifact/evaluation/point clocks,
+missing fields, location filtering, ordinary refresh, failed-read withdrawal and
+isolated retry. `ProxmoxCoverageTable.test.tsx` protects strict presentation of
+invalid instants. Browser proof must inspect the actual consuming record at
+desktop and narrow widths, including UTC text, keyboard/touch disclosure and
+refresh/recovery with the open record preserved. This is evidence inspection,
+not original incident recovery.
