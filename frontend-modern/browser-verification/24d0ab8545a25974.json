@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "e9e82da08263fab435eaf0a559fb7ee67004c06e",
+  "verified_at": "2026-10-28T13:04:03.242Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "11858eeae7ccc65d2de0110daf3454f56b448a170219ae5116c752244fe2dd52"
+  },
+  "routes": [
+    "/proxmox/backups/coverage?q=backup#evidence"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "PVE, PBS, posture and whole-inventory read failures, pending keyboard retries, successful/partial recovery and failed posture retry through production clients/parsers and the real Backups inspector.",
+    "Pending retries retain focus and report aria-disabled without duplicate activation. A disappearing focused error hands off to the active Coverage link; successful recovery does not alter the path, query or fragment.",
+    "Moved search/outside focus and an ordinary 30-second recovery poll do not steal focus. Ten retained images were opened with native view_image and inspected: six final and four exact-base, desktop light and 320px dark."
+  ],
+  "interactions": [
+    "73 final browser checks;35 exact-base checks reproduce lost recovery focus in all four paths at both sizes. Playwright1.56.1 matches the integration lock; desktop Chromium141.0.7390.37 and narrow WebKit.",
+    "Keyboard Enter retries/continues; Tab continues after handoff. Only known local GET requests are permitted; page errors, off-origin requests and horizontal overflow fail proof. The real polling interval runs under Playwright clock, not a substitute polling client.",
+    "Kiosk-region fallback and disposal are registered unit regressions, not claims of browser coverage. Source-proof shell143 returned no output/receipt: unit, types, lint and production-build results remain unknown pending Delivery metadata readback, not called passed."
+  ],
+  "evidence": "RECEIPTS.md / BROWSER-CANDIDATE.json / BROWSER-BASE.json / BROWSER-BINDING.json / PIXEL-REVIEW.json / BROWSER-ASSETS.tar.xz. Synthetic read recovery is not installed monitoring, guest recovery, fix publication or a release claim."
+}
