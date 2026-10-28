@@ -256,9 +256,7 @@ describe('ResourceTable', () => {
       expect(
         screen.queryByRole('switch', { name: 'Alerts for Runtime A' }),
       ).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('columnheader', { name: 'Alerts', exact: true }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('columnheader', { name: 'Alerts' })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Offline alerts for Runtime A: On' }));
       expect(onToggleNodeConnectivity).toHaveBeenCalledWith('runtime-a');
       expect(onToggleDisabled).not.toHaveBeenCalled();
