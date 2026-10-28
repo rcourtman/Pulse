@@ -162,6 +162,33 @@ func TestRootInstallProxmoxFailurePreservesRecovery(t *testing.T) {
 	}
 }
 
+// Both sourced entries must propagate removal failures even when a conditional
+// caller disables errexit. The fixture confines every mutation to temporary
+// ordinary-user files; native systemd acceptance stays with the existing job.
+func TestRootInstallRemovalFilesystemFailures(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix server removal fixture")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_server_removal_failures.py"), "-v")
+	cmd.Env = append(os.Environ(), "PULSE_INSTALLER_UNDER_TEST="+repoFile("install.sh"))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("server removal filesystem/account/reload controls: %v\n%s", err, out)
+	}
+	for _, control := range []string{
+		"test_each_runtime_deletion_failure_preserves_data_and_stops",
+		"test_reload_or_account_failure_preserves_data",
+		"test_partial_data_deletion_is_not_completion_or_intact_state",
+		"test_unsafe_or_unreadable_layout_refuses_all_file_deletion",
+	} {
+		if !strings.Contains(string(out), control) {
+			t.Fatalf("required removal control %s did not run:\n%s", control, out)
+		}
+	}
+}
+
 func TestRootInstallScriptVersionFlagRequiresValue(t *testing.T) {
 	scriptPath := filepath.Join("..", "..", "install.sh")
 

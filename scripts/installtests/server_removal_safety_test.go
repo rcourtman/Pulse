@@ -240,7 +240,7 @@ rm() {
   # must be in the fixture; unexpected options are a fixture error.
   local arg
   for arg in "$@"; do
-    case "$arg" in -f|-rf) ;; "$FIXTURE_DIR"/*) /bin/rm -rf -- "$arg" ;; /etc/systemd/system/*|/usr/local/bin/pulse-sensor-cleanup.sh|/var/log/pulse*.log|/opt/pulse.log) ;; *) return 91 ;; esac
+    case "$arg" in -f|-rf|--) ;; "$FIXTURE_DIR"/*) /bin/rm -rf -- "$arg" ;; /etc/systemd/system/*|/usr/local/bin/pulse-sensor-cleanup.sh|/var/log/pulse*.log|/opt/pulse.log) ;; *) return 91 ;; esac
   done
 }
 safe_read() { printf -v "$2" '%s' 2; }
