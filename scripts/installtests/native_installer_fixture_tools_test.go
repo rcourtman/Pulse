@@ -160,7 +160,7 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
+	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			bin, prefix, tarPrefix, runnerTemp := filepath.Join(root, "bin"), filepath.Join(root, "brew with spaces"), filepath.Join(root, "gnu tar with spaces"), filepath.Join(root, "runner temp")
@@ -182,7 +182,7 @@ esac
 			if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0700); err != nil {
 				t.Fatal(err)
 			}
-			tools := []string{"bash", "stat", "chmod", "chown", "mv", "ln", "tar", "awk"}
+			tools := []string{"bash", "stat", "chmod", "chown", "mv", "ln", "readlink", "tar", "awk"}
 			installed := make(map[string]string)
 			for _, name := range tools {
 				leaf, toolPrefix := name, prefix
@@ -220,9 +220,9 @@ esac
 				}
 			}
 			// Native macOS defaults must not be the fallback for Linux-only
-			// archive extraction or atomic replacement. The supplied real GNU
-			// tools below must win even when the native names are unsuitable.
-			for _, name := range []string{"mv", "tar", "awk"} {
+			// archive extraction, canonicalization or atomic replacement. Real
+			// GNU tools must win even when the native names are unsuitable.
+			for _, name := range []string{"mv", "readlink", "tar", "awk"} {
 				if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\nprintf 'native BSD utility reached\\n' >&2\nexit 64\n"), 0700); err != nil {
 					t.Fatal(err)
 				}
@@ -269,7 +269,7 @@ esac
 			}
 			entries, err := os.ReadDir(fixtureBin)
 			if err != nil || len(entries) != len(tools) {
-				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/ln/tar/awk")
+				t.Fatal("fixture supply must select only Bash/stat/chmod/chown/mv/ln/readlink/tar/awk")
 			}
 			for _, name := range tools {
 				if target, err := os.Readlink(filepath.Join(fixtureBin, name)); err != nil || target != installed[name] {
@@ -285,7 +285,7 @@ esac
 set -eu
 test "$*" = "scripts/installtests/run_unix_contracts.py --phase $EXPECTED_PHASE" || exit 91
 test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
-for tool in stat chmod chown mv ln tar awk; do
+for tool in stat chmod chown mv ln readlink tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
 # Exercise the actual Linux-only flags with real executables and file bytes.
@@ -311,6 +311,13 @@ if ln -T -- "$PROBE_ROOT/published" "$links/occupied" 2>/dev/null; then exit 94;
 test "$(cat "$links/occupied")" = concurrent
 if ln -T -- "$PROBE_ROOT/published" "$links/occupied-directory" 2>/dev/null; then exit 95; fi
 test ! -e "$links/occupied-directory/published"
+# Removal validates the entire runtime/data layout before deleting a file.
+# Its Linux readlink -m must resolve symlinked parents and missing leaves;
+# BSD readlink cannot stand in for that safety boundary on a macOS runner.
+mkdir "$links/config"
+ln -s -- "$links/config" "$links/config-link"
+test "$(readlink -m -- "$links/config-link/future/../settings")" = "$links/config/settings"
+test "$(readlink -m -- "$links/config-link/../missing")" = "$links/missing"
 # Exercise the NAS filter's actual octal byte range, not a --version double.
 # Safe text must pass; NUL and other disallowed controls must fail. Neither
 # false-positive empty matching nor dropping binary bytes is acceptable.
