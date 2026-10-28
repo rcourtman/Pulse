@@ -16,6 +16,7 @@ const entryGuideNames = [
   'UNIFIED_AGENT',
   'TRUENAS',
   'PBS',
+  'RECOVERY',
 ];
 
 function renderGuide(name: string): HTMLElement {
@@ -112,6 +113,10 @@ describe('troubleshooting workflow entry', () => {
           '/docs/VM_DISK_MONITORING#current-retained-and-unavailable-disk-readings',
           '/docs/TROUBLESHOOTING#guest-memory-is-high-but-available-memory-is-plentiful',
         ],
+      ],
+      [
+        'Backups are visible but protection looks stale:',
+        ['/docs/RECOVERY#protection-assessment-times'],
       ],
       [
         'Proxmox data belongs to the wrong host, or healthy jobs look Pending:',

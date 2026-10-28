@@ -238,6 +238,42 @@ new backup or changing stored history. For local `vzdump` archives, use the
 [PVE comparison below](#local-pve-backups-are-newer-than-coverage); PBS is not
 required.
 
+### Protection assessment times
+
+In **Proxmox → Backups → Coverage**, expand the affected workload and read
+**Protection assessment**, where available. Its recorded times are shown in
+**UTC**, not your browser's local timezone:
+
+- **Evaluated**: when the server assessed protection, not when the backup
+  completed or the provider last collected data. A recent evaluation can use
+  older or incomplete evidence; read **Provider evidence** and the posture
+  explanation as well.
+- **Latest successful point**: the successful-point time recorded by that
+  assessment. It is not the latest task's result or necessarily **Last backup**
+  in the current filtered list.
+- **Last verified**: the verification time recorded by the assessment, not
+  proof of a tested restore, application health or guest thaw.
+
+These clocks are workload-wide. Selecting a **Backup location** changes the
+listed artifacts and their backup age, not the assessment or its times. Compare
+[the matching archive](#local-pve-backups-are-newer-than-coverage), owning
+installation and guest; repeated names or VMIDs do not establish identity.
+Keep an archive's creation time separate from its task's completion time, and
+compare the same instant with its timezone, not just the calendar date.
+
+**Not reported** means that clock was not supplied; **Unknown** means its
+supplied value could not be interpreted. Neither means zero, no backups or a
+failed verification. Do not borrow another clock to fill it. If the section is
+absent or the assessment cannot be loaded, a retained artifact or green
+connection does not establish a current assessment. Older versions may not
+show these details; use existing provider records without rerunning collection.
+
+Use existing observations only; do not run Diagnostics, another backup or a
+guest-agent probe, restart monitoring or clear History to reconcile the clocks.
+If a guest is unresponsive or freeze/thaw is uncertain, follow
+[Backup safety](VM_DISK_MONITORING.md#backup-safety) instead. A current timestamp
+or corrected badge does not establish safe workload recovery.
+
 ### Backup task results and backup age
 
 A recent backup and a failed task can both be genuine. In **Proxmox → Backups
@@ -305,7 +341,9 @@ protected. Compare one existing archive with the same workload in Pulse:
    for a whole-workload comparison. Selecting a location limits the listed
    artifacts and backup age, but does not recalculate the workload's posture.
    A visible archive and a green connection do not establish that the posture
-   assessment received the same complete, correctly linked evidence.
+   assessment received the same complete, correctly linked evidence. Read the
+   [Protection assessment times](#protection-assessment-times) separately from
+   the archive and task clocks; a recent evaluation is not a fresh collection.
 4. Compare **Last backup** (**Backup** or **Age** at narrower widths) with the
    archive's timestamp. **Restore evidence** can show only a selection of the
    workload's points; use **By date** to locate an omitted archive. **Unknown**
