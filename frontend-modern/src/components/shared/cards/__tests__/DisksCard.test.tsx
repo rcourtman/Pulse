@@ -6,7 +6,7 @@ import { DisksCard } from '../DisksCard';
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: (props: {
     disks?: unknown[];
-    aggregateDisk?: { total?: number; used?: number };
+    aggregateDisk?: { total?: number; used?: number; usage?: number };
     mode?: string;
   }) => (
     <div
@@ -15,6 +15,7 @@ vi.mock('@/components/Workloads/StackedDiskBar', () => ({
       data-disk-count={props.disks?.length ?? 0}
       data-total={props.aggregateDisk?.total}
       data-used={props.aggregateDisk?.used}
+      data-usage={props.aggregateDisk?.usage}
     />
   ),
 }));
@@ -52,6 +53,7 @@ describe('DisksCard', () => {
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-disk-count', '2');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-total', '400');
     expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-used', '180');
+    expect(screen.getByTestId('stacked-disk-bar')).toHaveAttribute('data-usage', '45');
     expect(screen.getByText('/')).toBeInTheDocument();
     expect(screen.getByText('/data')).toBeInTheDocument();
   });

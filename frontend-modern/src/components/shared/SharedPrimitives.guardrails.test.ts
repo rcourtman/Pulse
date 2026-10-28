@@ -334,6 +334,13 @@ const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css')
 const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
+  it('converts normalized disk usage ratios to percentages at the aggregate bar boundary', () => {
+    const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
+    expect(source).toContain('aggregateDisk={{ ...aggregate(), usage: aggregateUsagePercent() }}');
+    expect(source).toContain('(aggregate.used / aggregate.total) * 100');
+    expect(source).not.toContain('aggregateDisk={aggregate()}');
+  });
+
   it('keeps disk mounts in the parent scrolling flow rather than a hidden nested list', () => {
     const source = readFrontendSource('src/components/shared/cards/DisksCard.tsx');
     expect(source).toContain('data-testid="disks-card-mounts"');

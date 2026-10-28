@@ -10580,3 +10580,20 @@ not its selection; existing tab and health-count actions remain the way to
 choose another view. This adds no route, assessment or backend mutation.
 `ProxmoxBackupsTable.test.tsx` verifies focused open evidence across both polling
 directions, deferred/failing assessment, retry and URL/history compatibility.
+
+### Compact disk summaries preserve producer aggregate ownership
+
+In aggregate mode, a usable supplied aggregate owns the total percentage and
+byte summary even when filesystem rows are present. Aliases in the breakdown
+must not be counted as independent capacity. Mount rows retain their own values,
+severity, order and tooltips; explicit max and per-filesystem modes are unchanged.
+Without a usable aggregate, measured-row fallback remains. Independent percentages
+must not borrow byte totals from the breakdown. Current/last-known/unavailable
+classification and unknown-filesystem admission remain authoritative.
+
+`StackedDiskBar.test.tsx` exercises alias/reorder/zero, invalid and
+percentage-only aggregates, fallback, severity, freshness and mounted replacements.
+`DisksCard.test.tsx` checks that its normalized ratio crosses the aggregate
+component boundary as a percentage. Actual producer frames must pass through
+canonical resource and Workloads projection into desktop/narrow consumers, with
+pixels inspected. This is presentation correction, not native guest recovery.

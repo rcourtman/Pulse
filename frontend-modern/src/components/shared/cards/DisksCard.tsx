@@ -68,7 +68,12 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
                 value={`${formatBytes(aggregate().used)} / ${formatBytes(aggregate().total)}`}
                 valueClass={getMetricTextColorClass(aggregateUsagePercent(), 'disk')}
               />
-              <StackedDiskBar disks={props.disks} aggregateDisk={aggregate()} mode="aggregate" />
+              {/* NormalizedDisk.usage is a ratio; aggregate Disk.usage is a percentage. */}
+              <StackedDiskBar
+                disks={props.disks}
+                aggregateDisk={{ ...aggregate(), usage: aggregateUsagePercent() }}
+                mode="aggregate"
+              />
             </Show>
           </div>
         )}
