@@ -9,6 +9,9 @@ CURRENT_DIR="${PULSE_BENCH_CURRENT_DIR:-$(pwd)}"
 BASELINE_DIR="${PULSE_BENCH_BASELINE_DIR:-}"
 SAMPLE_COUNT="${PULSE_BENCH_SAMPLE_COUNT:-10}"
 BENCHTIME="${PULSE_BENCH_BENCHTIME:-100ms}"
+# CI partitions packages, never a package's paired samples, across three
+# isolated runners. Ordinary local collection still covers the full inventory.
+SHARD="${PULSE_BENCH_SHARD:-all}"
 # Wall-clock seconds a paired run may take, warm-up included; unset means no
 # limit. Checked after every round, so a suite that has outgrown its budget
 # stops early and names each package's cost instead of meeting a step timeout.
@@ -20,6 +23,10 @@ if ! [[ "${SAMPLE_COUNT}" =~ ^[1-9][0-9]*$ ]]; then
 fi
 if [[ -n "${BUDGET_SECONDS}" && ! "${BUDGET_SECONDS}" =~ ^[0-9]+$ ]]; then
   echo "PULSE_BENCH_BUDGET_SECONDS must be a whole number of seconds." >&2
+  exit 2
+fi
+if [[ ! "${SHARD}" =~ ^(all|0|1|2)$ ]]; then
+  echo "PULSE_BENCH_SHARD must be all, 0, 1 or 2." >&2
   exit 2
 fi
 if [[ ! -d "${CURRENT_DIR}" ]]; then
@@ -134,8 +141,29 @@ select_packages() {
 }
 if [[ -n "${BASELINE_DIR}" ]]; then
   select_packages
-  echo "Benchmark packages, ${selection}: ${SELECTED[*]:-none}"
 fi
+
+# Keep the slow monitoring and unified-resource families on different hosts.
+# Membership is fixed before either tree runs; both trees and all ten rounds
+# for a package stay together. Fail closed if the inventory grows without an
+# assignment, rather than silently dropping the new package from every shard.
+shard_packages() {
+  local package owner picked=()
+  for package in "${SELECTED[@]}"; do
+    case "${package}" in
+      ./pkg/auth/|./internal/monitoring/|./internal/dockeragent/) owner=0 ;;
+      ./internal/api/|./internal/unifiedresources/|./internal/hostagent/) owner=1 ;;
+      ./pkg/metrics/|./cmd/pulse-agent/|./internal/hostmetrics/) owner=2 ;;
+      *) echo "Benchmark package has no shard: ${package}" >&2; exit 2 ;;
+    esac
+    if [[ "${SHARD}" == all || "${SHARD}" == "${owner}" ]]; then
+      picked+=("${package}")
+    fi
+  done
+  SELECTED=(${picked[@]+"${picked[@]}"})
+}
+shard_packages
+echo "Benchmark packages, ${selection}, shard ${SHARD}: ${SELECTED[*]:-none}"
 
 # Retain provenance without dumping credentials, remote URLs or working paths.
 # PR checkouts may be synthetic merges; Go selects a toolchain for each tree.
@@ -150,6 +178,7 @@ revision() {
   printf 'platform=%s\n' "$(uname -sm)"
   printf 'gomaxprocs=%s\n' "${GOMAXPROCS:-runtime-default}"
   printf 'selection=%s\n' "${selection}"
+  printf 'shard=%s\nshard_count=3\n' "${SHARD}"
   printf 'packages=%s\n' "${SELECTED[*]:-}"
   for label in candidate baseline; do
     tree="${CURRENT_DIR}"
@@ -207,7 +236,7 @@ run_unpaired() {
     PULSE_DATA_DIR="${data_dir}" go test -exec "${binary_wrapper}" \
       -bench=. -benchmem -count="${SAMPLE_COUNT}" -run='^$' \
       -benchtime="${BENCHTIME}" -timeout=5m \
-      "${PACKAGES[@]}"
+      "${SELECTED[@]}"
   ) | tee "${output}"
 }
 

@@ -4,7 +4,7 @@
 The workflow uploads all four files even when the regression gate fails.
 Metadata records the candidate and baseline Git HEAD and committed tree IDs,
 selected Go versions, platform, GOMAXPROCS setting, sample count, duration,
-package list and paired sample start order/timestamps. It deliberately does
+package list, shard and paired sample start order/timestamps. It deliberately does
 not dump environment variables, remote URLs or filesystem paths.
 
 HEAD/tree identify committed source, not a clean-worktree or clean-build
@@ -48,7 +48,26 @@ embeds and testdata. Module or workspace files, trees that are not both clean
 Git roots, or an unreadable package graph select every package. Metadata `selection=` names the rule applied and
 `packages=` the packages sampled; an empty list leaves empty timing files and
 nothing to compare. A benchmark reading files outside that closure at run time
-escapes selection. Unpaired runs always sample every package.
+escapes selection. Unpaired runs select every package before sharding.
+
+CI now partitions that inventory across three isolated hosted jobs using
+`PULSE_BENCH_SHARD=0`, `1` and `2`. The fixed assignment in the collector keeps
+monitoring and unified resources apart. Each package's baseline, candidate,
+warmups and all ten alternating pairs stay on the **same** runner; samples for
+one comparison are never combined across hosts. Each shard still uses the
+existing duration, budget and regression rules. With no shard specified,
+local collection retains the full inventory. Invalid shards and unassigned
+packages fail; an empty affected shard records an explicit empty package list
+without invoking Go on the repository root.
+
+The aggregate `Benchmarks` check requires every shard to succeed, with matrix
+fail-fast disabled so a failed sibling does not cancel another comparison.
+Each job uploads its own `bench-results-0`, `-1` or `-2` artifact even on failure.
+Read **all three** artifacts and their source/shard identities before calling
+collection complete. Source controls and a disposable fixture do not establish
+hosted runtime improvement or clear an older incomplete comparison. Sharding
+adds hosted setup work in exchange for a smaller per-job measurement workload;
+it does not assert a reduction in total compute or an idle worker.
 
 With `PULSE_BENCH_BUDGET_SECONDS` set, a paired run projects its total,
 warm-up included, after each round and exits 1 once the projection reaches the

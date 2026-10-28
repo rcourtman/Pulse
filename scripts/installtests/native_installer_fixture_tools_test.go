@@ -160,9 +160,18 @@ func TestNativeInstallerPhasesKeepNASBeforeFrontendAndAllChecksGating(t *testing
 
 func TestNativeInstallerFixtureToolsAreRealAndStepLocal(t *testing.T) {
 	supply, preflight, installer := nativeInstallerFixtureSteps(t)
-	for _, scenario := range []string{"real tools", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
+	for _, scenario := range []string{"real tools", "symlinked fixture root", "install failure", "missing bash", "legacy bash", "missing stat", "non-GNU chmod", "missing mv", "non-GNU mv", "missing ln", "non-GNU ln", "missing readlink", "non-GNU readlink", "missing tar", "non-GNU tar", "missing awk", "non-GNU awk"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
+			if scenario == "symlinked fixture root" {
+				// macOS temporary roots can be reached through /var -> /private/var.
+				// Reproduce that legitimate alias without requiring a macOS host.
+				alias := filepath.Join(t.TempDir(), "alias with spaces")
+				if err := os.Symlink(root, alias); err != nil {
+					t.Fatal(err)
+				}
+				root = alias
+			}
 			bin, prefix, tarPrefix, runnerTemp := filepath.Join(root, "bin"), filepath.Join(root, "brew with spaces"), filepath.Join(root, "gnu tar with spaces"), filepath.Join(root, "runner temp")
 			for _, path := range []string{bin, filepath.Join(prefix, "bin"), filepath.Join(tarPrefix, "bin"), runnerTemp} {
 				if err := os.MkdirAll(path, 0700); err != nil {
@@ -242,7 +251,7 @@ esac
 			if ctx.Err() != nil {
 				t.Fatalf("fixture prerequisite deadline: %v", ctx.Err())
 			}
-			if scenario != "real tools" {
+			if scenario != "real tools" && scenario != "symlinked fixture root" {
 				want := 1
 				if scenario == "install failure" {
 					want = 23
@@ -288,6 +297,10 @@ test "$(command -v bash)" = "$PULSE_INSTALLER_FIXTURE_BIN/bash" || exit 92
 for tool in stat chmod chown mv ln readlink tar awk; do
   test "$(command -v "$tool")" = "$PULSE_INSTALLER_FIXTURE_BIN/$tool" || exit 93
 done
+# The expected readlink result must use a physical root too. A temporary
+# directory reached through a legitimate parent symlink is not itself the
+# canonical spelling (notably /var on macOS).
+PROBE_ROOT="$(cd "$PROBE_ROOT" && pwd -P)"
 # Exercise the actual Linux-only flags with real executables and file bytes.
 # Neither a filename check nor a --version double can establish these semantics.
 printf 'archive bytes\n' > "$PROBE_ROOT/source"

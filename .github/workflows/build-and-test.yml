@@ -938,11 +938,17 @@ jobs:
             echo "::warning title=Chart SLO verdict not published::This token cannot create check runs; the evidence job carries the verdict."
 
   benchmarks:
-    name: Benchmarks
+    name: Benchmarks (shard ${{ matrix.shard }})
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    env:
+      PULSE_BENCH_SHARD: ${{ matrix.shard }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -983,10 +989,10 @@ jobs:
         run: bash scripts/run-ci-benchmarks.sh
 
       # Only packages whose dependency closure the pull request changes are
-      # sampled. A module or shared-model change still samples nearly every
-      # package: about 24 minutes, warm-up included, as of October 2026. The
-      # script's budget stops the run with per-package costs before the step
-      # timeout can kill it without them.
+      # sampled. Each package's complete same-host pair stays in one fixed
+      # shard, including its warm-ups and all ten alternating rounds. The
+      # unchanged budget stops an outgrown shard with per-package costs before
+      # the step timeout can kill it without them.
       - name: Paired base and candidate benchmarks (pull requests)
         if: github.event_name == 'pull_request'
         timeout-minutes: 30
@@ -1012,7 +1018,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: bench-results
+          name: bench-results-${{ matrix.shard }}
           path: |
             bench-results.txt
             bench-baseline.txt
@@ -1020,3 +1026,19 @@ jobs:
             bench-metadata.txt
           if-no-files-found: warn
           retention-days: 7
+
+  benchmarks-verdict:
+    name: Benchmarks
+    needs: [changes, benchmarks]
+    if: always() && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every benchmark shard
+        env:
+          SHARD_RESULT: ${{ needs.benchmarks.result }}
+        run: |
+          if [ "$SHARD_RESULT" != success ]; then
+            echo "Benchmark collection or comparison is incomplete: $SHARD_RESULT"
+            exit 1
+          fi

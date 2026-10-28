@@ -1601,12 +1601,32 @@ remain in `scripts/tests/test-ci-benchmarks.sh`.
 Paired pull-request runs sample only the packages whose in-module dependency
 closure the change reaches, recorded as `selection=` and `packages=` in the
 metadata. Module files, unclean or non-Git trees and an unreadable package
-graph select every package; unpaired branch runs always sample every package.
+graph select every package; unpaired branch runs select every package.
 An empty selection leaves nothing to compare and is not a passed comparison of
 skipped packages. The paired step's wall-clock budget sits below its timeout so
 an outgrown suite stops with each package's mean cost per sample, not a bare
 timeout; `TestPairedBenchmarksStopInsideTheirBudget` checks that ordering and
 the selection and budget cases run in `scripts/tests/test-ci-benchmarks.sh`.
+
+Build and Test partitions the selected inventory into three fixed, disjoint
+package shards. Each package retains baseline and candidate on one runner,
+both warmups, ten alternating paired rounds, executable hashes and the existing
+duration, budget and regression rules. A package comparison never combines
+measurements from different hosts. Metadata names the shard and its selected
+packages; invalid shards and unassigned packages fail collection. Local runs
+default to the unpartitioned inventory. An empty affected shard invokes no Go
+test rather than inadvertently testing the repository root.
+
+Each shard uploads a distinct `bench-results-<shard>` artifact on success or
+failure. Matrix fail-fast is disabled and the aggregate `Benchmarks` check
+accepts only success from the complete matrix; a failed, cancelled, skipped or
+missing result stays incomplete. `test_benchmark_workflow_contract.py` executes
+the actual verdict shell against those results, while the collector controls
+check complete/disjoint membership, sample counts, alternating order and byte
+provenance. The native workflow contract checks artifact separation and retains
+the budget/deadline ordering. These controls establish collection boundaries,
+not a hosted speedup, less total compute, release acceptance or resolution of
+an earlier incomplete performance observation.
 
 ### Public Helm exact-package receipt
 

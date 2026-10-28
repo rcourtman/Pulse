@@ -4122,6 +4122,28 @@ func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	if !strings.Contains(job, "bash scripts/check-bench-regression.sh bench-comparison.txt") {
 		t.Fatal("provenance must not replace the benchmark regression gate")
 	}
+	// Matrix jobs cannot share an artifact name: a successful sibling must
+	// neither overwrite a failed collection nor hide its source-bound samples.
+	for _, required := range []string{
+		"fail-fast: false", "shard: [0, 1, 2]",
+		"PULSE_BENCH_SHARD: ${{ matrix.shard }}",
+		"name: bench-results-${{ matrix.shard }}",
+	} {
+		if !strings.Contains(job, required) {
+			t.Fatalf("benchmark shards must retain complete isolated evidence: missing %q", required)
+		}
+	}
+	verdict := workflowJobBlock(t, string(content), "benchmarks-verdict")
+	for _, required := range []string{
+		"name: Benchmarks", "needs: [changes, benchmarks]",
+		"if: always() && needs.changes.outputs.code == 'true'",
+		"SHARD_RESULT: ${{ needs.benchmarks.result }}",
+		`if [ "$SHARD_RESULT" != success ]; then`, "exit 1",
+	} {
+		if !strings.Contains(verdict, required) {
+			t.Fatalf("benchmark verdict must reject an incomplete matrix: missing %q", required)
+		}
+	}
 }
 
 // A paired run names each package's cost only when its own budget stops it
