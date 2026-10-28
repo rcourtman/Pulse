@@ -2543,6 +2543,10 @@ describe('backup activity day controls survive ordinary inventory polling', () =
     expect(target).toHaveFocus();
     expect(apiFetchMock).toHaveBeenCalledTimes(4);
     expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    // Like the existing saved-view/navigation regressions, keep the router's
+    // scheduling live during input. The inventory poll above stays controlled.
+    vi.useRealTimers();
+    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW + 30_000, toFake: ['Date'] });
     fireEvent.click(target);
     await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'true'));
     expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
