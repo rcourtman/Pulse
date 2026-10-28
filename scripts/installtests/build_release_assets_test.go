@@ -4273,8 +4273,10 @@ func TestBackendAPIShardsKeepRequiredCheckExhaustive(t *testing.T) {
 	verdict := workflowJobBlock(t, workflow, "backend-api-verdict")
 	for _, required := range []string{
 		"name: Backend tests (api)\n",
-		"needs: backend-api",
+		"needs: [changes, backend-api]",
 		"if: always()",
+		"CHANGE_RESULT: ${{ needs.changes.result }}",
+		"CODE_CHANGED: ${{ needs.changes.outputs.code }}",
 		"API_SHARDS_RESULT: ${{ needs.backend-api.result }}",
 		`if [ "$API_SHARDS_RESULT" != success ]; then`,
 	} {
@@ -5645,6 +5647,14 @@ func TestCITestCompilationPreservesChecks(t *testing.T) {
 	}
 	if strings.Count(workflow, "name: Require compiled backend tests") != 2 {
 		t.Fatal("both required backend matrices must report compilation failures")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", repoFile("scripts", "tests", "test_go_test_compilation.py"), "-v",
+		"GoTestCompilationTest.test_required_checks_admit_only_explicit_consistent_results",
+		"GoTestCompilationTest.test_actual_api_verdict_rejects_unknown_results_and_distinguishes_no_tests")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("required backend admission and truthful verdict controls: %v\n%s", err, out)
 	}
 	for _, path := range []string{
 		repoFile("scripts", "compile-go-tests.sh"),
