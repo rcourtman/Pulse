@@ -10502,7 +10502,7 @@ input. A removed focused day returns to the selected activity-range control,
 without changing the saved day filter or moving focus from another control.
 
 The open tooltip reads the current bucket for its day, not a retained count or
-volume snapshot. Removed days withdraw the reading, including on return until a
+volume snapshot, and follows the actual control after inventory layout changes. Removed days withdraw the reading, including on return until a
 new interaction. Unknown-volume markers and counts update together. Reconciled
 chart values must not mutate the caller's inventory-derived DTOs.
 

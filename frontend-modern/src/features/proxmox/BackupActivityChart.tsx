@@ -1,4 +1,12 @@
-import { createComputed, createMemo, createSignal, For, Show, untrack } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  untrack,
+} from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import type { Accessor, Component } from 'solid-js';
 
@@ -43,6 +51,7 @@ import {
 
 interface TooltipState {
   key: string;
+  element: HTMLButtonElement;
   x: number;
   y: number;
 }
@@ -135,15 +144,29 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
 
   const chartGapStyle = () => `${getRecoveryTimelineChartGapPx(props.range())}px`;
 
-  const showTooltip = (target: HTMLElement, key: string) => {
+  const showTooltip = (target: HTMLButtonElement, key: string) => {
     const rect = target.getBoundingClientRect();
     setTooltip({
       key,
+      element: target,
       x: rect.left + rect.width / 2,
       y: rect.top,
     });
   };
   const hideTooltip = () => setTooltip(null);
+
+  // Retaining the control also retains its reading. After the DOM updates,
+  // follow the real anchor: inventory notices, metric labels and calendar
+  // rollover can move it even though its logical day and focus stay the same.
+  createEffect(() => {
+    props.timeline();
+    props.range();
+    metricMode();
+    const target = untrack(tooltip);
+    if (!target) return;
+    const rect = target.element.getBoundingClientRect();
+    setTooltip({ ...target, x: rect.left + rect.width / 2, y: rect.top });
+  });
 
   return (
     <div class="rounded-lg border border-border-subtle px-2 py-2">

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,7 +51,10 @@ function mount() {
   return { data, setData, selected, setMode, onToggleDay };
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('backup activity interaction continuity', () => {
   it('keeps the exact focused day across fresh inventory objects and updates its reading', () => {
@@ -97,6 +100,23 @@ describe('backup activity interaction continuity', () => {
     expect(target.querySelector('[data-unknown-volume]')).toBeNull();
     fireEvent.mouseLeave(target);
     expect(tooltip()).toBeNull();
+  });
+
+  it('reanchors the retained reading after inventory layout changes', async () => {
+    const { setData } = mount();
+    const target = day('2026-10-28');
+    let top = 200;
+    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(100, top, 20, 80),
+    );
+    target.focus();
+    const portal = () => document.querySelector('foreignObject');
+    await waitFor(() => expect(portal()).toHaveAttribute('y', '192'));
+    top = 250;
+    setData(timeline([point('2026-10-27', 1), point('2026-10-28', 3)]));
+    await waitFor(() => expect(portal()).toHaveAttribute('y', '242'));
+    expect(target).toHaveFocus();
+    expect(tooltip()).toHaveTextContent('3 restore points');
   });
 
   it('keeps a surviving calendar day, not its array index, when the window rolls over', () => {
