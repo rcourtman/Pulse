@@ -849,9 +849,11 @@ payload admission and scoped install/update behaviour are unchanged.
 no implicit legacy-cleanup implementation. The real `create_lxc_container`
 entry is exercised through a controlling-terminal Cancel, Quick and Advanced
 selection and a detached noninteractive Quick entry, with every Proxmox action
-an inert fixture. No existing-guest inventory/lifecycle action may precede the
-first configuration prompt; Cancel must complete without one. The separate
-legacy cleanup safety suite continues to own its explicit maintenance path.
+an inert fixture. The selected-ID lookup remains read-only. No implicit legacy
+cleanup or guest lifecycle action may precede the first configuration prompt;
+Cancel must complete without Proxmox actions. Normal read-only ID collision
+checks are unchanged. The separate legacy cleanup safety suite continues to own
+its explicit maintenance path.
 
 ### Legacy credential cleanup needs complete inventory and preserved keys
 
