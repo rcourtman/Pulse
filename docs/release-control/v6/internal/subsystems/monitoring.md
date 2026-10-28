@@ -17,6 +17,30 @@
 
 ## Purpose
 
+### CORE per-disk throughput keeps its native meaning
+
+The existing reporting batch retains each selected disk's read/write rate even
+when a missing member prevents a complete host sum. Only an exact inventory
+device name within the connection matches; serials, pools, partitions, namesakes
+and unscoped replies never substitute. Native values remain bytes/s, not counters
+or busy percentages. Live age filtering still applies. Read/write presence and
+sample times remain independent; zero is observed and null is absent.
+The canonical physical-disk writer preserves native instants, rejects invalid,
+future or timeless readings, deduplicates rebuilds and keeps existing mock,
+native-writer and metric-target gates. Rehydrated scalars cannot mint samples.
+
+`TestCOREPerDiskRatesKeepPartialNativeSamples` and
+`TestCOREPerDiskRatesRejectInvalidAndPreserveScope` in `core_reporting_test.go`
+cover partial/duplicate/unscoped/stale/zero/null/identity and clone boundaries.
+`TestCOREPhysicalDiskReportingPipeline` in `physical_disk_roundtrip_test.go`
+crosses pinned TLS REST, snapshot, poller, registry, resolver, writer and local/
+persistent drawer reads for both boot names and complete/partial/idle cycles.
+`TestTrueNASDiskRateWriterAdmission` rejects invalid observations. Desktop and
+narrow browser proof must use actual produced disk History in the existing
+drawer. These controls do not establish the reported boot-only host cause,
+native missing ARC, operation/busy counters or original appliance recovery.
+
+
 ### Explicit Proxmox endpoint trust survives save and reload
 
 A managed primary fingerprint edit reconciles only that exact HTTP authority

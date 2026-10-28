@@ -324,12 +324,15 @@ type ResourceMetrics struct {
 
 // MetricValue represents a metric value, optionally with totals.
 type MetricValue struct {
-	Value   float64    `json:"value"`
-	Used    *int64     `json:"used,omitempty"`
-	Total   *int64     `json:"total,omitempty"`
-	Percent float64    `json:"percent,omitempty"`
-	Unit    string     `json:"unit,omitempty"`
-	Source  DataSource `json:"-"`
+	// ObservedAt retains a provider-native sample instant for rate writers.
+	// Internal only: a rehydrated scalar without that instant is not a new sample.
+	ObservedAt time.Time  `json:"-"`
+	Value      float64    `json:"value"`
+	Used       *int64     `json:"used,omitempty"`
+	Total      *int64     `json:"total,omitempty"`
+	Percent    float64    `json:"percent,omitempty"`
+	Unit       string     `json:"unit,omitempty"`
+	Source     DataSource `json:"-"`
 	// Memory provenance travels with the selected numeric metric, not a
 	// different platform facet retained on a cross-source merged guest.
 	Observation models.MemoryObservation `json:"observation,omitzero"`

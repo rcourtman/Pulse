@@ -6666,6 +6666,7 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 		// re-issuing the same snapshot maps to one sample instead of a fresh
 		// wall-clock row (#1966).
 		m.writeSMARTMetrics(disk, unifiedResourceObservedAt(resource, now))
+		m.writeTrueNASDiskRates(resource, targetID, now)
 	}
 }
 

@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
@@ -1069,5 +1070,26 @@ func TestCloneResourceKeepsContinuityMarker(t *testing.T) {
 	rr.IngestResources([]Resource{saved})
 	if seeded, ok := rr.Get(saved.ID); !ok || !seeded.continuityOnly {
 		t.Fatalf("seeded row = %+v (listed=%v), want the continuity marker kept", seeded, ok)
+	}
+}
+
+func TestCloneNativeRateObservation(t *testing.T) {
+	at := time.Unix(1789000000, 0).UTC()
+	original := &Resource{ID: "disk:core:da0", Type: ResourceTypePhysicalDisk, Metrics: &ResourceMetrics{DiskRead: &MetricValue{Value: 0, Unit: "bytes/s", Source: SourceTrueNAS, ObservedAt: at}}}
+	cloned := cloneResource(original)
+	if cloned.Metrics.DiskRead == original.Metrics.DiskRead || !cloned.Metrics.DiskRead.ObservedAt.Equal(at) || cloned.Metrics.DiskRead.Value != 0 {
+		t.Fatal("rate sample time/zero not cloned independently")
+	}
+	cloned.Metrics.DiskRead.ObservedAt = at.Add(time.Hour)
+	if !original.Metrics.DiskRead.ObservedAt.Equal(at) {
+		t.Fatal("clone mutated original sample instant")
+	}
+	raw, err := json.Marshal(original.Metrics.DiskRead)
+	if err != nil || string(raw) != `{"value":0,"unit":"bytes/s"}` {
+		t.Fatalf("rate instant changed wire contract: %s %v", raw, err)
+	}
+	var hydrated MetricValue
+	if err := json.Unmarshal(raw, &hydrated); err != nil || !hydrated.ObservedAt.IsZero() {
+		t.Fatal("rehydrated scalar invented a sample time")
 	}
 }

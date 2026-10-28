@@ -853,6 +853,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypePhysicalDisk,
 				Name:      disk.Name,
+				Metrics:   metricsFromTrueNASDisk(snapshot.System, disk),
 				Status:    unifiedresources.IncidentsStatus(unifiedresources.PhysicalDiskStatus(disk.Model, healthFromDisk(disk), assessment), incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
@@ -3103,6 +3104,8 @@ func clonePools(pools []Pool) []Pool {
 
 func cloneSystemInfo(system SystemInfo) SystemInfo {
 	cloned := system
+	cloned.DiskReadRates = cloneDeviceRates(system.DiskReadRates)
+	cloned.DiskWriteRates = cloneDeviceRates(system.DiskWriteRates)
 	if system.Telemetry != nil {
 		availability := *system.Telemetry
 		cloned.Telemetry = &availability

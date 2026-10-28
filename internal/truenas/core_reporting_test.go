@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"math"
 	"net/http"
 	"os"
@@ -12,8 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // Five native result excerpts supplied in #2077 on 1 October 2026. Identifiers
@@ -449,4 +448,97 @@ func TestCORE13DiskTemperatureHistoryExternalTiming(t *testing.T) {
 	points := parseReportingDiskTemperatureHistory([]trueNASReportingGetDataResponse{response})["disk-a"]
 	assertCOREPoint(t, points, 0, response.Start, 40)
 	assertCOREPoint(t, points, 1, response.Start+20, 42)
+}
+
+func TestCOREPerDiskRatesKeepPartialNativeSamples(t *testing.T) {
+	const start int64 = 1789000000
+	graph := func(device string, rows []any) trueNASReportingGetDataResponse {
+		return trueNASReportingGetDataResponse{Name: "disk", Identifier: device, Start: start, End: start + 20, Step: 10, Legend: []string{"disk_octets_read", "disk_octets_write"}, Data: rows}
+	}
+	a := graph("disk-a", []any{[]any{100., 200.}, []any{0., nil}, []any{nil, 0.}})
+	b := graph("disk-b", []any{[]any{1000., 2000.}, []any{nil, 2200.}, []any{1200., 2400.}})
+	history := parseSystemMetricHistory([]trueNASReportingGetDataResponse{a, b, a, graph("disk-c", nil)})
+	if history == nil || len(history.DiskReadRate) > 0 || len(history.DiskWriteRate) > 0 {
+		t.Fatal("incomplete catalogue invented host totals or discarded good per-disk samples")
+	}
+	assertCOREPoint(t, history.DiskReadRates["disk-a"], 1, start+10, 0)
+	assertCOREPoint(t, history.DiskWriteRates["disk-a"], 1, start+20, 0)
+	if len(history.DiskReadRates["disk-a"]) != 2 {
+		t.Fatal("duplicate graph doubled rates or null became zero")
+	}
+	system := systemInfoFromMetricHistory(history)
+	metrics := metricsFromTrueNASDisk(*system, Disk{Name: "disk-a"})
+	if metrics == nil || metrics.DiskRead.Value != 0 || metrics.DiskWrite.Value != 0 || metrics.DiskRead.ObservedAt.Unix() != start+10 || metrics.DiskWrite.ObservedAt.Unix() != start+20 {
+		t.Fatalf("directional native time/zero lost: %+v", metrics)
+	}
+	if system.Telemetry.DiskRead || system.Telemetry.DiskWrite {
+		t.Fatal("partial device readings made host total complete")
+	}
+	live := parseSystemMetricHistory(liveReportingResponses([]trueNASReportingGetDataResponse{a, b}, start+100))
+	if live != nil {
+		t.Fatal("stale native disk buckets became live samples")
+	}
+	if metricsFromTrueNASDisk(*system, Disk{Name: "unknown", ID: "disk-a", Serial: "disk-b"}) != nil {
+		t.Fatal("guessed disk identity")
+	}
+	clone := cloneSystemInfo(*system)
+	clone.DiskReadRates["disk-a"] = TimeSeriesPoint{Value: 999}
+	if system.DiskReadRates["disk-a"].Value != 0 {
+		t.Fatal("snapshot rates alias caller mutation")
+	}
+	unscoped := parseSystemMetricHistory([]trueNASReportingGetDataResponse{graph("", []any{[]any{4., 5.}})})
+	if unscoped == nil || len(unscoped.DiskReadRates) != 0 || len(unscoped.DiskWriteRates) != 0 || unscoped.DiskReadRate[0].Value != 4 {
+		t.Fatal("unscoped compatibility graph was assigned to a physical disk or lost host data")
+	}
+}
+
+func TestCOREPerDiskRatesRejectInvalidAndPreserveScope(t *testing.T) {
+	for _, value := range []float64{-1, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		if metricsFromTrueNASDisk(SystemInfo{DiskReadRates: map[string]TimeSeriesPoint{"da0": {Timestamp: time.Unix(1789000000, 0), Value: value}}}, Disk{Name: "da0"}) != nil {
+			t.Fatalf("invalid rate became a reading: %v", value)
+		}
+	}
+	for _, device := range []string{"", "other", "/dev/da0", "da0p2", "DA0"} {
+		if metricsFromTrueNASDisk(SystemInfo{DiskReadRates: map[string]TimeSeriesPoint{device: {Timestamp: time.Unix(1789000000, 0), Value: 1}}}, Disk{Name: "da0", ID: device, Serial: device}) != nil {
+			t.Fatalf("unmatched reporting identifier assigned: %q", device)
+		}
+	}
+	if metricsFromTrueNASDisk(SystemInfo{DiskReadRates: map[string]TimeSeriesPoint{"da0": {Value: 1}}}, Disk{Name: "da0"}) != nil {
+		t.Fatal("sample without time accepted")
+	}
+}
+
+func TestCOREPerDiskRatesConnectionIsolation(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() { SetFeatureEnabled(previous) })
+	at := time.Unix(1789000000, 0).UTC()
+	fixtures := FixtureSnapshot{CollectedAt: at, System: SystemInfo{Hostname: "namesake", DiskReadRates: map[string]TimeSeriesPoint{"da0": {Timestamp: at, Value: 13}}}, Disks: []Disk{{Name: "da0", ID: "{da0}", Serial: "UNKNOWN"}}}
+	first := NewLiveProviderForConnection(&FixtureFetcher{Snapshot: fixtures}, "core-first")
+	second := NewLiveProviderForConnection(&FixtureFetcher{Snapshot: fixtures}, "core-second")
+	if err := first.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	fixtures.System.DiskReadRates["da0"] = TimeSeriesPoint{Timestamp: at, Value: 29}
+	if err := second.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, append(first.Records(), second.Records()...))
+	seen := map[string]float64{}
+	for _, r := range registry.List() {
+		if r.Type == unifiedresources.ResourceTypePhysicalDisk {
+			seen[r.ID] = r.Metrics.DiskRead.Value
+		}
+	}
+	if len(seen) != 2 {
+		t.Fatalf("namesake connection/disk identity merged: %+v", seen)
+	}
+	total := 0.
+	for _, v := range seen {
+		total += v
+	}
+	if total != 42 {
+		t.Fatalf("sample crossed snapshot/connection: %+v", seen)
+	}
 }

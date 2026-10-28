@@ -2,14 +2,10 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"slices"
-	"strconv"
-	"sync"
-	"testing"
-	"time"
-
+	"fmt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -19,6 +15,16 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"math"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
 )
 
 // Monitor construction restores notification destinations before admitting
@@ -1964,5 +1970,227 @@ func TestMergeHostAgentSMARTIntoDisksKeepsSSHNodeSensorReadingOfSplitDisk(t *tes
 	live := mergeHostAgentSMARTIntoDisks([]models.PhysicalDisk{disk}, nodes, hosts, splits)[0]
 	if live.Temperature != 0 || live.Collection.Temperature.State != diskinventory.FieldUnsupported {
 		t.Fatalf("split disk with a reporting agent kept the agent-supplied reading: %+v / %+v", live, live.Collection)
+	}
+}
+
+// Registered end-to-end source regression: production pinned REST -> snapshot
+// -> poller -> canonical registry/target -> writer -> local/persistent drawer
+// readback. Only provider HTTP responses are synthetic; there is no appliance
+// mutation, credentials or simulated cumulative kernel counter.
+func TestCOREPhysicalDiskReportingPipeline(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+	for _, boot := range []string{"boot-pool", "freenas-boot"} {
+		t.Run(boot, func(t *testing.T) {
+			var cycle atomic.Int64
+			sampleEnd := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second).Unix()
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v2.0/system/info":
+					fmt.Fprint(w, `{"hostname":"namesake-core","version":"TrueNAS-13.0-U6.1","cores":8,"physmem":34359738368}`)
+				case "/api/v2.0/pool":
+					fmt.Fprintf(w, `[{"id":1,"name":%q,"status":"ONLINE","size":1000,"allocated":400,"free":600},{"id":2,"name":"data-pool","status":"ONLINE","size":100000,"allocated":60000,"free":40000}]`, boot)
+				case "/api/v2.0/disk":
+					fmt.Fprintf(w, `[{"identifier":"{disk-a}","name":"disk-a","size":1000,"pool":%q,"model":"Synthetic boot disk"},{"identifier":"{disk-b}","name":"disk-b","size":100000,"pool":"data-pool","model":"Synthetic data disk"},{"identifier":"{disk-c}","name":"disk-c","size":100000,"pool":"data-pool","model":"Synthetic data disk"}]`, boot)
+				case "/api/v2.0/disk/temperatures":
+					fmt.Fprint(w, `{"disk-a":30,"disk-b":31,"disk-c":32}`)
+				case "/api/v2.0/pool/dataset", "/api/v2.0/alert/list":
+					fmt.Fprint(w, `[]`)
+				case "/api/v2.0/reporting/graphs":
+					fmt.Fprint(w, `[{"name":"disk","identifiers":["disk-a","disk-b","disk-c"]}]`)
+				case "/api/v2.0/reporting/get_data":
+					var request struct {
+						Graphs []map[string]any `json:"graphs"`
+						Query  map[string]any   `json:"reporting_query"`
+					}
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Error(err)
+						w.WriteHeader(400)
+						return
+					}
+					end := sampleEnd + cycle.Load()*10
+					var replies []map[string]any
+					for _, g := range request.Graphs {
+						name, _ := g["name"].(string)
+						id, _ := g["identifier"].(string)
+						reply := map[string]any{"name": name, "identifier": id, "start": end - 10, "end": end, "step": 10}
+						switch name {
+						case "memory":
+							reply["legend"] = []string{"memory-free_value"}
+							reply["data"] = [][]any{{float64(2 << 30)}, {float64(2 << 30)}}
+						case "arcsize":
+							reply["legend"] = []string{"arcsize_value"}
+							reply["data"] = [][]any{{float64(20 << 30)}, {float64(20 << 30)}}
+						case "disk":
+							if cycle.Load() == 1 && id == "disk-c" {
+								continue
+							} // selected but absent, not idle
+							rates := map[string][]any{"disk-a": {100., 200.}, "disk-b": {1000., 2000.}, "disk-c": {10000., 20000.}}
+							rate, ok := rates[id]
+							if !ok {
+								t.Errorf("unexpected disk query %q", id)
+								w.WriteHeader(400)
+								return
+							}
+							if cycle.Load() == 2 {
+								rate = []any{0., nil}
+							} // true idle reads, missing writes
+							reply["legend"] = []string{"disk_octets_read", "disk_octets_write"}
+							reply["data"] = [][]any{rate, rate}
+						default:
+							continue
+						}
+						replies = append(replies, reply)
+					}
+					_ = json.NewEncoder(w).Encode(replies)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			fingerprint := fmt.Sprintf("%x", sha256.Sum256(server.Certificate().Raw))
+			client, err := truenas.NewClient(truenas.ClientConfig{Host: server.URL, APIKey: "synthetic", Fingerprint: fingerprint, InsecureSkipVerify: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			provider := truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, "core-a")
+			instance := config.TrueNASInstance{ID: "core-a", Host: server.URL, Enabled: true}
+			poller := NewTrueNASPoller(nil, 0, nil)
+			poller.providersByOrg["default"] = map[string]*truenas.Provider{instance.ID: provider}
+			poller.configsByOrg["default"] = map[string]config.TrueNASInstance{instance.ID: instance}
+			persistent, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = persistent.Close() }()
+			resourceStore := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(unifiedresources.NewMemoryStore()))
+			monitor := &Monitor{resourceStore: resourceStore, metricsHistory: NewMetricsHistory(1024, 24*time.Hour), metricsStore: persistent}
+			for c := int64(0); c < 3; c++ {
+				cycle.Store(c)
+				poller.ensureConnectionRuntimeStatusLocked("default", instance.ID).nextPollAt = time.Now().Add(-time.Second)
+				poller.pollAll(context.Background())
+				records := poller.GetCurrentRecordsForOrg("default")
+				if len(records) == 0 {
+					t.Fatal("production poll lost inventory")
+				}
+				resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{unifiedresources.SourceTrueNAS: records})
+				monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+				monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+				diskCount := 0
+				for _, resource := range resourceStore.GetAll() {
+					if resource.Type == unifiedresources.ResourceTypeAgent {
+						if resource.Agent.Memory.Free != 2<<30 || resource.Agent.Memory.Cache != 20<<30 {
+							t.Fatalf("memory regression: %+v", resource.Agent.Memory)
+						}
+						if c == 0 && (resource.Metrics.DiskRead == nil || resource.Metrics.DiskRead.Value != 11100 || resource.Metrics.DiskWrite.Value != 22200) {
+							t.Fatal("complete host total changed")
+						}
+						if c == 1 && resource.Metrics != nil && (resource.Metrics.DiskRead != nil || resource.Metrics.DiskWrite != nil) {
+							t.Fatal("partial catalogue became complete host IO")
+						}
+						continue
+					}
+					if resource.Type != unifiedresources.ResourceTypePhysicalDisk {
+						continue
+					}
+					diskCount++
+					if resource.PhysicalDisk.IO != nil {
+						t.Fatal("RRD rates fabricated cumulative counters")
+					}
+					target := resourceStore.MetricsTargetForResource(resource.ID)
+					if target == nil || target.ResourceType != "disk" {
+						t.Fatal("disk lost its real history identity")
+					}
+					want := map[string]float64{"disk-a": 100, "disk-b": 1000, "disk-c": 10000}[resource.Name]
+					present := !(c == 1 && resource.Name == "disk-c")
+					if present && (resource.Metrics == nil || resource.Metrics.DiskRead == nil) {
+						t.Fatalf("cycle %d %s lost native per-disk rate", c, resource.Name)
+					}
+					if !present && resource.Metrics != nil && (resource.Metrics.DiskRead != nil || resource.Metrics.DiskWrite != nil) {
+						t.Fatal("absent disk retained a current rate")
+					}
+					if c == 2 && resource.Metrics.DiskWrite != nil {
+						t.Fatal("missing write was carried forward")
+					}
+
+					for _, kind := range []string{"diskread", "diskwrite"} {
+						expected := 1
+						if c > 0 && resource.Name != "disk-c" {
+							expected++
+						}
+						if c == 2 && kind == "diskread" {
+							expected++
+						}
+						points, err := persistent.Query("disk", target.ResourceID, kind, time.Unix(sampleEnd-3600, 0), time.Now(), 0)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if len(points) != expected {
+							t.Fatalf("cycle %d %s %s: %d history points, want %d (missing/zero/rebuild)", c, resource.Name, kind, len(points), expected)
+						}
+						if points[0].Value != want*map[string]float64{"diskread": 1, "diskwrite": 2}[kind] || points[0].Timestamp.Unix() != sampleEnd {
+							t.Fatalf("native rate/time altered: %+v", points)
+						}
+						if c == 2 && kind == "diskread" && points[len(points)-1].Value != 0 {
+							t.Fatal("idle read became unavailable")
+						}
+						local := monitor.GetDiskMetricsForChart(target.ResourceID, kind, time.Hour)
+						// Sparse local windows may choose the persistent store. Either path must
+						// return the same actual rate observations, not temperatures or counters.
+						if len(local) != expected {
+							t.Fatalf("drawer %s %s lost history: %+v", target.ResourceID, kind, local)
+						}
+					}
+					if c == 0 {
+						raw, _ := json.Marshal(map[string]any{"resource": resource, "target": target, "read": monitor.GetDiskMetricsForChart(target.ResourceID, "diskread", time.Hour), "write": monitor.GetDiskMetricsForChart(target.ResourceID, "diskwrite", time.Hour)})
+						t.Logf("CORE_DISK_CONSUMER %s", raw)
+					}
+				}
+				if diskCount != 3 {
+					t.Fatalf("disk inventory lost: %d", diskCount)
+				}
+			}
+		})
+	}
+}
+
+func TestTrueNASDiskRateWriterAdmission(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	persistent, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = persistent.Close() }()
+	monitor := &Monitor{metricsStore: persistent, metricsHistory: NewMetricsHistory(100, time.Hour)}
+	for _, tc := range []struct {
+		name   string
+		value  float64
+		at     time.Time
+		source unifiedresources.DataSource
+		unit   string
+	}{
+		{"missing_time", 1, time.Time{}, unifiedresources.SourceTrueNAS, "bytes/s"},
+		{"future", 1, now.Add(time.Hour), unifiedresources.SourceTrueNAS, "bytes/s"},
+		{"negative", -1, now, unifiedresources.SourceTrueNAS, "bytes/s"},
+		{"nan", math.NaN(), now, unifiedresources.SourceTrueNAS, "bytes/s"},
+		{"infinite", math.Inf(1), now, unifiedresources.SourceTrueNAS, "bytes/s"},
+		{"other_source", 1, now, unifiedresources.SourceAgent, "bytes/s"},
+		{"counters", 1, now, unifiedresources.SourceTrueNAS, "bytes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := unifiedresources.Resource{Metrics: &unifiedresources.ResourceMetrics{DiskRead: &unifiedresources.MetricValue{Value: tc.value, ObservedAt: tc.at, Source: tc.source, Unit: tc.unit}}}
+			monitor.writeTrueNASDiskRates(r, tc.name, now)
+			points, err := persistent.Query("disk", tc.name, "diskread", now.Add(-time.Hour), now.Add(time.Hour), 0)
+			if err != nil || len(points) > 0 {
+				t.Fatalf("invalid sample persisted: %+v %v", points, err)
+			}
+		})
+	}
+	encoded, _ := json.Marshal(unifiedresources.MetricValue{Value: 1, ObservedAt: now, Source: unifiedresources.SourceTrueNAS})
+	if strings.Contains(string(encoded), "ObservedAt") || strings.Contains(string(encoded), "observedAt") {
+		t.Fatal("internal timestamp changed the wire shape")
 	}
 }

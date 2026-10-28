@@ -302,7 +302,11 @@ func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
 	if history == nil {
 		return nil
 	}
-	system := &SystemInfo{Telemetry: &SystemTelemetryAvailability{}}
+	system := &SystemInfo{
+		Telemetry:      &SystemTelemetryAvailability{},
+		DiskReadRates:  latestDeviceRates(history.DiskReadRates),
+		DiskWriteRates: latestDeviceRates(history.DiskWriteRates),
+	}
 	for _, series := range [][]TimeSeriesPoint{history.CPUPercent, history.MemoryAvailableBytes, history.NetInRate, history.NetOutRate, history.DiskReadRate, history.DiskWriteRate} {
 		for _, point := range series {
 			if point.Timestamp.After(system.CollectedAt) {
@@ -2174,6 +2178,8 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	system.NetOutRate = telemetry.NetOutRate
 	system.DiskReadRate = telemetry.DiskReadRate
 	system.DiskWriteRate = telemetry.DiskWriteRate
+	system.DiskReadRates = cloneDeviceRates(telemetry.DiskReadRates)
+	system.DiskWriteRates = cloneDeviceRates(telemetry.DiskWriteRates)
 	if len(telemetry.TemperatureCelsius) > 0 {
 		system.TemperatureCelsius = cloneTemperatureMap(telemetry.TemperatureCelsius)
 	}
@@ -3454,7 +3460,9 @@ func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *Syst
 	history.NetOutRate = sumReportingDevices(io["netout"])
 	history.DiskReadRate = sumReportingDevices(io["diskread"])
 	history.DiskWriteRate = sumReportingDevices(io["diskwrite"])
-	if len(history.CPUPercent)+len(history.MemoryPercent)+len(history.MemoryUsedBytes)+len(history.MemoryAvailableBytes)+len(history.MemoryTotalBytes)+len(history.ARCSizeBytes)+len(history.NetInRate)+len(history.NetOutRate)+len(history.DiskReadRate)+len(history.DiskWriteRate)+len(history.TemperatureCelsius) == 0 {
+	history.DiskReadRates = reportingDiskRates(io["diskread"])
+	history.DiskWriteRates = reportingDiskRates(io["diskwrite"])
+	if len(history.CPUPercent)+len(history.MemoryPercent)+len(history.MemoryUsedBytes)+len(history.MemoryAvailableBytes)+len(history.MemoryTotalBytes)+len(history.ARCSizeBytes)+len(history.NetInRate)+len(history.NetOutRate)+len(history.DiskReadRate)+len(history.DiskWriteRate)+len(history.TemperatureCelsius)+len(history.DiskReadRates)+len(history.DiskWriteRates) == 0 {
 		return nil
 	}
 	return history

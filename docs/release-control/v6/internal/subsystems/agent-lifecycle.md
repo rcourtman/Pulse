@@ -15,6 +15,16 @@
 
 ## Purpose
 
+### API-backed disk rates preserve native-writer authority
+
+The physical-disk sync excludes Agent/Proxmox native writers and mock-owned
+records before writing TrueNAS per-device rates. A rate is not a kernel counter,
+agent report or continuity signal. Existing target resolution stays authoritative.
+The physical-disk roundtrip pipeline covers the API rate route and its adjacent
+native-writer regressions remain required. No enrolment, removal, lease, host
+identity or installed state transition changes.
+
+
 A member test announces and reveals its result beside that exact member rather
 than leaving feedback in the off-screen global footer. The normal primary
 Test connection result stays in the footer; both remain endpoint-qualified
