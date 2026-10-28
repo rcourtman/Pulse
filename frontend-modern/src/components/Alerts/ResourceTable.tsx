@@ -36,6 +36,8 @@ export interface ResourceTableProps {
   onRemoveOverride: (resourceId: string) => void;
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
+  /** Omit the all-alerts control for connectivity-only resource tables. */
+  showAlertsColumn?: boolean;
   showOfflineAlertsColumn?: boolean; // Show separate column for offline/connectivity alerts
   globalOfflineSeverity?: 'warning' | 'critical';
   onSetGlobalOfflineState?: (state: OfflineState) => void;
@@ -120,7 +122,8 @@ export function ResourceTable(props: ResourceTableProps) {
   const totalColumnCount = createMemo(
     () =>
       props.columns.length +
-      3 +
+      2 +
+      (props.showAlertsColumn === false ? 0 : 1) +
       (props.showOfflineAlertsColumn ? 1 : 0) +
       (props.onBulkEdit ? 1 : 0),
   );

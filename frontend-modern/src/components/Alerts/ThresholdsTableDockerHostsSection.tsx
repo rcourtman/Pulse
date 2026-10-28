@@ -22,6 +22,12 @@ export function ThresholdsTableDockerHostsSection(props: ThresholdsTableSectionP
         emptyMessage={state.CONTAINER_RUNTIMES_FILTER_EMPTY_STATE}
       >
         <div ref={state.registerSection('dockerHosts')} class="scroll-mt-24">
+          <p class="mb-3 text-sm text-muted">
+            Offline Alerts only controls runtime-disconnection alerts, not container or machine
+            alerts. To mute existing containers, turn off their Alerts switches in Containers and
+            save. Newly added containers need their own setting; there is no single-runtime mute for
+            all its containers.
+          </p>
           <ResourceTable
             title=""
             onConfigureResourceIntent={tableProps.onConfigureResourceIntent}
@@ -33,7 +39,7 @@ export function ThresholdsTableDockerHostsSection(props: ThresholdsTableSectionP
             onSaveEdit={state.saveEdit}
             onCancelEdit={state.cancelEdit}
             onRemoveOverride={state.removeOverride}
-            onToggleDisabled={state.toggleDisabled}
+            showAlertsColumn={false}
             onToggleNodeConnectivity={state.toggleNodeConnectivity}
             showOfflineAlertsColumn={true}
             editingId={state.editingId}
@@ -41,25 +47,9 @@ export function ThresholdsTableDockerHostsSection(props: ThresholdsTableSectionP
             setEditingThresholds={state.setEditingThresholds}
             editingNote={state.editingNote}
             setEditingNote={state.setEditingNote}
-            onBulkEdit={(ids) =>
-              state.handleBulkEdit(ids, [
-                'CPU %',
-                'Memory %',
-                'Disk %',
-                'Disk R MB/s',
-                'Disk W MB/s',
-                'Net In MB/s',
-                'Net Out MB/s',
-                'Restart Count',
-                'Restart Window (s)',
-              ])
-            }
             formatMetricValue={formatMetricValue}
             hasActiveAlert={state.hasActiveAlert}
             globalDisableFlag={tableProps.disableAllDockerHosts}
-            onToggleGlobalDisable={() =>
-              tableProps.setDisableAllDockerHosts(!tableProps.disableAllDockerHosts())
-            }
             globalDisableOfflineFlag={tableProps.disableAllDockerHostsOffline}
             onToggleGlobalDisableOffline={() =>
               tableProps.setDisableAllDockerHostsOffline(!tableProps.disableAllDockerHostsOffline())

@@ -60,6 +60,7 @@ interface AlertResourceTableRowProps {
   onSaveEdit: (resourceId: string) => void;
   onCancelEdit: () => void;
   onRemoveOverride: (resourceId: string) => void;
+  showAlertsColumn?: boolean;
   onToggleDisabled?: (resourceId: string) => void;
   onToggleNodeConnectivity?: (nodeId: string) => void;
   showOfflineAlertsColumn?: boolean;
@@ -267,34 +268,38 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
         </TableCell>
       </Show>
 
-      <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
-        <Show when={props.onToggleDisabled}>
-          {(() => {
-            const globallyDisabled = props.globalDisableFlag?.() ?? false;
-            const isChecked = !globallyDisabled && !props.resource.disabled;
-            return (
-              <div class="flex items-center justify-center">
-                <TogglePrimitive
-                  size="sm"
-                  checked={isChecked}
-                  disabled={globallyDisabled}
-                  onToggle={() => !globallyDisabled && props.onToggleDisabled?.(props.resource.id)}
-                  class="-my-0.5"
-                  title={
-                    globallyDisabled
-                      ? 'Alerts disabled globally'
-                      : props.resource.disabled
-                        ? 'Click to enable alerts'
-                        : 'Click to disable alerts'
-                  }
-                  // The switch role carries on/off; the name says whose alerts.
-                  ariaLabel={`Alerts for ${resourceLabel()}`}
-                />
-              </div>
-            );
-          })()}
-        </Show>
-      </TableCell>
+      <Show when={props.showAlertsColumn !== false}>
+        <TableCell class={`${getPlatformTableCellClassForKind('badge')} align-middle`}>
+          <Show when={props.onToggleDisabled}>
+            {(() => {
+              const globallyDisabled = props.globalDisableFlag?.() ?? false;
+              const isChecked = !globallyDisabled && !props.resource.disabled;
+              return (
+                <div class="flex items-center justify-center">
+                  <TogglePrimitive
+                    size="sm"
+                    checked={isChecked}
+                    disabled={globallyDisabled}
+                    onToggle={() =>
+                      !globallyDisabled && props.onToggleDisabled?.(props.resource.id)
+                    }
+                    class="-my-0.5"
+                    title={
+                      globallyDisabled
+                        ? 'Alerts disabled globally'
+                        : props.resource.disabled
+                          ? 'Click to enable alerts'
+                          : 'Click to disable alerts'
+                    }
+                    // The switch role carries on/off; the name says whose alerts.
+                    ariaLabel={`Alerts for ${resourceLabel()}`}
+                  />
+                </div>
+              );
+            })()}
+          </Show>
+        </TableCell>
+      </Show>
 
       <TableCell class={getPlatformTableCellClassForKind('name')}>
         <div class="flex items-center gap-2 min-w-0">
