@@ -80,7 +80,10 @@ describe('missing local filesystem guidance', () => {
     ]) {
       expect(text).toContain(distinction);
     }
-    for (const target of ['use-existing-machines-readings-without-changing-the-guest', 'backup-safety']) {
+    for (const target of [
+      'use-existing-machines-readings-without-changing-the-guest',
+      'backup-safety',
+    ]) {
       expect(content.querySelector(`a[href="#${target}"]`)).not.toBeNull();
       expect(guide('VM_DISK_MONITORING').querySelector(`#${target}`)).not.toBeNull();
     }
