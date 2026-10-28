@@ -128,19 +128,20 @@ describe('ProxmoxRecoverableTable record drawer', () => {
 });
 
 describe('ProxmoxRecoverableTable responsive columns', () => {
-  it('keeps source, location, recovery age, and state visible in compact containers', () => {
+  it('groups full restore-point identity beside age and state in compact containers', () => {
     renderTable(330);
 
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual([
-      'Workload',
-      'Via',
+      'Restore point',
       'Age▼',
       'State',
     ]);
     expect(document.body.textContent).toContain('VM 100');
-    // The phone projection has no location column; the row title carries it.
-    expect(document.body.textContent).not.toContain('main / pve1');
-    expect(document.querySelector('td [title*="main / pve1"]')).not.toBeNull();
+    // No hover is needed to identify the repository on a phone.
+    expect(document.querySelector('[data-backup-location]')).toHaveTextContent('main / pve1');
+    expect(document.querySelector('[data-backup-source-connection]')).toHaveTextContent(
+      'Connection: Unknown connection',
+    );
     expect(document.body.textContent).not.toContain('5 PBS files');
   });
 

@@ -2935,3 +2935,39 @@ describe('bare Backups entry retains its assessed workspace', () => {
     await screen.findByText('No backups yet');
   });
 });
+
+describe('By-date restore-point scope', () => {
+  afterEach(() => vi.useRealTimers());
+  it('shows the workload connection independently of its backup reader before disclosure', async () => {
+    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW, toFake: ['Date'] });
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data:
+            url === '/api/backups/pbs'
+              ? { backups: [identityPBS({ instance: 'independent-pbs-reader' })] }
+              : { backupTasks: [], storageBackups: [], guestSnapshots: [] },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
+      />
+    ));
+    const toggle = await screen.findByRole('button', {
+      name: 'Expand details for east-100 (VM 100) · PVE connection: east',
+    });
+    const point = toggle.closest('tr')!;
+    expect(point.querySelector('[data-backup-workload-connection]')).toHaveTextContent('PVE: east');
+    expect(point.querySelector('[data-backup-source-connection]')).toHaveTextContent(
+      'independent-pbs-reader',
+    );
+    expect(screen.queryByTestId('proxmox-recoverable-detail')).not.toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+});
