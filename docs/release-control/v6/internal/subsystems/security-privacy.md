@@ -18,6 +18,28 @@
 
 ## Purpose
 
+### OIDC retains the bounded JOSE key and token verifier
+
+OIDC discovery, remote JWKS and signed ID tokens use go-oidc's real verifier
+with go-jose/v4 at least 4.1.6. The upstream default RSA JWK modulus ceiling is
+4096 bits; Pulse must not raise its process-global limit to accept larger
+provider keys. Supported RSA 2048/4096, P256/ES256 and Ed25519/EdDSA keys remain
+usable. A larger provider key requires rotation to a supported key, not a
+signature, issuer, audience, expiry or TLS-verification bypass. The ceiling
+also applies while decoding a key set: a mixed JWKS is not automatically usable
+merely because one of its keys is within range.
+
+`TestOIDCJOSEJWKModulusBound` checks the exact default, both supported sizes and
+the first out-of-range size without performing expensive oversized-key crypto.
+`TestOIDCServiceJOSECompatibilityAndRejection` uses Pulse's actual discovery and
+remote-key consumer with independently stdlib-signed tokens. It preserves key
+IDs/subjects containing spaces and rejects invalid signatures, unsigned
+algorithms, wrong issuers/audiences, expired tokens and P256/ES384 confusion.
+Existing mixed unsupported-key and custom-CA/cross-origin controls still apply.
+No verifier skip or library-limit override is introduced. These are source
+obligations, not evidence of installed sign-in or publication.
+
+
 ### Audit CSV is a spreadsheet projection, not rewritten evidence
 
 The canonical audit exporter prefixes dangerous text cells with one apostrophe
