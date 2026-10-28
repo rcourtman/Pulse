@@ -50,9 +50,13 @@ func TestAgentReportsKeepSystemNamedSiblingVolumes(t *testing.T) {
  {"device":"/dev/vda1","mountpoint":"/snapshots","type":"ext4","totalBytes":1000,"usedBytes":950,"freeBytes":50,"usage":95},
  {"device":"/dev/vdb1","mountpoint":"/runtime","type":"xfs","totalBytes":1000,"usedBytes":400,"freeBytes":600,"usage":40},
  {"device":"/dev/vdc1","mountpoint":"/var/lib/docker-data","type":"ext4","totalBytes":1000,"usedBytes":700,"freeBytes":300,"usage":70},
+ {"device":"/dev/vdd1","mountpoint":"/var/lib/containers","type":"btrfs","totalBytes":1000,"usedBytes":700,"freeBytes":300,"usage":70},
+ {"device":"/dev/vde1","mountpoint":"/var/lib/docker","type":"xfs","totalBytes":1000,"usedBytes":500,"freeBytes":500,"usage":50},
  {"device":"image","mountpoint":"/snap/image","type":"squashfs","totalBytes":1000,"usedBytes":1000,"usage":100},
  {"device":"runtime","mountpoint":"/run/worker","type":"ext4","totalBytes":1000,"usedBytes":1000,"usage":100},
- {"device":"remote","mountpoint":"/snapshots-remote","type":"nfs4","totalBytes":1000,"usedBytes":1000,"usage":100}
+ {"device":"remote","mountpoint":"/snapshots-remote","type":"nfs4","totalBytes":1000,"usedBytes":1000,"usage":100},
+ {"device":"layer","mountpoint":"/var/lib/docker/overlay2/layer/merged","type":"ext4","totalBytes":1000,"usedBytes":1000,"usage":100},
+ {"device":"podman-layer","mountpoint":"/var/lib/containers/storage/overlay/layer/merged","type":"xfs","totalBytes":1000,"usedBytes":1000,"usage":100}
  ]`), &disks); err != nil {
 				t.Fatal(err)
 			}
@@ -101,10 +105,10 @@ func TestAgentReportsKeepSystemNamedSiblingVolumes(t *testing.T) {
 					stored = m.state.GetSnapshot().DockerHosts[0].Disks
 					canonical = m.GetUnifiedReadState().DockerHosts()[0].Disks()
 				}
-				if len(native) != 3 || len(stored) != 3 || len(canonical) != 3 {
+				if len(native) != 5 || len(stored) != 5 || len(canonical) != 5 {
 					t.Fatalf("local volumes missing at report/state/read boundaries: %v / %v / %v", native, stored, canonical)
 				}
-				for i := 0; i < 3; i++ {
+				for i := 0; i < 5; i++ {
 					want := disks[i]
 					if native[i].Mountpoint != want.Mountpoint || native[i].Total != want.TotalBytes || native[i].Used != want.UsedBytes || native[i].Usage != want.Usage ||
 						stored[i] != native[i] || canonical[i].Mountpoint != want.Mountpoint || canonical[i].Total != want.TotalBytes || canonical[i].Used != want.UsedBytes || canonical[i].Usage != want.Usage {

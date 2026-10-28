@@ -1153,6 +1153,26 @@ through QGA aggregation and both report/state/canonical-read paths, and host
 usage alert onset/recovery. These synthetic controls do not establish native
 guest polling, installed agent recovery or completion of a reported incident.
 
+### Runtime data directories retain real disk capacity
+
+`/var/lib/containers` and `/var/lib/docker` can be independently mounted data
+disks, not just container plumbing (#3444). The shared filesystem filter admits
+their real backing mounts and persistent data volumes without an include
+override. Only the runtime's specific layer trees remain path-excluded, with
+directory-boundary matching; virtual, read-only and remote filesystem types
+remain excluded everywhere. Existing device/volume deduplication still counts
+aliases once and retains their own per-mount observations. Explicit operator
+exclusions, guest-read admission, backup policy and backup exclusions do not
+change.
+
+`runtime_data_mount_test.go` covers eligible root/data mounts and filtered
+layers/types. Host collector and report-boundary controls cover pre-usage
+admission, state and canonical views. `TestVMRuntimeDataMountPolling` exercises
+the real Proxmox HTTP client and both ordinary VM builders for ext4/xfs/btrfs,
+near-full/zero readings, reordered aliases, canonical/served counters and
+filesystem alert onset/recovery. These synthetic endpoints are not a native
+guest probe, the reporter's actual fsinfo payload or installed recovery proof.
+
 ### QEMU Windows capacity is owned by the volume, not the physical drive
 
 The guest filesystem aggregate uses the reported Windows volume GUID when
