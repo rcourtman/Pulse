@@ -130,31 +130,73 @@ func TestStaleFixture(t *testing.T) { _ = api.Resource{Alerts: []api.ResourceAle
         # Frontend work does not wait for the Go-only gate.
         self.assertIn("needs: changes", job(source, "frontend"))
 
-    def test_required_checks_fail_on_bad_compile_and_pass_docs_only_skip(self):
+    def test_required_checks_admit_only_explicit_consistent_results(self):
         source = WORKFLOW.read_text()
         for name in ("backend", "backend-api"):
             section = job(source, name)
             self.assertIn("needs: [changes, test-compile]", section)
             self.assertIn("if: ${{ !cancelled() && needs.changes.result == 'success' }}", section)
+            self.assertIn("CODE_CHANGED: ${{ needs.changes.outputs.code }}", section)
+            self.assertIn("COMPILE_REQUIRED: ${{ needs.changes.outputs.go_compile }}", section)
             self.assertIn("COMPILE_RESULT: ${{ needs.test-compile.result }}", section)
             self.assertLess(section.index("Require compiled backend tests"), section.index("Checkout repository"))
             script = prerequisite_script(section)
-            for code in ("true", "false"):
-                for result in ("success", "failure", "cancelled", "skipped", ""):
-                    with self.subTest(job=name, code=code, result=result):
-                        observed = subprocess.run(
-                            ["bash", "-euo", "pipefail", "-c", script],
-                            env={**os.environ, "COMPILE_REQUIRED": code, "COMPILE_RESULT": result},
-                            capture_output=True, text=True,
-                        )
-                        expected = 0 if code == "false" or result == "success" else 1
-                        self.assertEqual(observed.returncode, expected, observed.stdout + observed.stderr)
+            admitted = {("true", "true", "success"), ("true", "false", "skipped"),
+                        ("false", "false", "skipped")}
+            for code in ("true", "false", "", "unknown", "true\nfalse"):
+                for required in ("true", "false", "", "unknown"):
+                    for result in ("success", "failure", "cancelled", "skipped", ""):
+                        with self.subTest(job=name, code=code, required=required, result=result):
+                            observed = subprocess.run(
+                                ["bash", "-euo", "pipefail", "-c", script],
+                                env={**os.environ, "CODE_CHANGED": code,
+                                     "COMPILE_REQUIRED": required, "COMPILE_RESULT": result},
+                                capture_output=True, text=True, timeout=5,
+                            )
+                            expected = 0 if (code, required, result) in admitted else 1
+                            self.assertEqual(observed.returncode, expected, observed.stdout + observed.stderr)
+                            if expected:
+                                self.assertIn("no runtime tests started", observed.stdout)
+                                self.assertIn("Detect changed areas", observed.stdout)
+            self.assertIn("- name: Report inapplicable backend runtime\n"
+                          "        if: needs.changes.outputs.code == 'false'", section)
+            self.assertIn("no backend tests ran in this shard", section)
             # Compile-only success cannot replace these full race/vet runs.
             self.assertIn("go test -race -timeout 50m", section)
         self.assertIn("shard: [rest-0, rest-1]", job(source, "backend"))
         self.assertIn("index: [0, 1, 2, 3, 4]", job(source, "backend-api"))
         self.assertIn("name: Backend tests (api)", job(source, "backend-api-verdict"))
         self.assertIn("if: always()", job(source, "backend-api-verdict"))
+
+    def test_actual_api_verdict_rejects_unknown_results_and_distinguishes_no_tests(self):
+        section = job(WORKFLOW.read_text(), "backend-api-verdict")
+        self.assertIn("needs: [changes, backend-api]", section)
+        for binding in ("CHANGE_RESULT: ${{ needs.changes.result }}",
+                        "CODE_CHANGED: ${{ needs.changes.outputs.code }}",
+                        "API_SHARDS_RESULT: ${{ needs.backend-api.result }}"):
+            self.assertIn(binding, section)
+        script = section.split("        run: |\n", 1)[1]
+        script = "\n".join(line[10:] for line in script.splitlines())
+        for change in ("success", "failure", "cancelled", "skipped", ""):
+            for code in ("true", "false", "", "unknown"):
+                for shards in ("success", "failure", "cancelled", "skipped", ""):
+                    with self.subTest(change=change, code=code, shards=shards):
+                        observed = subprocess.run(
+                            ["bash", "-euo", "pipefail", "-c", script],
+                            env={**os.environ, "CHANGE_RESULT": change,
+                                 "CODE_CHANGED": code, "API_SHARDS_RESULT": shards},
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        expected = 0 if change == shards == "success" and code in ("true", "false") else 1
+                        self.assertEqual(observed.returncode, expected, observed.stdout + observed.stderr)
+                        if expected == 0:
+                            if code == "true":
+                                self.assertIn("Every internal/api runtime shard passed", observed.stdout)
+                                self.assertNotIn("not applicable", observed.stdout)
+                            else:
+                                self.assertIn("not applicable", observed.stdout)
+                                self.assertIn("no internal/api tests ran", observed.stdout)
+                                self.assertNotIn("passed", observed.stdout)
 
 
 if __name__ == "__main__":

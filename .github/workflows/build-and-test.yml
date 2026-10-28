@@ -471,17 +471,23 @@ jobs:
     steps:
       - name: Require compiled backend tests
         env:
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
           COMPILE_REQUIRED: ${{ needs.changes.outputs.go_compile }}
           COMPILE_RESULT: ${{ needs.test-compile.result }}
         run: |
-          if [ "$COMPILE_REQUIRED" = true ] && [ "$COMPILE_RESULT" != success ]; then
-            echo "::error::Backend test compilation did not pass (result: ${COMPILE_RESULT:-unknown}); no runtime tests started."
-            exit 1
-          fi
+          # Only explicit, consistent classifier/compiler results admit tests
+          # or a deliberate skip. Missing outputs must not look like false.
+          case "$CODE_CHANGED:$COMPILE_REQUIRED:$COMPILE_RESULT" in
+            true:true:success|true:false:skipped|false:false:skipped) ;;
+            *)
+              echo "::error::Backend CI admission is incomplete or inconsistent. Inspect Detect changed areas and Compile backend race tests; no runtime tests started."
+              exit 1
+              ;;
+          esac
 
-      - name: Report documentation-only change
-        if: needs.changes.outputs.code != 'true'
-        run: echo "No backend code changed. Tests are not required for this shard."
+      - name: Report inapplicable backend runtime
+        if: needs.changes.outputs.code == 'false'
+        run: echo "Application runtime checks are not applicable to this classified change; no backend tests ran in this shard."
 
       - name: Checkout repository
         if: needs.changes.outputs.code == 'true'
@@ -578,17 +584,23 @@ jobs:
     steps:
       - name: Require compiled backend tests
         env:
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
           COMPILE_REQUIRED: ${{ needs.changes.outputs.go_compile }}
           COMPILE_RESULT: ${{ needs.test-compile.result }}
         run: |
-          if [ "$COMPILE_REQUIRED" = true ] && [ "$COMPILE_RESULT" != success ]; then
-            echo "::error::Backend test compilation did not pass (result: ${COMPILE_RESULT:-unknown}); no runtime tests started."
-            exit 1
-          fi
+          # Only explicit, consistent classifier/compiler results admit tests
+          # or a deliberate skip. Missing outputs must not look like false.
+          case "$CODE_CHANGED:$COMPILE_REQUIRED:$COMPILE_RESULT" in
+            true:true:success|true:false:skipped|false:false:skipped) ;;
+            *)
+              echo "::error::Backend CI admission is incomplete or inconsistent. Inspect Detect changed areas and Compile backend race tests; no runtime tests started."
+              exit 1
+              ;;
+          esac
 
-      - name: Report documentation-only change
-        if: needs.changes.outputs.code != 'true'
-        run: echo "No backend code changed. Tests are not required for this shard."
+      - name: Report inapplicable backend runtime
+        if: needs.changes.outputs.code == 'false'
+        run: echo "Application runtime checks are not applicable to this classified change; no backend tests ran in this shard."
 
       - name: Checkout repository
         if: needs.changes.outputs.code == 'true'
@@ -700,20 +712,30 @@ jobs:
   # internal/api shard succeeded (a skipped or cancelled shard fails it too).
   backend-api-verdict:
     name: Backend tests (api)
-    needs: backend-api
+    needs: [changes, backend-api]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require every internal/api shard
         env:
+          CHANGE_RESULT: ${{ needs.changes.result }}
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
           API_SHARDS_RESULT: ${{ needs.backend-api.result }}
         run: |
+          if [ "$CHANGE_RESULT" != success ]; then
+            echo "::error::Changed-area classification did not pass; backend runtime cannot be verified."
+            exit 1
+          fi
           if [ "$API_SHARDS_RESULT" != success ]; then
             echo "::error::internal/api shards did not all pass (result: ${API_SHARDS_RESULT})"
             exit 1
           fi
-          echo "Every internal/api shard passed."
+          case "$CODE_CHANGED" in
+            true) echo "Every internal/api runtime shard passed." ;;
+            false) echo "Application runtime checks are not applicable to this classified change; no internal/api tests ran." ;;
+            *) echo "::error::Missing or invalid changed-area classification; backend runtime cannot be verified."; exit 1 ;;
+          esac
 
   script-smoke:
     name: Script smoke tests (shard ${{ matrix.shard }}/2)

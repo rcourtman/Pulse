@@ -8736,18 +8736,30 @@ full compilation. Frontend-only changes do not pay for this Go-only preflight
 checks still run. `scripts/go-test-compile-required.sh` consumes the complete
 file list without an early-close/SIGPIPE path.
 
-A failed, cancelled, skipped or unknown compile result when compilation is required must
-fail the unchanged required backend check names, not let dependency skipping
-report success. Documentation-only changes still expand those named checks and
-accept the deliberately skipped compiler, as do changes outside Go compilation. Frontend and independent secret-scan
-work do not wait for compilation; their existing audit rules remain unchanged.
+Both backend matrices admit only three explicit classifier/compiler tuples:
+code=true/compile=true/success, code=true/compile=false/skipped, or
+code=false/compile=false/skipped. Missing, invalid or inconsistent outputs and
+failed, cancelled, skipped or unknown required compilation fail the unchanged
+required backend check names before checkout/runtime work. Missing output must
+not be interpreted as an intentional false flag. Documentation-, receipt- and
+triage-only changes still expand those named checks and accept the deliberately
+skipped compiler. Frontend and independent secret-scan work do not wait for
+compilation; their existing audit rules remain unchanged.
+
+The API aggregate also requires successful classification and every expanded
+shard. It reports runtime success only for code=true; code=false explicitly
+reports that no API tests ran because runtime checks are inapplicable. An
+unknown classifier or skipped/failed/cancelled shard never reports success.
 
 `scripts/tests/test_go_test_compilation.py` exercises the actual compiler on
 inert multi-package fixtures, rejects a test-only removed API and a normal-source
 compile defect, and proves init/TestMain/test/example code is never executed.
-It executes both matrix prerequisite scripts against successful and adverse
-results and the documentation-only skip. `TestCITestCompilationPreservesChecks`
-retains the required names, full race execution and separate dependency audit.
+It executes both actual matrix prerequisite scripts and the API aggregate over
+successful, missing, invalid, inconsistent, failed, cancelled and deliberately
+skipped results, including the distinct no-tests message.
+`TestCITestCompilationPreservesChecks` executes these admission/verdict controls
+as well as retaining the required names, full race execution and separate
+dependency audit.
 These proofs establish CI source admission, not hosted queue-time relief.
 
 
