@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "77d8f2bb4fa0639be5fc6a8b26bdefee9ab2784f",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/BackupActivityChart.tsx": "5154b504f4bc0640abed683dcbb0d085345f8a31ee14e1b8e8e93a98d6d2b256"
+  },
+  "verified_at": "2026-10-28T08:46:07.083261Z",
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "Exact assigned-base Chromium and 390px WebKit comparisons detach the focused day on the first ordinary 30-second inventory poll; Chromium withdraws its tooltip, not an exposed stale reading.",
+    "Candidate preserves the exact calendar-day DOM control and keyboard focus across fresh parsed inventory objects, count/volume changes, unknown-only/known-only readings and calendar rollover.",
+    "Current tooltip contents and unknown-size markers follow current inventory. Its position follows layout-changing notices and calendar rollover, verified against actual geometry and pixels.",
+    "A retired focused day returns to the selected activity range without rewriting or broadening the saved date filter. A returned day does not resurrect an old tooltip; unrelated focus is never stolen."
+  ],
+  "interactions": [
+    "Normal PVE/PBS/posture HTTP polling through the real router, parsers, model, hooks, chart, filter and entry-list consumer; one bounded GET per source per round; no extra interaction reads.",
+    "Desktop and narrow WebKit keyboard focus, Enter selection, Space clearing, current row counts and exact saved date; 320px WebKit tap selection and clearing.",
+    "Metric changes, mixed/unknown-only/known-only volume, surviving and retired day rollover, 30d/90d window return, outside focus, desktop Tab/Shift+Tab and narrow resize."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "base": false,
+      "timezone": "UTC"
+    },
+    {
+      "engine": "webkit",
+      "version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "base": false,
+      "timezone": "America/Los_Angeles"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "completed_checks": 71,
+  "pixel_review": "All seven final files were opened with native view_image; actual image content reached the maintainer. The first failed capture and six intermediate-pass captures were separately inspected, not substituted for final pixels.",
+  "captures": [
+    {
+      "name": "base-desktop-poll.png",
+      "sha256": "054f251d1871ed76e7c763b3f5741cdbbfd5d7a96577f261fff58eb287827267",
+      "bytes": 109026
+    },
+    {
+      "name": "desktop-mixed-volume.png",
+      "sha256": "ce85cc2f81ee1692745953ca1e5ba1e41057f457de42460f151dbe969f7c5c02",
+      "bytes": 125355
+    },
+    {
+      "name": "desktop-post-refresh-anchor.png",
+      "sha256": "57da070ab147f605ba58738239b73c9da4245fcd58b3b364e9f5b2bd7e9faf51",
+      "bytes": 102130
+    },
+    {
+      "name": "desktop-current-reading.png",
+      "sha256": "22c4efd982204d45a363d5638ba82a3c11fd3e7b796d0092bcd582d11831299f",
+      "bytes": 101922
+    },
+    {
+      "name": "base-phone-poll.png",
+      "sha256": "ca79352106b325d2fc903c1894b329161e75c898f0eb873c64f8fb416cff6711",
+      "bytes": 93821
+    },
+    {
+      "name": "phone-mixed-volume.png",
+      "sha256": "37fbabc72d0df6af5f5f6fe683c2176e29e437741664963b956932f4fe492285",
+      "bytes": 103122
+    },
+    {
+      "name": "phone-current-reading.png",
+      "sha256": "10e1d4ad6362857769ba9e0435d1f3b9d5cca3d45f4257beafea4cae6f7be503",
+      "bytes": 86212
+    }
+  ],
+  "execution_limits": {
+    "client_exit": 0,
+    "errors": [],
+    "requests": 54,
+    "safe_fixtures": true,
+    "preview_build_warnings": "Both proof-only combined preview builds retain Vite\u2019s >500kB advisory; production build/budget proof remains separate.",
+    "prior_attempts": "One authored baseline assertion failed; corrected to the observed withdrawn tooltip. Intermediate 65-check pass remains bound to its old source. No original guest/native recovery or published availability is claimed."
+  },
+  "evidence": "Lane RECEIPTS.md, BROWSER-RESULT.json, BROWSER-FINAL.tar.xz, PIXEL-REVIEW.json and retained source/adverse records."
+}

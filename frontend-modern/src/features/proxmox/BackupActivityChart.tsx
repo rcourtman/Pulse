@@ -1,4 +1,13 @@
-import { createSignal, For, Show } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  untrack,
+} from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import type { Accessor, Component } from 'solid-js';
 
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
@@ -41,8 +50,8 @@ import {
 } from './proxmoxBackupActivityPresentation';
 
 interface TooltipState {
-  dateLabel: string;
-  point: BackupActivityPoint;
+  key: string;
+  element: HTMLButtonElement;
   x: number;
   y: number;
 }
@@ -68,7 +77,52 @@ interface BackupActivityChartProps {
 export const BackupActivityChart: Component<BackupActivityChartProps> = (props) => {
   const [tooltip, setTooltip] = createSignal<TooltipState | null>(null);
 
-  const points = () => props.timeline().points;
+  let dayControls: HTMLDivElement | undefined;
+  let rangeControls: HTMLDivElement | undefined;
+  const [chart, setChart] = createStore<{ points: BackupActivityPoint[] }>({ points: [] });
+  // Inventory polling rebuilds every bucket. Reconcile by calendar day so a
+  // keyboard user's control survives; indexing would silently change its date
+  // when the window rolls over. Own the nested values, not the caller's DTOs.
+  createComputed(() => {
+    const next = props.timeline().points;
+    const target = untrack(tooltip);
+    if (target && !next.some((point) => point.key === target.key)) setTooltip(null);
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLElement &&
+      dayControls?.contains(active) &&
+      !next.some((point) => point.key === active.dataset.backupActivityDay)
+    ) {
+      // A retired day cannot keep focus. Return to the selected range without
+      // changing the saved day filter or stealing focus from another control.
+      untrack(() =>
+        rangeControls
+          ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+          ?.focus({ preventScroll: true }),
+      );
+    }
+    setChart(
+      'points',
+      reconcile(
+        next.map((point) => ({
+          ...point,
+          counts: { ...point.counts },
+          unknownCounts: point.unknownCounts ? { ...point.unknownCounts } : undefined,
+        })),
+        { key: 'key' },
+      ),
+    );
+  });
+  const points = () => chart.points;
+  // Retain interaction identity, never a snapshot of the displayed reading.
+  // A disappearing day withdraws its tooltip rather than showing old evidence.
+  const activeTooltip = createMemo(() => {
+    const target = tooltip();
+    const point = target && points().find((point) => point.key === target.key);
+    return target && point
+      ? { ...target, point, dateLabel: getRecoveryPrettyDateLabel(point.key) }
+      : null;
+  });
   const axisMax = () => props.timeline().axisMax;
   const hasSelection = () => props.selectedDateKey() !== null;
   const metricMode = (): BackupActivityMetricMode =>
@@ -90,16 +144,29 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
 
   const chartGapStyle = () => `${getRecoveryTimelineChartGapPx(props.range())}px`;
 
-  const showTooltip = (target: HTMLElement, point: BackupActivityPoint, dateLabel: string) => {
+  const showTooltip = (target: HTMLButtonElement, key: string) => {
     const rect = target.getBoundingClientRect();
     setTooltip({
-      dateLabel,
-      point,
+      key,
+      element: target,
       x: rect.left + rect.width / 2,
       y: rect.top,
     });
   };
   const hideTooltip = () => setTooltip(null);
+
+  // Retaining the control also retains its reading. After the DOM updates,
+  // follow the real anchor: inventory notices, metric labels and calendar
+  // rollover can move it even though its logical day and focus stay the same.
+  createEffect(() => {
+    props.timeline();
+    props.range();
+    metricMode();
+    const target = untrack(tooltip);
+    if (!target) return;
+    const rect = target.element.getBoundingClientRect();
+    setTooltip({ ...target, x: rect.left + rect.width / 2, y: rect.top });
+  });
 
   return (
     <div class="rounded-lg border border-border-subtle px-2 py-2">
@@ -151,6 +218,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
           <div
             role="group"
             aria-label="Activity range"
+            ref={rangeControls}
             class="inline-flex shrink-0 rounded-sm border border-border bg-surface p-0.5"
           >
             <For each={BACKUP_ACTIVITY_RANGE_DAYS}>
@@ -209,6 +277,7 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                 style={{ 'min-width': chartMinWidthStyle() }}
               >
                 <div
+                  ref={dayControls}
                   class="absolute inset-x-0 bottom-4 top-0 flex items-stretch"
                   style={{ gap: chartGapStyle() }}
                 >
@@ -237,12 +306,11 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
                               unknownCount(point),
                             )}
                             aria-pressed={isSelected() ? 'true' : 'false'}
+                            data-backup-activity-day={point.key}
                             onClick={() => props.onToggleDay(point.key)}
-                            onMouseEnter={(event) =>
-                              showTooltip(event.currentTarget, point, dateLabel)
-                            }
+                            onMouseEnter={(event) => showTooltip(event.currentTarget, point.key)}
                             onMouseLeave={hideTooltip}
-                            onFocus={(event) => showTooltip(event.currentTarget, point, dateLabel)}
+                            onFocus={(event) => showTooltip(event.currentTarget, point.key)}
                             onBlur={hideTooltip}
                           >
                             <div class="relative h-full w-full overflow-hidden rounded-xs">
@@ -326,14 +394,14 @@ export const BackupActivityChart: Component<BackupActivityChartProps> = (props) 
           </div>
 
           <TooltipPortal
-            when={tooltip() !== null}
-            x={tooltip()?.x ?? 0}
-            y={tooltip()?.y ?? 0}
+            when={activeTooltip() !== null}
+            x={activeTooltip()?.x ?? 0}
+            y={activeTooltip()?.y ?? 0}
             align="center"
             direction="up"
             maxWidth={240}
           >
-            <Show when={tooltip()}>
+            <Show when={activeTooltip()}>
               {(t) => (
                 <div class="min-w-[180px]">
                   <div class="flex items-start justify-between gap-3 border-b border-border pb-1">

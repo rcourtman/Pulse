@@ -2498,3 +2498,65 @@ describe('backup activity follows the consuming inventory scope', () => {
     expect(apiFetchMock).toHaveBeenCalledTimes(calls);
   });
 });
+
+describe('backup activity day controls survive ordinary inventory polling', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('retains the same focused date, updates its count and toggles the current parsed entries', async () => {
+    vi.useFakeTimers({
+      now: BACKUP_IDENTITY_NOW,
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+    });
+    let archives = [identityArchive()];
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        jsonResponse({
+          data: url.endsWith('/pbs')
+            ? { backups: [] }
+            : {
+                backupTasks: [],
+                guestSnapshots: [],
+                storageBackups: archives,
+              },
+        }),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [], policy: protectionPolicy });
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    renderInRouter(() => (
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[identityGuest('east-100', 'east', 'pve-1')]}
+      />
+    ));
+    const target = await screen.findByRole('button', {
+      name: `${getRecoveryPrettyDateLabel('2026-10-04')}: 1 restore point`,
+    });
+    target.focus();
+    archives = [identityArchive(), identityArchive({ id: 'second', time: '2026-10-04T10:00:00Z' })];
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(
+      screen.getByRole('button', {
+        name: `${getRecoveryPrettyDateLabel('2026-10-04')}: 2 restore points`,
+      }),
+    ).toBe(target);
+    expect(target).toHaveFocus();
+    expect(apiFetchMock).toHaveBeenCalledTimes(4);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+    // Like the existing saved-view/navigation regressions, keep the router's
+    // scheduling live during input. The inventory poll above stays controlled.
+    vi.useRealTimers();
+    vi.useFakeTimers({ now: BACKUP_IDENTITY_NOW + 30_000, toFake: ['Date'] });
+    fireEvent.click(target);
+    await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'true'));
+    expect(document.querySelectorAll('[data-proxmox-backup-row="recoverable"]')).toHaveLength(2);
+    await waitFor(() =>
+      expect(new URLSearchParams(window.location.search).get('day')).toBe('2026-10-04'),
+    );
+    fireEvent.click(target);
+    await waitFor(() => expect(target).toHaveAttribute('aria-pressed', 'false'));
+    expect(target).toHaveFocus();
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has('day')).toBe(false));
+    expect(apiFetchMock).toHaveBeenCalledTimes(4);
+  });
+});
