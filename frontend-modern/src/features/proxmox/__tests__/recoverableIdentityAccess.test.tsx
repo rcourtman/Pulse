@@ -108,7 +108,9 @@ describe('restore-point identity without hover', () => {
             expect(element).not.toHaveClass('truncate');
           }
           expect(row.children).toHaveLength(3);
-          expect(row.closest('table')?.querySelector('thead th')).toHaveTextContent('Restore point');
+          expect(row.closest('table')?.querySelector('thead th')).toHaveTextContent(
+            'Restore point',
+          );
         }
         fireEvent.click(within(row).getByRole('button', { name: /Expand details/ }));
         const panel = screen.getByTestId('proxmox-recoverable-detail');
