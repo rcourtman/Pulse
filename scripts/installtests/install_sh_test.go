@@ -8815,6 +8815,7 @@ func TestInstallSHLegacyTeardownRequiresObservedQuiescence(t *testing.T) {
 		"test_process_inventory_does_not_return_arguments_or_secrets",
 		"test_real_process_timeout_stops_owned_child_without_erasure",
 		"test_rendered_stop_retains_pidfiles_on_refused_or_ignored_signals",
+		"test_model_uses_selected_isolated_interpreter",
 	}, time.Minute)
 }
 

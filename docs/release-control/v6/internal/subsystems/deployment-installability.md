@@ -4970,9 +4970,9 @@ release is public as a prerelease, while stable/latest remains `v6.3.2`.
 
 Future release qualification on `main` must not depend on a warm worker. On
 the canonical 8-vCPU, three-shard PVE plan, the backend runner reserves two
-single-CPU package workers for the non-API graph, gives the API shards a
-volume-weighted `4/1/1` allocation, passes `-p 2` to `go test`, and sets
-`GOMAXPROCS=1` for every non-API test binary. The combined declared width is
+single-CPU package workers initially for the non-API graph and gives the API
+shards a volume-weighted `4/1/1` allocation. Each whole non-API package runs
+with `-p 1` and `GOMAXPROCS=1`. The combined declared width is
 therefore eight CPUs instead of eight API CPUs plus unbounded non-API package
 concurrency. Each
 API shard has a 45-minute cumulative watchdog, the non-API graph retains its
@@ -4983,7 +4983,7 @@ evidence for that outer budget: all three race-enabled API shards passed in
 packages until the former 55-minute ceiling canceled it during the expanded
 secure-runtime install-test package. The added headroom does not weaken or
 extend either inner watchdog. Constrained
-one-vCPU hosts run the non-API graph before the API shard rather than knowingly
+one-vCPU hosts run the API shard and whole packages serially rather than knowingly
 oversubscribing the host. The deterministic CPU allocator and release guards
 pin this partition and reject a job ceiling that could pre-empt the API
 watchdog.
@@ -4999,9 +4999,43 @@ failed closed, release `378812881` remained an unpublished draft, and
 convergence run `33220806414` changed no customer pointers. This is measured
 partition imbalance rather than a hung product test. Four-vCPU release workers
 must therefore use the same three-way cost boundary as the PVE worker, with a
-non-oversubscribed `1/1/1` API allocation plus one non-API package worker. The
+non-oversubscribed `1/1/1` API allocation plus one initial non-API package worker. The
 existing 10-GiB admission floor still degrades the shard count on constrained
 hosts instead of weakening the watchdog.
+
+Beta.3 backend job `123003682684` at `d8402d1da91e` completed all three API
+shards in 601, 833 and 1,007 seconds, but the non-API graph retained only one
+worker until the enclosing 70-minute job was cancelled. The runner now releases
+each completed API shard's actual width to queued whole packages. It never
+exceeds the original vCPU budget; API roots, race/vet checks, 45-minute API and
+30-minute per-package deadlines, and the 70-minute hosted ceiling are unchanged.
+Source `go list` must complete before any runtime child starts. Existing package
+weights only order the complete non-API inventory, longest first. Every package
+gets a separate data directory, and any failed child fails the gate and cleans
+up its siblings. Each task has its own process group: failure signals every
+group before waiting, with bounded TERM-to-KILL escalation, rather than racing
+a recursive process-tree snapshot against child creation.
+The failed task's own group remains in that cleanup set even after its leader
+exits, so a surviving descendant cannot disappear with the released PID.
+Already completed children are joined by their retained PID, because Bash
+`wait -n` can otherwise omit their saved exit status. A no-job race triggers
+reconciliation of the same PIDs, never a task replay or an assumed pass.
+`test_release_backend_queue.py`, discovered by script smoke,
+executes the actual runner with controlled children at one, four and eight CPUs,
+including partial discovery and both branch failures. The hosted artifact
+retains source-listed package/API coverage and actual start/finish CPU leases;
+missing terminal entries are not passes. This repairs a scheduling fault, not
+a product defect diagnosis or qualification of the interrupted candidate.
+
+The legacy FreeBSD/SysV removal controls select the native runner's Python
+interpreter with `-I -S`, as the existing NAS controls do. A private site-hook
+adverse control proves that ambient startup output cannot contaminate manager
+readback. Five-second production observations and all refusal/retention rules
+remain unchanged. Fixture failures retain fixed model roles/numeric bounded
+command exits, observation counters and modelled state rather than only the
+generic production refusal. The earlier stopped-FreeBSD fixture failure has no
+retained per-operation result; isolation fixes a demonstrated fixture weakness,
+not an established cause of that historical failure or native removal proof.
 
 Activation-only recovery must distinguish the immutable binary packet from
 governed release-note presentation sidecars. Release run `33223712880` passed
