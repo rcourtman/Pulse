@@ -62,10 +62,6 @@ describe('PBS datastore capacity evidence', () => {
     ['missing used', { used: undefined }, 'Unknown'],
     ['negative used', { used: -10 }, 'Unknown'],
     ['nonfinite total', { total: Infinity }, 'Unknown'],
-    ['invalid authoritative percent', { usagePercent: NaN }, 'Unknown'],
-    ['negative authoritative percent', { usagePercent: -1 }, 'Unknown'],
-    ['null authoritative percent', { usagePercent: null }, 'Unknown'],
-    ['string authoritative percent', { usagePercent: '0' }, 'Unknown'],
     ['overflowed ratio', { used: Number.MAX_VALUE, total: Number.MIN_VALUE }, 'Unknown'],
   ])('shows %s as unknown evidence rather than healthy usage', async (_name, patch, label) => {
     const { container } = render(() => (
@@ -82,6 +78,24 @@ describe('PBS datastore capacity evidence', () => {
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     expect(within(container).getByText('Healthy')).toBeInTheDocument();
   });
+
+  it.each([NaN, -1, null, '0'])(
+    'uses valid bytes even when optional percentage metadata is invalid (%s)',
+    (usagePercent) => {
+      const { container } = render(() => (
+        <ProxmoxBackupServersTable
+          servers={[server(datastore({ usagePercent }))]}
+          layoutWidth={() => 1200}
+        />
+      ));
+      const cell = usedCell(container);
+      expect(cell).toHaveTextContent('40.0%');
+      expect(cell).toHaveTextContent('400 B / 1000 B');
+      expect(cell.querySelector('.bg-emerald-500')).not.toBeNull();
+      expect(within(cell).queryByText('Unknown')).toBeNull();
+      expect(container.textContent).toContain('2.0×');
+    },
+  );
 
   it('withdraws retained capacity and dedup when the PBS connection is offline', () => {
     const { container } = render(() => (
