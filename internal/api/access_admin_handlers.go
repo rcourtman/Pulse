@@ -71,11 +71,18 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req struct {
-		OrgID         string `json:"org_id"`
-		Username      string `json:"username"`
-		RecoveryToken string `json:"recovery_token"`
+		OrgID         json.RawMessage `json:"org_id"`
+		Username      string          `json:"username"`
+		RecoveryToken string          `json:"recovery_token"`
 	}
 	if err := decodeAdminJSONObject(w, r, &req, 4*1024); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid request body", nil)
+		return
+	}
+	// Only omission selects the request organisation. Keep explicit null and
+	// blank selections distinct, before validating (and spending) the token.
+	var selectedOrgID string
+	if req.OrgID != nil && json.Unmarshal(req.OrgID, &selectedOrgID) != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Invalid request body", nil)
 		return
 	}
@@ -94,15 +101,14 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 		contextOrgID = "default"
 	}
 
-	req.OrgID = strings.TrimSpace(req.OrgID)
-	if req.OrgID == "" {
-		req.OrgID = contextOrgID
-	} else {
-		if !isValidOrganizationID(req.OrgID) {
+	orgID := contextOrgID
+	if req.OrgID != nil {
+		orgID = strings.TrimSpace(selectedOrgID)
+		if !isValidOrganizationID(orgID) {
 			writeErrorResponse(w, http.StatusBadRequest, "invalid_org_id", "Invalid organization ID", nil)
 			return
 		}
-		if req.OrgID != contextOrgID {
+		if orgID != contextOrgID {
 			writeErrorResponse(w, http.StatusForbidden, "access_denied", "Token is not authorized for this organization", nil)
 			return
 		}
@@ -114,7 +120,7 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := ResetAdminRole(h.rbacProvider, req.OrgID, req.Username); err != nil {
+	if err := ResetAdminRole(h.rbacProvider, orgID, req.Username); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "reset_failed", "Failed to reset admin role", nil)
 		return
 	}
@@ -122,7 +128,7 @@ func (h *RBACHandlers) HandleRBACAdminReset(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"status":   "ok",
-		"org_id":   req.OrgID,
+		"org_id":   orgID,
 		"username": req.Username,
 		"message":  "Admin role reset successfully",
 	})

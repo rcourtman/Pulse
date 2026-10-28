@@ -384,6 +384,10 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid OIDC redirect URL", nil)
 			return
 		}
+		if config.ValidateOIDCLogoutURL(provider.OIDC.LogoutURL) != nil {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid OIDC logout URL", nil)
+			return
+		}
 		if provider.OIDC.ClientSecret != "" {
 			provider.OIDC.ClientSecretSet = true
 		}
@@ -539,6 +543,12 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	}
 	if updated.Type == existing.Type && updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
 		updated.SAML = existing.SAML
+	}
+	// Validate the effective value after partial-update preservation too: an
+	// old invalid target must not become usable through a flat enable toggle.
+	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && config.ValidateOIDCLogoutURL(updated.OIDC.LogoutURL) != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid OIDC logout URL", nil)
+		return
 	}
 	// groupsClaim, groupRoleMappings, allowedGroups, allowedDomains and
 	// allowedEmails are NOT preserved on empty: both the detail GET and the

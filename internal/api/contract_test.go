@@ -83,6 +83,124 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+// Recovery selection is admitted before the IP-bound one-use token, through
+// the actual public fallback and its existing authentication/licence wrappers.
+func TestContractRBACResetSelectionAdmission(t *testing.T) {
+	SetRBACAdminEndpointsBinder(nil)
+	t.Cleanup(func() { SetRBACAdminEndpointsBinder(nil) })
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	rawToken := "reset-selection-contract-token.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil))
+	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierEnterprise)
+	resetRecoveryStore()
+	t.Cleanup(resetRecoveryStore)
+	InitRecoveryTokenStore(cfg.DataPath)
+	recoveryToken, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	serve := func(method, body, authToken string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/api/admin/rbac/reset-admin", strings.NewReader(body))
+		req.RemoteAddr = "127.0.0.1:12345"
+		req.Header.Set("Accept", "application/json")
+		if authToken != "" {
+			req.Header.Set("X-API-Token", authToken)
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	body := fmt.Sprintf(`{"org_id":null,"username":"recovery-user","recovery_token":%q}`, recoveryToken)
+	for _, tt := range []struct {
+		name, selection, code string
+		status                int
+	}{
+		{"null", "null", "invalid_org_id", 400}, {"blank", `" "`, "invalid_org_id", 400},
+		{"type", "true", "invalid_json", 400}, {"foreign", `"other"`, "access_denied", 403},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := serve(http.MethodPost, fmt.Sprintf(`{"org_id":%s,"username":"recovery-user","recovery_token":%q}`, tt.selection, recoveryToken), rawToken)
+			var failure APIError
+			if json.Unmarshal(rec.Body.Bytes(), &failure) != nil || rec.Code != tt.status || failure.Code != tt.code {
+				t.Fatalf("unexpected admission result: %d %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+	if rec := serve(http.MethodPost, body, ""); rec.Code != 401 {
+		t.Fatalf("unauthenticated = %d", rec.Code)
+	}
+	if rec := serve(http.MethodGet, body, rawToken); rec.Code != 405 {
+		t.Fatalf("wrong method = %d", rec.Code)
+	}
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierFree)
+	if rec := serve(http.MethodPost, body, rawToken); rec.Code != 402 {
+		t.Fatalf("unlicensed = %d", rec.Code)
+	}
+	manager, err := router.rbacProvider.GetManager("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manager.GetUserAssignment("recovery-user"); ok {
+		t.Fatal("rejected request mutated roles")
+	}
+	setLicenseTierForHandlersForTests(t, router.licenseHandlers, "default", pkglicensing.TierEnterprise)
+	valid := fmt.Sprintf(`{"org_id":" default ","username":"recovery-user","recovery_token":%q}`, recoveryToken)
+	if rec := serve(http.MethodPost, valid, rawToken); rec.Code != 200 {
+		t.Fatalf("corrected request = %d %s", rec.Code, rec.Body.String())
+	}
+	assignment, ok := manager.GetUserAssignment("recovery-user")
+	if !ok || !slices.Contains(assignment.RoleIDs, authpkg.RoleAdmin) {
+		t.Fatal("corrected request did not recover admin")
+	}
+	if rec := serve(http.MethodPost, valid, rawToken); rec.Code != 403 {
+		t.Fatalf("token replay = %d", rec.Code)
+	}
+}
+
+func TestContractOIDCLogoutTargetAdmission(t *testing.T) {
+	SetSSOAdminEndpointsBinder(nil)
+	t.Cleanup(func() { SetSSOAdminEndpointsBinder(nil) })
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	rawToken := "logout-target-contract-token.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil))
+	router := NewRouter(cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	serve := func(method, path, target, token string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]any{"id": "logout-fixture", "name": "Identity provider", "type": "oidc", "enabled": false, "oidc": map[string]any{"issuerUrl": "https://identity.example.test", "clientId": "fixture", "logoutUrl": target}})
+		req := httptest.NewRequest(method, path, bytes.NewReader(body))
+		req.RemoteAddr = ssoTestIP()
+		req.Header.Set("Accept", "application/json")
+		if token != "" {
+			req.Header.Set("X-API-Token", token)
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	path := "/api/security/sso/providers"
+	if rec := serve(http.MethodPost, path, "javascript:void(0)", ""); rec.Code != 401 {
+		t.Fatalf("unauthenticated = %d", rec.Code)
+	}
+	// Community SSO remains available without a paid licence.
+	if rec := serve(http.MethodPost, path, "javascript:void(0)", rawToken); rec.Code != 400 || !strings.Contains(rec.Body.String(), `"validation_error"`) {
+		t.Fatalf("invalid create = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodPost, path, "https://identity.example.test/logout", rawToken); rec.Code != 201 {
+		t.Fatalf("Community create = %d %s", rec.Code, rec.Body.String())
+	}
+	path += "/logout-fixture"
+	if rec := serve(http.MethodPut, path, "data:text/plain,inert", rawToken); rec.Code != 400 || !strings.Contains(rec.Body.String(), `"validation_error"`) {
+		t.Fatalf("invalid edit = %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodPut, path, "", rawToken); rec.Code != 200 {
+		t.Fatalf("clear = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
 // The registered public fallback remains reachable behind the ordinary
 // authentication and licence gates, without an Enterprise endpoint binder.
 func TestContractRBACIntegrityQueryAdmission(t *testing.T) {

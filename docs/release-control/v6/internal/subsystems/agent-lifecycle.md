@@ -10611,3 +10611,15 @@ org/authentication/licence boundaries remain. This changes no agent token,
 enrolment, credential or runtime operation. The API contract and
 `TestContractRBACIntegrityQueryAdmission` cover the registered fallback;
 `rbac_integrity_query_test.go` covers rejected and supported selections.
+
+### Access admission retains agent and environment authority
+
+The public reset fallback rejects explicit blank/null organisation selections
+before spending recovery tokens or changing roles; omission and same-org
+recovery remain supported. OIDC writes validate effective sign-out targets,
+including partial edits of disabled providers. Status withholds an unsafe
+legacy/environment target without persisting environment credentials or changing
+that configuration, so local logout remains available. No enrolment, agent
+token, confinement or update contract changes. The API contract and registered
+`TestContractRBACResetSelectionAdmission` / `TestContractOIDCLogoutTargetAdmission`
+plus `sso_logout_url_test.go` cover these boundaries.

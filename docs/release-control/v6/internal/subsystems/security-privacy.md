@@ -3757,3 +3757,16 @@ the session router's default branch, which still refuses tokens without
 `ai:chat` before answering `404`
 (`TestRelayMobileAccessScopeDeniesAdjacentAIRoutes`). The undo, redo, and steer
 notes above are history.
+
+### Authenticated status never supplies an unsafe OIDC sign-out target
+
+The optional authenticated `ssoLogoutURL` is emitted only when the configured
+value passes the same bounded absolute HTTP(S), no-userinfo admission used by
+public provider writes. Older saved and authoritative environment values remain
+unchanged and editable; an unsafe value is omitted rather than handed to browser
+navigation. The SSO session and ordinary local logout remain intact. Anonymous
+status still exposes no target. This validates URL format, not IdP logout or
+session revocation, and changes no proxy-auth, tenant, licence, TLS or environment
+authority. Config validation, `sso_logout_url_test.go` and
+`TestContractOIDCLogoutTargetAdmission` bind the producer and existing gates;
+backend-effect consuming browser/pixel proof remains required.

@@ -278,6 +278,13 @@ func (c *SSOConfig) Validate() error {
 		if p.Type != SSOProviderTypeOIDC && p.Type != SSOProviderTypeSAML {
 			return fmt.Errorf("provider %q: invalid type %q (must be 'oidc' or 'saml')", p.ID, p.Type)
 		}
+		// Disabled providers can later be enabled, so a saved browser navigation
+		// target must be safe even when the rest of the provider is incomplete.
+		if p.Type == SSOProviderTypeOIDC && p.OIDC != nil {
+			if err := ValidateOIDCLogoutURL(p.OIDC.LogoutURL); err != nil {
+				return fmt.Errorf("provider %q: %w", p.ID, err)
+			}
+		}
 
 		if p.Enabled {
 			if err := validateProvider(&p); err != nil {
@@ -318,6 +325,26 @@ func validateOIDCProvider(cfg *OIDCProviderConfig) error {
 	}
 	if strings.TrimSpace(cfg.ClientID) == "" {
 		return fmt.Errorf("client id is required")
+	}
+	return ValidateOIDCLogoutURL(cfg.LogoutURL)
+}
+
+// ValidateOIDCLogoutURL admits an optional absolute HTTP(S) sign-out target.
+// Keep the shared SSO transport policy, but never hand a script, relative URL
+// or URL credential to the browser. Errors must not echo rejected input.
+func ValidateOIDCLogoutURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	invalid := fmt.Errorf("invalid oidc logout url")
+	if len(raw) > 2048 || raw != strings.TrimSpace(raw) {
+		return invalid
+	}
+	if _, err := url.ParseRequestURI(raw); err != nil {
+		return invalid
+	}
+	if _, err := securityutil.NormalizeAbsoluteHTTPURL(raw); err != nil {
+		return invalid
 	}
 	return nil
 }

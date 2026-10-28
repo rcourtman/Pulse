@@ -13043,3 +13043,35 @@ manager/files on rejection, supported results, existing denials and both
 fallbacks. `TestContractRBACIntegrityQueryAdmission` exercises the registered
 router and unchanged authentication/licence gates. No frontend consumes this
 admin-only check; this changes no rendered state, recovery token or sign-in.
+
+### Recovery selections and OIDC sign-out targets fail before side effects
+
+The public `POST /api/admin/rbac/reset-admin` fallback distinguishes an omitted
+`org_id` from explicit empty, whitespace or JSON null. Only omission selects the
+request organisation (including existing default-context compatibility).
+Explicit blanks/null return `400 invalid_org_id`; wrong JSON types retain
+`400 invalid_json`, invalid identifiers remain rejected and foreign identifiers
+return `403 access_denied`. These admissions precede IP-bound, one-use recovery
+token consumption and role mutation. A corrected same-org request may use the
+original token once; usernames remain exact. Method, authentication, instance
+administration, licence and endpoint-binder precedence are unchanged.
+`rbac_reset_selection_test.go` and `TestContractRBACResetSelectionAdmission`
+exercise those boundaries and real role recovery. This API has no frontend caller.
+
+OIDC provider creates and effective edits, including disabled/partial edits,
+validate an optional `logoutUrl` as a bounded absolute HTTP(S) URL without
+userinfo. Script/data, relative, malformed, blank and overlong targets return
+`400 validation_error` / `Invalid OIDC logout URL` without reflecting the target,
+persisting it or replacing live configuration. Empty/null clearing, preserved
+secrets/restrictions, Community SSO and the existing shared HTTP(S) transport
+policy remain; this does not relax the private adapter's stricter policy or TLS
+verification. The config validator also checks disabled providers' targets.
+
+Authenticated status omits an unsafe target from older saved or environment
+configuration, leaving that authoritative source and the SSO session intact.
+The unchanged runtime consumer then uses ordinary local logout, not the unsafe
+navigation. Valid targets remain available only to authenticated SSO sessions.
+The filter establishes URL admission, not IdP logout or session revocation.
+`SSOLogoutURL` regression roots, config validation and
+`TestContractOIDCLogoutTargetAdmission` cover the producers and route gates;
+consuming browser/pixel receipts remain necessary for these backend effects.

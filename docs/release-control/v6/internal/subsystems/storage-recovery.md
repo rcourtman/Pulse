@@ -8264,3 +8264,16 @@ invalid instants. Browser proof must inspect the actual consuming record at
 desktop and narrow widths, including UTC text, keyboard/touch disclosure and
 refresh/recovery with the open record preserved. This is evidence inspection,
 not original incident recovery.
+
+### Damaged recovery targets cannot spend the original reset token
+
+The public reset fallback returns `400 invalid_org_id` for explicit blank/null
+organisation selections before token consumption or role mutation. Corrected
+same-org requests retain the original IP-bound token for one successful reset;
+omission still selects the request scope. Strict JSON and foreign-org denials
+remain. OIDC sign-out admission/status filtering preserves saved credentials and
+environment authority while preventing unsafe browser navigation; clearing an
+optional target remains supported. This changes no backup, guest operation,
+storage format or installed-recovery guarantee. The API contract,
+`rbac_reset_selection_test.go`, `sso_logout_url_test.go` and the two registered
+reset/sign-out contract tests establish these source boundaries.

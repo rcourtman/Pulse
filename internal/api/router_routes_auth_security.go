@@ -403,7 +403,10 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			SessionCapabilities:          r.securityStatusSessionCapabilities(req.Context()),
 			SettingsCapabilities:         r.securityStatusSettingsCapabilitiesFromSnapshot(authSnapshot),
 		}
-		if primaryOIDCConfig != nil && ssoSessionUsername != "" {
+		// Older saved configurations and environment providers bypass write
+		// admission. Withhold an unsafe target, without rewriting its source or
+		// preventing ordinary local logout and administrator recovery.
+		if primaryOIDCConfig != nil && ssoSessionUsername != "" && config.ValidateOIDCLogoutURL(primaryOIDCConfig.LogoutURL) == nil {
 			authenticatedStatus.SSOLogoutURL = primaryOIDCConfig.LogoutURL
 		}
 		if !authSnapshot.canAccessAdminSurface(config.ScopeSettingsRead) {
