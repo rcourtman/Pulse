@@ -1034,9 +1034,7 @@ describe('backup read recovery keeps keyboard position', () => {
       finish = fixture.pending();
       fireEvent.click(retry);
       finish();
-      await waitFor(() =>
-        expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus(),
-      );
+      await waitFor(() => expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus());
       expect(screen.queryByRole('button', { name: fixture.label })).toBeNull();
       expect(window.location.pathname + window.location.search + window.location.hash).toBe(
         '/proxmox/backups/coverage?q=backup#proof',
@@ -1079,9 +1077,7 @@ describe('backup read recovery keeps keyboard position', () => {
     expect(sourceCalls('pve')).toHaveLength(2);
     expect(sourceCalls('pbs')).toHaveLength(2);
     pve.resolve(jsonResponse(readPvePayload));
-    await waitFor(() =>
-      expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus(),
-    );
+    await waitFor(() => expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus());
     expect(screen.getByRole('button', { name: 'Retry PBS inventory' })).toBeInTheDocument();
     pbs.resolve(jsonResponse(pbsPayload));
     await waitFor(() =>
