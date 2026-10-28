@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -65,6 +66,7 @@ def record(event):
     with (root / "children.jsonl").open("a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps(dict(event=event, name=name, pid=os.getpid(),
+            pgid=os.getpgrp(),
             width=int(os.environ["GOMAXPROCS"]), selected=selected,
             data=os.environ["PULSE_DATA_DIR"], ignores_term=ignores_term,
             time=time.monotonic())) + "\n")
@@ -83,12 +85,22 @@ if os.environ["QUEUE_CPUS"] == "4":
                 sys.exit(97)
             time.sleep(.01)
 time.sleep(delay)
+if os.environ.get("QUEUE_ORPHAN") and name.endswith("internal/monitoring"):
+    ready = root / "orphan-ready"
+    if os.fork() == 0:
+        ignores_term = True
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        record("orphan-start"); ready.touch()
+        time.sleep(10)
+        record("orphan-finish"); os._exit(0)
+    while not ready.exists(): time.sleep(.01)
 record("finish")
 if os.environ.get("QUEUE_FAIL") in (name, "api" if selected else "other"):
     sys.exit(19)
 '''
 
 
+@unittest.skipUnless(sys.platform == "linux", "release backend runner uses Linux Bash job control")
 class ReleaseBackendQueueTest(unittest.TestCase):
     def run_queue(self, cpus=4, packages=None, **extra):
         with tempfile.TemporaryDirectory() as directory:
@@ -123,10 +135,23 @@ class ReleaseBackendQueueTest(unittest.TestCase):
             coverage = root / "data/release-backend-run/coverage"
             receipts = list(csv.DictReader((coverage / "execution.tsv").read_text().splitlines(), delimiter="\t")) if (coverage / "execution.tsv").exists() else []
             selected = (coverage / "non-api-packages.txt").read_text().splitlines() if (coverage / "non-api-packages.txt").exists() else []
+            groups = {int(row["pid"]) for row in receipts if row["event"] == "start"}
             for event in events:
-                if event["event"] == "start":
-                    with self.assertRaises(ProcessLookupError, msg="runner left a child alive"):
+                if event["event"] in ("start", "orphan-start"):
+                    self.assertIn(event["pgid"], groups, "child escaped its owned task process group")
+                    try:
                         os.kill(event["pid"], 0)
+                    except ProcessLookupError:
+                        continue
+                    try:
+                        state = Path(f"/proc/{event['pid']}/stat").read_text().rsplit(")", 1)[1].split()[0]
+                    except (FileNotFoundError, ProcessLookupError):
+                        continue
+                    # A just-killed orphan may await init's reap. Z is a dead,
+                    # non-executing process, not a live child or command pass.
+                    if state == "Z":
+                        continue
+                    self.fail(f"runner left child {event['pid']} {event['name']} in state {state}")
             return result, events, receipts, selected
 
     def test_complete_source_inventory_reuses_finished_api_width(self):
@@ -210,6 +235,13 @@ test "$completed_pid" = "${{pids[0]}}" && test "$status" = {child_exit}
                 result = subprocess.run(["bash", "-c", script], capture_output=True,
                                         text=True, timeout=5)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_cleanup_includes_descendants_of_the_failed_task(self):
+        result, events, _, _ = self.run_queue(
+            QUEUE_FAIL=MODULE + "internal/monitoring", QUEUE_ORPHAN="1")
+        self.assertEqual(result.returncode, 19, result.stdout + result.stderr)
+        self.assertEqual([e["event"] for e in events if e["event"].startswith("orphan")],
+                         ["orphan-start"])
 
 
 if __name__ == "__main__":

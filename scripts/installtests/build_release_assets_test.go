@@ -4878,6 +4878,11 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 			t.Fatalf("release backend partition missing coverage contract: %s", needle)
 		}
 	}
+	failedTaskExit := strings.Index(backendScript, `if [ "$status" -ne 0 ]; then exit "$status"; fi`)
+	leaseRelease := strings.Index(backendScript, `free_procs=$((free_procs + task_widths[$completed_pid]))`)
+	if failedTaskExit < 0 || leaseRelease < failedTaskExit {
+		t.Fatal("failed task process groups must remain owned until failure cleanup")
+	}
 }
 
 func TestHelmAgentRuntimePointsAtRealImage(t *testing.T) {

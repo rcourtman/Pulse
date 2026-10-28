@@ -407,6 +407,9 @@ while [ "$next_package" -lt "${#OTHER_PACKAGES[@]}" ] || [ "${#pids[@]}" -gt 0 ]
   fi
   printf 'finish\t%s\t%s\t%s\t%s\t%s\n' "$completed_pid" "${task_widths[$completed_pid]}" \
     "$((SECONDS - task_starts[$completed_pid]))" "$status" "${task_names[$completed_pid]}" >> "$RUN_ROOT/coverage/execution.tsv"
+  # Keep the failed task's group in cleanup too: its leader may have exited
+  # while an owned descendant is still running in that same group.
+  if [ "$status" -ne 0 ]; then exit "$status"; fi
   free_procs=$((free_procs + task_widths[$completed_pid]))
   active=()
   for pid in "${pids[@]}"; do
@@ -414,7 +417,6 @@ while [ "$next_package" -lt "${#OTHER_PACKAGES[@]}" ] || [ "${#pids[@]}" -gt 0 ]
   done
   pids=("${active[@]}")
   unset 'task_widths[$completed_pid]' 'task_names[$completed_pid]' 'task_starts[$completed_pid]'
-  if [ "$status" -ne 0 ]; then exit "$status"; fi
 done
 
 echo "Race-enabled backend release tests passed with $API_SHARDS API shard(s)."
