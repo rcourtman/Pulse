@@ -1,4 +1,12 @@
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
@@ -491,6 +499,20 @@ export const ProxmoxBackupsTable: Component<{
   // The health strip's counts that name a posture filter toggle it. From the
   // date view a count opens Coverage already filtered to those workloads.
   const navigate = useNavigate();
+  // Old bookmarks can enter without a view segment. Pick their useful default
+  // only after the first assessment settles, then let the existing URL own it.
+  // A later poll must update health, not replace the workspace under inspection.
+  createEffect(() => {
+    if (
+      location.pathname.replace(/\/+$/, '') !== PROXMOX_BACKUPS_PATH ||
+      legacyQueryView() ||
+      !hasReadableInventory() ||
+      ((props.workloads?.length ?? 0) > 0 && !protectionPostures.resolvedOnce())
+    ) {
+      return;
+    }
+    navigate(`${backupViewPath(view())}${location.hash}`, { replace: true, scroll: false });
+  });
   const postureSegmentFilter = (posture: Exclude<CoverageFilterValue, 'all'>) => {
     const pressed = view() === 'coverage' && coverageFilter() === posture;
     // A zero count would only open an empty list.
