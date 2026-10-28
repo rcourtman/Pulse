@@ -105,7 +105,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(within(panel).getByText('Last verified').closest('tr')).toHaveTextContent(
       'Not reported',
     );
-    expect(panel).toHaveTextContent('Protected');
+    expect(within(panel).getByRole('img', { name: 'Protected' })).toBeInTheDocument();
   });
 
   it('keeps uncertain archive evidence inspectable without changing server posture or its owner', async () => {

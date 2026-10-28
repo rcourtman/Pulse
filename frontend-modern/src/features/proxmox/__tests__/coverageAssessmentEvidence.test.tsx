@@ -107,7 +107,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
       expect(panel).toHaveTextContent('Evaluation time is not a backup completion time.');
       expect(panel).toHaveTextContent('They do not verify a restore or guest responsiveness.');
       expect(panel.querySelector(`time[datetime="${freshArchiveAt}"]`)).toBeNull();
-      expect(panel).toHaveTextContent('Attention');
+      expect(within(panel).getByRole('img', { name: 'Needs attention' })).toBeInTheDocument();
       expect(panel).toHaveTextContent('PVE connection');
       expect(api.fetch).toHaveBeenCalledTimes(2);
       expect(api.json).toHaveBeenCalledTimes(1);
@@ -124,19 +124,19 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
         expect(valueRow(panel, label).querySelector('time')).toBeNull();
       }
       expect(panel.querySelectorAll('time')).toHaveLength(1);
-      expect(panel).toHaveTextContent('Attention');
+      expect(within(panel).getByRole('img', { name: 'Needs attention' })).toBeInTheDocument();
     },
   );
 
   it('keeps assessment clocks workload-wide when a location filter is selected and cleared', async () => {
     mount();
     const panel = await open();
-    fireEvent.click(screen.getByRole('button', { name: 'Backup location: All backup locations' }));
-    fireEvent.click(
-      within(screen.getByRole('listbox', { name: 'Backup location' })).getByRole('option', {
-        name: 'PVE file · east / local',
-      }),
-    );
+    const option = screen.getByRole('option', {
+      name: 'Backup location: PVE file · east / local',
+    }) as HTMLOptionElement;
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), {
+      target: { value: option.value },
+    });
     await screen.findByRole('note', { name: 'Restore evidence scope' });
     expect(valueRow(panel, 'Latest successful point').querySelector('time')).toHaveAttribute(
       'datetime',
@@ -179,7 +179,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
     await screen.findByText(/Protection posture is unavailable/);
     expect(within(panel).queryByText('Protection assessment', { exact: true })).toBeNull();
     expect(panel.querySelectorAll('time')).toHaveLength(0);
-    expect(panel).toHaveTextContent('Unknown');
+    expect(within(panel).getByRole('img', { name: 'Unknown' })).toBeInTheDocument();
     expect(collapse).toHaveFocus();
 
     const inventoryReads = api.fetch.mock.calls.length;
@@ -203,7 +203,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
       expect(within(panel).queryByText('Protection assessment', { exact: true })).toBeNull();
       expect(panel.querySelector('time')).toBeNull();
       expect(panel.querySelector('img')).toBeNull();
-      expect(panel).toHaveTextContent('Unknown');
+      expect(within(panel).getByRole('img', { name: 'Unknown' })).toBeInTheDocument();
     },
   );
 });
