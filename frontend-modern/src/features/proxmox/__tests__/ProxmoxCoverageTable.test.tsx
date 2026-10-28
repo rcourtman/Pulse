@@ -98,6 +98,7 @@ describe('ProxmoxCoverageTable column visibility', () => {
     ));
     const panel = screen.getByTestId('proxmox-coverage-detail');
     for (const label of ['Evaluated', 'Latest successful point']) {
+      expect(within(panel).getByText(label, { exact: true })).toHaveClass('whitespace-normal');
       const value = within(panel).getByText(label, { exact: true }).closest('tr')!;
       expect(value).toHaveTextContent('Unknown');
       expect(value.querySelector('time')).toBeNull();

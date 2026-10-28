@@ -8967,6 +8967,7 @@ native backup/guest recovery.
 
 An expanded Proxmox Coverage record exposes the server assessment's `evaluatedAt`,
 `lastSuccessfulPointAt` and `lastVerifiedAt` as separately labelled UTC instants.
+Time labels and values use wrapping stacked rows, not truncated hover-only labels.
 Evaluation is not backup completion. These workload-wide recorded times do not
 come from the current artifact list or its location filters and do not establish
 a fresh inventory read, successful restore or guest responsiveness. Missing

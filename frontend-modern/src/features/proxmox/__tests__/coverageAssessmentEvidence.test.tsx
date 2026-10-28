@@ -98,6 +98,7 @@ describe('Coverage server assessment clocks through the parsed consumer', () => 
         ['Latest successful point', pointAt],
         ['Last verified', verifiedAt],
       ]) {
+        expect(within(panel).getByText(label, { exact: true })).toHaveClass('whitespace-normal');
         const time = valueRow(panel, label).querySelector('time')!;
         expect(time).toHaveAttribute('datetime', instant);
         expect(time).toHaveTextContent('UTC');

@@ -220,6 +220,7 @@ const assessmentTimeRow = (label: string, value: string | null | undefined) => {
           },
         });
   return makeDetailRow(label, display, {
+    layout: 'stacked',
     wrap: true,
     tone: ms === undefined ? 'muted' : undefined,
     valueContent:
