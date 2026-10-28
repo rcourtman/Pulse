@@ -3,7 +3,7 @@ import ts from 'typescript';
 import runtimeControlsSource from '@/components/Settings/AIRuntimeControlsSection.tsx?raw';
 
 vi.mock('typescript', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('typescript')>();
+  const actual = await importOriginal<{ default: typeof ts }>();
   return {
     default: { ...actual.default, createSourceFile: vi.fn(actual.default.createSourceFile) },
   };
@@ -26,7 +26,7 @@ describe('surviving settings documentation link contract', () => {
   it.each([
     'export const Link = () => <a href="/docs">Docs</a>;',
     'export const Link = () => <\n a href="/docs">Docs</a>;',
-    valid.replace('ExternalTextLink', 'External\\u0054extLink'),
+    String.raw`import { External\u0054extLink as Link } from './untrusted'; export const Section = () => <Link href="/docs">Docs</Link>;`,
     'import { TERMS_DOC_URL as terms } from "@/utils/docsLinks"; export const Section = () => <p>No link</p>;',
   ])('still parses possible anchors, aliases and escaped bindings: %s', (source) => {
     vi.mocked(ts.createSourceFile).mockClear();
