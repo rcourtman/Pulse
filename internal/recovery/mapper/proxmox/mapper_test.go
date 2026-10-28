@@ -1,6 +1,7 @@
 package proxmoxmapper
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -943,6 +944,143 @@ func TestFromPVEStorageBackupsExplicitUnknownKindCannotBorrowSubject(t *testing.
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestFromPVEGuestSnapshotsRetainsExplicitGuestKind(t *testing.T) {
+	for _, kind := range []string{"qemu", " VM ", "lxc", " CT ", "container"} {
+		for _, liveType := range []unifiedresources.ResourceType{"", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer} {
+			t.Run(kind+"/"+string(liveType), func(t *testing.T) {
+				now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+				snap := models.GuestSnapshot{ID: "cluster-node-100-pre", Name: "pre", Instance: "cluster", Node: "node", VMID: 100, Type: kind, Time: now.Add(-time.Hour), SizeBytes: 2048, Description: "original", Parent: "base", VMState: true}
+				artifactType := resourceTypeFromGuestType(kind)
+				info := map[string]GuestInfo{}
+				if liveType != "" {
+					info["cluster|node|100"] = GuestInfo{ResourceID: "current-canonical", SourceID: "current-source", ResourceType: liveType, Name: "current-occupant"}
+				}
+				before := snap
+				points, err := FromPVEGuestSnapshotsWithEvidence([]models.GuestSnapshot{snap}, info, now)
+				if err != nil || len(points) != 1 {
+					t.Fatalf("points=%+v err=%v", points, err)
+				}
+				p := points[0]
+				if liveType == artifactType {
+					if p.SubjectResourceID != "current-canonical" || p.SubjectRef == nil || p.SubjectRef.Name != "current-occupant" || p.SubjectRef.ID != "current-source" {
+						t.Errorf("matching metadata lost: %+v", p)
+					}
+				} else {
+					want := unifiedresources.ProxmoxGuestCanonicalID(artifactType, "cluster", 100)
+					if p.SubjectResourceID != want || p.SubjectRef == nil || p.SubjectRef.Name != "100" || p.SubjectRef.ID != "cluster:node:100" {
+						t.Errorf("snapshot borrowed incompatible metadata: %+v", p)
+					}
+				}
+				refType := "proxmox-vm"
+				if artifactType == unifiedresources.ResourceTypeSystemContainer {
+					refType = "proxmox-lxc"
+				}
+				if p.SubjectRef == nil || p.SubjectRef.Type != refType || p.ProviderScope != "cluster" || p.Evidence == nil {
+					t.Errorf("typed reference/evidence lost: %+v", p)
+				}
+				if p.ID != "pve-snapshot:"+snap.ID || p.Kind != recovery.KindSnapshot || p.Mode != recovery.ModeSnapshot || p.Outcome != recovery.OutcomeSuccess || p.StartedAt == nil || p.CompletedAt == nil || !p.StartedAt.Equal(snap.Time) || !p.CompletedAt.Equal(snap.Time) || p.SizeBytes == nil || *p.SizeBytes != snap.SizeBytes || p.Details["type"] != strings.TrimSpace(kind) || p.Details["description"] != snap.Description || p.Details["parent"] != snap.Parent || p.Details["vmState"] != snap.VMState || !reflect.DeepEqual(before, snap) {
+					t.Errorf("independent snapshot facts changed: %+v", p)
+				}
+			})
+		}
+	}
+}
+
+func TestFromPVEGuestSnapshotsUnknownKindDoesNotBorrowSubject(t *testing.T) {
+	for _, kind := range []string{"unknown", " UNKNOWN ", "unsupported", "host"} {
+		for _, liveType := range []unifiedresources.ResourceType{unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer} {
+			t.Run(kind+"/"+string(liveType), func(t *testing.T) {
+				now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+				snap := models.GuestSnapshot{ID: "opaque", Instance: "cluster", Node: "node", VMID: 100, Type: kind, Time: now, SizeBytes: 2048}
+				info := map[string]GuestInfo{"cluster|node|100": {ResourceID: "current-canonical", SourceID: "current-source", ResourceType: liveType, Name: "current-occupant"}}
+				points, err := FromPVEGuestSnapshotsWithEvidence([]models.GuestSnapshot{snap}, info, now)
+				if err != nil || len(points) != 1 {
+					t.Fatalf("points=%+v err=%v", points, err)
+				}
+				p := points[0]
+				if p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence != nil {
+					t.Errorf("unknown snapshot claimed current guest: %+v", p)
+				}
+				if p.ID != "pve-snapshot:opaque" || p.ProviderScope != "cluster" || p.CompletedAt == nil || !p.CompletedAt.Equal(now) || p.SizeBytes == nil || *p.SizeBytes != 2048 || p.Details["type"] != strings.TrimSpace(kind) {
+					t.Errorf("unknown identity lost artifact facts: %+v", p)
+				}
+			})
+		}
+	}
+}
+
+func TestFromPVEGuestSnapshotsLegacyMetadataAndScope(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"", "   "} {
+		for _, liveType := range []unifiedresources.ResourceType{unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer} {
+			info := map[string]GuestInfo{"cluster|node|100": {ResourceID: "current-canonical", SourceID: "current-source", ResourceType: liveType, Name: "current-occupant"}}
+			snap := models.GuestSnapshot{ID: "legacy", Instance: "cluster", Node: "node", VMID: 100, Type: kind, Time: now}
+			points := FromPVEGuestSnapshots([]models.GuestSnapshot{snap}, info)
+			if len(points) != 1 || points[0].SubjectResourceID != "current-canonical" || points[0].SubjectRef == nil || points[0].SubjectRef.Name != "current-occupant" {
+				t.Fatalf("absent legacy type lost best effort metadata: %+v", points)
+			}
+			// A neighbouring connection or node cannot provide this metadata.
+			for _, field := range []string{"instance", "node"} {
+				other := snap
+				other.Type = "qemu"
+				if field == "instance" {
+					other.Instance = "other"
+				} else {
+					other.Node = "other"
+				}
+				p := FromPVEGuestSnapshots([]models.GuestSnapshot{other}, info)[0]
+				if p.SubjectRef == nil || p.SubjectRef.Name != "100" || p.SubjectResourceID == "current-canonical" {
+					t.Fatalf("metadata crossed %s: %+v", field, p)
+				}
+			}
+		}
+	}
+}
+
+// This pure mapper/posture regression uses no guest, task, store or filesystem
+// operation. A snapshot is not a backup and cannot supply another kind's posture.
+func TestFromPVEGuestSnapshotsPostureKindIsolation(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	for _, kind := range []string{"qemu", "lxc"} {
+		originalType, liveType := unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer
+		if kind == "lxc" {
+			originalType, liveType = liveType, originalType
+		}
+		originalRID := unifiedresources.ProxmoxGuestCanonicalID(originalType, "cluster", 100)
+		liveRID := unifiedresources.ProxmoxGuestCanonicalID(liveType, "cluster", 100)
+		snap := models.GuestSnapshot{ID: "cluster-node-100-before-replacement", Name: "before-replacement", Instance: "cluster", Node: "node", VMID: 100, Type: kind, Time: now.Add(-time.Hour), SizeBytes: 2048}
+		for _, phase := range []string{"opposite-kind", "matching-kind", "explicit-unknown"} {
+			info := GuestInfo{ResourceID: liveRID, SourceID: "cluster:node:100", ResourceType: liveType, Name: "replacement"}
+			row := snap
+			if phase == "matching-kind" {
+				info = GuestInfo{ResourceID: originalRID, SourceID: "cluster:node:100", ResourceType: originalType, Name: "original"}
+			}
+			if phase == "explicit-unknown" {
+				row.Type = "unknown"
+			}
+			points, err := FromPVEGuestSnapshotsWithEvidence([]models.GuestSnapshot{row}, map[string]GuestInfo{"cluster|node|100": info}, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			postures := []recovery.ProtectionPosture{}
+			for _, rid := range []string{originalRID, liveRID} {
+				postures = append(postures, recovery.BuildProtectionPostureFromPointsAt(rid, points, nil, recovery.DefaultProtectionPosturePolicy, now))
+			}
+			if len(postures[1].ProviderStates) != 0 {
+				t.Errorf("%s/%s: snapshot supplied replacement's posture: %+v", kind, phase, postures[1])
+			}
+			wantOriginal := 1
+			if phase == "explicit-unknown" {
+				wantOriginal = 0
+			}
+			if len(postures[0].ProviderStates) != wantOriginal {
+				t.Errorf("%s/%s: wrong original subject posture: %+v", kind, phase, postures[0])
+			}
+
 		}
 	}
 }

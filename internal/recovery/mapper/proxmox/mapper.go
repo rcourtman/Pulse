@@ -204,13 +204,19 @@ func FromPVEGuestSnapshots(snapshots []models.GuestSnapshot, guestInfoByKey map[
 		if vmid > 0 && instanceName != "" && nodeName != "" {
 			key := guestLookupKey(instanceName, nodeName, vmid)
 			info := guestInfoByKey[key]
+			resourceType := resourceTypeFromGuestType(snap.Type)
+			if resourceType == "" && strings.TrimSpace(snap.Type) == "" {
+				// Only absent legacy kinds use best-effort live metadata. An
+				// explicitly unknown snapshot cannot claim the current guest.
+				resourceType = info.ResourceType
+			} else if info.ResourceType != "" && info.ResourceType != resourceType {
+				// A reused VMID or stale guest index cannot change the observed
+				// snapshot's kind or lend it a replacement guest's identity/name.
+				info = GuestInfo{}
+			}
 			sourceID := strings.TrimSpace(info.SourceID)
 			if sourceID == "" {
 				sourceID = guestSourceID(instanceName, nodeName, vmid)
-			}
-			resourceType := info.ResourceType
-			if resourceType == "" {
-				resourceType = resourceTypeFromGuestType(snap.Type)
 			}
 			if resourceType != "" {
 				subjectRID = subjectResourceID(resourceType, info.ResourceID, sourceID)
