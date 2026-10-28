@@ -27,10 +27,7 @@ describe('shipped documentation index', () => {
   it('uses labelled online references rather than unshipped routes or draft release packets', () => {
     const article = guide('README');
     for (const [label, url] of [
-      [
-        'Demo screenshots (GitHub)',
-        'https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md',
-      ],
+      ['Live demo (online)', 'https://demo.pulserelay.pro'],
       ['Published release notes (GitHub)', 'https://github.com/rcourtman/Pulse/releases'],
     ]) {
       const link = [...article.querySelectorAll('a')].find(
@@ -46,6 +43,9 @@ describe('shipped documentation index', () => {
     );
     expect(article.textContent?.replace(/\s+/g, ' ')).toContain(
       'current content can differ from your installed version',
+    );
+    expect(article.textContent?.replace(/\s+/g, ' ')).toContain(
+      'generated sample data, not a real deployment',
     );
   });
 

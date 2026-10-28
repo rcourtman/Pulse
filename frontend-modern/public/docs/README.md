@@ -5,7 +5,7 @@ Intelligence. Commands, configuration keys, image names, API fields, and
 product identifiers remain untranslated in localized guides.
 
 The local guides below are shipped with this installation. Links labelled
-**GitHub** open online resources in a new tab and need network access; their
+**GitHub** or **online** open online resources in a new tab and need network access; their
 current content can differ from your installed version.
 
 **Need help with a failure?** Read the
@@ -61,7 +61,8 @@ integration against their own vCenter before production use.
 - [Automatic updates](AUTO_UPDATE.md)
 - [Centralized agent management](CENTRALIZED_MANAGEMENT.md) (Pro)
 - [Operational trust model](OPERATIONAL_TRUST.md)
-- [Demo screenshots (GitHub)](https://github.com/rcourtman/Pulse/blob/main/docs/SCREENSHOTS.md)
+- [Live demo (online)](https://demo.pulserelay.pro) — generated sample data,
+  not a real deployment.
 
 ## Pulse Intelligence
 
