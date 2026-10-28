@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "42aec904484042700206c0d9b66f667f18184420",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "80d8ee74107755acf067be325ff0f0fb33d702313548ef8126a337839a4d1123",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "6360c88535be7a6ac406ef03999cf41618198c060e39a40f4922b530740ae5c6"
+  },
+  "verified_at": "2026-10-28T07:45:27Z",
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "states": [
+    "Exact assigned-base comparison: a current local backup makes the workload Protected beside a 57-day-old selected remote point; no location-versus-workload qualification exists in the baseline list or open record.",
+    "Candidate names all-target/all-location health and qualifies selected backup ages and restore evidence separately from workload-wide assessments and task history, both next to Coverage and inside its open record. Long resolved inventory labels wrap as literal text.",
+    "Snapshot-only selection keeps Unknown backup age and the independent server assessment; clearing the location restores all evidence without a new read. Unresolved selection withdraws the label/rows rather than broadening it.",
+    "Ordinary bounded polling changes Protected to Attention using the server response while keeping the selected snapshot, open panel and focused disclosure; later inventory disappearance/return removes/restores only the actual resolved scope."
+  ],
+  "interactions": [
+    "Keyboard disclosure and Space-activated filter removal at desktop; whole-row touch disclosure, mobile filter expansion/removal, native location selection and 390-to-320px resize in WebKit.",
+    "Clear the stale remote location, select the existing Snapshot location, switch By date/Coverage while preserving the exact query, then run three normal 30-second PVE/PBS/posture poll rounds.",
+    "Verify exact owner, isolated selected evidence, workload-wide task and count retention, no raw-query fallback, no inserted HTML, no extra reads for filter interactions, no off-origin or mutation request and no horizontal document overflow."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1100
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "browsers": [
+    {
+      "engine": "chromium",
+      "version": "141.0.7390.37",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "base": false,
+      "timezone": "UTC"
+    },
+    {
+      "engine": "webkit",
+      "version": "26.0",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "base": false,
+      "timezone": "America/Los_Angeles"
+    }
+  ],
+  "playwright_version": "1.56.1",
+  "completed_checks": 118,
+  "pixel_review": "All six retained final captures were opened with the native view_image tool and image content presented to the maintainer. The candidate visibly distinguishes filtered evidence from whole-workload protection; complete long labels and both notices wrap without clipping on phones, selected ages and evidence remain unchanged, and clearing removes the qualification. Baseline captures show the unqualified ambiguity.",
+  "captures": [
+    {
+      "name": "base-desktop-filtered.png",
+      "sha256": "875b73a49dfd7bc805fc9db9a73b214b10ec1a99b5156903c0cd63941f2e4765",
+      "bytes": 122799
+    },
+    {
+      "name": "desktop-filtered.png",
+      "sha256": "2fb3295e8a5e6d4afd7974da6e82c5b09d74b2f3dffb97351be4ba4767d00740",
+      "bytes": 145094
+    },
+    {
+      "name": "desktop-all-locations.png",
+      "sha256": "1b5ccdff78bef2263435ebe65ed7b088fe3a5f834884a17f134c6e1e04713907",
+      "bytes": 130693
+    },
+    {
+      "name": "base-phone-detail.png",
+      "sha256": "b7d573c16f6aa0a86722f8e250d321bb41896422165da1d3b1df42c089d19e5c",
+      "bytes": 54045
+    },
+    {
+      "name": "phone390-filtered.png",
+      "sha256": "fa1e74ae126a42f81951b5bc2e284250d33fc9abf90825f949f46cd4dd87d0d3",
+      "bytes": 130557
+    },
+    {
+      "name": "phone320-snapshot-detail.png",
+      "sha256": "1969b8f16d833d29b8c2a4a3ea27ddfd14ceb1689cd06634db607210c6b70d43",
+      "bytes": 54639
+    }
+  ],
+  "execution_limits": {
+    "final_client_exit": 0,
+    "final_errors": [],
+    "requests": 30,
+    "prior_attempts": "Three earlier client exits 1 are retained: absolute preview-dependency path before launch; authored stale pre-navigation panel handle; authored narrow-only hidden-description assertion. No product source changed between those browser attempts.",
+    "preview_build_warnings": "Both proof-only combined preview bundles emitted the existing Vite >500kB chunk advisory. The actual production build and normal bundle/preload budgets passed in source-s13wej0f."
+  },
+  "evidence": "Lane RECEIPTS.md, SOURCE-ATTEMPT-2.json (source-s13wej0f), BROWSER-RESULT.json, BROWSER-FINAL.tar.xz, PIXEL-REVIEW.json and immutable original browser/source attempts. Not native incident recovery or release availability."
+}
