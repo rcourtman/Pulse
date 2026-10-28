@@ -2,12 +2,16 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	pveapi "github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -251,5 +255,173 @@ func TestPollPVEBackupsAsyncUsesRuntimeContextIndependentOfCycle(t *testing.T) {
 	m.mu.RUnlock()
 	if scheduledAt.IsZero() {
 		t.Fatal("backup polling was not scheduled on the monitor runtime context")
+	}
+}
+
+// A task running on node-b cannot be writing a file on node-a's independent
+// local disk, even when both paths and VMIDs are identical. Shared views and
+// missing task origins remain conservative: a peer may be writing that file.
+func TestPVEStorageRunningArchiveOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		name, storageType, taskNode string
+		shared, otherInstance       bool
+		ended, failed, oldArchive   bool
+		earlierPeer                 bool
+		want                        map[string]bool
+	}{
+		{name: "writer-a", taskNode: "node-a", want: map[string]bool{"node-a": true, "node-b": false}},
+		{name: "writer-b", taskNode: "node-b", want: map[string]bool{"node-a": false, "node-b": true}},
+		{name: "writer-elsewhere", taskNode: "node-c", want: map[string]bool{"node-a": false, "node-b": false}},
+		{name: "separate-node-windows", taskNode: "node-a", earlierPeer: true, want: map[string]bool{"node-a": false, "node-b": true}},
+		{name: "unknown-writer", want: map[string]bool{"node-a": true, "node-b": true}},
+		{name: "shared-flag", shared: true, taskNode: "node-b", want: map[string]bool{"": true}},
+		{name: "nfs-peer-view", storageType: "nfs", taskNode: "node-b", want: map[string]bool{"": true}},
+		{name: "cifs-peer-view", storageType: "cifs", taskNode: "node-b", want: map[string]bool{"": true}},
+		{name: "pbs-peer-view", storageType: "pbs", taskNode: "node-b", want: map[string]bool{"": true}},
+		{name: "other-connection", taskNode: "node-a", otherInstance: true, want: map[string]bool{"node-a": false, "node-b": false}},
+		{name: "ended-task", taskNode: "node-a", ended: true, want: map[string]bool{"node-a": false, "node-b": false}},
+		{name: "failed-task", taskNode: "node-a", failed: true, want: map[string]bool{"node-a": false, "node-b": false}},
+		{name: "archive-before-window", taskNode: "node-a", oldArchive: true, want: map[string]bool{"node-a": false, "node-b": false}},
+	} {
+		for _, reverse := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/reverse=%t", tc.name, reverse), func(t *testing.T) {
+				f, client := localArchiveIdentityFixture(t, "qemu")
+				now := time.Now().UTC().Truncate(time.Second)
+				task := models.BackupTask{ID: "running", Instance: "cluster", Node: tc.taskNode, VMID: 101,
+					Type: "vzdump", Status: "running", StartTime: now.Add(-time.Minute), ObservedAt: now}
+				// Inside the existing clock-skew window, including a file just
+				// older than the task. The change must not widen that window.
+				f.client.at = task.StartTime.Add(-time.Minute)
+				if tc.oldArchive {
+					f.client.at = task.StartTime.Add(-runningVzdumpClockSkew - time.Second)
+				}
+				if tc.otherInstance {
+					task.Instance = "other"
+				}
+				if tc.ended {
+					task.EndTime = now
+				}
+				if tc.failed {
+					task.Status = "error"
+				}
+				client.shared = tc.shared
+				if tc.storageType != "" {
+					client.storageType = tc.storageType
+				}
+				if reverse {
+					f.nodes[0], f.nodes[1] = f.nodes[1], f.nodes[0]
+				}
+				tasks := []models.BackupTask{task}
+				if tc.earlierPeer {
+					peer := task
+					peer.ID, peer.Node, peer.StartTime = "peer", "node-b", now.Add(-time.Hour)
+					tasks = append(tasks, peer)
+					f.client.at = now.Add(-10 * time.Minute)
+				}
+				f.m.state.UpdateBackupTasksForInstance(task.Instance, tasks)
+				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+				f.wait(t)
+				rows := f.m.state.GetSnapshot().PVEBackups.StorageBackups
+				if len(rows) != len(tc.want) {
+					t.Fatalf("archive count=%d want=%d", len(rows), len(tc.want))
+				}
+				for _, row := range rows {
+					want, ok := tc.want[row.StorageNode]
+					if !ok || row.InProgress != want {
+						t.Errorf("disk=%q partial=%t want=%t (known=%t)", row.StorageNode, row.InProgress, want, ok)
+					}
+				}
+			})
+		}
+	}
+}
+
+// Drive the actual poller, live guest dates, asynchronous recovery ingestion
+// and canonical posture through a running task, read failure and ordinary
+// completion. No guest, backup operation, schema or data repair is involved.
+func TestPVEStorageRunningArchiveOriginLifecycle(t *testing.T) {
+	for _, kind := range []string{"qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			f, client := localArchiveIdentityFixture(t, kind)
+			now := time.Now().UTC().Truncate(time.Second)
+			f.client.at = now.Add(-time.Minute)
+			task := models.BackupTask{ID: "running", Instance: "cluster", Node: "node-b", VMID: 101,
+				Type: "vzdump", Status: "running", StartTime: now.Add(-10 * time.Minute), ObservedAt: now}
+			frames := map[string]any{}
+			var idA, idB string
+			for _, phase := range []string{"running", "partial-read", "completed"} {
+				if phase == "partial-read" {
+					f.client.contentErr = fmt.Errorf("503 unavailable")
+				}
+				if phase == "completed" {
+					f.client.contentErr = nil
+					task.Status, task.EndTime = "OK", now
+				}
+				f.m.state.UpdateBackupTasksForInstance("cluster", []models.BackupTask{task})
+				f.m.pollStorageBackupsWithNodes(context.Background(), "cluster", client, f.nodes, f.online)
+				f.wait(t)
+				snap, points, postures := f.m.state.GetSnapshot(), f.points(t), f.postures(t)
+				if len(snap.PVEBackups.StorageBackups) != 2 || len(points) != 2 {
+					t.Fatal("independent archive lost from live inventory or recovery")
+				}
+				for _, row := range snap.PVEBackups.StorageBackups {
+					wantPartial := row.StorageNode == "node-b" && phase != "completed"
+					point := points["pve-backup:"+row.ID]
+					if row.InProgress != wantPartial || point.SubjectResourceID != f.ids[0] || row.Node != "node-b" ||
+						row.Type != kind || !row.Time.Equal(f.client.at) || row.VMID != 101 || row.Storage != "local" {
+						t.Fatalf("phase=%s wrong archive facts: row=%+v point=%+v", phase, row, point)
+					}
+					if wantPartial {
+						if point.Outcome != recovery.OutcomeRunning || point.CompletedAt != nil {
+							t.Fatal("the writer's partial output claimed completion")
+						}
+					} else if point.Outcome != recovery.OutcomeSuccess || point.CompletedAt == nil || !point.CompletedAt.Equal(row.Time) {
+						t.Fatal("the independent completed archive lost its completion")
+					}
+					if row.StorageNode == "node-a" {
+						if idA != "" && idA != row.ID {
+							t.Fatal("task state renamed independent archive")
+						}
+						idA = row.ID
+					} else {
+						if idB != "" && idB != row.ID {
+							t.Fatal("task state renamed writer archive")
+						}
+						idB = row.ID
+					}
+				}
+				last, running := time.Time{}, false
+				if kind == "qemu" {
+					last, running = snap.VMs[0].LastBackup, snap.VMs[0].BackupInProgress
+				} else {
+					last, running = snap.Containers[0].LastBackup, snap.Containers[0].BackupInProgress
+				}
+				if !last.Equal(f.client.at) || running != (phase != "completed") {
+					t.Fatalf("phase=%s guest completion/running=%s/%t", phase, last, running)
+				}
+				posture := postures[0]
+				if posture.LastSuccessfulPointAt == nil || !posture.LastSuccessfulPointAt.Equal(f.client.at) ||
+					(phase != "partial-read" && posture.State != recovery.ProtectionStateProtected) ||
+					(phase == "partial-read" && posture.State == recovery.ProtectionStateProtected) {
+					t.Fatalf("phase=%s wrong scoped protection: %+v", phase, posture)
+				}
+				frames[phase] = map[string]any{"pve": map[string]any{"data": snap.PVEBackups}, "postures": map[string]any{"data": postures, "policy": recovery.DefaultProtectionPosturePolicy.Payload()}, "vms": snap.VMs, "containers": snap.Containers}
+			}
+			if os.Getenv("PULSE_RUNNING_ARCHIVE_FRAMES") == "1" {
+				hashes := map[string]string{}
+				for _, path := range []string{"monitor_backups.go", "../models/models.go", "../recovery/mapper/proxmox/mapper.go"} {
+					b, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					hashes[path] = fmt.Sprintf("%x", sha256.Sum256(b))
+				}
+				b, err := json.Marshal(map[string]any{"kind": kind, "runtime_sha256": hashes, "resource_ids": f.ids, "frames": frames})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Log("RUNNING_ARCHIVE_FRAMES=" + string(b))
+			}
+		})
 	}
 }
