@@ -330,7 +330,7 @@ func TestSyncGuestBackupTimesLocalArchiveGuestKinds(t *testing.T) {
 }
 
 func TestSyncGuestBackupTimesUntypedLocalArchiveCompatibility(t *testing.T) {
-	for _, kind := range []string{"", "unknown", "legacy"} {
+	for _, kind := range []string{"", "  "} {
 		t.Run(kind, func(t *testing.T) {
 			state := NewState()
 			now := time.Now().UTC().Truncate(time.Second)
@@ -339,6 +339,36 @@ func TestSyncGuestBackupTimesUntypedLocalArchiveCompatibility(t *testing.T) {
 			state.SyncGuestBackupTimes()
 			if got := state.GetSnapshot().VMs[0].LastBackup; !got.Equal(now) {
 				t.Errorf("untyped legacy behavior changed: %s", got)
+			}
+		})
+	}
+}
+
+func TestSyncGuestBackupTimesExplicitUnknownArchiveIsNotGuestEvidence(t *testing.T) {
+	for _, kind := range []string{"unknown", " UNKNOWN ", "legacy", "host"} {
+		t.Run(kind, func(t *testing.T) {
+			state := NewState()
+			now := time.Now().UTC().Truncate(time.Second)
+			state.UpdateVMs([]VM{{VMID: 100, Instance: "a"}, {VMID: 100, Instance: "b"}})
+			state.UpdateContainers([]Container{{VMID: 100, Instance: "a"}})
+			for _, withTyped := range []bool{false, true} {
+				rows := []StorageBackup{{ID: "opaque", Instance: "a", VMID: 100, Type: kind, Time: now}}
+				wantVM, wantCT := time.Time{}, time.Time{}
+				if withTyped {
+					wantVM, wantCT = now.Add(-time.Hour), now.Add(-2*time.Hour)
+					rows = append(rows,
+						StorageBackup{ID: "vm", Instance: "a", VMID: 100, Type: "qemu", Time: wantVM},
+						StorageBackup{ID: "ct", Instance: "a", VMID: 100, Type: "lxc", Time: wantCT})
+				}
+				state.UpdateStorageBackupsForInstance("a", rows)
+				state.SyncGuestBackupTimes()
+				snap := state.GetSnapshot()
+				if !snap.VMs[0].LastBackup.Equal(wantVM) || !snap.Containers[0].LastBackup.Equal(wantCT) || !snap.VMs[1].LastBackup.IsZero() {
+					t.Fatalf("unknown archive supplied or hid a guest date: vms=%+v containers=%+v", snap.VMs, snap.Containers)
+				}
+				if snap.VMs[0].BackupInProgress || snap.Containers[0].BackupInProgress || len(snap.PVEBackups.StorageBackups) != len(rows) {
+					t.Fatal("unknown identity changed activity or hid an artifact")
+				}
 			}
 		})
 	}

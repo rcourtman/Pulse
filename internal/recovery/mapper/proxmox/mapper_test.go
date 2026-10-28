@@ -1,6 +1,7 @@
 package proxmoxmapper
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -878,7 +879,6 @@ func TestFromPVEStorageBackupsRetainsExplicitGuestKind(t *testing.T) {
 		{"matching-vm", "qemu", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeVM},
 		{"matching-lxc", "lxc", unifiedresources.ResourceTypeSystemContainer, unifiedresources.ResourceTypeSystemContainer},
 		{"untyped-legacy", "", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeVM},
-		{"unknown-legacy", "unknown", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeVM},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			now := time.Now().UTC().Truncate(time.Second)
@@ -915,5 +915,34 @@ func TestFromPVEStorageBackupsRetainsExplicitGuestKind(t *testing.T) {
 				t.Error("incomplete archive changed subject or claimed completion")
 			}
 		})
+	}
+}
+
+func TestFromPVEStorageBackupsExplicitUnknownKindCannotBorrowSubject(t *testing.T) {
+	for _, kind := range []string{"unknown", " UNKNOWN ", "unsupported", "host"} {
+		for _, liveType := range []unifiedresources.ResourceType{unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer} {
+			t.Run(kind+"/"+string(liveType), func(t *testing.T) {
+				now := time.Now().UTC().Truncate(time.Second)
+				b := models.StorageBackup{ID: "opaque", Instance: "cluster", Node: "read-node", VMID: 100, Type: kind, Time: now, Size: 2048, Storage: "local", Volid: "local:backup/opaque"}
+				info := map[string]GuestInfo{"cluster|read-node|100": {ResourceID: "current-canonical", SourceID: "current-source", ResourceType: liveType, Name: "current-occupant"}}
+				for _, running := range []bool{false, true} {
+					b.InProgress = running
+					points, err := FromPVEStorageBackupsWithEvidence([]models.StorageBackup{b}, info, now)
+					if err != nil || len(points) != 1 {
+						t.Fatalf("points=%+v err=%v", points, err)
+					}
+					p := points[0]
+					if p.SubjectResourceID != "" || p.SubjectRef != nil || p.Evidence != nil {
+						t.Fatalf("unclassified archive borrowed a current subject: %+v", p)
+					}
+					if p.ID != "pve-backup:opaque" || p.StartedAt == nil || !p.StartedAt.Equal(now) || p.SizeBytes == nil || *p.SizeBytes != b.Size || p.Details["type"] != strings.TrimSpace(kind) || p.Details["volid"] != b.Volid || p.ProviderScope != "cluster" {
+						t.Fatalf("lost independent archive facts: %+v", p)
+					}
+					if running && (p.Outcome != recovery.OutcomeRunning || p.CompletedAt != nil) || !running && (p.Outcome != recovery.OutcomeSuccess || p.CompletedAt == nil || !p.CompletedAt.Equal(now)) {
+						t.Fatalf("unknown identity changed completion: %+v", p)
+					}
+				}
+			})
+		}
 	}
 }
