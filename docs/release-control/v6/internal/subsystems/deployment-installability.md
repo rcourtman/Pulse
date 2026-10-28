@@ -5027,6 +5027,16 @@ retains source-listed package/API coverage and actual start/finish CPU leases;
 missing terminal entries are not passes. This repairs a scheduling fault, not
 a product defect diagnosis or qualification of the interrupted candidate.
 
+The legacy FreeBSD/SysV removal controls select the native runner's Python
+interpreter with `-I -S`, as the existing NAS controls do. A private site-hook
+adverse control proves that ambient startup output cannot contaminate manager
+readback. Five-second production observations and all refusal/retention rules
+remain unchanged. Fixture failures retain fixed model roles/numeric bounded
+command exits, observation counters and modelled state rather than only the
+generic production refusal. The earlier stopped-FreeBSD fixture failure has no
+retained per-operation result; isolation fixes a demonstrated fixture weakness,
+not an established cause of that historical failure or native removal proof.
+
 Activation-only recovery must distinguish the immutable binary packet from
 governed release-note presentation sidecars. Release run `33223712880` passed
 its immutable readiness join and retained draft release `378812881`, but its

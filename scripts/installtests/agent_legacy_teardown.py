@@ -12,8 +12,10 @@ from pathlib import Path
 import shlex
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get("PULSE_AGENT_LEGACY_SOURCE", ROOT / "scripts/install.sh"))
@@ -36,12 +38,12 @@ def functions(source, names=FUNCTIONS):
     return "\n".join(result)
 
 
-MODEL = r'''#!/usr/bin/python3
+MODEL = r'''
 import json, os, pathlib, sys
 root = pathlib.Path(os.environ['FIXTURE'])
 path = root / 'model.json'
 v = json.loads(path.read_text())
-role, a = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
+role, a = sys.argv[1], sys.argv[2:]
 fault = v['fault']
 remote = (root / 'events').exists() and 'remote:remove' in (root / 'events').read_text()
 def save():
@@ -125,6 +127,14 @@ else: raise ValueError('operation outside private fixture')
 '''
 
 
+def model_launcher(model, role):
+    # Like the NAS controls, use the runner's selected interpreter and only
+    # the standard library. Ambient site hooks must not alter manager readback
+    # or spend a production observation's unchanged bounded deadline.
+    return ('#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' -I -S '
+            + shlex.quote(str(model)) + ' ' + shlex.quote(role) + ' "$@"\n')
+
+
 class AgentLegacyTeardown(unittest.TestCase):
     source = SOURCE.read_text()
 
@@ -133,14 +143,15 @@ class AgentLegacyTeardown(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tools = root / "tools"; tools.mkdir()
+            model_source = root / "model.py"; model_source.write_text(MODEL)
             for name in ("ps", "sysrc", "update-rc.d", "chkconfig"):
-                p = tools / name; p.write_text(MODEL); p.chmod(0o700)
+                p = tools / name; p.write_text(model_launcher(model_source, name)); p.chmod(0o700)
             init = root / "init"
             unrelated = root / "unrelated"; unrelated.write_text("retain unrelated file\n")
             if path == "linked": init.symlink_to(unrelated)
             elif path == "directory": init.mkdir()
             elif path != "missing":
-                init.write_text(MODEL); init.chmod(0o600 if path == "not-executable" else 0o700)
+                init.write_text(model_launcher(model_source, "init")); init.chmod(0o600 if path == "not-executable" else 0o700)
             for name in ("state", "helper", "profile"):
                 p = root / name; p.mkdir(); (p / "token").write_text("synthetic recovery only\n")
             (root / "wrapper").write_text("owned boot wrapper\n")
@@ -183,6 +194,16 @@ PULSE_URL=https://same-instance.example.invalid AGENT_ID=synthetic
 ACTION_RUNNER_NAME=pulse-agent-runner PRIVILEGED_HELPER_NAME=pulse-agent-helper
 log_info() { :; }; log_warn() { :; }
 fail() { printf '%s\n' "$1" >&2; exit "${2:-1}"; }
+timeout() {
+    local result=0 role="${4##*/}"
+    builtin command timeout "$@" || result=$?
+    # Only a fixed model role and numeric exit, never arbitrary argv or output.
+    case "$role" in ps|sysrc|init|update-rc.d|chkconfig) ;;
+        *) return 96 ;;
+    esac
+    printf 'bounded:%s:%s\n' "$role" "$result" >> "$EVENTS"
+    return "$result"
+}
 uname() { [[ "$PLATFORM" == FreeBSD ]] && printf 'FreeBSD\n' || printf 'Linux\n'; }
 command() {
     case "$*" in
@@ -409,11 +430,49 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
         for platform in ("FreeBSD", "SysV"):
             for path, repeat in (("regular", False), ("missing", False), ("regular", True)):
                 with self.subTest(platform=platform, path=path, repeat=repeat):
-                    r, events, before, after, _ = self.exercise(platform, state="stopped", enabled="NO", links="none", path=path, repeat=repeat)
-                    self.assertEqual(r.returncode, 0, r.stderr)
+                    r, events, before, after, model = self.exercise(platform, state="stopped", enabled="NO", links="none", path=path, repeat=repeat)
+                    self.assertEqual(r.returncode, 0, r.stderr + "\nPrivate model observations: " + json.dumps(dict(
+                        events=events, state=model["state"], enabled=model["enabled"],
+                        process_reads=model["process_reads"], status_reads=model["status_reads"], enable_reads=model["enable_reads"])))
                     self.assertNotIn("service:stop", events)
                     for k in ("state/token", "helper/token", "profile/token", "unrelated"):
                         self.assertEqual(after[k], before[k])
+
+    def test_model_uses_selected_isolated_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="legacy model ") as directory:
+            root = Path(directory)
+            model = root / "model.py"; model.write_text(MODEL)
+            invocations = root / "interpreter-arguments"
+            interpreter = root / "selected python"
+            interpreter.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> '
+                                   + shlex.quote(str(invocations)) + '\nexec '
+                                   + shlex.quote(sys.executable) + ' "$@"\n')
+            interpreter.chmod(0o700)
+            with mock.patch.object(sys, "executable", str(interpreter)):
+                launcher = model_launcher(model, "sysrc")
+            tool = root / "sysrc"; tool.write_text(launcher); tool.chmod(0o700)
+            (root / "model.json").write_text(json.dumps(dict(
+                platform="FreeBSD", fault="", state="stopped", enabled="NO", enable_reads=0)))
+            marker = root / "site-ran"
+            (root / "sitecustomize.py").write_text('from pathlib import Path\nPath('
+                + repr(str(marker)) + ').touch()\nprint("unexpected site hook")\n')
+            env = dict(os.environ, FIXTURE=str(root), PYTHONPATH=str(root))
+            # Deliberate adverse control: the old unisolated model protocol
+            # accepts unrelated startup output. Do not turn that into a pass.
+            adverse = subprocess.run([sys.executable, str(model), "sysrc", "-n", "pulse_agent_enable"],
+                                     env=env, capture_output=True, text=True, timeout=5)
+            self.assertEqual(adverse.returncode, 0, adverse.stderr)
+            self.assertIn("unexpected site hook", adverse.stdout)
+            self.assertTrue(marker.exists())
+            marker.unlink()
+            result = subprocess.run([str(tool), "-n", "pulse_agent_enable"], env=env,
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "NO\n")
+            self.assertEqual(result.stderr, "")
+            self.assertFalse(marker.exists())
+            self.assertEqual(invocations.read_text().splitlines(),
+                             ["-I", "-S", str(model), "sysrc", "-n", "pulse_agent_enable"])
 
     def test_process_inventory_does_not_return_arguments_or_secrets(self):
         r, _, _, _, _ = self.exercise("FreeBSD", flow="process")
@@ -426,6 +485,7 @@ remove_safe_profile_state_dir() { builtin command rm -r -- "$SAFE_PROFILE_STATE_
     def test_real_process_timeout_stops_owned_child_without_erasure(self):
         r, events, before, after, model = self.exercise("FreeBSD", fault="timeout-process")
         self.assertNotEqual(r.returncode, 0, r.stderr)
+        self.assertIn("bounded:ps:124", events)
         self.assertEqual(after, before)
         self.assertTrue(model["timed_child_absent"])
         self.assertNotIn("service:stop", events)
