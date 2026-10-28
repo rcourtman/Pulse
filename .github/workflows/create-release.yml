@@ -599,6 +599,15 @@ jobs:
       - name: Run backend tests
         run: ./scripts/run-release-backend-tests.sh --data-root "$RUNNER_TEMP/pulse-test-data"
 
+      - name: Retain backend package coverage and CPU leases
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-backend-coverage-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pulse-test-data/release-backend-run/coverage/
+          if-no-files-found: warn
+          retention-days: 7
+
 
   # Alpha and beta builds are feedback checkpoints. RC and stable publication
   # run the deeper integration gate because an RC must be promotable in intent.

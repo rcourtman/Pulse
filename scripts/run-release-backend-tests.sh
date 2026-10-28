@@ -264,30 +264,36 @@ print("\n".join(str(width) for width in widths))
 PY
 )
 RESERVED_OTHER_PACKAGE_PROCS="${CPU_PLAN[0]}"
-OTHER_PACKAGE_PROCS="$RESERVED_OTHER_PACKAGE_PROCS"
-if [ "$OTHER_PACKAGE_PROCS" -eq 0 ]; then OTHER_PACKAGE_PROCS=1; fi
 SHARD_GOMAXPROCS=("${CPU_PLAN[@]:1}")
 if [ "${#SHARD_GOMAXPROCS[@]}" -ne "$API_SHARDS" ]; then
   echo "Error: shard GOMAXPROCS plan produced ${#SHARD_GOMAXPROCS[@]} entries for $API_SHARDS shards." >&2
   exit 4
 fi
 echo "API shard GOMAXPROCS: ${SHARD_GOMAXPROCS[*]}"
-echo "Non-API package workers: $OTHER_PACKAGE_PROCS (GOMAXPROCS=1 each)"
+echo "Initial non-API package workers: $RESERVED_OTHER_PACKAGE_PROCS (GOMAXPROCS=1 each)"
 
 API_IMPORT_PATH="$(go list -f '{{.ImportPath}}' ./internal/api)"
-mapfile -t OTHER_PACKAGES < <(
-  go list ./cmd/... ./internal/... ./pkg/... ./scripts/... ./tests/... \
-    | awk -v api="$API_IMPORT_PATH" '$0 != api'
-)
+mkdir -p "$RUN_ROOT/coverage"
+# Do not hide a failed/partial go list in process substitution. Source defines
+# the complete inventory; the existing weights only put slow packages first.
+go list ./cmd/... ./internal/... ./pkg/... ./scripts/... ./tests/... > "$RUN_ROOT/packages.txt"
+awk -v api="$API_IMPORT_PATH" '$0 != api' "$RUN_ROOT/packages.txt" \
+  | python3 .github/scripts/select-go-package-shard.py \
+      .github/scripts/go-package-test-seconds.txt 1 0 > "$RUN_ROOT/coverage/non-api-packages.txt"
+mapfile -t OTHER_PACKAGES < "$RUN_ROOT/coverage/non-api-packages.txt"
 if [ "${#OTHER_PACKAGES[@]}" -eq 0 ]; then
   echo "Error: no non-API backend test packages were discovered." >&2
   exit 4
 fi
 
-run_other_packages() {
-  echo "Running ${#OTHER_PACKAGES[@]} non-API packages..."
-  env GOMAXPROCS=1 PULSE_DATA_DIR="$RUN_ROOT/data/other" \
-    go test -race -p "$OTHER_PACKAGE_PROCS" -timeout 30m "${OTHER_PACKAGES[@]}"
+run_other_package() {
+  local package_index="$1" package="$2"
+  # Separate package processes must not race on the old shared data directory.
+  local package_root="$RUN_ROOT/data/other/$package_index"
+  local OTHER_PACKAGE_PROCS=1
+  mkdir -p "$package_root"
+  env GOMAXPROCS=1 PULSE_DATA_DIR="$package_root" \
+    go test -race -p "$OTHER_PACKAGE_PROCS" -timeout 30m "$package"
 }
 
 run_api_shard() {
@@ -319,23 +325,6 @@ run_api_shard() {
   echo "Completed internal/api shard $shard_index in $((SECONDS - shard_started_seconds))s."
 }
 
-pids=()
-# A one-vCPU host cannot reserve a concurrent package slot. Complete the
-# non-API graph first there; release workers have enough width for concurrent
-# execution through the normal path below.
-if [ "$RESERVED_OTHER_PACKAGE_PROCS" -eq 0 ]; then
-  run_other_packages
-else
-  run_other_packages &
-  pids+=("$!")
-fi
-for shard_number in $(seq 1 "$API_SHARDS"); do
-  shard_index="$(printf '%02d' "$shard_number")"
-  run_api_shard "$shard_index" "${SHARD_GOMAXPROCS[$((shard_number - 1))]}" &
-  pids+=("$!")
-done
-
-remaining="${#pids[@]}"
 terminate_tree() {
   local parent_pid="$1"
   local child_pid
@@ -347,17 +336,68 @@ terminate_tree() {
   kill -TERM "$parent_pid" >/dev/null 2>&1 || true
 }
 
-while [ "$remaining" -gt 0 ]; do
-  if wait -n; then
-    remaining=$((remaining - 1))
-  else
-    status=$?
-    for pid in "${pids[@]}"; do
-      terminate_tree "$pid"
-    done
-    wait "${pids[@]}" >/dev/null 2>&1 || true
-    exit "$status"
+pids=()
+declare -A task_widths=() task_names=() task_starts=()
+free_procs="$VCPUS"
+stop_tasks() {
+  local pid
+  for pid in "${pids[@]}"; do terminate_tree "$pid"; done
+  if [ "${#pids[@]}" -gt 0 ]; then wait "${pids[@]}" >/dev/null 2>&1 || true; fi
+}
+trap stop_tasks EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+printf 'event\tpid\twidth\tseconds\texit\tpackage\n' > "$RUN_ROOT/coverage/execution.tsv"
+cp "$PLAN_DIR/manifest.json" "$RUN_ROOT/coverage/api-plan.json"
+printf 'vcpus=%s\napi_widths=%s\ninitial_other=%s\n' \
+  "$VCPUS" "${SHARD_GOMAXPROCS[*]}" "$RESERVED_OTHER_PACKAGE_PROCS" > "$RUN_ROOT/coverage/cpu-plan.txt"
+
+record_task() {
+  local pid="$1" width="$2" name="$3"
+  pids+=("$pid")
+  task_widths[$pid]="$width"
+  task_names[$pid]="$name"
+  task_starts[$pid]="$SECONDS"
+  free_procs=$((free_procs - width))
+  printf 'start\t%s\t%s\t%s\t-\t%s\n' "$pid" "$width" "$SECONDS" "$name" >> "$RUN_ROOT/coverage/execution.tsv"
+}
+
+# Beta.3 job 123003682684 finished all API shards in 17 minutes, but kept
+# the other 169 packages on one slot until the 70-minute job was cancelled.
+# A completed shard now releases its actual CPU width to whole packages.
+# No extra runner, wider CPU envelope, changed root order or timeout is needed.
+for shard_number in $(seq 1 "$API_SHARDS"); do
+  shard_index="$(printf '%02d' "$shard_number")"
+  width="${SHARD_GOMAXPROCS[$((shard_number - 1))]}"
+  run_api_shard "$shard_index" "$width" &
+  record_task "$!" "$width" "internal/api:$shard_index"
+done
+
+next_package=0
+echo "Running ${#OTHER_PACKAGES[@]} non-API packages with reusable CPU slots..."
+while [ "$next_package" -lt "${#OTHER_PACKAGES[@]}" ] || [ "${#pids[@]}" -gt 0 ]; do
+  while [ "$free_procs" -gt 0 ] && [ "$next_package" -lt "${#OTHER_PACKAGES[@]}" ]; do
+    package="${OTHER_PACKAGES[$next_package]}"
+    run_other_package "$next_package" "$package" &
+    record_task "$!" 1 "$package"
+    next_package=$((next_package + 1))
+  done
+  status=0
+  wait -n -p completed_pid "${pids[@]}" || status=$?
+  if [ -z "${completed_pid:-}" ]; then
+    echo "Error: backend child completion was not observed (exit $status)." >&2
+    exit 4
   fi
+  printf 'finish\t%s\t%s\t%s\t%s\t%s\n' "$completed_pid" "${task_widths[$completed_pid]}" \
+    "$((SECONDS - task_starts[$completed_pid]))" "$status" "${task_names[$completed_pid]}" >> "$RUN_ROOT/coverage/execution.tsv"
+  free_procs=$((free_procs + task_widths[$completed_pid]))
+  active=()
+  for pid in "${pids[@]}"; do
+    if [ "$pid" != "$completed_pid" ]; then active+=("$pid"); fi
+  done
+  pids=("${active[@]}")
+  unset 'task_widths[$completed_pid]' 'task_names[$completed_pid]' 'task_starts[$completed_pid]'
+  if [ "$status" -ne 0 ]; then exit "$status"; fi
 done
 
 echo "Race-enabled backend release tests passed with $API_SHARDS API shard(s)."

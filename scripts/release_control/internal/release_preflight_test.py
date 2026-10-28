@@ -610,7 +610,7 @@ echo CONTINUED
         )
         self.assertIn("RESERVED_OTHER_PACKAGE_PROCS", backend)
         self.assertIn(
-            'GOMAXPROCS=1 PULSE_DATA_DIR="$RUN_ROOT/data/other"', backend
+            'GOMAXPROCS=1 PULSE_DATA_DIR="$package_root"', backend
         )
         self.assertIn(
             'go test -race -p "$OTHER_PACKAGE_PROCS" -timeout 30m', backend

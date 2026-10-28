@@ -4859,13 +4859,16 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 		"SHARD_GOMAXPROCS",
 		`GOMAXPROCS="$shard_procs"`,
 		"RESERVED_OTHER_PACKAGE_PROCS",
-		`GOMAXPROCS=1 PULSE_DATA_DIR="$RUN_ROOT/data/other"`,
+		`GOMAXPROCS=1 PULSE_DATA_DIR="$package_root"`,
 		`go test -race -p "$OTHER_PACKAGE_PROCS" -timeout 30m`,
 		`API_SHARD_TIMEOUT="${PULSE_BACKEND_API_SHARD_TIMEOUT:-45m}"`,
 		"--shard-boundaries",
 		"TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback",
 		"TestServerInfoEndpointMethodNotAllowed",
 		`-test.timeout "$API_SHARD_TIMEOUT"`,
+		`record_task "$!" "$width" "internal/api:$shard_index"`,
+		`free_procs=$((free_procs + task_widths[$completed_pid]))`,
+		`wait -n -p completed_pid`,
 	} {
 		if !strings.Contains(backendScript, needle) {
 			t.Fatalf("release backend partition missing coverage contract: %s", needle)
