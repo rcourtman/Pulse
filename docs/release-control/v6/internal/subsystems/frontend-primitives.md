@@ -42,6 +42,24 @@ fulfilment of discussion #3432/#2107 whole-runtime-and-children demand, recipien
 proof, installed recovery or release availability.
 
 
+### Missing-filesystem help separates real capacity from container layers (28 October 2026)
+
+The existing VM disk guide and Troubleshooting entry distinguish an attached
+virtual disk, a real local filesystem under a container-data directory and an
+intentionally excluded layer or remote mount. The version-specific v6.6.0 path
+filter limitation is not an agent-installation diagnosis or a claim of repair.
+Backup inclusion stays separate from capacity collection; deliberately excluded
+disks stay excluded. Existing guest or already-linked-agent observations offer
+an interim capacity view, not API recovery or complete monitoring.
+
+`missingFilesystemGuide.test.ts` verifies the production Markdown renderer,
+entry/target links, exact shipped mirrors, narrow-friendly prose instead of a
+new table, source/time/privacy distinctions and the absence of new commands.
+No remount, data move, service restart, new agent, guest probe or backup change
+is prescribed. Backup safety retains precedence. Source-bound desktop/narrow
+Docs interactions and inspected captures remain required; this is Help
+maintenance, not a filesystem-admission fix, installed recovery or publication.
+
 ### Coverage evidence remains inspectable without a pointer
 
 The bounded Coverage preview includes undated source/state witnesses and a
