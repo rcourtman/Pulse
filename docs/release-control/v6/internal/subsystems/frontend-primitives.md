@@ -10533,3 +10533,15 @@ current tooltip readings and input ownership. `ProxmoxBackupsTable.test.tsx`
 exercises the parsed inventory and ordinary polling through the consuming date
 filter, preserving bounded reads. Backup/posture policy, source association,
 read cadence and guest operations are unchanged; this is not native recovery.
+
+### Backup polling does not choose a different workspace
+
+Bare legacy Backups links retain the useful initial health-based view choice,
+then bind it to the existing canonical view route once inventory is readable
+and the first assessment settles. History replacement preserves shared query
+filters and the fragment without a scroll jump. Explicit named/query views
+remain authoritative. Subsequent health changes update the mounted workspace,
+not its selection; existing tab and health-count actions remain the way to
+choose another view. This adds no route, assessment or backend mutation.
+`ProxmoxBackupsTable.test.tsx` verifies focused open evidence across both polling
+directions, deferred/failing assessment, retry and URL/history compatibility.

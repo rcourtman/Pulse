@@ -2560,3 +2560,157 @@ describe('backup activity day controls survive ordinary inventory polling', () =
     expect(apiFetchMock).toHaveBeenCalledTimes(4);
   });
 });
+
+describe('bare Backups entry retains its assessed workspace', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    window.history.replaceState({}, '', '/proxmox/backups');
+    mockBackupAPIs();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  // waitFor's interval is frozen with the query timers. Drain the router's
+  // promise-based transition before asserting native history, which need not
+  // cause another DOM mutation for waitFor to observe.
+  const settleNavigation = () => vi.advanceTimersByTimeAsync(1);
+
+  const responseFor = (
+    state: 'protected' | 'attention' | 'unknown',
+  ): ProtectionPosturesResponse => ({
+    data: [{ ...protectionPosture('ct-112'), state, explanation: `Observed ${state} posture.` }],
+    policy: protectionPolicy,
+  });
+
+  it.each([
+    { initial: 'attention', next: 'protected', view: 'coverage', table: 'coverage' },
+    { initial: 'protected', next: 'attention', view: 'date', table: 'recoverable' },
+    { initial: 'unknown', next: 'protected', view: 'coverage', table: 'coverage' },
+  ] as const)(
+    'keeps $view, its open evidence and focus when $initial becomes $next',
+    async ({ initial, next, view, table }) => {
+      let state: 'protected' | 'attention' | 'unknown' = initial;
+      apiFetchJSONMock.mockImplementation(() => Promise.resolve(responseFor(state)));
+      const historyLength = window.history.length;
+      mountBackupReadState();
+      await settleNavigation();
+      await waitFor(() => expect(window.location.pathname).toBe(`/proxmox/backups/${view}`));
+      expect(window.history.length).toBe(historyLength);
+      const row = document.querySelector(`[data-proxmox-backup-row="${table}"]`)!;
+      const disclosure = within(row as HTMLElement).getByRole('button', {
+        name: /expand details/i,
+      });
+      await fireEvent.click(disclosure);
+      disclosure.focus();
+      const detail = document.getElementById(disclosure.getAttribute('aria-controls')!);
+      expect(detail).not.toBeNull();
+
+      state = next;
+      await vi.advanceTimersByTimeAsync(30_000);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: `1 ${next}` })).toBeInTheDocument(),
+      );
+      expect(window.location.pathname).toBe(`/proxmox/backups/${view}`);
+      expect(
+        screen.getByRole('link', { name: view === 'date' ? /by date/i : /coverage/i }),
+      ).toHaveAttribute('aria-current', 'page');
+      expect(document.getElementById(disclosure.getAttribute('aria-controls')!)).toBe(detail);
+      expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+      expect(disclosure).toHaveFocus();
+      expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+      expect(sourceCalls('pve')).toHaveLength(2);
+      expect(sourceCalls('pbs')).toHaveLength(2);
+    },
+  );
+
+  it('waits for the initial assessment, preserves common filters/hash and replaces rather than pushes', async () => {
+    const pending = deferred<ProtectionPosturesResponse>();
+    apiFetchJSONMock.mockReturnValue(pending.promise);
+    window.history.replaceState(
+      {},
+      '',
+      '/proxmox/backups/?q=pbs&node=pve-a&type=ct&operator=saved#evidence',
+    );
+    const historyLength = window.history.length;
+    mountBackupReadState();
+    await settleNavigation();
+    await screen.findByRole('link', { name: /by date/i });
+    expect(window.location.pathname).toBe('/proxmox/backups/');
+    pending.resolve(responseFor('attention'));
+    await settleNavigation();
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+    expect(window.location.search).toBe('?q=pbs&node=pve-a&type=ct&operator=saved');
+    expect(window.location.hash).toBe('#evidence');
+    expect(window.history.length).toBe(historyLength);
+    expect(screen.getByPlaceholderText(/search backups by workload/i)).toHaveValue('pbs');
+    expect(document.querySelectorAll('[data-proxmox-backup-row="coverage"]')).toHaveLength(1);
+  });
+
+  it('keeps the initial failure workspace through retry and lets a later health action choose Coverage', async () => {
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('Posture unavailable'));
+    apiFetchJSONMock.mockResolvedValue(responseFor('protected'));
+    mountBackupReadState();
+    await settleNavigation();
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+    await screen.findByText(/Protection posture is unavailable/);
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry protection posture' }));
+    await screen.findByRole('button', { name: '1 protected' });
+    expect(window.location.pathname).toBe('/proxmox/backups/coverage');
+    await fireEvent.click(screen.getByRole('link', { name: /by date/i }));
+    await settleNavigation();
+    const protectedCount = screen.getByRole('button', { name: '1 protected' });
+    await fireEvent.click(protectedCount);
+    await settleNavigation();
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/coverage'));
+    expect(new URLSearchParams(window.location.search).get('posture')).toBe('protected');
+  });
+
+  it.each([
+    '/proxmox/backups/date',
+    '/proxmox/backups/coverage',
+    '/proxmox/backups?view=date',
+    '/proxmox/backups?view=coverage',
+  ])('does not rewrite an explicit view: %s', async (path) => {
+    window.history.replaceState({}, '', path);
+    apiFetchJSONMock.mockResolvedValue(responseFor('attention'));
+    mountBackupReadState();
+    await settleNavigation();
+    await screen.findByRole('button', { name: '1 attention' });
+    expect(window.location.pathname + window.location.search).toBe(path);
+  });
+
+  it('does not apply an old default after the operator has explicitly chosen By date', async () => {
+    const pending = deferred<ProtectionPosturesResponse>();
+    apiFetchJSONMock.mockReturnValue(pending.promise);
+    mountBackupReadState();
+    await settleNavigation();
+    await fireEvent.click(await screen.findByRole('link', { name: /by date/i }));
+    pending.resolve(responseFor('attention'));
+    await settleNavigation();
+    await screen.findByRole('button', { name: '1 attention' });
+    expect(window.location.pathname).toBe('/proxmox/backups/date');
+    expect(screen.getByRole('link', { name: /by date/i })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('does not navigate after the pending entry is unmounted', async () => {
+    const pending = deferred<ProtectionPosturesResponse>();
+    apiFetchJSONMock.mockReturnValue(pending.promise);
+    const { unmount } = mountBackupReadState();
+    await screen.findByRole('link', { name: /by date/i });
+    unmount();
+    pending.resolve(responseFor('attention'));
+    await settleNavigation();
+    await Promise.resolve();
+    expect(window.location.pathname).toBe('/proxmox/backups');
+  });
+
+  it('chooses By date after a readable empty inventory without requesting an unscoped assessment', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} workloads={[]} />);
+    await settleNavigation();
+    await waitFor(() => expect(window.location.pathname).toBe('/proxmox/backups/date'));
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+    await screen.findByText('No backups yet');
+  });
+});

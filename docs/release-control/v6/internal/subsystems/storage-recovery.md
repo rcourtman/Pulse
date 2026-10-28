@@ -8159,3 +8159,26 @@ current tooltip readings and input ownership. `ProxmoxBackupsTable.test.tsx`
 exercises the parsed inventory and ordinary polling through the consuming date
 filter, preserving bounded reads. Backup/posture policy, source association,
 read cadence and guest operations are unchanged; this is not native recovery.
+
+### Bare Backups entry chooses a view once, not on each health poll
+
+An existing `/proxmox/backups` bookmark without a named or legacy-query view
+chooses its health-based default after readable inventory and the first
+workload protection assessment settle. Attention, unprotected or unknown
+workloads still open Coverage; otherwise the existing By date default applies.
+The chosen view becomes its existing canonical route through a history replace
+without scrolling. Shared query filters and the fragment survive; incompatible
+per-view facets are cleared by the existing view-path builder. Explicit named
+and legacy-query views remain authoritative and are not rewritten.
+
+Later inventory/posture polls and posture retries update counts, evidence and
+unavailability honestly without silently replacing that workspace or its open
+row and keyboard focus. The operator can still change views or follow a health
+count to filtered Coverage. No assessment, backup completion, provider query,
+permissions, guest operation, persistence or recovery guarantee changes.
+
+`ProxmoxBackupsTable.test.tsx` covers both polling directions, unknown and failed
+initial assessments, retry, deferred initial assessment, common filters/hash,
+replace-history semantics, explicit views and empty inventory. Browser proof
+must exercise the actual table, inventory parsers and posture client through a
+local safe producer at desktop and narrow widths, with native pixel inspection.
