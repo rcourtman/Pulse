@@ -114,10 +114,10 @@ function datastoreCapacity(datastore: ResourcePBSDatastore | undefined, online: 
   ) {
     return { state: 'unknown' as const, percent: undefined };
   }
-  const percent =
-    datastore.usagePercent !== undefined
-      ? datastore.usagePercent
-      : (datastore.used / datastore.total) * 100;
+  // Fullness and its warning tone must describe the bytes shown beside them.
+  // A defaulted or retained usagePercent must not make a full store look empty
+  // (or an empty store look full). Both byte fields passed admission above.
+  const percent = (datastore.used / datastore.total) * 100;
   if (!Number.isFinite(percent) || percent < 0) {
     return { state: 'unknown' as const, percent: undefined };
   }

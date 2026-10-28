@@ -227,6 +227,72 @@ beforeEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
+  it.each([
+    { used: 9_500, usagePercent: 0, expected: '95.0%', tone: 'text-red-600' },
+    { used: 8_000, usagePercent: 20, expected: '80.0%', tone: 'text-amber-600' },
+    { used: 0, usagePercent: 95, expected: '0.0%', tone: 'text-base-content' },
+    { used: 10_000, usagePercent: undefined, expected: '100.0%', tone: 'text-red-600' },
+  ])(
+    'keeps datastore fullness and warning consistent with used bytes: $used/$usagePercent',
+    async ({ used, usagePercent, expected, tone }) => {
+      mockBackupAPIs();
+      const [servers, setServers] = createSignal<Resource[]>([
+        {
+          ...pbsServerResource,
+          pbs: {
+            ...pbsServerResource.pbs!,
+            datastores: [{ name: 'main', total: 10_000, used, usagePercent }],
+          },
+        },
+      ]);
+      const { container } = renderInRouter(() => (
+        <ProxmoxBackupsTable emptyIcon={<span />} servers={servers()} />
+      ));
+      await screen.findByText(expected);
+      const table = container.querySelector('[data-proxmox-backups-table="servers"]')!;
+      const usedColumn = Array.from(table.querySelectorAll('th')).findIndex(
+        (head) => head.textContent?.trim() === 'Used',
+      );
+      const usedCell = () => table.querySelector('tbody tr')!.querySelectorAll('td')[usedColumn];
+      expect(within(usedCell()).getByText(expected).parentElement).toHaveClass(tone);
+
+      // Reconciled polling updates must recompute the same row, not retain the
+      // previous percentage or borrow one from the provider's optional field.
+      setServers([pbsServerResource]);
+      await within(usedCell()).findByText('40.0%');
+      expect(within(usedCell()).queryByText(expected)).not.toBeInTheDocument();
+      expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
+    },
+  );
+
+  it.each([
+    { total: 0, used: 0, status: 'available', expected: 'Unknown' },
+    { total: 10_000, used: -1, status: 'available', expected: 'Unknown' },
+    { total: 10_000, used: 9_500, status: 'unavailable', expected: 'Unavailable' },
+    { total: 10_000, used: 9_500, status: 'unrecognised', expected: 'Unknown' },
+  ])(
+    'does not let an optional percentage establish admitted capacity: $total/$used/$status',
+    async ({ total, used, status, expected }) => {
+      mockBackupAPIs();
+      renderInRouter(() => (
+        <ProxmoxBackupsTable
+          emptyIcon={<span />}
+          servers={[
+            {
+              ...pbsServerResource,
+              pbs: {
+                ...pbsServerResource.pbs!,
+                datastores: [{ name: 'main', total, used, status, usagePercent: 95 }],
+              },
+            },
+          ]}
+        />
+      ));
+      await screen.findByText(expected);
+      expect(screen.queryByText('95.0%')).not.toBeInTheDocument();
+    },
+  );
+
   it('keeps successful backup inventory independent of unavailable datastore capacity', async () => {
     mockBackupAPIs();
     const failed = {
