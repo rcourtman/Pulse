@@ -430,6 +430,47 @@ TrueNAS versions, and the relevant sanitized evidence above. Do not replace
 an otherwise working key or clear stored History merely because a graph is
 empty.
 
+#### Host totals and individual disk activity
+
+In **TrueNAS → Overview**, a host **Disk I/O** total does not establish that
+every physical disk was measured. In **TrueNAS → Storage**, check each disk's
+**Activity** and **Disk I/O** separately. A temperature reading, disk inventory
+or correct pool/dataset capacity does not establish live disk activity: capacity
+measures space, not a read/write rate. A blank or dash is unavailable evidence,
+not proof that the disk is idle.
+
+Use TrueNAS's own **Reporting** view for missing activity. Compare the same
+appliance, disk and time window; a boot disk's rate and a data pool's rate are
+not interchangeable. Keep any boot-pool name already supplied in a report,
+but do not rename `freenas-boot` or `boot-pool`, recreate the connection or
+install an agent just to make the readings appear.
+
+#### Memory usage and ARC cache
+
+In **TrueNAS → Overview**, the memory bar's percentage alone does not explain
+its composition. On desktop, hover over the bar to read its breakdown:
+
+- **Used** excludes separately supplied reclaimable ARC cache.
+- **Reclaimable cache** is shown when a separate cache value is available.
+  **Used with ARC cache** includes that cache; do not add it again.
+- **Free** is the remaining space after Used and the supplied cache, not an
+  additional allocation.
+
+An absent cache row does not establish that ARC is zero. CORE's native
+**Active**, **Inactive**, **Wired**, **Laundry** and **Free** categories are
+not each an ARC measurement. If your installed build does not expose the
+breakdown with your keyboard or touch input, or supplies only a percentage,
+use TrueNAS's own **Reporting** view instead; do not infer a missing value.
+
+Check **History** separately from the current Overview and Storage readings.
+A recovered current value does not establish that its historical series is
+available or that earlier missing samples were recovered. Keep existing
+versions, affected panels and original times in the same report; no new graph
+capture, Debug logging, History deletion or connection change is needed just
+to describe these differences.
+
+#### Requested CORE graph evidence
+
 If a maintainer requests a **CORE 13 native graph response**, use your existing
 signed-in **TrueNAS** browser session, not the Pulse page:
 

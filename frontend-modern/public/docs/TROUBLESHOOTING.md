@@ -47,7 +47,9 @@ establish safe recovery.
   Do not rename, remove or re-enrol resources to create evidence.
 - **TrueNAS readings are stale or absent:** use
   [TrueNAS data checks](TRUENAS.md#stale-truenas-data), keeping the platform API
-  and Pulse Agent paths separate.
+  and Pulse Agent paths separate. If only some readings return, distinguish
+  [host totals from individual disk activity](TRUENAS.md#host-totals-and-individual-disk-activity)
+  and [memory usage from ARC cache](TRUENAS.md#memory-usage-and-arc-cache).
 - **PBS is Active but missing from monitoring:** distinguish the
   [server, backup inventory and History](PBS.md#pbs-is-active-but-missing-from-monitoring).
   An Active API connection does not establish a visible PBS resource; installing
