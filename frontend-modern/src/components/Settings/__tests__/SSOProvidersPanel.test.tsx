@@ -234,7 +234,9 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
       expect(screen.getByText('Callback / Redirect URL:').tagName).toBe('DT');
       fireEvent.click(copy);
       await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith(callback));
-      expect(notificationSuccessMock).toHaveBeenCalledWith('Callback URL has been copied');
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Callback URL has been copied to the clipboard.',
+      );
       expect(screen.getByRole('button', { name: 'Edit provider' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Delete provider' })).toBeDisabled();
       expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
@@ -283,7 +285,11 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
 
     const copy = await screen.findByRole('button', { name: 'Copy callback / redirect URL' });
     fireEvent.click(copy);
-    await waitFor(() => expect(notificationErrorMock).toHaveBeenCalledWith('Unable to copy callback url'));
+    await waitFor(() =>
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        'Unable to copy callback url. Select and copy the URL manually.',
+      ),
+    );
     expect(copy).toHaveTextContent(callback);
     expect(copy).toBeEnabled();
     expect(writeText).toHaveBeenCalledExactlyOnceWith(callback);
