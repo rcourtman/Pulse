@@ -949,7 +949,7 @@ func TestFromPVEStorageBackupsExplicitUnknownKindCannotBorrowSubject(t *testing.
 }
 
 func TestFromPVEGuestSnapshotsRetainsExplicitGuestKind(t *testing.T) {
-	for _, kind := range []string{"qemu", " VM ", "lxc", " CT ", "container"} {
+	for _, kind := range []string{"qemu", " VM ", "lxc", " CT "} {
 		for _, liveType := range []unifiedresources.ResourceType{"", unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer} {
 			t.Run(kind+"/"+string(liveType), func(t *testing.T) {
 				now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
@@ -991,7 +991,7 @@ func TestFromPVEGuestSnapshotsRetainsExplicitGuestKind(t *testing.T) {
 }
 
 func TestFromPVEGuestSnapshotsUnknownKindDoesNotBorrowSubject(t *testing.T) {
-	for _, kind := range []string{"unknown", " UNKNOWN ", "unsupported", "host"} {
+	for _, kind := range []string{"unknown", " UNKNOWN ", "unsupported", "host", "container"} {
 		for _, liveType := range []unifiedresources.ResourceType{unifiedresources.ResourceTypeVM, unifiedresources.ResourceTypeSystemContainer} {
 			t.Run(kind+"/"+string(liveType), func(t *testing.T) {
 				now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
