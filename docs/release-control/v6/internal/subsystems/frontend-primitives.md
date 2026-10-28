@@ -10668,3 +10668,19 @@ protect grouped metadata, responsive columns and bounded rendering. Browser
 proof must exercise the consuming list at desktop/narrow widths, inspect actual
 pixels, identity, state/age fit, touch/keyboard disclosure, filters and live
 updates. This is safer evidence inspection, not a restore or installed recovery.
+
+
+### SSO endpoint cards remain readable and copyable on narrow screens
+
+The SSO provider card in `SSOProvidersPanel.tsx` separates each endpoint's
+label from its value with a definition-list entry. OIDC callbacks and enabled
+SAML metadata/ACS values wrap anywhere rather than truncating or forcing an
+unshrinkable inline URL row on the card. The shared `CopyValueButton` remains a native,
+keyboard-operable control with a preserved copy icon, a full-width 44px-tall
+narrow target, and the exact server-supplied value. Copying does not navigate,
+normalise or infer a URL. Existing missing-endpoint guidance, disabled-provider
+visibility and read-only management gates remain; viewing/copying is not a
+settings mutation or a paid SSO gate. `SSOProvidersPanel.test.tsx` verifies
+exact OIDC/SAML clipboard values, read-only/disabled-provider controls and
+clipboard rejection. Actual consuming desktop and narrow-browser geometry,
+keyboard/touch and inspected pixels establish responsive fit beyond JSDOM.

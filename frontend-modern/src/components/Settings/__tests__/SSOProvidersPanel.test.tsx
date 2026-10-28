@@ -218,6 +218,84 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
     expect(screen.getByRole('button', { name: 'Copy callback / redirect URL' })).toBeTruthy();
   });
 
+  it.each([true, false])(
+    'copies the complete server-supplied OIDC endpoint from a read-only card, enabled=%s',
+    async (enabled) => {
+      const callback =
+        'https://monitoring.example.test/pulse/api/oidc/東京%2Foperations-with-a-long-provider-id/callback?scope=a%2Fb&state=unchanged';
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      setupFetch([{ ...corpProvider, enabled, oidcCallbackUrl: callback }]);
+      render(() => <SSOProvidersPanel canManage={false} />);
+
+      const copy = await screen.findByRole('button', { name: 'Copy callback / redirect URL' });
+      expect(copy).toBeEnabled();
+      expect(copy).toHaveTextContent(callback);
+      expect(screen.getByText('Callback / Redirect URL:').tagName).toBe('DT');
+      fireEvent.click(copy);
+      await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith(callback));
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Callback URL has been copied to the clipboard.',
+      );
+      expect(screen.getByRole('button', { name: 'Edit provider' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Delete provider' })).toBeDisabled();
+      expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
+    },
+  );
+
+  it('keeps SAML metadata and ACS endpoints distinct and copyable without write access', async () => {
+    const base =
+      'https://monitoring.example.test/pulse/api/saml/operations-with-a-very-long-provider-id';
+    const endpoints = [
+      { caption: 'SP Metadata:', label: 'Copy SP metadata URL', value: `${base}/metadata` },
+      { caption: 'ACS URL:', label: 'Copy ACS URL', value: `${base}/acs?target=a%2Fb` },
+    ];
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    setupFetch([
+      {
+        id: 'corp-saml',
+        name: 'Corporate SAML',
+        type: 'saml',
+        enabled: true,
+        samlMetadataUrl: endpoints[0].value,
+        samlAcsUrl: endpoints[1].value,
+      },
+    ]);
+    render(() => <SSOProvidersPanel canManage={false} />);
+
+    for (const endpoint of endpoints) {
+      const copy = await screen.findByRole('button', { name: endpoint.label });
+      expect(copy).toBeEnabled();
+      expect(copy).toHaveTextContent(endpoint.value);
+      expect(screen.getByText(endpoint.caption).tagName).toBe('DT');
+      fireEvent.click(copy);
+      await waitFor(() => expect(writeText).toHaveBeenLastCalledWith(endpoint.value));
+    }
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
+  });
+
+  it('reports a rejected card copy without changing its value or provider', async () => {
+    const callback = 'https://monitoring.example.test/api/oidc/corp-oidc/callback';
+    const writeText = vi.fn().mockRejectedValue(new Error('Clipboard unavailable'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    setupFetch([{ ...corpProvider, oidcCallbackUrl: callback }]);
+    render(() => <SSOProvidersPanel />);
+
+    const copy = await screen.findByRole('button', { name: 'Copy callback / redirect URL' });
+    fireEvent.click(copy);
+    await waitFor(() =>
+      expect(notificationErrorMock).toHaveBeenCalledWith(
+        'Unable to copy callback url. Select and copy the URL manually.',
+      ),
+    );
+    expect(copy).toHaveTextContent(callback);
+    expect(copy).toBeEnabled();
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(callback);
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
+  });
+
   it('guides the admin to set a public URL instead of offering a copyable OIDC URL', async () => {
     setupFetch([{ ...corpProvider, oidcCallbackUrl: '' }]);
     render(() => <SSOProvidersPanel />);

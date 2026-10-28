@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "c4c24f40dba17580bcededd21280c52a14dc667c",
+  "verified_at": "2026-10-28T23:05:14.563980Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "7838695600fd3315d04945effd613099a6c1b727fcbf02fb314886b3ec1efd20"
+  },
+  "routes": [
+    "Settings > Security > Single Sign-On Providers (actual SSOProvidersPanel/state/model/client/Toast, synthetic HTTP fixture and exact production entry CSS)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 960
+    },
+    {
+      "width": 320,
+      "height": 900
+    }
+  ],
+  "states": [
+    "Read-only and administrator cards; full long OIDC callback and distinct SAML metadata/ACS including percent-encoded query; enabled and disabled OIDC; disabled SAML; absent endpoints and unchanged public-URL guidance.",
+    "Dark-mode 340px constrained-pane stress control at desktop viewport. Endpoint values fit independently of the existing truncated header summaries; this is not a normal installed layout or a global card-identity audit."
+  ],
+  "interactions": [
+    "103 checks pass: Chromium141.0.7390.37 desktop/dark pane and WebKit26.0 at320px with touch, Playwright1.56.1 matching the integration lock. Native Tab/Enter and pointer/tap preserve exact clipboard payloads and focus; denial keeps the full value and readable existing guidance.",
+    "Every caption, URL text line and copy icon fits its own card. The phone callback is248x64px with a one-line16px caption; all phone endpoint targets meet44px height. Read-only management stays disabled while copying stays enabled. Admin editor opens/cancels without writes.",
+    "27 explicit fixture GETs, no modifying or off-origin requests and no JS, console or server errors. Three contexts/browsers and the server close. System clipboard permission and real IdP acceptance are not claimed; writeText is a controlled capability boundary.",
+    "All six final captures were opened with native view_image at original detail. Phone URLs and query tail wrap visibly within the card, icons and native focus ring fit, and existing denial feedback is readable. Full source proof source-_9amqxtb on this parent passes202 scoped tests,17 graph checks, full types/lint, formatter, production build and budgets. All29 compiled production modules and both npm manifests match. Initial142 passes/3 new assertion failures are retained and corrected, not erased."
+  ],
+  "evidence": "Lane RECEIPTS.md, PIXEL-REVIEW.json, BROWSER-RESULT.json, SOURCE-BINDING.json, exact terminal receipts and EXECUTION.tar.xz. Committed maintenance candidate only; not released or original #3038/access recovery."
+}
