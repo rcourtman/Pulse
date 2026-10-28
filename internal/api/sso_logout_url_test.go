@@ -71,7 +71,7 @@ func TestSSOLogoutURLRejectsUnsafeWrites(t *testing.T) {
 					var failure APIError
 					require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &failure))
 					require.Equal(t, "validation_error", failure.Code)
-					require.Equal(t, "Invalid OIDC logout URL", failure.Message)
+					require.Equal(t, "Invalid OIDC logout URL", failure.ErrorMessage)
 					require.NotContains(t, rec.Body.String(), "synthetic-url-secret")
 					require.NotContains(t, rec.Body.String(), "javascript:")
 					require.Equal(t, before, router.ensureSSOConfig(), "rejection changed published provider or credentials")
