@@ -10491,3 +10491,23 @@ Desktop/narrow browser proof must exercise the parsed inventory consumer,
 filter interactions, scoped open records and literal long labels and inspect
 actual pixels. This corrects evidence scope, not original incident causality or
 native backup/guest recovery.
+
+
+### Backup activity preserves calendar-day interaction identity
+
+`BackupActivityChart` retains each day control by its local calendar key across
+inventory refreshes, scope changes and metric changes. The focused control must
+not disappear or silently become another date when new buckets replace the
+input. A removed focused day returns to the selected activity-range control,
+without changing the saved day filter or moving focus from another control.
+
+The open tooltip reads the current bucket for its day, not a retained count or
+volume snapshot. Removed days withdraw the reading, including on return until a
+new interaction. Unknown-volume markers and counts update together. Reconciled
+chart values must not mutate the caller's inventory-derived DTOs.
+
+Normal `BackupActivityChart.test.tsx` covers focus, rollover, disappearance,
+current tooltip readings and input ownership. `ProxmoxBackupsTable.test.tsx`
+exercises the parsed inventory and ordinary polling through the consuming date
+filter, preserving bounded reads. Backup/posture policy, source association,
+read cadence and guest operations are unchanged; this is not native recovery.
