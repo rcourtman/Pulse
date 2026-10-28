@@ -5,6 +5,7 @@ import csv
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -188,6 +189,27 @@ class ReleaseBackendQueueTest(unittest.TestCase):
         resistant = [e for e in events if e["ignores_term"]]
         self.assertEqual([e["event"] for e in resistant], ["start"])
         self.assertNotIn("Race-enabled backend release tests passed", result.stdout)
+
+    def test_wait_preserves_already_completed_child_status(self):
+        source = (ROOT / "scripts/run-release-backend-tests.sh").read_text()
+        helper = re.search(r"^wait_for_task\(\) \{\n.*?^\}", source, re.M | re.S)
+        self.assertIsNotNone(helper)
+        for child_exit in (0, 19, 127):
+            with self.subTest(child_exit=child_exit):
+                script = helper.group() + f'''
+set -m
+bash -c 'exit {child_exit}' &
+pids=("$!")
+# Establish that the child is no longer running before joining it. A saved
+# failure, even exit127, must not be confused with wait -n's no-job result.
+while kill -0 "${{pids[0]}}" 2>/dev/null; do sleep .01; done
+status=0
+wait_for_task || status=$?
+test "$completed_pid" = "${{pids[0]}}" && test "$status" = {child_exit}
+'''
+                result = subprocess.run(["bash", "-c", script], capture_output=True,
+                                        text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

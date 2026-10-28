@@ -358,6 +358,24 @@ record_task() {
   printf 'start\t%s\t%s\t%s\t-\t%s\n' "$pid" "$width" "$SECONDS" "$name" >> "$RUN_ROOT/coverage/execution.tsv"
 }
 
+wait_for_task() {
+  local pid running
+  completed_pid=
+  # Bash wait -n ignores children that already finished before the call,
+  # whereas wait PID retains their actual status. Drain those first: several
+  # fast packages can finish together while the parent schedules replacements.
+  running="$(jobs -pr)"
+  running=" ${running//$'\n'/ } "
+  for pid in "${pids[@]}"; do
+    if [[ "$running" != *" $pid "* ]]; then
+      completed_pid="$pid"
+      wait "$pid"
+      return "$?"
+    fi
+  done
+  wait -n -p completed_pid "${pids[@]}"
+}
+
 # Beta.3 job 123003682684 finished all API shards in 17 minutes, but kept
 # the other 169 packages on one slot until the 70-minute job was cancelled.
 # A completed shard now releases its actual CPU width to whole packages.
@@ -379,7 +397,10 @@ while [ "$next_package" -lt "${#OTHER_PACKAGES[@]}" ] || [ "${#pids[@]}" -gt 0 ]
     next_package=$((next_package + 1))
   done
   status=0
-  wait -n -p completed_pid "${pids[@]}" || status=$?
+  wait_for_task || status=$?
+  # A child can finish between jobs -pr and wait -n. Re-scan the same retained
+  # PIDs, never rerun a task or substitute success for an unobserved status.
+  if [ -z "${completed_pid:-}" ] && [ "$status" -eq 127 ]; then continue; fi
   if [ -z "${completed_pid:-}" ]; then
     echo "Error: backend child completion was not observed (exit $status)." >&2
     exit 4

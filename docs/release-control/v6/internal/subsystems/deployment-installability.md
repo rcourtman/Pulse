@@ -5015,6 +5015,9 @@ gets a separate data directory, and any failed child fails the gate and cleans
 up its siblings. Each task has its own process group: failure signals every
 group before waiting, with bounded TERM-to-KILL escalation, rather than racing
 a recursive process-tree snapshot against child creation.
+Already completed children are joined by their retained PID, because Bash
+`wait -n` can otherwise omit their saved exit status. A no-job race triggers
+reconciliation of the same PIDs, never a task replay or an assumed pass.
 `test_release_backend_queue.py`, discovered by script smoke,
 executes the actual runner with controlled children at one, four and eight CPUs,
 including partial discovery and both branch failures. The hosted artifact

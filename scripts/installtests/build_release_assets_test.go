@@ -4869,6 +4869,8 @@ func TestReleaseBackendRaceGateUsesCompleteWorkerPartition(t *testing.T) {
 		`record_task "$!" "$width" "internal/api:$shard_index"`,
 		`free_procs=$((free_procs + task_widths[$completed_pid]))`,
 		`wait -n -p completed_pid`,
+		`running="$(jobs -pr)"`,
+		`wait "$pid"`,
 		`kill -TERM -- "-$pid"`,
 		`kill -KILL -- "-$pid"`,
 	} {
