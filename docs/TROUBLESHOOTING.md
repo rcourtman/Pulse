@@ -39,6 +39,8 @@ establish safe recovery.
   [current, retained and unavailable disks](VM_DISK_MONITORING.md#current-retained-and-unavailable-disk-readings)
   from [guest memory pressure](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
   Unknown is not zero, and a working Pulse Agent view does not prove API recovery.
+  If only one disk is absent, use [missing-filesystem checks](VM_DISK_MONITORING.md#one-filesystem-is-missing-but-other-disks-have-readings);
+  a container-data directory can hold a real disk, independently of backup selection.
 - **Proxmox data belongs to the wrong host, or healthy jobs look Pending:** use
   [cross-installation identity checks](TROUBLESHOOTING.md#monitoring-is-mixed-between-proxmox-installations)
   or [replication status checks](TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing).

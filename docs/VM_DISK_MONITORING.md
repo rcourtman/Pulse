@@ -359,6 +359,55 @@ a backup or a restart to turn an unknown reading into a number. Do not bypass a
 guest-read pause or widen token access. None of these display states proves
 thaw or successful workload writes; [Backup safety](#backup-safety) still applies.
 
+If other disks have readings but one filesystem is absent, use
+[missing-filesystem checks](#one-filesystem-is-missing-but-other-disks-have-readings)
+before treating it as a guest-agent setup failure.
+
+### One filesystem is missing but other disks have readings
+
+A current root-disk reading does not establish that every data filesystem is
+monitored. Compare the **same guest and collection source**, using its existing
+filesystem view and Pulse's **Filesystems** rows. Keep the observation times;
+an old number or recent agent contact does not prove a current disk reading.
+
+- **Attached virtual disk:** its allocated size does not establish a mounted
+  filesystem or its used space inside the guest.
+- **Separate local filesystem:** ext4, XFS or Btrfs at `/var/lib/containers` or
+  `/var/lib/docker` is not a container layer just because of its directory name.
+  If Pulse omits it, its usage is unknown in Pulse, not zero.
+- **Excluded layer or remote mount:** `overlay`, `tmpfs`, NFS and SMB are excluded
+  from filesystem usage. Their absence alone does not establish a missing local
+  data disk.
+
+**Pulse v6.6.0 filters `/var/lib/containers` and `/var/lib/docker` by path.**
+That can also hide a real local filesystem mounted there, even when the QEMU
+Guest Agent returns it. This is separate from an absent or stopped agent;
+working readings for other disks do not rule it out. A missing filesystem at
+another path can have a different cause.
+
+**Backup inclusion and capacity monitoring are separate.** Excluding a virtual
+disk from Proxmox backups does not make its mounted data disposable or explain
+its absence from filesystem usage. Leave an intentionally excluded disk
+excluded; enabling backups is not a capacity-monitoring repair.
+
+For capacity decisions, use the guest's established filesystem view, or
+[current readings from an already linked Pulse Agent](#use-existing-machines-readings-without-changing-the-guest),
+with the same guest, filesystem and observation time. An alternative view does
+not repair the missing API reading or establish complete monitoring.
+**Do not remount or move data, change backup selection, install another agent,
+restart services or run guest-agent probes just to make the disk appear.**
+If a backup, freeze/thaw or unresponsive guest is involved,
+[Backup safety](#backup-safety) takes precedence.
+
+For a report, use facts already available: the running Pulse version, whether
+this is the Proxmox API or a Pulse Agent view, which filesystem is missing and
+which still have readings. Keep the filesystem type and whether it has its own
+device if already known; unknown is valid. Use consistent private aliases for
+guest, device and mount names, retaining a relevant standard path such as
+`/var/lib/containers` without private suffixes. Do not post full mount tables,
+fstab, VM configuration, raw guest-agent responses or Diagnostics exports.
+There is no need to collect these facts again if they are in the existing report.
+
 ### A missing reading is not an installation diagnosis
 
 [Check the reading's context](#current-retained-and-unavailable-disk-readings)
