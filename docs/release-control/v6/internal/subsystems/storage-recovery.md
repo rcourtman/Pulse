@@ -193,6 +193,28 @@ Shared badge and drawer tests retain completion precedence and reactive tones.
 Desktop/narrow consuming browser proof checks the existing rows and details.
 No provider data, route, access, retention operation or guest recovery changes.
 
+### Running local archives retain their executing-node scope
+
+A live vzdump task can mark an archive as partial only on its own executing
+node's independent local disk. Identical VMIDs and paths on another local disk
+are not its output; current guest placement cannot substitute for the disk's
+read origin. Keep each node's earliest running-task start independently before
+applying the existing clock-skew window. Shared/remote storage views and tasks
+with no executing node retain conservative connection/VMID correlation. PBS
+entries without a manifest remain incomplete. Task age, running-state expiry,
+archive identity, access policy and public payload shape are unchanged.
+
+`TestPVEStorageRunningArchiveOrigin` covers both read orders, either writer,
+unknown origin, shared-flag/NFS/CIFS/PBS views, connection isolation, ended/failed
+tasks and the pre-window control. The normal-suite
+`TestPVEStorageRunningArchiveOriginLifecycle` exercises VM and LXC live dates,
+asynchronous recovery points and canonical posture through running, unread and
+completed phases. The writer's partial output never gains a completion time;
+the independent completed copy remains usable. Its actual frames drive desktop
+and narrow production Backups and workload-badge proof. No guest, backup,
+restore or database/schema operation is introduced. This is source correlation
+correctness, not incident recovery or a claim that an old task proves completion.
+
 ### Retained local archives do not change kind when a VMID is reused
 
 A PVE VM archive cannot advance the backup date or protect a live LXC using

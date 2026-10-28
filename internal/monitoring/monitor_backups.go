@@ -261,7 +261,10 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// tasks polled just before this pass (pollBackupTasks runs first in the
 	// cycle): a guest backup file created at or after a running task's start
 	// is that task's partial output, not a completed backup.
-	runningVzdumpStart := make(map[int]time.Time) // VMID -> earliest running task start
+	// Local archive paths belong to the disk on the task's executing node,
+	// not to the guest's current placement. Shared/remote repositories and
+	// tasks without a node retain the conservative instance/VMID fallback.
+	runningVzdumpStart := make(map[int]map[string]time.Time) // VMID -> task node -> earliest start
 	for _, task := range snapshot.PVEBackups.BackupTasks {
 		if task.Instance != instanceName || task.VMID <= 0 || !task.EndTime.IsZero() {
 			continue
@@ -270,8 +273,12 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 		if status != "" && status != "running" {
 			continue
 		}
-		if existing, ok := runningVzdumpStart[task.VMID]; !ok || task.StartTime.Before(existing) {
-			runningVzdumpStart[task.VMID] = task.StartTime
+		if runningVzdumpStart[task.VMID] == nil {
+			runningVzdumpStart[task.VMID] = make(map[string]time.Time)
+		}
+		byNode := runningVzdumpStart[task.VMID]
+		if existing, ok := byNode[task.Node]; !ok || task.StartTime.Before(existing) {
+			byNode[task.Node] = task.StartTime
 		}
 	}
 
@@ -498,9 +505,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 				// covers backups submitted by another cluster or host.
 				inProgress := false
 				if content.VMID > 0 {
-					if start, ok := runningVzdumpStart[content.VMID]; ok &&
-						!time.Unix(content.CTime, 0).Before(start.Add(-runningVzdumpClockSkew)) {
-						inProgress = true
+					for taskNode, start := range runningVzdumpStart[content.VMID] {
+						if storageNode != "" && taskNode != "" && taskNode != storageNode {
+							continue
+						}
+						if !time.Unix(content.CTime, 0).Before(start.Add(-runningVzdumpClockSkew)) {
+							inProgress = true
+							break
+						}
 					}
 					if isPBSStorage && content.Size == 0 {
 						inProgress = true
