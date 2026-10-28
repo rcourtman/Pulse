@@ -183,7 +183,7 @@ jobs:
           coreutils_bin="$(brew --prefix coreutils)/bin"
           fixture_bin="$(mktemp -d "$RUNNER_TEMP/pulse-installer-fixture-tools.XXXXXX")"
           ln -s "$linux_bash" "$fixture_bin/bash"
-          for tool in stat chmod chown mv ln; do
+          for tool in stat chmod chown mv ln readlink; do
             executable="$coreutils_bin/g$tool"
             test -x "$executable"
             "$executable" --version | grep -q 'GNU coreutils'
