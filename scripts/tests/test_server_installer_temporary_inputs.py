@@ -334,7 +334,8 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
         for fault in ("bad_signature", "script_transport", "signature_transport", "missing_signature", "script_interrupt"):
             with self.subTest(fault=fault):
                 r, o = self.exercise("connected_container", fault)
-                self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+                self.assertEqual(r.returncode, 143 if fault == "script_interrupt" else 1,
+                                 r.stdout + r.stderr)
                 self.assertIsNone(o["copied"])
                 self.assertNotIn("EXECUTE", o["calls"])
                 self.assertEqual(o["shared_entries"], [])

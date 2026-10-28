@@ -889,6 +889,9 @@ fixture state/key bytes and mode, and no stop/destroy operation. Success, option
 settings failure, caller-owned inputs and owned-scratch cleanup are positive
 controls. These are ordinary-user source proofs, not native guest experiments,
 signed installed forward/reverse recovery or a diagnosis of existing incidents.
+The existing authenticated-input controls require exact exit143 for interrupted
+bootstrap transport and exit1 for failed signature/transport admission, retaining
+their no-copy/no-execution and owned-scratch cleanup requirements in both cases.
 
 ### Legacy credential cleanup needs complete inventory and preserved keys
 
