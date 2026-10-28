@@ -143,14 +143,20 @@ describe('TrueNAS system memory inspection through the actual table', () => {
     setSystems(0, 'agent', 'memory', 'cache', undefined);
     expect(within(dialog).queryByText('Reclaimable cache')).toBeNull();
     expect(rowValue(dialog, 'Free')).toHaveTextContent('20.0 GB');
-    setSystems(0, 'status', 'unknown');
+    setSystems(0, 'memory', undefined);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Memory composition for nas-core' })).toBeNull();
     expect(document.body.style.overflow).not.toBe('hidden');
   });
 
-  it('offers no composition from an unreported metric or unknown system', () => {
-    mount([system({ memory: undefined }), system({ id: 'unknown', status: 'unknown' })]);
+  it('offers no composition from unreported or non-finite memory', () => {
+    mount([
+      system({ memory: undefined }),
+      system({
+        id: 'not-finite',
+        memory: { current: Number.NaN, used: Number.NaN, total: Number.NaN },
+      }),
+    ]);
     expect(screen.queryByRole('button', { name: /Memory composition for/ })).toBeNull();
   });
 
