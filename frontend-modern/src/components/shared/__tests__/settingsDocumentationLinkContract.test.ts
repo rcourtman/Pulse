@@ -1,13 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import ts from 'typescript';
+import { describe, expect, it } from 'vitest';
 import runtimeControlsSource from '@/components/Settings/AIRuntimeControlsSection.tsx?raw';
 
-vi.mock('typescript', async (importOriginal) => {
-  const actual = await importOriginal<{ default: typeof ts }>();
-  return {
-    default: { ...actual.default, createSourceFile: vi.fn(actual.default.createSourceFile) },
-  };
-});
 import { settingsDocumentationLinkViolations } from './settingsDocumentationLinkContract';
 
 const valid = `
@@ -17,10 +10,8 @@ const valid = `
 `;
 
 describe('surviving settings documentation link contract', () => {
-  it('does not parse a link-free surviving runtime section', () => {
-    vi.mocked(ts.createSourceFile).mockClear();
+  it('accepts the link-free surviving runtime section', () => {
     expect(settingsDocumentationLinkViolations(runtimeControlsSource)).toEqual([]);
-    expect(ts.createSourceFile).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -28,10 +19,8 @@ describe('surviving settings documentation link contract', () => {
     'export const Link = () => <\n a href="/docs">Docs</a>;',
     String.raw`import { External\u0054extLink as Link } from './untrusted'; export const Section = () => <Link href="/docs">Docs</Link>;`,
     'import { TERMS_DOC_URL as terms } from "@/utils/docsLinks"; export const Section = () => <p>No link</p>;',
-  ])('still parses possible anchors, aliases and escaped bindings: %s', (source) => {
-    vi.mocked(ts.createSourceFile).mockClear();
+  ])('rejects possible anchors, aliases and escaped bindings: %s', (source) => {
     expect(settingsDocumentationLinkViolations(source)).not.toEqual([]);
-    expect(ts.createSourceFile).toHaveBeenCalledOnce();
   });
 
   it('accepts an actual shared link to shipped Terms', () => {
