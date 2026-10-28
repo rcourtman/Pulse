@@ -62,6 +62,9 @@ establish safe recovery.
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
   Guest usage and database size are different measurements.
+- **Usage fell but an alert remains open:** compare the
+  [evaluated reading, clear level and recovery progress](#usage-alert-stays-open-after-the-reading-falls).
+  A previous breach, an active incident and a retained notification are different evidence.
 - **Notification Test works but alerts do not arrive:** follow
   [ordinary delivery checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
   Do not trigger an alert or replay the queue just to complete a report.
@@ -705,6 +708,45 @@ planned maintenance window, preserving the deployment's settings and data.
   before the pause**, following the deployment-specific precaution. Unknown
   pre-pause states are not permission to start them. **Pulse monitoring and
   alerts are unavailable while stopped**; arrange independent outage coverage.
+
+#### Usage alert stays open after the reading falls
+
+Start in **Alerts → Overview** with the affected incident, not an old email or
+**Recent delivery activity**. Match the resource and metric; for guest disks,
+match the filesystem too. Freeing space on one filesystem does not establish
+recovery of another, a host storage pool or a separate backup-age alert.
+
+Where the card supplies live metric details, read its evaluated value and
+clear rule together:
+
+- **Alert still open** means the evaluated value has fallen below the trigger
+  but has not completed the clear rule. Usage rules have separate trigger and
+  clear values: with a 90% trigger and 85% clear, 88% can still hold the alert.
+  This is an example, not the saved rule for every resource. Check
+  [threshold defaults and resource overrides](CONFIGURATION.md#metric-thresholds-off-and-inheritance).
+- **Recovering** means the reading meets the clear level but the recovery delay
+  is still being evaluated. Use the reported progress; elapsed wall-clock time
+  alone does not prove that fresh eligible observations continued throughout.
+  If the card says **averaged**, compare that evaluated value with the clear
+  level, not only its **latest** sample or a different tool's instantaneous value.
+- **No recent reading** is retained evidence, not a healthy zero or a completed
+  recovery. The separate **Last reading at or above** value describes the
+  previous breach, not current usage. Older versions or a restored incident
+  may lack live detail; missing detail does not establish a current breach.
+
+Acknowledgement and snooze affect attention or notification delivery; they are
+not required for a threshold alert to recover. A retained failed notification
+can outlive its incident, so use [delivery recovery](#recover-retained-delivery-failures)
+for that warning rather than changing the metric rule.
+
+If fresh readings for the same resource remain within the displayed clear rule
+but the incident does not recover, keep the original times, units, evaluated
+value, clear rule and any reported progress with a locally reviewed screenshot
+or excerpt. Unknown details are valid. Add only missing evidence to the
+[existing report](#-getting-help); do not rerun a backup, create load, restart,
+change thresholds, disable monitoring or retry notifications just to clear it.
+Do not delete alert or queue data. A disappearing alert after a policy change
+is not proof that the workload recovered.
 
 #### Backup-age alerts were not evaluated
 
