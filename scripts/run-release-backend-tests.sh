@@ -90,7 +90,7 @@ if [[ ! "$API_SHARD_TIMEOUT" =~ ^[1-9][0-9]*(ms|s|m|h)$ ]]; then
   exit 2
 fi
 
-for command_name in go python3 getconf awk pgrep; do
+for command_name in go python3 getconf awk; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Error: required backend-test command is missing: $command_name" >&2
     exit 3
@@ -325,24 +325,20 @@ run_api_shard() {
   echo "Completed internal/api shard $shard_index in $((SECONDS - shard_started_seconds))s."
 }
 
-terminate_tree() {
-  local parent_pid="$1"
-  local child_pid
-  while IFS= read -r child_pid; do
-    if [ -n "$child_pid" ]; then
-      terminate_tree "$child_pid"
-    fi
-  done < <(pgrep -P "$parent_pid" || true)
-  kill -TERM "$parent_pid" >/dev/null 2>&1 || true
-}
-
+# Give every asynchronous task its own process group. A recursive pgrep/kill
+# snapshot can miss a child forked between enumeration and parent termination.
+# Group signalling covers that race, including a leader that already exited.
+set -m
 pids=()
 declare -A task_widths=() task_names=() task_starts=()
 free_procs="$VCPUS"
 stop_tasks() {
   local pid
-  for pid in "${pids[@]}"; do terminate_tree "$pid"; done
-  if [ "${#pids[@]}" -gt 0 ]; then wait "${pids[@]}" >/dev/null 2>&1 || true; fi
+  if [ "${#pids[@]}" -eq 0 ]; then return; fi
+  for pid in "${pids[@]}"; do kill -TERM -- "-$pid" >/dev/null 2>&1 || true; done
+  sleep 1
+  for pid in "${pids[@]}"; do kill -KILL -- "-$pid" >/dev/null 2>&1 || true; done
+  wait "${pids[@]}" >/dev/null 2>&1 || true
 }
 trap stop_tasks EXIT
 trap 'exit 130' INT

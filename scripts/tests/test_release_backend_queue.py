@@ -20,7 +20,7 @@ PACKAGES = [MODULE + name for name in (
 # All subprocess work is synthetic. The actual shell runner owns discovery,
 # API partitioning, CPU leases, command flags, data paths and failure cleanup.
 CHILD = r'''#!/usr/bin/env python3
-import fcntl, json, os, re, sys, time
+import fcntl, json, os, re, signal, sys, time
 from pathlib import Path
 
 root = Path(os.environ["QUEUE_FIXTURE"])
@@ -56,13 +56,31 @@ else:
     # The first ordinary package remains busy after a short API shard ends.
     delay = .7 if name.endswith("scripts/installtests") else .25
 assert os.environ["CI"] == os.environ["GITHUB_ACTIONS"] == "true"
+ignores_term = bool(os.environ.get("QUEUE_IGNORE_TERM")) and name.endswith("scripts/installtests")
+if ignores_term:
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    delay = 10
 def record(event):
     with (root / "children.jsonl").open("a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps(dict(event=event, name=name, pid=os.getpid(),
             width=int(os.environ["GOMAXPROCS"]), selected=selected,
-            data=os.environ["PULSE_DATA_DIR"], time=time.monotonic())) + "\n")
+            data=os.environ["PULSE_DATA_DIR"], ignores_term=ignores_term,
+            time=time.monotonic())) + "\n")
 record("start")
+# A disposable VM may schedule the tiny fixture processes far apart. Use a
+# causal barrier, not a .6-second timing race, to prove that a short API shard
+# admits another package while both the prefix and first package remain live.
+if os.environ["QUEUE_CPUS"] == "4":
+    marker = root / "reused-slot"
+    if not selected and not name.endswith("scripts/installtests"):
+        marker.touch()
+    elif name.startswith("api:TestPrefix") or name.endswith("scripts/installtests"):
+        deadline = time.monotonic() + 10
+        while not marker.exists():
+            if time.monotonic() >= deadline:
+                sys.exit(97)
+            time.sleep(.01)
 time.sleep(delay)
 record("finish")
 if os.environ.get("QUEUE_FAIL") in (name, "api" if selected else "other"):
@@ -96,7 +114,8 @@ class ReleaseBackendQueueTest(unittest.TestCase):
                  "--data-root", str(root / "data"), "--api-shards", str(min(3, cpus))],
                 cwd=root, capture_output=True, text=True, timeout=20,
                 env={**os.environ, "PATH": str(root / "bin") + ":" + os.environ["PATH"],
-                     "QUEUE_FIXTURE": str(root), "PULSE_BACKEND_TEST_SHARD_BOUNDARIES": "",
+                     "QUEUE_FIXTURE": str(root), "QUEUE_CPUS": str(cpus),
+                     "PULSE_BACKEND_TEST_SHARD_BOUNDARIES": "",
                      "PULSE_BACKEND_TEST_SHARD_WEIGHTS": "", **extra})
             events = root / "children.jsonl"
             events = [json.loads(line) for line in events.read_text().splitlines()] if events.exists() else []
@@ -161,6 +180,14 @@ class ReleaseBackendQueueTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 19, result.stdout + result.stderr)
                 self.assertTrue(any(row["exit"] == "19" for row in receipts))
                 self.assertNotIn("Race-enabled backend release tests passed", result.stdout)
+
+    def test_failure_escalates_for_a_child_ignoring_term(self):
+        result, events, _, _ = self.run_queue(
+            QUEUE_FAIL=MODULE + "internal/monitoring", QUEUE_IGNORE_TERM="1")
+        self.assertEqual(result.returncode, 19, result.stdout + result.stderr)
+        resistant = [e for e in events if e["ignores_term"]]
+        self.assertEqual([e["event"] for e in resistant], ["start"])
+        self.assertNotIn("Race-enabled backend release tests passed", result.stdout)
 
 
 if __name__ == "__main__":

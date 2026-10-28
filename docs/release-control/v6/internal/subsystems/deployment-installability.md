@@ -5012,7 +5012,10 @@ exceeds the original vCPU budget; API roots, race/vet checks, 45-minute API and
 Source `go list` must complete before any runtime child starts. Existing package
 weights only order the complete non-API inventory, longest first. Every package
 gets a separate data directory, and any failed child fails the gate and cleans
-up its siblings. `test_release_backend_queue.py`, discovered by script smoke,
+up its siblings. Each task has its own process group: failure signals every
+group before waiting, with bounded TERM-to-KILL escalation, rather than racing
+a recursive process-tree snapshot against child creation.
+`test_release_backend_queue.py`, discovered by script smoke,
 executes the actual runner with controlled children at one, four and eight CPUs,
 including partial discovery and both branch failures. The hosted artifact
 retains source-listed package/API coverage and actual start/finish CPU leases;
