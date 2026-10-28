@@ -3,6 +3,18 @@ import ts from 'typescript';
 // Inspect surviving JSX, not symbol mentions: removing a whole link is valid,
 // but leaving an import or comment must not conceal a raw or misdirected link.
 export function settingsDocumentationLinkViolations(source: string): string[] {
+  // Removed controls can leave a section with no documentation link at all.
+  // Avoid constructing an AST in that common case. Any possible raw anchor,
+  // shared/Terms binding or escape still takes the full structural check.
+  if (
+    !source.includes('ExternalTextLink') &&
+    !source.includes('TERMS_DOC_URL') &&
+    !/<\s*a\b/.test(source) &&
+    !source.includes('\\')
+  ) {
+    return [];
+  }
+
   const file = ts.createSourceFile(
     'settings.tsx',
     source,

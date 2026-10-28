@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "1325b434fdf96579e1da7073923e484c518094d2",
+  "verified_at": "2026-10-28T16:22:27.479534Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "b014768ee51365ce9f0ca562070edd778c8c12a22cd023ab1d8f32b42bb203ae",
+    "frontend-modern/src/components/shared/cards/DisksCard.tsx": "cd4cfcae985ae79f07aea655cdc602fd5e600c4064f36546e0edd456ca8c08ff"
+  },
+  "routes": [
+    "/ (offline production Workloads row, disk card and guest drawer consumers)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Six retained production HTTP/poll/canonical-broadcast frames pass through canonicalizeRealtimeResource and useWorkloads into actual GuestRow compact mode and StackedDiskBar. Both viewports preserve producer90.2%/10000MiB and2% after real data zero; aliases retain independent mount observations, not additive capacity.",
+    "Mount reorder and EXT4/Podman versus BTRFS/Docker context preserve canonical aggregate, per-filesystem98% severity, true zero and drawer rows. Existing DisksCard caller retains the root20% rather than interpreting its ratio as0.2%.",
+    "Additional synthetic reading controls retain grey last-known90.2% and unavailable N/A, then restore current90.2%; no freshness or native failure is inferred."
+  ],
+  "interactions": [
+    "12 frame checks, desktop hover and keyboard activation, phone touch row opening, drawer collapse, no document overflow. Their strict final fixture check failed only on two undeclared anomaly reads; fulfilled matrix evidence is retained, not called an overall passing run.",
+    "A subsequent two-viewport context run supplies the declared empty anomaly response and passes with no unmapped API, page/console, off-origin or modifying request.15 captures across the completed matrix and passing context were opened natively with view_image and inspected. Playwright1.56.1 matches the integration lock.",
+    "source-z_xvcy2i validates869 registered consumer tests, whole frontend types/lint/format, production embed build and bundle budgets. The corrected evidence-only consumer build source-6eynudqd has complete output and completed cleanup. All254 compiled module and manifest hashes match this receipt own-parent source; intervening changes are test-only.",
+    "The earlier missing-signal fixture failed before any frame assertion/capture; all attempts, exact input/build identities and original output are retained in the lane dossier. This receipt does not hide adverse attempts, establish release inclusion or original guest recovery."
+  ],
+  "evidence": "RECEIPTS.md; BROWSER-MATRIX.json; BROWSER-CONTEXT.json; BROWSER-CONTAINING-BINDING.json; PRODUCER-INCLUSION.json; PIXEL-REVIEW.json; EXECUTION.tar.xz; CORE-RETURN.tar.xz."
+}

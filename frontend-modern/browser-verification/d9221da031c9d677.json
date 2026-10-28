@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "790dd86aefd0ae0a739162d090363ba221a715ec",
+  "verified_at": "2026-10-28T14:45:52.291734Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "a86a1f0b50b93a876242cc2289df7f8e3af7d491d42ffc8daffc199c0700034f"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Contradictory optional fullness fields on near-full, warning and empty PBS datastores: the existing Used percentage and warning match the admitted used/total byte pair; unknown total and unavailable read states remain explicit.",
+    "Live production resource-hook REST refresh updates95% to85% warning, withdraws unavailable capacity without leaking provider error text, then recovers90% danger without an optional percentage. Independent inventory reads and the inspection route are retained."
+  ],
+  "interactions": [
+    "33 final and31 exact-base checks; desktop Chromium141.0.7390.37 and320px dark WebKit; Playwright1.56.1 matches integration lock. Keyboard Enter navigates Coverage/By date; production useUnifiedResources, API clients and real Backups consumers are exercised, not a formatter fixture.",
+    "Six completed-run captures opened natively with view_image and inspected: two exact-base and four final. No horizontal overflow, page errors, unknown API calls, off-origin or mutating requests in the completed proof. Initial fixture path/context/alert-stub failures remain retained separately.",
+    "Original source-3c2b5b51/source-v7d0i04d VM result subsequently arrived without replay:122 tests, frontend types/lint/audits, changed-file format, production embed build and budgets pass, command/client0, complete hash-matched output and completed guest stop. The earlier shell143 observation and unknown initiator remain historical facts. Not a whole-frontend unit-suite pass.",
+    "Receipt metadata correction only: use the required UTC Z timestamp. All2446 executed source files are unchanged between original3c2b5b51 and own-parent790dd86a; retained browser executions/captures remain the proof, not a repeated browser pass or changed runtime."
+  ],
+  "evidence": "RECEIPTS.md / BROWSER-BASE.json / BROWSER-CANDIDATE.json / SOURCE-BINDING.json / BROWSER-SOURCE-INTEGRITY.json / PIXEL-REVIEW.json / CAPTURES.json / BROWSER-ASSETS.tar.xz. Synthetic consuming proof is not installed PBS or original guest recovery, publication or release qualification."
+}
