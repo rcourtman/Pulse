@@ -1035,7 +1035,7 @@ describe('backup read recovery keeps keyboard position', () => {
       fireEvent.click(retry);
       finish();
       await waitFor(() =>
-        expect(screen.getByRole('link', { name: 'Coverage', exact: true })).toHaveFocus(),
+        expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus(),
       );
       expect(screen.queryByRole('button', { name: fixture.label })).toBeNull();
       expect(window.location.pathname + window.location.search + window.location.hash).toBe(
@@ -1067,7 +1067,7 @@ describe('backup read recovery keeps keyboard position', () => {
     apiFetchMock.mockResolvedValue(new Response('{}', { status: 503 }));
     apiFetchJSONMock.mockResolvedValue(acceptedPosture);
     mountBackupReadState();
-    const refresh = await screen.findByRole('button', { name: 'Refresh', exact: true });
+    const refresh = await screen.findByRole('button', { name: 'Refresh' });
     refresh.focus();
     const pve = deferred<Response>();
     const pbs = deferred<Response>();
@@ -1080,14 +1080,14 @@ describe('backup read recovery keeps keyboard position', () => {
     expect(sourceCalls('pbs')).toHaveLength(2);
     pve.resolve(jsonResponse(readPvePayload));
     await waitFor(() =>
-      expect(screen.getByRole('link', { name: 'Coverage', exact: true })).toHaveFocus(),
+      expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus(),
     );
     expect(screen.getByRole('button', { name: 'Retry PBS inventory' })).toBeInTheDocument();
     pbs.resolve(jsonResponse(pbsPayload));
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Retry PBS inventory' })).toBeNull(),
     );
-    expect(screen.getByRole('link', { name: 'Coverage', exact: true })).toHaveFocus();
+    expect(screen.getByRole('link', { name: 'Coverage' })).toHaveFocus();
   });
 
   it('uses the named inspection region when kiosk mode hides the view links', async () => {
