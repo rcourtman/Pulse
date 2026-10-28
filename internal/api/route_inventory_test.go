@@ -301,6 +301,7 @@ func sortedKeys(set map[string]struct{}) []string {
 var dynamicRouteAllowlist = []string{
 	"agentcapabilities.OperationsLoopStatusCompatibilityPath",
 	"agentcapabilities.PatrolControlStatusCapabilityPath",
+	"agentcapabilities.RecentChangesCapabilityPath",
 }
 
 var publicRouteAllowlist = []string{

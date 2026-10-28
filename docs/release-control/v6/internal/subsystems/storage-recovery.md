@@ -4703,6 +4703,15 @@ store and the approval store rehydrate on startup, the fleet view
 recovers the same situated picture without any fleet-specific
 rehydration step.
 
+The fleet change timeline at `/api/agent/changes` (`list_recent_changes`)
+introduces no new persistence either. It reads the existing durable
+`resource_changes` table through the store's filtered change read, bounded by
+that table's 30-day retention, and consults the registry only to attach
+resource names. Changes for a resource the registry no longer knows stay
+readable without a name, so the timeline's recovery posture is exactly the
+`resource_changes` table's: whatever survives a restart or restore is what
+agents read, with no timeline-specific rehydration or recovery artifact.
+
 The Patrol-control status endpoint at
 `/api/agent/patrol-control/status` introduces no new persistence. The legacy
 `/api/agent/operations-loop/status` URL remains a compatibility alias. It reads the

@@ -2742,6 +2742,13 @@ use their bounded facts, provenance, freshness, and explicit redaction metadata
 to understand a resource, but those sections must not be expanded into
 provider-local config, raw discovery command output, environment values,
 secret-like metadata, install-token scope, or command authority.
+The fleet change timeline at `/api/agent/changes` (`list_recent_changes`) is
+the same read-only boundary. Lifecycle consumers, MCP adapters, and external
+agents may read what changed across the fleet, but `command_executed` and
+`runbook_executed` records reach a monitoring-read token with
+`commandRedacted:true`, the command text, output, and caller details dropped,
+and a command's reason cut to its status. A change record is history, never command
+disclosure, install-token scope, or execution authority.
 Agent-facing provisioning capabilities declared by
 `/api/agent/capabilities` are also API-owned projections over the canonical
 node lifecycle and discovery APIs. Lifecycle and infrastructure onboarding

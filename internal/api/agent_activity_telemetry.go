@@ -46,7 +46,8 @@ func externalAgentCapabilityActivity(capabilityName string) (string, string, boo
 	case agentcapabilities.ResourceContextCapabilityName,
 		agentcapabilities.ListResourceCapabilitiesCapabilityName:
 		activity = config.ExternalAgentActivityResourceContext
-	case agentcapabilities.FleetContextCapabilityName:
+	case agentcapabilities.FleetContextCapabilityName,
+		agentcapabilities.ListRecentChangesCapabilityName:
 		activity = config.ExternalAgentActivityFleetContext
 	case agentcapabilities.OperationsLoopStatusCapabilityName:
 		activity = config.ExternalAgentActivityFleetContext

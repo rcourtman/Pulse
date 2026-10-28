@@ -2073,6 +2073,15 @@ layer forwards non-path GET arguments as URL query parameters so the manifest
 contract, not a per-capability adapter, owns query-string transport. The
 `resources/list` adapter calls fleet-context with no filters and continues to
 receive the full fleet.
+`list_recent_changes` is the manifest-owned change-history read for external
+agents (`GET /api/agent/changes`, `monitoring:read`). It projects the existing
+observed resource change store with since/before/resourceId/kind/sourceType
+filters and a capped limit, and counts as fleet-context external-agent activity
+rather than a new telemetry activity. It must stay read-only over observed
+changes: it does not reconstruct events Pulse did not see, and command, output
+and runbook message content is redacted for tokens without `ai:execute`. Integer
+filters reach the route because the shared projection forwards integral JSON
+numbers as query parameters.
 than in `cmd/pulse-mcp` or an MCP-only inventory registry. They must enter
 through `ManifestSurfaceResourceCapabilities`,
 `ListMCPManifestSurfaceResourcesHTTP`, and

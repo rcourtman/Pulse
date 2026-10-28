@@ -205,6 +205,7 @@ func TestAgentCapabilitiesManifest_ScopesMatchAPIAuthConstants(t *testing.T) {
 		agentcapabilities.ResourceContextCapabilityName:          config.ScopeMonitoringRead,
 		agentcapabilities.ListResourceCapabilitiesCapabilityName: config.ScopeMonitoringRead,
 		agentcapabilities.FleetContextCapabilityName:             config.ScopeMonitoringRead,
+		agentcapabilities.ListRecentChangesCapabilityName:        config.ScopeMonitoringRead,
 		agentcapabilities.OperationsLoopStatusCapabilityName:     config.ScopeMonitoringRead,
 		"list_nodes":                      config.ScopeSettingsRead,
 		"add_node":                        config.ScopeSettingsWrite,

@@ -2,7 +2,10 @@ package agentcapabilities
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -52,6 +55,56 @@ func fleetContextInputSchema() json.RawMessage {
 			"type":        "string",
 			"description": "Return only resources whose canonical type matches exactly (case-insensitive), such as vm, system-container, app-container, agent, storage.",
 		},
+	})
+}
+
+// RecentChangeKinds lists the observed change kinds list_recent_changes
+// accepts in its kind filter. The API test parses each one through the shared
+// resource-change filter contract so this list cannot drift from the store.
+var RecentChangeKinds = []string{
+	"state_transition", "restart", "config_update", "relationship_change",
+	"capability_change", "metric_anomaly", "activity",
+	"alert_fired", "alert_acknowledged", "alert_unacknowledged",
+	"alert_snoozed", "alert_unsnoozed", "alert_resolved",
+	"command_executed", "runbook_executed",
+}
+
+const (
+	// RecentChangesDefaultWindow is the lookback applied when since is omitted.
+	RecentChangesDefaultWindow = 24 * time.Hour
+	// RecentChangesDefaultLimit and RecentChangesMaxLimit bound one read so an
+	// agent cannot pull a month of history into a single response.
+	RecentChangesDefaultLimit = 50
+	RecentChangesMaxLimit     = 200
+)
+
+// recentChangesInputSchema declares the optional filters for
+// list_recent_changes, forwarded as URL query parameters for the GET.
+func recentChangesInputSchema() json.RawMessage {
+	return agentObjectInputSchema(nil, map[string]any{
+		"since":                dateTimeOption("Inclusive RFC 3339 start of the window. Defaults to 24 hours ago. Pulse keeps 30 days of change history."),
+		"before":               dateTimeOption("Exclusive RFC 3339 end of the window. Omit for no upper bound, which also includes provider events stamped ahead of the Pulse clock."),
+		ResourceIDArgumentName: stringOption("Canonical resource id from get_fleet_context. Narrows the result to that resource and its related resources. History stays readable after the resource is gone."),
+		"kind":                 stringOption("Comma-separated change kinds: " + strings.Join(RecentChangeKinds, ", ") + "."),
+		"sourceType":           stringOption("Comma-separated origins: platform_event, pulse_diff, heuristic, user_action, agent_action."),
+		"limit": map[string]any{
+			"type":        "integer",
+			"minimum":     1,
+			"maximum":     RecentChangesMaxLimit,
+			"description": fmt.Sprintf("Maximum changes to return, newest first. Defaults to %d; values above %d are capped.", RecentChangesDefaultLimit, RecentChangesMaxLimit),
+		},
+	})
+}
+
+func recentChangesOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"changes", "count", "truncated", "since", "limit", "generatedAt"}, map[string]any{
+		"changes":     objectArrayOption("Observed changes, newest first. Each carries the canonical resourceId plus resourceName and resourceType when the resource is still known, the kind, from/to state, origin, confidence, actor, reason and metadata."),
+		"count":       integerOption("Total changes matching the window and filters, which can exceed the number returned."),
+		"truncated":   booleanOption("True when count exceeds the returned changes. Narrow the window, resource or kind instead of paging."),
+		"since":       dateTimeOption("Effective inclusive window start."),
+		"before":      dateTimeOption("Effective exclusive window end, when one was supplied."),
+		"limit":       integerOption("Effective result limit after defaulting and capping."),
+		"generatedAt": dateTimeOption("Server timestamp for this read."),
 	})
 }
 
@@ -826,6 +879,20 @@ var canonicalManifest = Manifest{
 			OutputSchema:   fleetContextOutputSchema(),
 		},
 		{
+			Name:           ListRecentChangesCapabilityName,
+			Title:          "List recent changes",
+			Description:    "Return what Pulse observed changing across the fleet, newest first: state transitions, restarts, configuration and relationship changes, alerts fired, acknowledged, snoozed and resolved, and commands or runbooks run. One read for 'what happened since last night?'; optional filters (since, before, resourceId, kind, sourceType) narrow it. Only changes Pulse observed are listed, so a gap is not proof that nothing happened. Results are capped, and truncated says when more matched. Command text, output and runbook messages are redacted for monitoring-read API tokens unless the token also has ai:execute.",
+			Category:       "context",
+			Method:         http.MethodGet,
+			Path:           RecentChangesCapabilityPath,
+			Scope:          agentCapabilityScopeMonitoringRead,
+			ActionMode:     agentCapabilityActionModeRead,
+			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
+			ResponseShape:  "AgentRecentChanges",
+			InputSchema:    recentChangesInputSchema(),
+			OutputSchema:   recentChangesOutputSchema(),
+		},
+		{
 			Name:           OperationsLoopStatusCapabilityName,
 			Title:          "Get Patrol work status",
 			Description:    "Return the current content-safe Patrol work status: Patrol issue evidence, pending approvals, governed decisions/actions, verified outcomes, Patrol control outcome evidence, compatibility aliases, and optional MCP readiness. The payload is count-only and deliberately omits finding ids, action ids, prompts, commands, resource names, and output.",
@@ -1163,6 +1230,7 @@ func canonicalPulseMCPSurfaceToolNames() []string {
 		ResourceContextCapabilityName,
 		ListResourceCapabilitiesCapabilityName,
 		FleetContextCapabilityName,
+		ListRecentChangesCapabilityName,
 		OperationsLoopStatusCapabilityName,
 		ListNodesCapabilityName,
 		AddNodeCapabilityName,
