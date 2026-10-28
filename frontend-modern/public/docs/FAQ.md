@@ -190,6 +190,10 @@ the warning. For missing messages, use the
 [ordinary notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
 Do not induce an alert, send another Test or retry the queue merely to check Off.
 
+For Docker or Podman, [runtime, container and machine alert scopes](DOCKER.md#runtime-and-container-alert-scopes)
+are separate: runtime Offline Alerts does not mute its containers, and machine
+maintenance is not a container-only mute.
+
 ### How do I monitor temperature?
 
 Check the affected host's active agent version, sensor and observation time

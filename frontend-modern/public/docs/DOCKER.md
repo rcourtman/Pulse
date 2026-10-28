@@ -143,6 +143,42 @@ is worth reporting, even when memory no longer grows.
 
 ---
 
+## Runtime and container alert scopes
+
+In **Alerts → Thresholds → Docker**, a container runtime (Docker or Podman),
+its containers and the machine running it are different alert resources.
+Turning off one check is not a blanket mute for everything on that machine.
+
+- **Runtime Offline Alerts** controls that runtime's connectivity alert. It
+  does **not** turn off alerts for its containers. The runtime row's general
+  **Alerts** switch is not a runtime-and-children control; do not rely on it
+  to mute the containers below it.
+- **One container's Alerts → Off** disables that container's threshold alerts,
+  including state, health and resource checks. Find the container under the
+  intended runtime/host group, not by name alone, then save the settings and
+  check the saved row. Other containers and the machine keep their own rules.
+  Turning off only the container's **Offline Alerts** leaves its other checks
+  enabled. Neither setting stops collection or hides readings.
+- **Machine maintenance** has a different scope. A window covering the machine
+  and its descendants also suppresses wanted machine alerts, not just Docker
+  alerts. It is not equivalent to muting one runtime and its containers while
+  keeping the machine monitored. Global or platform-wide Off controls also
+  affect more than one runtime; do not use them for that narrower job.
+
+There is no single inherited runtime-and-containers Off control here. For an
+on-demand lab, the existing alternative is to disable each unwanted container's
+alerts separately and, if wanted, the runtime's Offline Alerts. This does not
+automatically cover containers added later; review their own settings too.
+Keep wanted machine and other-runtime alerts enabled.
+
+Use existing alert details to distinguish the runtime, container and machine;
+do not stop a workload, induce an alert or send another Test to check a mute.
+Already queued messages can reflect earlier settings: changing a rule is not
+queue cancellation or proof of recovery. For those messages, use
+[ordinary notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing).
+Patrol findings are separate from threshold alerts; see
+[metric Off and Patrol](FAQ.md#can-i-disable-alerts-for-specific-metrics).
+
 ## Container CPU readings
 
 Pulse shows container CPU as a share of the **Docker/Podman host's total CPU
