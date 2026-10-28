@@ -347,6 +347,9 @@ export function ProxmoxCoverageTable(props: {
     const width = props.layoutWidth?.() ?? observedWidth.width();
     return typeof width === 'number' && width > 0 ? getCoverageLayoutForContainer(width) : 'full';
   });
+  // Phones (and narrow panes beside the Assistant) cannot reveal hover titles.
+  // Keep complete guest/connection identity visible before opening a namesake.
+  const wrapWorkloadIdentity = () => layoutMode() === 'compact' || layoutMode() === 'basic';
   const visibleColumns = createMemo(() =>
     getCoverageColumns(layoutMode(), {
       task: props.showTaskColumn,
@@ -493,9 +496,22 @@ export function ProxmoxCoverageTable(props: {
                               controlsId={detailRowId()}
                               onToggle={() => props.onToggleExpand(row.key)}
                             />
-                            <div class="min-w-0">
-                              <div class="flex min-w-0 items-center gap-1">
-                                <span class="truncate font-semibold" title={row.workload.label}>
+                            <div class="min-w-0 flex-1">
+                              <div
+                                class={
+                                  wrapWorkloadIdentity()
+                                    ? 'flex min-w-0 flex-col items-start'
+                                    : 'flex min-w-0 items-center gap-1'
+                                }
+                              >
+                                <span
+                                  class={`font-semibold ${
+                                    wrapWorkloadIdentity()
+                                      ? 'block w-full whitespace-normal wrap-anywhere'
+                                      : 'truncate'
+                                  }`}
+                                  title={row.workload.label}
+                                >
                                   {row.workload.name || row.workload.label}
                                 </span>
                                 <Show
@@ -515,7 +531,11 @@ export function ProxmoxCoverageTable(props: {
                               <Show when={getBackupWorkloadPVEConnection(row.workload)}>
                                 {(connection) => (
                                   <span
-                                    class="block truncate text-[10px] text-muted"
+                                    class={`block text-[10px] text-muted ${
+                                      wrapWorkloadIdentity()
+                                        ? 'whitespace-normal wrap-anywhere'
+                                        : 'truncate'
+                                    }`}
                                     title={`PVE connection: ${connection()}`}
                                     data-backup-workload-connection
                                   >
